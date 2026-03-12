@@ -67,6 +67,26 @@ function calculateBollingerBands(closes: number[], period = 20, multiplier = 2) 
   return { upper, middle, lower };
 }
 
+async function resolveKoreanTicker(
+  ticker: string,
+  period1: string,
+  period2: string,
+  interval: string,
+) {
+  if (!/^\d{6}$/.test(ticker)) return null;
+  const [ksResult, kqResult] = await Promise.allSettled([
+    yahooFinance.chart(`${ticker}.KS`, { period1, period2, interval: interval as any }),
+    yahooFinance.chart(`${ticker}.KQ`, { period1, period2, interval: interval as any }),
+  ]);
+  if (ksResult.status === "fulfilled" && ksResult.value?.quotes?.some((q) => q.close && q.close > 0)) {
+    return { symbol: `${ticker}.KS`, result: ksResult.value };
+  }
+  if (kqResult.status === "fulfilled" && kqResult.value?.quotes?.some((q) => q.close && q.close > 0)) {
+    return { symbol: `${ticker}.KQ`, result: kqResult.value };
+  }
+  return null;
+}
+
 router.get("/:ticker", async (req, res) => {
   const { ticker } = req.params;
   const { period = "1y", interval = "1d" } = req.query as {
@@ -87,10 +107,13 @@ router.get("/:ticker", async (req, res) => {
     startDate.setDate(startDate.getDate() - days);
 
     const periodStr = period as string;
+    const p1 = startDate.toISOString().split("T")[0];
+    const p2 = new Date().toISOString().split("T")[0];
 
-    const result = await yahooFinance.chart(ticker, {
-      period1: startDate.toISOString().split("T")[0],
-      period2: new Date().toISOString().split("T")[0],
+    const koreanResolved = await resolveKoreanTicker(ticker, p1, p2, interval as string);
+    const result = koreanResolved?.result ?? await yahooFinance.chart(ticker, {
+      period1: p1,
+      period2: p2,
       interval: (interval as any) ?? "1d",
     });
 

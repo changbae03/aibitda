@@ -19,14 +19,7 @@ const client = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? undefined,
 });
 
-function normalizeTickerForYahoo(ticker: string): string {
-  if (/^\d{6}$/.test(ticker)) return `${ticker}.KS`;
-  if (/^\d{6}KQ$/.test(ticker)) return `${ticker.slice(0, 6)}.KQ`;
-  return ticker;
-}
-
-async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; industry: string }> {
-  const symbol = normalizeTickerForYahoo(ticker);
+async function tryQuoteSummary(symbol: string) {
   try {
     const result = await yahooFinance.quoteSummary(symbol, {
       modules: ["quoteType", "summaryProfile"],
@@ -34,16 +27,31 @@ async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; i
     const companyName =
       (result.quoteType as any)?.longName ||
       (result.quoteType as any)?.shortName ||
-      ticker;
+      null;
+    if (!companyName || /^\d{6}/.test(companyName)) return null;
     const industry =
       (result.summaryProfile as any)?.industry ||
       (result.summaryProfile as any)?.sector ||
-      (result.summaryProfile as any)?.industryDisp ||
       "일반";
     return { companyName, industry };
   } catch {
-    return { companyName: ticker, industry: "일반" };
+    return null;
   }
+}
+
+async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; industry: string }> {
+  if (/^\d{6}$/.test(ticker)) {
+    const [ksResult, kqResult] = await Promise.all([
+      tryQuoteSummary(`${ticker}.KS`),
+      tryQuoteSummary(`${ticker}.KQ`),
+    ]);
+    const found = ksResult || kqResult;
+    if (found) return found;
+  } else {
+    const result = await tryQuoteSummary(ticker);
+    if (result) return result;
+  }
+  return { companyName: ticker, industry: "일반" };
 }
 
 router.post("/", async (req, res) => {
