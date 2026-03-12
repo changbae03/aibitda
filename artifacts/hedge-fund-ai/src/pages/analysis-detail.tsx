@@ -31,19 +31,19 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: runStep, isPending: isRunningStep } = useRunAnalysisStep();
-  const autoRunning = useRef(false);
+  const triggeredSteps = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!analysis || analysis.status !== "in_progress" || isRunningStep || autoRunning.current) return;
+    if (!analysis || analysis.status !== "in_progress" || isRunningStep) return;
     const nextIndex = analysis.steps.length;
     if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
-    autoRunning.current = true;
+    if (triggeredSteps.current.has(nextStepKey)) return;
+    triggeredSteps.current.add(nextStepKey);
     runStep(
       { id, data: { stepKey: nextStepKey } },
       {
         onSettled: () => {
-          autoRunning.current = false;
           queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
         },
       }

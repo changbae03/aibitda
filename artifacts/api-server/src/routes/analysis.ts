@@ -15,6 +15,9 @@ import { triggerModelReview } from "./model-insights.js";
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
 
+// Prevent concurrent duplicate step execution
+const runningStepsLock = new Map<string, boolean>();
+
 const client = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? undefined,
@@ -351,6 +354,13 @@ router.post("/:id/step", async (req, res) => {
     return;
   }
 
+  const lockKey = `${id}-${stepKey}`;
+  if (runningStepsLock.get(lockKey)) {
+    res.status(409).json({ error: "Step already running" });
+    return;
+  }
+  runningStepsLock.set(lockKey, true);
+
   const agent = AGENTS[stepKey];
 
   let enrichedContext = analysis.additionalContext ?? null;
@@ -391,99 +401,103 @@ router.post("/:id/step", async (req, res) => {
 
   let content = "";
   try {
-    const stream = await client.chat.completions.create({
-      model: "gpt-5.2",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_completion_tokens: 8192,
-      stream: true,
-    });
-    for await (const chunk of stream) {
-      content += chunk.choices[0]?.delta?.content ?? "";
-    }
-    console.log(`[${stepKey}] streamed content length:`, content.length);
-    if (!content) content = "분석 결과를 생성하지 못했습니다.";
-  } catch (err) {
-    console.error("OpenAI error:", err);
-    content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
-  }
-
-  const [step] = await db
-    .insert(analysisStepsTable)
-    .values({
-      analysisId: id,
-      stepKey,
-      agentName: agent.name,
-      agentRole: agent.role,
-      content,
-      validationNotes: null,
-      informationType: "data_based_estimate",
-    })
-    .returning();
-
-  const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
-  const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;
-  const isLast = stepKey === "investment_strategy";
-
-  if (isLast) {
-    let investmentVerdict: string | null = null;
-    let targetPrice: number | null = null;
-    let entryPrice: number | null = null;
-    let stopLoss: number | null = null;
-    let riskRewardRatio: number | null = null;
-
     try {
-      const json = JSON.parse(content);
-      investmentVerdict = json.verdict ?? null;
-
-      const parsePrice = (val: string | undefined) => {
-        if (!val) return null;
-        const num = parseFloat(String(val).replace(/[^0-9.]/g, ""));
-        return isNaN(num) ? null : num;
-      };
-
-      targetPrice = parsePrice(json.target_price);
-      entryPrice = parsePrice(json.entry_price);
-      stopLoss = parsePrice(json.stop_loss);
-
-      if (targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss) {
-        riskRewardRatio = Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss));
+      const stream = await client.chat.completions.create({
+        model: "gpt-5.2",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_completion_tokens: 8192,
+        stream: true,
+      });
+      for await (const chunk of stream) {
+        content += chunk.choices[0]?.delta?.content ?? "";
       }
-
-      const rr = json.risk_reward;
-      if (!riskRewardRatio && rr) {
-        const m = String(rr).match(/[\d.]+/g);
-        if (m && m.length >= 2) riskRewardRatio = parseFloat(m[1]) / parseFloat(m[0]);
-      }
-    } catch {
-      // JSON parse failed
+      console.log(`[${stepKey}] streamed content length:`, content.length);
+      if (!content) content = "분석 결과를 생성하지 못했습니다.";
+    } catch (err) {
+      console.error("OpenAI error:", err);
+      content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
     }
 
-    await db
-      .update(analysesTable)
-      .set({
-        status: "completed",
-        currentStep: null,
-        investmentVerdict,
-        targetPrice,
-        entryPrice,
-        stopLoss,
-        riskRewardRatio,
-        updatedAt: new Date(),
+    const [step] = await db
+      .insert(analysisStepsTable)
+      .values({
+        analysisId: id,
+        stepKey,
+        agentName: agent.name,
+        agentRole: agent.role,
+        content,
+        validationNotes: null,
+        informationType: "data_based_estimate",
       })
-      .where(eq(analysesTable.id, id));
+      .returning();
 
-    triggerModelReview().catch(console.error);
-  } else if (nextStep) {
-    await db
-      .update(analysesTable)
-      .set({ currentStep: nextStep, updatedAt: new Date() })
-      .where(eq(analysesTable.id, id));
+    const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
+    const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;
+    const isLast = stepKey === "investment_strategy";
+
+    if (isLast) {
+      let investmentVerdict: string | null = null;
+      let targetPrice: number | null = null;
+      let entryPrice: number | null = null;
+      let stopLoss: number | null = null;
+      let riskRewardRatio: number | null = null;
+
+      try {
+        const json = JSON.parse(content);
+        investmentVerdict = json.verdict ?? null;
+
+        const parsePrice = (val: string | undefined) => {
+          if (!val) return null;
+          const num = parseFloat(String(val).replace(/[^0-9.]/g, ""));
+          return isNaN(num) ? null : num;
+        };
+
+        targetPrice = parsePrice(json.target_price);
+        entryPrice = parsePrice(json.entry_price);
+        stopLoss = parsePrice(json.stop_loss);
+
+        if (targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss) {
+          riskRewardRatio = Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss));
+        }
+
+        const rr = json.risk_reward;
+        if (!riskRewardRatio && rr) {
+          const m = String(rr).match(/[\d.]+/g);
+          if (m && m.length >= 2) riskRewardRatio = parseFloat(m[1]) / parseFloat(m[0]);
+        }
+      } catch {
+        // JSON parse failed
+      }
+
+      await db
+        .update(analysesTable)
+        .set({
+          status: "completed",
+          currentStep: null,
+          investmentVerdict,
+          targetPrice,
+          entryPrice,
+          stopLoss,
+          riskRewardRatio,
+          updatedAt: new Date(),
+        })
+        .where(eq(analysesTable.id, id));
+
+      triggerModelReview().catch(console.error);
+    } else if (nextStep) {
+      await db
+        .update(analysesTable)
+        .set({ currentStep: nextStep, updatedAt: new Date() })
+        .where(eq(analysesTable.id, id));
+    }
+
+    res.json(formatStep(step));
+  } finally {
+    runningStepsLock.delete(lockKey);
   }
-
-  res.json(formatStep(step));
 });
 
 function formatStep(step: any) {
