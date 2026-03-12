@@ -125,6 +125,8 @@ export default function StockChart({ ticker, companyName }: StockChartProps) {
   const { data, isLoading, error } = useGetMarketData(ticker, { period, interval });
 
   const isUp = (data?.changePercent ?? 0) >= 0;
+  const nxtInfo = (data as any)?.nxtInfo as { price: number; changePercent: number; compareToPrev: string; at: string; sessionType: string; status: string } | null | undefined;
+  const nxtIsUp = (nxtInfo?.changePercent ?? 0) >= 0;
 
   const chartData = data?.candles?.map((c) => ({
     ...c,
@@ -154,15 +156,38 @@ export default function StockChart({ ticker, companyName }: StockChartProps) {
             <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">{ticker}</span>
           </div>
           {data && (
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xl font-bold text-foreground font-mono">{formatPrice(data.currentPrice)}</span>
-              <span className={cn(
-                "flex items-center gap-0.5 text-sm font-semibold",
-                isUp ? "text-success" : "text-destructive"
-              )}>
-                {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                {isUp ? "+" : ""}{data.changePercent.toFixed(2)}%
-              </span>
+            <div className="flex flex-col gap-0.5 mt-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-bold text-foreground font-mono">{formatPrice(data.currentPrice)}</span>
+                <span className={cn(
+                  "flex items-center gap-0.5 text-sm font-semibold",
+                  isUp ? "text-success" : "text-destructive"
+                )}>
+                  {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  {isUp ? "+" : ""}{data.changePercent.toFixed(2)}%
+                </span>
+                <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">KRX 종가</span>
+              </div>
+              {nxtInfo && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                    {nxtInfo.sessionType === "AFTER_MARKET" ? "NXT 장후" : "NXT 장전"}
+                    {nxtInfo.status === "OPEN" ? " 거래중" : ""}
+                  </span>
+                  <span className="font-mono font-bold text-sm text-foreground">{formatPrice(nxtInfo.price)}</span>
+                  <span className={cn("text-xs font-semibold", nxtIsUp ? "text-success" : "text-destructive")}>
+                    {nxtIsUp ? "+" : ""}{nxtInfo.changePercent.toFixed(2)}%
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    ({nxtInfo.compareToPrev}원)
+                  </span>
+                  {nxtInfo.at && (
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                      {nxtInfo.at.replace("T", " ").substring(0, 16)} KST
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

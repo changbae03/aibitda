@@ -60,6 +60,97 @@ async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; i
   return { companyName: ticker, industry: "일반", resolvedSymbol: ticker };
 }
 
+// ─── Naver Finance data fetching ─────────────────────────────────────────────
+
+const NAVER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  "Referer": "https://m.stock.naver.com/",
+};
+
+function naverFmt(val: string | undefined | null): number | null {
+  if (!val) return null;
+  const n = Number(String(val).replace(/,/g, ""));
+  return isNaN(n) ? null : n;
+}
+
+async function fetchNaverFinanceData(code: string): Promise<string> {
+  const lines: string[] = [];
+
+  try {
+    const basicRes = await fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, { headers: NAVER_HEADERS });
+    if (basicRes.ok) {
+      const basic: any = await basicRes.json();
+      lines.push("\n=== 네이버증권 실시간 시세 데이터 ===");
+      const close = naverFmt(basic.closePrice);
+      const exchName = basic.stockExchangeName ?? basic.stockExchangeType?.nameKor ?? "";
+      if (close) lines.push(`KRX(${exchName}) 최종 종가: ${close.toLocaleString("ko-KR")}원`);
+      const fluctRatio = basic.compareToPreviousPrice?.text ?? "";
+      const fluctPct = basic.fluctuationsRatio ?? "";
+      if (fluctRatio && fluctPct) lines.push(`당일 등락: ${fluctRatio} ${fluctPct}%`);
+
+      const nxt = basic.overMarketPriceInfo;
+      if (nxt?.overPrice) {
+        const nxtPrice = naverFmt(nxt.overPrice);
+        const sessionType = nxt.tradingSessionType === "AFTER_MARKET" ? "NXT 장후거래" : nxt.tradingSessionType === "PRE_MARKET" ? "NXT 장전거래" : "NXT";
+        const status = nxt.overMarketStatus === "CLOSE" ? "(마감)" : nxt.overMarketStatus === "OPEN" ? "(거래중)" : "";
+        if (nxtPrice) {
+          lines.push(`${sessionType}${status} 최종가: ${nxtPrice.toLocaleString("ko-KR")}원 (등락 ${nxt.fluctuationsRatio}%, 변동 ${nxt.compareToPreviousClosePrice}원)`);
+          const tradedAt = nxt.localTradedAt ? ` [${nxt.localTradedAt.replace("T", " ").substring(0, 16)} KST]` : "";
+          lines.push(`NXT 거래 시각:${tradedAt}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[naver-basic] Error:", e);
+  }
+
+  try {
+    const summaryRes = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/summary`, { headers: NAVER_HEADERS });
+    if (summaryRes.ok) {
+      const summary: any = await summaryRes.json();
+
+      const parseIncomeStatement = (stmtObj: any, label: string) => {
+        const cols: string[][] = stmtObj?.columns ?? [];
+        const titleList: any[] = stmtObj?.trTitleList ?? [];
+        const periods: string[] = cols[0]?.slice(1) ?? [];
+        const revenues: string[] = cols.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
+        const opIncomes: string[] = cols.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
+        if (!periods.length) return;
+        lines.push(`\n[네이버 ${label} 실적 (단위: 억원, [E]=컨센서스예측)]`);
+        periods.forEach((period: string, i: number) => {
+          const isE = titleList[i]?.isConsensus === "Y" ? "[E] " : "";
+          const rev = revenues[i] ? fmtNum(Number(revenues[i]) * 1e8, "KRW") : "-";
+          const op = opIncomes[i] ? fmtNum(Number(opIncomes[i]) * 1e8, "KRW") : "-";
+          const margin = (revenues[i] && opIncomes[i] && Number(revenues[i]) > 0)
+            ? ` (영업이익률 ${((Number(opIncomes[i]) / Number(revenues[i])) * 100).toFixed(1)}%)`
+            : "";
+          lines.push(`  ${isE}${period}: 매출 ${rev} | 영업이익 ${op}${margin}`);
+        });
+      };
+
+      parseIncomeStatement(summary.chartIncomeStatement?.annual, "연간");
+      parseIncomeStatement(summary.chartIncomeStatement?.quarter, "분기");
+
+      const epsCols: string[][] = summary.chartEps?.columns ?? [];
+      const epsTitleList: any[] = summary.chartEps?.trTitleList ?? [];
+      const epsPeriods: string[] = epsCols[0]?.slice(1) ?? [];
+      const epsVals: string[] = epsCols.find((c: string[]) => c[0] === "EPS")?.slice(1) ?? [];
+      if (epsPeriods.length > 0 && epsVals.length > 0) {
+        lines.push("\n[네이버 분기 EPS (원, [E]=컨센서스예측)]");
+        epsPeriods.forEach((period: string, i: number) => {
+          const isE = epsTitleList[i]?.isConsensus === "Y" ? "[E] " : "";
+          const epsNum = naverFmt(epsVals[i]);
+          if (epsNum != null) lines.push(`  ${isE}${period}: EPS ${epsNum.toLocaleString("ko-KR")}원`);
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[naver-summary] Error:", e);
+  }
+
+  return lines.join("\n");
+}
+
 // ─── Financial data fetching ──────────────────────────────────────────────────
 
 function toYear(val: any): string {
@@ -218,6 +309,13 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       const growth  = t.earningsEstimate?.growth != null ? pct(t.earningsEstimate.growth) : "-";
       lines.push(`  ${period}: EPS ${epsAvg} (${epsLow}~${epsHigh}), 매출 ${revAvg}, 성장률 ${growth}`);
     }
+  }
+
+  // Supplement with Naver Finance for Korean stocks
+  const koreanCode = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/)?.[1];
+  if (koreanCode) {
+    const naverData = await fetchNaverFinanceData(koreanCode);
+    if (naverData) lines.push(naverData);
   }
 
   const text = lines.join("\n");

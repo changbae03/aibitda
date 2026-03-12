@@ -263,8 +263,9 @@ router.get("/:ticker", async (req, res) => {
     const yearLow = Math.min(...lows);
     const currentRsi = rsi[rsi.length - 1];
 
-    let quoteInfo = null;
     const resolvedSymbol = koreanResolved?.symbol ?? ticker;
+
+    let quoteInfo = null;
     try {
       const quote = await yahooFinance.quote(resolvedSymbol);
       quoteInfo = {
@@ -279,14 +280,52 @@ router.get("/:ticker", async (req, res) => {
       // quote info optional
     }
 
+    // Fetch Naver real-time data for Korean stocks (NXT price + accurate close)
+    let nxtInfo: { price: number; changePercent: number; compareToPrev: string; at: string; sessionType: string; status: string } | null = null;
+    let naverKrxClose: number | null = null;
+    const koreanCode = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/)?.[1];
+    if (koreanCode) {
+      try {
+        const naverBasicRes = await fetch(
+          `https://m.stock.naver.com/api/stock/${koreanCode}/basic`,
+          { headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", "Referer": "https://m.stock.naver.com/" } }
+        );
+        if (naverBasicRes.ok) {
+          const naverBasic: any = await naverBasicRes.json();
+          const naverClose = naverBasic.closePrice ? Number(String(naverBasic.closePrice).replace(/,/g, "")) : null;
+          if (naverClose && naverClose > 0) naverKrxClose = naverClose;
+          const nxt = naverBasic.overMarketPriceInfo;
+          if (nxt?.overPrice) {
+            const nxtPriceNum = Number(String(nxt.overPrice).replace(/,/g, ""));
+            if (nxtPriceNum > 0) {
+              nxtInfo = {
+                price: nxtPriceNum,
+                changePercent: Number(nxt.fluctuationsRatio ?? 0),
+                compareToPrev: nxt.compareToPreviousClosePrice ?? "0",
+                at: nxt.localTradedAt ?? "",
+                sessionType: nxt.tradingSessionType ?? "AFTER_MARKET",
+                status: nxt.overMarketStatus ?? "CLOSE",
+              };
+            }
+          }
+        }
+      } catch {
+        // optional
+      }
+    }
+
+    // Use Naver close price as authoritative for Korean stocks when available
+    const effectiveCurrentPrice = naverKrxClose ?? currentPrice;
+
     res.json({
       ticker,
       quoteInfo,
-      currentPrice,
+      currentPrice: effectiveCurrentPrice,
       changePercent,
       yearHigh,
       yearLow,
       currentRsi,
+      nxtInfo,
       candles: dates.map((date, i) => ({
         date,
         open: opens[i],
