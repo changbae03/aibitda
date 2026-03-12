@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useListAnalyses, useListModelInsights, useStartAnalysis } from "@workspace/api-client-react";
+import { useListAnalyses, useListModelInsights, useStartAnalysis, useDeleteAnalysis } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Search,
   Loader2,
-  TrendingDown
+  TrendingDown,
+  Trash2
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -23,6 +24,14 @@ export default function Dashboard() {
   const { data: analyses, isLoading: loadingAnalyses } = useListAnalyses();
   const { data: insights } = useListModelInsights();
   const { mutateAsync: startAnalysis, isPending: isStarting } = useStartAnalysis();
+  const { mutate: deleteAnalysis } = useDeleteAnalysis();
+
+  const handleDelete = (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("이 분석을 삭제하시겠습니까?")) return;
+    deleteAnalysis(id);
+  };
   const [quickTicker, setQuickTicker] = useState("");
 
   const completedAnalyses = analyses?.filter(a => a.status === 'completed') || [];
@@ -166,6 +175,13 @@ export default function Dashboard() {
                             ) : null}
                           </div>
                         )}
+                        <button
+                          onClick={(e) => handleDelete(e, analysis.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                          title="분석 삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                         <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                     </Link>

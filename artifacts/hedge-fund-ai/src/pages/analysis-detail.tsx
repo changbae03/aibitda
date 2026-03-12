@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { useRoute } from "wouter";
-import { useGetAnalysis, useRunAnalysisStep, getGetAnalysisQueryKey } from "@workspace/api-client-react";
+import { useRoute, useLocation } from "wouter";
+import { useGetAnalysis, useRunAnalysisStep, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AGENTS, ANALYSIS_STEPS_ORDER, type AgentInfo } from "@/lib/agents";
 import { format } from "date-fns";
@@ -11,7 +11,8 @@ import {
   Play, 
   Loader2, 
   Briefcase,
-  BrainCircuit
+  BrainCircuit,
+  Trash2
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +22,7 @@ import remarkGfm from "remark-gfm";
 
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
+  const [, setLocation] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : 0;
   
   const queryClient = useQueryClient();
@@ -31,6 +33,12 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: runStep, isPending: isRunningStep } = useRunAnalysisStep();
+  const { mutate: deleteAnalysis } = useDeleteAnalysis();
+
+  const handleDelete = () => {
+    if (!confirm("이 분석을 삭제하시겠습니까?")) return;
+    deleteAnalysis(id, { onSuccess: () => setLocation("/") });
+  };
   const triggeredSteps = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -100,6 +108,16 @@ export default function AnalysisDetail() {
             </div>
           </div>
 
+          <div className="flex flex-col items-end gap-3">
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-destructive/20"
+              title="분석 삭제"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>삭제</span>
+            </button>
+
           {/* Verdict Card */}
           {isComplete && analysis.investmentVerdict && (
             <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl min-w-[250px]">
@@ -121,6 +139,7 @@ export default function AnalysisDetail() {
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
 

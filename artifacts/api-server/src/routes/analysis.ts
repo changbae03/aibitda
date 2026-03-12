@@ -293,6 +293,17 @@ router.get("/", async (_req, res) => {
   res.json(results);
 });
 
+router.delete("/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  await db.delete(analysisStepsTable).where(eq(analysisStepsTable.analysisId, id));
+  await db.delete(analysesTable).where(eq(analysesTable.id, id));
+  res.json({ success: true });
+});
+
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
