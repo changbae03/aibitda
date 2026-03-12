@@ -67,6 +67,14 @@ function calculateBollingerBands(closes: number[], period = 20, multiplier = 2) 
   return { upper, middle, lower };
 }
 
+function isValidEquityName(name: string | undefined, symbol: string): boolean {
+  if (!name) return false;
+  // Invalid if name contains commas (fund/index codes) or is identical to the ticker
+  if (name.includes(",")) return false;
+  if (name.trim() === symbol.trim()) return false;
+  return true;
+}
+
 async function resolveKoreanTicker(
   ticker: string,
   period1: string,
@@ -74,16 +82,33 @@ async function resolveKoreanTicker(
   interval: string,
 ) {
   if (!/^\d{6}$/.test(ticker)) return null;
-  const [ksResult, kqResult] = await Promise.allSettled([
+
+  const [ksChart, kqChart, ksQuote, kqQuote] = await Promise.allSettled([
     yahooFinance.chart(`${ticker}.KS`, { period1, period2, interval: interval as any }),
     yahooFinance.chart(`${ticker}.KQ`, { period1, period2, interval: interval as any }),
+    yahooFinance.quote(`${ticker}.KS`),
+    yahooFinance.quote(`${ticker}.KQ`),
   ]);
-  if (ksResult.status === "fulfilled" && ksResult.value?.quotes?.some((q) => q.close && q.close > 0)) {
-    return { symbol: `${ticker}.KS`, result: ksResult.value };
+
+  const ksValid = ksChart.status === "fulfilled" && ksChart.value?.quotes?.some((q) => q.close && q.close > 0);
+  const kqValid = kqChart.status === "fulfilled" && kqChart.value?.quotes?.some((q) => q.close && q.close > 0);
+
+  const ksName = ksQuote.status === "fulfilled" ? (ksQuote.value.longName ?? ksQuote.value.shortName ?? "") : "";
+  const kqName = kqQuote.status === "fulfilled" ? (kqQuote.value.longName ?? kqQuote.value.shortName ?? "") : "";
+
+  const ksNameOk = isValidEquityName(ksName, `${ticker}.KS`);
+  const kqNameOk = isValidEquityName(kqName, `${ticker}.KQ`);
+
+  // Prefer the exchange whose company name looks like a real stock
+  if (kqValid && kqNameOk && !ksNameOk) {
+    return { symbol: `${ticker}.KQ`, result: kqChart.value! };
   }
-  if (kqResult.status === "fulfilled" && kqResult.value?.quotes?.some((q) => q.close && q.close > 0)) {
-    return { symbol: `${ticker}.KQ`, result: kqResult.value };
+  if (ksValid && ksNameOk && !kqNameOk) {
+    return { symbol: `${ticker}.KS`, result: ksChart.value! };
   }
+  // Both valid or both invalid → prefer KQ (KOSDAQ has more individual stocks)
+  if (kqValid) return { symbol: `${ticker}.KQ`, result: kqChart.value! };
+  if (ksValid) return { symbol: `${ticker}.KS`, result: ksChart.value! };
   return null;
 }
 
@@ -108,7 +133,9 @@ router.get("/:ticker", async (req, res) => {
 
     const periodStr = period as string;
     const p1 = startDate.toISOString().split("T")[0];
-    const p2 = new Date().toISOString().split("T")[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const p2 = tomorrow.toISOString().split("T")[0];
 
     const koreanResolved = await resolveKoreanTicker(ticker, p1, p2, interval as string);
     const result = koreanResolved?.result ?? await yahooFinance.chart(ticker, {
@@ -129,7 +156,13 @@ router.get("/:ticker", async (req, res) => {
       return;
     }
 
-    const dates = quotes.map((d) => new Date(d.date).toISOString().split("T")[0]);
+    const dates = quotes.map((d) => {
+      // Yahoo Finance stores timestamps at midnight of the exchange's local timezone.
+      // KRX (Seoul, UTC+9): midnight KST = 15:00 UTC previous day → ISO date is wrong.
+      // Adding 12 h normalises across all major exchanges (KST +9, ET -5, etc.).
+      const adjusted = new Date(new Date(d.date).getTime() + 12 * 3600 * 1000);
+      return adjusted.toISOString().split("T")[0];
+    });
     const opens = quotes.map((d) => d.open ?? 0);
     const highs = quotes.map((d) => d.high ?? 0);
     const lows = quotes.map((d) => d.low ?? 0);
@@ -151,8 +184,9 @@ router.get("/:ticker", async (req, res) => {
     const currentRsi = rsi[rsi.length - 1];
 
     let quoteInfo = null;
+    const resolvedSymbol = koreanResolved?.symbol ?? ticker;
     try {
-      const quote = await yahooFinance.quote(ticker);
+      const quote = await yahooFinance.quote(resolvedSymbol);
       quoteInfo = {
         longName: quote.longName ?? quote.shortName,
         marketCap: quote.marketCap,
