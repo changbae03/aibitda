@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
-import { Search, Loader2, TrendingUp, Building2, ArrowRight } from "lucide-react";
+import { Search, Loader2, TrendingUp, Building2, ArrowRight, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const EXAMPLES = [
@@ -13,32 +13,115 @@ const EXAMPLES = [
   { ticker: "078160.KS", label: "메디포스트" },
 ];
 
+function isKorean(str: string) {
+  return /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(str);
+}
+
+interface SearchResult {
+  symbol: string;
+  shortname: string;
+  exchange: string;
+  quoteType: string;
+}
+
 export default function NewAnalysis() {
   const [, setLocation] = useLocation();
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isComposing = useRef(false);
+
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (!query.trim()) { setSuggestions([]); setShowDropdown(false); return; }
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/market-data/search/${encodeURIComponent(query)}`);
+      const data: SearchResult[] = await res.json();
+      setSuggestions(data);
+      setShowDropdown(data.length > 0);
+      setSelectedIndex(-1);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isKorean(ticker) && !/[\u4e00-\u9fff]/.test(ticker)) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => fetchSuggestions(ticker), 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [ticker, fetchSuggestions]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+          inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const handleSubmit = async (tickerValue: string) => {
     const value = tickerValue.trim().toUpperCase();
     if (!value) {
-      setError("종목코드를 입력해주세요");
+      setError("종목코드 또는 종목명을 입력해주세요");
       inputRef.current?.focus();
       return;
     }
     setError("");
+    setShowDropdown(false);
     try {
       const result = await startAnalysis({ data: { ticker: value } });
       setLocation(`/analysis/${result.id}`);
-    } catch (e: any) {
+    } catch {
       setError("분석을 시작할 수 없습니다. 올바른 종목코드를 확인해주세요.");
     }
   };
 
+  const handleSelectSuggestion = (sym: string) => {
+    setTicker(sym);
+    setSuggestions([]);
+    setShowDropdown(false);
+    handleSubmit(sym);
+  };
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isComposing.current) return;
+    if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+      handleSelectSuggestion(suggestions[selectedIndex].symbol);
+      return;
+    }
     handleSubmit(ticker);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposing.current) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    }
   };
 
   return (
@@ -59,25 +142,32 @@ export default function NewAnalysis() {
             어떤 종목을 분석할까요?
           </h1>
           <p className="text-muted-foreground text-base">
-            종목코드를 입력하면 5명의 최정예 AI 에이전트가 즉시 분석을 시작합니다
+            종목코드 또는 한글 회사명을 입력하면 5명의 최정예 AI 에이전트가 즉시 분석을 시작합니다
           </p>
         </div>
 
         {/* Search box */}
-        <form onSubmit={onSubmit} className="w-full">
+        <form onSubmit={onSubmit} className="w-full relative">
           <div className={`flex items-center gap-3 bg-white border-2 rounded-2xl px-5 py-3 shadow-md transition-all ${error ? "border-destructive" : "border-border focus-within:border-primary focus-within:shadow-lg focus-within:shadow-primary/10"}`}>
             <Search className="w-5 h-5 text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
               value={ticker}
-              onChange={(e) => { setTicker(e.target.value.toUpperCase()); setError(""); }}
-              placeholder="종목코드 입력  예) 005930, NVDA, 078160.KS"
-              className="flex-1 bg-transparent border-none outline-none text-foreground text-lg font-mono placeholder:text-muted-foreground/50 placeholder:font-sans placeholder:text-base"
+              onChange={(e) => { setTicker(e.target.value); setError(""); }}
+              onCompositionStart={() => { isComposing.current = true; }}
+              onCompositionEnd={(e) => {
+                isComposing.current = false;
+                setTicker(e.currentTarget.value);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="종목코드 또는 회사명  예) 삼성전자, NVDA, 005930"
+              className="flex-1 bg-transparent border-none outline-none text-foreground text-lg placeholder:text-muted-foreground/50 placeholder:font-sans placeholder:text-base"
               autoFocus
               disabled={isPending}
-              onKeyDown={(e) => e.key === "Enter" && onSubmit(e as any)}
+              autoComplete="off"
             />
+            {isSearching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />}
             <button
               type="submit"
               disabled={isPending || !ticker.trim()}
@@ -90,6 +180,43 @@ export default function NewAnalysis() {
               )}
             </button>
           </div>
+
+          {/* Autocomplete Dropdown */}
+          <AnimatePresence>
+            {showDropdown && suggestions.length > 0 && (
+              <motion.div
+                ref={dropdownRef}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.12 }}
+                className="absolute top-full left-0 right-0 mt-2 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden"
+              >
+                {suggestions.map((s, i) => (
+                  <button
+                    key={s.symbol}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
+                    className={`w-full flex items-center justify-between px-4 py-3 hover:bg-primary/5 transition-colors text-left ${i === selectedIndex ? "bg-primary/10" : ""}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-mono text-primary text-[10px] font-bold shrink-0">
+                        {s.symbol.substring(0, 4)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{s.shortname}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono text-xs text-muted-foreground">{s.symbol}</span>
+                          {s.exchange && <span className="text-[10px] text-muted-foreground/60 bg-muted px-1 rounded">{s.exchange}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {error && (
@@ -148,7 +275,7 @@ export default function NewAnalysis() {
 
         {/* Info note */}
         <p className="text-xs text-muted-foreground text-center max-w-md leading-relaxed">
-          한국(KOSPI/KOSDAQ), 미국, 글로벌 거래소 모든 종목 지원 · 기업명과 산업은 자동으로 조회됩니다
+          한국(KOSPI/KOSDAQ), 미국, 글로벌 거래소 모든 종목 지원 · 한글 회사명으로도 검색 가능합니다
         </p>
       </motion.div>
     </div>

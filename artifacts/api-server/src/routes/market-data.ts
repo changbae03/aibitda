@@ -112,6 +112,86 @@ async function resolveKoreanTicker(
   return null;
 }
 
+const KOREAN_COMPANY_MAP: Array<{ name: string; keywords: string[]; symbol: string; exchange: string }> = [
+  { name: "삼성전자", keywords: ["삼성전자", "삼성"], symbol: "005930.KS", exchange: "KSC" },
+  { name: "SK하이닉스", keywords: ["sk하이닉스", "하이닉스"], symbol: "000660.KS", exchange: "KSC" },
+  { name: "카카오", keywords: ["카카오"], symbol: "035720.KS", exchange: "KSC" },
+  { name: "NAVER", keywords: ["네이버", "naver"], symbol: "035420.KS", exchange: "KSC" },
+  { name: "현대차", keywords: ["현대차", "현대자동차"], symbol: "005380.KS", exchange: "KSC" },
+  { name: "기아", keywords: ["기아"], symbol: "000270.KS", exchange: "KSC" },
+  { name: "LG화학", keywords: ["lg화학", "엘지화학"], symbol: "051910.KS", exchange: "KSC" },
+  { name: "LG전자", keywords: ["lg전자", "엘지전자"], symbol: "066570.KS", exchange: "KSC" },
+  { name: "LG에너지솔루션", keywords: ["lg에너지", "엘지에너지솔루션", "lges"], symbol: "373220.KS", exchange: "KSC" },
+  { name: "셀트리온", keywords: ["셀트리온"], symbol: "068270.KS", exchange: "KSC" },
+  { name: "삼성바이오로직스", keywords: ["삼성바이오", "바이오로직스"], symbol: "207940.KS", exchange: "KSC" },
+  { name: "삼성SDI", keywords: ["삼성sdi", "삼성에스디아이"], symbol: "006400.KS", exchange: "KSC" },
+  { name: "삼성전기", keywords: ["삼성전기"], symbol: "009150.KS", exchange: "KSC" },
+  { name: "현대모비스", keywords: ["현대모비스", "모비스"], symbol: "012330.KS", exchange: "KSC" },
+  { name: "POSCO홀딩스", keywords: ["포스코", "posco"], symbol: "005490.KS", exchange: "KSC" },
+  { name: "KB금융", keywords: ["kb금융", "kb국민은행"], symbol: "105560.KS", exchange: "KSC" },
+  { name: "신한지주", keywords: ["신한지주", "신한"], symbol: "055550.KS", exchange: "KSC" },
+  { name: "하나금융지주", keywords: ["하나금융", "하나은행"], symbol: "086790.KS", exchange: "KSC" },
+  { name: "우리금융지주", keywords: ["우리금융", "우리은행"], symbol: "316140.KS", exchange: "KSC" },
+  { name: "카카오뱅크", keywords: ["카카오뱅크"], symbol: "323410.KS", exchange: "KSC" },
+  { name: "카카오페이", keywords: ["카카오페이"], symbol: "377300.KS", exchange: "KSC" },
+  { name: "크래프톤", keywords: ["크래프톤", "배틀그라운드"], symbol: "259960.KS", exchange: "KSC" },
+  { name: "하이브", keywords: ["하이브", "빅히트"], symbol: "352820.KS", exchange: "KSC" },
+  { name: "SK텔레콤", keywords: ["sk텔레콤", "에스케이텔레콤"], symbol: "017670.KS", exchange: "KSC" },
+  { name: "KT", keywords: ["kt", "케이티"], symbol: "030200.KS", exchange: "KSC" },
+  { name: "SK이노베이션", keywords: ["sk이노베이션"], symbol: "096770.KS", exchange: "KSC" },
+  { name: "한화에어로스페이스", keywords: ["한화에어로", "한화항공우주"], symbol: "012450.KS", exchange: "KSC" },
+  { name: "두산에너빌리티", keywords: ["두산에너빌리티", "두산중공업"], symbol: "034020.KS", exchange: "KSC" },
+  { name: "메디포스트", keywords: ["메디포스트"], symbol: "078160.KS", exchange: "KSC" },
+  { name: "에코프로비엠", keywords: ["에코프로비엠", "에코프로"], symbol: "247540.KQ", exchange: "KOE" },
+  { name: "포스코퓨처엠", keywords: ["포스코퓨처엠", "포스코케미칼"], symbol: "003670.KS", exchange: "KSC" },
+  { name: "고려아연", keywords: ["고려아연"], symbol: "010130.KS", exchange: "KSC" },
+  { name: "삼성물산", keywords: ["삼성물산"], symbol: "028260.KS", exchange: "KSC" },
+  { name: "롯데케미칼", keywords: ["롯데케미칼", "롯데화학"], symbol: "011170.KS", exchange: "KSC" },
+  { name: "한국전력", keywords: ["한국전력", "한전"], symbol: "015760.KS", exchange: "KSC" },
+  { name: "기업은행", keywords: ["기업은행", "ibk"], symbol: "024110.KS", exchange: "KSC" },
+  { name: "현대건설", keywords: ["현대건설"], symbol: "000720.KS", exchange: "KSC" },
+  { name: "HD현대중공업", keywords: ["hd현대중공업", "현대중공업"], symbol: "329180.KS", exchange: "KSC" },
+  { name: "한진칼", keywords: ["한진칼", "대한항공"], symbol: "180640.KS", exchange: "KSC" },
+  { name: "엔씨소프트", keywords: ["엔씨소프트", "엔씨"], symbol: "036570.KS", exchange: "KSC" },
+  { name: "넷마블", keywords: ["넷마블"], symbol: "251270.KS", exchange: "KSC" },
+];
+
+function searchKorean(query: string) {
+  const q = query.toLowerCase().replace(/\s/g, "");
+  return KOREAN_COMPANY_MAP.filter(c =>
+    c.keywords.some(k => k.includes(q) || q.includes(k))
+  ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
+}
+
+router.get("/search/:query", async (req, res) => {
+  const query = req.params.query;
+  if (!query || query.trim().length < 1) {
+    res.json([]);
+    return;
+  }
+
+  const isKorean = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(query);
+  if (isKorean) {
+    res.json(searchKorean(query));
+    return;
+  }
+
+  try {
+    const result = await yahooFinance.search(query, { newsCount: 0, quotesCount: 8 });
+    const quotes = (result.quotes || [])
+      .filter((q: any) => q.symbol && (q.quoteType === "EQUITY" || q.quoteType === "ETF"))
+      .map((q: any) => ({
+        symbol: q.symbol,
+        shortname: q.shortname || q.longname || q.symbol,
+        exchange: q.exchange || "",
+        quoteType: q.quoteType || "",
+      }));
+    res.json(quotes);
+  } catch {
+    res.json([]);
+  }
+});
+
 router.get("/:ticker", async (req, res) => {
   const { ticker } = req.params;
   const { period = "1y", interval = "1d" } = req.query as {

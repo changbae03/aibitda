@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useListAnalyses, useListModelInsights, useStartAnalysis, useDeleteAnalysis } from "@workspace/api-client-react";
 import { format } from "date-fns";
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const { data: insights } = useListModelInsights();
   const { mutateAsync: startAnalysis, isPending: isStarting } = useStartAnalysis();
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
+  const isComposing = useRef(false);
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.preventDefault();
@@ -47,8 +48,14 @@ export default function Dashboard() {
 
   const handleQuickAnalysis = async (e: React.FormEvent) => {
     e.preventDefault();
-    const t = quickTicker.trim().toUpperCase();
-    if (!t) return;
+    if (isComposing.current) return;
+    const raw = quickTicker.trim();
+    if (!raw) return;
+    if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(raw)) {
+      setLocation("/analysis/new");
+      return;
+    }
+    const t = raw.toUpperCase();
     const result = await startAnalysis({ data: { ticker: t } });
     setLocation(`/analysis/${result.id}`);
   };
@@ -62,10 +69,13 @@ export default function Dashboard() {
           <input
             type="text"
             value={quickTicker}
-            onChange={e => setQuickTicker(e.target.value.toUpperCase())}
-            placeholder="종목코드를 입력하고 Enter  예) 005930, NVDA, 078160.KS"
-            className="flex-1 bg-transparent outline-none border-none text-foreground text-base font-mono placeholder:font-sans placeholder:text-muted-foreground/60 placeholder:text-sm"
+            onChange={e => { setQuickTicker(e.target.value); }}
+            onCompositionStart={() => { isComposing.current = true; }}
+            onCompositionEnd={(e) => { isComposing.current = false; setQuickTicker(e.currentTarget.value); }}
+            placeholder="종목코드 또는 회사명 입력  예) 삼성전자, NVDA, 005930"
+            className="flex-1 bg-transparent outline-none border-none text-foreground text-base placeholder:font-sans placeholder:text-muted-foreground/60 placeholder:text-sm"
             disabled={isStarting}
+            autoComplete="off"
           />
           <button
             type="submit"
