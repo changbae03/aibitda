@@ -225,6 +225,14 @@ export default function AnalysisDetail() {
   );
 }
 
+function formatPrice(val: string | number | undefined | null): string {
+  if (val == null) return "N/A";
+  const str = String(val).trim();
+  const num = parseFloat(str.replace(/[^0-9.]/g, ""));
+  if (isNaN(num)) return str;
+  return new Intl.NumberFormat("ko-KR").format(num) + "원";
+}
+
 function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: number }) {
   let json: any = null;
   try { json = JSON.parse(step.content); } catch { /* fallback to text */ }
@@ -271,15 +279,15 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-xl p-4 border border-border text-center">
               <div className="text-[11px] text-muted-foreground font-mono mb-1">진입가</div>
-              <div className="font-bold text-foreground text-base">{json.entry_price}</div>
+              <div className="font-bold text-foreground text-base">{formatPrice(json.entry_price)}</div>
             </div>
             <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 text-center">
               <div className="text-[11px] text-emerald-600 font-mono mb-1">목표가</div>
-              <div className="font-bold text-emerald-700 text-base">{json.target_price}</div>
+              <div className="font-bold text-emerald-700 text-base">{formatPrice(json.target_price)}</div>
             </div>
             <div className="bg-red-50 rounded-xl p-4 border border-red-200 text-center">
               <div className="text-[11px] text-red-500 font-mono mb-1">손절가</div>
-              <div className="font-bold text-red-600 text-base">{json.stop_loss}</div>
+              <div className="font-bold text-red-600 text-base">{formatPrice(json.stop_loss)}</div>
             </div>
           </div>
 
@@ -376,7 +384,7 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
               ul: ({ children }) => <ul className="mb-3 space-y-1 pl-1">{children}</ul>,
               ol: ({ children }) => <ol className="mb-3 space-y-1 pl-4 list-decimal">{children}</ol>,
               li: ({ children }) => <li className="flex gap-2 text-foreground/85"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current flex-shrink-0 opacity-50" /><span>{children}</span></li>,
-              strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+              strong: ({ children }) => <span>{children}</span>,
               em: ({ children }) => <em className="text-foreground/70">{children}</em>,
               hr: () => <hr className="my-3 border-border" />,
             }}
