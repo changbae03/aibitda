@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { analysesTable, analysisStepsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import OpenAI from "openai";
+import YahooFinance from "yahoo-finance2";
 import {
   AGENTS,
   STEP_ORDER,
@@ -11,29 +12,66 @@ import {
 } from "../lib/ai-agents.js";
 
 const router: IRouter = Router();
+const yahooFinance = new YahooFinance();
 
 const client = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? undefined,
 });
 
+function normalizeTickerForYahoo(ticker: string): string {
+  if (/^\d{6}$/.test(ticker)) return `${ticker}.KS`;
+  if (/^\d{6}KQ$/.test(ticker)) return `${ticker.slice(0, 6)}.KQ`;
+  return ticker;
+}
+
+async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; industry: string }> {
+  const symbol = normalizeTickerForYahoo(ticker);
+  try {
+    const result = await yahooFinance.quoteSummary(symbol, {
+      modules: ["quoteType", "summaryProfile"],
+    });
+    const companyName =
+      (result.quoteType as any)?.longName ||
+      (result.quoteType as any)?.shortName ||
+      ticker;
+    const industry =
+      (result.summaryProfile as any)?.industry ||
+      (result.summaryProfile as any)?.sector ||
+      (result.summaryProfile as any)?.industryDisp ||
+      "일반";
+    return { companyName, industry };
+  } catch {
+    return { companyName: ticker, industry: "일반" };
+  }
+}
+
 router.post("/", async (req, res) => {
-  const { ticker, companyName, industry, additionalContext } = req.body as {
+  const { ticker, companyName: rawCompanyName, industry: rawIndustry, additionalContext } = req.body as {
     ticker: string;
-    companyName: string;
-    industry: string;
+    companyName?: string;
+    industry?: string;
     additionalContext?: string;
   };
 
-  if (!ticker || !companyName || !industry) {
-    res.status(400).json({ error: "ticker, companyName, industry are required" });
+  if (!ticker) {
+    res.status(400).json({ error: "ticker는 필수입니다" });
     return;
+  }
+
+  let companyName = rawCompanyName?.trim();
+  let industry = rawIndustry?.trim();
+
+  if (!companyName || !industry) {
+    const info = await fetchTickerInfo(ticker.toUpperCase());
+    companyName = companyName || info.companyName;
+    industry = industry || info.industry;
   }
 
   const [analysis] = await db
     .insert(analysesTable)
     .values({
-      ticker,
+      ticker: ticker.toUpperCase(),
       companyName,
       industry,
       additionalContext: additionalContext ?? null,
@@ -41,11 +79,6 @@ router.post("/", async (req, res) => {
       currentStep: "industry_structure",
     })
     .returning();
-
-  const fullAnalysis = await db.query.analysesTable.findFirst({
-    where: eq(analysesTable.id, analysis.id),
-    with: { steps: true } as any,
-  });
 
   res.json(formatAnalysis(analysis, []));
 });

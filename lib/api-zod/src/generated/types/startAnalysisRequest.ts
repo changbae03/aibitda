@@ -9,10 +9,10 @@
 export interface StartAnalysisRequest {
   /** Stock ticker symbol (e.g. 005930, AAPL) */
   ticker: string;
-  /** Company name */
-  companyName: string;
-  /** Industry/sector */
-  industry: string;
+  /** Company name (auto-fetched if omitted) */
+  companyName?: string;
+  /** Industry/sector (auto-fetched if omitted) */
+  industry?: string;
   /** Additional context or focus areas for analysis */
   additionalContext?: string;
 }

@@ -1,5 +1,6 @@
-import { Link } from "wouter";
-import { useListAnalyses, useListHypotheses } from "@workspace/api-client-react";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useListAnalyses, useListHypotheses, useStartAnalysis } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
@@ -9,14 +10,19 @@ import {
   TrendingUp, 
   Activity,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Search,
+  Loader2
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
   const { data: analyses, isLoading: loadingAnalyses } = useListAnalyses();
   const { data: hypotheses, isLoading: loadingHypotheses } = useListHypotheses();
+  const { mutateAsync: startAnalysis, isPending: isStarting } = useStartAnalysis();
+  const [quickTicker, setQuickTicker] = useState("");
 
   const completedAnalyses = analyses?.filter(a => a.status === 'completed') || [];
   const inProgressAnalyses = analyses?.filter(a => a.status === 'in_progress') || [];
@@ -27,26 +33,37 @@ export default function Dashboard() {
   const resolvedCount = hypotheses?.filter(h => h.outcome !== 'pending' && h.outcome !== 'ongoing').length || 0;
   const winRate = resolvedCount > 0 ? (successfulHypotheses.length / resolvedCount) * 100 : 0;
 
+  const handleQuickAnalysis = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = quickTicker.trim().toUpperCase();
+    if (!t) return;
+    const result = await startAnalysis({ data: { ticker: t } });
+    setLocation(`/analysis/${result.id}`);
+  };
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">
-            리서치 현황
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            AI 기업분석 팀 운영 현황 및 포트폴리오 인사이트
-          </p>
+    <div className="space-y-7">
+      {/* Quick Search */}
+      <form onSubmit={handleQuickAnalysis}>
+        <div className="flex items-center gap-3 bg-white border-2 border-border rounded-2xl px-5 py-3 shadow-sm focus-within:border-primary focus-within:shadow-md focus-within:shadow-primary/10 transition-all">
+          <Search className="w-5 h-5 text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            value={quickTicker}
+            onChange={e => setQuickTicker(e.target.value.toUpperCase())}
+            placeholder="종목코드를 입력하고 Enter  예) 005930, NVDA, 078160.KS"
+            className="flex-1 bg-transparent outline-none border-none text-foreground text-base font-mono placeholder:font-sans placeholder:text-muted-foreground/60 placeholder:text-sm"
+            disabled={isStarting}
+          />
+          <button
+            type="submit"
+            disabled={isStarting || !quickTicker.trim()}
+            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-50"
+          >
+            {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><BrainCircuit className="w-4 h-4" /> 분석 시작</>}
+          </button>
         </div>
-        <Link 
-          href="/analysis/new"
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all shadow-sm"
-        >
-          <BrainCircuit className="w-4 h-4" />
-          AI 분석 시작
-        </Link>
-      </header>
+      </form>
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

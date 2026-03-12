@@ -245,17 +245,15 @@ components:
           description: Stock ticker symbol (e.g. 005930, AAPL)
         companyName:
           type: string
-          description: Company name
+          description: Company name (auto-fetched if omitted)
         industry:
           type: string
-          description: Industry/sector
+          description: Industry/sector (auto-fetched if omitted)
         additionalContext:
           type: string
           description: Additional context or focus areas for analysis
       required:
         - ticker
-        - companyName
-        - industry
 
     RunStepRequest:
       type: object
