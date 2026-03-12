@@ -28,15 +28,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 border-r border-white/5 bg-card/30 backdrop-blur-xl flex flex-col z-20 hidden md:flex">
-        <div className="p-6 flex items-center gap-3">
+        <div className="p-5 flex items-center gap-3 border-b border-white/5">
           <img 
-            src={`${import.meta.env.BASE_URL}images/logo-mark.png`} 
-            alt="Logo" 
-            className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
+            src={`${import.meta.env.BASE_URL}images/cbst-logo.png`} 
+            alt="CBST Research" 
+            className="h-9 w-auto object-contain"
           />
-          <span className="font-display font-bold text-lg tracking-wide text-white">
-            QUANT<span className="text-primary">AI</span>
-          </span>
+          <div className="flex flex-col leading-tight">
+            <span className="font-display font-bold text-sm tracking-widest text-white">AI 기업분석</span>
+            <span className="text-xs text-muted-foreground font-mono tracking-wider">플랫폼</span>
+          </div>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">
