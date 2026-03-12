@@ -13,6 +13,8 @@ tags:
     description: AI research analysis operations
   - name: hypotheses
     description: Investment hypothesis tracking
+  - name: market-data
+    description: Real-time and historical market data
 paths:
   /healthz:
     get:
@@ -172,6 +174,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Hypothesis"
+
+  /market-data/{ticker}:
+    get:
+      operationId: getMarketData
+      tags: [market-data]
+      summary: Get historical market data with technical indicators
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Ticker symbol (e.g. 078160.KS, AAPL)
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: ["3m", "6m", "1y", "2y", "5y"]
+            default: "1y"
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: ["1d", "1wk", "1mo"]
+            default: "1d"
+      responses:
+        "200":
+          description: Market data with technical indicators
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketData"
+        "404":
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to fetch data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -393,3 +439,100 @@ components:
         - outcome
         - createdAt
         - updatedAt
+
+    Candle:
+      type: object
+      properties:
+        date:
+          type: string
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: number
+        rsi:
+          type: number
+          nullable: true
+        ma20:
+          type: number
+          nullable: true
+        ma60:
+          type: number
+          nullable: true
+        ma120:
+          type: number
+          nullable: true
+        bbUpper:
+          type: number
+          nullable: true
+        bbMiddle:
+          type: number
+          nullable: true
+        bbLower:
+          type: number
+          nullable: true
+      required:
+        - date
+        - open
+        - high
+        - low
+        - close
+        - volume
+
+    MarketQuoteInfo:
+      type: object
+      properties:
+        longName:
+          type: string
+          nullable: true
+        marketCap:
+          type: number
+          nullable: true
+        fiftyTwoWeekHigh:
+          type: number
+          nullable: true
+        fiftyTwoWeekLow:
+          type: number
+          nullable: true
+        averageVolume:
+          type: number
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+
+    MarketData:
+      type: object
+      properties:
+        ticker:
+          type: string
+        quoteInfo:
+          $ref: "#/components/schemas/MarketQuoteInfo"
+          nullable: true
+        currentPrice:
+          type: number
+        changePercent:
+          type: number
+        yearHigh:
+          type: number
+        yearLow:
+          type: number
+        currentRsi:
+          type: number
+          nullable: true
+        candles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Candle"
+      required:
+        - ticker
+        - currentPrice
+        - changePercent
+        - yearHigh
+        - yearLow
+        - candles

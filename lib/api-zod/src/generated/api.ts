@@ -288,3 +288,58 @@ export const UpdateHypothesisResponse = zod.object({
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
+
+/**
+ * @summary Get historical market data with technical indicators
+ */
+export const GetMarketDataParams = zod.object({
+  ticker: zod.coerce.string().describe("Ticker symbol (e.g. 078160.KS, AAPL)"),
+});
+
+export const getMarketDataQueryPeriodDefault = `1y`;
+export const getMarketDataQueryIntervalDefault = `1d`;
+
+export const GetMarketDataQueryParams = zod.object({
+  period: zod
+    .enum(["3m", "6m", "1y", "2y", "5y"])
+    .default(getMarketDataQueryPeriodDefault),
+  interval: zod
+    .enum(["1d", "1wk", "1mo"])
+    .default(getMarketDataQueryIntervalDefault),
+});
+
+export const GetMarketDataResponse = zod.object({
+  ticker: zod.string(),
+  quoteInfo: zod
+    .object({
+      longName: zod.string().nullish(),
+      marketCap: zod.number().nullish(),
+      fiftyTwoWeekHigh: zod.number().nullish(),
+      fiftyTwoWeekLow: zod.number().nullish(),
+      averageVolume: zod.number().nullish(),
+      currency: zod.string().nullish(),
+    })
+    .nullish(),
+  currentPrice: zod.number(),
+  changePercent: zod.number(),
+  yearHigh: zod.number(),
+  yearLow: zod.number(),
+  currentRsi: zod.number().nullish(),
+  candles: zod.array(
+    zod.object({
+      date: zod.string(),
+      open: zod.number(),
+      high: zod.number(),
+      low: zod.number(),
+      close: zod.number(),
+      volume: zod.number(),
+      rsi: zod.number().nullish(),
+      ma20: zod.number().nullish(),
+      ma60: zod.number().nullish(),
+      ma120: zod.number().nullish(),
+      bbUpper: zod.number().nullish(),
+      bbMiddle: zod.number().nullish(),
+      bbLower: zod.number().nullish(),
+    }),
+  ),
+});

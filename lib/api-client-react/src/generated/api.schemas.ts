@@ -152,3 +152,64 @@ export interface Hypothesis {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Candle {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  rsi?: number | null;
+  ma20?: number | null;
+  ma60?: number | null;
+  ma120?: number | null;
+  bbUpper?: number | null;
+  bbMiddle?: number | null;
+  bbLower?: number | null;
+}
+
+export interface MarketQuoteInfo {
+  longName?: string | null;
+  marketCap?: number | null;
+  fiftyTwoWeekHigh?: number | null;
+  fiftyTwoWeekLow?: number | null;
+  averageVolume?: number | null;
+  currency?: string | null;
+}
+
+export interface MarketData {
+  ticker: string;
+  quoteInfo?: MarketQuoteInfo | null;
+  currentPrice: number;
+  changePercent: number;
+  yearHigh: number;
+  yearLow: number;
+  currentRsi?: number | null;
+  candles: Candle[];
+}
+
+export type GetMarketDataParams = {
+  period?: GetMarketDataPeriod;
+  interval?: GetMarketDataInterval;
+};
+
+export type GetMarketDataPeriod =
+  (typeof GetMarketDataPeriod)[keyof typeof GetMarketDataPeriod];
+
+export const GetMarketDataPeriod = {
+  "3m": "3m",
+  "6m": "6m",
+  "1y": "1y",
+  "2y": "2y",
+  "5y": "5y",
+} as const;
+
+export type GetMarketDataInterval =
+  (typeof GetMarketDataInterval)[keyof typeof GetMarketDataInterval];
+
+export const GetMarketDataInterval = {
+  "1d": "1d",
+  "1wk": "1wk",
+  "1mo": "1mo",
+} as const;

@@ -21,8 +21,10 @@ import type {
   AnalysisStep,
   CreateHypothesisRequest,
   ErrorResponse,
+  GetMarketDataParams,
   HealthStatus,
   Hypothesis,
+  MarketData,
   RunStepRequest,
   StartAnalysisRequest,
   UpdateHypothesisRequest,
@@ -695,3 +697,112 @@ export const useUpdateHypothesis = <
 > => {
   return useMutation(getUpdateHypothesisMutationOptions(options));
 };
+
+/**
+ * @summary Get historical market data with technical indicators
+ */
+export const getGetMarketDataUrl = (
+  ticker: string,
+  params?: GetMarketDataParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/market-data/${ticker}?${stringifiedParams}`
+    : `/api/market-data/${ticker}`;
+};
+
+export const getMarketData = async (
+  ticker: string,
+  params?: GetMarketDataParams,
+  options?: RequestInit,
+): Promise<MarketData> => {
+  return customFetch<MarketData>(getGetMarketDataUrl(ticker, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMarketDataQueryKey = (
+  ticker: string,
+  params?: GetMarketDataParams,
+) => {
+  return [`/api/market-data/${ticker}`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMarketDataQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMarketData>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  params?: GetMarketDataParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMarketData>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMarketDataQueryKey(ticker, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMarketData>>> = ({
+    signal,
+  }) => getMarketData(ticker, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!ticker,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMarketData>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMarketDataQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMarketData>>
+>;
+export type GetMarketDataQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get historical market data with technical indicators
+ */
+
+export function useGetMarketData<
+  TData = Awaited<ReturnType<typeof getMarketData>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  params?: GetMarketDataParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMarketData>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMarketDataQueryOptions(ticker, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

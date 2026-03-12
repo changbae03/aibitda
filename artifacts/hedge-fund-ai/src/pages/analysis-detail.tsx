@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import StockChart from "@/components/StockChart";
 
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
@@ -115,6 +116,9 @@ export default function AnalysisDetail() {
           )}
         </div>
       </div>
+
+      {/* Real-time Stock Chart */}
+      <StockChart ticker={analysis.ticker} companyName={analysis.companyName} />
 
       {/* Progress Track */}
       <div className="px-2">
