@@ -34,7 +34,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             className="h-8 w-auto object-contain"
           />
           <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold text-[13px] tracking-tight text-white">CBST AI 기업분석</span>
+            <span className="font-display font-bold text-[13px] tracking-tight text-white">CBST AI 리서치센터</span>
           </div>
         </div>
 
@@ -76,7 +76,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-white z-30">
           <div className="flex items-center gap-2">
             <img src={`${import.meta.env.BASE_URL}images/cbst-logo.png`} alt="CBST" className="h-7 w-auto object-contain" />
-            <span className="font-display font-bold text-sm text-foreground">CBST AI 기업분석</span>
+            <span className="font-display font-bold text-sm text-foreground">CBST AI 리서치센터</span>
           </div>
           <button className="p-2 text-muted-foreground">
             <Menu className="w-5 h-5" />
