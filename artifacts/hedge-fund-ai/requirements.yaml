@@ -1,0 +1,23 @@
+packages:
+  "framer-motion": "For premium smooth animations and page transitions"
+  "recharts": "For displaying hypothesis accuracy and financial data charts"
+  "date-fns": "For formatting analysis and hypothesis timestamps"
+  "lucide-react": "For beautiful consistent iconography"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes safely"
+  "@hookform/resolvers": "For Zod form validation integration"
+  "react-hook-form": "For robust form state management"
+  "zod": "For strict schema validation on the frontend"
+
+images:
+  - path: "artifacts/hedge-fund-ai/public/images/auth-bg.png"
+    description: "Abstract geometric data visualization in dark space grey and subtle gold and teal lines, extremely minimal, high-end hedge fund aesthetic, dark mode"
+    aspect_ratio: "16:9"
+  - path: "artifacts/hedge-fund-ai/public/images/logo-mark.png"
+    description: "A sharp, minimal, geometric letter A intertwined with an upward chart arrow, rendered in metallic gold and crisp white on a transparent background, high luxury finance"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated React Query hooks from @workspace/api-client-react
+  - Routing via wouter
+  - Strict dark mode theme with premium finance aesthetic

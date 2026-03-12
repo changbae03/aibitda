@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AI Hedge Fund Research Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: analysis
+    description: AI research analysis operations
+  - name: hypotheses
+    description: Investment hypothesis tracking
 paths:
   /healthz:
     get:
@@ -24,6 +27,152 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /analysis:
+    post:
+      operationId: startAnalysis
+      tags: [analysis]
+      summary: Start a new AI research analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartAnalysisRequest"
+      responses:
+        "200":
+          description: Analysis started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+    get:
+      operationId: listAnalyses
+      tags: [analysis]
+      summary: List all analyses
+      responses:
+        "200":
+          description: List of analyses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Analysis"
+
+  /analysis/{id}:
+    get:
+      operationId: getAnalysis
+      tags: [analysis]
+      summary: Get a specific analysis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Analysis details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /analysis/{id}/step:
+    post:
+      operationId: runAnalysisStep
+      tags: [analysis]
+      summary: Run next analysis step for a given analysis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunStepRequest"
+      responses:
+        "200":
+          description: Step result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisStep"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hypotheses:
+    get:
+      operationId: listHypotheses
+      tags: [hypotheses]
+      summary: List all investment hypotheses
+      responses:
+        "200":
+          description: List of hypotheses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hypothesis"
+    post:
+      operationId: createHypothesis
+      tags: [hypotheses]
+      summary: Create an investment hypothesis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHypothesisRequest"
+      responses:
+        "200":
+          description: Created hypothesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hypothesis"
+
+  /hypotheses/{id}:
+    patch:
+      operationId: updateHypothesis
+      tags: [hypotheses]
+      summary: Update hypothesis with actual price/outcome
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHypothesisRequest"
+      responses:
+        "200":
+          description: Updated hypothesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hypothesis"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +183,213 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    StartAnalysisRequest:
+      type: object
+      properties:
+        ticker:
+          type: string
+          description: Stock ticker symbol (e.g. 005930, AAPL)
+        companyName:
+          type: string
+          description: Company name
+        industry:
+          type: string
+          description: Industry/sector
+        additionalContext:
+          type: string
+          description: Additional context or focus areas for analysis
+      required:
+        - ticker
+        - companyName
+        - industry
+
+    RunStepRequest:
+      type: object
+      properties:
+        stepKey:
+          type: string
+          description: Which analysis step to run
+          enum:
+            - industry_structure
+            - macro
+            - fundamental
+            - valuation
+            - market_microstructure
+            - technical
+            - catalyst
+            - smart_money
+            - lead_validation
+      required:
+        - stepKey
+
+    AnalysisStep:
+      type: object
+      properties:
+        id:
+          type: integer
+        analysisId:
+          type: integer
+        stepKey:
+          type: string
+        agentName:
+          type: string
+        agentRole:
+          type: string
+        content:
+          type: string
+        validationNotes:
+          type: string
+        informationType:
+          type: string
+          enum: [confirmed_fact, data_based_estimate, hypothesis]
+        createdAt:
+          type: string
+      required:
+        - id
+        - analysisId
+        - stepKey
+        - agentName
+        - agentRole
+        - content
+        - informationType
+        - createdAt
+
+    Analysis:
+      type: object
+      properties:
+        id:
+          type: integer
+        ticker:
+          type: string
+        companyName:
+          type: string
+        industry:
+          type: string
+        additionalContext:
+          type: string
+        status:
+          type: string
+          enum: [in_progress, completed]
+        currentStep:
+          type: string
+        investmentVerdict:
+          type: string
+        targetPrice:
+          type: number
+        entryPrice:
+          type: number
+        stopLoss:
+          type: number
+        riskRewardRatio:
+          type: number
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisStep"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - ticker
+        - companyName
+        - industry
+        - status
+        - steps
+        - createdAt
+        - updatedAt
+
+    CreateHypothesisRequest:
+      type: object
+      properties:
+        analysisId:
+          type: integer
+        ticker:
+          type: string
+        companyName:
+          type: string
+        hypothesisText:
+          type: string
+        targetPrice:
+          type: number
+        entryPrice:
+          type: number
+        timeHorizon:
+          type: string
+        catalysts:
+          type: string
+        risks:
+          type: string
+      required:
+        - ticker
+        - companyName
+        - hypothesisText
+        - targetPrice
+        - entryPrice
+
+    UpdateHypothesisRequest:
+      type: object
+      properties:
+        actualPrice:
+          type: number
+        outcome:
+          type: string
+          enum: [pending, hit_target, hit_stoploss, expired, ongoing]
+        notes:
+          type: string
+
+    Hypothesis:
+      type: object
+      properties:
+        id:
+          type: integer
+        analysisId:
+          type: integer
+        ticker:
+          type: string
+        companyName:
+          type: string
+        hypothesisText:
+          type: string
+        targetPrice:
+          type: number
+        entryPrice:
+          type: number
+        actualPrice:
+          type: number
+        timeHorizon:
+          type: string
+        catalysts:
+          type: string
+        risks:
+          type: string
+        outcome:
+          type: string
+          enum: [pending, hit_target, hit_stoploss, expired, ongoing]
+        accuracyScore:
+          type: number
+        notes:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - ticker
+        - companyName
+        - hypothesisText
+        - targetPrice
+        - entryPrice
+        - outcome
+        - createdAt
+        - updatedAt
