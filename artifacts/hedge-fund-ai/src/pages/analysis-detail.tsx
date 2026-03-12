@@ -16,6 +16,8 @@ import {
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart from "@/components/StockChart";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
@@ -363,10 +365,23 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
       </div>
 
       <div className="p-5">
-        <div className="text-sm text-foreground/85 leading-relaxed space-y-2.5">
-          {step.content.split('\n').map((para: string, i: number) => (
-            para.trim() ? <p key={i}>{para}</p> : null
-          ))}
+        <div className="text-sm text-foreground/85 leading-relaxed markdown-body">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-5 mb-2 pb-1 border-b border-border first:mt-0">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground/90 mt-4 mb-1.5">{children}</h3>,
+              p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+              ul: ({ children }) => <ul className="mb-3 space-y-1 pl-1">{children}</ul>,
+              ol: ({ children }) => <ol className="mb-3 space-y-1 pl-4 list-decimal">{children}</ol>,
+              li: ({ children }) => <li className="flex gap-2 text-foreground/85"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current flex-shrink-0 opacity-50" /><span>{children}</span></li>,
+              strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+              em: ({ children }) => <em className="text-foreground/70">{children}</em>,
+              hr: () => <hr className="my-3 border-border" />,
+            }}
+          >
+            {step.content}
+          </ReactMarkdown>
         </div>
       </div>
     </motion.div>

@@ -65,11 +65,16 @@ export function buildPrompt(
           .join("\n\n---\n\n")}`
       : "";
 
-  const COMMON_RULES = `원칙:
-- 컨텍스트에 Yahoo Finance 실제 재무 데이터가 제공됩니다. 수치는 반드시 이 데이터에서 직접 인용하세요.
-- 마크다운 볼드(** **) 사용 금지
+  const COMMON_RULES = `출력 형식 규칙 (반드시 준수):
+- 마크다운 형식으로 작성하세요
+- 섹션 제목은 ## (이모지 포함), 소제목은 ### 을 사용하세요. 예: ## 🏭 산업 구조
+- 섹션 제목(##) 뒤에 반드시 빈 줄을 하나 추가하세요
+- 핵심 수치, 중요 용어, 결론은 **굵게** 표시하세요
+- 일반 설명은 문장으로, 세부 항목은 - 로 구분하세요 (제목과 항목을 동일하게 - 로 쓰지 마세요)
+- 섹션 사이에는 반드시 빈 줄을 넣어 가독성을 높이세요
 - 사용자에게 추가 입력을 요청하지 말 것
-- 데이터가 없는 항목은 "-" 또는 "데이터 없음"으로 표시하고 추측하지 마세요`;
+- 컨텍스트에 Yahoo Finance 실제 재무 데이터가 제공됩니다. 수치는 반드시 이 데이터에서 직접 인용하세요
+- 데이터가 없는 항목은 "데이터 없음"으로 표시하고 추측하지 마세요`;
 
   const prompts: Record<AgentKey, { systemPrompt: string; userPrompt: string }> = {
     industry_analysis: {
@@ -184,8 +189,10 @@ ${COMMON_RULES}`,
     investment_strategy: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
 역할: 모든 에이전트 분석을 통합하여 최종 투자 전략을 JSON으로 도출합니다.
-${COMMON_RULES}
-중요: 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 금지.`,
+원칙:
+- 컨텍스트에 Yahoo Finance 실제 재무 데이터가 제공됩니다. 수치는 반드시 이 데이터에서 직접 인용하세요
+- 사용자에게 추가 입력을 요청하지 말 것
+- 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지.`,
       userPrompt: `${baseContext}${previousContext}
 
 모든 에이전트 분석을 검토하고 최종 투자 전략을 도출하세요.
