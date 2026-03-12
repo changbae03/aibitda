@@ -7,9 +7,10 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(value: number | undefined | null) {
   if (value == null) return "N/A";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("ko-KR", {
     style: "currency",
-    currency: "USD",
+    currency: "KRW",
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
