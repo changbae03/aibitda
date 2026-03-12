@@ -98,12 +98,6 @@ export default function AnalysisDetail() {
               <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> {analysis.industry}</span>
               <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
             </div>
-            {analysis.additionalContext && (
-              <p className="mt-3 text-sm bg-primary/5 p-3 rounded-lg border border-primary/15 text-foreground/80 max-w-2xl border-l-2 border-l-primary">
-                <span className="font-semibold text-primary block mb-0.5 text-xs uppercase tracking-wide">분석 포커스</span>
-                {analysis.additionalContext}
-              </p>
-            )}
           </div>
 
           {/* Verdict Card */}
