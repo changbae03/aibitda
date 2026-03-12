@@ -20,12 +20,12 @@ export type AgentInfo = {
 export const AGENTS: Record<string, AgentInfo> = {
   company_intro: {
     id: "company_intro",
-    name: "팀장",
+    name: "브리핑",
     role: "Lead Portfolio Strategist",
     icon: ShieldCheck,
     color: "text-primary",
     bgColor: "bg-primary/10",
-    description: "기업 개요 파악 및 리서치 방향 설정"
+    description: "분석 의뢰 접수 및 팀 소개"
   },
   industry_analysis: {
     id: "industry_analysis",

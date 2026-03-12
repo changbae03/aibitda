@@ -345,6 +345,12 @@ router.post("/:id/step", async (req, res) => {
     .from(analysisStepsTable)
     .where(eq(analysisStepsTable.analysisId, id));
 
+  const alreadyRun = existingSteps.some((s) => s.stepKey === stepKey);
+  if (alreadyRun) {
+    res.status(409).json({ error: "Step already completed" });
+    return;
+  }
+
   const agent = AGENTS[stepKey];
 
   let enrichedContext = analysis.additionalContext ?? null;
