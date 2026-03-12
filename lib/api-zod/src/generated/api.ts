@@ -20,8 +20,14 @@ export const HealthCheckResponse = zod.object({
  */
 export const StartAnalysisBody = zod.object({
   ticker: zod.string().describe("Stock ticker symbol (e.g. 005930, AAPL)"),
-  companyName: zod.string().describe("Company name"),
-  industry: zod.string().describe("Industry\/sector"),
+  companyName: zod
+    .string()
+    .optional()
+    .describe("Company name (auto-fetched if omitted)"),
+  industry: zod
+    .string()
+    .optional()
+    .describe("Industry\/sector (auto-fetched if omitted)"),
   additionalContext: zod
     .string()
     .optional()
@@ -151,15 +157,12 @@ export const RunAnalysisStepParams = zod.object({
 export const RunAnalysisStepBody = zod.object({
   stepKey: zod
     .enum([
-      "industry_structure",
-      "macro",
-      "fundamental",
-      "valuation",
-      "market_microstructure",
-      "technical",
-      "catalyst",
-      "smart_money",
-      "lead_validation",
+      "company_intro",
+      "industry_analysis",
+      "company_analysis",
+      "market_analysis",
+      "catalyst_analysis",
+      "investment_strategy",
     ])
     .describe("Which analysis step to run"),
 });
@@ -181,112 +184,36 @@ export const RunAnalysisStepResponse = zod.object({
 });
 
 /**
- * @summary List all investment hypotheses
+ * @summary List all AI model performance insights
  */
-export const ListHypothesesResponseItem = zod.object({
+export const ListModelInsightsResponseItem = zod.object({
   id: zod.number(),
   analysisId: zod.number().optional(),
   ticker: zod.string(),
   companyName: zod.string(),
-  hypothesisText: zod.string(),
-  targetPrice: zod.number(),
-  entryPrice: zod.number(),
-  actualPrice: zod.number().optional(),
-  timeHorizon: zod.string().optional(),
-  catalysts: zod.string().optional(),
-  risks: zod.string().optional(),
-  outcome: zod.enum([
-    "pending",
-    "hit_target",
-    "hit_stoploss",
-    "expired",
-    "ongoing",
-  ]),
-  accuracyScore: zod.number().optional(),
-  notes: zod.string().optional(),
+  industry: zod.string(),
+  verdict: zod.string().optional(),
+  entryPrice: zod.number().optional(),
+  targetPrice: zod.number().optional(),
+  stopLoss: zod.number().optional(),
+  priceAtReview: zod.number().optional(),
+  priceReturn: zod.number().optional(),
+  daysElapsed: zod.number().optional(),
+  outcome: zod.enum(["pending", "hit_target", "hit_stoploss", "ongoing"]),
+  lesson: zod.string().optional(),
+  analysisDate: zod.string().optional(),
+  reviewedAt: zod.string().optional(),
   createdAt: zod.string(),
-  updatedAt: zod.string(),
 });
-export const ListHypothesesResponse = zod.array(ListHypothesesResponseItem);
+export const ListModelInsightsResponse = zod.array(
+  ListModelInsightsResponseItem,
+);
 
 /**
- * @summary Create an investment hypothesis
+ * @summary Trigger model performance review
  */
-export const CreateHypothesisBody = zod.object({
-  analysisId: zod.number().optional(),
-  ticker: zod.string(),
-  companyName: zod.string(),
-  hypothesisText: zod.string(),
-  targetPrice: zod.number(),
-  entryPrice: zod.number(),
-  timeHorizon: zod.string().optional(),
-  catalysts: zod.string().optional(),
-  risks: zod.string().optional(),
-});
-
-export const CreateHypothesisResponse = zod.object({
-  id: zod.number(),
-  analysisId: zod.number().optional(),
-  ticker: zod.string(),
-  companyName: zod.string(),
-  hypothesisText: zod.string(),
-  targetPrice: zod.number(),
-  entryPrice: zod.number(),
-  actualPrice: zod.number().optional(),
-  timeHorizon: zod.string().optional(),
-  catalysts: zod.string().optional(),
-  risks: zod.string().optional(),
-  outcome: zod.enum([
-    "pending",
-    "hit_target",
-    "hit_stoploss",
-    "expired",
-    "ongoing",
-  ]),
-  accuracyScore: zod.number().optional(),
-  notes: zod.string().optional(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
-
-/**
- * @summary Update hypothesis with actual price/outcome
- */
-export const UpdateHypothesisParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const UpdateHypothesisBody = zod.object({
-  actualPrice: zod.number().optional(),
-  outcome: zod
-    .enum(["pending", "hit_target", "hit_stoploss", "expired", "ongoing"])
-    .optional(),
-  notes: zod.string().optional(),
-});
-
-export const UpdateHypothesisResponse = zod.object({
-  id: zod.number(),
-  analysisId: zod.number().optional(),
-  ticker: zod.string(),
-  companyName: zod.string(),
-  hypothesisText: zod.string(),
-  targetPrice: zod.number(),
-  entryPrice: zod.number(),
-  actualPrice: zod.number().optional(),
-  timeHorizon: zod.string().optional(),
-  catalysts: zod.string().optional(),
-  risks: zod.string().optional(),
-  outcome: zod.enum([
-    "pending",
-    "hit_target",
-    "hit_stoploss",
-    "expired",
-    "ongoing",
-  ]),
-  accuracyScore: zod.number().optional(),
-  notes: zod.string().optional(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
+export const TriggerInsightReviewResponse = zod.object({
+  message: zod.string().optional(),
 });
 
 /**

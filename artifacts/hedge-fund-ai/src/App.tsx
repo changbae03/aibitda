@@ -9,7 +9,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import NewAnalysis from "@/pages/new-analysis";
 import AnalysisDetail from "@/pages/analysis-detail";
-import Hypotheses from "@/pages/hypotheses";
+import ModelInsights from "@/pages/model-insights";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,7 +27,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/analysis/new" component={NewAnalysis} />
         <Route path="/analysis/:id" component={AnalysisDetail} />
-        <Route path="/hypotheses" component={Hypotheses} />
+        <Route path="/model-insights" component={ModelInsights} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

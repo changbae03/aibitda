@@ -321,7 +321,17 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
   );
 }
 
-function StepCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: number }) {
+function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentInfo | undefined, delay: number }) {
+  const agent: AgentInfo = agentProp ?? {
+    id: step.stepKey,
+    name: step.agentName ?? "에이전트",
+    role: step.agentRole ?? step.stepKey,
+    icon: BrainCircuit,
+    color: "text-primary",
+    bgColor: "bg-primary/10",
+    description: "",
+  };
+
   if (step.stepKey === "investment_strategy") {
     return <InvestmentStrategyCard step={step} agent={agent} delay={delay} />;
   }

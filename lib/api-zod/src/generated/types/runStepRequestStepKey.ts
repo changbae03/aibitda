@@ -13,13 +13,10 @@ export type RunStepRequestStepKey =
   (typeof RunStepRequestStepKey)[keyof typeof RunStepRequestStepKey];
 
 export const RunStepRequestStepKey = {
-  industry_structure: "industry_structure",
-  macro: "macro",
-  fundamental: "fundamental",
-  valuation: "valuation",
-  market_microstructure: "market_microstructure",
-  technical: "technical",
-  catalyst: "catalyst",
-  smart_money: "smart_money",
-  lead_validation: "lead_validation",
+  company_intro: "company_intro",
+  industry_analysis: "industry_analysis",
+  company_analysis: "company_analysis",
+  market_analysis: "market_analysis",
+  catalyst_analysis: "catalyst_analysis",
+  investment_strategy: "investment_strategy",
 } as const;

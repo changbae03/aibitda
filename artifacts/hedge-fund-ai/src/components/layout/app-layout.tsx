@@ -2,11 +2,10 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   BrainCircuit, 
-  Crosshair, 
   LayoutDashboard, 
-  LogOut, 
   Settings,
-  Menu
+  Menu,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +18,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석 시작", icon: BrainCircuit },
-    { href: "/hypotheses", label: "투자 가설 트래커", icon: Crosshair },
+    { href: "/model-insights", label: "AI 모델 고도화", icon: Sparkles },
     { href: "/", label: "대시보드", icon: LayoutDashboard },
   ];
 

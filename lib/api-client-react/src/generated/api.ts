@@ -19,15 +19,14 @@ import type {
 import type {
   Analysis,
   AnalysisStep,
-  CreateHypothesisRequest,
   ErrorResponse,
   GetMarketDataParams,
   HealthStatus,
-  Hypothesis,
   MarketData,
+  ModelInsight,
   RunStepRequest,
   StartAnalysisRequest,
-  UpdateHypothesisRequest,
+  TriggerInsightReview200,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -451,31 +450,31 @@ export const useRunAnalysisStep = <
 };
 
 /**
- * @summary List all investment hypotheses
+ * @summary List all AI model performance insights
  */
-export const getListHypothesesUrl = () => {
-  return `/api/hypotheses`;
+export const getListModelInsightsUrl = () => {
+  return `/api/model-insights`;
 };
 
-export const listHypotheses = async (
+export const listModelInsights = async (
   options?: RequestInit,
-): Promise<Hypothesis[]> => {
-  return customFetch<Hypothesis[]>(getListHypothesesUrl(), {
+): Promise<ModelInsight[]> => {
+  return customFetch<ModelInsight[]>(getListModelInsightsUrl(), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListHypothesesQueryKey = () => {
-  return [`/api/hypotheses`] as const;
+export const getListModelInsightsQueryKey = () => {
+  return [`/api/model-insights`] as const;
 };
 
-export const getListHypothesesQueryOptions = <
-  TData = Awaited<ReturnType<typeof listHypotheses>>,
+export const getListModelInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listModelInsights>>,
   TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listHypotheses>>,
+    Awaited<ReturnType<typeof listModelInsights>>,
     TError,
     TData
   >;
@@ -483,40 +482,40 @@ export const getListHypothesesQueryOptions = <
 }) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListHypothesesQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getListModelInsightsQueryKey();
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof listHypotheses>>> = ({
-    signal,
-  }) => listHypotheses({ signal, ...requestOptions });
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listModelInsights>>
+  > = ({ signal }) => listModelInsights({ signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listHypotheses>>,
+    Awaited<ReturnType<typeof listModelInsights>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export type ListHypothesesQueryResult = NonNullable<
-  Awaited<ReturnType<typeof listHypotheses>>
+export type ListModelInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listModelInsights>>
 >;
-export type ListHypothesesQueryError = ErrorType<unknown>;
+export type ListModelInsightsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List all investment hypotheses
+ * @summary List all AI model performance insights
  */
 
-export function useListHypotheses<
-  TData = Awaited<ReturnType<typeof listHypotheses>>,
+export function useListModelInsights<
+  TData = Awaited<ReturnType<typeof listModelInsights>>,
   TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listHypotheses>>,
+    Awaited<ReturnType<typeof listModelInsights>>,
     TError,
     TData
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListHypothesesQueryOptions(options);
+  const queryOptions = getListModelInsightsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -526,42 +525,39 @@ export function useListHypotheses<
 }
 
 /**
- * @summary Create an investment hypothesis
+ * @summary Trigger model performance review
  */
-export const getCreateHypothesisUrl = () => {
-  return `/api/hypotheses`;
+export const getTriggerInsightReviewUrl = () => {
+  return `/api/model-insights/review`;
 };
 
-export const createHypothesis = async (
-  createHypothesisRequest: CreateHypothesisRequest,
+export const triggerInsightReview = async (
   options?: RequestInit,
-): Promise<Hypothesis> => {
-  return customFetch<Hypothesis>(getCreateHypothesisUrl(), {
+): Promise<TriggerInsightReview200> => {
+  return customFetch<TriggerInsightReview200>(getTriggerInsightReviewUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createHypothesisRequest),
   });
 };
 
-export const getCreateHypothesisMutationOptions = <
+export const getTriggerInsightReviewMutationOptions = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createHypothesis>>,
+    Awaited<ReturnType<typeof triggerInsightReview>>,
     TError,
-    { data: BodyType<CreateHypothesisRequest> },
+    void,
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof createHypothesis>>,
+  Awaited<ReturnType<typeof triggerInsightReview>>,
   TError,
-  { data: BodyType<CreateHypothesisRequest> },
+  void,
   TContext
 > => {
-  const mutationKey = ["createHypothesis"];
+  const mutationKey = ["triggerInsightReview"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -571,131 +567,42 @@ export const getCreateHypothesisMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createHypothesis>>,
-    { data: BodyType<CreateHypothesisRequest> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return createHypothesis(data, requestOptions);
+    Awaited<ReturnType<typeof triggerInsightReview>>,
+    void
+  > = () => {
+    return triggerInsightReview(requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type CreateHypothesisMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createHypothesis>>
+export type TriggerInsightReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof triggerInsightReview>>
 >;
-export type CreateHypothesisMutationBody = BodyType<CreateHypothesisRequest>;
-export type CreateHypothesisMutationError = ErrorType<unknown>;
+
+export type TriggerInsightReviewMutationError = ErrorType<unknown>;
 
 /**
- * @summary Create an investment hypothesis
+ * @summary Trigger model performance review
  */
-export const useCreateHypothesis = <
+export const useTriggerInsightReview = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createHypothesis>>,
+    Awaited<ReturnType<typeof triggerInsightReview>>,
     TError,
-    { data: BodyType<CreateHypothesisRequest> },
+    void,
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof createHypothesis>>,
+  Awaited<ReturnType<typeof triggerInsightReview>>,
   TError,
-  { data: BodyType<CreateHypothesisRequest> },
+  void,
   TContext
 > => {
-  return useMutation(getCreateHypothesisMutationOptions(options));
-};
-
-/**
- * @summary Update hypothesis with actual price/outcome
- */
-export const getUpdateHypothesisUrl = (id: number) => {
-  return `/api/hypotheses/${id}`;
-};
-
-export const updateHypothesis = async (
-  id: number,
-  updateHypothesisRequest: UpdateHypothesisRequest,
-  options?: RequestInit,
-): Promise<Hypothesis> => {
-  return customFetch<Hypothesis>(getUpdateHypothesisUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(updateHypothesisRequest),
-  });
-};
-
-export const getUpdateHypothesisMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateHypothesis>>,
-    TError,
-    { id: number; data: BodyType<UpdateHypothesisRequest> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof updateHypothesis>>,
-  TError,
-  { id: number; data: BodyType<UpdateHypothesisRequest> },
-  TContext
-> => {
-  const mutationKey = ["updateHypothesis"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof updateHypothesis>>,
-    { id: number; data: BodyType<UpdateHypothesisRequest> }
-  > = (props) => {
-    const { id, data } = props ?? {};
-
-    return updateHypothesis(id, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type UpdateHypothesisMutationResult = NonNullable<
-  Awaited<ReturnType<typeof updateHypothesis>>
->;
-export type UpdateHypothesisMutationBody = BodyType<UpdateHypothesisRequest>;
-export type UpdateHypothesisMutationError = ErrorType<unknown>;
-
-/**
- * @summary Update hypothesis with actual price/outcome
- */
-export const useUpdateHypothesis = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateHypothesis>>,
-    TError,
-    { id: number; data: BodyType<UpdateHypothesisRequest> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof updateHypothesis>>,
-  TError,
-  { id: number; data: BodyType<UpdateHypothesisRequest> },
-  TContext
-> => {
-  return useMutation(getUpdateHypothesisMutationOptions(options));
+  return useMutation(getTriggerInsightReviewMutationOptions(options));
 };
 
 /**

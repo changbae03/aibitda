@@ -31,15 +31,12 @@ export type RunStepRequestStepKey =
   (typeof RunStepRequestStepKey)[keyof typeof RunStepRequestStepKey];
 
 export const RunStepRequestStepKey = {
-  industry_structure: "industry_structure",
-  macro: "macro",
-  fundamental: "fundamental",
-  valuation: "valuation",
-  market_microstructure: "market_microstructure",
-  technical: "technical",
-  catalyst: "catalyst",
-  smart_money: "smart_money",
-  lead_validation: "lead_validation",
+  company_intro: "company_intro",
+  industry_analysis: "industry_analysis",
+  company_analysis: "company_analysis",
+  market_analysis: "market_analysis",
+  catalyst_analysis: "catalyst_analysis",
+  investment_strategy: "investment_strategy",
 } as const;
 
 export interface RunStepRequest {
@@ -94,63 +91,34 @@ export interface Analysis {
   updatedAt: string;
 }
 
-export interface CreateHypothesisRequest {
-  analysisId?: number;
-  ticker: string;
-  companyName: string;
-  hypothesisText: string;
-  targetPrice: number;
-  entryPrice: number;
-  timeHorizon?: string;
-  catalysts?: string;
-  risks?: string;
-}
+export type ModelInsightOutcome =
+  (typeof ModelInsightOutcome)[keyof typeof ModelInsightOutcome];
 
-export type UpdateHypothesisRequestOutcome =
-  (typeof UpdateHypothesisRequestOutcome)[keyof typeof UpdateHypothesisRequestOutcome];
-
-export const UpdateHypothesisRequestOutcome = {
+export const ModelInsightOutcome = {
   pending: "pending",
   hit_target: "hit_target",
   hit_stoploss: "hit_stoploss",
-  expired: "expired",
   ongoing: "ongoing",
 } as const;
 
-export interface UpdateHypothesisRequest {
-  actualPrice?: number;
-  outcome?: UpdateHypothesisRequestOutcome;
-  notes?: string;
-}
-
-export type HypothesisOutcome =
-  (typeof HypothesisOutcome)[keyof typeof HypothesisOutcome];
-
-export const HypothesisOutcome = {
-  pending: "pending",
-  hit_target: "hit_target",
-  hit_stoploss: "hit_stoploss",
-  expired: "expired",
-  ongoing: "ongoing",
-} as const;
-
-export interface Hypothesis {
+export interface ModelInsight {
   id: number;
   analysisId?: number;
   ticker: string;
   companyName: string;
-  hypothesisText: string;
-  targetPrice: number;
-  entryPrice: number;
-  actualPrice?: number;
-  timeHorizon?: string;
-  catalysts?: string;
-  risks?: string;
-  outcome: HypothesisOutcome;
-  accuracyScore?: number;
-  notes?: string;
+  industry: string;
+  verdict?: string;
+  entryPrice?: number;
+  targetPrice?: number;
+  stopLoss?: number;
+  priceAtReview?: number;
+  priceReturn?: number;
+  daysElapsed?: number;
+  outcome: ModelInsightOutcome;
+  lesson?: string;
+  analysisDate?: string;
+  reviewedAt?: string;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface Candle {
@@ -188,6 +156,10 @@ export interface MarketData {
   currentRsi?: number | null;
   candles: Candle[];
 }
+
+export type TriggerInsightReview200 = {
+  message?: string;
+};
 
 export type GetMarketDataParams = {
   period?: GetMarketDataPeriod;

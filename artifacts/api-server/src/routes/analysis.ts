@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { analysesTable, analysisStepsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
+import { eq, desc, and, not } from "drizzle-orm";
 import OpenAI from "openai";
 import YahooFinance from "yahoo-finance2";
 import {
@@ -10,6 +10,7 @@ import {
   buildPrompt,
   type AgentKey,
 } from "../lib/ai-agents.js";
+import { triggerModelReview } from "./model-insights.js";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -166,12 +167,36 @@ router.post("/:id/step", async (req, res) => {
     .where(eq(analysisStepsTable.analysisId, id));
 
   const agent = AGENTS[stepKey];
+
+  let enrichedContext = analysis.additionalContext ?? null;
+  if (stepKey === "company_intro" || stepKey === "investment_strategy") {
+    try {
+      const insights = await db
+        .select()
+        .from(modelInsightsTable)
+        .where(not(eq(modelInsightsTable.outcome, "pending")));
+
+      const relevantLessons = insights
+        .filter((i) => i.lesson && i.lesson.trim())
+        .slice(-5)
+        .map((i) => `[${i.companyName}(${i.ticker}) ${i.daysElapsed}일, ${i.priceReturn?.toFixed(1)}%] ${i.lesson}`)
+        .join("\n");
+
+      if (relevantLessons) {
+        const lessonBlock = `\n\n[AI 모델 과거 교훈]\n${relevantLessons}`;
+        enrichedContext = enrichedContext ? enrichedContext + lessonBlock : lessonBlock;
+      }
+    } catch {
+      // insights injection optional
+    }
+  }
+
   const { systemPrompt, userPrompt } = buildPrompt(
     stepKey,
     analysis.ticker,
     analysis.companyName,
     analysis.industry,
-    analysis.additionalContext,
+    enrichedContext,
     existingSteps.map((s) => ({
       stepKey: s.stepKey,
       agentName: s.agentName,
@@ -266,6 +291,8 @@ router.post("/:id/step", async (req, res) => {
         updatedAt: new Date(),
       })
       .where(eq(analysesTable.id, id));
+
+    triggerModelReview().catch(console.error);
   } else if (nextStep) {
     await db
       .update(analysesTable)

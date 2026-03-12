@@ -6,13 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateHypothesisRequestOutcome =
-  (typeof UpdateHypothesisRequestOutcome)[keyof typeof UpdateHypothesisRequestOutcome];
+export type ModelInsightOutcome =
+  (typeof ModelInsightOutcome)[keyof typeof ModelInsightOutcome];
 
-export const UpdateHypothesisRequestOutcome = {
+export const ModelInsightOutcome = {
   pending: "pending",
   hit_target: "hit_target",
   hit_stoploss: "hit_stoploss",
-  expired: "expired",
   ongoing: "ongoing",
 } as const;

@@ -11,8 +11,8 @@ tags:
     description: Health operations
   - name: analysis
     description: AI research analysis operations
-  - name: hypotheses
-    description: Investment hypothesis tracking
+  - name: model-insights
+    description: AI model self-improvement insights
   - name: market-data
     description: Real-time and historical market data
 paths:
@@ -118,62 +118,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /hypotheses:
+  /model-insights:
     get:
-      operationId: listHypotheses
-      tags: [hypotheses]
-      summary: List all investment hypotheses
+      operationId: listModelInsights
+      tags: [model-insights]
+      summary: List all AI model performance insights
       responses:
         "200":
-          description: List of hypotheses
+          description: List of model insights
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Hypothesis"
-    post:
-      operationId: createHypothesis
-      tags: [hypotheses]
-      summary: Create an investment hypothesis
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateHypothesisRequest"
-      responses:
-        "200":
-          description: Created hypothesis
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Hypothesis"
+                  $ref: "#/components/schemas/ModelInsight"
 
-  /hypotheses/{id}:
-    patch:
-      operationId: updateHypothesis
-      tags: [hypotheses]
-      summary: Update hypothesis with actual price/outcome
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateHypothesisRequest"
+  /model-insights/review:
+    post:
+      operationId: triggerInsightReview
+      tags: [model-insights]
+      summary: Trigger model performance review
       responses:
         "200":
-          description: Updated hypothesis
+          description: Review started
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Hypothesis"
+                type: object
+                properties:
+                  message:
+                    type: string
 
   /market-data/{ticker}:
     get:
@@ -262,15 +236,12 @@ components:
           type: string
           description: Which analysis step to run
           enum:
-            - industry_structure
-            - macro
-            - fundamental
-            - valuation
-            - market_microstructure
-            - technical
-            - catalyst
-            - smart_money
-            - lead_validation
+            - company_intro
+            - industry_analysis
+            - company_analysis
+            - market_analysis
+            - catalyst_analysis
+            - investment_strategy
       required:
         - stepKey
 
@@ -352,46 +323,7 @@ components:
         - createdAt
         - updatedAt
 
-    CreateHypothesisRequest:
-      type: object
-      properties:
-        analysisId:
-          type: integer
-        ticker:
-          type: string
-        companyName:
-          type: string
-        hypothesisText:
-          type: string
-        targetPrice:
-          type: number
-        entryPrice:
-          type: number
-        timeHorizon:
-          type: string
-        catalysts:
-          type: string
-        risks:
-          type: string
-      required:
-        - ticker
-        - companyName
-        - hypothesisText
-        - targetPrice
-        - entryPrice
-
-    UpdateHypothesisRequest:
-      type: object
-      properties:
-        actualPrice:
-          type: number
-        outcome:
-          type: string
-          enum: [pending, hit_target, hit_stoploss, expired, ongoing]
-        notes:
-          type: string
-
-    Hypothesis:
+    ModelInsight:
       type: object
       properties:
         id:
@@ -402,41 +334,40 @@ components:
           type: string
         companyName:
           type: string
-        hypothesisText:
+        industry:
           type: string
-        targetPrice:
-          type: number
+        verdict:
+          type: string
         entryPrice:
           type: number
-        actualPrice:
+        targetPrice:
           type: number
-        timeHorizon:
-          type: string
-        catalysts:
-          type: string
-        risks:
-          type: string
+        stopLoss:
+          type: number
+        priceAtReview:
+          type: number
+        priceReturn:
+          type: number
+        daysElapsed:
+          type: integer
         outcome:
           type: string
-          enum: [pending, hit_target, hit_stoploss, expired, ongoing]
-        accuracyScore:
-          type: number
-        notes:
+          enum: [pending, hit_target, hit_stoploss, ongoing]
+        lesson:
+          type: string
+        analysisDate:
+          type: string
+        reviewedAt:
           type: string
         createdAt:
-          type: string
-        updatedAt:
           type: string
       required:
         - id
         - ticker
         - companyName
-        - hypothesisText
-        - targetPrice
-        - entryPrice
+        - industry
         - outcome
         - createdAt
-        - updatedAt
 
     Candle:
       type: object

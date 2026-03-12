@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useListAnalyses, useListHypotheses, useStartAnalysis } from "@workspace/api-client-react";
+import { useListAnalyses, useListModelInsights, useStartAnalysis } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
@@ -9,10 +9,11 @@ import {
   Target, 
   TrendingUp, 
   Activity,
-  AlertCircle,
+  BookOpen,
   ChevronRight,
   Search,
-  Loader2
+  Loader2,
+  TrendingDown
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -20,18 +21,20 @@ import { motion } from "framer-motion";
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: analyses, isLoading: loadingAnalyses } = useListAnalyses();
-  const { data: hypotheses, isLoading: loadingHypotheses } = useListHypotheses();
+  const { data: insights } = useListModelInsights();
   const { mutateAsync: startAnalysis, isPending: isStarting } = useStartAnalysis();
   const [quickTicker, setQuickTicker] = useState("");
 
   const completedAnalyses = analyses?.filter(a => a.status === 'completed') || [];
   const inProgressAnalyses = analyses?.filter(a => a.status === 'in_progress') || [];
   
-  const activeHypotheses = hypotheses?.filter(h => h.outcome === 'pending' || h.outcome === 'ongoing') || [];
-  const successfulHypotheses = hypotheses?.filter(h => h.outcome === 'hit_target') || [];
-  
-  const resolvedCount = hypotheses?.filter(h => h.outcome !== 'pending' && h.outcome !== 'ongoing').length || 0;
-  const winRate = resolvedCount > 0 ? (successfulHypotheses.length / resolvedCount) * 100 : 0;
+  const reviewedInsights = insights?.filter(i => i.outcome !== "pending") ?? [];
+  const hitTarget = reviewedInsights.filter(i => i.outcome === "hit_target");
+  const winRate = reviewedInsights.length > 0
+    ? (hitTarget.length / reviewedInsights.length * 100).toFixed(1)
+    : "0.0";
+
+  const lessonsCount = insights?.filter(i => i.lesson).length ?? 0;
 
   const handleQuickAnalysis = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,17 +85,17 @@ export default function Dashboard() {
           delay={0.1}
         />
         <StatCard 
-          title="추적 가설" 
-          value={activeHypotheses.length.toString()} 
-          icon={AlertCircle} 
-          sub="시장 모니터링 중"
+          title="추출 교훈" 
+          value={lessonsCount.toString()} 
+          icon={BookOpen} 
+          sub="모델 학습 완료"
           delay={0.15}
         />
         <StatCard 
           title="AI 적중률" 
-          value={`${winRate.toFixed(1)}%`} 
+          value={`${winRate}%`} 
           icon={TrendingUp} 
-          sub="해결된 가설 기준"
+          sub="목표가 달성 기준"
           highlight
           delay={0.2}
         />
@@ -151,7 +154,7 @@ export default function Dashboard() {
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-warning"></span>
                             </span>
-                            분석중 ({analysis.steps.length}/9)
+                            분석중 ({analysis.steps.length}/{6})
                           </div>
                         ) : (
                           <div className="text-right">
@@ -173,44 +176,53 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Active Hypotheses */}
+        {/* AI 모델 교훈 */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-display font-semibold text-foreground">추적 중인 가설</h2>
-            <Link href="/hypotheses" className="text-xs text-primary hover:underline">
+            <h2 className="text-base font-display font-semibold text-foreground">AI 모델 교훈</h2>
+            <Link href="/model-insights" className="text-xs text-primary hover:underline">
               전체 보기
             </Link>
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
-            {loadingHypotheses ? (
-              <div className="py-8 text-center text-muted-foreground text-sm animate-pulse">불러오는 중...</div>
-            ) : activeHypotheses.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm">추적 중인 가설이 없습니다.</div>
+          <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3 min-h-[200px]">
+            {!insights || insights.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-10 text-center gap-2">
+                <BookOpen className="w-8 h-8 text-muted-foreground/30" />
+                <p className="text-xs text-muted-foreground">
+                  분석이 완료되면 AI가 자동으로<br />교훈을 추출합니다
+                </p>
+              </div>
             ) : (
-              activeHypotheses.slice(0, 4).map((hyp, i) => (
-                <motion.div 
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.08 * i }}
-                  key={hyp.id} 
-                  className="p-3 rounded-lg bg-muted/50 border border-border hover:border-primary/40 transition-colors"
-                >
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="font-mono font-bold text-primary text-sm">{hyp.ticker}</span>
-                    <span className="text-[11px] font-semibold text-warning bg-warning/10 px-2 py-0.5 rounded">
-                      추적중
-                    </span>
-                  </div>
-                  <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed mb-2">
-                    {hyp.hypothesisText}
-                  </p>
-                  <div className="flex justify-between text-[11px] font-mono text-muted-foreground">
-                    <span>진입: {formatCurrency(hyp.entryPrice)}</span>
-                    <span className="text-primary font-semibold">목표: {formatCurrency(hyp.targetPrice)}</span>
-                  </div>
-                </motion.div>
-              ))
+              insights
+                .filter(i => i.lesson)
+                .slice(-4)
+                .reverse()
+                .map((insight, i) => (
+                  <motion.div
+                    key={insight.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.06 * i }}
+                    className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-100"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-mono font-bold text-primary text-xs">{insight.ticker.replace(/\.(KS|KQ)$/, "")}</span>
+                      <span className={cn(
+                        "text-[11px] font-bold flex items-center gap-0.5",
+                        (insight.priceReturn ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"
+                      )}>
+                        {(insight.priceReturn ?? 0) >= 0
+                          ? <TrendingUp className="w-3 h-3" />
+                          : <TrendingDown className="w-3 h-3" />}
+                        {(insight.priceReturn ?? 0) >= 0 ? "+" : ""}{insight.priceReturn?.toFixed(1) ?? "—"}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground/75 leading-relaxed line-clamp-3">
+                      {insight.lesson}
+                    </p>
+                  </motion.div>
+                ))
             )}
           </div>
         </div>
