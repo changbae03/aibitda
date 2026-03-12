@@ -35,8 +35,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             className="h-9 w-auto object-contain"
           />
           <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold text-sm tracking-widest text-white">AI 기업분석</span>
-            <span className="text-xs text-muted-foreground font-mono tracking-wider">플랫폼</span>
+            <span className="font-display font-bold text-sm tracking-widest text-white">CBST AI 기업분석</span>
           </div>
         </div>
 
