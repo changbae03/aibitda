@@ -1,5 +1,4 @@
 export type AgentKey =
-  | "company_intro"
   | "industry_analysis"
   | "company_analysis"
   | "market_analysis"
@@ -13,11 +12,6 @@ export interface AgentInfo {
 }
 
 export const AGENTS: Record<AgentKey, AgentInfo> = {
-  company_intro: {
-    name: "Lead Portfolio Strategist",
-    role: "팀장",
-    number: "0",
-  },
   industry_analysis: {
     name: "Macro & Industry Analyst",
     role: "에이전트 1",
@@ -46,7 +40,6 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
 };
 
 export const STEP_ORDER: AgentKey[] = [
-  "company_intro",
   "industry_analysis",
   "company_analysis",
   "market_analysis",
@@ -78,26 +71,6 @@ export function buildPrompt(
 - 추측 금지, 데이터 기반으로만 서술`;
 
   const prompts: Record<AgentKey, { systemPrompt: string; userPrompt: string }> = {
-    company_intro: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
-역할: 분석 대상 기업을 소개하고 리서치 목표를 설정합니다.
-${COMMON_RULES}`,
-      userPrompt: `${baseContext}
-
-아래 항목을 간결하게 서술하세요:
-
-1. 기업 개요
-   - 사업 영역, 주요 제품/서비스
-   - 설립 연도, 시장 지위
-
-2. 분석 배경
-   - 이 종목을 분석하는 이유
-   - 현재 시장 환경에서의 위치
-
-3. 리서치 목표
-   - 이번 분석에서 확인할 핵심 질문 3가지`,
-    },
-
     industry_analysis: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Macro & Industry Analyst(에이전트 1)입니다.
 역할: 산업 구조, 성장률, 정책 환경, 경쟁 구도, 매크로 리스크를 분석합니다.

@@ -59,7 +59,7 @@ export default function NewAnalysis() {
             어떤 종목을 분석할까요?
           </h1>
           <p className="text-muted-foreground text-base">
-            종목코드를 입력하면 8개 AI 에이전트가 즉시 분석을 시작합니다
+            종목코드를 입력하면 5명의 최정예 AI 에이전트가 즉시 분석을 시작합니다
           </p>
         </div>
 

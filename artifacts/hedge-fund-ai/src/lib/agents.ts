@@ -18,15 +18,6 @@ export type AgentInfo = {
 };
 
 export const AGENTS: Record<string, AgentInfo> = {
-  company_intro: {
-    id: "company_intro",
-    name: "팀장",
-    role: "Lead Portfolio Strategist",
-    icon: ShieldCheck,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-    description: "분석 대상 기업 소개 및 리서치 목표 설정"
-  },
   industry_analysis: {
     id: "industry_analysis",
     name: "에이전트 1",
@@ -75,7 +66,6 @@ export const AGENTS: Record<string, AgentInfo> = {
 };
 
 export const ANALYSIS_STEPS_ORDER = [
-  "company_intro",
   "industry_analysis",
   "company_analysis",
   "market_analysis",
