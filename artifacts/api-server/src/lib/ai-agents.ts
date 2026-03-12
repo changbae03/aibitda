@@ -66,9 +66,10 @@ export function buildPrompt(
       : "";
 
   const COMMON_RULES = `원칙:
+- 컨텍스트에 Yahoo Finance 실제 재무 데이터가 제공됩니다. 수치는 반드시 이 데이터에서 직접 인용하세요.
 - 마크다운 볼드(** **) 사용 금지
 - 사용자에게 추가 입력을 요청하지 말 것
-- 추측 금지, 데이터 기반으로만 서술`;
+- 데이터가 없는 항목은 "-" 또는 "데이터 없음"으로 표시하고 추측하지 마세요`;
 
   const prompts: Record<AgentKey, { systemPrompt: string; userPrompt: string }> = {
     industry_analysis: {
@@ -102,29 +103,32 @@ ${COMMON_RULES}`,
     company_analysis: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Fundamental & Valuation Analyst(에이전트 2)입니다.
 역할: 사업 구조, 재무 분석, 밸류에이션, 적정 주가를 산출합니다.
-${COMMON_RULES}`,
+${COMMON_RULES}
+중요: 컨텍스트의 Yahoo Finance 실제 수치(P/E, P/B, EV/EBITDA, EPS, ROE, FCF 등)를 반드시 그대로 인용하여 분석하세요. 수치 없이 서술만 하는 것은 금지입니다.`,
       userPrompt: `${baseContext}${previousContext}
 
-아래 항목을 분석하세요:
+컨텍스트에 제공된 Yahoo Finance 재무 데이터를 기반으로 아래 항목을 분석하세요:
 
-1. 사업 구조
-   - 매출 세그먼트별 비중 및 트렌드
-   - 이익률 구조, 이익의 질
+1. 사업 구조 및 재무 현황
+   - 매출·이익 추이 (연간 실적 데이터 직접 인용)
+   - 이익률 구조: 매출총이익률, 영업이익률, 순이익률 (실제 수치 기입)
+   - FCF, 영업현금흐름 분석
 
-2. 핵심 재무 지표
-   - ROE, ROIC, FCF (업계 대비 평가)
-   - 부채비율, 이자보상배율
-   - CB/BW 등 희석 리스크
+2. 핵심 재무 지표 (실제 수치 기입)
+   - ROE, ROA (실제 수치 및 업계 평균 대비 평가)
+   - 부채비율(D/E), 유동비율, 당좌비율
+   - 보유 현금 vs 총 부채 비교
 
-3. 경쟁 우위(Moat) 및 성장성
-   - 지속 가능한 경쟁 우위 요소
-   - 향후 3년 성장 전망
-
-4. 밸류에이션
-   - 적용 모델 및 핵심 가정 명시
-   - Bear / Base / Bull 시나리오별 적정가
+3. 밸류에이션 (반드시 실제 멀티플 수치 인용)
+   - P/E(TTM), P/E(Forward), P/B, EV/EBITDA, EV/매출 (모두 실제 수치 기입)
+   - 피어 그룹 평균 멀티플과 비교한 할인/프리미엄 판단
+   - DCF 또는 적정 멀티플 기반 Bear / Base / Bull 시나리오별 적정 주가 산출
    - 현재가 대비 상승/하락 여력 (%)
-   - 피어 그룹 비교`,
+
+4. EPS 전망 및 성장성
+   - 애널리스트 컨센서스 EPS 추정치 인용
+   - 매출 성장률, 이익 성장률 트렌드
+   - PEG 기반 성장가치 평가`,
     },
 
     market_analysis: {

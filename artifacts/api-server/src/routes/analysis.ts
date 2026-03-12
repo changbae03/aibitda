@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
-import { eq, desc, and, not } from "drizzle-orm";
+import { eq, desc, not } from "drizzle-orm";
 import OpenAI from "openai";
 import YahooFinance from "yahoo-finance2";
 import {
@@ -20,10 +20,12 @@ const client = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? undefined,
 });
 
+// ─── Ticker resolution ────────────────────────────────────────────────────────
+
 async function tryQuoteSummary(symbol: string) {
   try {
     const result = await yahooFinance.quoteSummary(symbol, {
-      modules: ["quoteType", "summaryProfile"],
+      modules: ["quoteType", "summaryProfile"] as any,
     });
     const companyName =
       (result.quoteType as any)?.longName ||
@@ -40,20 +42,187 @@ async function tryQuoteSummary(symbol: string) {
   }
 }
 
-async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; industry: string }> {
+async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; industry: string; resolvedSymbol: string }> {
   if (/^\d{6}$/.test(ticker)) {
     const [ksResult, kqResult] = await Promise.all([
       tryQuoteSummary(`${ticker}.KS`),
       tryQuoteSummary(`${ticker}.KQ`),
     ]);
-    const found = ksResult || kqResult;
-    if (found) return found;
-  } else {
-    const result = await tryQuoteSummary(ticker);
-    if (result) return result;
+    if (kqResult) return { ...kqResult, resolvedSymbol: `${ticker}.KQ` };
+    if (ksResult) return { ...ksResult, resolvedSymbol: `${ticker}.KS` };
+    return { companyName: ticker, industry: "일반", resolvedSymbol: `${ticker}.KS` };
   }
-  return { companyName: ticker, industry: "일반" };
+  const result = await tryQuoteSummary(ticker);
+  if (result) return { ...result, resolvedSymbol: ticker };
+  return { companyName: ticker, industry: "일반", resolvedSymbol: ticker };
 }
+
+// ─── Financial data fetching ──────────────────────────────────────────────────
+
+function toYear(val: any): string {
+  if (!val) return "?";
+  if (val instanceof Date) return String(val.getFullYear());
+  if (typeof val === "number") return String(new Date(val * 1000).getFullYear());
+  return "?";
+}
+
+function fmtNum(val: number | undefined | null, currency?: string): string {
+  if (val == null || isNaN(val)) return "-";
+  const abs = Math.abs(val);
+  const sign = val < 0 ? "-" : "";
+  if (currency === "KRW") {
+    if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)}조원`;
+    if (abs >= 1e8)  return `${sign}${(abs / 1e8).toFixed(1)}억원`;
+    if (abs >= 1e4)  return `${sign}${(abs / 1e4).toFixed(0)}만원`;
+    return `${sign}${abs.toLocaleString()}원`;
+  }
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
+  return `${sign}${abs.toFixed(2)}`;
+}
+
+function pct(val: number | undefined | null): string {
+  if (val == null || isNaN(val)) return "-";
+  return `${(val * 100).toFixed(1)}%`;
+}
+
+async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
+  let result: any;
+  try {
+    result = await yahooFinance.quoteSummary(resolvedSymbol, {
+      modules: [
+        "financialData",
+        "defaultKeyStatistics",
+        "incomeStatementHistory",
+        "balanceSheetHistory",
+        "cashflowStatementHistory",
+        "earningsTrend",
+      ] as any,
+    });
+  } catch (err) {
+    console.error(`[financial-data] Failed for ${resolvedSymbol}:`, err);
+    return "";
+  }
+
+  const lines: string[] = [
+    `=== Yahoo Finance 실제 재무 데이터 (${resolvedSymbol}, 기준일: ${new Date().toISOString().split("T")[0]}) ===`,
+    "※ 아래 수치는 실제 공시 데이터 기반입니다. 분석 시 이 수치를 직접 인용하세요.",
+  ];
+
+  const fd = result.financialData as any;
+  const ks = result.defaultKeyStatistics as any;
+  const currency: string = fd?.financialCurrency ?? "USD";
+
+  // Current financial metrics
+  if (fd) {
+    lines.push("\n[현재 재무 현황]");
+    if (fd.currentPrice)         lines.push(`현재가: ${fd.currentPrice} ${currency}`);
+    if (fd.targetMeanPrice)      lines.push(`애널리스트 평균 목표가: ${fd.targetMeanPrice} ${currency}`);
+    if (fd.targetHighPrice)      lines.push(`목표가 범위: ${fd.targetLowPrice} ~ ${fd.targetHighPrice} ${currency}`);
+    if (fd.recommendationKey)    lines.push(`애널리스트 추천: ${fd.recommendationKey} (커버리지 ${fd.numberOfAnalystOpinions ?? "?"}명)`);
+    if (fd.totalRevenue)         lines.push(`매출(TTM): ${fmtNum(fd.totalRevenue, currency)}`);
+    if (fd.grossProfits)         lines.push(`매출총이익(TTM): ${fmtNum(fd.grossProfits, currency)}`);
+    if (fd.ebitda)               lines.push(`EBITDA: ${fmtNum(fd.ebitda, currency)}`);
+    if (fd.operatingCashflow)    lines.push(`영업현금흐름: ${fmtNum(fd.operatingCashflow, currency)}`);
+    if (fd.freeCashflow)         lines.push(`잉여현금흐름(FCF): ${fmtNum(fd.freeCashflow, currency)}`);
+    if (fd.totalCash)            lines.push(`보유 현금: ${fmtNum(fd.totalCash, currency)}`);
+    if (fd.totalDebt)            lines.push(`총 부채: ${fmtNum(fd.totalDebt, currency)}`);
+    if (fd.revenueGrowth != null) lines.push(`매출 성장률(YoY): ${pct(fd.revenueGrowth)}`);
+    if (fd.earningsGrowth != null) lines.push(`이익 성장률(YoY): ${pct(fd.earningsGrowth)}`);
+    if (fd.grossMargins != null)    lines.push(`매출총이익률: ${pct(fd.grossMargins)}`);
+    if (fd.operatingMargins != null) lines.push(`영업이익률: ${pct(fd.operatingMargins)}`);
+    if (fd.profitMargins != null)   lines.push(`순이익률: ${pct(fd.profitMargins)}`);
+    if (fd.returnOnEquity != null)  lines.push(`ROE: ${pct(fd.returnOnEquity)}`);
+    if (fd.returnOnAssets != null)  lines.push(`ROA: ${pct(fd.returnOnAssets)}`);
+    if (fd.debtToEquity != null)    lines.push(`부채비율(D/E): ${fd.debtToEquity.toFixed(1)}`);
+    if (fd.currentRatio != null)    lines.push(`유동비율: ${fd.currentRatio.toFixed(2)}`);
+    if (fd.quickRatio != null)      lines.push(`당좌비율: ${fd.quickRatio.toFixed(2)}`);
+  }
+
+  // Valuation multiples
+  if (ks) {
+    lines.push("\n[밸류에이션 지표]");
+    if (ks.enterpriseValue)         lines.push(`기업가치(EV): ${fmtNum(ks.enterpriseValue, currency)}`);
+    if (ks.trailingEps != null)     lines.push(`EPS(TTM): ${ks.trailingEps.toFixed(2)} ${currency}`);
+    if (ks.forwardEps != null)      lines.push(`EPS(Forward): ${ks.forwardEps.toFixed(2)} ${currency}`);
+    if (ks.trailingPE != null)      lines.push(`P/E(TTM): ${ks.trailingPE.toFixed(1)}x`);
+    if (ks.forwardPE != null)       lines.push(`P/E(Forward): ${ks.forwardPE.toFixed(1)}x`);
+    if (ks.priceToBook != null)     lines.push(`P/B: ${ks.priceToBook.toFixed(2)}x`);
+    if (ks.enterpriseToRevenue != null) lines.push(`EV/매출: ${ks.enterpriseToRevenue.toFixed(2)}x`);
+    if (ks.enterpriseToEbitda != null)  lines.push(`EV/EBITDA: ${ks.enterpriseToEbitda.toFixed(2)}x`);
+    if (ks.pegRatio != null)        lines.push(`PEG: ${ks.pegRatio.toFixed(2)}`);
+    if (ks.beta != null)            lines.push(`베타: ${ks.beta.toFixed(2)}`);
+    if (ks.bookValue != null)       lines.push(`BPS(주당순자산): ${ks.bookValue.toFixed(2)} ${currency}`);
+    if (ks.sharesOutstanding)       lines.push(`발행주식수: ${fmtNum(ks.sharesOutstanding)}`);
+    if (ks.heldPercentInsiders != null)     lines.push(`내부자 보유율: ${pct(ks.heldPercentInsiders)}`);
+    if (ks.heldPercentInstitutions != null) lines.push(`기관 보유율: ${pct(ks.heldPercentInstitutions)}`);
+    if (ks.shortRatio != null)      lines.push(`공매도 커버일수: ${ks.shortRatio.toFixed(1)}일`);
+    if (ks.dividendYield != null)   lines.push(`배당수익률: ${pct(ks.dividendYield)}`);
+    if (ks.payoutRatio != null)     lines.push(`배당성향: ${pct(ks.payoutRatio)}`);
+  }
+
+  // Income statement history
+  const incomeStmts: any[] = (result.incomeStatementHistory as any)?.incomeStatementHistory ?? [];
+  if (incomeStmts.length > 0) {
+    lines.push("\n[손익계산서 - 연간 실적]");
+    for (const stmt of incomeStmts.slice(0, 4)) {
+      const year = toYear(stmt.endDate);
+      const rev  = fmtNum(stmt.totalRevenue, currency);
+      const gp   = fmtNum(stmt.grossProfit, currency);
+      const op   = fmtNum(stmt.operatingIncome ?? stmt.totalOperatingExpenses, currency);
+      const ni   = fmtNum(stmt.netIncome, currency);
+      const eps  = stmt.basicEps != null ? stmt.basicEps.toFixed(2) : (stmt.dilutedEps != null ? stmt.dilutedEps.toFixed(2) : "-");
+      lines.push(`  ${year}년: 매출 ${rev} | 매출총이익 ${gp} | 영업이익 ${op} | 순이익 ${ni} | EPS ${eps}`);
+    }
+  }
+
+  // Balance sheet
+  const balanceStmts: any[] = (result.balanceSheetHistory as any)?.balanceSheetStatements ?? [];
+  if (balanceStmts.length > 0) {
+    lines.push("\n[재무상태표 - 최근 연도]");
+    for (const stmt of balanceStmts.slice(0, 2)) {
+      const year = toYear(stmt.endDate);
+      lines.push(
+        `  ${year}년: 총자산 ${fmtNum(stmt.totalAssets, currency)} | 총부채 ${fmtNum(stmt.totalLiab, currency)} | 자기자본 ${fmtNum(stmt.totalStockholderEquity, currency)} | 현금 ${fmtNum(stmt.cash, currency)}`
+      );
+    }
+  }
+
+  // Cash flow
+  const cfStmts: any[] = (result.cashflowStatementHistory as any)?.cashflowStatements ?? [];
+  if (cfStmts.length > 0) {
+    lines.push("\n[현금흐름표]");
+    for (const stmt of cfStmts.slice(0, 2)) {
+      const year = toYear(stmt.endDate);
+      const ocf   = fmtNum(stmt.totalCashFromOperatingActivities, currency);
+      const capex = fmtNum(stmt.capitalExpenditures, currency);
+      const icf   = fmtNum(stmt.totalCashflowsFromInvestingActivities, currency);
+      lines.push(`  ${year}년: 영업CF ${ocf} | CAPEX ${capex} | 투자CF ${icf}`);
+    }
+  }
+
+  // Earnings estimates
+  const trends: any[] = (result.earningsTrend as any)?.trend ?? [];
+  if (trends.length > 0) {
+    lines.push("\n[EPS 및 매출 전망 (애널리스트 컨센서스)]");
+    for (const t of trends.slice(0, 4)) {
+      const period  = t.period ?? "?";
+      const epsAvg  = t.earningsEstimate?.avg?.toFixed(2) ?? "-";
+      const epsLow  = t.earningsEstimate?.low?.toFixed(2) ?? "-";
+      const epsHigh = t.earningsEstimate?.high?.toFixed(2) ?? "-";
+      const revAvg  = t.revenueEstimate?.avg ? fmtNum(t.revenueEstimate.avg, currency) : "-";
+      const growth  = t.earningsEstimate?.growth != null ? pct(t.earningsEstimate.growth) : "-";
+      lines.push(`  ${period}: EPS ${epsAvg} (${epsLow}~${epsHigh}), 매출 ${revAvg}, 성장률 ${growth}`);
+    }
+  }
+
+  const text = lines.join("\n");
+  console.log(`[financial-data] Fetched ${text.length} chars for ${resolvedSymbol}`);
+  return text;
+}
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post("/", async (req, res) => {
   const { ticker, companyName: rawCompanyName, industry: rawIndustry, additionalContext } = req.body as {
@@ -68,22 +237,32 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  const upperTicker = ticker.toUpperCase();
   let companyName = rawCompanyName?.trim();
   let industry = rawIndustry?.trim();
+  let resolvedSymbol = upperTicker;
 
   if (!companyName || !industry) {
-    const info = await fetchTickerInfo(ticker.toUpperCase());
+    const info = await fetchTickerInfo(upperTicker);
     companyName = companyName || info.companyName;
     industry = industry || info.industry;
+    resolvedSymbol = info.resolvedSymbol;
   }
+
+  // Fetch real financial data from Yahoo Finance
+  const financialData = await fetchFinancialContext(resolvedSymbol);
+  const userContext = additionalContext ?? null;
+  const fullContext = financialData
+    ? (userContext ? financialData + "\n\n[사용자 추가 컨텍스트]\n" + userContext : financialData)
+    : userContext;
 
   const [analysis] = await db
     .insert(analysesTable)
     .values({
-      ticker: ticker.toUpperCase(),
+      ticker: upperTicker,
       companyName,
       industry,
-      additionalContext: additionalContext ?? null,
+      additionalContext: fullContext,
       status: "in_progress",
       currentStep: "industry_analysis",
     })
@@ -225,8 +404,6 @@ router.post("/:id/step", async (req, res) => {
     content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
   }
 
-  const informationType = detectInformationType(content);
-
   const [step] = await db
     .insert(analysisStepsTable)
     .values({
@@ -236,7 +413,7 @@ router.post("/:id/step", async (req, res) => {
       agentRole: agent.role,
       content,
       validationNotes: null,
-      informationType,
+      informationType: "data_based_estimate",
     })
     .returning();
 
@@ -275,7 +452,7 @@ router.post("/:id/step", async (req, res) => {
         if (m && m.length >= 2) riskRewardRatio = parseFloat(m[1]) / parseFloat(m[0]);
       }
     } catch {
-      // JSON parse failed — fall back to null values
+      // JSON parse failed
     }
 
     await db
@@ -302,12 +479,6 @@ router.post("/:id/step", async (req, res) => {
 
   res.json(formatStep(step));
 });
-
-function detectInformationType(content: string): string {
-  if (content.includes("[확인된 사실]")) return "confirmed_fact";
-  if (content.includes("[가설]")) return "hypothesis";
-  return "data_based_estimate";
-}
 
 function formatStep(step: any) {
   return {
