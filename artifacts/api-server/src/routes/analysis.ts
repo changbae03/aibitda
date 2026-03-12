@@ -264,7 +264,7 @@ router.post("/", async (req, res) => {
       industry,
       additionalContext: fullContext,
       status: "in_progress",
-      currentStep: "industry_analysis",
+      currentStep: "company_intro",
     })
     .returning();
 
@@ -348,7 +348,7 @@ router.post("/:id/step", async (req, res) => {
   const agent = AGENTS[stepKey];
 
   let enrichedContext = analysis.additionalContext ?? null;
-  if (stepKey === "investment_strategy") {
+  if (stepKey === "company_intro" || stepKey === "investment_strategy") {
     try {
       const insights = await db
         .select()

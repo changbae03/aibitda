@@ -1,4 +1,5 @@
 export type AgentKey =
+  | "company_intro"
   | "industry_analysis"
   | "company_analysis"
   | "market_analysis"
@@ -12,6 +13,11 @@ export interface AgentInfo {
 }
 
 export const AGENTS: Record<AgentKey, AgentInfo> = {
+  company_intro: {
+    name: "Lead Portfolio Strategist",
+    role: "팀장",
+    number: "0",
+  },
   industry_analysis: {
     name: "Macro & Industry Analyst",
     role: "에이전트 1",
@@ -40,6 +46,7 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
 };
 
 export const STEP_ORDER: AgentKey[] = [
+  "company_intro",
   "industry_analysis",
   "company_analysis",
   "market_analysis",
@@ -77,6 +84,27 @@ export function buildPrompt(
 - 데이터가 없는 항목은 "데이터 없음"으로 표시하고 추측하지 마세요`;
 
   const prompts: Record<AgentKey, { systemPrompt: string; userPrompt: string }> = {
+    company_intro: {
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
+역할: 분석 대상 기업을 간략히 파악하고 팀 전체 리서치의 방향을 설정합니다.
+${COMMON_RULES}`,
+      userPrompt: `${baseContext}
+
+컨텍스트에 제공된 실제 재무 데이터를 바탕으로 아래 항목을 간결하게 작성하세요:
+
+## 📋 기업 개요
+
+기업의 핵심 사업, 주요 제품/서비스, 시장 지위를 2-3문장으로 요약하세요.
+
+## 📊 현재 재무 스냅샷
+
+제공된 Yahoo Finance 데이터에서 가장 핵심적인 수치 5개를 선별해 제시하세요 (현재가, 시가총액, 매출, 주요 멀티플 등).
+
+## 🎯 리서치 핵심 질문
+
+이번 분석에서 팀이 집중해서 확인해야 할 핵심 질문 3가지를 제시하세요. 각 에이전트가 답해야 할 방향을 설정합니다.`,
+    },
+
     industry_analysis: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Macro & Industry Analyst(에이전트 1)입니다.
 역할: 산업 구조, 성장률, 정책 환경, 경쟁 구도, 매크로 리스크를 분석합니다.

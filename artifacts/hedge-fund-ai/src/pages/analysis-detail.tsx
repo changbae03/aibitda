@@ -339,6 +339,7 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
   }
 
   const agentColors: Record<string, string> = {
+    company_intro: "hsl(218, 67%, 44%)",
     industry_analysis: "#059669",
     company_analysis: "#4f46e5",
     market_analysis: "#e11d48",
