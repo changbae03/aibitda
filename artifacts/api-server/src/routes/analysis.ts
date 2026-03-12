@@ -181,15 +181,20 @@ router.post("/:id/step", async (req, res) => {
 
   let content = "";
   try {
-    const completion = await client.chat.completions.create({
+    const stream = await client.chat.completions.create({
       model: "gpt-5.2",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      max_tokens: 3000,
+      max_completion_tokens: 8192,
+      stream: true,
     });
-    content = completion.choices[0]?.message?.content ?? "분석 결과를 생성하지 못했습니다.";
+    for await (const chunk of stream) {
+      content += chunk.choices[0]?.delta?.content ?? "";
+    }
+    console.log(`[${stepKey}] streamed content length:`, content.length);
+    if (!content) content = "분석 결과를 생성하지 못했습니다.";
   } catch (err) {
     console.error("OpenAI error:", err);
     content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;

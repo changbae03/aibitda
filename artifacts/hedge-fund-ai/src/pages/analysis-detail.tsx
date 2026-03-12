@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useRoute } from "wouter";
 import { useGetAnalysis, useRunAnalysisStep, getGetAnalysisQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,6 +33,24 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: runStep, isPending: isRunningStep } = useRunAnalysisStep();
+  const autoRunning = useRef(false);
+
+  useEffect(() => {
+    if (!analysis || analysis.status !== "in_progress" || isRunningStep || autoRunning.current) return;
+    const nextIndex = analysis.steps.length;
+    if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
+    const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
+    autoRunning.current = true;
+    runStep(
+      { id, data: { stepKey: nextStepKey } },
+      {
+        onSettled: () => {
+          autoRunning.current = false;
+          queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
+        },
+      }
+    );
+  }, [analysis?.steps.length, analysis?.status, isRunningStep]);
 
   if (isLoading) return (
     <div className="p-20 text-center">
