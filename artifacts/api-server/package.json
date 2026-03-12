@@ -15,7 +15,8 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "openai": "^6.27.0"
+    "openai": "^6.27.0",
+    "yahoo-finance2": "^3.13.2"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
