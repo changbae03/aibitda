@@ -1,13 +1,9 @@
 import {
-  Building2,
+  ShieldCheck,
   Globe2,
   PieChart,
-  Calculator,
-  Activity,
-  LineChart,
+  BarChart2,
   Zap,
-  Eye,
-  ShieldCheck,
   LucideIcon
 } from "lucide-react";
 
@@ -22,97 +18,67 @@ export type AgentInfo = {
 };
 
 export const AGENTS: Record<string, AgentInfo> = {
-  industry_structure: {
-    id: "industry_structure",
-    name: "Agent 2",
-    role: "Industry Structure Analyst",
-    icon: Building2,
-    color: "text-blue-400",
-    bgColor: "bg-blue-400/10",
-    description: "Analyzes market size, growth, value chain, and competitive landscape."
-  },
-  macro: {
-    id: "macro",
-    name: "Agent 1",
-    role: "Global Macro Strategist",
-    icon: Globe2,
-    color: "text-emerald-400",
-    bgColor: "bg-emerald-400/10",
-    description: "Evaluates interest rates, liquidity, policy, and geopolitical risks."
-  },
-  fundamental: {
-    id: "fundamental",
-    name: "Agent 3",
-    role: "Fundamental Analyst",
-    icon: PieChart,
-    color: "text-indigo-400",
-    bgColor: "bg-indigo-400/10",
-    description: "Deep dive into revenue structures, ROE, FCF, and capital structures."
-  },
-  valuation: {
-    id: "valuation",
-    name: "Agent 4",
-    role: "Valuation Specialist",
-    icon: Calculator,
-    color: "text-purple-400",
-    bgColor: "bg-purple-400/10",
-    description: "Calculates intrinsic value using DCF, PBRxROE, or EV/EBITDA models."
-  },
-  market_microstructure: {
-    id: "market_microstructure",
-    name: "Agent 5",
-    role: "Market Microstructure Analyst",
-    icon: Activity,
-    color: "text-rose-400",
-    bgColor: "bg-rose-400/10",
-    description: "Tracks institutional flows, foreign capital, short selling, and block trades."
-  },
-  technical: {
-    id: "technical",
-    name: "Agent 6",
-    role: "Technical Strategist",
-    icon: LineChart,
-    color: "text-cyan-400",
-    bgColor: "bg-cyan-400/10",
-    description: "Identains entry/exit timings based on long/short term trend and volume analysis."
-  },
-  catalyst: {
-    id: "catalyst",
-    name: "Agent 7",
-    role: "Catalyst Hunter",
-    icon: Zap,
-    color: "text-amber-400",
-    bgColor: "bg-amber-400/10",
-    description: "Detects upcoming events: policy changes, earnings turnarounds, product launches."
-  },
-  smart_money: {
-    id: "smart_money",
-    name: "Agent 8",
-    role: "Smart Money Tracker",
-    icon: Eye,
-    color: "text-fuchsia-400",
-    bgColor: "bg-fuchsia-400/10",
-    description: "Monitors hidden institutional accumulation patterns and smart money movement."
-  },
-  lead_validation: {
-    id: "lead_validation",
-    name: "Team Lead",
+  company_intro: {
+    id: "company_intro",
+    name: "팀장",
     role: "Lead Portfolio Strategist",
     icon: ShieldCheck,
     color: "text-primary",
     bgColor: "bg-primary/10",
-    description: "Synthesizes all insights, challenges hypotheses, and finalizes the investment strategy."
-  }
+    description: "분석 대상 기업 소개 및 리서치 목표 설정"
+  },
+  industry_analysis: {
+    id: "industry_analysis",
+    name: "에이전트 1",
+    role: "Macro & Industry Analyst",
+    icon: Globe2,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50",
+    description: "산업 구조, 성장률, 정책 환경, 경쟁 구도, 매크로 리스크"
+  },
+  company_analysis: {
+    id: "company_analysis",
+    name: "에이전트 2",
+    role: "Fundamental & Valuation Analyst",
+    icon: PieChart,
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-50",
+    description: "사업 구조, 재무 분석, 밸류에이션, 적정 주가"
+  },
+  market_analysis: {
+    id: "market_analysis",
+    name: "에이전트 3",
+    role: "Market & Technical Analyst",
+    icon: BarChart2,
+    color: "text-rose-600",
+    bgColor: "bg-rose-50",
+    description: "수급, 차트 분석, 진입/목표/손절 전략"
+  },
+  catalyst_analysis: {
+    id: "catalyst_analysis",
+    name: "에이전트 4",
+    role: "Catalyst & Smart Money Analyst",
+    icon: Zap,
+    color: "text-amber-600",
+    bgColor: "bg-amber-50",
+    description: "주가 촉매 이벤트, 세력 움직임, 주도주 가능성"
+  },
+  investment_strategy: {
+    id: "investment_strategy",
+    name: "팀장",
+    role: "Lead Portfolio Strategist",
+    icon: ShieldCheck,
+    color: "text-primary",
+    bgColor: "bg-primary/10",
+    description: "통합 검토 후 최종 투자 전략 도출"
+  },
 };
 
 export const ANALYSIS_STEPS_ORDER = [
-  "industry_structure",
-  "macro",
-  "fundamental",
-  "valuation",
-  "market_microstructure",
-  "technical",
-  "catalyst",
-  "smart_money",
-  "lead_validation"
+  "company_intro",
+  "industry_analysis",
+  "company_analysis",
+  "market_analysis",
+  "catalyst_analysis",
+  "investment_strategy",
 ] as const;

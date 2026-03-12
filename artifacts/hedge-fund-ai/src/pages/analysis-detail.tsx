@@ -10,10 +10,6 @@ import {
   Clock, 
   Play, 
   Loader2, 
-  Target, 
-  ChevronRight,
-  MessageSquareQuote,
-  ShieldCheck,
   Briefcase,
   BrainCircuit
 } from "lucide-react";
@@ -142,14 +138,14 @@ export default function AnalysisDetail() {
             <BrainCircuit className="text-primary w-4 h-4" />
             AI 분석 파이프라인
           </h3>
-          <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{currentStepCount} / 9 단계</span>
+          <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{currentStepCount} / {ANALYSIS_STEPS_ORDER.length} 단계</span>
         </div>
         
         <div className="relative">
           <div className="absolute top-4 left-4 right-4 h-0.5 bg-border z-0" />
           <div 
             className="absolute top-4 left-4 h-0.5 bg-primary z-0 transition-all duration-700 ease-out"
-            style={{ width: `calc(${(currentStepCount / 9) * 100}% - 2rem)` }}
+            style={{ width: `calc(${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}% - 2rem)` }}
           />
           <div className="relative z-10 flex justify-between">
             {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
@@ -227,23 +223,115 @@ export default function AnalysisDetail() {
   );
 }
 
-function StepCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: number }) {
-  const getBadgeStyle = (type: string) => {
-    switch(type) {
-      case 'confirmed_fact': return "bg-success/10 text-success border-success/20";
-      case 'data_based_estimate': return "bg-blue-500/10 text-blue-600 border-blue-200";
-      case 'hypothesis': return "bg-purple-500/10 text-purple-600 border-purple-200";
-      default: return "bg-muted text-muted-foreground border-border";
-    }
+function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: number }) {
+  let json: any = null;
+  try { json = JSON.parse(step.content); } catch { /* fallback to text */ }
+
+  const verdictColor = (v: string) => {
+    if (!v) return "text-foreground";
+    const s = v.toLowerCase();
+    if (s.includes("strong buy")) return "text-emerald-600";
+    if (s.includes("buy")) return "text-green-600";
+    if (s.includes("strong sell")) return "text-red-600";
+    if (s.includes("sell")) return "text-red-500";
+    return "text-amber-600";
   };
 
-  const getBadgeLabel = (type: string) => {
-    switch(type) {
-      case 'confirmed_fact': return "확인된 사실";
-      case 'data_based_estimate': return "데이터 기반 추정";
-      case 'hypothesis': return "가설";
-      default: return type;
-    }
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="bg-primary/5 border-2 border-primary/30 rounded-2xl overflow-hidden"
+    >
+      <div className="bg-primary px-6 py-4 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
+          <agent.icon className="w-4.5 h-4.5 text-white" />
+        </div>
+        <div>
+          <h4 className="font-display font-bold text-sm text-white">최종 투자 전략</h4>
+          <span className="text-[11px] text-primary-foreground/70 font-mono uppercase tracking-wider">{agent.role}</span>
+        </div>
+      </div>
+
+      {json ? (
+        <div className="p-6 space-y-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={cn("text-2xl font-display font-bold", verdictColor(json.verdict))}>{json.verdict}</span>
+            <span className="text-xs font-semibold px-2 py-0.5 bg-white border border-border rounded text-muted-foreground">신뢰도: {json.confidence}</span>
+            <span className="text-xs font-mono px-2 py-0.5 bg-white border border-border rounded text-muted-foreground">{json.investment_period} · R/R {json.risk_reward}</span>
+          </div>
+
+          {json.summary && (
+            <p className="text-sm text-foreground/80 leading-relaxed border-l-2 border-primary pl-4">{json.summary}</p>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl p-4 border border-border text-center">
+              <div className="text-[11px] text-muted-foreground font-mono mb-1">진입가</div>
+              <div className="font-bold text-foreground text-base">{json.entry_price}</div>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 text-center">
+              <div className="text-[11px] text-emerald-600 font-mono mb-1">목표가</div>
+              <div className="font-bold text-emerald-700 text-base">{json.target_price}</div>
+            </div>
+            <div className="bg-red-50 rounded-xl p-4 border border-red-200 text-center">
+              <div className="text-[11px] text-red-500 font-mono mb-1">손절가</div>
+              <div className="font-bold text-red-600 text-base">{json.stop_loss}</div>
+            </div>
+          </div>
+
+          {json.risks?.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">핵심 리스크</div>
+              <ul className="space-y-1.5">
+                {json.risks.map((r: string, i: number) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
+                    <span className="text-red-400 mt-0.5 shrink-0">▲</span>{r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {json.hypothesis && (
+            <div className="bg-white rounded-xl p-4 border border-primary/20">
+              <div className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-1">투자 가설</div>
+              <p className="text-sm text-foreground/85">{json.hypothesis}</p>
+            </div>
+          )}
+
+          {json.monitoring_indicators?.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">모니터링 지표</div>
+              <div className="flex flex-wrap gap-2">
+                {json.monitoring_indicators.map((m: string, i: number) => (
+                  <span key={i} className="text-xs px-2.5 py-1 bg-white border border-border rounded-full text-foreground/70">{m}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-5 text-sm text-foreground/80 leading-relaxed">
+          {step.content.split('\n').map((p: string, i: number) => p.trim() ? <p key={i}>{p}</p> : null)}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function StepCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: number }) {
+  if (step.stepKey === "investment_strategy") {
+    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} />;
+  }
+
+  const agentColors: Record<string, string> = {
+    company_intro: "hsl(218, 67%, 44%)",
+    industry_analysis: "#059669",
+    company_analysis: "#4f46e5",
+    market_analysis: "#e11d48",
+    catalyst_analysis: "#d97706",
   };
 
   return (
@@ -252,52 +340,24 @@ function StepCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: 
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
       className="bg-card border border-border rounded-xl overflow-hidden border-l-4"
-      style={{ borderLeftColor: `hsl(218, 67%, 44%)` }}
+      style={{ borderLeftColor: agentColors[step.stepKey] ?? "hsl(218, 67%, 44%)" }}
     >
-      {/* Agent Header */}
-      <div className="bg-muted/40 px-5 py-3.5 flex items-center justify-between border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/15">
-            <agent.icon className="w-4.5 h-4.5 text-primary" />
-          </div>
-          <div>
-            <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-            <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
-          </div>
+      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border">
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${agentColors[step.stepKey]}15`, borderColor: `${agentColors[step.stepKey]}30` }}>
+          <agent.icon className="w-4.5 h-4.5" style={{ color: agentColors[step.stepKey] }} />
         </div>
-        <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded border hidden sm:inline", getBadgeStyle(step.informationType))}>
-          {getBadgeLabel(step.informationType)}
-        </span>
+        <div>
+          <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+        </div>
       </div>
 
-      {/* Content */}
       <div className="p-5">
-        <div className="text-sm text-foreground/85 leading-relaxed space-y-3">
+        <div className="text-sm text-foreground/85 leading-relaxed space-y-2.5">
           {step.content.split('\n').map((para: string, i: number) => (
             para.trim() ? <p key={i}>{para}</p> : null
           ))}
         </div>
-
-        {/* Lead Strategist Note */}
-        {step.validationNotes && (
-          <div className="mt-5 pt-5 border-t border-dashed border-border">
-            <div className="flex gap-3">
-              <div className="shrink-0">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
-                  <ShieldCheck className="w-4 h-4 text-primary" />
-                </div>
-              </div>
-              <div className="bg-primary/5 rounded-xl rounded-tl-none p-4 border border-primary/10 flex-1">
-                <h5 className="text-xs font-bold text-primary mb-1.5 uppercase tracking-wide">
-                  수석 포트폴리오 전략가 검증
-                </h5>
-                <div className="text-sm text-foreground/75 italic leading-relaxed">
-                  "{step.validationNotes}"
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </motion.div>
   );

@@ -84,7 +84,7 @@ router.post("/", async (req, res) => {
       industry,
       additionalContext: additionalContext ?? null,
       status: "in_progress",
-      currentStep: "industry_structure",
+      currentStep: "company_intro",
     })
     .returning();
 
@@ -217,28 +217,48 @@ router.post("/:id/step", async (req, res) => {
 
   const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
   const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;
-  const isLast = stepKey === "lead_validation";
+  const isLast = stepKey === "investment_strategy";
 
   if (isLast) {
-    const verdictMatch = content.match(/투자 등급[:\s]+([^\n]+)/);
-    const targetMatch = content.match(/목표 가격[:\s]+[\₩]?([\d,]+)/);
-    const entryMatch = content.match(/진입 가격[:\s]+[\₩]?([\d,]+)/);
-    const stopMatch = content.match(/손절 가격[:\s]+[\₩]?([\d,]+)/);
+    let investmentVerdict: string | null = null;
+    let targetPrice: number | null = null;
+    let entryPrice: number | null = null;
+    let stopLoss: number | null = null;
+    let riskRewardRatio: number | null = null;
 
-    const targetPrice = targetMatch ? parseFloat(targetMatch[1].replace(/,/g, "")) : null;
-    const entryPrice = entryMatch ? parseFloat(entryMatch[1].replace(/,/g, "")) : null;
-    const stopLoss = stopMatch ? parseFloat(stopMatch[1].replace(/,/g, "")) : null;
-    const riskRewardRatio =
-      targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss
-        ? Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss))
-        : null;
+    try {
+      const json = JSON.parse(content);
+      investmentVerdict = json.verdict ?? null;
+
+      const parsePrice = (val: string | undefined) => {
+        if (!val) return null;
+        const num = parseFloat(String(val).replace(/[^0-9.]/g, ""));
+        return isNaN(num) ? null : num;
+      };
+
+      targetPrice = parsePrice(json.target_price);
+      entryPrice = parsePrice(json.entry_price);
+      stopLoss = parsePrice(json.stop_loss);
+
+      if (targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss) {
+        riskRewardRatio = Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss));
+      }
+
+      const rr = json.risk_reward;
+      if (!riskRewardRatio && rr) {
+        const m = String(rr).match(/[\d.]+/g);
+        if (m && m.length >= 2) riskRewardRatio = parseFloat(m[1]) / parseFloat(m[0]);
+      }
+    } catch {
+      // JSON parse failed — fall back to null values
+    }
 
     await db
       .update(analysesTable)
       .set({
         status: "completed",
         currentStep: null,
-        investmentVerdict: verdictMatch ? verdictMatch[1].trim() : null,
+        investmentVerdict,
         targetPrice,
         entryPrice,
         stopLoss,
