@@ -29,7 +29,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   industry_analysis: {
     id: "industry_analysis",
-    name: "에이전트 1",
+    name: "Macro & Industry",
     role: "Macro & Industry Analyst",
     icon: Globe2,
     color: "text-emerald-600",
@@ -38,7 +38,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   company_analysis: {
     id: "company_analysis",
-    name: "에이전트 2",
+    name: "Fundamental & Valuation",
     role: "Fundamental & Valuation Analyst",
     icon: PieChart,
     color: "text-indigo-600",
@@ -47,7 +47,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   market_analysis: {
     id: "market_analysis",
-    name: "에이전트 3",
+    name: "Market & Technical",
     role: "Market & Technical Analyst",
     icon: BarChart2,
     color: "text-rose-600",
@@ -56,7 +56,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   catalyst_analysis: {
     id: "catalyst_analysis",
-    name: "에이전트 4",
+    name: "Catalyst & Smart Money",
     role: "Catalyst & Smart Money Analyst",
     icon: Zap,
     color: "text-amber-600",
@@ -65,7 +65,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   investment_strategy: {
     id: "investment_strategy",
-    name: "팀장",
+    name: "결론",
     role: "Lead Portfolio Strategist",
     icon: ShieldCheck,
     color: "text-primary",
