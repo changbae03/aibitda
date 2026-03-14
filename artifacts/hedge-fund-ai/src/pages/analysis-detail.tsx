@@ -291,6 +291,16 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
             <span className="text-xs font-mono px-2 py-0.5 bg-white border border-border rounded text-muted-foreground">{json.investment_period} · R/R {json.risk_reward}</span>
           </div>
 
+          {json.key_issue && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
+              <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">최대 이슈</div>
+              <p className="text-sm font-medium text-amber-900">{json.key_issue}</p>
+              {json.issue_priced_in && (
+                <p className="text-xs text-amber-700/80">{json.issue_priced_in}</p>
+              )}
+            </div>
+          )}
+
           {json.summary && (
             <p className="text-sm text-foreground/80 leading-relaxed border-l-2 border-primary pl-4">{json.summary}</p>
           )}
