@@ -86,7 +86,7 @@ export default function AnalysisDetail() {
     <div className="space-y-6 pb-20">
       {/* Back button */}
       <button
-        onClick={() => setLocation("/")}
+        onClick={() => setLocation("/analysis/new")}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
