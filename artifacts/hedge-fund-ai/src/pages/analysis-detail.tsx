@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import StockChart from "@/components/StockChart";
+import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -251,7 +251,7 @@ export default function AnalysisDetail() {
       <div className="space-y-4">
         <AnimatePresence>
           {analysis.steps.map((step, idx) => (
-            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} />
+            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} />
           ))}
         </AnimatePresence>
 
@@ -539,7 +539,25 @@ function StreamingCard({ stepKey, content }: { stepKey: string; content: string 
   );
 }
 
-function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentInfo | undefined, delay: number }) {
+function parseChartLevels(content: string): ChartLevels | null {
+  const match = content.match(/CHART_DATA:(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]) as ChartLevels;
+    // Zero values are treated as absent
+    const clean: ChartLevels = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "number" && v > 0) (clean as any)[k] = v;
+    }
+    return Object.keys(clean).length > 0 ? clean : null;
+  } catch { return null; }
+}
+
+function stripChartData(content: string): string {
+  return content.replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "").replace(/\nCHART_DATA:\{[^\n]+\}\s*$/, "").trim();
+}
+
+function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
     name: step.agentName ?? "에이전트",
@@ -553,6 +571,10 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
   if (step.stepKey === "investment_strategy") {
     return <InvestmentStrategyCard step={step} agent={agent} delay={delay} />;
   }
+
+  const isMarket = step.stepKey === "market_analysis";
+  const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
+  const displayContent = isMarket ? stripChartData(step.content ?? "") : (step.content ?? "");
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
@@ -606,9 +628,21 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
               td: ({ children }) => <td className="px-3 py-2 text-foreground/75 whitespace-nowrap">{children}</td>,
             }}
           >
-            {step.content}
+            {displayContent}
           </ReactMarkdown>
         </div>
+
+        {/* Market Analysis 전용 차트 */}
+        {isMarket && ticker && (
+          <div className="mt-5 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">기술적 분석 차트</span>
+              {chartLevels && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">AI 레벨 오버레이 적용</span>}
+            </div>
+            <StockChart ticker={ticker} companyName={companyName} chartLevels={chartLevels ?? undefined} />
+          </div>
+        )}
       </div>
     </motion.div>
   );

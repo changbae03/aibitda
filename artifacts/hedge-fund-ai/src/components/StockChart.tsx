@@ -12,6 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import { useGetMarketData } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
@@ -21,9 +22,20 @@ type Period = "3m" | "6m" | "1y" | "2y" | "5y";
 type Interval = "1d" | "1wk" | "1mo";
 type ChartType = "price" | "rsi" | "volume";
 
+export interface ChartLevels {
+  support?: number;
+  resistance?: number;
+  entryMin?: number;
+  entryMax?: number;
+  stopLoss?: number;
+  target1?: number;
+  target2?: number;
+}
+
 interface StockChartProps {
   ticker: string;
   companyName?: string;
+  chartLevels?: ChartLevels;
 }
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
@@ -115,7 +127,18 @@ const ctrlBtn = (active: boolean, color = "primary") =>
       : "text-muted-foreground hover:text-foreground hover:bg-muted"
   );
 
-export default function StockChart({ ticker, companyName }: StockChartProps) {
+function LevelBadge({ label, value, color }: { label: string; value: number | string; color: string }) {
+  const display = typeof value === "number" ? `${value.toLocaleString("ko-KR")}원` : value + "원";
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium" style={{ borderColor: `${color}40`, backgroundColor: `${color}10`, color }}>
+      <span className="w-2 h-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+      <span className="text-muted-foreground font-normal">{label}</span>
+      <span className="font-mono font-semibold">{display}</span>
+    </div>
+  );
+}
+
+export default function StockChart({ ticker, companyName, chartLevels }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
   const [showMA, setShowMA] = useState(true);
@@ -269,32 +292,76 @@ export default function StockChart({ ticker, companyName }: StockChartProps) {
         {data && chartData.length > 0 && (
           <div>
             {activeChart === "price" && (
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                  <XAxis dataKey="dateLabel" tick={axisStyle} tickLine={false} interval={Math.floor(chartData.length / 8)} />
-                  <YAxis domain={[priceMin, priceMax]} tick={axisStyle} tickLine={false} tickFormatter={(v) => v.toLocaleString("ko-KR")} width={70} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
+              <>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                    <XAxis dataKey="dateLabel" tick={axisStyle} tickLine={false} interval={Math.floor(chartData.length / 8)} />
+                    <YAxis domain={[priceMin, priceMax]} tick={axisStyle} tickLine={false} tickFormatter={(v) => v.toLocaleString("ko-KR")} width={70} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
 
-                  {showBB && (
-                    <>
-                      <Line dataKey="bbUpper" name="BB 상단" stroke="#f97316" strokeWidth={1} dot={false} strokeDasharray="3 3" connectNulls />
-                      <Line dataKey="bbLower" name="BB 하단" stroke="#f97316" strokeWidth={1} dot={false} strokeDasharray="3 3" connectNulls />
-                    </>
-                  )}
+                    {/* AI 기술적 분석 레벨 — 진입 구간 영역 */}
+                    {chartLevels?.entryMin && chartLevels?.entryMax && (
+                      <ReferenceArea
+                        y1={chartLevels.entryMin}
+                        y2={chartLevels.entryMax}
+                        fill="#2563b0"
+                        fillOpacity={0.08}
+                        strokeOpacity={0}
+                      />
+                    )}
 
-                  <Line dataKey="close" name="종가" stroke="#2563b0" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                    {showBB && (
+                      <>
+                        <Line dataKey="bbUpper" name="BB 상단" stroke="#f97316" strokeWidth={1} dot={false} strokeDasharray="3 3" connectNulls />
+                        <Line dataKey="bbLower" name="BB 하단" stroke="#f97316" strokeWidth={1} dot={false} strokeDasharray="3 3" connectNulls />
+                      </>
+                    )}
 
-                  {showMA && (
-                    <>
-                      <Line dataKey="ma20" name="MA20" stroke="#818cf8" strokeWidth={1.5} dot={false} connectNulls />
-                      <Line dataKey="ma60" name="MA60" stroke="#10b981" strokeWidth={1.5} dot={false} connectNulls />
-                      <Line dataKey="ma120" name="MA120" stroke="#f472b6" strokeWidth={1.5} dot={false} connectNulls />
-                    </>
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
+                    <Line dataKey="close" name="종가" stroke="#2563b0" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+
+                    {showMA && (
+                      <>
+                        <Line dataKey="ma20" name="MA20" stroke="#818cf8" strokeWidth={1.5} dot={false} connectNulls />
+                        <Line dataKey="ma60" name="MA60" stroke="#10b981" strokeWidth={1.5} dot={false} connectNulls />
+                        <Line dataKey="ma120" name="MA120" stroke="#f472b6" strokeWidth={1.5} dot={false} connectNulls />
+                      </>
+                    )}
+
+                    {/* AI 기술적 분석 레벨 — 개별 라인 */}
+                    {chartLevels?.resistance && (
+                      <ReferenceLine y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 3" label={{ value: "저항", position: "right", fontSize: 9, fill: "#ef4444" }} />
+                    )}
+                    {chartLevels?.support && (
+                      <ReferenceLine y={chartLevels.support} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3" label={{ value: "지지", position: "right", fontSize: 9, fill: "#22c55e" }} />
+                    )}
+                    {chartLevels?.stopLoss && (
+                      <ReferenceLine y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 3" label={{ value: "손절", position: "right", fontSize: 9, fill: "#dc2626" }} />
+                    )}
+                    {chartLevels?.target1 && (
+                      <ReferenceLine y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="4 3" label={{ value: "목표1", position: "right", fontSize: 9, fill: "#16a34a" }} />
+                    )}
+                    {chartLevels?.target2 && (
+                      <ReferenceLine y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="4 3" label={{ value: "목표2", position: "right", fontSize: 9, fill: "#15803d" }} />
+                    )}
+                  </ComposedChart>
+                </ResponsiveContainer>
+
+                {/* 차트 레벨 범례 */}
+                {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
+                  <div className="mt-3 flex flex-wrap gap-2 px-1">
+                    {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" />}
+                    {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" />}
+                    {chartLevels.entryMin && chartLevels.entryMax && (
+                      <LevelBadge label="진입구간" value={`${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`} color="#2563b0" />
+                    )}
+                    {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" />}
+                    {chartLevels.target1 && <LevelBadge label="1차 목표" value={chartLevels.target1} color="#16a34a" />}
+                    {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" />}
+                  </div>
+                )}
+              </>
             )}
 
             {activeChart === "rsi" && (
