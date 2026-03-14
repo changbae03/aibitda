@@ -540,6 +540,13 @@ router.post("/:id/step", async (req, res) => {
   }
   runningStepsLock.set(lockKey, true);
 
+  // SSE streaming headers — send before anything else
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
   const agent = AGENTS[stepKey];
 
   let enrichedContext = analysis.additionalContext ?? null;
@@ -591,13 +598,18 @@ router.post("/:id/step", async (req, res) => {
         stream: true,
       });
       for await (const chunk of stream) {
-        content += chunk.choices[0]?.delta?.content ?? "";
+        const text = chunk.choices[0]?.delta?.content ?? "";
+        if (text) {
+          content += text;
+          res.write(`data: ${JSON.stringify({ t: text })}\n\n`);
+        }
       }
       console.log(`[${stepKey}] streamed content length:`, content.length);
       if (!content) content = "분석 결과를 생성하지 못했습니다.";
     } catch (err) {
       console.error("OpenAI error:", err);
       content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
+      res.write(`data: ${JSON.stringify({ error: content })}\n\n`);
     }
 
     const [step] = await db
@@ -673,7 +685,8 @@ router.post("/:id/step", async (req, res) => {
         .where(eq(analysesTable.id, id));
     }
 
-    res.json(formatStep(step));
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
   } finally {
     runningStepsLock.delete(lockKey);
   }

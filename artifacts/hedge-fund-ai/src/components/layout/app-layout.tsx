@@ -4,7 +4,8 @@ import {
   BrainCircuit, 
   LayoutDashboard, 
   Settings,
-  Menu
+  Menu,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

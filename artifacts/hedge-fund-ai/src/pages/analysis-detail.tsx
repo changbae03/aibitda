@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useGetAnalysis, useRunAnalysisStep, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
+import { useGetAnalysis, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AGENTS, ANALYSIS_STEPS_ORDER, type AgentInfo } from "@/lib/agents";
 import { format } from "date-fns";
@@ -34,31 +34,73 @@ export default function AnalysisDetail() {
     }
   });
 
-  const { mutate: runStep, isPending: isRunningStep } = useRunAnalysisStep();
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
+  const [streamingStep, setStreamingStep] = useState<{ key: string; content: string } | null>(null);
+  const isStreaming = streamingStep !== null;
+  const triggeredSteps = useRef<Set<string>>(new Set());
 
   const handleDelete = () => {
     if (!confirm("이 분석을 삭제하시겠습니까?")) return;
     deleteAnalysis(id, { onSuccess: () => setLocation("/") });
   };
-  const triggeredSteps = useRef<Set<string>>(new Set());
 
+  const runStreamingStep = useCallback(async (stepKey: string) => {
+    setStreamingStep({ key: stepKey, content: "" });
+    try {
+      const res = await fetch(`/api/analysis/${id}/step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepKey }),
+      });
+      if (!res.ok || !res.body) {
+        setStreamingStep(null);
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const msg = JSON.parse(line.slice(6));
+            if (msg.t) {
+              setStreamingStep(prev => prev ? { ...prev, content: prev.content + msg.t } : null);
+            }
+            if (msg.done) {
+              queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch {
+      setStreamingStep(null);
+    }
+  }, [id, queryClient]);
+
+  // Clear streaming card once the step appears in the DB-fetched list
   useEffect(() => {
-    if (!analysis || analysis.status !== "in_progress" || isRunningStep) return;
+    if (!streamingStep) return;
+    if (analysis?.steps.some(s => s.stepKey === streamingStep.key)) {
+      setStreamingStep(null);
+    }
+  }, [analysis?.steps, streamingStep]);
+
+  // Auto-trigger next step sequentially
+  useEffect(() => {
+    if (!analysis || analysis.status !== "in_progress" || isStreaming) return;
     const nextIndex = analysis.steps.length;
     if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
     if (triggeredSteps.current.has(nextStepKey)) return;
     triggeredSteps.current.add(nextStepKey);
-    runStep(
-      { id, data: { stepKey: nextStepKey } },
-      {
-        onSettled: () => {
-          queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
-        },
-      }
-    );
-  }, [analysis?.steps.length, analysis?.status, isRunningStep]);
+    runStreamingStep(nextStepKey);
+  }, [analysis?.steps.length, analysis?.status, isStreaming, runStreamingStep]);
 
   if (isLoading) return (
     <div className="p-20 text-center">
@@ -72,14 +114,13 @@ export default function AnalysisDetail() {
 
   const currentStepCount = analysis.steps.length;
   const isComplete = analysis.status === 'completed';
-  
+
   const handleRunNextStep = () => {
-    if (isComplete || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
+    if (isComplete || isStreaming || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[currentStepCount];
-    runStep(
-      { id, data: { stepKey: nextStepKey } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) }) }
-    );
+    if (triggeredSteps.current.has(nextStepKey)) return;
+    triggeredSteps.current.add(nextStepKey);
+    runStreamingStep(nextStepKey);
   };
 
   return (
@@ -214,8 +255,15 @@ export default function AnalysisDetail() {
           ))}
         </AnimatePresence>
 
-        {/* Next Action */}
-        {!isComplete && (
+        {/* Streaming card — live typewriter while AI writes */}
+        <AnimatePresence>
+          {streamingStep && (
+            <StreamingCard key={streamingStep.key} stepKey={streamingStep.key} content={streamingStep.content} />
+          )}
+        </AnimatePresence>
+
+        {/* Next Action — only shown when not streaming and not complete */}
+        {!isComplete && !isStreaming && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -237,14 +285,9 @@ export default function AnalysisDetail() {
                 </div>
                 <button
                   onClick={handleRunNextStep}
-                  disabled={isRunningStep}
-                  className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                  className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all flex items-center gap-2 shadow-sm"
                 >
-                  {isRunningStep ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중...</>
-                  ) : (
-                    <><Play className="w-4 h-4 fill-current" /> {currentStepCount + 1}단계 실행</>
-                  )}
+                  <Play className="w-4 h-4 fill-current" /> {currentStepCount + 1}단계 실행
                 </button>
               </>
             ) : (
@@ -452,6 +495,50 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
   );
 }
 
+const AGENT_COLORS: Record<string, string> = {
+  company_intro: "hsl(218, 67%, 44%)",
+  industry_analysis: "#059669",
+  company_analysis: "#4f46e5",
+  market_analysis: "#e11d48",
+  catalyst_analysis: "#d97706",
+  investment_strategy: "hsl(218, 67%, 44%)",
+};
+
+function StreamingCard({ stepKey, content }: { stepKey: string; content: string }) {
+  const agent = AGENTS[stepKey];
+  const color = AGENT_COLORS[stepKey] ?? "hsl(218, 67%, 44%)";
+  if (!agent) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className="bg-card border border-border rounded-xl overflow-hidden border-l-4"
+      style={{ borderLeftColor: color }}
+    >
+      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border">
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+          <agent.icon className="w-4.5 h-4.5" style={{ color }} />
+        </div>
+        <div className="flex-1">
+          <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>분석 중...</span>
+        </div>
+      </div>
+      <div className="p-5">
+        <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap font-sans">
+          {content}
+          <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentInfo | undefined, delay: number }) {
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
@@ -467,14 +554,7 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
     return <InvestmentStrategyCard step={step} agent={agent} delay={delay} />;
   }
 
-  const agentColors: Record<string, string> = {
-    company_intro: "hsl(218, 67%, 44%)",
-    industry_analysis: "#059669",
-    company_analysis: "#4f46e5",
-    market_analysis: "#e11d48",
-    catalyst_analysis: "#d97706",
-    investment_strategy: "hsl(218, 67%, 44%)",
-  };
+  const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
   return (
     <motion.div
@@ -482,11 +562,11 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
       className="bg-card border border-border rounded-xl overflow-hidden border-l-4"
-      style={{ borderLeftColor: agentColors[step.stepKey] ?? "hsl(218, 67%, 44%)" }}
+      style={{ borderLeftColor: color }}
     >
       <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border">
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${agentColors[step.stepKey]}15`, borderColor: `${agentColors[step.stepKey]}30` }}>
-          <agent.icon className="w-4.5 h-4.5" style={{ color: agentColors[step.stepKey] }} />
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+          <agent.icon className="w-4.5 h-4.5" style={{ color }} />
         </div>
         <div>
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
