@@ -297,6 +297,32 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
             <span className="text-xs font-mono px-2 py-0.5 bg-white border border-border rounded text-muted-foreground">{json.investment_period} · R/R {json.risk_reward}</span>
           </div>
 
+          {(json.company_type || json.inflection || json.price_stage) && (
+            <div className="flex flex-wrap gap-2">
+              {json.company_type && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-700 font-medium">
+                  🏷️ {json.company_type}
+                </span>
+              )}
+              {json.inflection && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-medium">
+                  ⚡ {json.inflection}
+                </span>
+              )}
+              {json.price_stage && (
+                <span className={cn(
+                  "inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border",
+                  json.price_stage.includes("초기") && "bg-emerald-50 border-emerald-200 text-emerald-700",
+                  json.price_stage.includes("리레이팅") && "bg-amber-50 border-amber-200 text-amber-700",
+                  json.price_stage.includes("과열") && "bg-red-50 border-red-200 text-red-700",
+                  !json.price_stage.includes("초기") && !json.price_stage.includes("리레이팅") && !json.price_stage.includes("과열") && "bg-muted border-border text-muted-foreground",
+                )}>
+                  📍 {json.price_stage}
+                </span>
+              )}
+            </div>
+          )}
+
           {json.key_issue && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
               <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">최대 이슈</div>
