@@ -415,6 +415,48 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   return text;
 }
 
+// ─── Company news fetching (Google News RSS) ─────────────────────────────────
+
+async function fetchCompanyNews(companyName: string): Promise<string> {
+  try {
+    const query = encodeURIComponent(companyName);
+    const rssUrl = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`;
+    const res = await fetch(rssUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return "";
+    const xml = await res.text();
+
+    const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+    if (items.length === 0) return "";
+
+    const lines: string[] = [
+      `\n=== 최신 뉴스/공시 (${companyName}, 기준: ${new Date().toISOString().split("T")[0]}) ===`,
+      "※ 아래 뉴스 이슈들을 분석에 직접 반영하세요. 특히 주가에 영향을 미치는 핵심 이벤트에 주목하세요.\n",
+    ];
+
+    for (const item of items.slice(0, 15)) {
+      const cdataTitle = item.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/)?.[1];
+      const plainTitle = item.match(/<title>([^<]+)<\/title>/)?.[1];
+      const title = (cdataTitle ?? plainTitle ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+      const pubDate = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] ?? "";
+      const source = item.match(/<source[^>]*>(?:<!\[CDATA\[)?([^\]<]+)(?:\]\]>)?<\/source>/)?.[1] ?? "";
+      if (!title) continue;
+      const dateStr = pubDate
+        ? new Date(pubDate).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })
+        : "";
+      lines.push(`[${dateStr}] ${title}${source ? ` (${source})` : ""}`);
+    }
+
+    console.log(`[news] Fetched ${items.length} news items for ${companyName}`);
+    return lines.join("\n");
+  } catch (err) {
+    console.error("[news] Failed:", err);
+    return "";
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post("/", async (req, res) => {
@@ -442,12 +484,15 @@ router.post("/", async (req, res) => {
     resolvedSymbol = info.resolvedSymbol;
   }
 
-  // Fetch real financial data from Yahoo Finance
-  const financialData = await fetchFinancialContext(resolvedSymbol);
+  // Fetch financial data and news in parallel
+  const [financialData, newsData] = await Promise.all([
+    fetchFinancialContext(resolvedSymbol),
+    fetchCompanyNews(companyName ?? ""),
+  ]);
   const userContext = additionalContext ?? null;
-  const fullContext = financialData
-    ? (userContext ? financialData + "\n\n[사용자 추가 컨텍스트]\n" + userContext : financialData)
-    : userContext;
+  const fullContext = [financialData, newsData, userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : ""]
+    .filter(Boolean)
+    .join("\n\n") || null;
 
   const [analysis] = await db
     .insert(analysesTable)
