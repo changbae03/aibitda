@@ -23,18 +23,18 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
     role: "에이전트 1",
     number: "1",
   },
-  company_analysis: {
-    name: "Fundamental & Valuation Analyst",
+  catalyst_analysis: {
+    name: "Catalyst & Smart Money Analyst",
     role: "에이전트 2",
     number: "2",
   },
-  market_analysis: {
-    name: "Market & Technical Analyst",
+  company_analysis: {
+    name: "Fundamental & Valuation Analyst",
     role: "에이전트 3",
     number: "3",
   },
-  catalyst_analysis: {
-    name: "Catalyst & Smart Money Analyst",
+  market_analysis: {
+    name: "Market & Technical Analyst",
     role: "에이전트 4",
     number: "4",
   },
@@ -48,9 +48,9 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
 export const STEP_ORDER: AgentKey[] = [
   "company_intro",
   "industry_analysis",
+  "catalyst_analysis",
   "company_analysis",
   "market_analysis",
-  "catalyst_analysis",
   "investment_strategy",
 ];
 
@@ -119,7 +119,7 @@ export function buildPrompt(
 - 사용자에게 추가 입력을 요청하지 마세요`,
       userPrompt: `${baseContext}
 
-분석 의뢰가 접수됐습니다. 팀장으로서 ① 기업명·핵심사업·현재주가를 1~2문장으로 소개하고, ② 지금 이 기업의 운명을 가를 핵심 이슈 1가지를 한 문장으로 명확하게 선언하고(예: 삼성전자라면 "HBM 수율 개선과 엔비디아 공급망 진입", SK하이닉스라면 "HBM3E 독점 공급 지속 여부", 에코프로비엠이라면 "전기차 배터리 수요 회복 시점"), ③ 4명의 전문 애널리스트(Macro & Industry → Fundamental & Valuation → Market & Technical → Catalyst & Smart Money)가 이 이슈를 중심으로 순서대로 심층 분석할 것임을 한 문장으로 마무리하세요. 총 4~5문장.`,
+분석 의뢰가 접수됐습니다. 팀장으로서 ① 기업명·핵심사업·현재주가를 1~2문장으로 소개하고, ② 지금 이 기업의 운명을 가를 핵심 이슈 1가지를 한 문장으로 명확하게 선언하고(예: 삼성전자라면 "HBM 수율 개선과 엔비디아 공급망 진입", SK하이닉스라면 "HBM3E 독점 공급 지속 여부", 에코프로비엠이라면 "전기차 배터리 수요 회복 시점"), ③ 4명의 전문 애널리스트(Macro & Industry → Catalyst & Smart Money → Fundamental & Valuation → Market & Technical)가 이 이슈를 중심으로 순서대로 심층 분석할 것임을 한 문장으로 마무리하세요. 총 4~5문장.`,
     },
 
     industry_analysis: {
@@ -153,7 +153,7 @@ ${companyName}이 속한 산업의 본질을 아래 흐름으로 깊이 있게 �
     },
 
     company_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Fundamental & Valuation Analyst(에이전트 2)입니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Fundamental & Valuation Analyst(에이전트 3)입니다.
 역할: 사업 구조, 재무 분석, 밸류에이션, 주당 내재가치를 산출합니다.
 ${COMMON_RULES}
 
@@ -197,26 +197,6 @@ DCF 성장 원칙:
       userPrompt: `${baseContext}${previousContext}
 
 컨텍스트에 제공된 재무 데이터를 기반으로 아래 섹션을 순서대로 작성하세요.
-
-## 🏷️ 0. 기업 유형 분류 & 전환 국면 진단
-
-아래 7가지 유형 중 이 기업에 가장 적합한 유형을 하나 선택하고 한 문장으로 선언하세요:
-구조적 ROIC 기업 / 산업 전환 수혜 기업 / 사이클 기업 / 적자 성장 기업 / R&D 고집약 기업 / 바이오·확률 기업 / 플랫폼·네트워크 기업
-
-"이 기업은 __ 유형에 속한다."
-
-이어서 전환 국면 5개 기준을 체크하세요. 2개 이상 충족 시 전환 국면으로 인정합니다:
-
-| 기준 | 충족 여부 | 근거 |
-|------|----------|------|
-| 제품 믹스의 구조적 변화 | | |
-| 단가의 구조적 상승 | | |
-| 시장 점유율 상승 중 | | |
-| 고정비 레버리지 구간 진입 | | |
-| 글로벌 시장 확대 가능 | | |
-
-전환 국면 판정: (인정 / 미인정) — 충족 기준 X/5
-전환 국면 인정 시: "보수적 평균 대신 Forward 수치를 적용한다" + 이유 명시
 
 ## 📊 1. 사업 구조 및 재무 현황
 
@@ -304,7 +284,7 @@ DCF와 독립적으로 멀티플 기반 적정가를 산출하고 DCF와 비교�
     },
 
     market_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Market & Technical Analyst(에이전트 3)입니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Market & Technical Analyst(에이전트 4)입니다.
 역할: 수급 구조, 차트 분석, 가격 구간 판정, 코리아 디스카운트 해소 여부를 분석합니다.
 ${COMMON_RULES}`,
       userPrompt: `${baseContext}${previousContext}
@@ -347,7 +327,7 @@ ${COMMON_RULES}`,
     },
 
     catalyst_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Catalyst & Smart Money Analyst(에이전트 4)입니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Catalyst & Smart Money Analyst(에이전트 2)입니다.
 역할: 현재 이 기업의 주가를 지배하는 최대 이슈를 식별하고, 이것이 가격에 얼마나 반영됐는지 분석합니다. 주가 촉매 이벤트, 기관/세력 움직임, 주도주 가능성도 함께 다룹니다.
 ${COMMON_RULES}
 

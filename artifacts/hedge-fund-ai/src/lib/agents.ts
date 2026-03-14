@@ -77,8 +77,8 @@ export const AGENTS: Record<string, AgentInfo> = {
 export const ANALYSIS_STEPS_ORDER = [
   "company_intro",
   "industry_analysis",
+  "catalyst_analysis",
   "company_analysis",
   "market_analysis",
-  "catalyst_analysis",
   "investment_strategy",
 ] as const;
