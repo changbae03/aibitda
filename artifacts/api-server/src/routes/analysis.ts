@@ -120,6 +120,26 @@ async function fetchNaverFinanceData(code: string): Promise<string> {
       infoMap[item.code] = item.value ?? "";
     }
     if (infoMap.marketValue)         lines.push(`시가총액: ${infoMap.marketValue}`);
+
+    // 발행주식수 역산: 시가총액(원) / 현재가(원)
+    if (infoMap.marketValue && basic) {
+      try {
+        // 네이버 시총 형식: "648조 5,592억" 또는 "5,592억" 등
+        const mcapStr = infoMap.marketValue;
+        const triMatch = mcapStr.match(/([0-9,]+)조/);
+        const hundMatch = mcapStr.match(/([0-9,]+)억/);
+        const tri  = triMatch  ? Number(triMatch[1].replace(/,/g, ""))  * 1e12 : 0;
+        const hund = hundMatch ? Number(hundMatch[1].replace(/,/g, "")) * 1e8  : 0;
+        const mcapKRW = tri + hund;
+        const currentPrice = naverFmt(basic.closePrice);
+        if (mcapKRW > 0 && currentPrice && currentPrice > 0) {
+          const sharesCalc = Math.round(mcapKRW / currentPrice);
+          lines.push(`발행주식수(시총÷현재가 역산): ${sharesCalc.toLocaleString("ko-KR")}주 (${(sharesCalc / 1e8).toFixed(4)}억주)`);
+          lines.push(`※ [DCF 핵심] 주당 내재가치 = 주주가치(조원) × 1,000,000,000,000 ÷ ${sharesCalc.toLocaleString("ko-KR")}주`);
+        }
+      } catch { /* ignore */ }
+    }
+
     if (infoMap.foreignRate)         lines.push(`외국인 소진율: ${infoMap.foreignRate}`);
     if (infoMap.highPriceOf52Weeks)  lines.push(`52주 최고가: ${infoMap.highPriceOf52Weeks}원`);
     if (infoMap.lowPriceOf52Weeks)   lines.push(`52주 최저가: ${infoMap.lowPriceOf52Weeks}원`);
@@ -312,7 +332,15 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.pegRatio != null)        lines.push(`PEG: ${ks.pegRatio.toFixed(2)}`);
     if (ks.beta != null)            lines.push(`베타: ${ks.beta.toFixed(2)}`);
     if (ks.bookValue != null)       lines.push(`BPS(주당순자산): ${ks.bookValue.toFixed(2)} ${currency}`);
-    if (ks.sharesOutstanding)       lines.push(`발행주식수: ${fmtNum(ks.sharesOutstanding)}`);
+    if (ks.sharesOutstanding) {
+      const sh = ks.sharesOutstanding;
+      const shStr = sh >= 1e8
+        ? `${(sh / 1e8).toFixed(4)}억주 (${sh.toLocaleString("ko-KR")}주)`
+        : sh >= 1e4
+        ? `${(sh / 1e4).toFixed(0)}만주 (${sh.toLocaleString("ko-KR")}주)`
+        : `${sh.toLocaleString("ko-KR")}주`;
+      lines.push(`발행주식수: ${shStr}  ※ DCF 주당가치 환산 시 이 주식수(주)를 사용할 것`);
+    }
     if (ks.heldPercentInsiders != null)     lines.push(`내부자 보유율: ${pct(ks.heldPercentInsiders)}`);
     if (ks.heldPercentInstitutions != null) lines.push(`기관 보유율: ${pct(ks.heldPercentInstitutions)}`);
     if (ks.shortRatio != null)      lines.push(`공매도 커버일수: ${ks.shortRatio.toFixed(1)}일`);
