@@ -12,7 +12,8 @@ import {
   Loader2, 
   Briefcase,
   BrainCircuit,
-  Trash2
+  Trash2,
+  ArrowLeft
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -83,6 +84,15 @@ export default function AnalysisDetail() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Back button */}
+      <button
+        onClick={() => setLocation("/")}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+      >
+        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+        목록으로
+      </button>
+
       {/* Header */}
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
