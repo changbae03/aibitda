@@ -305,13 +305,63 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
             <p className="text-sm text-foreground/80 leading-relaxed border-l-2 border-primary pl-4">{json.summary}</p>
           )}
 
+          {json.scenarios?.length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-muted/60 border-b border-border">
+                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80">시나리오</th>
+                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80">핵심 가정</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-foreground/80">목표가</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-foreground/80">등락률</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-foreground/80">확률</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {json.scenarios.map((s: any, i: number) => {
+                    const isBear = s.case === "Bear";
+                    const isBull = s.case === "Bull";
+                    const isBase = s.case === "Base";
+                    return (
+                      <tr key={i} className={cn(
+                        "hover:bg-muted/20 transition-colors",
+                        isBase && "bg-primary/5"
+                      )}>
+                        <td className="px-3 py-2.5 font-semibold">
+                          <span className={cn(
+                            "inline-flex items-center gap-1 text-xs",
+                            isBear && "text-red-500",
+                            isBase && "text-primary",
+                            isBull && "text-emerald-600"
+                          )}>
+                            {isBear ? "▼" : isBull ? "▲" : "—"} {s.case}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-foreground/70 max-w-[220px] whitespace-normal leading-snug">{s.assumption}</td>
+                        <td className={cn(
+                          "px-3 py-2.5 text-right font-mono font-semibold",
+                          isBear ? "text-red-500" : isBull ? "text-emerald-600" : "text-foreground"
+                        )}>{formatPrice(s.target_price)}</td>
+                        <td className={cn(
+                          "px-3 py-2.5 text-right font-mono",
+                          s.upside?.startsWith("+") ? "text-emerald-600" : s.upside?.startsWith("-") ? "text-red-500" : "text-foreground/70"
+                        )}>{s.upside}</td>
+                        <td className="px-3 py-2.5 text-right text-foreground/60">{s.probability}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-xl p-4 border border-border text-center">
               <div className="text-[11px] text-muted-foreground font-mono mb-1">진입가</div>
               <div className="font-bold text-foreground text-base">{formatPrice(json.entry_price)}</div>
             </div>
             <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 text-center">
-              <div className="text-[11px] text-emerald-600 font-mono mb-1">목표가</div>
+              <div className="text-[11px] text-emerald-600 font-mono mb-1">목표가 (Base)</div>
               <div className="font-bold text-emerald-700 text-base">{formatPrice(json.target_price)}</div>
             </div>
             <div className="bg-red-50 rounded-xl p-4 border border-red-200 text-center">
