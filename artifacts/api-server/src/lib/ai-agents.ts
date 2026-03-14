@@ -96,7 +96,8 @@ export function buildPrompt(
 사용 가능 소스: 금융감독원 DART, 한국거래소 KRX, 한국은행, 통계청, 기획재정부, 산업통상자원부, Bloomberg, 네이버증권, 연합인포맥스, 주요 증권사 리포트
 - 모든 수치는 최신 공시 기준으로 검증한다
 - 필요한 데이터는 사용자 요청 없이 스스로 확보·인용한다
-- 확인되지 않은 수치는 추측하지 말고 출처를 함께 표기한다`;
+- 본문 안에 건건마다 출처를 표기하지 마세요. 대신 분석 맨 마지막 줄에 아래 형식으로 한 번만 작성하세요:
+  출처: 네이버증권, Yahoo Finance (또는 실제 사용한 소스 나열)`;
 
   const prompts: Record<AgentKey, { systemPrompt: string; userPrompt: string }> = {
     company_intro: {

@@ -465,7 +465,13 @@ function StepCard({ step, agent: agentProp, delay }: { step: any, agent: AgentIn
             components={{
               h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-5 mb-2 pb-1 border-b border-border first:mt-0">{children}</h2>,
               h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground/90 mt-4 mb-1.5">{children}</h3>,
-              p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+              p: ({ children }) => {
+                const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
+                if (text.startsWith("출처:") || text.startsWith("출처 :")) {
+                  return <p className="mt-4 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
+                }
+                return <p className="mb-3 last:mb-0">{children}</p>;
+              },
               ul: ({ children }) => <ul className="mb-3 space-y-1 pl-1">{children}</ul>,
               ol: ({ children }) => <ol className="mb-3 space-y-1 pl-4 list-decimal">{children}</ol>,
               li: ({ children }) => <li className="flex gap-2 text-foreground/85"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current flex-shrink-0 opacity-50" /><span>{children}</span></li>,
