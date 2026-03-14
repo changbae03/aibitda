@@ -348,4 +348,82 @@ router.get("/:ticker", async (req, res) => {
   }
 });
 
+// GET /api/market-data/financials/:ticker — structured annual + quarterly income statement
+router.get("/financials/:ticker", async (req, res) => {
+  const ticker = (req.params.ticker as string).toUpperCase();
+  const NAVER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    "Referer": "https://m.stock.naver.com/",
+  };
+
+  const koreanCode = ticker.match(/^(\d{6})\.(KS|KQ)$/)?.[1]
+    ?? ticker.match(/^(\d{6})$/)?.[1];
+
+  if (koreanCode) {
+    try {
+      const summaryRes = await fetch(
+        `https://m.stock.naver.com/api/stock/${koreanCode}/finance/summary`,
+        { headers: NAVER_HEADERS }
+      );
+      if (!summaryRes.ok) { res.status(502).json({ error: "Naver API error" }); return; }
+      const summary: any = await summaryRes.json();
+
+      const parseStmt = (stmtObj: any) => {
+        if (!stmtObj) return [];
+        const cols: string[][] = stmtObj.columns ?? [];
+        const titleList: any[] = stmtObj.trTitleList ?? [];
+        const periods: string[] = cols[0]?.slice(1) ?? [];
+        const revenues = cols.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
+        const opIncomes = cols.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
+        const netIncomes = cols.find((c: string[]) => c[0] === "당기순이익")?.slice(1) ?? [];
+        return periods.map((period: string, i: number) => ({
+          period,
+          isEstimate: titleList[i]?.isConsensus === "Y",
+          revenue: revenues[i] ? Number(revenues[i]) * 1e8 : null,
+          operatingIncome: opIncomes[i] ? Number(opIncomes[i]) * 1e8 : null,
+          netIncome: netIncomes[i] ? Number(netIncomes[i]) * 1e8 : null,
+          operatingMargin:
+            revenues[i] && opIncomes[i] && Number(revenues[i]) > 0
+              ? (Number(opIncomes[i]) / Number(revenues[i])) * 100
+              : null,
+        }));
+      };
+
+      res.json({
+        ticker,
+        currency: "KRW",
+        annual: parseStmt(summary.chartIncomeStatement?.annual),
+        quarterly: parseStmt(summary.chartIncomeStatement?.quarter),
+      });
+      return;
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message ?? "Failed to fetch Naver financials" });
+      return;
+    }
+  }
+
+  // US stocks — Yahoo Finance incomeStatementHistory
+  try {
+    const result = await yahooFinance.quoteSummary(ticker, {
+      modules: ["incomeStatementHistory", "incomeStatementHistoryQuarterly"],
+    } as any);
+    const toEntry = (s: any) => ({
+      period: s.endDate ? new Date(s.endDate).toISOString().slice(0, 7) : "",
+      isEstimate: false,
+      revenue: s.totalRevenue ?? null,
+      operatingIncome: s.operatingIncome ?? null,
+      netIncome: s.netIncome ?? null,
+      operatingMargin:
+        s.totalRevenue && s.operatingIncome && s.totalRevenue > 0
+          ? (s.operatingIncome / s.totalRevenue) * 100
+          : null,
+    });
+    const annual = ((result as any).incomeStatementHistory?.incomeStatementHistory ?? []).map(toEntry);
+    const quarterly = ((result as any).incomeStatementHistoryQuarterly?.incomeStatementHistory ?? []).map(toEntry);
+    res.json({ ticker, currency: "USD", annual, quarterly });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to fetch Yahoo financials" });
+  }
+});
+
 export default router;

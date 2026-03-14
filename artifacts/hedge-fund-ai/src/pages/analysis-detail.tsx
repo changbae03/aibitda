@@ -17,6 +17,7 @@ import {
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart from "@/components/StockChart";
+import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -145,6 +146,11 @@ export default function AnalysisDetail() {
 
       {/* Stock Chart */}
       <StockChart ticker={analysis.ticker} companyName={analysis.companyName} />
+
+      {/* Financial Chart */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <FinancialChart ticker={analysis.ticker} />
+      </div>
 
       {/* Progress Track */}
       <div className="bg-card border border-border rounded-2xl p-5">
