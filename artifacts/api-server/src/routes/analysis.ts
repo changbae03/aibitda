@@ -455,6 +455,12 @@ router.get("/", async (_req, res) => {
   res.json(results);
 });
 
+router.delete("/", async (_req, res) => {
+  await db.delete(analysisStepsTable);
+  await db.delete(analysesTable);
+  res.json({ success: true });
+});
+
 router.delete("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {

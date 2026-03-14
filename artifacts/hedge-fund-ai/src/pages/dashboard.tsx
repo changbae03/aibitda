@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useListAnalyses, useStartAnalysis, useDeleteAnalysis } from "@workspace/api-client-react";
+import { useListAnalyses, useStartAnalysis, useDeleteAnalysis, useDeleteAllAnalyses } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const { data: analyses, isLoading: loadingAnalyses } = useListAnalyses();
   const { mutateAsync: startAnalysis, isPending: isStarting } = useStartAnalysis();
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
+  const { mutate: deleteAllAnalyses, isPending: isDeletingAll } = useDeleteAllAnalyses();
   const isComposing = useRef(false);
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -27,6 +28,12 @@ export default function Dashboard() {
     e.stopPropagation();
     if (!confirm("이 분석을 삭제하시겠습니까?")) return;
     deleteAnalysis(id);
+  };
+
+  const handleDeleteAll = () => {
+    if (!analyses?.length) return;
+    if (!confirm(`분석 내역 ${analyses.length}건을 모두 삭제하시겠습니까?`)) return;
+    deleteAllAnalyses();
   };
 
   const [quickTicker, setQuickTicker] = useState("");
@@ -95,7 +102,19 @@ export default function Dashboard() {
 
       {/* Recent Analyses */}
       <div className="space-y-3">
-        <h2 className="text-base font-display font-semibold text-foreground">최근 분석 내역</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-display font-semibold text-foreground">최근 분석 내역</h2>
+          {!!analyses?.length && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={isDeletingAll}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              모두 삭제
+            </button>
+          )}
+        </div>
 
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           {loadingAnalyses ? (

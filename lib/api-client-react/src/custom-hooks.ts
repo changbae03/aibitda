@@ -12,3 +12,14 @@ export function useDeleteAnalysis() {
     },
   });
 }
+
+export function useDeleteAllAnalyses() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      customFetch<{ success: boolean }>(`/api/analysis`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey() });
+    },
+  });
+}

@@ -16,8 +16,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
 
   const navItems = [
-    { href: "/", label: "대시보드", icon: LayoutDashboard },
     { href: "/analysis/new", label: "AI 기업분석 시작", icon: BrainCircuit },
+    { href: "/", label: "대시보드", icon: LayoutDashboard },
   ];
 
   return (
