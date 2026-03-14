@@ -7,10 +7,6 @@ import { motion, AnimatePresence } from "framer-motion";
 const EXAMPLES = [
   { ticker: "005930", label: "삼성전자" },
   { ticker: "000660", label: "SK하이닉스" },
-  { ticker: "035720", label: "카카오" },
-  { ticker: "NVDA", label: "NVIDIA" },
-  { ticker: "AAPL", label: "Apple" },
-  { ticker: "078160.KS", label: "메디포스트" },
 ];
 
 function isKorean(str: string) {
@@ -55,13 +51,15 @@ export default function NewAnalysis() {
   }, []);
 
   useEffect(() => {
-    if (!isKorean(ticker) && !/[\u4e00-\u9fff]/.test(ticker)) {
+    const isKoreanInput = isKorean(ticker);
+    const isSixDigit = /^\d{6}$/.test(ticker.trim());
+    if (!isKoreanInput && !isSixDigit) {
       setSuggestions([]);
       setShowDropdown(false);
       return;
     }
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchSuggestions(ticker), 300);
+    searchTimer.current = setTimeout(() => fetchSuggestions(ticker.trim()), 300);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [ticker, fetchSuggestions]);
 
@@ -142,7 +140,7 @@ export default function NewAnalysis() {
             어떤 종목을 분석할까요?
           </h1>
           <p className="text-muted-foreground text-base">
-            종목코드 또는 한글 회사명을 입력하면 5명의 최정예 AI 에이전트가 즉시 분석을 시작합니다
+            코스피·코스닥 종목코드(6자리) 또는 한글 회사명을 입력하면 AI 에이전트가 즉시 분석을 시작합니다
           </p>
         </div>
 
@@ -161,7 +159,7 @@ export default function NewAnalysis() {
                 setTicker(e.currentTarget.value);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="종목코드 또는 회사명  예) 삼성전자, NVDA, 005930"
+              placeholder="예) 삼성전자, 하이닉스, 005930, 247540"
               className="flex-1 bg-transparent border-none outline-none text-foreground text-lg placeholder:text-muted-foreground/50 placeholder:font-sans placeholder:text-base"
               autoFocus
               disabled={isPending}
@@ -275,7 +273,7 @@ export default function NewAnalysis() {
 
         {/* Info note */}
         <p className="text-xs text-muted-foreground text-center max-w-md leading-relaxed">
-          한국(KOSPI/KOSDAQ), 미국, 글로벌 거래소 모든 종목 지원 · 한글 회사명으로도 검색 가능합니다
+          코스피·코스닥 전 종목 지원 · 6자리 종목코드 또는 한글 회사명으로 검색
         </p>
       </motion.div>
     </div>

@@ -113,47 +113,92 @@ async function resolveKoreanTicker(
 }
 
 const KOREAN_COMPANY_MAP: Array<{ name: string; keywords: string[]; symbol: string; exchange: string }> = [
-  { name: "삼성전자", keywords: ["삼성전자", "삼성"], symbol: "005930.KS", exchange: "KSC" },
-  { name: "SK하이닉스", keywords: ["sk하이닉스", "하이닉스"], symbol: "000660.KS", exchange: "KSC" },
-  { name: "카카오", keywords: ["카카오"], symbol: "035720.KS", exchange: "KSC" },
-  { name: "NAVER", keywords: ["네이버", "naver"], symbol: "035420.KS", exchange: "KSC" },
-  { name: "현대차", keywords: ["현대차", "현대자동차"], symbol: "005380.KS", exchange: "KSC" },
-  { name: "기아", keywords: ["기아"], symbol: "000270.KS", exchange: "KSC" },
-  { name: "LG화학", keywords: ["lg화학", "엘지화학"], symbol: "051910.KS", exchange: "KSC" },
-  { name: "LG전자", keywords: ["lg전자", "엘지전자"], symbol: "066570.KS", exchange: "KSC" },
-  { name: "LG에너지솔루션", keywords: ["lg에너지", "엘지에너지솔루션", "lges"], symbol: "373220.KS", exchange: "KSC" },
-  { name: "셀트리온", keywords: ["셀트리온"], symbol: "068270.KS", exchange: "KSC" },
-  { name: "삼성바이오로직스", keywords: ["삼성바이오", "바이오로직스"], symbol: "207940.KS", exchange: "KSC" },
-  { name: "삼성SDI", keywords: ["삼성sdi", "삼성에스디아이"], symbol: "006400.KS", exchange: "KSC" },
-  { name: "삼성전기", keywords: ["삼성전기"], symbol: "009150.KS", exchange: "KSC" },
-  { name: "현대모비스", keywords: ["현대모비스", "모비스"], symbol: "012330.KS", exchange: "KSC" },
-  { name: "POSCO홀딩스", keywords: ["포스코", "posco"], symbol: "005490.KS", exchange: "KSC" },
-  { name: "KB금융", keywords: ["kb금융", "kb국민은행"], symbol: "105560.KS", exchange: "KSC" },
-  { name: "신한지주", keywords: ["신한지주", "신한"], symbol: "055550.KS", exchange: "KSC" },
-  { name: "하나금융지주", keywords: ["하나금융", "하나은행"], symbol: "086790.KS", exchange: "KSC" },
-  { name: "우리금융지주", keywords: ["우리금융", "우리은행"], symbol: "316140.KS", exchange: "KSC" },
-  { name: "카카오뱅크", keywords: ["카카오뱅크"], symbol: "323410.KS", exchange: "KSC" },
-  { name: "카카오페이", keywords: ["카카오페이"], symbol: "377300.KS", exchange: "KSC" },
-  { name: "크래프톤", keywords: ["크래프톤", "배틀그라운드"], symbol: "259960.KS", exchange: "KSC" },
-  { name: "하이브", keywords: ["하이브", "빅히트"], symbol: "352820.KS", exchange: "KSC" },
-  { name: "SK텔레콤", keywords: ["sk텔레콤", "에스케이텔레콤"], symbol: "017670.KS", exchange: "KSC" },
-  { name: "KT", keywords: ["kt", "케이티"], symbol: "030200.KS", exchange: "KSC" },
-  { name: "SK이노베이션", keywords: ["sk이노베이션"], symbol: "096770.KS", exchange: "KSC" },
-  { name: "한화에어로스페이스", keywords: ["한화에어로", "한화항공우주"], symbol: "012450.KS", exchange: "KSC" },
-  { name: "두산에너빌리티", keywords: ["두산에너빌리티", "두산중공업"], symbol: "034020.KS", exchange: "KSC" },
-  { name: "메디포스트", keywords: ["메디포스트"], symbol: "078160.KS", exchange: "KSC" },
-  { name: "에코프로비엠", keywords: ["에코프로비엠", "에코프로"], symbol: "247540.KQ", exchange: "KOE" },
-  { name: "포스코퓨처엠", keywords: ["포스코퓨처엠", "포스코케미칼"], symbol: "003670.KS", exchange: "KSC" },
-  { name: "고려아연", keywords: ["고려아연"], symbol: "010130.KS", exchange: "KSC" },
-  { name: "삼성물산", keywords: ["삼성물산"], symbol: "028260.KS", exchange: "KSC" },
-  { name: "롯데케미칼", keywords: ["롯데케미칼", "롯데화학"], symbol: "011170.KS", exchange: "KSC" },
-  { name: "한국전력", keywords: ["한국전력", "한전"], symbol: "015760.KS", exchange: "KSC" },
-  { name: "기업은행", keywords: ["기업은행", "ibk"], symbol: "024110.KS", exchange: "KSC" },
-  { name: "현대건설", keywords: ["현대건설"], symbol: "000720.KS", exchange: "KSC" },
-  { name: "HD현대중공업", keywords: ["hd현대중공업", "현대중공업"], symbol: "329180.KS", exchange: "KSC" },
-  { name: "한진칼", keywords: ["한진칼", "대한항공"], symbol: "180640.KS", exchange: "KSC" },
-  { name: "엔씨소프트", keywords: ["엔씨소프트", "엔씨"], symbol: "036570.KS", exchange: "KSC" },
-  { name: "넷마블", keywords: ["넷마블"], symbol: "251270.KS", exchange: "KSC" },
+  // ── KOSPI 대형주 ─────────────────────────────────────────────────────────
+  { name: "삼성전자", keywords: ["삼성전자", "삼성"], symbol: "005930.KS", exchange: "KOSPI" },
+  { name: "SK하이닉스", keywords: ["sk하이닉스", "하이닉스", "에스케이하이닉스"], symbol: "000660.KS", exchange: "KOSPI" },
+  { name: "LG에너지솔루션", keywords: ["lg에너지솔루션", "엘지에너지솔루션", "lges"], symbol: "373220.KS", exchange: "KOSPI" },
+  { name: "삼성바이오로직스", keywords: ["삼성바이오로직스", "삼성바이오", "바이오로직스"], symbol: "207940.KS", exchange: "KOSPI" },
+  { name: "현대차", keywords: ["현대차", "현대자동차"], symbol: "005380.KS", exchange: "KOSPI" },
+  { name: "셀트리온", keywords: ["셀트리온"], symbol: "068270.KS", exchange: "KOSPI" },
+  { name: "기아", keywords: ["기아", "기아자동차"], symbol: "000270.KS", exchange: "KOSPI" },
+  { name: "NAVER", keywords: ["네이버", "naver"], symbol: "035420.KS", exchange: "KOSPI" },
+  { name: "KB금융", keywords: ["kb금융", "kb국민은행", "국민은행"], symbol: "105560.KS", exchange: "KOSPI" },
+  { name: "LG화학", keywords: ["lg화학", "엘지화학"], symbol: "051910.KS", exchange: "KOSPI" },
+  { name: "신한지주", keywords: ["신한지주", "신한은행", "신한"], symbol: "055550.KS", exchange: "KOSPI" },
+  { name: "삼성SDI", keywords: ["삼성sdi", "삼성에스디아이"], symbol: "006400.KS", exchange: "KOSPI" },
+  { name: "카카오", keywords: ["카카오"], symbol: "035720.KS", exchange: "KOSPI" },
+  { name: "현대모비스", keywords: ["현대모비스", "모비스"], symbol: "012330.KS", exchange: "KOSPI" },
+  { name: "POSCO홀딩스", keywords: ["포스코홀딩스", "포스코", "posco"], symbol: "005490.KS", exchange: "KOSPI" },
+  { name: "하나금융지주", keywords: ["하나금융지주", "하나금융", "하나은행"], symbol: "086790.KS", exchange: "KOSPI" },
+  { name: "LG전자", keywords: ["lg전자", "엘지전자"], symbol: "066570.KS", exchange: "KOSPI" },
+  { name: "삼성물산", keywords: ["삼성물산"], symbol: "028260.KS", exchange: "KOSPI" },
+  { name: "삼성전기", keywords: ["삼성전기"], symbol: "009150.KS", exchange: "KOSPI" },
+  { name: "LG이노텍", keywords: ["lg이노텍", "엘지이노텍", "이노텍"], symbol: "011070.KS", exchange: "KOSPI" },
+  { name: "포스코퓨처엠", keywords: ["포스코퓨처엠", "포스코케미칼"], symbol: "003670.KS", exchange: "KOSPI" },
+  { name: "우리금융지주", keywords: ["우리금융지주", "우리금융", "우리은행"], symbol: "316140.KS", exchange: "KOSPI" },
+  { name: "고려아연", keywords: ["고려아연"], symbol: "010130.KS", exchange: "KOSPI" },
+  { name: "기업은행", keywords: ["기업은행", "ibk"], symbol: "024110.KS", exchange: "KOSPI" },
+  { name: "SK텔레콤", keywords: ["sk텔레콤", "에스케이텔레콤", "skt"], symbol: "017670.KS", exchange: "KOSPI" },
+  { name: "카카오뱅크", keywords: ["카카오뱅크"], symbol: "323410.KS", exchange: "KOSPI" },
+  { name: "카카오페이", keywords: ["카카오페이"], symbol: "377300.KS", exchange: "KOSPI" },
+  { name: "크래프톤", keywords: ["크래프톤", "배틀그라운드", "pubg"], symbol: "259960.KS", exchange: "KOSPI" },
+  { name: "하이브", keywords: ["하이브", "빅히트"], symbol: "352820.KS", exchange: "KOSPI" },
+  { name: "KT", keywords: ["kt", "케이티"], symbol: "030200.KS", exchange: "KOSPI" },
+  { name: "한화에어로스페이스", keywords: ["한화에어로스페이스", "한화에어로", "한화항공우주"], symbol: "012450.KS", exchange: "KOSPI" },
+  { name: "두산에너빌리티", keywords: ["두산에너빌리티", "두산중공업"], symbol: "034020.KS", exchange: "KOSPI" },
+  { name: "SK이노베이션", keywords: ["sk이노베이션", "에스케이이노베이션"], symbol: "096770.KS", exchange: "KOSPI" },
+  { name: "한국전력", keywords: ["한국전력", "한전", "kepco"], symbol: "015760.KS", exchange: "KOSPI" },
+  { name: "현대건설", keywords: ["현대건설"], symbol: "000720.KS", exchange: "KOSPI" },
+  { name: "HD현대중공업", keywords: ["hd현대중공업", "현대중공업"], symbol: "329180.KS", exchange: "KOSPI" },
+  { name: "현대제철", keywords: ["현대제철"], symbol: "004020.KS", exchange: "KOSPI" },
+  { name: "엔씨소프트", keywords: ["엔씨소프트", "엔씨", "nc"], symbol: "036570.KS", exchange: "KOSPI" },
+  { name: "넷마블", keywords: ["넷마블"], symbol: "251270.KS", exchange: "KOSPI" },
+  { name: "롯데케미칼", keywords: ["롯데케미칼", "롯데화학"], symbol: "011170.KS", exchange: "KOSPI" },
+  { name: "한진칼", keywords: ["한진칼", "대한항공"], symbol: "180640.KS", exchange: "KOSPI" },
+  { name: "현대글로비스", keywords: ["현대글로비스", "글로비스"], symbol: "086280.KS", exchange: "KOSPI" },
+  { name: "SK바이오사이언스", keywords: ["sk바이오사이언스", "에스케이바이오"], symbol: "302440.KS", exchange: "KOSPI" },
+  { name: "S-Oil", keywords: ["에쓰오일", "s-oil", "soil"], symbol: "010950.KS", exchange: "KOSPI" },
+  { name: "GS", keywords: ["gs칼텍스", "gs홀딩스"], symbol: "078930.KS", exchange: "KOSPI" },
+  { name: "LS일렉트릭", keywords: ["ls일렉트릭", "ls전선", "엘에스"], symbol: "010120.KS", exchange: "KOSPI" },
+  { name: "삼성중공업", keywords: ["삼성중공업"], symbol: "010140.KS", exchange: "KOSPI" },
+  { name: "F&F", keywords: ["f&f", "에프앤에프", "mlb"], symbol: "383220.KS", exchange: "KOSPI" },
+  { name: "KT&G", keywords: ["kt&g", "케이티앤지", "담배인삼공사"], symbol: "033780.KS", exchange: "KOSPI" },
+  { name: "한화솔루션", keywords: ["한화솔루션", "한화큐셀"], symbol: "009830.KS", exchange: "KOSPI" },
+  { name: "HD현대일렉트릭", keywords: ["hd현대일렉트릭", "현대일렉트릭"], symbol: "267260.KS", exchange: "KOSPI" },
+  { name: "두산로보틱스", keywords: ["두산로보틱스", "두산로봇"], symbol: "454910.KS", exchange: "KOSPI" },
+  // ── KOSDAQ 주요 종목 ──────────────────────────────────────────────────────
+  { name: "에코프로비엠", keywords: ["에코프로비엠", "에코프로bm"], symbol: "247540.KQ", exchange: "KOSDAQ" },
+  { name: "에코프로", keywords: ["에코프로"], symbol: "086520.KQ", exchange: "KOSDAQ" },
+  { name: "HLB", keywords: ["hlb", "에이치엘비"], symbol: "028300.KQ", exchange: "KOSDAQ" },
+  { name: "알테오젠", keywords: ["알테오젠"], symbol: "196170.KQ", exchange: "KOSDAQ" },
+  { name: "리가켐바이오", keywords: ["리가켐바이오", "리가켐"], symbol: "141080.KQ", exchange: "KOSDAQ" },
+  { name: "클래시스", keywords: ["클래시스"], symbol: "214150.KQ", exchange: "KOSDAQ" },
+  { name: "파마리서치", keywords: ["파마리서치"], symbol: "214360.KQ", exchange: "KOSDAQ" },
+  { name: "카카오게임즈", keywords: ["카카오게임즈", "카카오게임"], symbol: "293490.KQ", exchange: "KOSDAQ" },
+  { name: "펄어비스", keywords: ["펄어비스", "검은사막"], symbol: "263750.KQ", exchange: "KOSDAQ" },
+  { name: "위메이드", keywords: ["위메이드"], symbol: "112040.KQ", exchange: "KOSDAQ" },
+  { name: "레인보우로보틱스", keywords: ["레인보우로보틱스", "레인보우로봇"], symbol: "277810.KQ", exchange: "KOSDAQ" },
+  { name: "솔브레인", keywords: ["솔브레인"], symbol: "357780.KQ", exchange: "KOSDAQ" },
+  { name: "원익IPS", keywords: ["원익ips", "원익"], symbol: "240810.KQ", exchange: "KOSDAQ" },
+  { name: "리노공업", keywords: ["리노공업", "리노"], symbol: "058470.KQ", exchange: "KOSDAQ" },
+  { name: "실리콘투", keywords: ["실리콘투"], symbol: "257720.KQ", exchange: "KOSDAQ" },
+  { name: "동진쎄미켐", keywords: ["동진쎄미켐", "동진세미켐"], symbol: "005290.KQ", exchange: "KOSDAQ" },
+  { name: "셀트리온헬스케어", keywords: ["셀트리온헬스케어", "셀트리온헬스"], symbol: "091990.KQ", exchange: "KOSDAQ" },
+  { name: "오스템임플란트", keywords: ["오스템임플란트", "오스템", "임플란트"], symbol: "048260.KQ", exchange: "KOSDAQ" },
+  { name: "메디포스트", keywords: ["메디포스트"], symbol: "078160.KQ", exchange: "KOSDAQ" },
+  { name: "피에스케이홀딩스", keywords: ["피에스케이홀딩스", "psk홀딩스", "psk"], symbol: "031980.KQ", exchange: "KOSDAQ" },
+  { name: "제이엘케이", keywords: ["제이엘케이", "jlk"], symbol: "322510.KQ", exchange: "KOSDAQ" },
+  { name: "엘앤에프", keywords: ["엘앤에프", "l&f"], symbol: "066970.KQ", exchange: "KOSDAQ" },
+  { name: "휴온스", keywords: ["휴온스"], symbol: "243070.KQ", exchange: "KOSDAQ" },
+  { name: "오리온", keywords: ["오리온", "초코파이"], symbol: "271560.KQ", exchange: "KOSDAQ" },
+  { name: "에스티팜", keywords: ["에스티팜"], symbol: "237690.KQ", exchange: "KOSDAQ" },
+  { name: "유한양행", keywords: ["유한양행"], symbol: "000100.KS", exchange: "KOSPI" },
+  { name: "한미약품", keywords: ["한미약품", "한미"], symbol: "128940.KS", exchange: "KOSPI" },
+  { name: "대웅제약", keywords: ["대웅제약", "대웅"], symbol: "069620.KQ", exchange: "KOSDAQ" },
+  { name: "셀비온", keywords: ["셀비온"], symbol: "308080.KQ", exchange: "KOSDAQ" },
+  { name: "이수페타시스", keywords: ["이수페타시스", "이수"], symbol: "007660.KQ", exchange: "KOSDAQ" },
+  { name: "나노신소재", keywords: ["나노신소재"], symbol: "121600.KQ", exchange: "KOSDAQ" },
+  { name: "코스모화학", keywords: ["코스모화학"], symbol: "005420.KQ", exchange: "KOSDAQ" },
 ];
 
 function searchKorean(query: string) {
@@ -164,32 +209,40 @@ function searchKorean(query: string) {
 }
 
 router.get("/search/:query", async (req, res) => {
-  const query = req.params.query;
-  if (!query || query.trim().length < 1) {
-    res.json([]);
-    return;
-  }
+  const query = req.params.query?.trim() ?? "";
+  if (!query) { res.json([]); return; }
 
-  const isKorean = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(query);
-  if (isKorean) {
+  // 한글 회사명 → 한국 기업 맵 검색
+  if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(query)) {
     res.json(searchKorean(query));
     return;
   }
 
-  try {
-    const result = await yahooFinance.search(query, { newsCount: 0, quotesCount: 8 });
-    const quotes = (result.quotes || [])
-      .filter((q: any) => q.symbol && (q.quoteType === "EQUITY" || q.quoteType === "ETF"))
-      .map((q: any) => ({
-        symbol: q.symbol,
-        shortname: q.shortname || q.longname || q.symbol,
-        exchange: q.exchange || "",
-        quoteType: q.quoteType || "",
-      }));
-    res.json(quotes);
-  } catch {
-    res.json([]);
+  // 6자리 숫자 종목코드 → KOSPI/KOSDAQ 직접 조회
+  if (/^\d{6}$/.test(query)) {
+    try {
+      const [ksQ, kqQ] = await Promise.allSettled([
+        yahooFinance.quote(`${query}.KS`),
+        yahooFinance.quote(`${query}.KQ`),
+      ]);
+      const results: any[] = [];
+      if (ksQ.status === "fulfilled") {
+        const name = ksQ.value.longName || ksQ.value.shortName || "";
+        if (name && name !== `${query}.KS`) results.push({ symbol: `${query}.KS`, shortname: name, exchange: "KOSPI", quoteType: "EQUITY" });
+      }
+      if (kqQ.status === "fulfilled") {
+        const name = kqQ.value.longName || kqQ.value.shortName || "";
+        if (name && name !== `${query}.KQ`) results.push({ symbol: `${query}.KQ`, shortname: name, exchange: "KOSDAQ", quoteType: "EQUITY" });
+      }
+      res.json(results);
+    } catch {
+      res.json([]);
+    }
+    return;
   }
+
+  // 그 외(미국주식 등) → 지원하지 않음
+  res.json([]);
 });
 
 router.get("/:ticker", async (req, res) => {

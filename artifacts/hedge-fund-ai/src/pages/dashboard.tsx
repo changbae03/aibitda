@@ -46,12 +46,12 @@ export default function Dashboard() {
     if (isComposing.current) return;
     const raw = quickTicker.trim();
     if (!raw) return;
-    if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(raw)) {
+    // 한글 또는 6자리 미만 숫자 → 전체 검색 페이지로
+    if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(raw) || !/^\d{6}$/.test(raw)) {
       setLocation("/analysis/new");
       return;
     }
-    const t = raw.toUpperCase();
-    const result = await startAnalysis({ data: { ticker: t } });
+    const result = await startAnalysis({ data: { ticker: raw } });
     setLocation(`/analysis/${result.id}`);
   };
 
@@ -67,7 +67,7 @@ export default function Dashboard() {
             onChange={e => { setQuickTicker(e.target.value); }}
             onCompositionStart={() => { isComposing.current = true; }}
             onCompositionEnd={(e) => { isComposing.current = false; setQuickTicker(e.currentTarget.value); }}
-            placeholder="종목코드 또는 회사명 입력  예) 삼성전자, NVDA, 005930"
+            placeholder="종목코드(6자리) 또는 회사명  예) 005930, 삼성전자"
             className="flex-1 bg-transparent outline-none border-none text-foreground text-base placeholder:font-sans placeholder:text-muted-foreground/60 placeholder:text-sm"
             disabled={isStarting}
             autoComplete="off"
