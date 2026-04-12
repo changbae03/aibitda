@@ -52,33 +52,20 @@ export default function Reports() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-              <BookOpen className="w-4 h-4 text-orange-600" />
-            </div>
-            <h1 className="text-2xl font-display font-bold text-foreground tracking-tight">
-              CBST 리서치
-            </h1>
-          </div>
-          <p className="text-sm text-muted-foreground pl-[42px]">
-            CBST Research Substack 최신 글
-          </p>
-        </div>
-        {feed?.link && (
+      {/* Substack 구독 버튼 */}
+      {feed?.link && (
+        <div className="flex justify-end">
           <a
             href={feed.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 text-xs font-medium hover:bg-orange-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 text-xs font-medium hover:bg-orange-100 transition-colors"
           >
             <Rss className="w-3.5 h-3.5" />
             Substack 구독
           </a>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Loading */}
       {isLoading && (
@@ -147,15 +134,11 @@ export default function Reports() {
                     )}
                   </div>
 
-                  <h3 className="font-semibold text-sm text-foreground leading-snug group-hover:text-orange-700 transition-colors line-clamp-2">
+                  <h3 className="font-semibold text-sm text-foreground leading-snug group-hover:text-orange-700 transition-colors line-clamp-2 flex-1">
                     {item.title}
                   </h3>
 
-                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed flex-1">
-                    {item.summary}
-                  </p>
-
-                  <div className="flex items-center justify-between mt-1 pt-2 border-t border-border">
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
                     <span className="text-xs text-muted-foreground">{item.creator}</span>
                     <span className="text-xs text-orange-600 font-medium flex items-center gap-1 group-hover:gap-1.5 transition-all">
                       읽기 <ExternalLink className="w-3 h-3" />
