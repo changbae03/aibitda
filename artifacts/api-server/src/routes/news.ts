@@ -11,7 +11,8 @@ interface NewsItem {
   images: string[];
 }
 
-let cache: { items: NewsItem[]; fetchedAt: number } | null = null;
+let cacheResearch: { items: NewsItem[]; fetchedAt: number } | null = null;
+let cacheRadar: { items: NewsItem[]; fetchedAt: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5분
 
 function decodeHtmlEntities(str: string): string {
@@ -33,8 +34,8 @@ function stripHtmlTags(html: string): string {
   ).trim();
 }
 
-async function fetchTelegramNews(): Promise<NewsItem[]> {
-  const url = "https://t.me/s/cbstresearch";
+async function fetchTelegramChannel(channel: string): Promise<NewsItem[]> {
+  const url = `https://t.me/s/${channel}`;
   const res = await fetch(url, {
     headers: {
       "User-Agent":
@@ -49,17 +50,13 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
   const html = await res.text();
 
   const items: NewsItem[] = [];
-
-  // Split HTML by message divs
   const segments = html.split(/(?=<div class="tgme_widget_message[^_])/);
 
   for (const segment of segments) {
-    // Get post ID — match any channel name
     const idMatch = segment.match(/data-post="[^/]+\/(\d+)"/);
     if (!idMatch) continue;
     const id = idMatch[1];
 
-    // Get message text (with inner HTML preserved for links/bold)
     const textMatch = segment.match(
       /<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/
     );
@@ -67,14 +64,11 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
     const text = stripHtmlTags(rawHtml);
     if (!text && !segment.includes("tgme_widget_message_photo")) continue;
 
-    // Get timestamp
     const timeMatch = segment.match(/datetime="([^"]+)"/);
     const date = timeMatch ? timeMatch[1] : new Date().toISOString();
 
-    // Get link
-    const link = `https://t.me/cbstresearch/${id}`;
+    const link = `https://t.me/${channel}/${id}`;
 
-    // Get images (background-image in photo divs, excluding emoji/icon images)
     const images: string[] = [];
     const imgRegex = /background-image:url\('([^']+)'\)/g;
     let imgMatch: RegExpExecArray | null;
@@ -88,14 +82,12 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
       const url = normalizeUrl(imgMatch[1]);
       if (isContentImage(url)) images.push(url);
     }
-    // Also check <img> src within message
     const srcRegex = /<img[^>]+src="([^"]+)"/g;
     while ((imgMatch = srcRegex.exec(segment)) !== null) {
       const url = normalizeUrl(imgMatch[1]);
       if (isContentImage(url) && !images.includes(url)) images.push(url);
     }
 
-    // Clean inner HTML for display (convert <br> to newline, preserve links/bold)
     const cleanHtml = rawHtml
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g, (_, href, text) => {
@@ -110,7 +102,6 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
     items.push({ id, text, html: cleanHtml, date, link, images });
   }
 
-  // Return newest first, deduplicated
   const seen = new Set<string>();
   return items
     .filter((item) => {
@@ -122,20 +113,37 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
     .slice(0, 50);
 }
 
-router.get("/news", async (req, res) => {
+// GET /api/news — @cbstresearch (큐레이션)
+router.get("/news", async (_req, res) => {
   try {
     const now = Date.now();
-    if (cache && now - cache.fetchedAt < CACHE_TTL) {
-      res.json({ items: cache.items, cached: true });
+    if (cacheResearch && now - cacheResearch.fetchedAt < CACHE_TTL) {
+      res.json({ items: cacheResearch.items, cached: true });
       return;
     }
-
-    const items = await fetchTelegramNews();
-    cache = { items, fetchedAt: now };
+    const items = await fetchTelegramChannel("cbstresearch");
+    cacheResearch = { items, fetchedAt: now };
     res.json({ items, cached: false });
   } catch (err) {
-    console.error("[news] fetch error:", err);
+    console.error("[news/research] fetch error:", err);
     res.status(500).json({ error: "뉴스를 불러오지 못했습니다." });
+  }
+});
+
+// GET /api/news/radar — @cbstradar (실시간 뉴스)
+router.get("/news/radar", async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (cacheRadar && now - cacheRadar.fetchedAt < CACHE_TTL) {
+      res.json({ items: cacheRadar.items, cached: true });
+      return;
+    }
+    const items = await fetchTelegramChannel("cbstradar");
+    cacheRadar = { items, fetchedAt: now };
+    res.json({ items, cached: false });
+  } catch (err) {
+    console.error("[news/radar] fetch error:", err);
+    res.status(500).json({ error: "레이더 뉴스를 불러오지 못했습니다." });
   }
 });
 

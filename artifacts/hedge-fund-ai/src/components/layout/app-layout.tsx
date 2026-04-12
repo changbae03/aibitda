@@ -25,7 +25,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석", icon: BrainCircuit },
     { href: "/reports", label: "투자 아이디어", icon: FileText },
-    { href: "/news", label: "CBST 큐레이션", icon: Newspaper },
+    { href: "/news", label: "뉴스", icon: Newspaper },
   ];
 
   return (
