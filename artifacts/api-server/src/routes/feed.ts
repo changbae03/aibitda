@@ -86,14 +86,20 @@ router.get("/substack", async (_req, res) => {
         ? strippedText.slice(0, 200) + "…"
         : strippedText;
 
+      const decodedTitle = decodeEntities(item.title ?? "");
+      // Extract series tag from title prefix like [산업의 이해], [투자 아이디어] etc.
+      const tagMatch = decodedTitle.match(/^\[([^\]]+)\]/);
+      const tag = tagMatch ? tagMatch[1] : null;
+
       return {
-        title: decodeEntities(item.title ?? ""),
+        title: decodedTitle,
         link: item.link ?? "",
         pubDate: item.pubDate ?? item.isoDate ?? "",
         summary,
         image,
         creator: decodeEntities((item as any).creator ?? feed.title ?? ""),
         categories: item.categories ?? [],
+        tag,
       };
     });
 
