@@ -214,16 +214,23 @@ function NewsCard({
 
       {/* Body */}
       {body && (
-        <div className="space-y-1.5 mt-0.5">
+        <div className="space-y-2 mt-1">
           {body
             .split("\n")
             .filter((l) => l.trim())
-            .slice(0, 5)
-            .map((line, i) => (
-              <p key={i} className="text-xs text-muted-foreground leading-relaxed break-words">
-                {line.trim()}
-              </p>
-            ))}
+            .map((line, i) => {
+              const t = line.trim();
+              const isSubHeading = t.length <= 40 && !t.startsWith("•") && !t.startsWith("-") && !t.startsWith("*") && !t.match(/^https?:\/\//);
+              return isSubHeading ? (
+                <p key={i} className="text-xs font-semibold text-foreground/80 mt-3 first:mt-0">
+                  {t}
+                </p>
+              ) : (
+                <p key={i} className="text-xs text-muted-foreground leading-relaxed break-words">
+                  {t}
+                </p>
+              );
+            })}
         </div>
       )}
     </a>
