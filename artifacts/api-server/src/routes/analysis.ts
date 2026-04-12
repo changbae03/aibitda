@@ -18,11 +18,12 @@ const yahooFinance = new YahooFinance();
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
 
+const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!;
 const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY!,
-  httpOptions: {
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL!,
-  },
+  apiKey: geminiApiKey,
+  ...(process.env.GEMINI_API_KEY ? {} : {
+    httpOptions: { baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL! },
+  }),
 });
 
 // ─── Ticker resolution ────────────────────────────────────────────────────────
