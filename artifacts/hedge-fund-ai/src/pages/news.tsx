@@ -78,7 +78,7 @@ export default function News() {
             <div className="w-8 h-8 rounded-full bg-[#229ED9] flex items-center justify-center">
               <Send className="w-4 h-4 text-white fill-white" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">CBST 레이더</h1>
+            <h1 className="text-xl font-bold text-foreground">CBST 큐레이션</h1>
           </div>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1">
@@ -88,7 +88,7 @@ export default function News() {
                 <Wifi className="w-3 h-3 text-emerald-500" />
               )}
             </span>
-            @cbstradar 텔레그램 채널
+            @cbstresearch 텔레그램 채널
             {lastFetched && (
               <span className="text-muted-foreground/60">
                 · {formatDate(lastFetched.toISOString())} 업데이트
@@ -156,7 +156,7 @@ export default function News() {
       {!loading && !error && items.length > 0 && (
         <div className="mt-4 text-center">
           <a
-            href="https://t.me/cbstradar"
+            href="https://t.me/cbstresearch"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -171,6 +171,14 @@ export default function News() {
   );
 }
 
+function parseTitle(text: string): { title: string; body: string } {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return { title: "", body: "" };
+  const title = lines[0];
+  const body = lines.slice(1).join("\n").trim();
+  return { title, body };
+}
+
 function NewsCard({
   item,
   formatDate,
@@ -180,58 +188,44 @@ function NewsCard({
   formatDate: (d: string) => string;
   formatAbsDate: (d: string) => string;
 }) {
-  const [imgError, setImgError] = useState<Record<number, boolean>>({});
+  const { title, body } = parseTitle(item.text ?? "");
 
   return (
     <a
       href={item.link}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex gap-3 p-4 hover:bg-muted/40 transition-colors group block"
+      className="block px-5 py-4 hover:bg-muted/40 transition-colors group"
     >
-      {/* Avatar */}
-      <div className="shrink-0 mt-0.5">
-        <div className="w-9 h-9 rounded-full bg-[#229ED9] flex items-center justify-center">
-          <Send className="w-4 h-4 text-white fill-white" />
-        </div>
+      {/* Time + link icon */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] text-muted-foreground/70" title={formatAbsDate(item.date)}>
+          {formatDate(item.date)}
+        </span>
+        <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity" />
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        {/* Name + time */}
-        <div className="flex items-baseline gap-2 mb-1">
-          <span className="font-semibold text-sm text-foreground">CBST 레이더</span>
-          <span className="text-xs text-muted-foreground shrink-0" title={formatAbsDate(item.date)}>
-            {formatDate(item.date)}
-          </span>
-          <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-auto shrink-0" />
+      {/* Title */}
+      {title && (
+        <p className="text-sm font-semibold text-foreground leading-snug mb-1.5">
+          {title}
+        </p>
+      )}
+
+      {/* Body */}
+      {body && (
+        <div className="space-y-1.5 mt-0.5">
+          {body
+            .split("\n")
+            .filter((l) => l.trim())
+            .slice(0, 5)
+            .map((line, i) => (
+              <p key={i} className="text-xs text-muted-foreground leading-relaxed break-words">
+                {line.trim()}
+              </p>
+            ))}
         </div>
-
-        {/* Text */}
-        {item.text && (
-          <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap break-words">
-            {item.text}
-          </p>
-        )}
-
-        {/* Images */}
-        {item.images.length > 0 && (
-          <div className={cn("mt-2 grid gap-1 rounded-xl overflow-hidden", item.images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-            {item.images.slice(0, 4).map((src, i) => {
-              if (imgError[i]) return null;
-              return (
-                <img
-                  key={i}
-                  src={src}
-                  alt=""
-                  className="w-full object-cover max-h-72 rounded"
-                  onError={() => setImgError((prev) => ({ ...prev, [i]: true }))}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
+      )}
     </a>
   );
 }

@@ -25,11 +25,16 @@ function decodeHtmlEntities(str: string): string {
 }
 
 function stripHtmlTags(html: string): string {
-  return decodeHtmlEntities(html.replace(/<[^>]+>/g, "")).trim();
+  return decodeHtmlEntities(
+    html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+  ).trim();
 }
 
 async function fetchTelegramNews(): Promise<NewsItem[]> {
-  const url = "https://t.me/s/cbstradar";
+  const url = "https://t.me/s/cbstresearch";
   const res = await fetch(url, {
     headers: {
       "User-Agent":
@@ -45,24 +50,12 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
 
   const items: NewsItem[] = [];
 
-  // Extract each message block
-  const messageBlockRegex =
-    /<div class="tgme_widget_message_wrap[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/g;
-
-  // Simpler approach: extract post IDs and their data
-  const postRegex = /data-post="cbstradar\/(\d+)"/g;
-  const postIds: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = postRegex.exec(html)) !== null) {
-    postIds.push(m[1]);
-  }
-
   // Split HTML by message divs
   const segments = html.split(/(?=<div class="tgme_widget_message[^_])/);
 
   for (const segment of segments) {
-    // Get post ID
-    const idMatch = segment.match(/data-post="cbstradar\/(\d+)"/);
+    // Get post ID — match any channel name
+    const idMatch = segment.match(/data-post="[^/]+\/(\d+)"/);
     if (!idMatch) continue;
     const id = idMatch[1];
 
@@ -79,7 +72,7 @@ async function fetchTelegramNews(): Promise<NewsItem[]> {
     const date = timeMatch ? timeMatch[1] : new Date().toISOString();
 
     // Get link
-    const link = `https://t.me/cbstradar/${id}`;
+    const link = `https://t.me/cbstresearch/${id}`;
 
     // Get images (background-image in photo divs, excluding emoji/icon images)
     const images: string[] = [];
