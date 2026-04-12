@@ -5,6 +5,7 @@ import marketDataRouter from "./market-data.js";
 import modelInsightsRouter from "./model-insights.js";
 import newsRouter from "./news.js";
 import authRouter from "./auth.js";
+import feedRouter from "./feed.js";
 
 const router: IRouter = Router();
 
@@ -13,6 +14,7 @@ router.use(authRouter);
 router.use("/analysis", analysisRouter);
 router.use("/market-data", marketDataRouter);
 router.use("/model-insights", modelInsightsRouter);
+router.use("/feed", feedRouter);
 router.use(newsRouter);
 
 export default router;
