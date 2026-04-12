@@ -14,7 +14,6 @@ import {
   BrainCircuit,
   Trash2,
   ArrowLeft,
-  ImageDown
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +21,6 @@ import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import html2canvas from "html2canvas";
 
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
@@ -363,31 +361,6 @@ function extractJson(raw: string): any | null {
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
   const json = extractJson(step.content);
 
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [saving, setSaving] = useState(false);
-
-  const handleSaveImage = async () => {
-    if (!cardRef.current || saving) return;
-    setSaving(true);
-    try {
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#f8f9ff",
-        logging: false,
-      });
-      const link = document.createElement("a");
-      const filename = ticker && companyName
-        ? `${ticker}_${companyName}_투자전략.png`
-        : "투자전략.png";
-      link.download = filename;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const verdictColor = (v: string) => {
     if (!v) return "text-foreground";
     const s = v.toLowerCase();
@@ -400,7 +373,6 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
   return (
     <motion.div
-      ref={cardRef}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
@@ -560,25 +532,6 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             </div>
           )}
 
-          {/* 이미지 저장 버튼 */}
-          <div className="pt-4 border-t border-border flex items-center justify-between print:hidden">
-            <span className="text-[11px] text-muted-foreground font-mono">
-              {ticker && companyName ? `${ticker} · ${companyName}` : ""}
-              {createdAt ? ` · ${format(new Date(createdAt), 'yyyy.MM.dd HH:mm', { locale: ko })} 생성` : ""}
-            </span>
-            <button
-              onClick={handleSaveImage}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ImageDown className="w-4 h-4" />
-              )}
-              {saving ? "저장 중..." : "이미지로 저장"}
-            </button>
-          </div>
         </div>
       ) : (
         <div className="p-5 text-sm text-foreground/80 leading-relaxed">
