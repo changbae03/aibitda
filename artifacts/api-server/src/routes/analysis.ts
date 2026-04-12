@@ -513,22 +513,27 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/", async (_req, res) => {
-  const analyses = await db
-    .select()
-    .from(analysesTable)
-    .orderBy(desc(analysesTable.createdAt));
+  try {
+    const analyses = await db
+      .select()
+      .from(analysesTable)
+      .orderBy(desc(analysesTable.createdAt));
 
-  const results = await Promise.all(
-    analyses.map(async (a) => {
-      const steps = await db
-        .select()
-        .from(analysisStepsTable)
-        .where(eq(analysisStepsTable.analysisId, a.id));
-      return formatAnalysis(a, steps);
-    })
-  );
+    const results = await Promise.all(
+      analyses.map(async (a) => {
+        const steps = await db
+          .select()
+          .from(analysisStepsTable)
+          .where(eq(analysisStepsTable.analysisId, a.id));
+        return formatAnalysis(a, steps);
+      })
+    );
 
-  res.json(results);
+    res.json(results);
+  } catch (err: any) {
+    console.error("[GET /analysis] DB error:", err?.message, err?.cause);
+    res.status(500).json({ error: "Database query failed", detail: err?.message });
+  }
 });
 
 router.delete("/", async (_req, res) => {

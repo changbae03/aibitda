@@ -1,6 +1,8 @@
 import app from "./app";
 import { runMigrations } from "@workspace/db";
 
+console.log("[STARTUP] API Server v2 - SSL fix + auto migration enabled");
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {

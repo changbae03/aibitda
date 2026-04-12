@@ -10,11 +10,22 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+const dbUrl = process.env.DATABASE_URL!;
+
+const sslmodeMatch = dbUrl.match(/[?&]sslmode=([^&]*)/);
+const sslmode = sslmodeMatch ? sslmodeMatch[1] : null;
+
+const sslDisabled = sslmode === "disable";
+
+if (!sslDisabled) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
+const connectionString = dbUrl.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
+
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("localhost")
-    ? false
-    : { rejectUnauthorized: false },
+  connectionString,
+  ssl: sslDisabled ? false : { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });
 
