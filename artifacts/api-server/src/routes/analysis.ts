@@ -614,10 +614,15 @@ router.post("/:id/step", async (req, res) => {
     return;
   }
 
-  const existingSteps = await db
+  const rawSteps = await db
     .select()
     .from(analysisStepsTable)
     .where(eq(analysisStepsTable.analysisId, id));
+
+  // STEP_ORDER 순서로 정렬하고, 현재 단계 이전 단계만 context로 전달
+  const existingSteps = [...rawSteps].sort(
+    (a, b) => STEP_ORDER.indexOf(a.stepKey as AgentKey) - STEP_ORDER.indexOf(b.stepKey as AgentKey)
+  );
 
   const alreadyRun = existingSteps.some((s) => s.stepKey === stepKey);
   if (alreadyRun) {
@@ -664,17 +669,19 @@ router.post("/:id/step", async (req, res) => {
     }
   }
 
+  // 현재 단계 이전에 완료된 단계만 context로 전달 (순서 보장)
+  const currentStepIndex = STEP_ORDER.indexOf(stepKey);
+  const previousStepsForContext = existingSteps
+    .filter((s) => STEP_ORDER.indexOf(s.stepKey as AgentKey) < currentStepIndex)
+    .map((s) => ({ stepKey: s.stepKey, agentName: s.agentName, content: s.content }));
+
   const { systemPrompt, userPrompt } = buildPrompt(
     stepKey,
     analysis.ticker,
     analysis.companyName,
     analysis.industry,
     enrichedContext,
-    existingSteps.map((s) => ({
-      stepKey: s.stepKey,
-      agentName: s.agentName,
-      content: s.content,
-    }))
+    previousStepsForContext
   );
 
   let content = "";
