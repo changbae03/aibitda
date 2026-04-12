@@ -3,14 +3,16 @@ import { db } from "@workspace/db";
 import { modelInsightsTable, analysesTable } from "@workspace/db";
 import { eq, desc, and, not, isNull } from "drizzle-orm";
 import YahooFinance from "yahoo-finance2";
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
 
-const client = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? undefined,
+const ai = new GoogleGenAI({
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY!,
+  httpOptions: {
+    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL!,
+  },
 });
 
 async function fetchCurrentPrice(ticker: string): Promise<number | null> {
@@ -66,12 +68,12 @@ async function generateLesson(
 마크다운 볼드(**) 사용 금지. 간결하고 실용적으로 작성.`;
 
   try {
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [{ role: "user", content: prompt }],
-      max_completion_tokens: 200,
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { maxOutputTokens: 200 },
     });
-    return completion.choices[0]?.message?.content?.trim() ?? "";
+    return response.text?.trim() ?? "";
   } catch {
     return `${companyName} 분석 ${daysElapsed}일 후 ${priceReturn.toFixed(1)}% ${direction}. 결과: ${successOrFail}.`;
   }

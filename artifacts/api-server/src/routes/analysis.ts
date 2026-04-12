@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { eq, desc, not } from "drizzle-orm";
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
 import {
   AGENTS,
@@ -18,9 +18,11 @@ const yahooFinance = new YahooFinance();
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
 
-const client = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? undefined,
+const ai = new GoogleGenAI({
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY!,
+  httpOptions: {
+    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL!,
+  },
 });
 
 // ─── Ticker resolution ────────────────────────────────────────────────────────
@@ -661,17 +663,16 @@ router.post("/:id/step", async (req, res) => {
   let content = "";
   try {
     try {
-      const stream = await client.chat.completions.create({
-        model: "gpt-5.2",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_completion_tokens: 8192,
-        stream: true,
+      const stream = await ai.models.generateContentStream({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction: systemPrompt,
+          maxOutputTokens: 8192,
+        },
       });
       for await (const chunk of stream) {
-        const text = chunk.choices[0]?.delta?.content ?? "";
+        const text = chunk.text ?? "";
         if (text) {
           content += text;
           res.write(`data: ${JSON.stringify({ t: text })}\n\n`);
@@ -680,7 +681,7 @@ router.post("/:id/step", async (req, res) => {
       console.log(`[${stepKey}] streamed content length:`, content.length);
       if (!content) content = "분석 결과를 생성하지 못했습니다.";
     } catch (err) {
-      console.error("OpenAI error:", err);
+      console.error("Gemini error:", err);
       content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
       res.write(`data: ${JSON.stringify({ error: content })}\n\n`);
     }
