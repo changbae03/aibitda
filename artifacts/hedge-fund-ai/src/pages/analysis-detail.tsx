@@ -503,9 +503,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         )}>{formatPrice(s.target_price)}</td>
                         <td className={cn(
                           "px-3 py-2.5 text-right font-mono",
-                          s.upside?.startsWith("+") ? "text-emerald-600" : s.upside?.startsWith("-") ? "text-red-500" : "text-foreground/70"
-                        )}>{s.upside}</td>
-                        <td className="px-3 py-2.5 text-right text-foreground/60">{s.probability}</td>
+                          (() => { const u = String(s.upside ?? ""); return u.startsWith("+") || (!u.startsWith("-") && parseFloat(u) > 0) ? "text-emerald-600" : u.startsWith("-") || parseFloat(u) < 0 ? "text-red-500" : "text-foreground/70"; })()
+                        )}>{(() => { const u = String(s.upside ?? ""); const n = parseFloat(u.replace(/[^0-9.\-]/g, "")); if (!isNaN(n) && !u.includes("%")) return (n > 0 ? "+" : "") + n + "%"; return u; })()}</td>
+                        <td className="px-3 py-2.5 text-right text-foreground/60">{(() => { const p = String(s.probability ?? ""); const n = parseFloat(p.replace(/[^0-9.]/g, "")); if (!isNaN(n) && !p.includes("%")) return n + "%"; return p; })()}</td>
                       </tr>
                     );
                   })}
