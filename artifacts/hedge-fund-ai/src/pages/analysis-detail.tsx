@@ -151,10 +151,13 @@ export default function AnalysisDetail() {
                 {isComplete ? '분석 완료' : '분석 진행중'}
               </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2">
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground leading-tight">
               {analysis.companyName}
             </h1>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            {analysis.englishName && (
+              <p className="text-sm text-muted-foreground mt-0.5 mb-1 font-normal">{analysis.englishName}</p>
+            )}
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mt-2">
               <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> {analysis.industry}</span>
               <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
             </div>

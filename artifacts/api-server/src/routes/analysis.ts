@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
+import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
 import { eq, desc, not } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
@@ -48,19 +49,27 @@ async function tryQuoteSummary(symbol: string) {
   }
 }
 
-async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; industry: string; resolvedSymbol: string }> {
+async function fetchTickerInfo(ticker: string): Promise<{ companyName: string; englishName: string | null; industry: string; resolvedSymbol: string }> {
+  await loadKRXList();
+
   if (/^\d{6}$/.test(ticker)) {
     const [ksResult, kqResult] = await Promise.all([
       tryQuoteSummary(`${ticker}.KS`),
       tryQuoteSummary(`${ticker}.KQ`),
     ]);
-    if (kqResult) return { ...kqResult, resolvedSymbol: `${ticker}.KQ` };
-    if (ksResult) return { ...ksResult, resolvedSymbol: `${ticker}.KS` };
-    return { companyName: ticker, industry: "일반", resolvedSymbol: `${ticker}.KS` };
+    const yahooResult = kqResult ?? ksResult;
+    const resolvedSymbol = kqResult ? `${ticker}.KQ` : `${ticker}.KS`;
+    const koreanName = lookupKoreanName(ticker);
+    const englishName = yahooResult?.companyName ?? null;
+    const companyName = koreanName ?? englishName ?? ticker;
+    return { companyName, englishName: englishName !== companyName ? englishName : null, industry: yahooResult?.industry ?? "일반", resolvedSymbol };
   }
+
   const result = await tryQuoteSummary(ticker);
-  if (result) return { ...result, resolvedSymbol: ticker };
-  return { companyName: ticker, industry: "일반", resolvedSymbol: ticker };
+  const koreanName = lookupKoreanName(ticker);
+  const englishName = result?.companyName ?? null;
+  const companyName = koreanName ?? englishName ?? ticker;
+  return { companyName, englishName: englishName !== companyName ? englishName : null, industry: result?.industry ?? "일반", resolvedSymbol: ticker };
 }
 
 // ─── Naver Finance data fetching ─────────────────────────────────────────────
@@ -477,15 +486,16 @@ router.post("/", async (req, res) => {
 
   const upperTicker = ticker.toUpperCase();
   let companyName = rawCompanyName?.trim();
+  let englishName: string | null = null;
   let industry = rawIndustry?.trim();
   let resolvedSymbol = upperTicker;
 
-  if (!companyName || !industry) {
-    const info = await fetchTickerInfo(upperTicker);
-    companyName = companyName || info.companyName;
-    industry = industry || info.industry;
-    resolvedSymbol = info.resolvedSymbol;
-  }
+  const info = await fetchTickerInfo(upperTicker);
+  // Korean name: prefer KRX lookup over user-provided (which may be a ticker code)
+  companyName = info.companyName || companyName || upperTicker;
+  englishName = info.englishName;
+  industry = industry || info.industry;
+  resolvedSymbol = info.resolvedSymbol;
 
   // Fetch financial data and news in parallel
   const [financialData, newsData] = await Promise.all([
@@ -502,6 +512,7 @@ router.post("/", async (req, res) => {
     .values({
       ticker: upperTicker,
       companyName,
+      englishName,
       industry,
       additionalContext: fullContext,
       status: "in_progress",
@@ -791,6 +802,7 @@ function formatAnalysis(analysis: any, steps: any[]) {
     id: analysis.id,
     ticker: analysis.ticker,
     companyName: analysis.companyName,
+    englishName: analysis.englishName ?? null,
     industry: analysis.industry,
     additionalContext: analysis.additionalContext,
     status: analysis.status,

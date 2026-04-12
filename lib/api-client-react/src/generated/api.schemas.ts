@@ -77,6 +77,7 @@ export interface Analysis {
   id: number;
   ticker: string;
   companyName: string;
+  englishName?: string | null;
   industry: string;
   additionalContext?: string;
   status: AnalysisStatus;

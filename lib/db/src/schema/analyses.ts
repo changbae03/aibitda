@@ -6,6 +6,7 @@ export const analysesTable = pgTable("analyses", {
   id: serial("id").primaryKey(),
   ticker: text("ticker").notNull(),
   companyName: text("company_name").notNull(),
+  englishName: text("english_name"),
   industry: text("industry").notNull(),
   additionalContext: text("additional_context"),
   status: text("status").notNull().default("in_progress"),

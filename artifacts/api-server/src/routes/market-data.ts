@@ -1,63 +1,10 @@
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
+import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
 
 const yahooFinance = new YahooFinance();
 
 const router: IRouter = Router();
-
-// ── KRX 전체 종목 캐시 ────────────────────────────────────────────────────────
-interface StockEntry {
-  name: string;
-  code: string;    // 6자리 숫자코드
-  symbol: string;  // "XXXXXX.KS" | "XXXXXX.KQ"
-  exchange: "KOSPI" | "KOSDAQ";
-}
-
-let krxCache: StockEntry[] = [];
-let krxLoadedAt = 0;
-const KRX_TTL = 1000 * 60 * 60 * 24; // 24시간
-
-async function loadKRXList(): Promise<StockEntry[]> {
-  const now = Date.now();
-  if (krxCache.length > 0 && now - krxLoadedAt < KRX_TTL) return krxCache;
-
-  try {
-    const res = await fetch(
-      "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13",
-      { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }, signal: AbortSignal.timeout(10000) }
-    );
-    const buf = await res.arrayBuffer();
-    const html = new TextDecoder("euc-kr").decode(buf);
-
-    const rows = html.match(/<tr>[\s\S]*?<\/tr>/gi) || [];
-    const results: StockEntry[] = [];
-
-    for (const row of rows.slice(1)) {
-      const cells = row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];
-      if (cells.length < 3) continue;
-      const name = cells[0].replace(/<[^>]+>/g, "").trim();
-      const market = cells[1].replace(/<[^>]+>/g, "").replace(/\s+/g, "");
-      const code = cells[2].replace(/<[^>]+>/g, "").trim();
-      if (!name || !/^\d{6}$/.test(code)) continue;
-      const exchange: "KOSPI" | "KOSDAQ" = market.includes("코스닥") ? "KOSDAQ" : "KOSPI";
-      const suffix = exchange === "KOSPI" ? ".KS" : ".KQ";
-      results.push({ name, code, symbol: `${code}${suffix}`, exchange });
-    }
-
-    if (results.length > 0) {
-      krxCache = results;
-      krxLoadedAt = now;
-      console.log(`[KRX] 종목 목록 로드 완료: ${results.length}개`);
-    }
-    return results;
-  } catch (err: any) {
-    console.error("[KRX] 종목 목록 로드 실패:", err.message);
-    return krxCache; // 실패 시 기존 캐시 반환
-  }
-}
-
-// 서버 시작 시 백그라운드로 로드
-loadKRXList().catch(() => {});
 
 function calculateRSI(closes: number[], window = 14): (number | null)[] {
   const rsi: (number | null)[] = new Array(window).fill(null);
@@ -261,31 +208,27 @@ function toResult(e: StockEntry) {
 
 function searchKorean(query: string): ReturnType<typeof toResult>[] {
   const q = query.toLowerCase().replace(/\s/g, "");
-  
-  // KRX 캐시가 있으면 우선 사용 (전체 종목 지원)
+  const krxCache = getKRXCache();
+
   if (krxCache.length > 0) {
     return krxCache
       .filter(e => e.name.toLowerCase().replace(/\s/g, "").includes(q))
       .slice(0, 8)
       .map(toResult);
   }
-  
-  // 폴백: 하드코딩 맵
-  const q2 = query.toLowerCase().replace(/\s/g, "");
   return KOREAN_COMPANY_MAP.filter(c =>
-    c.keywords.some(k => k.includes(q2) || q2.includes(k))
+    c.keywords.some(k => k.includes(q) || q.includes(k))
   ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
 }
 
 function searchByCode(digits: string): ReturnType<typeof toResult>[] {
-  // KRX 캐시 우선 사용
+  const krxCache = getKRXCache();
   if (krxCache.length > 0) {
     return krxCache
       .filter(e => e.code.startsWith(digits))
       .slice(0, 8)
       .map(toResult);
   }
-  // 폴백: 하드코딩 맵
   return KOREAN_COMPANY_MAP
     .filter(c => c.symbol.startsWith(digits))
     .slice(0, 8)
