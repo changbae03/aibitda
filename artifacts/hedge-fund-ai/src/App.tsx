@@ -6,7 +6,6 @@ import { AppLayout } from "@/components/layout/app-layout";
 import NotFound from "@/pages/not-found";
 
 // Pages
-import Dashboard from "@/pages/dashboard";
 import NewAnalysis from "@/pages/new-analysis";
 import AnalysisDetail from "@/pages/analysis-detail";
 import ModelInsights from "@/pages/model-insights";
@@ -25,7 +24,7 @@ function Router() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/" component={Dashboard} />
+        <Route path="/" component={NewAnalysis} />
         <Route path="/analysis/new" component={NewAnalysis} />
         <Route path="/analysis/:id" component={AnalysisDetail} />
         <Route path="/model-insights" component={ModelInsights} />

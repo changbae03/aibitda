@@ -2,10 +2,8 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   BrainCircuit, 
-  LayoutDashboard, 
   Settings,
   Menu,
-  Sparkles,
   Newspaper
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,7 +17,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석 시작", icon: BrainCircuit },
-    { href: "/", label: "대시보드", icon: LayoutDashboard },
     { href: "/news", label: "CBST 큐레이션", icon: Newspaper },
   ];
 
