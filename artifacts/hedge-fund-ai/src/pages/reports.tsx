@@ -31,13 +31,13 @@ interface SubstackFeed {
 
 function useSubstackFeed() {
   return useQuery<SubstackFeed>({
-    queryKey: ["substack-feed"],
+    queryKey: ["substack-feed-v2"],
     queryFn: async () => {
       const res = await fetch("/api/feed/substack");
-      if (!res.ok) throw new Error("RSS 피드를 불러오지 못했습니다");
+      if (!res.ok) throw new Error("피드를 불러오지 못했습니다");
       return res.json();
     },
-    staleTime: 1000 * 60 * 15,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
