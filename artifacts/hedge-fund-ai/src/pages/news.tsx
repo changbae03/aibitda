@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
-import { Send, RefreshCw, ExternalLink, WifiOff, Zap, Pin } from "lucide-react";
-import { formatDistanceToNow, parseISO } from "date-fns";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Send, RefreshCw, ExternalLink, WifiOff, Zap, Pin, X } from "lucide-react";
+import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface NewsItem {
   id: string;
@@ -23,21 +24,165 @@ function formatRelativeDate(iso: string) {
   }
 }
 
+function formatAbsDate(iso: string) {
+  try {
+    return format(parseISO(iso), "yyyy년 M월 d일 HH:mm", { locale: ko });
+  } catch {
+    return iso;
+  }
+}
+
 function parseTitle(text: string): { title: string; body: string } {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return { title: "", body: "" };
   return { title: lines[0], body: lines.slice(1).join("\n").trim() };
 }
 
+// ── Detail Panel ────────────────────────────────
+function DetailPanel({
+  item,
+  onClose,
+}: {
+  item: NewsItem | null;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  const { title, body } = item ? parseTitle(item.text ?? "") : { title: "", body: "" };
+
+  return (
+    <AnimatePresence>
+      {item && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={onClose}
+          />
+
+          {/* Slide panel */}
+          <motion.div
+            key="panel"
+            ref={panelRef}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 340, damping: 34 }}
+            className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col"
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+              <span className="text-xs text-muted-foreground">
+                {formatAbsDate(item.date)}
+              </span>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Panel body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {/* Image */}
+              {item.images[0] && (
+                <div className="rounded-xl overflow-hidden bg-slate-100">
+                  <img
+                    src={item.images[0]}
+                    alt=""
+                    className="w-full object-cover max-h-56"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).parentElement!.style.display = "none";
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Title */}
+              {title && (
+                <h2 className="text-lg font-bold text-foreground leading-snug">
+                  {title}
+                </h2>
+              )}
+
+              {/* Body */}
+              {body && (
+                <div className="space-y-2">
+                  {body
+                    .split("\n")
+                    .filter((l) => l.trim())
+                    .map((line, i) => {
+                      const t = line.trim();
+                      const isHeading =
+                        t.length <= 50 &&
+                        !t.startsWith("•") &&
+                        !t.startsWith("-") &&
+                        !t.startsWith("*") &&
+                        !t.match(/^https?:\/\//);
+                      return isHeading && i > 0 ? (
+                        <p key={i} className="text-sm font-semibold text-foreground/90 pt-2">
+                          {t}
+                        </p>
+                      ) : (
+                        <p key={i} className="text-sm text-muted-foreground leading-relaxed break-words">
+                          {t}
+                        </p>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {/* Panel footer */}
+            <div className="shrink-0 px-6 py-4 border-t border-border flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeDate(item.date)}
+              </span>
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium transition-colors"
+              >
+                <Send className="w-3 h-3" />
+                원문 보기
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ── 실시간 뉴스 카드 (compact) ──────────────────
-function RadarCard({ item }: { item: NewsItem }) {
+function RadarCard({
+  item,
+  onClick,
+}: {
+  item: NewsItem;
+  onClick: () => void;
+}) {
   const { title, body } = parseTitle(item.text ?? "");
   return (
-    <a
-      href={item.link}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex flex-col gap-1 px-4 py-3 hover:bg-sky-50/60 transition-colors border-b border-border last:border-0"
+    <button
+      onClick={onClick}
+      className="w-full text-left group flex flex-col gap-1 px-4 py-3 hover:bg-sky-50/60 transition-colors border-b border-border last:border-0"
     >
       <span className="text-[11px] text-muted-foreground/60">
         {formatRelativeDate(item.date)}
@@ -52,20 +197,24 @@ function RadarCard({ item }: { item: NewsItem }) {
           {body}
         </p>
       )}
-    </a>
+    </button>
   );
 }
 
 // ── 큐레이션 카드 (rich) ────────────────────────
-function CurationCard({ item }: { item: NewsItem }) {
+function CurationCard({
+  item,
+  onClick,
+}: {
+  item: NewsItem;
+  onClick: () => void;
+}) {
   const { title, body } = parseTitle(item.text ?? "");
   const hasImage = item.images.length > 0;
   return (
-    <a
-      href={item.link}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group block bg-white border border-border rounded-xl overflow-hidden hover:border-violet-300 hover:shadow-md transition-all duration-200"
+    <button
+      onClick={onClick}
+      className="w-full text-left group bg-white border border-border rounded-xl overflow-hidden hover:border-violet-300 hover:shadow-md transition-all duration-200"
     >
       {hasImage && (
         <div className="w-full h-40 bg-slate-100 overflow-hidden">
@@ -73,7 +222,9 @@ function CurationCard({ item }: { item: NewsItem }) {
             src={item.images[0]}
             alt=""
             className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-            onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).parentElement!.style.display = "none";
+            }}
           />
         </div>
       )}
@@ -97,7 +248,7 @@ function CurationCard({ item }: { item: NewsItem }) {
           </span>
         </div>
       </div>
-    </a>
+    </button>
   );
 }
 
@@ -131,7 +282,6 @@ function NewsColumn({
 }) {
   return (
     <div className="flex flex-col min-h-0">
-      {/* Column header */}
       <div className="flex items-center justify-between mb-3">
         <h2 className={cn("text-base font-bold flex items-center gap-1.5", accentClass)}>
           {icon}
@@ -147,7 +297,6 @@ function NewsColumn({
         </button>
       </div>
 
-      {/* Content */}
       <div className={cn(
         "flex-1 rounded-xl border border-border overflow-y-auto bg-white",
         compact ? "divide-y divide-border" : "flex flex-col gap-3 p-3 bg-transparent border-0"
@@ -182,7 +331,6 @@ function NewsColumn({
         )}
       </div>
 
-      {/* Footer link */}
       {!loading && !error && items.length > 0 && (
         <a
           href={telegramUrl}
@@ -200,6 +348,8 @@ function NewsColumn({
 
 // ── Main Page ───────────────────────────────────
 export default function News() {
+  const [selectedItem, setSelectedItem] = useState<NewsItem | null>(null);
+
   const [radarItems, setRadarItems] = useState<NewsItem[]>([]);
   const [radarLoading, setRadarLoading] = useState(true);
   const [radarError, setRadarError] = useState<string | null>(null);
@@ -255,40 +405,48 @@ export default function News() {
   }, [fetchRadar, fetchResearch]);
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col gap-4">
-      {/* Two-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-5 flex-1 min-h-0">
-        {/* Left — 실시간 뉴스 */}
-        <NewsColumn
-          title="실시간 뉴스"
-          icon={<Zap className="w-4 h-4 text-sky-500 fill-sky-200" />}
-          accentClass="text-sky-700"
-          telegramUrl="https://t.me/cbstradar"
-          items={radarItems}
-          loading={radarLoading}
-          error={radarError}
-          onRefresh={() => fetchRadar(true)}
-          refreshing={radarRefreshing}
-          cardRenderer={(item) => <RadarCard item={item} />}
-          emptyMessage="아직 뉴스가 없습니다"
-          compact
-        />
+    <>
+      <div className="h-[calc(100vh-8rem)] flex flex-col gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-5 flex-1 min-h-0">
+          {/* Left — 실시간 뉴스 */}
+          <NewsColumn
+            title="실시간 뉴스"
+            icon={<Zap className="w-4 h-4 text-sky-500 fill-sky-200" />}
+            accentClass="text-sky-700"
+            telegramUrl="https://t.me/cbstradar"
+            items={radarItems}
+            loading={radarLoading}
+            error={radarError}
+            onRefresh={() => fetchRadar(true)}
+            refreshing={radarRefreshing}
+            cardRenderer={(item) => (
+              <RadarCard item={item} onClick={() => setSelectedItem(item)} />
+            )}
+            emptyMessage="아직 뉴스가 없습니다"
+            compact
+          />
 
-        {/* Right — CBST 큐레이션 */}
-        <NewsColumn
-          title="CBST 큐레이션"
-          icon={<Pin className="w-4 h-4 text-violet-500 fill-violet-200" />}
-          accentClass="text-violet-700"
-          telegramUrl="https://t.me/cbstresearch"
-          items={researchItems}
-          loading={researchLoading}
-          error={researchError}
-          onRefresh={() => fetchResearch(true)}
-          refreshing={researchRefreshing}
-          cardRenderer={(item) => <CurationCard item={item} />}
-          emptyMessage="아직 큐레이션 글이 없습니다"
-        />
+          {/* Right — CBST 큐레이션 */}
+          <NewsColumn
+            title="CBST 큐레이션"
+            icon={<Pin className="w-4 h-4 text-violet-500 fill-violet-200" />}
+            accentClass="text-violet-700"
+            telegramUrl="https://t.me/cbstresearch"
+            items={researchItems}
+            loading={researchLoading}
+            error={researchError}
+            onRefresh={() => fetchResearch(true)}
+            refreshing={researchRefreshing}
+            cardRenderer={(item) => (
+              <CurationCard item={item} onClick={() => setSelectedItem(item)} />
+            )}
+            emptyMessage="아직 큐레이션 글이 없습니다"
+          />
+        </div>
       </div>
-    </div>
+
+      {/* Detail slide panel */}
+      <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} />
+    </>
   );
 }
