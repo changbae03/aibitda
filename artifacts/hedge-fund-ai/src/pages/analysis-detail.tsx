@@ -13,7 +13,8 @@ import {
   Briefcase,
   BrainCircuit,
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  FileDown
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -125,10 +126,34 @@ export default function AnalysisDetail() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* 인쇄 전용 헤더 — 화면에서는 숨김, 인쇄 시에만 표시 */}
+      <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">CBST AI 리서치센터 &nbsp;|&nbsp; AI 기업분석 리포트</div>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+              {analysis.companyName}
+              <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
+            </h1>
+            {analysis.englishName && <p className="text-sm text-gray-500 mt-0.5">{analysis.englishName}</p>}
+            <p className="text-xs text-gray-400 mt-1">{analysis.industry} &nbsp;·&nbsp; {format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} 생성</p>
+          </div>
+          {analysis.investmentVerdict && (
+            <div className="text-right">
+              <div className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-1">최종 투자 의견</div>
+              <div className="text-xl font-bold text-gray-900">{analysis.investmentVerdict}</div>
+              {analysis.targetPrice && (
+                <div className="text-sm text-gray-600 mt-0.5">목표가 {formatCurrency(analysis.targetPrice)}</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Back button */}
       <button
         onClick={() => setLocation("/analysis/new")}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group print:hidden"
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
         목록으로
@@ -163,7 +188,7 @@ export default function AnalysisDetail() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-col items-end gap-3 print:hidden">
             <button
               onClick={handleDelete}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-destructive/20"
@@ -207,7 +232,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* Progress Track */}
-      <div className="bg-card border border-border rounded-2xl p-5">
+      <div className="bg-card border border-border rounded-2xl p-5 print:hidden">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-display font-semibold text-base flex items-center gap-2">
             <BrainCircuit className="text-primary w-4 h-4" />
@@ -259,18 +284,20 @@ export default function AnalysisDetail() {
         </AnimatePresence>
 
         {/* Streaming card — live typewriter while AI writes */}
-        <AnimatePresence>
-          {streamingStep && (
-            <StreamingCard key={streamingStep.key} stepKey={streamingStep.key} content={streamingStep.content} />
-          )}
-        </AnimatePresence>
+        <div className="print:hidden">
+          <AnimatePresence>
+            {streamingStep && (
+              <StreamingCard key={streamingStep.key} stepKey={streamingStep.key} content={streamingStep.content} />
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Next Action — only shown when not streaming and not complete */}
         {!isComplete && !isStreaming && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="p-8 rounded-xl border border-dashed border-border bg-muted/30 flex flex-col items-center justify-center text-center gap-4"
+            className="p-8 rounded-xl border border-dashed border-border bg-muted/30 flex flex-col items-center justify-center text-center gap-4 print:hidden"
           >
             {currentStepCount < ANALYSIS_STEPS_ORDER.length ? (
               <>
@@ -314,7 +341,7 @@ function formatPrice(val: string | number | undefined | null): string {
   return new Intl.NumberFormat("ko-KR").format(num) + "원";
 }
 
-function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: AgentInfo, delay: number }) {
+function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
   let json: any = null;
   try { json = JSON.parse(step.content); } catch { /* fallback to text */ }
 
@@ -488,6 +515,21 @@ function InvestmentStrategyCard({ step, agent, delay }: { step: any, agent: Agen
               </div>
             </div>
           )}
+
+          {/* PDF 저장 버튼 */}
+          <div className="pt-4 border-t border-border flex items-center justify-between print:hidden">
+            <span className="text-[11px] text-muted-foreground font-mono">
+              {ticker && companyName ? `${ticker} · ${companyName}` : ""}
+              {createdAt ? ` · ${format(new Date(createdAt), 'yyyy.MM.dd HH:mm', { locale: ko })} 생성` : ""}
+            </span>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+            >
+              <FileDown className="w-4 h-4" />
+              PDF로 저장
+            </button>
+          </div>
         </div>
       ) : (
         <div className="p-5 text-sm text-foreground/80 leading-relaxed">
@@ -572,7 +614,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   };
 
   if (step.stepKey === "investment_strategy") {
-    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} />;
+    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} />;
   }
 
   const isMarket = step.stepKey === "market_analysis";
