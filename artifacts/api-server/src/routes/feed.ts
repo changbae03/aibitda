@@ -1,71 +1,49 @@
 import { Router } from "express";
-import Parser from "rss-parser";
 
 const router = Router();
-const parser = new Parser({
-  customFields: {
-    item: [
-      ["content:encoded", "contentEncoded"],
-      ["dc:creator", "creator"],
-    ],
-  },
-});
 
-const SUBSTACK_RSS = "https://cbstresearch.substack.com/feed";
+const SUBSTACK_BASE = "https://cbstresearch.substack.com";
 let cache: { data: any; fetchedAt: number } | null = null;
 const CACHE_TTL = 1000 * 60 * 15; // 15 minutes
 
-function decodeEntities(text: string): string {
-  if (!text) return "";
-  let decoded = text;
-  // Decode named entities first (&amp; must come last to avoid double-decode)
-  decoded = decoded
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&hellip;/g, "…")
-    .replace(/&mdash;/g, "—")
-    .replace(/&ndash;/g, "–")
-    .replace(/&lsquo;/g, "\u2018")
-    .replace(/&rsquo;/g, "\u2019")
-    .replace(/&ldquo;/g, "\u201C")
-    .replace(/&rdquo;/g, "\u201D")
-    .replace(/&amp;/g, "&");
-
-  // Decode numeric decimal entities: &#12345;
-  decoded = decoded.replace(/&#(\d+);/g, (_, code) =>
-    String.fromCodePoint(parseInt(code, 10))
-  );
-  // Decode numeric hex entities: &#x1F4C4;
-  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
-    String.fromCodePoint(parseInt(code, 16))
-  );
-
-  // Second pass — handles double-encoded like &amp;#8217; → &#8217; → '
-  decoded = decoded
-    .replace(/&amp;/g, "&")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(parseInt(code, 10)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCodePoint(parseInt(code, 16)));
-
-  return decoded;
+interface SubstackPost {
+  id: number;
+  title: string;
+  subtitle?: string;
+  canonical_url: string;
+  post_date: string;
+  cover_image?: string;
+  truncated_body_text?: string;
+  postTags?: { name: string; slug: string }[];
+  publishedBylines?: { name: string }[];
+  type: string;
 }
 
-function stripHtml(html: string): string {
-  if (!html) return "";
-  const noScript = html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-  const noTags = noScript.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return decodeEntities(noTags);
-}
+async function fetchAllPosts(): Promise<SubstackPost[]> {
+  const all: SubstackPost[] = [];
+  let offset = 0;
+  const limit = 12;
 
-function extractImage(html: string): string | null {
-  if (!html) return null;
-  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match ? match[1] : null;
+  while (true) {
+    const url = `${SUBSTACK_BASE}/api/v1/posts?limit=${limit}&offset=${offset}`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; CBST-Bot/1.0)",
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) throw new Error(`Substack API error: HTTP ${res.status}`);
+
+    const batch: SubstackPost[] = await res.json();
+    if (!batch || batch.length === 0) break;
+
+    all.push(...batch);
+    if (batch.length < limit) break;
+    offset += limit;
+  }
+
+  return all;
 }
 
 router.get("/substack", async (_req, res) => {
@@ -76,37 +54,29 @@ router.get("/substack", async (_req, res) => {
       return;
     }
 
-    const feed = await parser.parseURL(SUBSTACK_RSS);
+    const posts = await fetchAllPosts();
 
-    const items = (feed.items || []).slice(0, 20).map((item) => {
-      const rawHtml = (item as any).contentEncoded || item.content || item.summary || "";
-      const image = extractImage(rawHtml) ?? (item as any).enclosure?.url ?? null;
-      const strippedText = stripHtml(rawHtml);
-      const summary = strippedText.length > 200
-        ? strippedText.slice(0, 200) + "…"
-        : strippedText;
+    const items = posts
+      .filter((p) => p.type === "newsletter") // exclude podcasts/videos
+      .map((p) => {
+        const tag = p.postTags?.[0]?.name ?? null;
+        const creator = p.publishedBylines?.[0]?.name ?? "CBST Research";
+        const summary = p.truncated_body_text?.trim().slice(0, 200) ?? "";
 
-      const decodedTitle = decodeEntities(item.title ?? "");
-      // Extract series tag from title prefix like [산업의 이해], [투자 아이디어] etc.
-      const tagMatch = decodedTitle.match(/^\[([^\]]+)\]/);
-      const tag = tagMatch ? tagMatch[1] : null;
-
-      return {
-        title: decodedTitle,
-        link: item.link ?? "",
-        pubDate: item.pubDate ?? item.isoDate ?? "",
-        summary,
-        image,
-        creator: decodeEntities((item as any).creator ?? feed.title ?? ""),
-        categories: item.categories ?? [],
-        tag,
-      };
-    });
+        return {
+          title: p.title,
+          link: p.canonical_url,
+          pubDate: p.post_date,
+          summary: summary.length === 200 ? summary + "…" : summary,
+          image: p.cover_image ?? null,
+          creator,
+          tag,
+        };
+      });
 
     const result = {
-      title: feed.title,
-      description: feed.description,
-      link: feed.link,
+      title: "CBST Research",
+      link: SUBSTACK_BASE,
       items,
     };
 
@@ -114,7 +84,7 @@ router.get("/substack", async (_req, res) => {
     res.json(result);
   } catch (err: any) {
     console.error("[GET /feed/substack]", err?.message);
-    res.status(502).json({ error: "RSS 피드를 가져오지 못했습니다", detail: err?.message });
+    res.status(502).json({ error: "Substack 데이터를 가져오지 못했습니다", detail: err?.message });
   }
 });
 

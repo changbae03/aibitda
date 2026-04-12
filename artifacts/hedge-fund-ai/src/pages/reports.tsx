@@ -19,7 +19,6 @@ interface SubstackItem {
   summary: string;
   image: string | null;
   creator: string;
-  categories: string[];
   tag: string | null;
 }
 
@@ -50,13 +49,6 @@ function formatPubDate(dateStr: string): string {
   }
 }
 
-// Strip [tag] prefix from title for display inside tagged tabs
-function displayTitle(item: SubstackItem, activeTag: string | null): string {
-  if (activeTag && item.tag === activeTag) {
-    return item.title.replace(/^\[[^\]]+\]\s*/, "");
-  }
-  return item.title;
-}
 
 export default function Reports() {
   const { data: feed, isLoading, error } = useSubstackFeed();
@@ -212,7 +204,7 @@ export default function Reports() {
                     </div>
 
                     <h3 className="font-semibold text-sm text-foreground leading-snug group-hover:text-orange-700 transition-colors line-clamp-2 flex-1">
-                      {displayTitle(item, activeTag)}
+                      {item.title}
                     </h3>
 
                     <div className="flex items-center justify-between pt-2 border-t border-border">
