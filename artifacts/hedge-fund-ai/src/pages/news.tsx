@@ -298,7 +298,7 @@ function NewsColumn({
       </div>
 
       <div className={cn(
-        "flex-1 rounded-xl border border-border overflow-y-auto bg-white",
+        "overflow-y-auto max-h-[50vh] md:max-h-none md:flex-1 rounded-xl border border-border bg-white",
         compact ? "divide-y divide-border" : "flex flex-col gap-3 p-3 bg-transparent border-0"
       )}>
         {loading ? (
@@ -406,8 +406,8 @@ export default function News() {
 
   return (
     <>
-      <div className="h-[calc(100vh-8rem)] flex flex-col gap-4">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-5 flex-1 min-h-0">
+      <div className="flex flex-col gap-4 md:h-[calc(100vh-8rem)]">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-5 md:flex-1 md:min-h-0">
           {/* Left — 실시간 뉴스 */}
           <NewsColumn
             title="실시간 뉴스"

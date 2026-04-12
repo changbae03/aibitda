@@ -118,6 +118,14 @@
   background: hsl(var(--muted-foreground) / 0.4);
 }
 
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Card panel */
 .glass-panel {
   @apply bg-card border border-border shadow-sm;

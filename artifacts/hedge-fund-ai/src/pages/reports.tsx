@@ -77,13 +77,13 @@ export default function Reports() {
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-4">
-        {/* Tag tabs */}
-        <div className="flex items-center gap-1 flex-wrap">
+      <div className="flex items-center justify-between gap-3 overflow-hidden">
+        {/* Tag tabs — horizontal scroll on mobile */}
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-nowrap pb-0.5 min-w-0">
           <button
             onClick={() => setActiveTag(null)}
             className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+              "shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
               !activeTag
                 ? "bg-orange-600 text-white shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -96,7 +96,7 @@ export default function Reports() {
               key={tag}
               onClick={() => setActiveTag(tag)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                "shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
                 activeTag === tag
                   ? "bg-orange-600 text-white shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"

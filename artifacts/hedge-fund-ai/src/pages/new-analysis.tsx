@@ -136,18 +136,18 @@ export default function NewAnalysis() {
             <TrendingUp className="w-6 h-6 text-primary" />
             <span className="text-sm font-semibold text-primary uppercase tracking-widest">CBST AI 기업분석</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">
+          <h1 className="text-2xl md:text-4xl font-display font-bold text-foreground">
             어떤 종목을 분석할까요?
           </h1>
-          <p className="text-muted-foreground text-base">
+          <p className="text-muted-foreground text-sm md:text-base">
             코스피·코스닥 종목코드(6자리) 또는 한글 회사명을 입력하면 AI 에이전트가 즉시 분석을 시작합니다
           </p>
         </div>
 
         {/* Search box */}
         <form onSubmit={onSubmit} className="w-full relative">
-          <div className={`flex items-center gap-3 bg-white border-2 rounded-2xl px-5 py-3 shadow-md transition-all ${error ? "border-destructive" : "border-border focus-within:border-primary focus-within:shadow-lg focus-within:shadow-primary/10"}`}>
-            <Search className="w-5 h-5 text-muted-foreground shrink-0" />
+          <div className={`flex items-center gap-2 md:gap-3 bg-white border-2 rounded-2xl px-4 md:px-5 py-3 shadow-md transition-all ${error ? "border-destructive" : "border-border focus-within:border-primary focus-within:shadow-lg focus-within:shadow-primary/10"}`}>
+            <Search className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -159,8 +159,8 @@ export default function NewAnalysis() {
                 setTicker(e.currentTarget.value);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="예) 삼성전자, 하이닉스, 005930, 247540"
-              className="flex-1 bg-transparent border-none outline-none text-foreground text-lg placeholder:text-muted-foreground/50 placeholder:font-sans placeholder:text-base"
+              placeholder="종목명 또는 코드 입력"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-foreground text-base md:text-lg placeholder:text-muted-foreground/50 placeholder:font-sans placeholder:text-sm md:placeholder:text-base"
               autoFocus
               disabled={isPending}
               autoComplete="off"
@@ -169,7 +169,7 @@ export default function NewAnalysis() {
             <button
               type="submit"
               disabled={isPending || !ticker.trim()}
-              className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs md:text-sm hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
