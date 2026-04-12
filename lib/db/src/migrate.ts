@@ -72,6 +72,12 @@ export async function runMigrations() {
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
     `);
+
+    // 컬럼 추가 마이그레이션 (이미 존재하면 무시)
+    await client.query(`
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS english_name TEXT;
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
