@@ -22,7 +22,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const user = authData?.user ?? null;
 
   const navItems = [
-    { href: "/analysis/new", label: "AI 기업분석 시작", icon: BrainCircuit },
+    { href: "/analysis/new", label: "AI 기업분석", icon: BrainCircuit },
     { href: "/news", label: "CBST 큐레이션", icon: Newspaper },
   ];
 
