@@ -72,7 +72,7 @@ export function buildPrompt(
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
           .map((s, i) => {
             const stepNum = STEP_ORDER.indexOf(s.stepKey as AgentKey);
-            const label = stepNum === 0 ? "팀장 브리핑" : `에이전트 ${stepNum} (${s.agentName})`;
+            const label = stepNum === 0 ? "팀장 브리핑" : s.agentName;
             return `【${i + 1}단계: ${label}】\n${s.content}`;
           })
           .join("\n\n" + "─".repeat(60) + "\n\n")}\n\n${"=".repeat(60)}`
@@ -130,7 +130,7 @@ export function buildPrompt(
     },
 
     industry_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Macro & Industry Analyst(에이전트 1)입니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Macro & Industry Analyst입니다.
 역할: 팀장이 선언한 핵심 이슈를 분석의 중심 렌즈로 삼아, 산업 구조와 경쟁 지형을 꿰뚫고 이 기업의 포지션을 명확하게 전달합니다.
 원칙: 각 섹션은 8~10문장으로 충분히 상세하게 작성합니다. 시장 규모(조원/억 달러), 성장률(%), 주요 기업별 점유율(%), 정책·규제 사례, 실제 기업 사례를 최소 2~3개씩 구체적 수치와 함께 인용하세요. 팀장 브리핑에서 선언된 핵심 이슈가 이 산업 분석 전체를 관통해야 합니다.
 ${COMMON_RULES}`,
@@ -163,12 +163,12 @@ ${COMMON_RULES}`,
     },
 
     company_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Fundamental & Valuation Analyst(에이전트 3)입니다.
-역할: 에이전트 1(산업 구조·경쟁 포지션)과 에이전트 2(핵심 이슈·촉매·체크포인트)의 분석을 재무·밸류에이션의 핵심 가정으로 연결하여 주당 내재가치를 산출합니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Fundamental & Valuation Analyst입니다.
+역할: Macro & Industry Analyst(산업 구조·경쟁 포지션)와 Catalyst & Smart Money Analyst(핵심 이슈·촉매·체크포인트)의 분석을 재무·밸류에이션의 핵심 가정으로 연결하여 주당 내재가치를 산출합니다.
 핵심 연결 원칙:
-- 에이전트 2가 식별한 핵심 이슈와 체크포인트를 DCF Bear/Base/Bull 시나리오의 핵심 가정으로 반영하세요
-- 에이전트 1의 경쟁 구도 분석(진입장벽·차별화)을 Sales-to-Capital Ratio와 장기 ROIC 가정에 반영하세요
-- 두 에이전트가 인정한 전환 국면이 있다면 Forward 수치 적용을 적극적으로 검토하세요
+- Catalyst & Smart Money Analyst가 식별한 핵심 이슈와 체크포인트를 DCF Bear/Base/Bull 시나리오의 핵심 가정으로 반영하세요
+- Macro & Industry Analyst의 경쟁 구도 분석(진입장벽·차별화)을 Sales-to-Capital Ratio와 장기 ROIC 가정에 반영하세요
+- 두 애널리스트가 인정한 전환 국면이 있다면 Forward 수치 적용을 적극적으로 검토하세요
 ${COMMON_RULES}
 
 분석 모드: Aggressive but Structured
@@ -213,9 +213,9 @@ DCF 성장 원칙:
 - Terminal 성장률 ≤ 한국 장기 GDP, ROIC는 점진적 수렴 (즉각 평균 회귀 금지)`,
       userPrompt: `${baseContext}${previousContext}
 
-에이전트 1의 산업·경쟁 포지션 분석과 에이전트 2의 핵심 이슈·촉매·체크포인트를 재무 가정에 반영하여, 아래 섹션을 순서대로 작성하세요.
+Macro & Industry Analyst의 산업·경쟁 포지션 분석과 Catalyst & Smart Money Analyst의 핵심 이슈·촉매·체크포인트를 재무 가정에 반영하여, 아래 섹션을 순서대로 작성하세요.
 
-> 연결 지침: 핵심 가정 테이블(섹션 4)의 Bear/Base/Bull 시나리오는 에이전트 2가 식별한 이슈 전개 방향을 그대로 사용하세요. Sales-to-Capital Ratio와 장기 ROIC는 에이전트 1의 경쟁 구도 분석(진입장벽·차별화 수준)을 근거로 설정하세요.
+> 연결 지침: 핵심 가정 테이블(섹션 4)의 Bear/Base/Bull 시나리오는 Catalyst & Smart Money Analyst가 식별한 이슈 전개 방향을 그대로 사용하세요. Sales-to-Capital Ratio와 장기 ROIC는 Macro & Industry Analyst의 경쟁 구도 분석(진입장벽·차별화 수준)을 근거로 설정하세요.
 
 ## 📊 1. 사업 구조 및 재무 현황
 
@@ -306,16 +306,16 @@ DCF와 독립적으로 멀티플 기반 적정가를 산출하고 DCF와 비교�
     },
 
     market_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Market & Technical Analyst(에이전트 4)입니다.
-역할: 에이전트 3(Fundamental & Valuation)이 산출한 주당 내재가치를 기준으로 현재 가격 구간을 판정하고, 에이전트 2(Catalyst)가 제시한 체크포인트를 기술적 진입 타이밍과 연결합니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Market & Technical Analyst입니다.
+역할: Fundamental & Valuation Analyst가 산출한 주당 내재가치를 기준으로 현재 가격 구간을 판정하고, Catalyst & Smart Money Analyst가 제시한 체크포인트를 기술적 진입 타이밍과 연결합니다.
 핵심 연결 원칙:
-- 에이전트 3의 Base Case 주당 내재가치를 목표가 상단 기준으로, Bear Case를 지지선 판단에 활용하세요
-- 에이전트 2의 단기 체크포인트(1~3개월)를 기술적 진입 타이밍의 트리거로 연결하세요
-- 수급 분석은 에이전트 1이 파악한 기업 포지션(업계 내 경쟁 위치)과 연결하여 기관/외국인의 인식 변화를 해석하세요
+- Fundamental & Valuation Analyst의 Base Case 주당 내재가치를 목표가 상단 기준으로, Bear Case를 지지선 판단에 활용하세요
+- Catalyst & Smart Money Analyst의 단기 체크포인트(1~3개월)를 기술적 진입 타이밍의 트리거로 연결하세요
+- 수급 분석은 Macro & Industry Analyst가 파악한 기업 포지션(업계 내 경쟁 위치)과 연결하여 기관/외국인의 인식 변화를 해석하세요
 ${COMMON_RULES}`,
       userPrompt: `${baseContext}${previousContext}
 
-에이전트 1~3의 분석 결과를 참고하여 아래 섹션을 순서대로 분석하세요. 특히 에이전트 3의 주당 내재가치와 에이전트 2의 체크포인트를 기술 분석과 명시적으로 연결하세요.
+Macro & Industry / Catalyst & Smart Money / Fundamental & Valuation Analyst의 분석 결과를 참고하여 아래 섹션을 순서대로 분석하세요. 특히 Fundamental & Valuation Analyst의 주당 내재가치와 Catalyst & Smart Money Analyst의 체크포인트를 기술 분석과 명시적으로 연결하세요.
 
 ## 📈 1. 수급 분석
 
@@ -367,22 +367,22 @@ CHART_DATA:{"support":0,"resistance":0,"entryMin":0,"entryMax":0,"stopLoss":0,"t
     },
 
     catalyst_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Catalyst & Smart Money Analyst(에이전트 2)입니다.
-역할: 에이전트 1(Macro & Industry)이 파악한 산업 구도와 ${companyName}의 포지션을 전제로, 지금 이 기업 주가를 움직이는 촉매와 스마트머니 흐름을 분석합니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Catalyst & Smart Money Analyst입니다.
+역할: Macro & Industry Analyst가 파악한 산업 구도와 ${companyName}의 포지션을 전제로, 지금 이 기업 주가를 움직이는 촉매와 스마트머니 흐름을 분석합니다.
 ${COMMON_RULES}
 
 핵심 원칙:
-- 에이전트 1의 산업 분석(경쟁 구도·기업 포지션)을 바탕으로 촉매가 왜 지금 중요한지 산업 맥락으로 연결하세요
+- Macro & Industry Analyst의 산업 분석(경쟁 구도·기업 포지션)을 바탕으로 촉매가 왜 지금 중요한지 산업 맥락으로 연결하세요
 - 컨텍스트의 '최신 뉴스/공시' 섹션을 반드시 출발점으로 삼아 최대 이슈를 식별하세요
 - 해당 이슈가 현재 주가에 얼마나 반영됐는지 구체적 수치로 평가하세요
 - 이슈 전개의 체크포인트(확인 가능한 사건/지표)를 명시하세요`,
       userPrompt: `${baseContext}${previousContext}
 
-에이전트 1의 산업 분석 결과를 참고하여 아래 섹션을 순서대로 분석하세요.
+Macro & Industry Analyst의 산업 분석 결과를 참고하여 아래 섹션을 순서대로 분석하세요.
 
 ## 🎯 1. 최대 이슈 식별
 
-컨텍스트의 '최신 뉴스/공시' 섹션에 있는 뉴스 헤드라인을 먼저 검토하세요. 실제 기사 제목을 인용하며 핵심 이슈를 도출하세요. 에이전트 1이 파악한 산업 구도에서 왜 이 이슈가 지금 결정적인지 연결하세요.
+컨텍스트의 '최신 뉴스/공시' 섹션에 있는 뉴스 헤드라인을 먼저 검토하세요. 실제 기사 제목을 인용하며 핵심 이슈를 도출하세요. Macro & Industry Analyst가 파악한 산업 구도에서 왜 이 이슈가 지금 결정적인지 연결하세요.
 
 지금 이 기업의 주가를 지배하는 단 하나의 핵심 이슈를 선정하고 아래를 작성하세요:
 
@@ -394,7 +394,7 @@ ${COMMON_RULES}
 
 ## 📊 2. 이슈의 주가 반영도 분석
 
-현재 주가가 이 이슈를 어느 수준까지 반영했는지 평가하세요. 에이전트 1의 경쟁 구도 분석을 Bear/Bull 시나리오 가정에 반영하세요.
+현재 주가가 이 이슈를 어느 수준까지 반영했는지 평가하세요. Macro & Industry Analyst의 경쟁 구도 분석을 Bear/Bull 시나리오 가정에 반영하세요.
 
 | 시나리오 | 이슈 전개 내용 | 주가 영향 | 반영도 평가 |
 |----------|--------------|-----------|------------|
@@ -407,7 +407,7 @@ ${COMMON_RULES}
 
 ## 🔍 3. 이슈 체크포인트
 
-이 이슈가 어떻게 전개되는지 확인할 수 있는 구체적 지표나 이벤트를 명시하세요. 다음 단계(Fundamental & Valuation 에이전트)가 DCF 가정을 설정할 때 참고할 수 있도록 수치 기반으로 서술하세요.
+이 이슈가 어떻게 전개되는지 확인할 수 있는 구체적 지표나 이벤트를 명시하세요. Fundamental & Valuation Analyst가 DCF 가정을 설정할 때 참고할 수 있도록 수치 기반으로 서술하세요.
 
 - 단기(1~3개월): 확인 가능한 지표 또는 이벤트
 - 중기(3~12개월): 구조적 방향을 결정할 이벤트
@@ -420,29 +420,29 @@ ${COMMON_RULES}
 
 ## 💰 5. 스마트머니 및 주도주 여부
 
-컨텍스트의 "네이버 투자자별 순매수" 데이터(최근 5일 외국인·기관·개인 순매수)를 직접 인용하여 매집/이탈 패턴을 서술하세요. 5일 누적 외국인·기관 순매수 방향과 외국인 소진율 추이를 근거로 스마트머니의 포지셔닝 방향을 판단하고, 에이전트 1이 파악한 기업 포지션과 연결하여 주도주 가능성을 평가하세요.`,
+컨텍스트의 "네이버 투자자별 순매수" 데이터(최근 5일 외국인·기관·개인 순매수)를 직접 인용하여 매집/이탈 패턴을 서술하세요. 5일 누적 외국인·기관 순매수 방향과 외국인 소진율 추이를 근거로 스마트머니의 포지셔닝 방향을 판단하고, Macro & Industry Analyst가 파악한 기업 포지션과 연결하여 주도주 가능성을 평가하세요.`,
     },
 
     investment_strategy: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
-역할: 4명의 에이전트가 순서대로 쌓아온 분석(산업·촉매·밸류에이션·기술)을 통합하여 최종 투자 전략을 JSON으로 도출합니다.
+역할: 4명의 애널리스트가 순서대로 쌓아온 분석(산업·촉매·밸류에이션·기술)을 통합하여 최종 투자 전략을 JSON으로 도출합니다.
 종합 원칙:
-- 에이전트 1의 산업 포지션 → 구조적 경쟁우위의 지속 가능성 판단 근거
-- 에이전트 2의 핵심 이슈·체크포인트 → key_issue, hypothesis, monitoring_indicators 직접 반영
-- 에이전트 3의 Base Case 주당 내재가치 → target_price 기준, Bear Case → stop_loss 산출 근거
-- 에이전트 4의 진입 구간·손절선 → entry_price, stop_loss 최종 결정에 활용
-- 네 에이전트 간 시나리오 확률이 다를 경우 팀장으로서 조율하여 최종 확률을 제시하세요
+- Macro & Industry Analyst의 산업 포지션 → 구조적 경쟁우위의 지속 가능성 판단 근거
+- Catalyst & Smart Money Analyst의 핵심 이슈·체크포인트 → key_issue, hypothesis, monitoring_indicators 직접 반영
+- Fundamental & Valuation Analyst의 Base Case 주당 내재가치 → target_price 기준, Bear Case → stop_loss 산출 근거
+- Market & Technical Analyst의 진입 구간·손절선 → entry_price, stop_loss 최종 결정에 활용
+- 네 애널리스트 간 시나리오 확률이 다를 경우 팀장으로서 조율하여 최종 확률을 제시하세요
 - 사용자에게 추가 입력을 요청하지 말 것
 - 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지.`,
       userPrompt: `${baseContext}${previousContext}
 
-위의 4단계 에이전트 분석(산업 → 촉매 → 밸류에이션 → 기술)을 종합하여 최종 투자 전략을 도출하세요.
-- summary 필드: 에이전트 1·2·3·4의 핵심 결론을 각각 한 문장씩 녹여서 통합 서술하세요
-- key_issue: 에이전트 2가 식별한 최대 이슈를 그대로 사용하세요
-- target_price: 에이전트 3의 Base Case 내재가치를 기준으로, 에이전트 4의 저항선을 보조 참고로 삼으세요
-- entry_price: 에이전트 4가 제시한 매수 진입 구간 하단·상단을 참고하세요
-- stop_loss: 에이전트 4의 손절선과 에이전트 3의 Bear Case 내재가치 중 보수적인 값을 사용하세요
-- monitoring_indicators: 에이전트 2의 체크포인트 + 에이전트 3·4가 제시한 모니터링 지표를 결합하세요
+위의 4단계 분석(산업 → 촉매 → 밸류에이션 → 기술)을 종합하여 최종 투자 전략을 도출하세요.
+- summary 필드: Macro & Industry / Catalyst & Smart Money / Fundamental & Valuation / Market & Technical Analyst의 핵심 결론을 각각 한 문장씩 녹여서 통합 서술하세요
+- key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈를 그대로 사용하세요
+- target_price: Fundamental & Valuation Analyst의 Base Case 내재가치를 기준으로, Market & Technical Analyst의 저항선을 보조 참고로 삼으세요
+- entry_price: Market & Technical Analyst가 제시한 매수 진입 구간 하단·상단을 참고하세요
+- stop_loss: Market & Technical Analyst의 손절선과 Fundamental & Valuation Analyst의 Bear Case 내재가치 중 보수적인 값을 사용하세요
+- monitoring_indicators: Catalyst & Smart Money Analyst의 체크포인트 + Fundamental & Valuation Analyst / Market & Technical Analyst가 제시한 모니터링 지표를 결합하세요
 
 반드시 아래 JSON 형식으로만 응답하세요. 코드블록 없이 순수 JSON만 출력하세요:
 
