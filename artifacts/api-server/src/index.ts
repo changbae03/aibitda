@@ -16,12 +16,11 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 runMigrations()
-  .then(() => {
+  .catch((err) => {
+    console.error("Migration warning (non-fatal):", err?.message ?? err);
+  })
+  .finally(() => {
     app.listen(port, () => {
       console.log(`Server listening on port ${port}`);
     });
-  })
-  .catch((err) => {
-    console.error("Migration failed:", err);
-    process.exit(1);
   });
