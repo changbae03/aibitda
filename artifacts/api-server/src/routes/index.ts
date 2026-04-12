@@ -4,10 +4,12 @@ import analysisRouter from "./analysis.js";
 import marketDataRouter from "./market-data.js";
 import modelInsightsRouter from "./model-insights.js";
 import newsRouter from "./news.js";
+import authRouter from "./auth.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use("/analysis", analysisRouter);
 router.use("/market-data", marketDataRouter);
 router.use("/model-insights", modelInsightsRouter);
