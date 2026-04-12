@@ -342,9 +342,26 @@ function formatPrice(val: string | number | undefined | null): string {
   return new Intl.NumberFormat("ko-KR").format(num) + "원";
 }
 
+function extractJson(raw: string): any | null {
+  if (!raw) return null;
+  let s = raw.trim();
+  // 1) 마크다운 코드블록 제거 (```json ... ``` 또는 ``` ... ```)
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  // 2) 앞뒤 설명 텍스트 제거 — 첫 { 부터 마지막 } 까지만 추출
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    s = s.slice(start, end + 1);
+  }
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
-  let json: any = null;
-  try { json = JSON.parse(step.content); } catch { /* fallback to text */ }
+  const json = extractJson(step.content);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);

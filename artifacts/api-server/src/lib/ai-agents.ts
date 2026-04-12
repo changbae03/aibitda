@@ -433,7 +433,7 @@ Macro & Industry Analyst의 산업 분석 결과를 참고하여 아래 섹션�
 - Market & Technical Analyst의 진입 구간·손절선 → entry_price, stop_loss 최종 결정에 활용
 - 네 애널리스트 간 시나리오 확률이 다를 경우 팀장으로서 조율하여 최종 확률을 제시하세요
 - 사용자에게 추가 입력을 요청하지 말 것
-- 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지.`,
+- 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지. 코드블록(\`\`\`) 절대 사용 금지.`,
       userPrompt: `${baseContext}${previousContext}
 
 위의 4단계 분석(산업 → 촉매 → 밸류에이션 → 기술)을 종합하여 최종 투자 전략을 도출하세요.
@@ -444,7 +444,7 @@ Macro & Industry Analyst의 산업 분석 결과를 참고하여 아래 섹션�
 - stop_loss: Market & Technical Analyst의 손절선과 Fundamental & Valuation Analyst의 Bear Case 내재가치 중 보수적인 값을 사용하세요
 - monitoring_indicators: Catalyst & Smart Money Analyst의 체크포인트 + Fundamental & Valuation Analyst / Market & Technical Analyst가 제시한 모니터링 지표를 결합하세요
 
-반드시 아래 JSON 형식으로만 응답하세요. 코드블록 없이 순수 JSON만 출력하세요:
+⚠️ 응답 규칙: 아래 JSON 객체 하나만 출력하세요. 코드블록(\`\`\`)·설명 텍스트·마크다운 일절 금지. 첫 글자는 반드시 { 이어야 합니다.
 
 {
   "verdict": "Strong Buy / Buy / Hold / Sell / Strong Sell 중 하나",

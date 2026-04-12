@@ -16,6 +16,16 @@ import { triggerModelReview } from "./model-insights.js";
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
 
+function extractJsonSafe(raw: string): any | null {
+  if (!raw) return null;
+  let s = raw.trim();
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) s = s.slice(start, end + 1);
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
 
@@ -745,8 +755,9 @@ router.post("/:id/step", async (req, res) => {
       let stopLoss: number | null = null;
       let riskRewardRatio: number | null = null;
 
+      const json = extractJsonSafe(content);
       try {
-        const json = JSON.parse(content);
+        if (!json) throw new Error("JSON parse failed");
         investmentVerdict = json.verdict ?? null;
 
         const parsePrice = (val: string | undefined) => {
