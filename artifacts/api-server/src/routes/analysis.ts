@@ -687,22 +687,33 @@ router.post("/:id/step", async (req, res) => {
   let content = "";
   try {
     try {
+      // company_analysis(DCF·밸류에이션)은 섹션이 많아 더 큰 토큰 한도 필요
+      const maxOutputTokens =
+        stepKey === "company_analysis" ? 32768 : 16384;
+
       const stream = await ai.models.generateContentStream({
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         config: {
           systemInstruction: systemPrompt,
-          maxOutputTokens: 8192,
+          maxOutputTokens,
         },
       });
+      let lastFinishReason: string | undefined;
       for await (const chunk of stream) {
         const text = chunk.text ?? "";
         if (text) {
           content += text;
           res.write(`data: ${JSON.stringify({ t: text })}\n\n`);
         }
+        // 마지막 청크의 종료 이유 기록
+        const reason = chunk.candidates?.[0]?.finishReason;
+        if (reason) lastFinishReason = reason;
       }
-      console.log(`[${stepKey}] streamed content length:`, content.length);
+      if (lastFinishReason === "MAX_TOKENS") {
+        console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림 — 프롬프트 간소화 필요`);
+      }
+      console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}`);
       if (!content) content = "분석 결과를 생성하지 못했습니다.";
     } catch (err) {
       console.error("Gemini error:", err);
