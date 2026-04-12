@@ -18,8 +18,12 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 runMigrations()
+  .then(() => {
+    console.log("[MIGRATION] 완료");
+  })
   .catch((err) => {
-    console.error("Migration warning (non-fatal):", err?.message ?? err);
+    console.error("[MIGRATION] 실패:", err?.message ?? err);
+    if (err?.cause) console.error("[MIGRATION] 원인:", err.cause);
   })
   .finally(() => {
     app.listen(port, () => {
