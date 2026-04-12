@@ -10,6 +10,7 @@ import NewAnalysis from "@/pages/new-analysis";
 import AnalysisDetail from "@/pages/analysis-detail";
 import ModelInsights from "@/pages/model-insights";
 import News from "@/pages/news";
+import Reports from "@/pages/reports";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/" component={NewAnalysis} />
         <Route path="/analysis/new" component={NewAnalysis} />
         <Route path="/analysis/:id" component={AnalysisDetail} />
+        <Route path="/reports" component={Reports} />
         <Route path="/model-insights" component={ModelInsights} />
         <Route path="/news" component={News} />
         <Route component={NotFound} />

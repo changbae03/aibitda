@@ -4,6 +4,7 @@ import {
   BrainCircuit, 
   Menu,
   Newspaper,
+  FileText,
   LogIn,
   LogOut,
   User
@@ -23,6 +24,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석", icon: BrainCircuit },
+    { href: "/reports", label: "보고서", icon: FileText },
     { href: "/news", label: "CBST 큐레이션", icon: Newspaper },
   ];
 
