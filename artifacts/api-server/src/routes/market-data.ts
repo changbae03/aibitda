@@ -208,6 +208,14 @@ function searchKorean(query: string) {
   ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
 }
 
+function searchByCode(digits: string) {
+  // Prefix-match against KOREAN_COMPANY_MAP symbols (stored as "XXXXXX.KS" or "XXXXXX.KQ")
+  return KOREAN_COMPANY_MAP
+    .filter(c => c.symbol.startsWith(digits))
+    .slice(0, 8)
+    .map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
+}
+
 router.get("/search/:query", async (req, res) => {
   const query = req.params.query?.trim() ?? "";
   if (!query) { res.json([]); return; }
@@ -218,7 +226,7 @@ router.get("/search/:query", async (req, res) => {
     return;
   }
 
-  // 6자리 숫자 종목코드 → KOSPI/KOSDAQ 직접 조회
+  // 6자리 숫자 종목코드 → KOSPI/KOSDAQ 직접 조회 (Yahoo Finance)
   if (/^\d{6}$/.test(query)) {
     try {
       const [ksQ, kqQ] = await Promise.allSettled([
@@ -226,22 +234,36 @@ router.get("/search/:query", async (req, res) => {
         yahooFinance.quote(`${query}.KQ`),
       ]);
       const results: any[] = [];
+      const isValidName = (n: string, ticker: string) =>
+        n && n !== ticker && !n.includes(",") && !n.match(/^\d/) && n.length > 1;
+
       if (ksQ.status === "fulfilled") {
         const name = ksQ.value.longName || ksQ.value.shortName || "";
-        if (name && name !== `${query}.KS`) results.push({ symbol: `${query}.KS`, shortname: name, exchange: "KOSPI", quoteType: "EQUITY" });
+        if (isValidName(name, `${query}.KS`)) results.push({ symbol: `${query}.KS`, shortname: name, exchange: "KOSPI", quoteType: "EQUITY" });
       }
       if (kqQ.status === "fulfilled") {
         const name = kqQ.value.longName || kqQ.value.shortName || "";
-        if (name && name !== `${query}.KQ`) results.push({ symbol: `${query}.KQ`, shortname: name, exchange: "KOSDAQ", quoteType: "EQUITY" });
+        if (isValidName(name, `${query}.KQ`)) results.push({ symbol: `${query}.KQ`, shortname: name, exchange: "KOSDAQ", quoteType: "EQUITY" });
       }
-      res.json(results);
+      // Fallback: if Yahoo returned nothing, still try local map
+      if (results.length === 0) {
+        res.json(searchByCode(query));
+      } else {
+        res.json(results);
+      }
     } catch {
-      res.json([]);
+      res.json(searchByCode(query));
     }
     return;
   }
 
-  // 그 외(미국주식 등) → 지원하지 않음
+  // 부분 숫자 코드(2~5자리) → 로컬 맵 prefix 검색
+  if (/^\d{2,5}$/.test(query)) {
+    res.json(searchByCode(query));
+    return;
+  }
+
+  // 그 외 → 지원하지 않음
   res.json([]);
 });
 

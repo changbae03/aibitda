@@ -51,15 +51,18 @@ export default function NewAnalysis() {
   }, []);
 
   useEffect(() => {
-    const isKoreanInput = isKorean(ticker);
-    const isSixDigit = /^\d{6}$/.test(ticker.trim());
-    if (!isKoreanInput && !isSixDigit) {
+    const t = ticker.trim();
+    const isKoreanInput = isKorean(t);
+    const isDigitInput = /^\d{2,}$/.test(t); // 2자리 이상 숫자
+    if (!isKoreanInput && !isDigitInput) {
       setSuggestions([]);
       setShowDropdown(false);
       return;
     }
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchSuggestions(ticker.trim()), 300);
+    // 한글은 300ms, 숫자는 150ms 딜레이
+    const delay = isKoreanInput ? 300 : 150;
+    searchTimer.current = setTimeout(() => fetchSuggestions(t), delay);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [ticker, fetchSuggestions]);
 
@@ -190,28 +193,40 @@ export default function NewAnalysis() {
                 transition={{ duration: 0.12 }}
                 className="absolute top-full left-0 right-0 mt-2 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden"
               >
-                {suggestions.map((s, i) => (
-                  <button
-                    key={s.symbol}
-                    type="button"
-                    onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
-                    className={`w-full flex items-center justify-between px-4 py-3 hover:bg-primary/5 transition-colors text-left ${i === selectedIndex ? "bg-primary/10" : ""}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-mono text-primary text-[10px] font-bold shrink-0">
-                        {s.symbol.substring(0, 4)}
+                {suggestions.map((s, i) => {
+                  const code = s.symbol.replace(/\.(KS|KQ)$/, "");
+                  const isKospi = s.exchange === "KOSPI";
+                  return (
+                    <button
+                      key={s.symbol}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-left border-b border-border last:border-0 ${i === selectedIndex ? "bg-primary/10" : ""}`}
+                    >
+                      {/* Icon */}
+                      <div className="w-9 h-9 rounded-xl bg-primary/8 border border-primary/10 flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4 text-primary/70" />
                       </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">{s.shortname}</div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="font-mono text-xs text-muted-foreground">{s.symbol}</span>
-                          {s.exchange && <span className="text-[10px] text-muted-foreground/60 bg-muted px-1 rounded">{s.exchange}</span>}
+
+                      {/* Text */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-foreground truncate">{s.shortname}</span>
+                          <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                            isKospi
+                              ? "bg-blue-50 text-blue-600 border border-blue-100"
+                              : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                          }`}>
+                            {isKospi ? "코스피" : "코스닥"}
+                          </span>
                         </div>
+                        <span className="font-mono text-xs text-muted-foreground">{code}</span>
                       </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  </button>
-                ))}
+
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+                    </button>
+                  );
+                })}
               </motion.div>
             )}
           </AnimatePresence>
