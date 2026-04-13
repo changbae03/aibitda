@@ -10,6 +10,7 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
+  ReferenceLine,
 } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -133,6 +134,16 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
     [e.revenue, e.operatingIncome].filter((v): v is number => v != null)
   );
   const maxVal = Math.max(...allVals);
+  const minVal = Math.min(...allVals);
+  const hasNegative = minVal < 0;
+
+  const allMargins = entries
+    .map((e) => e.operatingMargin)
+    .filter((v): v is number => v != null);
+  const minMargin = allMargins.length ? Math.min(...allMargins) : 0;
+  const maxMargin = allMargins.length ? Math.max(...allMargins) : 60;
+  const marginMin = Math.min(minMargin - 5, -5);
+  const marginMax = Math.max(maxMargin + 5, 10);
 
   return (
     <div className="space-y-3">
@@ -172,7 +183,9 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
             tick={{ fontSize: 10, fill: "#94a3b8" }}
             axisLine={false}
             tickLine={false}
-            domain={[0, Math.ceil(maxVal * 1.15)]}
+            domain={hasNegative
+              ? [Math.floor(minVal * 1.3), Math.ceil(maxVal * 1.15)]
+              : [0, Math.ceil(maxVal * 1.15)]}
             width={52}
           />
           <YAxis
@@ -182,9 +195,12 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
             tick={{ fontSize: 10, fill: "#94a3b8" }}
             axisLine={false}
             tickLine={false}
-            domain={[0, 60]}
+            domain={[marginMin, marginMax]}
             width={36}
           />
+          {hasNegative && (
+            <ReferenceLine yAxisId="left" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
+          )}
           <Tooltip content={<CustomTooltip currency={currency} />} />
           <Legend
             iconType="circle"
