@@ -205,10 +205,10 @@ export default function AnalysisDetail() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-3 print:hidden">
+          <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
             <button
               onClick={handleDelete}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-destructive/20"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-destructive/20 self-end"
               title="분석 삭제"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -217,7 +217,7 @@ export default function AnalysisDetail() {
 
           {/* Verdict Card */}
           {isComplete && analysis.investmentVerdict && (
-            <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl min-w-[250px]">
+            <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
               <div className="text-[11px] font-mono text-primary/70 mb-1 uppercase tracking-widest">최종 투자 의견</div>
               <div className="text-xl font-bold text-foreground mb-3">{analysis.investmentVerdict}</div>
               <div className="space-y-1.5 font-mono text-xs">
@@ -799,8 +799,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 목표주가</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">3-Method 종합</span>
             </div>
-            <div className="rounded-xl border border-border overflow-hidden">
-              <table className="w-full text-xs border-collapse">
+            <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[300px] text-xs border-collapse">
                 <thead>
                   <tr className="bg-muted/60">
                     <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">방법론</th>
@@ -830,11 +830,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                   </tr>
                 </tbody>
               </table>
-              <div className="bg-muted/40 px-4 py-2.5 flex items-center justify-between border-t border-border">
+              <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
                 <span className="text-xs text-muted-foreground">현재 주가</span>
-                <span className="font-mono text-sm font-semibold text-foreground">{formatPrice(valuationData.current)}</span>
+                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(valuationData.current)}</span>
                 <span className="text-xs text-muted-foreground">Base 목표가 괴리율</span>
-                <span className={`font-mono text-sm font-bold ${valuationData.dcf_base > valuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
+                <span className={`font-mono text-sm font-bold text-right sm:text-left ${valuationData.dcf_base > valuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
                   {valuationData.current > 0 ? `${((valuationData.dcf_base - valuationData.current) / valuationData.current * 100).toFixed(1)}%` : "-"}
                 </span>
               </div>

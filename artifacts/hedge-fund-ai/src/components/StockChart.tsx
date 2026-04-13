@@ -121,7 +121,7 @@ const RSITooltip = ({ active, payload, label }: any) => {
 
 const ctrlBtn = (active: boolean, color = "primary") =>
   cn(
-    "px-2.5 py-1 text-xs rounded-md font-medium transition-colors",
+    "px-2.5 py-1 text-xs rounded-md font-medium transition-colors whitespace-nowrap shrink-0",
     active
       ? `bg-primary/10 text-primary border border-primary/30`
       : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -216,7 +216,7 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
         </div>
 
         {data && (
-          <div className="flex gap-5 text-xs">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
             <div>
               <div className="text-muted-foreground mb-0.5">52주 고가</div>
               <div className="text-success font-mono font-bold">{formatPrice(data.yearHigh)}</div>
@@ -257,7 +257,7 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
       </div>
 
       {/* Controls */}
-      <div className="px-4 py-2.5 border-b border-border flex flex-wrap gap-1.5 items-center bg-muted/30">
+      <div className="px-4 py-2.5 border-b border-border flex gap-1.5 items-center bg-muted/30 overflow-x-auto scrollbar-none">
         <div className="flex gap-1">
           {PERIOD_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setPeriod(opt.value)} className={ctrlBtn(period === opt.value)}>
