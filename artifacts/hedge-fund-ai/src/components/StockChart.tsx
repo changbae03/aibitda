@@ -239,6 +239,19 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                 </div>
               </div>
             )}
+            {(data as any).quoteInfo?.marketCap != null && (
+              <div>
+                <div className="text-muted-foreground mb-0.5">시가총액</div>
+                <div className="font-mono font-bold text-foreground">
+                  {(() => {
+                    const cap = (data as any).quoteInfo.marketCap as number;
+                    const tril = cap / 1e12;
+                    if (tril >= 1) return `${tril.toFixed(1)}조`;
+                    return `${Math.round(cap / 1e8)}억`;
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
