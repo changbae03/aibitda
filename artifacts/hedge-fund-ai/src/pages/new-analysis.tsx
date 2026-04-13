@@ -127,8 +127,9 @@ export default function NewAnalysis() {
       return;
     }
 
-    // 2) 드롭다운에 결과가 이미 있으면 첫 번째 항목 자동 선택
-    if (showDropdown && suggestions.length > 0) {
+    // 2) 검색 결과가 있으면 첫 번째 항목 자동 선택
+    // (버튼 mousedown 시 showDropdown이 먼저 닫혀도 suggestions는 남아있으므로 조건에서 제외)
+    if (suggestions.length > 0) {
       handleSelectSuggestion(suggestions[0].symbol);
       return;
     }
