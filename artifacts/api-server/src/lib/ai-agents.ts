@@ -253,7 +253,14 @@ WACC: Relevered β = Unlevered β × (1+(1-세율)×D/E) | CoE = Rf + β × ERP 
 | WACC | | | |
 | Terminal Growth Rate | | | |
 
-WACC 산출 근거: 무위험수익률 __% | Relevered β __ | ERP __% | CoE __% | CoD(after-tax) __% | WACC __%
+**WACC 산출 근거**
+- 무위험수익률(Rf): __%
+- Relevered β: __
+- 시장위험프리미엄(ERP): __%
+- 자기자본비용(CoE): __%
+- 타인자본비용(CoD, after-tax): __%
+- 자본구조 (E% / D%): __ / __%
+- **최종 WACC: __%**
 
 ## 💰 DCF 밸류에이션
 
