@@ -493,12 +493,26 @@ router.get("/financials/:ticker", async (req, res) => {
 
   if (koreanCode) {
     try {
-      const summaryRes = await fetch(
-        `https://m.stock.naver.com/api/stock/${koreanCode}/finance/summary`,
-        { headers: NAVER_HEADERS }
-      );
+      const [summaryRes, basicRes] = await Promise.all([
+        fetch(`https://m.stock.naver.com/api/stock/${koreanCode}/finance/summary`, { headers: NAVER_HEADERS }),
+        fetch(`https://m.stock.naver.com/api/stock/${koreanCode}/basic`, { headers: NAVER_HEADERS }),
+      ]);
       if (!summaryRes.ok) { res.status(502).json({ error: "Naver API error" }); return; }
       const summary: any = await summaryRes.json();
+
+      let marketCap: number | null = null;
+      if (basicRes.ok) {
+        const basic: any = await basicRes.json();
+        const rawCap = basic.marketCap ?? basic.marketValue ?? basic.totalMarketValue ?? null;
+        if (rawCap != null) marketCap = Number(String(rawCap).replace(/,/g, ""));
+      }
+      // Fallback: Yahoo Finance
+      if (!marketCap) {
+        try {
+          const yq = await yahooFinance.quote(ticker);
+          if (yq.marketCap) marketCap = yq.marketCap;
+        } catch { /* optional */ }
+      }
 
       const parseStmt = (stmtObj: any) => {
         if (!stmtObj) return [];
@@ -524,6 +538,7 @@ router.get("/financials/:ticker", async (req, res) => {
       res.json({
         ticker,
         currency: "KRW",
+        marketCap,
         annual: parseStmt(summary.chartIncomeStatement?.annual),
         quarterly: parseStmt(summary.chartIncomeStatement?.quarter),
       });

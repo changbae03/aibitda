@@ -26,6 +26,7 @@ interface FinancialEntry {
 interface FinancialData {
   ticker: string;
   currency: string;
+  marketCap: number | null;
   annual: FinancialEntry[];
   quarterly: FinancialEntry[];
 }
@@ -145,10 +146,25 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   const marginMin = Math.min(minMargin - 5, -5);
   const marginMax = Math.max(maxMargin + 5, 10);
 
+  const formatMarketCap = (cap: number | null) => {
+    if (!cap) return null;
+    const tril = cap / 1e12;
+    if (tril >= 1) return `${tril.toFixed(1)}조원`;
+    const bil = cap / 1e8;
+    return `${Math.round(bil)}억원`;
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">매출 · 이익 추이</h3>
+        <div className="flex items-center gap-2.5">
+          <h3 className="text-sm font-semibold text-foreground">매출 · 이익 추이</h3>
+          {data.marketCap && (
+            <span className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-mono">
+              시가총액 {formatMarketCap(data.marketCap)}
+            </span>
+          )}
+        </div>
         <div className="flex gap-1">
           {(["annual", "quarterly"] as const).map((v) => (
             <button
