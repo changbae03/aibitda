@@ -221,6 +221,18 @@ function searchKorean(query: string): ReturnType<typeof toResult>[] {
   ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
 }
 
+function searchEnglishLocal(query: string): ReturnType<typeof toResult>[] {
+  const q = query.toLowerCase().replace(/[\s\-\.&]/g, "");
+  return KOREAN_COMPANY_MAP.filter(c => {
+    const nameNorm = c.name.toLowerCase().replace(/[\s\-\.&]/g, "");
+    if (nameNorm.includes(q) || q.includes(nameNorm)) return true;
+    return c.keywords.some(k => {
+      const kn = k.replace(/[\s\-\.&]/g, "");
+      return kn.includes(q) || q.includes(kn);
+    });
+  }).slice(0, 8).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
+}
+
 function searchByCode(digits: string): ReturnType<typeof toResult>[] {
   const krxCache = getKRXCache();
   if (krxCache.length > 0) {
@@ -285,23 +297,27 @@ router.get("/search/:query", async (req, res) => {
     return;
   }
 
-  // 영문 텍스트 → Yahoo Finance search + KS/KQ 필터
+  // 영문 텍스트 → 로컬 맵 + Yahoo Finance 병합
   if (/^[A-Za-z0-9\-\. ]+$/.test(query) && query.length >= 2) {
+    const local = searchEnglishLocal(query);
+    let yahoo: any[] = [];
     try {
       const result = await (yahooFinance as any).search(query, { newsCount: 0, quotesCount: 20 });
       const quotes: any[] = result?.quotes ?? [];
-      const korean = quotes
+      yahoo = quotes
         .filter((q: any) => q.symbol && (q.symbol.endsWith(".KS") || q.symbol.endsWith(".KQ")))
-        .slice(0, 8)
         .map((q: any) => ({
           symbol: q.symbol,
           shortname: q.longname || q.shortname || q.symbol,
           exchange: q.symbol.endsWith(".KS") ? "KOSPI" : "KOSDAQ",
           quoteType: "EQUITY",
         }));
-      if (korean.length > 0) { res.json(korean); return; }
     } catch { /* fall through */ }
-    res.json([]);
+
+    // 로컬 결과 우선, Yahoo Finance 결과 추가 (중복 심볼 제거)
+    const seen = new Set(local.map(r => r.symbol));
+    const merged = [...local, ...yahoo.filter(r => !seen.has(r.symbol))].slice(0, 8);
+    res.json(merged);
     return;
   }
 
