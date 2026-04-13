@@ -53,15 +53,16 @@ export default function NewAnalysis() {
   useEffect(() => {
     const t = ticker.trim();
     const isKoreanInput = isKorean(t);
-    const isDigitInput = /^\d{2,}$/.test(t); // 2자리 이상 숫자
-    if (!isKoreanInput && !isDigitInput) {
+    const isDigitInput = /^\d{2,}$/.test(t);
+    const isEnglishInput = /^[A-Za-z0-9\-\. ]{2,}$/.test(t);
+    if (!isKoreanInput && !isDigitInput && !isEnglishInput) {
       setSuggestions([]);
       setShowDropdown(false);
       return;
     }
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    // 한글은 300ms, 숫자는 150ms 딜레이
-    const delay = isKoreanInput ? 300 : 150;
+    // 한글/영문은 350ms, 숫자는 150ms 딜레이
+    const delay = isDigitInput ? 150 : 350;
     searchTimer.current = setTimeout(() => fetchSuggestions(t), delay);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [ticker, fetchSuggestions]);

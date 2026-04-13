@@ -285,7 +285,26 @@ router.get("/search/:query", async (req, res) => {
     return;
   }
 
-  // 그 외 → 지원하지 않음
+  // 영문 텍스트 → Yahoo Finance search + KS/KQ 필터
+  if (/^[A-Za-z0-9\-\. ]+$/.test(query) && query.length >= 2) {
+    try {
+      const result = await (yahooFinance as any).search(query, { newsCount: 0, quotesCount: 20 });
+      const quotes: any[] = result?.quotes ?? [];
+      const korean = quotes
+        .filter((q: any) => q.symbol && (q.symbol.endsWith(".KS") || q.symbol.endsWith(".KQ")))
+        .slice(0, 8)
+        .map((q: any) => ({
+          symbol: q.symbol,
+          shortname: q.longname || q.shortname || q.symbol,
+          exchange: q.symbol.endsWith(".KS") ? "KOSPI" : "KOSDAQ",
+          quoteType: "EQUITY",
+        }));
+      if (korean.length > 0) { res.json(korean); return; }
+    } catch { /* fall through */ }
+    res.json([]);
+    return;
+  }
+
   res.json([]);
 });
 
