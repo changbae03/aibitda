@@ -656,9 +656,18 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
             </div>
           )}
           <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap font-sans">
-            {content}
-            {showCursor && (
-              <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
+            {!content && !isQCPhase ? (
+              <span className="text-muted-foreground/50 select-none">
+                분석 중
+                <span className="inline-block w-0.5 h-[1em] bg-muted-foreground/40 ml-0.5 animate-[pulse_0.7s_ease-in-out_infinite] align-middle" />
+              </span>
+            ) : (
+              <>
+                {content}
+                {showCursor && (
+                  <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
+                )}
+              </>
             )}
           </div>
         </div>
