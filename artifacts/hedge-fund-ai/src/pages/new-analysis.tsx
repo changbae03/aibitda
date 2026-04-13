@@ -33,6 +33,8 @@ export default function NewAnalysis() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isComposing = useRef(false);
+  const pendingSubmit = useRef(false);
+  const handleSubmitRef = useRef<(val: string) => Promise<void>>(async () => {});
 
   const fetchSuggestions = useCallback(async (query: string) => {
     if (!query.trim()) { setSuggestions([]); setShowDropdown(false); return; }
@@ -43,8 +45,18 @@ export default function NewAnalysis() {
       setSuggestions(data);
       setShowDropdown(data.length > 0);
       setSelectedIndex(-1);
+      // 검색 중 엔터/버튼 클릭이 있었으면 첫 번째 결과로 자동 제출
+      if (pendingSubmit.current && data.length > 0) {
+        pendingSubmit.current = false;
+        setShowDropdown(false);
+        setSuggestions([]);
+        setTimeout(() => handleSubmitRef.current(data[0].symbol), 0);
+      } else {
+        pendingSubmit.current = false;
+      }
     } catch {
       setSuggestions([]);
+      pendingSubmit.current = false;
     } finally {
       setIsSearching(false);
     }
@@ -95,6 +107,9 @@ export default function NewAnalysis() {
     }
   };
 
+  // ref를 최신 함수로 항상 동기화
+  handleSubmitRef.current = handleSubmit;
+
   const handleSelectSuggestion = (sym: string) => {
     setTicker(sym);
     setSuggestions([]);
@@ -105,10 +120,26 @@ export default function NewAnalysis() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isComposing.current) return;
+
+    // 1) 화살표키로 선택된 항목이 있으면 그걸 사용
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
       handleSelectSuggestion(suggestions[selectedIndex].symbol);
       return;
     }
+
+    // 2) 드롭다운에 결과가 이미 있으면 첫 번째 항목 자동 선택
+    if (showDropdown && suggestions.length > 0) {
+      handleSelectSuggestion(suggestions[0].symbol);
+      return;
+    }
+
+    // 3) 아직 검색 중이면 완료 후 자동 제출 예약
+    if (isSearching) {
+      pendingSubmit.current = true;
+      return;
+    }
+
+    // 4) 드롭다운 없음 → 입력값 그대로 제출 (6자리 코드 등)
     handleSubmit(ticker);
   };
 
