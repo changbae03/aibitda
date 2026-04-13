@@ -729,7 +729,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-5 mb-2 pb-1 border-b border-border first:mt-0">{children}</h2>,
+              h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-5 mb-2 first:mt-0">{children}</h2>,
               h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground/90 mt-4 mb-1.5">{children}</h3>,
               p: ({ children }) => {
                 const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
