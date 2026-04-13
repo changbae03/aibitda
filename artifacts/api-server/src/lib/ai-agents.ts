@@ -246,7 +246,14 @@ Bear Case 주당가치: __원 | Bull Case 주당가치: __원
 | Forward P/E (EPS × 목표 멀티플) | | | |
 | EV/EBITDA 역산 주가 | | | |
 | DCF 내재가치 | | | |
-| 현재 주가 대비 괴리율 | | | |`,
+| 현재 주가 대비 괴리율 | | | |
+
+> **밸류에이션 인계 요약 (Lead Portfolio Strategist 인계용)** — 아래 수치를 반드시 명시하세요.
+- 현재 주가: __원 (컨텍스트 "현재가"에서 직접 인용)
+- DCF 주당 내재가치 — Bear: __원 / Base: __원 / Bull: __원
+- Forward P/E 목표가 — Bear: __원 / Base: __원 / Bull: __원
+- EV/EBITDA 역산 목표가 — Bear: __원 / Base: __원 / Bull: __원
+- 세 방법론 Base 결과 최대 괴리: __%  ← 20% 초과 시 원인 한 문장 설명`,
     },
 
     market_analysis: {
@@ -345,23 +352,35 @@ Macro & Industry Analyst의 산업 분석 결과를 참고하여 아래 3개 섹
     investment_strategy: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
 역할: 4명의 애널리스트가 순서대로 쌓아온 분석(산업·촉매·밸류에이션·기술)을 통합하여 최종 투자 전략을 JSON으로 도출합니다.
+
+밸류에이션 정합성 규칙 (최우선 준수):
+1. 현재 주가 기준 통일 — upside 계산 시 반드시 컨텍스트 "현재가(KRW)" 수치를 동일하게 사용. 임의 추정 금지.
+2. 시나리오 수치 인계 — scenarios의 각 Bear/Base/Bull target_price는 Fundamental & Valuation Analyst 밸류에이션 인계 요약의 DCF 수치를 직접 인용. 임의 변경 금지.
+3. 최종 target_price = Base 시나리오 target_price와 반드시 동일. 불일치 금지.
+4. 크로스체크 의무 — Fundamental이 제시한 세 방법론(DCF / Forward P/E / EV/EBITDA) Base 목표가 간 최대 괴리가 20% 초과 시, target_price_rationale에 가중치 산식과 괴리 원인을 반드시 설명.
+5. 시나리오 확률 합계 = 반드시 100%.
+
 종합 원칙:
-- Macro & Industry Analyst의 산업 포지션 → 구조적 경쟁우위의 지속 가능성 판단 근거
-- Catalyst & Smart Money Analyst의 핵심 이슈·체크포인트 → key_issue, hypothesis, monitoring_indicators 직접 반영
-- Fundamental & Valuation Analyst의 Base Case 주당 내재가치 → target_price 기준, Bear Case → stop_loss 산출 근거
-- Market & Technical Analyst의 진입 구간·손절선 → entry_price, stop_loss 최종 결정에 활용
-- 네 애널리스트 간 시나리오 확률이 다를 경우 팀장으로서 조율하여 최종 확률을 제시하세요
+- Macro & Industry Analyst의 산업 포지션 → 구조적 경쟁우위 지속 가능성
+- Catalyst & Smart Money Analyst의 핵심 이슈·체크포인트 → key_issue, hypothesis, monitoring_indicators
+- Fundamental & Valuation Analyst의 밸류에이션 인계 요약 → 모든 목표가 수치의 원천
+- Market & Technical Analyst의 진입 구간·손절선 → entry_price, stop_loss 최종 결정
 - 사용자에게 추가 입력을 요청하지 말 것
 - 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지. 코드블록(\`\`\`) 절대 사용 금지.`,
       userPrompt: `${baseContext}${previousContext}
 
 위의 4단계 분석(산업 → 촉매 → 밸류에이션 → 기술)을 종합하여 최종 투자 전략을 도출하세요.
-- summary 필드: Macro & Industry / Catalyst & Smart Money / Fundamental & Valuation / Market & Technical Analyst의 핵심 결론을 각각 한 문장씩 녹여서 통합 서술하세요
-- key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈를 그대로 사용하세요
-- target_price: Fundamental & Valuation Analyst의 Base Case 내재가치를 기준으로, Market & Technical Analyst의 저항선을 보조 참고로 삼으세요
-- entry_price: Market & Technical Analyst가 제시한 매수 진입 구간 하단·상단을 참고하세요
-- stop_loss: Market & Technical Analyst의 손절선과 Fundamental & Valuation Analyst의 Bear Case 내재가치 중 보수적인 값을 사용하세요
-- monitoring_indicators: Catalyst & Smart Money Analyst의 체크포인트 + Fundamental & Valuation Analyst / Market & Technical Analyst가 제시한 모니터링 지표를 결합하세요
+
+필드별 작성 기준:
+- summary: 각 애널리스트 핵심 결론을 한 문장씩 녹여 3~4문장 통합 서술. 반드시 Base 주당 내재가치 수치 포함.
+- key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈 그대로 인용.
+- scenarios[].target_price: Fundamental 밸류에이션 인계 요약의 DCF Bear/Base/Bull 수치를 그대로 사용. 확률 합계 반드시 100%.
+- scenarios[].upside: 컨텍스트의 현재가(KRW) 수치로 계산. (target_price - 현재가) / 현재가 × 100%.
+- target_price (최상위): scenarios Base의 target_price와 반드시 동일한 숫자.
+- entry_price: Market & Technical Analyst의 진입 구간 하단·상단 참고.
+- stop_loss: Market & Technical Analyst 손절선과 Fundamental Bear Case 중 보수적인 값.
+- target_price_rationale: "DCF __% + Forward P/E __% + EV/EBITDA __%로 가중 평균. Base 목표가 __원." 형식으로 한 줄 명시. 세 방법론 괴리 20% 초과 시 원인 추가.
+- monitoring_indicators: Catalyst 체크포인트 + Fundamental/Technical 모니터링 지표 결합.
 
 ⚠️ 응답 규칙: 아래 JSON 객체 하나만 출력하세요. 코드블록(\`\`\`)·설명 텍스트·마크다운 일절 금지. 첫 글자는 반드시 { 이어야 합니다.
 
@@ -373,33 +392,34 @@ Macro & Industry Analyst의 산업 분석 결과를 참고하여 아래 3개 섹
   "price_stage": "기대 확산 초기 / 리레이팅 진행 중 / 기대 과열 구간 중 하나",
   "key_issue": "현재 이 기업 주가를 지배하는 단 하나의 핵심 이슈",
   "issue_priced_in": "핵심 이슈가 현재 주가에 반영된 정도 (과소 반영 / 적정 반영 / 과대 반영) + 한 문장 근거",
-  "summary": "핵심 투자 논거를 3-4문장으로 요약. 반드시 핵심 이슈의 전개 방향과 주당 내재가치를 포함할 것 (마크다운 볼드 없이)",
+  "summary": "핵심 투자 논거를 3-4문장으로 요약. Base 주당 내재가치 수치 반드시 포함 (마크다운 볼드 없이)",
   "scenarios": [
     {
       "case": "Bear",
       "assumption": "이 시나리오의 핵심 이슈 전개 가정 한 문장",
-      "target_price": "목표 가격 숫자만 (예: 150000)",
-      "upside": "현재가 대비 등락률 (예: -20%)",
+      "target_price": "Fundamental DCF Bear 목표가 숫자만 (예: 150000)",
+      "upside": "컨텍스트 현재가 기준 등락률 (예: -20%)",
       "probability": "확률 (예: 30%)"
     },
     {
       "case": "Base",
       "assumption": "이 시나리오의 핵심 이슈 전개 가정 한 문장",
-      "target_price": "목표 가격 숫자만 (예: 210000)",
-      "upside": "현재가 대비 등락률 (예: +15%)",
+      "target_price": "Fundamental DCF Base 목표가 숫자만 (예: 210000)",
+      "upside": "컨텍스트 현재가 기준 등락률 (예: +15%)",
       "probability": "확률 (예: 50%)"
     },
     {
       "case": "Bull",
       "assumption": "이 시나리오의 핵심 이슈 전개 가정 한 문장",
-      "target_price": "목표 가격 숫자만 (예: 280000)",
-      "upside": "현재가 대비 등락률 (예: +53%)",
+      "target_price": "Fundamental DCF Bull 목표가 숫자만 (예: 280000)",
+      "upside": "컨텍스트 현재가 기준 등락률 (예: +53%)",
       "probability": "확률 (예: 20%)"
     }
   ],
   "entry_price": "구체적 진입 가격 (한국 종목은 원화 숫자만, 예: 190000)",
-  "target_price": "Base 시나리오 목표 가격 (한국 종목은 원화 숫자만, 예: 210000)",
+  "target_price": "scenarios Base target_price와 동일한 숫자 (예: 210000)",
   "stop_loss": "손절 가격 (한국 종목은 원화 숫자만, 예: 175000)",
+  "target_price_rationale": "DCF __% + Forward P/E __% + EV/EBITDA __%로 가중 평균. Base 목표가 __원.",
   "investment_period": "단기 / 중기 / 장기",
   "risk_reward": "리스크/리워드 비율 (예: 1:3.5)",
   "risks": [
