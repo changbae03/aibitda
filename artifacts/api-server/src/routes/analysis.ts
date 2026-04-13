@@ -42,6 +42,16 @@ async function runQCCheck(
   const agentName = AGENTS[stepKey].name;
   const excerpt = content.slice(0, 3000);
 
+  const isFundamental = stepKey === "company_analysis";
+  const fundamentalExtra = isFundamental ? `
+
+5. 밸류에이션 정합성 (Fundamental 전용 필수 검증):
+   - 영업이익 적자 기업인데 FCF가 과도하게 크면: DCF가 비정상 FCF를 사용한 경우 → 즉시 불승인(false)
+   - Base 목표가가 현재 주가의 3배 이상이면: 입력 가정 재검토 여부 명시 없으면 불승인
+   - 세 방법론의 Base 목표가 괴리가 500% 이상이면: 반드시 불승인(false)
+   - Bear 목표가가 현재 주가의 30% 미만이면: 청산 가치 비교 여부 확인, 없으면 불승인
+   - 시나리오별 실적 전망의 수치가 DCF CAGR 가정과 불일치하면: 불승인` : "";
+
   const prompt = `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
 아래는 ${agentName}가 ${companyName}(${ticker})에 대해 작성한 분석 보고서입니다.
 
@@ -52,7 +62,7 @@ ${excerpt}
 1. 구체적 수치 인용 (시장 규모, 성장률, 점유율, 재무 수치 등)
 2. 핵심 이슈와의 명확한 연결
 3. 투자 판단에 도움되는 실행 가능한 인사이트
-4. 분석 깊이 (표면적 나열 vs 인과관계 해석)
+4. 분석 깊이 (표면적 나열 vs 인과관계 해석)${fundamentalExtra}
 
 반드시 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {"score": [1~10 정수], "approved": [7점 이상이면 true, 미만이면 false], "feedback": "미흡한 점 한 줄 요약 (approved이면 빈 문자열)"}`;
