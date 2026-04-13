@@ -14,6 +14,8 @@ import {
   BrainCircuit,
   Trash2,
   ArrowLeft,
+  ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -35,7 +37,15 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
-  const [streamingStep, setStreamingStep] = useState<{ key: string; content: string } | null>(null);
+  type QCStatus = "checking" | "approved" | "revising" | "revised";
+  interface StreamingStepState {
+    key: string;
+    content: string;
+    qcStatus?: QCStatus;
+    qcScore?: number;
+    qcFeedback?: string;
+  }
+  const [streamingStep, setStreamingStep] = useState<StreamingStepState | null>(null);
   const isStreaming = streamingStep !== null;
   const triggeredSteps = useRef<Set<string>>(new Set());
 
@@ -69,7 +79,15 @@ export default function AnalysisDetail() {
           if (!line.startsWith("data: ")) continue;
           try {
             const msg = JSON.parse(line.slice(6));
-            if (msg.t) {
+            if (msg.qc === "checking") {
+              setStreamingStep(prev => prev ? { ...prev, content: "", qcStatus: "checking" } : null);
+            } else if (msg.qc === "approved") {
+              setStreamingStep(prev => prev ? { ...prev, qcStatus: "approved", qcScore: msg.score } : null);
+            } else if (msg.qc === "revising") {
+              setStreamingStep(prev => prev ? { ...prev, content: "", qcStatus: "revising", qcScore: msg.score, qcFeedback: msg.feedback } : null);
+            } else if (msg.qc === "revised") {
+              setStreamingStep(prev => prev ? { ...prev, qcStatus: "revised", qcScore: msg.score } : null);
+            } else if (msg.t) {
               setStreamingStep(prev => prev ? { ...prev, content: prev.content + msg.t } : null);
             }
             if (msg.done) {
@@ -286,7 +304,14 @@ export default function AnalysisDetail() {
         <div className="print:hidden">
           <AnimatePresence>
             {streamingStep && (
-              <StreamingCard key={streamingStep.key} stepKey={streamingStep.key} content={streamingStep.content} />
+              <StreamingCard
+                key={streamingStep.key}
+                stepKey={streamingStep.key}
+                content={streamingStep.content}
+                qcStatus={streamingStep.qcStatus}
+                qcScore={streamingStep.qcScore}
+                qcFeedback={streamingStep.qcFeedback}
+              />
             )}
           </AnimatePresence>
         </div>
@@ -551,10 +576,53 @@ const AGENT_COLORS: Record<string, string> = {
   investment_strategy: "hsl(218, 67%, 44%)",
 };
 
-function StreamingCard({ stepKey, content }: { stepKey: string; content: string }) {
+function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
+  stepKey: string;
+  content: string;
+  qcStatus?: "checking" | "approved" | "revising" | "revised";
+  qcScore?: number;
+  qcFeedback?: string;
+}) {
   const agent = AGENTS[stepKey];
   const color = AGENT_COLORS[stepKey] ?? "hsl(218, 67%, 44%)";
   if (!agent) return null;
+
+  const isQCPhase = qcStatus === "checking" || qcStatus === "approved" || qcStatus === "revising" || qcStatus === "revised";
+  const showCursor = !isQCPhase || qcStatus === "revising";
+
+  const statusBadge = () => {
+    if (qcStatus === "checking") return (
+      <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+        <ShieldCheck className="w-3.5 h-3.5 animate-pulse" />
+        <span>팀장 검토 중...</span>
+      </div>
+    );
+    if (qcStatus === "approved") return (
+      <div className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        <span>검토 통과 {qcScore}/10</span>
+      </div>
+    );
+    if (qcStatus === "revising") return (
+      <div className="flex items-center gap-1.5 text-xs text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full">
+        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+        <span>재분석 중... ({qcScore}/10)</span>
+      </div>
+    );
+    if (qcStatus === "revised") return (
+      <div className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        <span>재분석 완료 {qcScore}/10</span>
+      </div>
+    );
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span>분석 중...</span>
+      </div>
+    );
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -571,17 +639,30 @@ function StreamingCard({ stepKey, content }: { stepKey: string; content: string 
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
           <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          <span>분석 중...</span>
-        </div>
+        {statusBadge()}
       </div>
-      <div className="p-5">
-        <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap font-sans">
-          {content}
-          <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
+
+      {qcStatus === "checking" ? (
+        <div className="p-5 flex items-center justify-center gap-3 text-sm text-muted-foreground py-8">
+          <ShieldCheck className="w-5 h-5 text-amber-500 animate-pulse" />
+          <span>Lead Portfolio Strategist가 분석 품질을 검토하고 있습니다...</span>
         </div>
-      </div>
+      ) : (
+        <div className="p-5">
+          {qcStatus === "revising" && qcFeedback && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-orange-500/8 border border-orange-500/20 text-xs text-orange-600 dark:text-orange-400 flex items-start gap-2">
+              <RefreshCw className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span><span className="font-semibold">팀장 피드백:</span> {qcFeedback}</span>
+            </div>
+          )}
+          <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap font-sans">
+            {content}
+            {showCursor && (
+              <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
+            )}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

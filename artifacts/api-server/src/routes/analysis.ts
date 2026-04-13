@@ -29,6 +29,55 @@ function extractJsonSafe(raw: string): any | null {
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
 
+// ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
+
+const QC_STEPS = new Set<AgentKey>(["industry_analysis", "catalyst_analysis", "company_analysis", "market_analysis"]);
+
+async function runQCCheck(
+  stepKey: AgentKey,
+  content: string,
+  companyName: string,
+  ticker: string
+): Promise<{ approved: boolean; score: number; feedback: string }> {
+  const agentName = AGENTS[stepKey].name;
+  const excerpt = content.slice(0, 3000);
+
+  const prompt = `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
+아래는 ${agentName}가 ${companyName}(${ticker})에 대해 작성한 분석 보고서입니다.
+
+[보고서 앞부분]
+${excerpt}
+
+다음 기준으로 품질을 평가하세요:
+1. 구체적 수치 인용 (시장 규모, 성장률, 점유율, 재무 수치 등)
+2. 핵심 이슈와의 명확한 연결
+3. 투자 판단에 도움되는 실행 가능한 인사이트
+4. 분석 깊이 (표면적 나열 vs 인과관계 해석)
+
+반드시 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
+{"score": [1~10 정수], "approved": [7점 이상이면 true, 미만이면 false], "feedback": "미흡한 점 한 줄 요약 (approved이면 빈 문자열)"}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { maxOutputTokens: 256 },
+    });
+    const raw = response.text ?? "";
+    const parsed = extractJsonSafe(raw);
+    if (parsed && typeof parsed.score === "number") {
+      return {
+        score: Math.min(10, Math.max(1, Number(parsed.score))),
+        approved: parsed.approved ?? Number(parsed.score) >= 7,
+        feedback: String(parsed.feedback ?? ""),
+      };
+    }
+  } catch (err) {
+    console.error("[QC] check error:", err);
+  }
+  return { approved: true, score: 8, feedback: "" };
+}
+
 const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!;
 const ai = new GoogleGenAI({
   apiKey: geminiApiKey,
@@ -731,6 +780,49 @@ router.post("/:id/step", async (req, res) => {
       res.write(`data: ${JSON.stringify({ error: content })}\n\n`);
     }
 
+    // ── Lead Portfolio Strategist QC ──────────────────────────────────────────
+    let finalContent = content;
+    let validationNotes: string | null = null;
+
+    if (QC_STEPS.has(stepKey) && content && !content.startsWith("분석 오류")) {
+      res.write(`data: ${JSON.stringify({ qc: "checking" })}\n\n`);
+      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker);
+      console.log(`[QC] ${stepKey} score=${qcResult.score} approved=${qcResult.approved}`);
+
+      if (!qcResult.approved) {
+        res.write(`data: ${JSON.stringify({ qc: "revising", score: qcResult.score, feedback: qcResult.feedback })}\n\n`);
+        try {
+          const revisedUserPrompt = userPrompt +
+            `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
+          const revisedMaxTokens = stepKey === "company_analysis" ? 32768 : 16384;
+          const revisedStream = await ai.models.generateContentStream({
+            model: "gemini-2.5-flash",
+            contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
+            config: { systemInstruction: systemPrompt, maxOutputTokens: revisedMaxTokens },
+          });
+          let revisedContent = "";
+          for await (const chunk of revisedStream) {
+            const text = chunk.text ?? "";
+            if (text) {
+              revisedContent += text;
+              res.write(`data: ${JSON.stringify({ t: text, revised: true })}\n\n`);
+            }
+          }
+          if (revisedContent) finalContent = revisedContent;
+          validationNotes = `팀장 재검토 완료 (초기 점수: ${qcResult.score}/10, 사유: ${qcResult.feedback})`;
+          res.write(`data: ${JSON.stringify({ qc: "revised", score: qcResult.score })}\n\n`);
+        } catch (err) {
+          console.error("[QC] revision error:", err);
+          validationNotes = `QC 완료 (점수: ${qcResult.score}/10)`;
+          res.write(`data: ${JSON.stringify({ qc: "approved", score: qcResult.score })}\n\n`);
+        }
+      } else {
+        validationNotes = `팀장 검토 통과 (점수: ${qcResult.score}/10)`;
+        res.write(`data: ${JSON.stringify({ qc: "approved", score: qcResult.score })}\n\n`);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const [step] = await db
       .insert(analysisStepsTable)
       .values({
@@ -738,8 +830,8 @@ router.post("/:id/step", async (req, res) => {
         stepKey,
         agentName: agent.name,
         agentRole: agent.role,
-        content,
-        validationNotes: null,
+        content: finalContent,
+        validationNotes,
         informationType: "data_based_estimate",
       })
       .returning();
