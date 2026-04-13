@@ -689,6 +689,27 @@ function stripChartData(content: string): string {
   return content.replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "").replace(/\nCHART_DATA:\{[^\n]+\}\s*$/, "").trim();
 }
 
+interface ValuationData {
+  current: number;
+  dcf_bear: number; dcf_base: number; dcf_bull: number;
+  pe_bear: number;  pe_base: number;  pe_bull: number;
+  ev_bear: number;  ev_base: number;  ev_bull: number;
+}
+
+function parseValuationData(content: string): ValuationData | null {
+  const match = content.match(/VALUATION_DATA:(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]) as ValuationData;
+    if (!parsed.dcf_base) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function stripValuationData(content: string): string {
+  return content.replace(/\nVALUATION_DATA:\{[^\n]+\}\s*$/, "").trim();
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
@@ -705,8 +726,14 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   }
 
   const isMarket = step.stepKey === "market_analysis";
+  const isFundamental = step.stepKey === "company_analysis";
   const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
-  const displayContent = isMarket ? stripChartData(step.content ?? "") : (step.content ?? "");
+  const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
+  const displayContent = isMarket
+    ? stripChartData(step.content ?? "")
+    : isFundamental
+      ? stripValuationData(step.content ?? "")
+      : (step.content ?? "");
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
@@ -763,6 +790,57 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
             {displayContent}
           </ReactMarkdown>
         </div>
+
+        {/* Fundamental & Valuation 목표주가 요약 박스 */}
+        {isFundamental && valuationData && (
+          <div className="mt-5 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 목표주가</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">3-Method 종합</span>
+            </div>
+            <div className="rounded-xl border border-border overflow-hidden">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-muted/60">
+                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">방법론</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-rose-600 border-b border-border">Bear</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-blue-600 border-b border-border">Bull</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2 font-medium text-foreground/80">DCF</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.dcf_bear)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.dcf_base)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.dcf_bull)}</td>
+                  </tr>
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2 font-medium text-foreground/80">Forward P/E</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.pe_bear)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.pe_base)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.pe_bull)}</td>
+                  </tr>
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2 font-medium text-foreground/80">EV/EBITDA</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.ev_bear)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.ev_base)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.ev_bull)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="bg-muted/40 px-4 py-2.5 flex items-center justify-between border-t border-border">
+                <span className="text-xs text-muted-foreground">현재 주가</span>
+                <span className="font-mono text-sm font-semibold text-foreground">{formatPrice(valuationData.current)}</span>
+                <span className="text-xs text-muted-foreground">Base 목표가 괴리율</span>
+                <span className={`font-mono text-sm font-bold ${valuationData.dcf_base > valuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
+                  {valuationData.current > 0 ? `${((valuationData.dcf_base - valuationData.current) / valuationData.current * 100).toFixed(1)}%` : "-"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Market Analysis 전용 차트 */}
         {isMarket && ticker && (

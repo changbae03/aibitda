@@ -272,7 +272,10 @@ Base Case 가정을 적용한 10년 FCFF 추정입니다. 단위는 조원이며
 - DCF 주당 내재가치 — Bear: __원 / Base: __원 / Bull: __원
 - Forward P/E 목표가 — Bear: __원 / Base: __원 / Bull: __원
 - EV/EBITDA 역산 목표가 — Bear: __원 / Base: __원 / Bull: __원
-- 세 방법론 Base 최대 괴리: __%  ← 20% 초과 시 원인 한 문장`,
+- 세 방법론 Base 최대 괴리: __%  ← 20% 초과 시 원인 한 문장
+
+밸류에이션 인계 요약 블록을 모두 작성한 뒤, 마지막 줄에 아래 형식의 JSON을 정확히 한 줄로 출력하세요. 다른 텍스트나 마크다운 없이 정확히 이 형식으로만 출력하세요:
+VALUATION_DATA:{"current":현재주가숫자,"dcf_bear":DCF_Bear숫자,"dcf_base":DCF_Base숫자,"dcf_bull":DCF_Bull숫자,"pe_bear":PER_Bear숫자,"pe_base":PER_Base숫자,"pe_bull":PER_Bull숫자,"ev_bear":EV_Bear숫자,"ev_base":EV_Base숫자,"ev_bull":EV_Bull숫자}`,
     },
 
     market_analysis: {
