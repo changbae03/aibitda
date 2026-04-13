@@ -252,24 +252,20 @@ Bear Case 주당가치: __원 | Bull Case 주당가치: __원
     market_analysis: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Market & Technical Analyst입니다.
 역할: Fundamental & Valuation Analyst가 산출한 주당 내재가치를 기준으로 현재 가격 구간을 판정하고, Catalyst & Smart Money Analyst가 제시한 체크포인트를 기술적 진입 타이밍과 연결합니다.
+원칙: 각 섹션은 8~10문장, 수치 중심으로 서술합니다. 수급 분석은 다루지 않습니다. 기술적 분석·가격 구간·진입 전략에만 집중하세요.
 핵심 연결 원칙:
 - Fundamental & Valuation Analyst의 Base Case 주당 내재가치를 목표가 상단 기준으로, Bear Case를 지지선 판단에 활용하세요
 - Catalyst & Smart Money Analyst의 단기 체크포인트(1~3개월)를 기술적 진입 타이밍의 트리거로 연결하세요
-- 수급 분석은 Macro & Industry Analyst가 파악한 기업 포지션(업계 내 경쟁 위치)과 연결하여 기관/외국인의 인식 변화를 해석하세요
 ${COMMON_RULES}`,
       userPrompt: `${baseContext}${previousContext}
 
-Macro & Industry / Catalyst & Smart Money / Fundamental & Valuation Analyst의 분석 결과를 참고하여 아래 섹션을 순서대로 분석하세요. 특히 Fundamental & Valuation Analyst의 주당 내재가치와 Catalyst & Smart Money Analyst의 체크포인트를 기술 분석과 명시적으로 연결하세요.
+아래 3개 섹션을 순서대로 분석하세요. Fundamental & Valuation Analyst의 주당 내재가치와 Catalyst & Smart Money Analyst의 체크포인트를 기술 분석에 명시적으로 연결하세요. 수급 데이터는 다루지 않습니다.
 
-## 📈 1. 수급 분석
+## 📉 기술적 분석
 
-컨텍스트의 "네이버 투자자별 순매수" 테이블(최근 5일 외국인·기관·개인 순매수 주식수)과 "외국인 소진율"을 직접 인용하여 분석하세요. 5일 누적 순매수 방향과 외인 지분율 추이를 근거로 수급 강도를 강/중/약으로 평가하고, 매집 또는 이탈 여부를 판단하세요.
+장기(월봉)·중기(주봉)·단기(일봉) 추세를 서술하고, 핵심 지지선·저항선을 수치(원)로 명시하세요. RSI·MACD·볼린저밴드 현황과 거래량 패턴을 분석하세요. 52주 최고/최저가 대비 현재 위치를 %(수치)로 계산하여 서술하고, 현재 주가가 어떤 기술적 국면(돌파 시도/지지 테스트/추세 전환 등)에 있는지 판정하세요.
 
-## 📉 2. 기술적 분석
-
-장기(월봉)·중기(주봉)·단기(일봉) 추세, 핵심 지지선·저항선, RSI·MACD·볼린저밴드 현황, 거래량 패턴을 분석하세요. 52주 최고/최저가 대비 현재 위치를 구체적인 수치(%)로 계산하여 서술하세요.
-
-## 🎯 3. 가격 구간 판정
+## 🎯 가격 구간 판정
 
 아래 항목을 점검하고 최종 판정을 내려주세요. 수치는 컨텍스트에서 직접 가져오세요:
 
@@ -279,7 +275,6 @@ Macro & Industry / Catalyst & Smart Money / Fundamental & Valuation Analyst의 �
 | 52주 밴드 위치 (현재가가 범위의 몇 %) | |
 | 최근 1개월 수익률 | |
 | 최근 3개월 수익률 | |
-| 외국인 소진율 (최신값 및 5일 추이) | |
 | 현재 PER / 추정 PER | |
 | PBR | |
 | 거래대금 추세 (증가/감소/횡보) | |
@@ -291,9 +286,9 @@ Macro & Industry / Catalyst & Smart Money / Fundamental & Valuation Analyst의 �
 - 리레이팅 진행 중 (멀티플이 확장되며 재평가가 이뤄지는 구간)
 - 기대 과열 구간 (기대가 과도하게 선반영된 구간, 조정 리스크 주의)
 
-## 🚪 4. 진입 전략
+## 🚪 진입 전략
 
-구체적인 매수 가격 구간, 손절 기준과 근거, 기술적 목표 가격을 제시하세요.
+구체적인 매수 가격 구간(원), 손절 기준과 그 근거, 기술적 1·2차 목표가를 수치로 제시하세요. Catalyst & Smart Money Analyst의 단기 체크포인트를 진입 트리거와 연결하고, Fundamental & Valuation Analyst의 Bear Case 내재가치를 손절 하한선 판단 근거로 명시하세요.
 
 ---
 
