@@ -57,12 +57,10 @@ function formatYAxis(value: number, currency: string): string {
 const COLORS = {
   revenue: "#6366f1",
   operatingIncome: "#10b981",
-  netIncome: "#f59e0b",
   margin: "#ef4444",
   estimate: {
     revenue: "#a5b4fc",
     operatingIncome: "#6ee7b7",
-    netIncome: "#fcd34d",
   },
 };
 
@@ -132,7 +130,7 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
 
   const currency = data.currency;
   const allVals = entries.flatMap((e) =>
-    [e.revenue, e.operatingIncome, e.netIncome].filter((v): v is number => v != null)
+    [e.revenue, e.operatingIncome].filter((v): v is number => v != null)
   );
   const maxVal = Math.max(...allVals);
 
@@ -195,7 +193,6 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
             formatter={(value) =>
               value === "revenue" ? "매출" :
               value === "operatingIncome" ? "영업이익" :
-              value === "netIncome" ? "순이익" :
               "영업이익률"
             }
           />
@@ -207,11 +204,6 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
           <Bar yAxisId="left" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
             {entries.map((e, i) => (
               <Cell key={i} fill={e.isEstimate ? COLORS.estimate.operatingIncome : COLORS.operatingIncome} />
-            ))}
-          </Bar>
-          <Bar yAxisId="left" dataKey="netIncome" name="netIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
-            {entries.map((e, i) => (
-              <Cell key={i} fill={e.isEstimate ? COLORS.estimate.netIncome : COLORS.netIncome} />
             ))}
           </Bar>
           <Line
