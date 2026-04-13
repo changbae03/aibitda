@@ -615,12 +615,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
         <span>재분석 완료 {qcScore}/10</span>
       </div>
     );
-    return (
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        <span>분석 중...</span>
-      </div>
-    );
+    return null;
   };
 
   return (
