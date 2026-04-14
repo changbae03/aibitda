@@ -30,7 +30,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   industry_analysis: {
     id: "industry_analysis",
-    name: "Macro & Industry",
+    name: "매크로 및 산업 분석",
     role: "Macro & Industry Analyst",
     icon: Globe2,
     color: "text-emerald-600",
@@ -39,7 +39,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   company_analysis: {
     id: "company_analysis",
-    name: "1단계: 실적 전망",
+    name: "실적 전망",
     role: "Financial Analyst",
     icon: PieChart,
     color: "text-indigo-600",
@@ -48,7 +48,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   relative_valuation: {
     id: "relative_valuation",
-    name: "2단계: 목표주가 산출",
+    name: "목표가 산출",
     role: "Valuation Analyst",
     icon: Scale,
     color: "text-violet-600",
@@ -57,7 +57,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   market_analysis: {
     id: "market_analysis",
-    name: "3단계: 타점 산출",
+    name: "타점 분석",
     role: "Market & Technical Analyst",
     icon: BarChart2,
     color: "text-rose-600",
@@ -66,7 +66,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   catalyst_analysis: {
     id: "catalyst_analysis",
-    name: "Catalyst & Smart Money",
+    name: "투자 촉매 및 수급 분석",
     role: "Catalyst & Smart Money Analyst",
     icon: Zap,
     color: "text-amber-600",
@@ -75,7 +75,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   investment_strategy: {
     id: "investment_strategy",
-    name: "결론",
+    name: "최종 결론",
     role: "Lead Portfolio Strategist",
     icon: ShieldCheck,
     color: "text-primary",
