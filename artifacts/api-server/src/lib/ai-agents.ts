@@ -767,9 +767,16 @@ ${COMMON_RULES}`,
    - 하단(Bear): 하단 밴드 숫자
    - 목표(Base): 최종 목표주가 숫자
    - 상단(Bull): 상단 밴드 숫자
-3. 최종 target_price = Base 시나리오 target_price와 반드시 동일. 불일치 금지.
-4. 조율 방법 명시 의무 — target_price_rationale에 DCF/피어 조율 방법을 반드시 서술.
-5. 시나리오 확률 합계 = 반드시 100%.
+3. verdict 결정 기준 (반드시 준수) — Base case upside = (Base target_price - 현재가) / 현재가 × 100 를 먼저 계산하고, 아래 기준만으로 verdict를 결정:
+   - Strong Buy: Base upside ≥ 30%
+   - Buy: 15% ≤ Base upside < 30%
+   - Hold: -10% ≤ Base upside < 15%
+   - Sell: -25% ≤ Base upside < -10%
+   - Strong Sell: Base upside < -25%
+   업사이드 수치 기준 외에 다른 이유로 verdict를 상향/하향하지 말 것. 예외 없음.
+4. 최종 target_price = Base 시나리오 target_price와 반드시 동일. 불일치 금지.
+5. 조율 방법 명시 의무 — target_price_rationale에 DCF/피어 조율 방법을 반드시 서술.
+6. 시나리오 확률 합계 = 반드시 100%.
 
 종합 원칙:
 - Macro & Industry Analyst의 산업 포지션 → 구조적 경쟁우위 지속 가능성
@@ -796,7 +803,7 @@ ${COMMON_RULES}`,
 ⚠️ 응답 규칙: 아래 JSON 객체 하나만 출력하세요. 코드블록(\`\`\`)·설명 텍스트·마크다운 일절 금지. 첫 글자는 반드시 { 이어야 합니다.
 
 {
-  "verdict": "Strong Buy / Buy / Hold / Sell / Strong Sell 중 하나",
+  "verdict": "아래 기준에 따라 반드시 Base case upside(%) 수치로 결정. ※ upside = (Base target_price - 현재가) / 현재가 × 100: Strong Buy(Base upside ≥ 30%), Buy(15% ≤ upside < 30%), Hold(-10% ≤ upside < 15%), Sell(-25% ≤ upside < -10%), Strong Sell(upside < -25%). 예외 없음.",
   "confidence": "높음 / 중간 / 낮음 중 하나",
   "investment_period": "단기 / 중기 / 장기",
   "risk_reward": "리스크/리워드 비율 (예: 1:3.5)",
