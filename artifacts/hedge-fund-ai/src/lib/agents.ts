@@ -44,7 +44,7 @@ export const AGENTS: Record<string, AgentInfo> = {
     icon: PieChart,
     color: "text-indigo-600",
     bgColor: "bg-indigo-50",
-    description: "모델 선택, 재무 현황, 시나리오별 실적 추정, DCF 입력 가정 준비"
+    description: "재무 분석(수익성·현금흐름·건전성) + Base 실적 추정"
   },
   relative_valuation: {
     id: "relative_valuation",
