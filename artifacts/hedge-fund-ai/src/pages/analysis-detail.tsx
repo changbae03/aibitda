@@ -21,6 +21,8 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
+import ETFSection from "@/components/ETFSection";
+import PeerGroupSection from "@/components/PeerGroupSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -246,6 +248,16 @@ export default function AnalysisDetail() {
       {/* Financial Chart */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <FinancialChart ticker={analysis.ticker} />
+      </div>
+
+      {/* ETF & Peer Group — 2-column on desktop, stacked on mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
+        <PeerGroupSection
+          ticker={analysis.ticker}
+          companyName={analysis.companyName}
+          industry={analysis.industry ?? undefined}
+        />
       </div>
 
       {/* Progress Track */}

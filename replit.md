@@ -69,6 +69,8 @@ Step 7: catalyst → Step 8: smart_money → Step 9: lead_validation (final verd
 - `GET /api/hypotheses` - 가설 목록
 - `POST /api/hypotheses` - 가설 생성
 - `PATCH /api/hypotheses/:id` - 가설 업데이트
+- `GET /api/market-data/etf-inclusion/:ticker` - ETF 편입 현황 (Yahoo Finance 글로벌 + Gemini AI 국내 ETF 추정)
+- `GET /api/market-data/peer-group/:ticker` - AI Peer Group 분석 (Gemini gemini-2.5-flash)
 
 ## TypeScript & Composite Projects
 
