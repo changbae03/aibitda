@@ -395,8 +395,20 @@ function pct(val: number | undefined | null): string {
 
 async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   let result: any;
-  try {
-    result = await yahooFinance.quoteSummary(resolvedSymbol, {
+  let tsResult: any = null;
+
+  // Fetch quoteSummary and fundamentalsTimeSeries in parallel
+  const tsTypes = [
+    "annualGrossProfit", "annualTotalRevenue", "annualOperatingIncome",
+    "annualNetIncome", "annualReturnOnEquity", "annualReturnOnAssets",
+    "annualBasicEPS", "annualTotalLiabilitiesNetMinorityInterest", "annualStockholdersEquity",
+  ];
+  const tsPeriod1 = Math.floor(new Date(`${new Date().getFullYear() - 4}-01-01`).getTime() / 1000);
+  const tsPeriod2 = Math.floor(Date.now() / 1000);
+  const tsUrl = `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(resolvedSymbol)}?type=${tsTypes.join(",")}&period1=${tsPeriod1}&period2=${tsPeriod2}`;
+
+  const [summaryRes, tsRes] = await Promise.allSettled([
+    yahooFinance.quoteSummary(resolvedSymbol, {
       modules: [
         "financialData",
         "defaultKeyStatistics",
@@ -405,10 +417,40 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         "cashflowStatementHistory",
         "earningsTrend",
       ] as any,
-    });
-  } catch (err) {
-    console.error(`[financial-data] Failed for ${resolvedSymbol}:`, err);
+    }),
+    fetch(tsUrl, { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) })
+      .then(r => r.ok ? r.json() : null),
+  ]);
+
+  if (summaryRes.status === "rejected") {
+    console.error(`[financial-data] Failed for ${resolvedSymbol}:`, summaryRes.reason);
     return "";
+  }
+  result = summaryRes.value;
+
+  // Parse direct timeseries fetch: result is an array of items each with one type key
+  let tsRows: any[] = [];
+  if (tsRes.status === "fulfilled" && tsRes.value) {
+    tsRows = tsRes.value?.timeseries?.result ?? [];
+    console.log(`[financial-data] timeseries rows: ${tsRows.length}`);
+  } else {
+    console.warn(`[financial-data] timeseries fetch failed for ${resolvedSymbol}:`, (tsRes as any).reason?.message ?? "unknown");
+  }
+
+  // Build a map: typeName → array of {asOfDate, raw}
+  const tsTypeMap: Record<string, Array<{year: string; value: number}>> = {};
+  for (const row of tsRows) {
+    for (const typeName of tsTypes) {
+      if (row[typeName]) {
+        tsTypeMap[typeName] = (row[typeName] as any[])
+          .filter((e: any) => e?.reportedValue?.raw != null)
+          .map((e: any) => ({
+            year: String(new Date(e.asOfDate).getFullYear()),
+            value: e.reportedValue.raw as number,
+          }))
+          .sort((a, b) => Number(b.year) - Number(a.year));
+      }
+    }
   }
 
   const lines: string[] = [
@@ -476,18 +518,59 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.payoutRatio != null)     lines.push(`배당성향: ${pct(ks.payoutRatio)}`);
   }
 
-  // Income statement history
-  const incomeStmts: any[] = (result.incomeStatementHistory as any)?.incomeStatementHistory ?? [];
-  if (incomeStmts.length > 0) {
-    lines.push("\n[손익계산서 - 연간 실적]");
-    for (const stmt of incomeStmts.slice(0, 4)) {
-      const year = toYear(stmt.endDate);
-      const rev  = fmtNum(stmt.totalRevenue, currency);
-      const gp   = fmtNum(stmt.grossProfit, currency);
-      const op   = fmtNum(stmt.operatingIncome ?? stmt.totalOperatingExpenses, currency);
-      const ni   = fmtNum(stmt.netIncome, currency);
-      const eps  = stmt.basicEps != null ? stmt.basicEps.toFixed(2) : (stmt.dilutedEps != null ? stmt.dilutedEps.toFixed(2) : "-");
-      lines.push(`  ${year}년: 매출 ${rev} | 매출총이익 ${gp} | 영업이익 ${op} | 순이익 ${ni} | EPS ${eps}`);
+  // ── fundamentalsTimeSeries annual data ──────────────────────────────────────
+  const toYearMap = (key: string): Record<string, number> =>
+    Object.fromEntries((tsTypeMap[key] ?? []).map(e => [e.year, e.value]));
+
+  const revMap  = toYearMap("annualTotalRevenue");
+  const gpMap   = toYearMap("annualGrossProfit");
+  const opMap   = toYearMap("annualOperatingIncome");
+  const niMap   = toYearMap("annualNetIncome");
+  const epsMap  = toYearMap("annualBasicEPS");
+  const roeMap  = toYearMap("annualReturnOnEquity");
+  const liabMap = toYearMap("annualTotalLiabilitiesNetMinorityInterest");
+  const eqMap   = toYearMap("annualStockholdersEquity");
+
+  const allYears = [...new Set([
+    ...Object.keys(revMap), ...Object.keys(gpMap), ...Object.keys(opMap), ...Object.keys(niMap)
+  ])].sort((a, b) => Number(b) - Number(a)).slice(0, 4);
+
+  if (allYears.length > 0) {
+    lines.push("\n[연간 손익계산서 — fundamentalsTimeSeries]");
+    lines.push("※ 이 수치로 매출총이익률·영업이익률·순이익률·ROE를 직접 계산하세요.");
+    for (const year of allYears) {
+      const rev  = revMap[year]  != null ? fmtNum(revMap[year], currency)  : "-";
+      const gp   = gpMap[year]   != null ? fmtNum(gpMap[year], currency)   : "-";
+      const op   = opMap[year]   != null ? fmtNum(opMap[year], currency)   : "-";
+      const ni   = niMap[year]   != null ? fmtNum(niMap[year], currency)   : "-";
+      const eps  = epsMap[year]  != null ? epsMap[year].toFixed(2)         : "-";
+      const roeRaw = roeMap[year] != null
+        ? roeMap[year] * 100
+        : (niMap[year] != null && eqMap[year] != null && eqMap[year] !== 0 ? niMap[year] / eqMap[year] * 100 : null);
+      const roe = roeRaw != null ? `${roeRaw.toFixed(1)}%` : "-";
+      // Derived margins
+      const gpM  = revMap[year] && gpMap[year]  ? `${(gpMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
+      const opM  = revMap[year] && opMap[year]  ? `${(opMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
+      const niM  = revMap[year] && niMap[year]  ? `${(niMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
+      const de   = liabMap[year] && eqMap[year] ? `${(liabMap[year] / eqMap[year] * 100).toFixed(1)}%` : "-";
+      lines.push(
+        `  ${year}년: 매출 ${rev} | 매출총이익 ${gp}(${gpM}) | 영업이익 ${op}(${opM}) | 순이익 ${ni}(${niM}) | EPS ${eps} | ROE ${roe} | D/E ${de}`
+      );
+    }
+  } else {
+    // Fallback: legacy incomeStatementHistory (may be empty post-Nov 2024)
+    const incomeStmts: any[] = (result.incomeStatementHistory as any)?.incomeStatementHistory ?? [];
+    if (incomeStmts.length > 0) {
+      lines.push("\n[손익계산서 - 연간 실적 (legacy)]");
+      for (const stmt of incomeStmts.slice(0, 4)) {
+        const year = toYear(stmt.endDate);
+        const rev  = fmtNum(stmt.totalRevenue, currency);
+        const gp   = fmtNum(stmt.grossProfit, currency);
+        const op   = fmtNum(stmt.operatingIncome ?? stmt.totalOperatingExpenses, currency);
+        const ni   = fmtNum(stmt.netIncome, currency);
+        const eps  = stmt.basicEps != null ? stmt.basicEps.toFixed(2) : (stmt.dilutedEps != null ? stmt.dilutedEps.toFixed(2) : "-");
+        lines.push(`  ${year}년: 매출 ${rev} | 매출총이익 ${gp} | 영업이익 ${op} | 순이익 ${ni} | EPS ${eps}`);
+      }
     }
   }
 

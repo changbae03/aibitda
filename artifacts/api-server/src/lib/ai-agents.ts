@@ -199,10 +199,10 @@ ${COMMON_RULES}`,
 최근 2~3년 실적 궤적을 2~3문장으로 서술하되 수치 중심으로 작성하세요 (매출·영업이익 CAGR, 턴어라운드 시점, 적자 확대/축소 추이 등).
 
 ### 💹 수익성
-⚠️ 마진율 계산 우선순위:
-① Yahoo 손익계산서(incomeStatementHistory)에 grossProfit·operatingIncome·netIncome이 있으면 직접 계산
-② Yahoo 데이터가 없으면 네이버 연간 실적의 영업이익/매출액으로 영업이익률 계산 (매출총이익률·순이익률은 "—")
-③ ROE: financialData.returnOnEquity가 있으면 ×100, 없으면 "—"
+⚠️ 마진율·ROE 계산 우선순위 (위에서 제공된 컨텍스트 기준):
+① 컨텍스트에 "[연간 손익계산서 — fundamentalsTimeSeries]" 섹션이 있으면: 거기에 이미 gpM·opM·niM·ROE가 계산되어 있음 → 직접 인용
+② fundamentalsTimeSeries 데이터가 없고 "[손익계산서 - 연간 실적]" 섹션이 있으면: grossProfit/totalRevenue로 매출총이익률 계산
+③ 위 둘 다 없으면 네이버 연간 실적 영업이익/매출액으로 영업이익률만 계산 (매출총이익률·ROE는 "—")
 계산 불가 셀은 반드시 "—"으로 표시. "데이터 없음" 표현 금지.
 
 | 지표 | ${new Date().getFullYear()-2}(실적) | ${new Date().getFullYear()-1}(실적) | TTM | 추세 |
