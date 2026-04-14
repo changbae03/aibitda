@@ -198,10 +198,12 @@ export default function PeerGroupSection({
   ticker,
   companyName,
   industry,
+  analysisSteps,
 }: {
   ticker: string;
   companyName: string;
   industry?: string;
+  analysisSteps?: Array<{ stepKey: string; content: string }>;
 }) {
   const [data, setData] = useState<PeerGroupData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -210,10 +212,12 @@ export default function PeerGroupSection({
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ companyName });
-    if (industry) params.set("industry", industry);
 
-    fetch(`/api/market-data/peer-group/${encodeURIComponent(ticker)}?${params}`)
+    fetch(`/api/market-data/peer-group/${encodeURIComponent(ticker)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyName, industry, analysisSteps: analysisSteps ?? [] }),
+    })
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });

@@ -145,30 +145,68 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
 });
 
 // ── 연관기업 (Peer Group) 분석 ─────────────────────────────────────────────────
-// GET /api/market-data/peer-group/:ticker
-router.get("/peer-group/:ticker", async (req, res) => {
+// POST /api/market-data/peer-group/:ticker
+router.post("/peer-group/:ticker", async (req, res) => {
   const ticker = (req.params.ticker as string).toUpperCase();
-  const { companyName, industry } = req.query as { companyName?: string; industry?: string };
+  const { companyName, industry, analysisSteps } = req.body as {
+    companyName?: string;
+    industry?: string;
+    analysisSteps?: Array<{ stepKey: string; content: string }>;
+  };
 
   if (!companyName) {
-    res.status(400).json({ error: "companyName query param required" });
+    res.status(400).json({ error: "companyName required in body" });
     return;
   }
 
   const isKorean = /^\d{6}\.(KS|KQ)$/.test(ticker);
 
+  // 분석 단계 내용에서 핵심 컨텍스트 추출
+  const stepsMap: Record<string, string> = {};
+  for (const s of (analysisSteps ?? [])) {
+    stepsMap[s.stepKey] = s.content ?? "";
+  }
+
+  // 각 단계에서 핵심 내용 요약 (너무 길면 잘라서 전달)
+  const truncate = (text: string, maxChars = 1500) =>
+    text.length > maxChars ? text.slice(0, maxChars) + "...(이하 생략)" : text;
+
+  const contextParts: string[] = [];
+
+  if (stepsMap["industry_analysis"]) {
+    contextParts.push(`[산업 분석 — 경쟁 구도 및 주요 플레이어]\n${truncate(stepsMap["industry_analysis"])}`);
+  }
+  if (stepsMap["company_analysis"]) {
+    contextParts.push(`[실적 전망 — 재무 포지션 및 성장 가정]\n${truncate(stepsMap["company_analysis"])}`);
+  }
+  if (stepsMap["relative_valuation"]) {
+    contextParts.push(`[목표가 산출 — 밸류에이션에 사용한 피어 기업 및 멀티플]\n${truncate(stepsMap["relative_valuation"], 2000)}`);
+  }
+  if (stepsMap["catalyst_analysis"]) {
+    contextParts.push(`[촉매 분석 — 핵심 이슈 및 경쟁 환경 변화]\n${truncate(stepsMap["catalyst_analysis"])}`);
+  }
+  if (stepsMap["investment_strategy"]) {
+    contextParts.push(`[최종 투자 전략 — 핵심 투자 논거 요약]\n${truncate(stepsMap["investment_strategy"], 800)}`);
+  }
+
+  const analysisContext = contextParts.length > 0
+    ? `\n\n════ 앞선 리서치 분석 내용 (반드시 반영) ════\n${contextParts.join("\n\n")}\n════ 분석 내용 끝 ════`
+    : "";
+
   const prompt = `당신은 글로벌 주식시장 전문 애널리스트입니다.
-아래 종목에 대해 연관기업(비교 가능한 피어)을 선정하고 JSON으로만 응답하세요.
+아래 종목에 대해 연관기업(비교 가능한 피어)을 선정하고 JSON으로만 응답하세요.${analysisContext}
 
 분석 대상:
 - 종목: ${ticker} (${companyName})
 - 업종: ${industry ?? "불명"}
 
-선정 기준:
+선정 기준 (앞선 리서치 내용을 최대한 반영):
+- 위 리서치(특히 목표가 산출 단계의 피어 멀티플)에서 이미 언급된 기업을 우선 포함
 - 사업 모델이 유사하거나 직접적 경쟁 관계인 기업
-- 밸류에이션 비교 시 의미 있는 기준이 되는 기업
-- **한국 상장 주식 3~4개** + **글로벌(미국/일본 등) 주요 기업 2~3개** 를 혼합하여 총 5~7개 선정
+- 밸류에이션 비교에서 실제로 사용된 피어를 최대한 반영
+- **한국 상장 주식 3~4개** + **글로벌(미국/일본 등) 주요 기업 2~3개** 혼합, 총 5~7개
 ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피어 중심으로 선정 가능" : ""}
+- reason 필드: 앞선 리서치에서 이 기업이 언급된 맥락을 포함해 2~3문장으로 서술
 
 다음 JSON 스키마로만 응답하세요:
 {
@@ -179,12 +217,12 @@ ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피�
       "nameEn": "Samsung Electronics",
       "exchange": "KOSPI",
       "region": "KR",
-      "reason": "피어 선정 근거 2~3문장: 사업 유사성·경쟁관계·밸류에이션 비교 의미",
+      "reason": "앞선 분석에서 언급된 맥락 + 사업 유사성·경쟁관계·밸류에이션 비교 의미 2~3문장",
       "keyPoints": ["포인트1", "포인트2"]
     }
   ],
-  "methodology": "피어 선정 기준 및 방법론 (2~3문장)",
-  "comparisonNote": "이 피어 그룹과 비교 시 투자자가 주목해야 할 핵심 관점 (1~2문장)"
+  "methodology": "이번 리서치 내용을 반영한 피어 선정 기준 및 방법론 (2~3문장)",
+  "comparisonNote": "이 피어 그룹이 해당 종목 밸류에이션에서 가지는 핵심 의미 (1~2문장)"
 }
 
 티커 형식:
