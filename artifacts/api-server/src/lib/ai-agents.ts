@@ -209,7 +209,7 @@ Relevered β = Unlevered β × (1+(1-세율)×D/E) | CoE = Rf + β × ERP | CoD(
 
 **선택 모델:** [모델명] — [이유 한 줄]
 
-(선택 기준: FCF 안정+성숙 → DCF | 고성장+FCF 불안정 → EV/Sales 기반 DCF | 금융주 → DDM | 바이오 임상 → rNPV | 부동산/인프라 → NAV | 순현금 대형주 → DCF+순현금 가산)
+(선택 기준: FCF 안정 + 성숙 기업 → DCF | 고성장 + FCF 불안정 → EV/Sales 기반 DCF | 금융주 → Gordon Growth Model (DDM) | 바이오 임상단계 → Pipeline rNPV | 부동산/인프라 → NAV | 순현금 대형주 → DCF + 순현금 가산)
 
 ## 📊 최근 실적 검토
 
