@@ -247,14 +247,24 @@ ${COMMON_RULES}`,
 ⚠️ 단위는 위에서 결정한 기업 규모 단위를 사용하고, 표 헤더에 단위를 명시하세요.
 ⚠️ 적자 기업이면 영업이익·EBITDA에 음수(-)를 반드시 표기하세요. 흑자 전환 예상 연도는 별도 각주로 표시하세요.
 
+⚠️ 매출성장률 YoY (${new Date().getFullYear()-1} 실적 칸) 계산 방법:
+- 컨텍스트에 ${new Date().getFullYear()-2}년 매출 데이터가 있으면: (${new Date().getFullYear()-1}년 매출 ÷ ${new Date().getFullYear()-2}년 매출 - 1) × 100 = YoY% 계산 후 기재
+- ${new Date().getFullYear()-2}년 매출 데이터가 없으면: "—" 기재
+
+⚠️ EBITDA 계산 방법 (모든 연도):
+- EBITDA = 영업이익 + 감가상각비(D&A)
+- 컨텍스트의 현금흐름표(cashflowStatements)에 depreciationAmortization 또는 depreciation 항목이 있으면 영업이익에 더해서 계산
+- 현금흐름표 D&A 없으면: 네이버증권 연간 실적 또는 Yahoo financialData의 ebitda 값을 직접 인용
+- 위 데이터가 모두 없으면: "—" 기재 (추정으로 임의 계산 금지)
+
 | 구분 | ${new Date().getFullYear()-1}(실적) | ${new Date().getFullYear()}E | ${new Date().getFullYear()+1}E |
 |------|------|------|------|
 | 매출 (단위기재) | | | |
-| 매출성장률 YoY | — | | |
+| 매출성장률 YoY | (위 계산법 참조) | | |
 | 영업이익 (단위기재) | | | |
-| 영업이익성장률 YoY | — | | |
+| 영업이익성장률 YoY | (위 계산법 동일 적용) | | |
 | 영업이익률 (%) | | | |
-| EBITDA (단위기재) | | | |
+| EBITDA (단위기재) | (위 계산법 참조) | | |
 | EPS (원) | | | |
 
 > **실적 전망 인계 요약 (목표가 산출 단계 인계용 — 아래 수치를 모두 채우세요)**
