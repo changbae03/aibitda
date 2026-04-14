@@ -71,6 +71,7 @@ async function runQCCheck(
    - 선택 모델 이유가 없으면: 불승인
    - 모델 가정 수립 섹션이 없으면: 불승인
    - WACC 산출 근거(Rf, β, ERP, CoE 수치)가 없으면: 불승인
+   - 바이오/제약 기업이 영업적자임에도 DCF(NOPAT/FCFF)를 선택했으면: 불승인 (rNPV 필수)
 
   [절대가치 모델 품질 검증 — 선택된 모델에 따라 아래 중 하나 적용]
    A) DCF 모델: FCFF 10년 테이블이 있어야 하고, 주당 내재가치 수치가 있어야 함. Reverse DCF 분석이 없으면: 불승인
@@ -606,14 +607,16 @@ US/global stocks: use standard tickers (e.g. NVDA, ASML, TSM).`;
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction: "You are a financial analyst. Return ONLY valid JSON with no markdown or explanation.",
-        maxOutputTokens: 512,
+        maxOutputTokens: 1024,
       },
     });
     const raw = resp.text ?? "";
+    console.log(`[peer-select] Raw response (first 300): ${raw.slice(0, 300)}`);
     const parsed = extractJsonSafe(raw);
-    if (parsed?.peers && Array.isArray(parsed.peers)) {
+    if (parsed?.peers && Array.isArray(parsed.peers) && parsed.peers.length > 0) {
       return parsed.peers.slice(0, 5);
     }
+    console.warn(`[peer-select] Parsed result: ${JSON.stringify(parsed)}`);
   } catch (err) {
     console.error("[peer-select] Failed:", err);
   }
