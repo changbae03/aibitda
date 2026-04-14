@@ -579,6 +579,58 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
   );
 }
 
+const SLOW_STEP_MESSAGES: Record<string, string[]> = {
+  company_analysis: [
+    "재무제표 꼼꼼히 뜯어보는 중이에요...",
+    "시나리오 세 가지 짜고 있어요, 잠깐만요 🧮",
+    "WACC 계산하는 중... 수식이 꽤 복잡하네요",
+    "Bear / Base / Bull 수치 하나하나 맞추는 중이에요",
+    "EPS·EBITDA 일관성 확인 중... 빈틈 없이 할게요",
+    "DCF 입력 가정 꼼꼼히 정리하고 있어요",
+    "데이터가 많아서요, 조금만 더 기다려주세요 🙏",
+    "거의 다 됐어요! 막바지 검토 중이에요",
+  ],
+  relative_valuation: [
+    "DCF 모델 돌리는 중이에요... 10년치예요 🏗️",
+    "글로벌 피어 비교표 만들고 있어요",
+    "Reverse DCF로 현재 주가 역산 중...",
+    "절대가치와 상대가치 맞춰보는 중이에요",
+    "오차 없이 맞추느라 시간이 좀 걸려요 😤",
+    "FCFF 수치 검증 중... 정합성이 중요하거든요",
+    "목표주가 두 개를 하나로 좁히는 마지막 단계예요",
+    "거의 다 됐어요, 최종 조율 중 🎯",
+  ],
+};
+
+function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
+  const messages = SLOW_STEP_MESSAGES[stepKey];
+  const [idx, setIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (!messages || messages.length <= 1) return;
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIdx(prev => (prev + 1) % messages.length);
+        setVisible(true);
+      }, 350);
+    }, 3800);
+    return () => clearInterval(interval);
+  }, [messages]);
+
+  if (!messages) return <span>분석 중...</span>;
+
+  return (
+    <span
+      style={{ transition: "opacity 0.35s ease" }}
+      className={visible ? "opacity-100" : "opacity-0"}
+    >
+      {messages[idx]}
+    </span>
+  );
+}
+
 const AGENT_COLORS: Record<string, string> = {
   company_intro: "hsl(218, 67%, 44%)",
   industry_analysis: "#059669",
@@ -667,7 +719,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
             {!content && !isQCPhase ? (
               <span className="flex items-center gap-2 text-muted-foreground/50 select-none py-1">
                 <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-                <span>분석 중...</span>
+                <RotatingAnalysisMessage stepKey={stepKey} />
               </span>
             ) : (
               <>
