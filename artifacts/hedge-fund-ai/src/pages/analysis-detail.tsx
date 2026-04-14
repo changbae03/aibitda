@@ -582,9 +582,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 const SLOW_STEP_MESSAGES: Record<string, string[]> = {
   company_analysis: [
     "재무제표 꼼꼼히 뜯어보는 중이에요...",
-    "시나리오 세 가지 짜고 있어요, 잠깐만요 🧮",
+    "Base 실적 추정 테이블 작성 중이에요 🧮",
     "WACC 계산하는 중... 수식이 꽤 복잡하네요",
-    "Bear / Base / Bull 수치 하나하나 맞추는 중이에요",
+    "목표주가 + 상단/하단 밴드 수치 산출 중이에요",
     "EPS·EBITDA 일관성 확인 중... 빈틈 없이 할게요",
     "DCF 입력 가정 꼼꼼히 정리하고 있어요",
     "데이터가 많아서요, 조금만 더 기다려주세요 🙏",
@@ -894,20 +894,20 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 <thead>
                   <tr className="bg-muted/60">
                     <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">구분</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-rose-600 border-b border-border">Bear</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-blue-600 border-b border-border">Bull</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-rose-600 border-b border-border">하단 밴드</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">목표주가</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-blue-600 border-b border-border">상단 밴드</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/80">절대가치(A)</td>
+                    <td className="px-3 py-2 font-medium text-foreground/80">절대가치(DCF)</td>
                     <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.abs_bear)}</td>
                     <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.abs_base)}</td>
                     <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.abs_bull)}</td>
                   </tr>
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/80">상대가치(B)</td>
+                    <td className="px-3 py-2 font-medium text-foreground/80">상대가치(피어)</td>
                     <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.rel_bear)}</td>
                     <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.rel_base)}</td>
                     <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.rel_bull)}</td>
@@ -923,7 +923,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
                 <span className="text-xs text-muted-foreground">현재 주가</span>
                 <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(finalValuationData.current)}</span>
-                <span className="text-xs text-muted-foreground">조율 Base 괴리율</span>
+                <span className="text-xs text-muted-foreground">목표가 괴리율</span>
                 <span className={`font-mono text-sm font-bold text-right sm:text-left ${finalValuationData.base > finalValuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
                   {finalValuationData.current > 0 ? `${((finalValuationData.base - finalValuationData.current) / finalValuationData.current * 100).toFixed(1)}%` : "-"}
                 </span>

@@ -47,17 +47,18 @@ async function runQCCheck(
   const fundamentalExtra = isFundamental ? `
 
 5. 실적 전망 정합성 (실적 전망 단계 전용 필수 검증):
-   - Bear/Base/Bull 3개 시나리오 실적 표가 모두 작성되지 않으면: 불승인
-   - EPS 또는 EBITDA 수치가 하나라도 누락되면: 불승인
+   - Base 실적 추정 테이블(매출·영업이익률·영업이익·EBITDA·EPS)이 없으면: 불승인
+   - EPS 또는 EBITDA 수치가 누락되면: 불승인
    - DCF 입력 가정 테이블(WACC, Terminal g, Sales-to-Capital)이 없으면: 불승인
    - 실적 전망 인계 요약 블록이 없으면: 불승인
-   - Bear > Base 또는 Base > Bull 수치 역전이 발생하면: 불승인` : isRelativeValuation ? `
+   - 성장 동력 또는 리스크 요인 서술이 없으면: 불승인` : isRelativeValuation ? `
 
-5. 목표주가 정합성 (목표주가 산출 단계 전용 필수 검증):
+5. 목표주가 정합성 (목표가 산출 단계 전용 필수 검증):
    - DCF 테이블(10년 FCFF) 또는 피어 멀티플 테이블 중 하나라도 없으면: 불승인
    - FINAL_VALUATION_DATA JSON이 없거나 파싱 불가이면: 즉시 불승인(false)
-   - 조율 최종 Base 목표가가 현재 주가의 4배 이상이면: 가정 재검토 여부 확인, 없으면 불승인
-   - 조율 Bear 목표가가 현재 주가의 20% 미만이면: 불승인
+   - 최종 목표주가·상단 밴드·하단 밴드 3개 수치가 없으면: 불승인
+   - 최종 목표주가가 현재 주가의 4배 이상이면: 가정 재검토 여부 확인, 없으면 불승인
+   - 하단 밴드가 현재 주가의 20% 미만이면: 불승인
    - 조율 근거(가중평균 or Lead 조율) 서술이 없으면: 불승인` : "";
 
   const prompt = `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
