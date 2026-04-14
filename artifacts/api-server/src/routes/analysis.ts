@@ -83,6 +83,8 @@ async function runQCCheck(
 
   [피어 조율 품질 검증]
    - 피어 기업이 3개 미만으로 선정되면: 불승인
+   - 피어 기업명이 "Peer A", "Peer B", "Peer C", "Peer D" 등 플레이스홀더이면: 불승인 (실제 회사명 필수)
+   - 피어 선정 논리(왜 이 피어들이 유의미한지)가 없으면: 불승인
    - 적용 멀티플(PER 또는 EV/EBITDA) 선택 이유가 없으면: 불승인
    - 프리미엄/디스카운트 적용 근거가 없으면: 불승인
 
@@ -589,34 +591,48 @@ async function selectPeerTickers(
   companyName: string,
   industry: string,
   previousContext: string
-): Promise<Array<{ ticker: string; name: string; exchange: string }>> {
+): Promise<Array<{ ticker: string; name: string; exchange: string; reason: string }>> {
   try {
     const prompt = `Company: ${companyName}, Industry: ${industry}.
 
-Based on the analysis context below, identify 4-5 publicly traded global peer companies for valuation comparison (same business model, value chain, and market positioning).
-${previousContext ? `\nContext:\n${previousContext.slice(0, 800)}` : ""}
+Based on the context below, identify 4-5 publicly traded peer companies for valuation comparison.
+Select peers based on: similar business model, competitive relationship, or meaningful valuation comparison.
+Mix of Korean (KOSPI/KOSDAQ) and global (US/global) peers is fine.
+${previousContext ? `\nContext:\n${previousContext.slice(0, 1000)}` : ""}
 
-Return ONLY valid JSON (no markdown, no explanation):
-{"peers": [{"ticker": "MU", "name": "Micron Technology", "exchange": "NASDAQ"}, ...]}
+Return a JSON object with this exact schema:
+{"peers": [{"ticker": "005930.KS", "name": "삼성전자", "exchange": "KOSPI", "reason": "동일 메모리 반도체 시장 경쟁사, PER/EV/EBITDA 비교 유효"}, ...]}
 
-Use exact Yahoo Finance tickers. Korean stocks: use 6-digit code + .KS or .KQ (e.g. 005930.KS).
-US/global stocks: use standard tickers (e.g. NVDA, ASML, TSM).`;
+Rules:
+- Korean stocks: 6-digit code + .KS (KOSPI) or .KQ (KOSDAQ)
+- US/global stocks: standard Yahoo Finance ticker (NVDA, ASML, TSM, etc.)
+- reason: 이 기업이 유의미한 피어인 이유를 1~2문장으로 한국어로 설명 (사업 유사성, 경쟁 관계, 밸류에이션 비교 근거 중심)`;
 
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
-        systemInstruction: "You are a financial analyst. Return ONLY valid JSON with no markdown or explanation.",
-        maxOutputTokens: 1024,
+        systemInstruction: "You are a financial analyst. Respond with a valid JSON object only.",
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
       },
     });
     const raw = resp.text ?? "";
-    console.log(`[peer-select] Raw response (first 300): ${raw.slice(0, 300)}`);
-    const parsed = extractJsonSafe(raw);
+    console.log(`[peer-select] Raw response (first 500): ${raw.slice(0, 500)}`);
+
+    // Try direct parse first (JSON mode response)
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = extractJsonSafe(raw);
+    }
+
     if (parsed?.peers && Array.isArray(parsed.peers) && parsed.peers.length > 0) {
+      console.log(`[peer-select] Success: ${parsed.peers.length} peers`);
       return parsed.peers.slice(0, 5);
     }
-    console.warn(`[peer-select] Parsed result: ${JSON.stringify(parsed)}`);
+    console.warn(`[peer-select] No valid peers in response: ${JSON.stringify(parsed)}`);
   } catch (err) {
     console.error("[peer-select] Failed:", err);
   }
@@ -624,13 +640,13 @@ US/global stocks: use standard tickers (e.g. NVDA, ASML, TSM).`;
 }
 
 async function fetchPeerFinancials(
-  peers: Array<{ ticker: string; name: string; exchange: string }>
+  peers: Array<{ ticker: string; name: string; exchange: string; reason?: string }>
 ): Promise<string> {
   if (peers.length === 0) return "";
 
   const rows: string[] = [];
   rows.push("\n=== 피어 그룹 실시간 재무 데이터 (Yahoo Finance) ===");
-  rows.push("※ 이 데이터를 Part B 상대가치 분석에 직접 인용하세요.\n");
+  rows.push("※ 아래 피어 기업들의 실제 수치를 Part B 상대가치 분석 표에 그대로 인용하세요. 피어 이름을 'Peer A/B/C/D' 등 플레이스홀더로 쓰지 말고 실제 회사명을 사용하세요.\n");
 
   const results = await Promise.allSettled(
     peers.map(async (peer) => {
@@ -685,11 +701,12 @@ async function fetchPeerFinancials(
         const grossMargin = fd.grossMargins ?? null;
 
         const line = [
-          `[${peer.name} (${peer.ticker})]`,
+          `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
+          peer.reason ? `  선정 이유: ${peer.reason}` : null,
           `  시가총액: ${mcapStr}${price ? ` | 현재가: ${price.toFixed(currency === "KRW" ? 0 : 2)} ${currency}` : ""}`,
           `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
           `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
-        ].join("\n");
+        ].filter(Boolean).join("\n");
         return line;
       } catch (err) {
         return `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 80)}`;
