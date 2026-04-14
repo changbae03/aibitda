@@ -40,10 +40,11 @@ async function runQCCheck(
   ticker: string
 ): Promise<{ approved: boolean; score: number; feedback: string }> {
   const agentName = AGENTS[stepKey].name;
-  const excerpt = content.slice(0, 3000);
-
   const isFundamental = stepKey === "company_analysis";
   const isRelativeValuation = stepKey === "relative_valuation";
+  // Use longer excerpt for relative_valuation so FINAL_VALUATION_DATA at end is captured
+  const excerptLength = isRelativeValuation ? 6000 : 3000;
+  const excerpt = content.slice(0, excerptLength);
   const fundamentalExtra = isFundamental ? `
 
 5. 실적 전망 정합성 (실적 전망 단계 전용 필수 검증):
@@ -53,18 +54,41 @@ async function runQCCheck(
    - 실적 전망 인계 요약 블록이 없으면: 불승인
    - 성장 동력 또는 리스크 요인 서술이 없으면: 불승인` : isRelativeValuation ? `
 
-5. 목표주가 정합성 (목표가 산출 단계 전용 필수 검증):
-   - DCF 테이블(10년 FCFF) 또는 피어 멀티플 테이블 중 하나라도 없으면: 불승인
-   - FINAL_VALUATION_DATA JSON이 없거나 파싱 불가이면: 즉시 불승인(false)
-   - 최종 목표주가·상단 밴드·하단 밴드 3개 수치가 없으면: 불승인
-   - 최종 목표주가가 현재 주가의 4배 이상이면: 가정 재검토 여부 확인, 없으면 불승인
-   - 하단 밴드가 현재 주가의 20% 미만이면: 불승인
-   - 조율 근거(가중평균 or Lead 조율) 서술이 없으면: 불승인` : "";
+5. 목표가 산출 정합성 — 팀장 직접 조율 검수 (전용 필수 검증):
+
+  [구조 검증 — 하나라도 없으면 즉시 불승인]
+   - DCF 10년 FCFF 테이블이 없으면: 불승인
+   - 피어 그룹 멀티플 비교 테이블이 없으면: 불승인
+   - FINAL_VALUATION_DATA JSON이 없거나 파싱 불가이면: 즉시 불승인
+   - 최종 목표주가·상단 밴드·하단 밴드 3개 수치가 모두 명시되지 않으면: 불승인
+   - 최종 밸류에이션 인계 요약 블록이 없으면: 불승인
+
+  [DCF 품질 검증]
+   - WACC, Terminal g, Sales-to-Capital이 실적 전망 단계 인계값과 일치하지 않으면: 불승인
+   - NOPAT = 영업이익 × (1-세율), FCFF = NOPAT - 재투자 공식이 보고서에 명시되지 않으면: 불승인
+   - DCF 내재가치가 현재 주가 대비 터무니없이 높거나(4배↑) 낮으면(0.2배↓): 가정 재검토 여부 확인, 없으면 불승인
+   - Reverse DCF 분석(현재 주가 역산)이 없으면: 불승인
+
+  [피어 조율 품질 검증]
+   - 피어 기업이 3개 미만으로 선정되면: 불승인
+   - 적용 멀티플(PER 또는 EV/EBITDA) 선택 이유가 없으면: 불승인
+   - 프리미엄/디스카운트 적용 근거가 없으면: 불승인
+
+  [조율 품질 검증 — 핵심]
+   - DCF 내재가치와 피어 목표가 두 숫자가 모두 명시되지 않으면: 불승인
+   - 괴리율이 명시되지 않으면: 불승인
+   - 조율 방법(가중평균 수식 또는 Lead 조율 근거)이 없으면: 불승인
+   - 상단/하단 밴드 산출 근거가 없으면: 불승인
+   - 상단 밴드 = 하단 밴드이면(밴드 차이 없음): 불승인
+   - 최종 목표주가가 상단 밴드보다 높거나 하단 밴드보다 낮으면: 불승인
+
+  [극단값 방어]
+   - 하단 밴드가 현재 주가의 20% 미만이면: 불승인` : "";
 
   const prompt = `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
 아래는 ${agentName}가 ${companyName}(${ticker})에 대해 작성한 분석 보고서입니다.
 
-[보고서 앞부분]
+[보고서]
 ${excerpt}
 
 다음 기준으로 품질을 평가하세요:
