@@ -21,7 +21,6 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
-import ETFSection from "@/components/ETFSection";
 import PeerGroupSection from "@/components/PeerGroupSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -358,10 +357,7 @@ export default function AnalysisDetail() {
         )}
       </div>
 
-      {/* ETF 편입 현황 */}
-      <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
-
-      {/* Peer Group 분석 */}
+      {/* 연관기업 */}
       <PeerGroupSection
         ticker={analysis.ticker}
         companyName={analysis.companyName}
