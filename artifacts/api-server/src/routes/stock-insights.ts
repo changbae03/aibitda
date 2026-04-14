@@ -27,23 +27,47 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
 
   // 1) Yahoo Finance 글로벌 펀드 편입 (실데이터)
   let globalFunds: Array<{
-    name: string; pctHeld: number; value: number | null; reportDate: string;
+    name: string; ticker: string | null; pctHeld: number; value: number | null; reportDate: string;
   }> = [];
   try {
     const summary = await yahooFinance.quoteSummary(resolvedSymbol, {
       modules: ["fundOwnership"] as any,
     });
     const list = (summary as any).fundOwnership?.ownershipList ?? [];
-    globalFunds = list
+    const sorted = list
       .filter((f: any) => f.pctHeld > 0)
-      .map((f: any) => ({
-        name: f.organization ?? "",
-        pctHeld: Math.round(f.pctHeld * 10000) / 100,
-        value: f.value ?? null,
-        reportDate: f.reportDate ? new Date(f.reportDate).toISOString().slice(0, 7) : "",
-      }))
       .sort((a: any, b: any) => b.pctHeld - a.pctHeld)
       .slice(0, 8);
+
+    // 각 펀드의 티커를 Yahoo Finance 검색으로 병렬 조회
+    const tickerResults = await Promise.allSettled(
+      sorted.map(async (f: any) => {
+        const org: string = f.organization ?? "";
+        // "FUND FAMILY-Fund Name" 형태에서 펀드 이름 추출
+        const searchQuery = org.includes("-") ? org.split("-").slice(1).join("-").trim() : org;
+        try {
+          const sr = await (yahooFinance as any).search(
+            searchQuery,
+            { newsCount: 0, quotesCount: 2 },
+            { validateResult: false }
+          );
+          const hit = (sr.quotes ?? []).find((q: any) =>
+            q.quoteType === "ETF" || q.quoteType === "MUTUALFUND"
+          ) ?? sr.quotes?.[0] ?? null;
+          return hit?.symbol ?? null;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    globalFunds = sorted.map((f: any, i: number) => ({
+      name: f.organization ?? "",
+      ticker: tickerResults[i].status === "fulfilled" ? tickerResults[i].value : null,
+      pctHeld: Math.round(f.pctHeld * 10000) / 100,
+      value: f.value ?? null,
+      reportDate: f.reportDate ? new Date(f.reportDate).toISOString().slice(0, 7) : "",
+    }));
   } catch {
     /* optional */
   }

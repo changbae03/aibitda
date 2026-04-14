@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface GlobalFund {
   name: string;
+  ticker: string | null;
   pctHeld: number;
   value: number | null;
   reportDate: string;
@@ -170,10 +171,11 @@ export default function ETFSection({
               <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono border border-border">실데이터</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[400px]">
+              <table className="w-full text-xs min-w-[440px]">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left text-muted-foreground font-medium pb-2 pr-3">펀드명</th>
+                    <th className="text-left text-muted-foreground font-medium pb-2 px-2 w-20">티커</th>
                     <th className="text-right text-muted-foreground font-medium pb-2 px-2 w-20">편입 비중</th>
                     <th className="text-right text-muted-foreground font-medium pb-2 pl-2 w-24">기준월</th>
                   </tr>
@@ -182,6 +184,15 @@ export default function ETFSection({
                   {data.globalFunds.map((f, i) => (
                     <tr key={i} className="hover:bg-muted/30 transition-colors">
                       <td className="py-2 pr-3 text-foreground leading-snug">{f.name}</td>
+                      <td className="py-2 px-2">
+                        {f.ticker ? (
+                          <span className="font-mono text-[11px] font-semibold text-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
+                            {f.ticker}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-right font-mono font-semibold text-primary">{f.pctHeld.toFixed(2)}%</td>
                       <td className="py-2 pl-2 text-right text-muted-foreground font-mono">{f.reportDate}</td>
                     </tr>
