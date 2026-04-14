@@ -39,25 +39,25 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   company_analysis: {
     id: "company_analysis",
-    name: "Valuation A (절대가치)",
-    role: "Valuation Analyst A",
+    name: "1단계: 실적 전망",
+    role: "Financial Analyst",
     icon: PieChart,
     color: "text-indigo-600",
     bgColor: "bg-indigo-50",
-    description: "재무 분석, DCF 절대 내재가치, 모델 선택"
+    description: "모델 선택, 재무 현황, 시나리오별 실적 추정, DCF 입력 가정 준비"
   },
   relative_valuation: {
     id: "relative_valuation",
-    name: "Valuation B (상대가치·조율)",
-    role: "Valuation Analyst B",
+    name: "2단계: 목표주가 산출",
+    role: "Valuation Analyst",
     icon: Scale,
     color: "text-violet-600",
     bgColor: "bg-violet-50",
-    description: "피어 멀티플 비교, 상대가치 목표가, 절대가치 조율"
+    description: "DCF(절대가치) + 피어 멀티플(상대가치) → 조율 목표주가 1개"
   },
   market_analysis: {
     id: "market_analysis",
-    name: "Market & Technical",
+    name: "3단계: 타점 산출",
     role: "Market & Technical Analyst",
     icon: BarChart2,
     color: "text-rose-600",

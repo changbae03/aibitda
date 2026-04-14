@@ -46,17 +46,17 @@ async function runQCCheck(
   const isRelativeValuation = stepKey === "relative_valuation";
   const fundamentalExtra = isFundamental ? `
 
-5. 밸류에이션 정합성 (Valuation A 전용 필수 검증):
-   - 영업이익 적자 기업인데 FCF가 과도하게 크면: DCF가 비정상 FCF를 사용한 경우 → 즉시 불승인(false)
-   - Base 목표가가 현재 주가의 3배 이상이면: 입력 가정 재검토 여부 명시 없으면 불승인
-   - 세 방법론의 Base 목표가 괴리가 500% 이상이면: 반드시 불승인(false)
-   - Bear 목표가가 현재 주가의 30% 미만이면: 청산 가치 비교 여부 확인, 없으면 불승인
-   - 시나리오별 실적 전망의 수치가 DCF CAGR 가정과 불일치하면: 불승인` : isRelativeValuation ? `
+5. 실적 전망 정합성 (실적 전망 단계 전용 필수 검증):
+   - Bear/Base/Bull 3개 시나리오 실적 표가 모두 작성되지 않으면: 불승인
+   - EPS 또는 EBITDA 수치가 하나라도 누락되면: 불승인
+   - DCF 입력 가정 테이블(WACC, Terminal g, Sales-to-Capital)이 없으면: 불승인
+   - 실적 전망 인계 요약 블록이 없으면: 불승인
+   - Bear > Base 또는 Base > Bull 수치 역전이 발생하면: 불승인` : isRelativeValuation ? `
 
-5. 상대가치 정합성 (Valuation B 전용 필수 검증):
-   - 피어 그룹이 3개 미만이거나 사업모델이 전혀 다른 기업이 포함되면: 불승인
+5. 목표주가 정합성 (목표주가 산출 단계 전용 필수 검증):
+   - DCF 테이블(10년 FCFF) 또는 피어 멀티플 테이블 중 하나라도 없으면: 불승인
    - FINAL_VALUATION_DATA JSON이 없거나 파싱 불가이면: 즉시 불승인(false)
-   - 조율 최종 Base 목표가가 현재 주가의 4배 이상이면: 불승인
+   - 조율 최종 Base 목표가가 현재 주가의 4배 이상이면: 가정 재검토 여부 확인, 없으면 불승인
    - 조율 Bear 목표가가 현재 주가의 20% 미만이면: 불승인
    - 조율 근거(가중평균 or Lead 조율) 서술이 없으면: 불승인` : "";
 
