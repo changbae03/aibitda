@@ -250,16 +250,6 @@ export default function AnalysisDetail() {
         <FinancialChart ticker={analysis.ticker} />
       </div>
 
-      {/* ETF 편입 현황 */}
-      <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
-
-      {/* Peer Group 분석 */}
-      <PeerGroupSection
-        ticker={analysis.ticker}
-        companyName={analysis.companyName}
-        industry={analysis.industry ?? undefined}
-      />
-
       {/* Progress Track */}
       <div className="bg-card border border-border rounded-2xl p-5 print:hidden">
         <div className="flex items-center justify-between mb-5">
@@ -365,6 +355,16 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
       </div>
+
+      {/* ETF 편입 현황 */}
+      <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
+
+      {/* Peer Group 분석 */}
+      <PeerGroupSection
+        ticker={analysis.ticker}
+        companyName={analysis.companyName}
+        industry={analysis.industry ?? undefined}
+      />
     </div>
   );
 }
