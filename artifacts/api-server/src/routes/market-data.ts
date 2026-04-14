@@ -569,52 +569,6 @@ router.get("/financials/:ticker", async (req, res) => {
       let annual = parseStmt(summary.chartIncomeStatement?.annual);
       const quarterly = parseStmt(summary.chartIncomeStatement?.quarter);
 
-      // 2027E 보완: 마지막 연간 데이터가 2026E까지만 있으면 Yahoo Finance earningsTrend에서 +1y 추가
-      const lastAnnual = annual[annual.length - 1];
-      const lastYear = lastAnnual?.period ? parseInt(lastAnnual.period) : 0;
-      if (lastYear <= 2026) {
-        try {
-          const yqTicker = ticker.includes(".") ? ticker : `${koreanCode}.KS`;
-          const trendResult: any = await yahooFinance.quoteSummary(yqTicker, {
-            modules: ["earningsTrend", "financialData"],
-          } as any, { validateResult: false } as any);
-          const trends: any[] = trendResult?.earningsTrend?.trend ?? [];
-          const nextYearTrend = trends.find((t: any) => t.period === "+1y");
-          const revAvg: number | null = nextYearTrend?.revenueEstimate?.avg ?? null;
-          const endDate: Date | null = nextYearTrend?.endDate ?? null;
-          const analystCount: number = nextYearTrend?.revenueEstimate?.numberOfAnalysts ?? 0;
-
-          if (revAvg && revAvg > 0 && endDate && analystCount >= 2) {
-            const year = new Date(endDate).getFullYear();
-            if (year === 2027) {
-              // 영업이익 추정: financialData.operatingMargins (LTM) 또는 2026E 마진 활용
-              const opMarginLtm: number | null = trendResult?.financialData?.operatingMargins ?? null;
-              // 2026E 영업이익률 우선 사용
-              const baseOpMargin =
-                (lastAnnual?.isEstimate && lastAnnual.operatingMargin != null)
-                  ? lastAnnual.operatingMargin / 100
-                  : (opMarginLtm ?? null);
-
-              const opIncome2027 = baseOpMargin != null ? revAvg * baseOpMargin : null;
-
-              annual = [
-                ...annual,
-                {
-                  period: `${year}.12.`,
-                  isEstimate: true,
-                  opIncomeFromMargin: opIncome2027 != null,
-                  revenue: revAvg,
-                  operatingIncome: opIncome2027,
-                  netIncome: null,
-                  operatingMargin: baseOpMargin != null ? baseOpMargin * 100 : null,
-                },
-              ];
-            }
-          }
-        } catch {
-          /* Yahoo Finance fallback 실패 — Naver 데이터만 사용 */
-        }
-      }
 
       res.json({
         ticker,

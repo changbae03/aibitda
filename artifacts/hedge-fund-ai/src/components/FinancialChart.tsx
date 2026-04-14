@@ -252,9 +252,6 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
       {entries.some((e) => e.isEstimate) && (
         <div className="flex flex-col items-end gap-0.5">
           <p className="text-[10px] text-muted-foreground">옅은 색 = 컨센서스 추정치</p>
-          {entries.some((e) => e.opIncomeFromMargin) && (
-            <p className="text-[10px] text-muted-foreground">* 2027E 영업이익은 전년도 이익률 기반 추정</p>
-          )}
         </div>
       )}
     </div>
