@@ -357,12 +357,14 @@ export default function AnalysisDetail() {
         )}
       </div>
 
-      {/* 연관기업 */}
-      <PeerGroupSection
-        ticker={analysis.ticker}
-        companyName={analysis.companyName}
-        industry={analysis.industry ?? undefined}
-      />
+      {/* 연관기업 — 최종 투자 전략 완료 후 표시 */}
+      {analysis.steps.some(s => s.stepKey === "investment_strategy") && (
+        <PeerGroupSection
+          ticker={analysis.ticker}
+          companyName={analysis.companyName}
+          industry={analysis.industry ?? undefined}
+        />
+      )}
     </div>
   );
 }
