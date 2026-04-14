@@ -206,16 +206,43 @@ function toResult(e: StockEntry) {
   return { symbol: e.symbol, shortname: e.name, exchange: e.exchange, quoteType: "EQUITY" };
 }
 
+// symbol → 표시명 우선 적용 맵 (KOREAN_COMPANY_MAP 기준 Naver 단축명)
+const DISPLAY_NAME_OVERRIDE = new Map<string, string>(
+  KOREAN_COMPANY_MAP.map(c => [c.symbol, c.name])
+);
+// symbol → 검색 키워드 확장 맵
+const KEYWORD_MAP = new Map<string, string[]>(
+  KOREAN_COMPANY_MAP.map(c => [c.symbol, c.keywords])
+);
+
 function searchKorean(query: string): ReturnType<typeof toResult>[] {
   const q = query.toLowerCase().replace(/\s/g, "");
   const krxCache = getKRXCache();
 
   if (krxCache.length > 0) {
-    return krxCache
-      .filter(e => e.name.toLowerCase().replace(/\s/g, "").includes(q))
-      .slice(0, 8)
-      .map(toResult);
+    // KRX 법인명 검색 + KOREAN_COMPANY_MAP 키워드 확장 검색 병합
+    const seen = new Set<string>();
+    const results: ReturnType<typeof toResult>[] = [];
+
+    for (const e of krxCache) {
+      const krxName = e.name.toLowerCase().replace(/\s/g, "");
+      const keywords = KEYWORD_MAP.get(e.symbol) ?? [];
+      const matchName = krxName.includes(q);
+      const matchKeyword = keywords.some(k => {
+        const kn = k.toLowerCase().replace(/\s/g, "");
+        return kn.includes(q) || q.includes(kn);
+      });
+      if ((matchName || matchKeyword) && !seen.has(e.symbol)) {
+        seen.add(e.symbol);
+        // KOREAN_COMPANY_MAP에 정확한 표시명이 있으면 우선 사용
+        const displayName = DISPLAY_NAME_OVERRIDE.get(e.symbol) ?? e.name;
+        results.push({ symbol: e.symbol, shortname: displayName, exchange: e.exchange, quoteType: "EQUITY" });
+      }
+      if (results.length >= 8) break;
+    }
+    return results;
   }
+
   return KOREAN_COMPANY_MAP.filter(c =>
     c.keywords.some(k => k.includes(q) || q.includes(k))
   ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
@@ -272,12 +299,16 @@ router.get("/search/:query", async (req, res) => {
         n && n !== ticker && !n.includes(",") && !n.match(/^\d/) && n.length > 1;
 
       if (ksQ.status === "fulfilled") {
-        const name = ksQ.value.longName || ksQ.value.shortName || "";
-        if (isValidName(name, `${query}.KS`)) results.push({ symbol: `${query}.KS`, shortname: name, exchange: "KOSPI", quoteType: "EQUITY" });
+        const sym = `${query}.KS`;
+        const yahooName = ksQ.value.longName || ksQ.value.shortName || "";
+        const name = DISPLAY_NAME_OVERRIDE.get(sym) || yahooName;
+        if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, exchange: "KOSPI", quoteType: "EQUITY" });
       }
       if (kqQ.status === "fulfilled") {
-        const name = kqQ.value.longName || kqQ.value.shortName || "";
-        if (isValidName(name, `${query}.KQ`)) results.push({ symbol: `${query}.KQ`, shortname: name, exchange: "KOSDAQ", quoteType: "EQUITY" });
+        const sym = `${query}.KQ`;
+        const yahooName = kqQ.value.longName || kqQ.value.shortName || "";
+        const name = DISPLAY_NAME_OVERRIDE.get(sym) || yahooName;
+        if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, exchange: "KOSDAQ", quoteType: "EQUITY" });
       }
       // Fallback: if Yahoo returned nothing, still try local map
       if (results.length === 0) {
