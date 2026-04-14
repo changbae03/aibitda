@@ -821,21 +821,44 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-5 mb-2 first:mt-0">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground/90 mt-4 mb-1.5">{children}</h3>,
+              h2: ({ children }) => (
+                <h2 className="text-base font-bold text-foreground mt-6 mb-3 first:mt-0 pb-1.5 border-b border-border/60">
+                  {children}
+                </h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-sm font-semibold text-foreground mt-5 mb-2 flex items-center gap-1.5">
+                  {children}
+                </h3>
+              ),
+              h4: ({ children }) => (
+                <h4 className="text-[13px] font-semibold text-foreground/80 mt-3 mb-1.5">{children}</h4>
+              ),
               p: ({ children }) => {
                 const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
                 if (text.startsWith("출처:") || text.startsWith("출처 :")) {
                   return <p className="mt-4 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
                 }
-                return <p className="mb-3 last:mb-0">{children}</p>;
+                return <p className="mb-3.5 last:mb-0 text-foreground/80 leading-[1.75]">{children}</p>;
               },
-              ul: ({ children }) => <ul className="mb-3 space-y-1 pl-1">{children}</ul>,
-              ol: ({ children }) => <ol className="mb-3 space-y-1 pl-4 list-decimal">{children}</ol>,
-              li: ({ children }) => <li className="flex gap-2 text-foreground/85"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current flex-shrink-0 opacity-50" /><span>{children}</span></li>,
-              strong: ({ children }) => <span>{children}</span>,
-              em: ({ children }) => <em className="text-foreground/70">{children}</em>,
-              hr: () => <hr className="my-3 border-border" />,
+              ul: ({ children }) => <ul className="mb-4 space-y-2 pl-0">{children}</ul>,
+              ol: ({ children }) => <ol className="mb-4 space-y-2 pl-5 list-decimal">{children}</ol>,
+              li: ({ children }) => (
+                <li className="flex gap-2.5 text-foreground/80 leading-[1.7]">
+                  <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-foreground/30 flex-shrink-0" />
+                  <span className="flex-1">{children}</span>
+                </li>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-foreground">{children}</strong>
+              ),
+              em: ({ children }) => <em className="text-foreground/60 not-italic text-[12px]">{children}</em>,
+              blockquote: ({ children }) => (
+                <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
+                  {children}
+                </blockquote>
+              ),
+              hr: () => <hr className="my-4 border-border/60" />,
               table: ({ children }) => (
                 <div className="my-4 w-full overflow-x-auto rounded-xl border border-border">
                   <table className="w-full text-xs border-collapse">{children}</table>
