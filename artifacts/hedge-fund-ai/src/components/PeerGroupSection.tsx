@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
-import { Users, AlertCircle, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Building2, AlertCircle, Info, ChevronDown, ChevronUp, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Peer {
   ticker: string;
   name: string;
   nameEn: string | null;
+  exchange: string | null;
+  region: string | null;
   reason: string;
   keyPoints: string[];
   marketCap: number | null;
   revenue: number | null;
   operatingIncome: number | null;
   operatingMargin: number | null;
+  currency: string | null;
 }
 
 interface PeerGroupData {
@@ -23,8 +26,7 @@ interface PeerGroupData {
   comparisonNote: string;
 }
 
-function formatKRW(value: number | null): string {
-  if (value == null) return "—";
+function formatKRW(value: number): string {
   const tril = value / 1e12;
   if (Math.abs(tril) >= 1) return `${tril.toFixed(1)}조`;
   const bil = value / 1e8;
@@ -32,10 +34,64 @@ function formatKRW(value: number | null): string {
   return "—";
 }
 
+function formatUSD(value: number): string {
+  const b = value / 1e9;
+  if (Math.abs(b) >= 1) return `$${b.toFixed(1)}B`;
+  const m = value / 1e6;
+  if (Math.abs(m) >= 1) return `$${m.toFixed(0)}M`;
+  return "—";
+}
+
+function formatValue(value: number | null, currency: string | null): string {
+  if (value == null) return "—";
+  const cur = (currency ?? "").toUpperCase();
+  if (cur === "KRW" || cur === "") return formatKRW(value);
+  return formatUSD(value);
+}
+
+function getExchangeInfo(peer: Peer): { label: string; colorClass: string } {
+  const ex = (peer.exchange ?? "").toUpperCase();
+  const ticker = peer.ticker ?? "";
+  const region = (peer.region ?? "").toUpperCase();
+
+  if (ex === "KOSDAQ" || ticker.endsWith(".KQ")) {
+    return { label: "KOSDAQ", colorClass: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800" };
+  }
+  if (ex === "KOSPI" || ticker.endsWith(".KS")) {
+    return { label: "KOSPI", colorClass: "text-violet-600 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-950 dark:border-violet-800" };
+  }
+  if (ex === "NASDAQ") {
+    return { label: "NASDAQ", colorClass: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800" };
+  }
+  if (ex === "NYSE") {
+    return { label: "NYSE", colorClass: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800" };
+  }
+  if (ex === "TSE" || ticker.endsWith(".T") || region === "JP") {
+    return { label: "TSE", colorClass: "text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800" };
+  }
+  if (region === "US" || ex === "US") {
+    return { label: "US", colorClass: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800" };
+  }
+  return { label: ex || "글로벌", colorClass: "text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-900 dark:border-slate-700" };
+}
+
+function getDisplayCode(peer: Peer): string {
+  const ticker = peer.ticker ?? "";
+  if (/^\d{6}\.(KS|KQ)$/.test(ticker)) return ticker.replace(/\.(KS|KQ)$/, "");
+  return ticker;
+}
+
+function isGlobal(peer: Peer): boolean {
+  const ticker = peer.ticker ?? "";
+  const region = (peer.region ?? "").toUpperCase();
+  return !/^\d{6}\.(KS|KQ)$/.test(ticker) && region !== "KR";
+}
+
 function PeerRow({ peer, index }: { peer: Peer; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const exchange = peer.ticker.includes(".KQ") ? "KOSDAQ" : "KOSPI";
-  const code = peer.ticker.replace(/\.(KS|KQ)$/, "");
+  const { label, colorClass } = getExchangeInfo(peer);
+  const code = getDisplayCode(peer);
+  const global = isGlobal(peer);
 
   const hasFinancials = peer.marketCap != null || peer.revenue != null || peer.operatingIncome != null;
 
@@ -45,7 +101,6 @@ function PeerRow({ peer, index }: { peer: Peer; index: number }) {
         className="w-full text-left hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(v => !v)}
       >
-        {/* 헤더 행 */}
         <div className="px-3.5 pt-3 pb-2">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -57,16 +112,17 @@ function PeerRow({ peer, index }: { peer: Peer; index: number }) {
                 {peer.nameEn && (
                   <span className="text-xs text-muted-foreground truncate hidden sm:block">{peer.nameEn}</span>
                 )}
+                {global && (
+                  <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
+                )}
               </div>
               <div className="flex items-center gap-2 ml-7">
                 <span className="font-mono text-xs text-muted-foreground">{code}</span>
                 <span className={cn(
                   "text-[10px] font-medium px-1.5 py-0.5 rounded border",
-                  exchange === "KOSDAQ"
-                    ? "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800"
-                    : "text-violet-600 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-950 dark:border-violet-800"
+                  colorClass
                 )}>
-                  {exchange}
+                  {label}
                 </span>
               </div>
             </div>
@@ -76,20 +132,23 @@ function PeerRow({ peer, index }: { peer: Peer; index: number }) {
           </div>
         </div>
 
-        {/* 재무 요약 인라인 (항상 표시) */}
         {hasFinancials && (
           <div className="px-3.5 pb-3 ml-7">
             <div className="flex items-center gap-4 flex-wrap">
               {peer.marketCap != null && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-muted-foreground">시가총액</span>
-                  <span className="text-[11px] font-semibold font-mono text-foreground">{formatKRW(peer.marketCap)}</span>
+                  <span className="text-[11px] font-semibold font-mono text-foreground">
+                    {formatValue(peer.marketCap, peer.currency)}
+                  </span>
                 </div>
               )}
               {peer.revenue != null && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-muted-foreground">매출</span>
-                  <span className="text-[11px] font-semibold font-mono text-foreground">{formatKRW(peer.revenue)}</span>
+                  <span className="text-[11px] font-semibold font-mono text-foreground">
+                    {formatValue(peer.revenue, peer.currency)}
+                  </span>
                 </div>
               )}
               {peer.operatingIncome != null && (
@@ -98,7 +157,9 @@ function PeerRow({ peer, index }: { peer: Peer; index: number }) {
                   <span className={cn(
                     "text-[11px] font-semibold font-mono",
                     peer.operatingIncome >= 0 ? "text-emerald-600" : "text-red-500"
-                  )}>{formatKRW(peer.operatingIncome)}</span>
+                  )}>
+                    {formatValue(peer.operatingIncome, peer.currency)}
+                  </span>
                 </div>
               )}
               {peer.operatingMargin != null && (
@@ -115,7 +176,6 @@ function PeerRow({ peer, index }: { peer: Peer; index: number }) {
         )}
       </button>
 
-      {/* 확장: 선정 근거 + 키포인트 */}
       {expanded && (
         <div className="px-3.5 pb-3.5 pt-0 border-t border-border/50 bg-muted/10">
           <p className="text-xs text-muted-foreground leading-relaxed mt-3 mb-2">{peer.reason}</p>
@@ -163,8 +223,8 @@ export default function PeerGroupSection({
     return (
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Users className="w-4 h-4 text-primary" />
-          <h3 className="font-display font-semibold text-base">Peer Group 분석</h3>
+          <Building2 className="w-4 h-4 text-primary" />
+          <h3 className="font-display font-semibold text-base">연관기업</h3>
         </div>
         <div className="space-y-2">
           {[1, 2, 3, 4].map(i => (
@@ -179,40 +239,62 @@ export default function PeerGroupSection({
     return (
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Users className="w-4 h-4 text-primary" />
-          <h3 className="font-display font-semibold text-base">Peer Group 분석</h3>
+          <Building2 className="w-4 h-4 text-primary" />
+          <h3 className="font-display font-semibold text-base">연관기업</h3>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <AlertCircle className="w-4 h-4" />
-          <span>피어 그룹 데이터를 불러올 수 없습니다</span>
+          <span>연관기업 데이터를 불러올 수 없습니다</span>
         </div>
       </div>
     );
   }
 
+  const koreanPeers = (data.peers ?? []).filter(p => !isGlobal(p));
+  const globalPeers = (data.peers ?? []).filter(p => isGlobal(p));
+
   return (
     <div className="bg-card border border-border rounded-2xl p-5">
       <div className="mb-4">
         <h3 className="font-display font-semibold text-base flex items-center gap-2">
-          <Users className="w-4 h-4 text-primary" />
-          Peer Group 분석
+          <Building2 className="w-4 h-4 text-primary" />
+          연관기업
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5">{companyName} · {industry}</p>
       </div>
 
-      {/* 재무 범례 */}
-      <p className="text-[10px] text-muted-foreground mb-3">시가총액 · 매출 · 영업이익은 TTM(최근 12개월) 기준</p>
+      <p className="text-[10px] text-muted-foreground mb-3">시가총액 · 매출 · 영업이익은 TTM 기준 (한국주식: 원화, 글로벌: USD)</p>
 
-      {/* Peer list */}
-      <div className="space-y-2 mb-5">
-        {(data.peers ?? []).map((peer, i) => (
-          <PeerRow key={peer.ticker} peer={peer} index={i} />
-        ))}
-      </div>
+      {koreanPeers.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">국내 상장</p>
+          <div className="space-y-2">
+            {koreanPeers.map((peer, i) => (
+              <PeerRow key={peer.ticker} peer={peer} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Methodology */}
+      {globalPeers.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
+            <Globe className="w-3 h-3" /> 글로벌
+          </p>
+          <div className="space-y-2">
+            {globalPeers.map((peer, i) => (
+              <PeerRow key={peer.ticker} peer={peer} index={koreanPeers.length + i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!koreanPeers.length && !globalPeers.length && (
+        <p className="text-sm text-muted-foreground">연관기업 데이터가 없습니다</p>
+      )}
+
       {data.methodology && (
-        <div className="rounded-xl bg-muted/30 border border-border/60 p-3.5">
+        <div className="rounded-xl bg-muted/30 border border-border/60 p-3.5 mt-1">
           <div className="flex items-start gap-2">
             <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
             <div>

@@ -39,11 +39,9 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
       .sort((a: any, b: any) => b.pctHeld - a.pctHeld)
       .slice(0, 8);
 
-    // 각 펀드의 티커를 Yahoo Finance 검색으로 병렬 조회
     const tickerResults = await Promise.allSettled(
       sorted.map(async (f: any) => {
         const org: string = f.organization ?? "";
-        // "FUND FAMILY-Fund Name" 형태에서 펀드 이름 추출
         const searchQuery = org.includes("-") ? org.split("-").slice(1).join("-").trim() : org;
         try {
           const sr = await (yahooFinance as any).search(
@@ -80,7 +78,6 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
   }> = [];
 
   try {
-    // 시총 조회
     let marketCapLabel = "불명";
     try {
       const q = await yahooFinance.quote(resolvedSymbol);
@@ -100,51 +97,39 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
 - 티커: ${ticker}${companyName ? ` (${companyName})` : ""}
 - 업종: ${industry ?? "불명"}
 - 거래소: ${exchange}
-- 시가총액 규모: ${marketCapLabel}
+- 시가총액 구분: ${marketCapLabel}
 
-JSON 형식으로만 응답하세요 (마크다운 없이):
-{
-  "etfs": [
-    {
-      "code": "069500",
-      "name": "KODEX 200",
-      "manager": "삼성자산운용",
-      "indexBasis": "KOSPI 200",
-      "confidence": "high",
-      "reason": "편입 근거 한 문장",
-      "estimatedWeight": "0.3%~0.5%",
-      "weightBasis": "KOSPI200 시총 비중 기준"
-    }
-  ],
-  "notes": "전반적인 ETF 편입 특성 요약 (1~2문장)"
-}
+다음 JSON 스키마로만 응답하세요:
+{"etfs": [{"code": "ETF코드", "name": "ETF명", "manager": "운용사", "indexBasis": "추종지수", "confidence": "high|medium|low", "reason": "편입 근거", "estimatedWeight": "추정비중% 또는 null", "weightBasis": "비중 추정 근거 또는 null"}], "notes": "참고사항 (선택)"}
 
 규칙:
-- confidence: high=거의 확실히 편입, medium=편입 가능성 높음, low=섹터/테마 ETF 가능성
-- 실제 존재하는 한국 ETF만 포함 (KODEX/TIGER/ARIRANG/HANARO/KBSTAR/SOL 등)
-- 거래소와 시총에 맞는 ETF만 선택 (KOSDAQ 소형주에 KODEX200 제외 등)
-- estimatedWeight: 해당 ETF 내 이 종목의 예상 편입 비중 (시총 비중, ETF 구성 방식 고려). 불확실하면 범위로 표시
-- weightBasis: 비중 추정 근거 (시총 비중, 동일 비중, 테마 ETF 등)
-- 최대 6개`;
+- 실제 존재하는 국내 ETF만 포함 (KODEX, TIGER, KBSTAR, HANARO, ARIRANG 등)
+- confidence: high=확실히 편입, medium=편입 가능성 높음, low=편입 가능성 있음
+- 3~6개 ETF 선정`;
 
     const result = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 16384 },
+      config: {
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
+      },
     });
 
-    const rawFull = result.text ?? "{}";
-    const raw = rawFull.replace(/```json\n?|```\n?/g, "").trim();
-    const parsed = JSON.parse(raw);
-    domesticEtfs = parsed.etfs ?? [];
-    const notes = parsed.notes ?? null;
+    const raw = result.text ?? "{}";
+    let parsed: any = null;
+    try { parsed = JSON.parse(raw); } catch { /* ignore */ }
+
+    if (parsed?.etfs) {
+      domesticEtfs = parsed.etfs ?? [];
+    }
 
     res.json({
       ticker,
       exchange,
       globalFunds,
       domesticEtfs,
-      notes,
+      notes: parsed?.notes ?? null,
     });
     return;
   } catch (err: any) {
@@ -159,7 +144,7 @@ JSON 형식으로만 응답하세요 (마크다운 없이):
   }
 });
 
-// ── Peer Group 분석 ────────────────────────────────────────────────────────────
+// ── 연관기업 (Peer Group) 분석 ─────────────────────────────────────────────────
 // GET /api/market-data/peer-group/:ticker
 router.get("/peer-group/:ticker", async (req, res) => {
   const ticker = (req.params.ticker as string).toUpperCase();
@@ -170,58 +155,75 @@ router.get("/peer-group/:ticker", async (req, res) => {
     return;
   }
 
-  const prompt = `당신은 한국 주식시장 전문 애널리스트입니다.
-아래 종목에 대해 Peer Group(유사 동종사)을 선정하고 JSON으로만 응답하세요.
+  const isKorean = /^\d{6}\.(KS|KQ)$/.test(ticker);
+
+  const prompt = `당신은 글로벌 주식시장 전문 애널리스트입니다.
+아래 종목에 대해 연관기업(비교 가능한 피어)을 선정하고 JSON으로만 응답하세요.
 
 분석 대상:
 - 종목: ${ticker} (${companyName})
 - 업종: ${industry ?? "불명"}
 
-JSON 형식 (마크다운 없이):
+선정 기준:
+- 사업 모델이 유사하거나 직접적 경쟁 관계인 기업
+- 밸류에이션 비교 시 의미 있는 기준이 되는 기업
+- **한국 상장 주식 3~4개** + **글로벌(미국/일본 등) 주요 기업 2~3개** 를 혼합하여 총 5~7개 선정
+${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피어 중심으로 선정 가능" : ""}
+
+다음 JSON 스키마로만 응답하세요:
 {
   "peers": [
     {
-      "ticker": "XXXXXX.KS",
-      "name": "회사명(한글)",
-      "nameEn": "Company Name",
-      "reason": "피어 선정 근거 (2~3문장): 사업 유사성, 경쟁관계, 벨류에이션 비교 시 의미 있는 이유",
+      "ticker": "005930.KS",
+      "name": "삼성전자",
+      "nameEn": "Samsung Electronics",
+      "exchange": "KOSPI",
+      "region": "KR",
+      "reason": "피어 선정 근거 2~3문장: 사업 유사성·경쟁관계·밸류에이션 비교 의미",
       "keyPoints": ["포인트1", "포인트2"]
     }
   ],
-  "methodology": "피어 선정 기준 및 방법론 설명 (2~3문장)",
+  "methodology": "피어 선정 기준 및 방법론 (2~3문장)",
   "comparisonNote": "이 피어 그룹과 비교 시 투자자가 주목해야 할 핵심 관점 (1~2문장)"
 }
 
-규칙:
-- 한국 상장 주식만 포함 (KS=KOSPI, KQ=KOSDAQ)
-- 실제 존재하는 회사만 (6자리 종목코드 정확히)
-- 피어 4~6개 선정
-- 단순 같은 업종 나열 금지 → 사업모델/경쟁관계/벨류에이션 비교 의미 있는 회사 선정
-- reason은 투자 판단에 실질적 도움이 되는 내용으로`;
+티커 형식:
+- 한국 KOSPI: 6자리코드.KS (예: 005930.KS)
+- 한국 KOSDAQ: 6자리코드.KQ (예: 035420.KQ)
+- 미국: 표준 티커 (예: NVDA, ASML, TSM)
+- 일본: 숫자.T (예: 6758.T)
+- exchange 필드: "KOSPI", "KOSDAQ", "NASDAQ", "NYSE", "TSE" 등 실제 거래소명
+- region 필드: "KR", "US", "JP", "EU" 등`;
 
   try {
     const result = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 4096 },
+      config: {
+        maxOutputTokens: 4096,
+        responseMimeType: "application/json",
+      },
     });
 
-    const raw = (result.text ?? "{}").replace(/```json\n?|```\n?/g, "").trim();
-    const parsed = JSON.parse(raw);
-    const peers: any[] = parsed.peers ?? [];
+    const raw = result.text ?? "{}";
+    let parsed: any = null;
+    try { parsed = JSON.parse(raw); } catch { /* ignore */ }
+    const peers: any[] = parsed?.peers ?? [];
 
     // 각 피어에 대해 Yahoo Finance 재무 데이터 병렬 조회
     const peerFinancials = await Promise.allSettled(
       peers.map(async (peer: any) => {
         const peerTicker: string = peer.ticker ?? "";
-        if (!peerTicker) return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null };
+        if (!peerTicker) return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null, operatingMargin: null, currency: null };
         try {
           const [q, fin] = await Promise.allSettled([
             yahooFinance.quote(peerTicker, undefined, { validateResult: false } as any),
-            yahooFinance.quoteSummary(peerTicker, { modules: ["financialData"] } as any, { validateResult: false } as any),
+            yahooFinance.quoteSummary(peerTicker, { modules: ["financialData", "price"] } as any, { validateResult: false } as any),
           ]);
           const quote = q.status === "fulfilled" ? q.value as any : null;
           const finData = fin.status === "fulfilled" ? (fin.value as any)?.financialData : null;
+          const priceData = fin.status === "fulfilled" ? (fin.value as any)?.price : null;
+          const currency: string = priceData?.currency ?? quote?.currency ?? "USD";
           const totalRevenue: number | null = finData?.totalRevenue ?? null;
           const opMargins: number | null = finData?.operatingMargins ?? null;
           const opIncome: number | null =
@@ -232,14 +234,14 @@ JSON 형식 (마크다운 없이):
             revenue: totalRevenue,
             operatingIncome: opIncome,
             operatingMargin: opMargins != null ? Math.round(opMargins * 1000) / 10 : null,
+            currency,
           };
         } catch {
-          return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null, operatingMargin: null };
+          return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null, operatingMargin: null, currency: null };
         }
       })
     );
 
-    // 피어 데이터와 재무 데이터 병합
     const peersWithFinancials = peers.map((peer: any) => {
       const fin = peerFinancials.find(
         (f) => f.status === "fulfilled" && f.value.ticker === peer.ticker
@@ -251,6 +253,7 @@ JSON 형식 (마크다운 없이):
         revenue: finVal?.revenue ?? null,
         operatingIncome: finVal?.operatingIncome ?? null,
         operatingMargin: finVal?.operatingMargin ?? null,
+        currency: finVal?.currency ?? null,
       };
     });
 
@@ -259,8 +262,8 @@ JSON 형식 (마크다운 없이):
       companyName,
       industry,
       peers: peersWithFinancials,
-      methodology: parsed.methodology ?? "",
-      comparisonNote: parsed.comparisonNote ?? "",
+      methodology: parsed?.methodology ?? "",
+      comparisonNote: parsed?.comparisonNote ?? "",
     });
   } catch (err: any) {
     console.error("Peer group error:", err);
