@@ -610,11 +610,15 @@ function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
   useEffect(() => {
     if (!messages || messages.length <= 1) return;
     const interval = setInterval(() => {
-      setVisible(false);
-      setTimeout(() => {
-        setIdx(prev => (prev + 1) % messages.length);
-        setVisible(true);
-      }, 350);
+      setIdx(prev => {
+        if (prev >= messages.length - 1) {
+          clearInterval(interval);
+          return prev;
+        }
+        setVisible(false);
+        setTimeout(() => setVisible(true), 350);
+        return prev + 1;
+      });
     }, 3800);
     return () => clearInterval(interval);
   }, [messages]);
