@@ -48,9 +48,9 @@ async function runQCCheck(
   const fundamentalExtra = isFundamental ? `
 
 5. 실적 전망 정합성 (실적 전망 단계 전용 필수 검증):
+   - 최근 실적 검토 섹션이 없으면: 불승인
    - Base 실적 추정 테이블(매출·영업이익률·영업이익·EBITDA·EPS)이 없으면: 불승인
    - EPS 또는 EBITDA 수치가 누락되면: 불승인
-   - DCF 입력 가정 테이블(WACC, Terminal g, Sales-to-Capital)이 없으면: 불승인
    - 실적 전망 인계 요약 블록이 없으면: 불승인
    - 성장 동력 또는 리스크 요인 서술이 없으면: 불승인` : isRelativeValuation ? `
 
@@ -63,9 +63,15 @@ async function runQCCheck(
    - 최종 목표주가·상단 밴드·하단 밴드 3개 수치가 모두 명시되지 않으면: 불승인
    - 최종 밸류에이션 인계 요약 블록이 없으면: 불승인
 
+  [모델 선택 및 DCF 가정 검증]
+   - 밸류에이션 모델 선택 섹션(4개 평가 기준 테이블)이 없으면: 불승인
+   - 선택 모델 이유가 없으면: 불승인
+   - DCF 입력 가정 섹션이 없으면: 불승인
+   - WACC 산출 근거(Rf, β, ERP, CoE, CoD 수치)가 없으면: 불승인
+   - WACC 또는 Terminal g 수치가 없으면: 불승인
+
   [DCF 품질 검증]
-   - WACC, Terminal g, Sales-to-Capital이 실적 전망 단계 인계값과 일치하지 않으면: 불승인
-   - NOPAT = 영업이익 × (1-세율), FCFF = NOPAT - 재투자 공식이 보고서에 명시되지 않으면: 불승인
+   - NOPAT = 영업이익 × (1-세율), FCFF = NOPAT - 재투자 공식이 명시되지 않으면: 불승인
    - DCF 내재가치가 현재 주가 대비 터무니없이 높거나(4배↑) 낮으면(0.2배↓): 가정 재검토 여부 확인, 없으면 불승인
    - Reverse DCF 분석(현재 주가 역산)이 없으면: 불승인
 
