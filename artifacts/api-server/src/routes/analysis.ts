@@ -1216,6 +1216,9 @@ function formatStep(step: any) {
 }
 
 function formatAnalysis(analysis: any, steps: any[]) {
+  const sortedSteps = [...steps].sort(
+    (a, b) => STEP_ORDER.indexOf(a.stepKey as AgentKey) - STEP_ORDER.indexOf(b.stepKey as AgentKey)
+  );
   return {
     id: analysis.id,
     ticker: analysis.ticker,
@@ -1230,7 +1233,7 @@ function formatAnalysis(analysis: any, steps: any[]) {
     entryPrice: analysis.entryPrice,
     stopLoss: analysis.stopLoss,
     riskRewardRatio: analysis.riskRewardRatio,
-    steps: steps.map(formatStep),
+    steps: sortedSteps.map(formatStep),
     createdAt: analysis.createdAt?.toISOString?.() ?? analysis.createdAt,
     updatedAt: analysis.updatedAt?.toISOString?.() ?? analysis.updatedAt,
   };

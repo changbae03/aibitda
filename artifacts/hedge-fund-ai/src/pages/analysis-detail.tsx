@@ -297,7 +297,9 @@ export default function AnalysisDetail() {
       {/* Analysis Steps Feed */}
       <div className="space-y-4">
         <AnimatePresence>
-          {analysis.steps.map((step, idx) => (
+          {[...analysis.steps]
+            .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
+            .map((step, idx) => (
             <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} />
           ))}
         </AnimatePresence>
