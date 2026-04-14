@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, AlertCircle, Info, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, AlertCircle, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Peer {
@@ -211,26 +211,15 @@ export default function PeerGroupSection({
       </div>
 
       {/* Methodology */}
-      {(data.methodology || data.comparisonNote) && (
-        <div className="rounded-xl bg-muted/30 border border-border/60 p-3.5 space-y-2">
-          {data.methodology && (
-            <div className="flex items-start gap-2">
-              <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
-              <div>
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-0.5">선정 방법론</span>
-                <p className="text-xs text-muted-foreground leading-relaxed">{data.methodology}</p>
-              </div>
+      {data.methodology && (
+        <div className="rounded-xl bg-muted/30 border border-border/60 p-3.5">
+          <div className="flex items-start gap-2">
+            <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-0.5">선정 방법론</span>
+              <p className="text-xs text-muted-foreground leading-relaxed">{data.methodology}</p>
             </div>
-          )}
-          {data.comparisonNote && (
-            <div className="flex items-start gap-2 pt-2 border-t border-border/50">
-              <ExternalLink className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
-              <div>
-                <span className="text-[11px] font-semibold text-primary uppercase tracking-wide block mb-0.5">투자 관점</span>
-                <p className="text-xs text-muted-foreground leading-relaxed">{data.comparisonNote}</p>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>
