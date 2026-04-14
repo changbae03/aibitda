@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 interface FinancialEntry {
   period: string;
   isEstimate: boolean;
+  opIncomeFromMargin?: boolean;
   revenue: number | null;
   operatingIncome: number | null;
   netIncome: number | null;
@@ -68,13 +69,25 @@ const COLORS = {
 
 const CustomTooltip = ({ active, payload, label, currency }: any) => {
   if (!active || !payload?.length) return null;
+  const entry: FinancialEntry | undefined = payload[0]?.payload;
   return (
     <div className="bg-white border border-border rounded-xl shadow-lg p-3 text-xs min-w-[160px]">
-      <div className="font-semibold text-foreground mb-2">{label}</div>
+      <div className="font-semibold text-foreground mb-2">
+        {label}
+        {entry?.isEstimate && (
+          <span className="ml-1.5 text-[10px] font-normal text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">추정치</span>
+        )}
+      </div>
       {payload.map((p: any) => (
         p.value != null && (
           <div key={p.dataKey} className="flex justify-between gap-4 mb-1">
-            <span style={{ color: p.color }}>{p.name}</span>
+            <span style={{ color: p.color }}>
+              {p.dataKey === "revenue" ? "매출" :
+               p.dataKey === "operatingIncome" ? "영업이익" : "영업이익률"}
+              {p.dataKey === "operatingIncome" && entry?.opIncomeFromMargin && (
+                <span className="ml-1 text-muted-foreground">(이익률 추정)</span>
+              )}
+            </span>
             <span className="font-mono font-semibold text-foreground">
               {p.dataKey === "operatingMargin"
                 ? `${Number(p.value).toFixed(1)}%`
@@ -237,7 +250,12 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
       </ResponsiveContainer>
 
       {entries.some((e) => e.isEstimate) && (
-        <p className="text-[10px] text-muted-foreground text-right">옅은 색 = 컨센서스 추정치</p>
+        <div className="flex flex-col items-end gap-0.5">
+          <p className="text-[10px] text-muted-foreground">옅은 색 = 컨센서스 추정치</p>
+          {entries.some((e) => e.opIncomeFromMargin) && (
+            <p className="text-[10px] text-muted-foreground">* 2027E 영업이익은 전년도 이익률 기반 추정</p>
+          )}
+        </div>
       )}
     </div>
   );
