@@ -583,6 +583,7 @@ const AGENT_COLORS: Record<string, string> = {
   company_intro: "hsl(218, 67%, 44%)",
   industry_analysis: "#059669",
   company_analysis: "#4f46e5",
+  relative_valuation: "#7c3aed",
   market_analysis: "#e11d48",
   catalyst_analysis: "#d97706",
   investment_strategy: "hsl(218, 67%, 44%)",
@@ -722,6 +723,27 @@ function stripValuationData(content: string): string {
   return content.replace(/\nVALUATION_DATA:\{[^\n]+\}\s*$/, "").trim();
 }
 
+interface FinalValuationData {
+  current: number;
+  bear: number; base: number; bull: number;
+  abs_bear: number; abs_base: number; abs_bull: number;
+  rel_bear: number; rel_base: number; rel_bull: number;
+}
+
+function parseFinalValuationData(content: string): FinalValuationData | null {
+  const match = content.match(/FINAL_VALUATION_DATA:(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]) as FinalValuationData;
+    if (!parsed.base) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function stripFinalValuationData(content: string): string {
+  return content.replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/, "").trim();
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
@@ -739,13 +761,17 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
 
   const isMarket = step.stepKey === "market_analysis";
   const isFundamental = step.stepKey === "company_analysis";
+  const isRelativeVal = step.stepKey === "relative_valuation";
   const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
   const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
+  const finalValuationData = isRelativeVal ? parseFinalValuationData(step.content ?? "") : null;
   const displayContent = isMarket
     ? stripChartData(step.content ?? "")
     : isFundamental
       ? stripValuationData(step.content ?? "")
-      : (step.content ?? "");
+      : isRelativeVal
+        ? stripFinalValuationData(step.content ?? "")
+        : (step.content ?? "");
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
@@ -802,6 +828,57 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
             {displayContent}
           </ReactMarkdown>
         </div>
+
+        {/* Valuation B 최종 조율 목표주가 요약 박스 */}
+        {isRelativeVal && finalValuationData && (
+          <div className="mt-5 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">최종 조율 목표주가</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>절대가치 × 상대가치 조율</span>
+            </div>
+            <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[300px] text-xs border-collapse">
+                <thead>
+                  <tr className="bg-muted/60">
+                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">구분</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-rose-600 border-b border-border">Bear</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-blue-600 border-b border-border">Bull</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2 font-medium text-foreground/80">절대가치(A)</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.abs_bear)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.abs_base)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.abs_bull)}</td>
+                  </tr>
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2 font-medium text-foreground/80">상대가치(B)</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.rel_bear)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.rel_base)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.rel_bull)}</td>
+                  </tr>
+                  <tr className="bg-muted/20 font-semibold">
+                    <td className="px-3 py-2.5 font-bold text-foreground">조율 목표가</td>
+                    <td className="px-3 py-2.5 text-right text-rose-600 font-mono font-bold">{formatPrice(finalValuationData.bear)}</td>
+                    <td className="px-3 py-2.5 text-right text-emerald-600 font-mono font-bold">{formatPrice(finalValuationData.base)}</td>
+                    <td className="px-3 py-2.5 text-right text-blue-600 font-mono font-bold">{formatPrice(finalValuationData.bull)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
+                <span className="text-xs text-muted-foreground">현재 주가</span>
+                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(finalValuationData.current)}</span>
+                <span className="text-xs text-muted-foreground">조율 Base 괴리율</span>
+                <span className={`font-mono text-sm font-bold text-right sm:text-left ${finalValuationData.base > finalValuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
+                  {finalValuationData.current > 0 ? `${((finalValuationData.base - finalValuationData.current) / finalValuationData.current * 100).toFixed(1)}%` : "-"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Fundamental & Valuation 목표주가 요약 박스 */}
         {isFundamental && valuationData && (

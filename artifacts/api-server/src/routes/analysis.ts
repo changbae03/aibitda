@@ -31,7 +31,7 @@ const runningStepsLock = new Map<string, boolean>();
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
-const QC_STEPS = new Set<AgentKey>(["industry_analysis", "catalyst_analysis", "company_analysis", "market_analysis"]);
+const QC_STEPS = new Set<AgentKey>(["industry_analysis", "catalyst_analysis", "company_analysis", "relative_valuation", "market_analysis"]);
 
 async function runQCCheck(
   stepKey: AgentKey,
@@ -43,14 +43,22 @@ async function runQCCheck(
   const excerpt = content.slice(0, 3000);
 
   const isFundamental = stepKey === "company_analysis";
+  const isRelativeValuation = stepKey === "relative_valuation";
   const fundamentalExtra = isFundamental ? `
 
-5. 밸류에이션 정합성 (Fundamental 전용 필수 검증):
+5. 밸류에이션 정합성 (Valuation A 전용 필수 검증):
    - 영업이익 적자 기업인데 FCF가 과도하게 크면: DCF가 비정상 FCF를 사용한 경우 → 즉시 불승인(false)
    - Base 목표가가 현재 주가의 3배 이상이면: 입력 가정 재검토 여부 명시 없으면 불승인
    - 세 방법론의 Base 목표가 괴리가 500% 이상이면: 반드시 불승인(false)
    - Bear 목표가가 현재 주가의 30% 미만이면: 청산 가치 비교 여부 확인, 없으면 불승인
-   - 시나리오별 실적 전망의 수치가 DCF CAGR 가정과 불일치하면: 불승인` : "";
+   - 시나리오별 실적 전망의 수치가 DCF CAGR 가정과 불일치하면: 불승인` : isRelativeValuation ? `
+
+5. 상대가치 정합성 (Valuation B 전용 필수 검증):
+   - 피어 그룹이 3개 미만이거나 사업모델이 전혀 다른 기업이 포함되면: 불승인
+   - FINAL_VALUATION_DATA JSON이 없거나 파싱 불가이면: 즉시 불승인(false)
+   - 조율 최종 Base 목표가가 현재 주가의 4배 이상이면: 불승인
+   - 조율 Bear 목표가가 현재 주가의 20% 미만이면: 불승인
+   - 조율 근거(가중평균 or Lead 조율) 서술이 없으면: 불승인` : "";
 
   const prompt = `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
 아래는 ${agentName}가 ${companyName}(${ticker})에 대해 작성한 분석 보고서입니다.
@@ -756,9 +764,9 @@ router.post("/:id/step", async (req, res) => {
   let content = "";
   try {
     try {
-      // company_analysis(DCF·밸류에이션)은 섹션이 많아 더 큰 토큰 한도 필요
+      // company_analysis(절대가치)와 relative_valuation(상대가치+조율)은 섹션이 많아 더 큰 토큰 한도 필요
       const maxOutputTokens =
-        stepKey === "company_analysis" ? 32768 : 16384;
+        (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 16384;
 
       const stream = await ai.models.generateContentStream({
         model: "gemini-2.5-flash",

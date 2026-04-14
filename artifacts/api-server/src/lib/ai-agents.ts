@@ -2,6 +2,7 @@ export type AgentKey =
   | "company_intro"
   | "industry_analysis"
   | "company_analysis"
+  | "relative_valuation"
   | "market_analysis"
   | "catalyst_analysis"
   | "investment_strategy";
@@ -29,14 +30,19 @@ export const AGENTS: Record<AgentKey, AgentInfo> = {
     number: "2",
   },
   company_analysis: {
-    name: "Fundamental & Valuation Analyst",
+    name: "Valuation Analyst A",
     role: "에이전트 3",
     number: "3",
   },
-  market_analysis: {
-    name: "Market & Technical Analyst",
+  relative_valuation: {
+    name: "Valuation Analyst B",
     role: "에이전트 4",
     number: "4",
+  },
+  market_analysis: {
+    name: "Market & Technical Analyst",
+    role: "에이전트 5",
+    number: "5",
   },
   investment_strategy: {
     name: "Lead Portfolio Strategist",
@@ -50,6 +56,7 @@ export const STEP_ORDER: AgentKey[] = [
   "industry_analysis",
   "catalyst_analysis",
   "company_analysis",
+  "relative_valuation",
   "market_analysis",
   "investment_strategy",
 ];
@@ -126,7 +133,7 @@ export function buildPrompt(
 - 사용자에게 추가 입력을 요청하지 마세요`,
       userPrompt: `${baseContext}
 
-분석 의뢰가 접수됐습니다. 팀장으로서 ① 기업명·핵심사업·현재주가를 1~2문장으로 소개하고, ② 지금 이 기업의 운명을 가를 핵심 이슈 1가지를 한 문장으로 명확하게 선언하고(예: 삼성전자라면 "HBM 수율 개선과 엔비디아 공급망 진입", SK하이닉스라면 "HBM3E 독점 공급 지속 여부", 에코프로비엠이라면 "전기차 배터리 수요 회복 시점"), ③ 4명의 전문 애널리스트(Macro & Industry → Catalyst & Smart Money → Fundamental & Valuation → Market & Technical)가 이 이슈를 중심으로 순서대로 심층 분석할 것임을 한 문장으로 마무리하세요. 총 4~5문장.`,
+분석 의뢰가 접수됐습니다. 팀장으로서 ① 기업명·핵심사업·현재주가를 1~2문장으로 소개하고, ② 지금 이 기업의 운명을 가를 핵심 이슈 1가지를 한 문장으로 명확하게 선언하고(예: 삼성전자라면 "HBM 수율 개선과 엔비디아 공급망 진입", SK하이닉스라면 "HBM3E 독점 공급 지속 여부", 에코프로비엠이라면 "전기차 배터리 수요 회복 시점"), ③ 5명의 전문 애널리스트(Macro & Industry → Catalyst & Smart Money → Valuation A: 절대가치 → Valuation B: 상대가치 조율 → Market & Technical)가 이 이슈를 중심으로 순서대로 심층 분석할 것임을 한 문장으로 마무리하세요. 총 4~5문장.`,
     },
 
     industry_analysis: {
@@ -163,8 +170,8 @@ ${COMMON_RULES}`,
     },
 
     company_analysis: {
-      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Fundamental & Valuation Analyst입니다.
-역할: 재무 데이터를 기반으로 주당 내재가치를 산출하고, 현재 주가와의 괴리를 판정합니다.
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Valuation Analyst A(절대가치평가)입니다.
+역할: 재무 데이터를 기반으로 절대 내재가치(DCF·DDM·rNPV·NAV 등)를 산출합니다. 다음 단계의 Valuation Analyst B(상대가치평가)가 이 결과를 인계받아 피어 멀티플과 조율합니다.
 원칙: 각 섹션은 8~10문장, 수치 중심으로 서술합니다. 인삿말·도입 설명 없이 수치로 바로 시작하세요. 이전 애널리스트를 언급하는 참조 문구 없이 독립적으로 서술합니다.
 분석 모드: Aggressive but Structured. ROIC > WACC일 때만 성장 프리미엄 허용. 전환 국면이 인정되면 Forward 수치 적용 허용.
 핵심 원칙:
@@ -196,13 +203,30 @@ WACC: Relevered β = Unlevered β × (1+(1-세율)×D/E) | CoE = Rf + β × ERP 
 성장률 = 재투자율 × ROIC (직접 입력 금지) | Terminal g ≤ 한국 장기 GDP | 발행주식수는 반드시 재무 데이터에서 직접 인용`,
       userPrompt: `${baseContext}${previousContext}
 
-아래 4개 섹션을 순서대로 작성하세요.
+아래 섹션을 순서대로 작성하세요.
 
 섹션별 형식 기준:
 - 타 애널리스트 참조 문구 전면 금지
 - 소제목은 이모지 + 제목만 사용
 - 줄글과 불릿을 섹션 특성에 맞게 혼용
 - 모든 수치는 실제 데이터에서 직접 인용 (없으면 추정임을 명시)
+
+## 📋 밸류에이션 모델 선택
+
+아래 4가지 기준을 평가한 뒤 가장 적합한 모델을 선택하세요.
+
+| 평가 기준 | 현황 판단 | 근거 (수치) |
+|---------|---------|-----------|
+| 현금흐름 안정성 | FCF 양수/음수/불안정 | |
+| 성장 단계 | 초기/성장/성숙/쇠퇴 | |
+| 업종 특성 | 자산집약도, 사이클, 규제 | |
+| 부채 수준 | 순현금/순부채 | |
+
+**선택 모델:** [모델명] — [이유 한 줄]
+
+(선택 기준: FCF 안정+성숙 → DCF | 고성장+FCF 불안정 → EV/Sales 기반 DCF | 금융주 → DDM | 바이오 임상 → rNPV | 부동산/인프라 → NAV | 순현금 대형주 → DCF+순현금 가산)
+
+이후 섹션은 선택된 모델 기준으로 작성하세요.
 
 ## 📊 재무 현황 (과거 실적)
 
@@ -338,15 +362,113 @@ Base Case CAGR·마진 가정(위 표에서 인용)을 적용한 10년 FCFF 추�
 - Bull 목표가: __원 (현재가 대비 +_%)
 - 최종 판단: 세 방법론 수렴 여부와 주당가치 레인지 한 문장
 
-> **밸류에이션 인계 요약 (Lead Portfolio Strategist 인계용)**
+> **절대가치 인계 요약 (Valuation Analyst B 인계용)**
 - 현재 주가: __원 (컨텍스트 "현재가"에서 직접 인용)
 - DCF 주당 내재가치 — Bear: __원 / Base: __원 / Bull: __원
 - Forward P/E 목표가 — Bear: __원 / Base: __원 / Bull: __원
 - EV/EBITDA 역산 목표가 — Bear: __원 / Base: __원 / Bull: __원
 - 세 방법론 Base 최대 괴리: __%  ← 20% 초과 시 원인 한 문장
+- **Analyst A 대표 목표가** — Bear: __원 / Base: __원 / Bull: __원 (세 방법론 중 선택 모델 기준)
 
 밸류에이션 인계 요약 블록을 모두 작성한 뒤, 마지막 줄에 아래 형식의 JSON을 정확히 한 줄로 출력하세요. 다른 텍스트나 마크다운 없이 정확히 이 형식으로만 출력하세요:
 VALUATION_DATA:{"current":현재주가숫자,"dcf_bear":DCF_Bear숫자,"dcf_base":DCF_Base숫자,"dcf_bull":DCF_Bull숫자,"pe_bear":PER_Bear숫자,"pe_base":PER_Base숫자,"pe_bull":PER_Bull숫자,"ev_bear":EV_Bear숫자,"ev_base":EV_Base숫자,"ev_bull":EV_Bull숫자}`,
+    },
+
+    relative_valuation: {
+      systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Valuation Analyst B(상대가치평가·조율)입니다.
+역할: 글로벌 동종업계 피어 그룹과의 멀티플 비교로 상대가치 목표가를 산출하고, 이전 Valuation Analyst A(절대가치평가)의 결과와 조율하여 최종 통합 목표가를 도출합니다.
+원칙: 인삿말·도입 설명 없이 수치로 바로 시작하세요. 피어 선정 이유, 적용 배수 근거, 조율 로직 모두 수치 중심으로 서술합니다. 타 애널리스트 직접 언급 금지 — "이전 분석" "선행 분석" 등으로 자연스럽게 녹이세요.
+핵심 원칙:
+- 피어는 사업모델·밸류체인·시장포지셔닝 기준 글로벌 3~5개 (국내+해외 혼합 허용)
+- 배수 적용 시 반드시 프리미엄/디스카운트 요인을 수치 근거와 함께 불릿으로 제시
+- 조율 로직: 차이 20% 이내 → 가중평균(절대 60%·상대 40%) / 차이 20% 이상 → 각자 원인 재설명 후 최종 조율가 산출
+${COMMON_RULES}`,
+      userPrompt: `${baseContext}${previousContext}
+
+아래 4개 섹션을 순서대로 작성하세요. 이전 단계의 절대가치평가(A) 수치를 반드시 직접 인용하여 조율하세요.
+
+## 🌐 피어 그룹 선정
+
+사업모델·밸류체인·시장포지셔닝을 기준으로 글로벌 피어 3~5개를 선정하세요.
+
+| 기업명 | 국가 | 시가총액 (조원 or USD Bn) | 선정 이유 |
+|-------|------|------------------------|---------|
+| ${companyName} | 한국 | | 분석 대상 |
+| | | | |
+| | | | |
+
+## 📊 피어 멀티플 비교
+
+컨텍스트의 실제 수치와 공개된 피어 데이터를 기반으로 작성하세요. 피어 데이터는 가장 최근 확정 또는 컨센서스 기준입니다.
+
+| 항목 | ${companyName} | Peer A | Peer B | Peer C | 피어 평균 |
+|-----|--------------|--------|--------|--------|---------|
+| 시가총액 (조원) | | | | | — |
+| PER (Fwd) | | | | | |
+| PBR | | | | | |
+| EV/EBITDA | | | | | |
+| ROE (%) | | | | | |
+| 영업이익률 (%) | | | | | |
+
+**평가:** ${companyName}은 피어 평균 대비 PER __배 [프리미엄/디스카운트], EV/EBITDA __배 [프리미엄/디스카운트] 거래 중. 판단 근거: [1~2문장]
+
+## 🎯 상대가치 목표가 산출
+
+**적용 지표 및 배수 근거:** 주요 밸류에이션 지표로 [PER/EV/EBITDA]를 선택. 이유: [1문장]
+
+**프리미엄 요인:**
+- [요인 1] (+__% 근거)
+- [요인 2] (+__% 근거)
+
+**디스카운트 요인:**
+- [요인 1] (-__% 근거)
+- [요인 2] (-__% 근거)
+
+| 시나리오 | 적용 지표 | 피어 평균 배수 | 적용 배수 | 적용 EPS/EBITDA | 목표가 (원) | 현재가 대비 |
+|---------|---------|-------------|---------|---------------|-----------|-----------|
+| 🔴 Bear | | | | | | |
+| 🟡 Base | | | | | | |
+| 🔵 Bull | | | | | | |
+
+## ⚖️ 절대가치평가(A) 조율
+
+이전 단계의 절대가치 결과를 직접 인용하세요.
+
+- 절대가치(A) 대표 목표가 — Bear: __원 / Base: __원 / Bull: __원
+- 상대가치(B) 목표가 — Bear: __원 / Base: __원 / Bull: __원
+- Base 기준 괴리율: __%
+
+**목표가 차이 원인:** [한 줄]
+
+**현 시점 더 신뢰할 모델:** [절대/상대 + 이유 한 줄]
+
+괴리율 20% 이내인 경우:
+> 가중평균 적용 (절대 60% + 상대 40%)
+> - Bear: __원 × 60% + __원 × 40% = **__원**
+> - Base: __원 × 60% + __원 × 40% = **__원**
+> - Bull: __원 × 60% + __원 × 40% = **__원**
+
+괴리율 20% 초과인 경우:
+> 괴리 20% 초과 — 원인 재설명 후 Lead 조율
+> - 절대가치 입장: [한 줄 재설명]
+> - 상대가치 입장: [한 줄 재설명]
+> - 최종 조율가: Bear __원 / Base __원 / Bull __원 (조율 근거: [한 줄])
+
+| 시나리오 | 절대가치(A) | 상대가치(B) | **조율 목표가** | 현재가 대비 |
+|---------|-----------|-----------|-------------|-----------|
+| Bear | | | | |
+| Base | | | | |
+| Bull | | | | |
+
+> **최종 밸류에이션 인계 요약 (Lead Portfolio Strategist 인계용)**
+> - 현재 주가: __원
+> - 절대가치(A) — Bear: __원 / Base: __원 / Bull: __원
+> - 상대가치(B) — Bear: __원 / Base: __원 / Bull: __원
+> - 조율 방법: [가중평균 60/40 or Lead 조율]
+> - **최종 조율 목표가 — Bear: __원 / Base: __원 / Bull: __원**
+
+마지막 줄에 아래 형식의 JSON을 정확히 한 줄로 출력하세요. 다른 텍스트나 마크다운 없이 정확히 이 형식으로만 출력하세요:
+FINAL_VALUATION_DATA:{"current":현재주가숫자,"bear":조율Bear숫자,"base":조율Base숫자,"bull":조율Bull숫자,"abs_bear":절대Bear숫자,"abs_base":절대Base숫자,"abs_bull":절대Bull숫자,"rel_bear":상대Bear숫자,"rel_base":상대Base숫자,"rel_bull":상대Bull숫자}`,
     },
 
     market_analysis: {
@@ -354,7 +476,7 @@ VALUATION_DATA:{"current":현재주가숫자,"dcf_bear":DCF_Bear숫자,"dcf_base
 역할: 주당 내재가치를 기준으로 현재 가격 구간을 판정하고, 체크포인트를 기술적 진입 타이밍과 연결합니다.
 원칙: 줄글과 불릿을 섹션 특성에 맞게 혼용합니다. 수급 분석은 다루지 않습니다. 모든 가격·수치는 컨텍스트에서 직접 인용하세요.
 핵심 연결 원칙:
-- Base Case 주당 내재가치를 목표가 상단 기준으로, Bear Case를 지지선 판단에 활용하세요
+- Valuation Analyst B(상대가치평가)의 최종 조율 목표가를 목표가 기준으로, Bear Case를 지지선 판단에 활용하세요
 - 단기 체크포인트(1~3개월)를 진입 트리거와 연결하세요
 ${COMMON_RULES}`,
       userPrompt: `${baseContext}${previousContext}
@@ -476,36 +598,36 @@ ${COMMON_RULES}`,
 
     investment_strategy: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
-역할: 4명의 애널리스트가 순서대로 쌓아온 분석(산업·촉매·밸류에이션·기술)을 통합하여 최종 투자 전략을 JSON으로 도출합니다.
+역할: 5명의 애널리스트가 순서대로 쌓아온 분석(산업·촉매·절대가치·상대가치 조율·기술)을 통합하여 최종 투자 전략을 JSON으로 도출합니다.
 
 밸류에이션 정합성 규칙 (최우선 준수):
 1. 현재 주가 기준 통일 — upside 계산 시 반드시 컨텍스트 "현재가(KRW)" 수치를 동일하게 사용. 임의 추정 금지.
-2. 시나리오 수치 인계 — scenarios의 각 Bear/Base/Bull target_price는 Fundamental & Valuation Analyst 밸류에이션 인계 요약의 DCF 수치를 직접 인용. 임의 변경 금지.
+2. 시나리오 수치 인계 — scenarios의 각 Bear/Base/Bull target_price는 Valuation Analyst B(상대가치평가·조율)의 최종 밸류에이션 인계 요약에 있는 **최종 조율 목표가**를 직접 인용. 임의 변경 금지.
 3. 최종 target_price = Base 시나리오 target_price와 반드시 동일. 불일치 금지.
-4. 크로스체크 의무 — Fundamental이 제시한 세 방법론(DCF / Forward P/E / EV/EBITDA) Base 목표가 간 최대 괴리가 20% 초과 시, target_price_rationale에 가중치 산식과 괴리 원인을 반드시 설명.
+4. 조율 방법 명시 의무 — target_price_rationale에 절대가치/상대가치 조율 방법(가중평균 또는 Lead 조율)과 최종 가중치 산식을 반드시 서술.
 5. 시나리오 확률 합계 = 반드시 100%.
 
 종합 원칙:
 - Macro & Industry Analyst의 산업 포지션 → 구조적 경쟁우위 지속 가능성
 - Catalyst & Smart Money Analyst의 핵심 이슈·체크포인트 → key_issue, hypothesis, monitoring_indicators
-- Fundamental & Valuation Analyst의 밸류에이션 인계 요약 → 모든 목표가 수치의 원천
+- Valuation Analyst B(상대가치평가·조율)의 최종 밸류에이션 인계 요약 → 모든 목표가 수치의 원천 (절대가치 A는 참고 자료)
 - Market & Technical Analyst의 진입 구간·손절선 → entry_price, stop_loss 최종 결정
 - 사용자에게 추가 입력을 요청하지 말 것
 - 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지. 코드블록(\`\`\`) 절대 사용 금지.`,
       userPrompt: `${baseContext}${previousContext}
 
-위의 4단계 분석(산업 → 촉매 → 밸류에이션 → 기술)을 종합하여 최종 투자 전략을 도출하세요.
+위의 5단계 분석(산업 → 촉매 → 절대가치 → 상대가치 조율 → 기술)을 종합하여 최종 투자 전략을 도출하세요.
 
 필드별 작성 기준:
-- summary: 각 애널리스트 핵심 결론을 한 문장씩 녹여 3~4문장 통합 서술. 반드시 Base 주당 내재가치 수치 포함.
+- summary: 각 애널리스트 핵심 결론을 한 문장씩 녹여 3~4문장 통합 서술. 반드시 조율 Base 목표가 수치 포함.
 - key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈 그대로 인용.
-- scenarios[].target_price: Fundamental 밸류에이션 인계 요약의 DCF Bear/Base/Bull 수치를 그대로 사용. 확률 합계 반드시 100%.
+- scenarios[].target_price: Valuation Analyst B의 최종 밸류에이션 인계 요약 — 최종 조율 목표가 Bear/Base/Bull 수치를 그대로 사용. 확률 합계 반드시 100%.
 - scenarios[].upside: 컨텍스트의 현재가(KRW) 수치로 계산. (target_price - 현재가) / 현재가 × 100%.
 - target_price (최상위): scenarios Base의 target_price와 반드시 동일한 숫자.
 - entry_price: Market & Technical Analyst의 진입 구간 하단·상단 참고.
-- stop_loss: Market & Technical Analyst 손절선과 Fundamental Bear Case 중 보수적인 값.
-- target_price_rationale: "DCF __% + Forward P/E __% + EV/EBITDA __%로 가중 평균. Base 목표가 __원." 형식으로 한 줄 명시. 세 방법론 괴리 20% 초과 시 원인 추가.
-- monitoring_indicators: Catalyst 체크포인트 + Fundamental/Technical 모니터링 지표 결합.
+- stop_loss: Market & Technical Analyst 손절선과 조율 Bear Case 중 보수적인 값.
+- target_price_rationale: 절대가치(A) Base __원 × 60% + 상대가치(B) Base __원 × 40% = __원 형식(또는 Lead 조율 설명). 조율 방법 명시.
+- monitoring_indicators: Catalyst 체크포인트 + Valuation/Technical 모니터링 지표 결합.
 
 ⚠️ 응답 규칙: 아래 JSON 객체 하나만 출력하세요. 코드블록(\`\`\`)·설명 텍스트·마크다운 일절 금지. 첫 글자는 반드시 { 이어야 합니다.
 
@@ -522,21 +644,21 @@ ${COMMON_RULES}`,
     {
       "case": "Bear",
       "assumption": "이 시나리오의 핵심 이슈 전개 가정 한 문장",
-      "target_price": "Fundamental DCF Bear 목표가 숫자만 (예: 150000)",
+      "target_price": "Valuation B 최종 조율 Bear 목표가 숫자만 (예: 150000)",
       "upside": "컨텍스트 현재가 기준 등락률 (예: -20%)",
       "probability": "확률 (예: 30%)"
     },
     {
       "case": "Base",
       "assumption": "이 시나리오의 핵심 이슈 전개 가정 한 문장",
-      "target_price": "Fundamental DCF Base 목표가 숫자만 (예: 210000)",
+      "target_price": "Valuation B 최종 조율 Base 목표가 숫자만 (예: 210000)",
       "upside": "컨텍스트 현재가 기준 등락률 (예: +15%)",
       "probability": "확률 (예: 50%)"
     },
     {
       "case": "Bull",
       "assumption": "이 시나리오의 핵심 이슈 전개 가정 한 문장",
-      "target_price": "Fundamental DCF Bull 목표가 숫자만 (예: 280000)",
+      "target_price": "Valuation B 최종 조율 Bull 목표가 숫자만 (예: 280000)",
       "upside": "컨텍스트 현재가 기준 등락률 (예: +53%)",
       "probability": "확률 (예: 20%)"
     }

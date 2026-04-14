@@ -4,6 +4,7 @@ import {
   PieChart,
   BarChart2,
   Zap,
+  Scale,
   LucideIcon
 } from "lucide-react";
 
@@ -38,12 +39,21 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   company_analysis: {
     id: "company_analysis",
-    name: "Fundamental & Valuation",
-    role: "Fundamental & Valuation Analyst",
+    name: "Valuation A (절대가치)",
+    role: "Valuation Analyst A",
     icon: PieChart,
     color: "text-indigo-600",
     bgColor: "bg-indigo-50",
-    description: "사업 구조, 재무 분석, 밸류에이션, 적정 주가"
+    description: "재무 분석, DCF 절대 내재가치, 모델 선택"
+  },
+  relative_valuation: {
+    id: "relative_valuation",
+    name: "Valuation B (상대가치·조율)",
+    role: "Valuation Analyst B",
+    icon: Scale,
+    color: "text-violet-600",
+    bgColor: "bg-violet-50",
+    description: "피어 멀티플 비교, 상대가치 목표가, 절대가치 조율"
   },
   market_analysis: {
     id: "market_analysis",
@@ -79,6 +89,7 @@ export const ANALYSIS_STEPS_ORDER = [
   "industry_analysis",
   "catalyst_analysis",
   "company_analysis",
+  "relative_valuation",
   "market_analysis",
   "investment_strategy",
 ] as const;
