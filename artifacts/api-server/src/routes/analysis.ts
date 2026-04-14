@@ -577,6 +577,128 @@ async function fetchCompanyNews(companyName: string): Promise<string> {
   }
 }
 
+// ─── Peer Data Auto-Fetch ─────────────────────────────────────────────────────
+
+async function selectPeerTickers(
+  companyName: string,
+  industry: string,
+  previousContext: string
+): Promise<Array<{ ticker: string; name: string; exchange: string }>> {
+  try {
+    const prompt = `Company: ${companyName}, Industry: ${industry}.
+
+Based on the analysis context below, identify 4-5 publicly traded global peer companies for valuation comparison (same business model, value chain, and market positioning).
+${previousContext ? `\nContext:\n${previousContext.slice(0, 800)}` : ""}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"peers": [{"ticker": "MU", "name": "Micron Technology", "exchange": "NASDAQ"}, ...]}
+
+Use exact Yahoo Finance tickers. Korean stocks: use 6-digit code + .KS or .KQ (e.g. 005930.KS).
+US/global stocks: use standard tickers (e.g. NVDA, ASML, TSM).`;
+
+    const resp = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        systemInstruction: "You are a financial analyst. Return ONLY valid JSON with no markdown or explanation.",
+        maxOutputTokens: 512,
+      },
+    });
+    const raw = resp.text ?? "";
+    const parsed = extractJsonSafe(raw);
+    if (parsed?.peers && Array.isArray(parsed.peers)) {
+      return parsed.peers.slice(0, 5);
+    }
+  } catch (err) {
+    console.error("[peer-select] Failed:", err);
+  }
+  return [];
+}
+
+async function fetchPeerFinancials(
+  peers: Array<{ ticker: string; name: string; exchange: string }>
+): Promise<string> {
+  if (peers.length === 0) return "";
+
+  const rows: string[] = [];
+  rows.push("\n=== 피어 그룹 실시간 재무 데이터 (Yahoo Finance) ===");
+  rows.push("※ 이 데이터를 Part B 상대가치 분석에 직접 인용하세요.\n");
+
+  const results = await Promise.allSettled(
+    peers.map(async (peer) => {
+      try {
+        const result = await yahooFinance.quoteSummary(peer.ticker, {
+          modules: [
+            "defaultKeyStatistics",
+            "financialData",
+            "summaryDetail",
+            "price",
+          ] as any,
+        });
+
+        const ks: any = result.defaultKeyStatistics ?? {};
+        const fd: any = result.financialData ?? {};
+        const sd: any = result.summaryDetail ?? {};
+        const pr: any = result.price ?? {};
+
+        const pct = (v: number | null | undefined) =>
+          v != null ? `${(v * 100).toFixed(1)}%` : "N/A";
+        const fmt1 = (v: number | null | undefined) =>
+          v != null ? v.toFixed(1) : "N/A";
+        const fmt2 = (v: number | null | undefined) =>
+          v != null ? v.toFixed(2) : "N/A";
+
+        const currency = pr.currency ?? "USD";
+        const price = pr.regularMarketPrice ?? null;
+        const mcap = pr.marketCap ?? sd.marketCap ?? null;
+        const mcapStr = mcap
+          ? currency === "KRW"
+            ? `${(mcap / 1e12).toFixed(1)}조원`
+            : `${(mcap / 1e9).toFixed(1)}B USD`
+          : "N/A";
+
+        // Forward PER: use defaultKeyStatistics.forwardPE or summaryDetail
+        const fwdPE = ks.forwardPE ?? sd.forwardPE ?? null;
+        // Trailing PER
+        const trailPE = sd.trailingPE ?? ks.trailingPE ?? null;
+        // PBR
+        const pbr = ks.priceToBook ?? null;
+        // EV/EBITDA
+        const evEbitda = ks.enterpriseToEbitda ?? null;
+        // EV/Revenue
+        const evRev = ks.enterpriseToRevenue ?? null;
+        // ROE
+        const roe = fd.returnOnEquity ?? null;
+        // Operating margin
+        const opMargin = fd.operatingMargins ?? null;
+        // Revenue growth
+        const revGrowth = fd.revenueGrowth ?? null;
+        // Gross margin
+        const grossMargin = fd.grossMargins ?? null;
+
+        const line = [
+          `[${peer.name} (${peer.ticker})]`,
+          `  시가총액: ${mcapStr}${price ? ` | 현재가: ${price.toFixed(currency === "KRW" ? 0 : 2)} ${currency}` : ""}`,
+          `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
+          `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
+        ].join("\n");
+        return line;
+      } catch (err) {
+        return `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 80)}`;
+      }
+    })
+  );
+
+  for (const r of results) {
+    rows.push(r.status === "fulfilled" ? r.value : `[데이터 오류] ${r.reason}`);
+    rows.push("");
+  }
+
+  const text = rows.join("\n");
+  console.log(`[peer-data] Fetched ${peers.length} peers, ${text.length} chars`);
+  return text;
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post("/", async (req, res) => {
@@ -774,6 +896,24 @@ router.post("/:id/step", async (req, res) => {
       }
     } catch {
       // insights injection optional
+    }
+  }
+
+  // ── relative_valuation: 피어 데이터 자동 수집 ────────────────────────────
+  if (stepKey === "relative_valuation") {
+    try {
+      const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 1200);
+      res.write(`data: ${JSON.stringify({ t: "" })}\n\n`); // keep connection alive
+      const peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext);
+      console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
+      if (peers.length > 0) {
+        const peerData = await fetchPeerFinancials(peers);
+        if (peerData) {
+          enrichedContext = enrichedContext ? enrichedContext + peerData : peerData;
+        }
+      }
+    } catch (err) {
+      console.error("[peer-fetch] Failed:", err);
     }
   }
 
