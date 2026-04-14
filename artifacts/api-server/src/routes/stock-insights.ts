@@ -52,6 +52,7 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
   let domesticEtfs: Array<{
     code: string; name: string; manager: string; indexBasis: string;
     confidence: "high" | "medium" | "low"; reason: string;
+    estimatedWeight: string | null; weightBasis: string | null;
   }> = [];
 
   try {
@@ -86,7 +87,9 @@ JSON 형식으로만 응답하세요 (마크다운 없이):
       "manager": "삼성자산운용",
       "indexBasis": "KOSPI 200",
       "confidence": "high",
-      "reason": "편입 근거 한 문장"
+      "reason": "편입 근거 한 문장",
+      "estimatedWeight": "0.3%~0.5%",
+      "weightBasis": "KOSPI200 시총 비중 기준"
     }
   ],
   "notes": "전반적인 ETF 편입 특성 요약 (1~2문장)"
@@ -96,6 +99,8 @@ JSON 형식으로만 응답하세요 (마크다운 없이):
 - confidence: high=거의 확실히 편입, medium=편입 가능성 높음, low=섹터/테마 ETF 가능성
 - 실제 존재하는 한국 ETF만 포함 (KODEX/TIGER/ARIRANG/HANARO/KBSTAR/SOL 등)
 - 거래소와 시총에 맞는 ETF만 선택 (KOSDAQ 소형주에 KODEX200 제외 등)
+- estimatedWeight: 해당 ETF 내 이 종목의 예상 편입 비중 (시총 비중, ETF 구성 방식 고려). 불확실하면 범위로 표시
+- weightBasis: 비중 추정 근거 (시총 비중, 동일 비중, 테마 ETF 등)
 - 최대 6개`;
 
     const result = await ai.models.generateContent({
@@ -179,12 +184,57 @@ JSON 형식 (마크다운 없이):
 
     const raw = (result.text ?? "{}").replace(/```json\n?|```\n?/g, "").trim();
     const parsed = JSON.parse(raw);
+    const peers: any[] = parsed.peers ?? [];
+
+    // 각 피어에 대해 Yahoo Finance 재무 데이터 병렬 조회
+    const peerFinancials = await Promise.allSettled(
+      peers.map(async (peer: any) => {
+        const peerTicker: string = peer.ticker ?? "";
+        if (!peerTicker) return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null };
+        try {
+          const [q, fin] = await Promise.allSettled([
+            yahooFinance.quote(peerTicker, undefined, { validateResult: false } as any),
+            yahooFinance.quoteSummary(peerTicker, { modules: ["financialData"] } as any, { validateResult: false } as any),
+          ]);
+          const quote = q.status === "fulfilled" ? q.value as any : null;
+          const finData = fin.status === "fulfilled" ? (fin.value as any)?.financialData : null;
+          const totalRevenue: number | null = finData?.totalRevenue ?? null;
+          const opMargins: number | null = finData?.operatingMargins ?? null;
+          const opIncome: number | null =
+            totalRevenue != null && opMargins != null ? Math.round(totalRevenue * opMargins) : null;
+          return {
+            ticker: peerTicker,
+            marketCap: quote?.marketCap ?? null,
+            revenue: totalRevenue,
+            operatingIncome: opIncome,
+            operatingMargin: opMargins != null ? Math.round(opMargins * 1000) / 10 : null,
+          };
+        } catch {
+          return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null, operatingMargin: null };
+        }
+      })
+    );
+
+    // 피어 데이터와 재무 데이터 병합
+    const peersWithFinancials = peers.map((peer: any) => {
+      const fin = peerFinancials.find(
+        (f) => f.status === "fulfilled" && f.value.ticker === peer.ticker
+      );
+      const finVal = fin?.status === "fulfilled" ? fin.value : null;
+      return {
+        ...peer,
+        marketCap: finVal?.marketCap ?? null,
+        revenue: finVal?.revenue ?? null,
+        operatingIncome: finVal?.operatingIncome ?? null,
+        operatingMargin: finVal?.operatingMargin ?? null,
+      };
+    });
 
     res.json({
       ticker,
       companyName,
       industry,
-      peers: parsed.peers ?? [],
+      peers: peersWithFinancials,
       methodology: parsed.methodology ?? "",
       comparisonNote: parsed.comparisonNote ?? "",
     });

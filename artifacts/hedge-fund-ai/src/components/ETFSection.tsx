@@ -16,6 +16,8 @@ interface DomesticEtf {
   indexBasis: string;
   confidence: "high" | "medium" | "low";
   reason: string;
+  estimatedWeight: string | null;
+  weightBasis: string | null;
 }
 
 interface ETFData {
@@ -31,14 +33,6 @@ const CONFIDENCE_CONFIG: Record<string, { label: string; color: string }> = {
   medium: { label: "편입 가능", color: "text-warning bg-warning/10 border-warning/20" },
   low: { label: "테마 가능", color: "text-muted-foreground bg-muted border-border" },
 };
-
-function formatKRW(value: number): string {
-  const tril = value / 1e12;
-  if (Math.abs(tril) >= 1) return `${tril.toFixed(1)}조`;
-  const bil = value / 1e8;
-  if (Math.abs(bil) >= 1) return `${Math.round(bil)}억`;
-  return `${Math.round(value / 1e6)}백만`;
-}
 
 export default function ETFSection({
   ticker,
@@ -119,32 +113,51 @@ export default function ETFSection({
               <span className="text-xs font-semibold text-foreground">국내 주요 ETF</span>
               <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono border border-border">AI 추정</span>
             </div>
-            <div className="space-y-2">
-              {data.domesticEtfs.map(etf => {
-                const conf = CONFIDENCE_CONFIG[etf.confidence] ?? CONFIDENCE_CONFIG.low;
-                return (
-                  <div key={etf.code} className="rounded-xl border border-border p-3 bg-background/60 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm text-foreground truncate">{etf.name}</span>
-                          <span className="font-mono text-[10px] text-muted-foreground shrink-0">{etf.code}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="text-[11px] text-muted-foreground">{etf.manager}</span>
-                          <span className="text-[11px] text-muted-foreground">·</span>
-                          <span className="text-[11px] text-muted-foreground">{etf.indexBasis}</span>
-                        </div>
-                      </div>
-                      <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0", conf.color)}>
-                        {conf.label}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">{etf.reason}</p>
-                  </div>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left text-muted-foreground font-medium pb-2 pr-2">ETF명</th>
+                    <th className="text-center text-muted-foreground font-medium pb-2 px-2 w-20">편입 가능성</th>
+                    <th className="text-right text-muted-foreground font-medium pb-2 px-2 w-24">추정 비중</th>
+                    <th className="text-left text-muted-foreground font-medium pb-2 pl-2">비중 근거</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {data.domesticEtfs.map(etf => {
+                    const conf = CONFIDENCE_CONFIG[etf.confidence] ?? CONFIDENCE_CONFIG.low;
+                    return (
+                      <tr key={etf.code} className="hover:bg-muted/20 transition-colors group">
+                        <td className="py-2.5 pr-2">
+                          <div className="font-semibold text-foreground leading-tight">{etf.name}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono text-[10px] text-muted-foreground">{etf.code}</span>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <span className="text-[10px] text-muted-foreground">{etf.manager}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap", conf.color)}>
+                            {conf.label}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-2 text-right">
+                          {etf.estimatedWeight ? (
+                            <span className="font-mono font-semibold text-primary text-[11px]">{etf.estimatedWeight}</span>
+                          ) : (
+                            <span className="text-muted-foreground text-[11px]">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 pl-2 text-muted-foreground leading-tight">
+                          {etf.weightBasis ?? etf.indexBasis}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+            {/* 선정 근거 아코디언 제거하고 툴팁 형태로 접근 — 간소화 */}
           </div>
         )}
 

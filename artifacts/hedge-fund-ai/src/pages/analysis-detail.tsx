@@ -250,15 +250,15 @@ export default function AnalysisDetail() {
         <FinancialChart ticker={analysis.ticker} />
       </div>
 
-      {/* ETF & Peer Group — 2-column on desktop, stacked on mobile */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
-        <PeerGroupSection
-          ticker={analysis.ticker}
-          companyName={analysis.companyName}
-          industry={analysis.industry ?? undefined}
-        />
-      </div>
+      {/* ETF 편입 현황 */}
+      <ETFSection ticker={analysis.ticker} companyName={analysis.companyName} industry={analysis.industry ?? undefined} />
+
+      {/* Peer Group 분석 */}
+      <PeerGroupSection
+        ticker={analysis.ticker}
+        companyName={analysis.companyName}
+        industry={analysis.industry ?? undefined}
+      />
 
       {/* Progress Track */}
       <div className="bg-card border border-border rounded-2xl p-5 print:hidden">
