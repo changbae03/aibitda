@@ -427,62 +427,52 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
       {json ? (
         <div className="p-6 space-y-5">
-          <div className="flex flex-wrap items-center gap-3">
+          {/* ① 판정 헤더 */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <span className={cn("text-2xl font-display font-bold", verdictColor(json.verdict))}>{json.verdict}</span>
-            <span className="text-xs font-semibold px-2 py-0.5 bg-white border border-border rounded text-muted-foreground">신뢰도: {json.confidence}</span>
-            <span className="text-xs font-mono px-2 py-0.5 bg-white border border-border rounded text-muted-foreground">{json.investment_period} · R/R {json.risk_reward}</span>
+            <span className="text-xs font-medium px-2 py-0.5 bg-muted border border-border rounded text-muted-foreground">신뢰도 {json.confidence}</span>
+            <span className="text-xs font-mono px-2 py-0.5 bg-muted border border-border rounded text-muted-foreground">{json.investment_period} · R/R {json.risk_reward}</span>
           </div>
 
-          {(json.company_type || json.inflection || json.price_stage) && (
-            <div className="flex flex-wrap gap-2">
-              {json.company_type && (
-                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-700 font-medium">
-                  🏷️ {json.company_type}
-                </span>
-              )}
-              {json.inflection && (
-                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-medium">
-                  ⚡ {json.inflection}
-                </span>
-              )}
-              {json.price_stage && (
-                <span className={cn(
-                  "inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border",
-                  json.price_stage.includes("초기") && "bg-emerald-50 border-emerald-200 text-emerald-700",
-                  json.price_stage.includes("리레이팅") && "bg-amber-50 border-amber-200 text-amber-700",
-                  json.price_stage.includes("과열") && "bg-red-50 border-red-200 text-red-700",
-                  !json.price_stage.includes("초기") && !json.price_stage.includes("리레이팅") && !json.price_stage.includes("과열") && "bg-muted border-border text-muted-foreground",
-                )}>
-                  📍 {json.price_stage}
-                </span>
-              )}
-            </div>
-          )}
-
+          {/* ② 핵심 이슈 */}
           {json.key_issue && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
-              <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">최대 이슈</div>
-              <p className="text-sm font-medium text-amber-900">{json.key_issue}</p>
-              {json.issue_priced_in && (
-                <p className="text-xs text-amber-700/80">{json.issue_priced_in}</p>
-              )}
+            <div className="flex items-start gap-2 text-sm text-foreground/80 border-l-2 border-amber-400 pl-3">
+              <span className="text-amber-500 font-semibold shrink-0 text-xs mt-0.5">핵심 이슈</span>
+              <span>{json.key_issue}</span>
             </div>
           )}
 
+          {/* ③ 투자 논거 요약 */}
           {json.summary && (
-            <p className="text-sm text-foreground/80 leading-relaxed border-l-2 border-primary pl-4">{json.summary}</p>
+            <p className="text-sm text-foreground/80 leading-relaxed">{json.summary}</p>
           )}
 
+          {/* ④ 가격 3박스 */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl p-3.5 border border-border bg-muted/30 text-center">
+              <div className="text-[10px] text-muted-foreground font-mono uppercase mb-1">진입가</div>
+              <div className="font-bold text-foreground text-base">{formatPrice(json.entry_price)}</div>
+            </div>
+            <div className="rounded-xl p-3.5 border border-emerald-200 bg-emerald-50 text-center">
+              <div className="text-[10px] text-emerald-600 font-mono uppercase mb-1">목표가</div>
+              <div className="font-bold text-emerald-700 text-base">{formatPrice(json.target_price)}</div>
+            </div>
+            <div className="rounded-xl p-3.5 border border-red-200 bg-red-50 text-center">
+              <div className="text-[10px] text-red-500 font-mono uppercase mb-1">손절가</div>
+              <div className="font-bold text-red-600 text-base">{formatPrice(json.stop_loss)}</div>
+            </div>
+          </div>
+
+          {/* ⑤ 시나리오 (가정 컬럼 제거, 숫자만) */}
           {json.scenarios?.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-border">
+            <div className="rounded-xl border border-border overflow-hidden">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-muted/60 border-b border-border">
-                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80">시나리오</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80">핵심 가정</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-foreground/80">목표가</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-foreground/80">등락률</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-foreground/80">확률</th>
+                    <th className="px-3 py-2 text-left font-semibold text-foreground/70">시나리오</th>
+                    <th className="px-3 py-2 text-right font-semibold text-foreground/70">목표가</th>
+                    <th className="px-3 py-2 text-right font-semibold text-foreground/70">등락률</th>
+                    <th className="px-3 py-2 text-right font-semibold text-foreground/70">확률</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -490,31 +480,25 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     const isBear = s.case === "Bear";
                     const isBull = s.case === "Bull";
                     const isBase = s.case === "Base";
+                    const uStr = String(s.upside ?? "");
+                    const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
+                    const uDisplay = !isNaN(uNum) && !uStr.includes("%") ? (uNum > 0 ? "+" : "") + uNum + "%" : uStr;
+                    const uColor = uStr.startsWith("+") || (!uStr.startsWith("-") && uNum > 0) ? "text-emerald-600" : uStr.startsWith("-") || uNum < 0 ? "text-red-500" : "text-foreground/70";
+                    const pStr = String(s.probability ?? "");
+                    const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
+                    const pDisplay = !isNaN(pNum) && !pStr.includes("%") ? pNum + "%" : pStr;
                     return (
-                      <tr key={i} className={cn(
-                        "hover:bg-muted/20 transition-colors",
-                        isBase && "bg-primary/5"
-                      )}>
+                      <tr key={i} className={cn("transition-colors", isBase ? "bg-primary/5" : "hover:bg-muted/20")}>
                         <td className="px-3 py-2.5 font-semibold">
-                          <span className={cn(
-                            "inline-flex items-center gap-1 text-xs",
-                            isBear && "text-red-500",
-                            isBase && "text-primary",
-                            isBull && "text-emerald-600"
-                          )}>
+                          <span className={cn("text-xs", isBear && "text-red-500", isBase && "text-primary", isBull && "text-emerald-600")}>
                             {isBear ? "▼" : isBull ? "▲" : "—"} {s.case}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-foreground/70 max-w-[220px] whitespace-normal leading-snug">{s.assumption}</td>
-                        <td className={cn(
-                          "px-3 py-2.5 text-right font-mono font-semibold",
-                          isBear ? "text-red-500" : isBull ? "text-emerald-600" : "text-foreground"
-                        )}>{formatPrice(s.target_price)}</td>
-                        <td className={cn(
-                          "px-3 py-2.5 text-right font-mono",
-                          (() => { const u = String(s.upside ?? ""); return u.startsWith("+") || (!u.startsWith("-") && parseFloat(u) > 0) ? "text-emerald-600" : u.startsWith("-") || parseFloat(u) < 0 ? "text-red-500" : "text-foreground/70"; })()
-                        )}>{(() => { const u = String(s.upside ?? ""); const n = parseFloat(u.replace(/[^0-9.\-]/g, "")); if (!isNaN(n) && !u.includes("%")) return (n > 0 ? "+" : "") + n + "%"; return u; })()}</td>
-                        <td className="px-3 py-2.5 text-right text-foreground/60">{(() => { const p = String(s.probability ?? ""); const n = parseFloat(p.replace(/[^0-9.]/g, "")); if (!isNaN(n) && !p.includes("%")) return n + "%"; return p; })()}</td>
+                        <td className={cn("px-3 py-2.5 text-right font-mono font-semibold", isBear ? "text-red-500" : isBull ? "text-emerald-600" : "text-foreground")}>
+                          {formatPrice(s.target_price)}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right font-mono", uColor)}>{uDisplay}</td>
+                        <td className="px-3 py-2.5 text-right text-foreground/50">{pDisplay}</td>
                       </tr>
                     );
                   })}
@@ -523,49 +507,31 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl p-4 border border-border text-center">
-              <div className="text-[11px] text-muted-foreground font-mono mb-1">진입가</div>
-              <div className="font-bold text-foreground text-base">{formatPrice(json.entry_price)}</div>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 text-center">
-              <div className="text-[11px] text-emerald-600 font-mono mb-1">목표가 (Base)</div>
-              <div className="font-bold text-emerald-700 text-base">{formatPrice(json.target_price)}</div>
-            </div>
-            <div className="bg-red-50 rounded-xl p-4 border border-red-200 text-center">
-              <div className="text-[11px] text-red-500 font-mono mb-1">손절가</div>
-              <div className="font-bold text-red-600 text-base">{formatPrice(json.stop_loss)}</div>
-            </div>
-          </div>
-
+          {/* ⑥ 핵심 리스크 */}
           {json.risks?.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">핵심 리스크</div>
+              <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">핵심 리스크</div>
               <ul className="space-y-1.5">
                 {json.risks.map((r: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-                    <span className="text-red-400 mt-0.5 shrink-0">▲</span>{r}
+                  <li key={i} className="flex items-start gap-2 text-sm text-foreground/75">
+                    <span className="text-red-400 shrink-0 mt-0.5">▲</span>{r}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {json.hypothesis && (
-            <div className="bg-white rounded-xl p-4 border border-primary/20">
-              <div className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-1">투자 가설</div>
-              <p className="text-sm text-foreground/85">{json.hypothesis}</p>
-            </div>
-          )}
-
+          {/* ⑦ 모니터링 지표 */}
           {json.monitoring_indicators?.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">모니터링 지표</div>
-              <div className="flex flex-wrap gap-2">
+              <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">모니터링 지표</div>
+              <ul className="space-y-1">
                 {json.monitoring_indicators.map((m: string, i: number) => (
-                  <span key={i} className="text-xs px-2.5 py-1 bg-white border border-border rounded-full text-foreground/70">{m}</span>
+                  <li key={i} className="flex items-start gap-2 text-xs text-foreground/65">
+                    <span className="text-primary/50 shrink-0 mt-0.5">·</span>{m}
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
 

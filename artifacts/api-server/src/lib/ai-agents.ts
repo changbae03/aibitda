@@ -561,47 +561,39 @@ ${COMMON_RULES}`,
 
 필드별 작성 기준:
 - summary: 각 애널리스트 핵심 결론을 한 문장씩 녹여 3~4문장 통합 서술. 반드시 목표주가 수치 포함.
-- key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈 그대로 인용.
+- key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈 한 문장으로.
 - scenarios[].target_price: 목표가 산출 단계의 최종 밸류에이션 인계 요약에서 직접 인용. 확률 합계 반드시 100%.
-  - Bear case = 하단 밴드 숫자
-  - Base case = 최종 목표주가 숫자
-  - Bull case = 상단 밴드 숫자
+  - Bear case = 하단 밴드 숫자, Base case = 최종 목표주가 숫자, Bull case = 상단 밴드 숫자
 - scenarios[].upside: 컨텍스트의 현재가(KRW) 수치로 계산. (target_price - 현재가) / 현재가 × 100%.
 - target_price (최상위): scenarios Base의 target_price와 반드시 동일한 숫자.
 - entry_price: Market & Technical Analyst의 진입 구간 하단·상단 참고.
 - stop_loss: Market & Technical Analyst 손절선과 하단 밴드 중 보수적인 값.
-- target_price_rationale: DCF __원 × __% + 피어 __원 × __%  = __원 형식(또는 Lead 조율 설명). 조율 방법 명시.
-- monitoring_indicators: Catalyst 체크포인트 + Valuation/Technical 모니터링 지표 결합.
+- monitoring_indicators: Catalyst 체크포인트 + Valuation/Technical 모니터링 지표 결합. 최대 4개.
 
 ⚠️ 응답 규칙: 아래 JSON 객체 하나만 출력하세요. 코드블록(\`\`\`)·설명 텍스트·마크다운 일절 금지. 첫 글자는 반드시 { 이어야 합니다.
 
 {
   "verdict": "Strong Buy / Buy / Hold / Sell / Strong Sell 중 하나",
   "confidence": "높음 / 중간 / 낮음 중 하나",
-  "company_type": "기업 유형 한 단어 (예: 산업 전환 수혜 기업)",
-  "inflection": "전환 국면 인정 여부 + 충족 기준 수 (예: 전환 국면 인정 — 4/5 충족)",
-  "price_stage": "기대 확산 초기 / 리레이팅 진행 중 / 기대 과열 구간 중 하나",
-  "key_issue": "현재 이 기업 주가를 지배하는 단 하나의 핵심 이슈",
-  "issue_priced_in": "핵심 이슈가 현재 주가에 반영된 정도 (과소 반영 / 적정 반영 / 과대 반영) + 한 문장 근거",
+  "investment_period": "단기 / 중기 / 장기",
+  "risk_reward": "리스크/리워드 비율 (예: 1:3.5)",
+  "key_issue": "현재 이 기업 주가를 지배하는 단 하나의 핵심 이슈 한 문장",
   "summary": "핵심 투자 논거를 3-4문장으로 요약. 목표주가 수치 반드시 포함 (마크다운 볼드 없이)",
   "scenarios": [
     {
       "case": "Bear",
-      "assumption": "하단 밴드 도달 조건 — 핵심 이슈가 부정적으로 전개되는 가정 한 문장",
       "target_price": "목표가 산출 단계 하단 밴드 숫자만 (예: 150000)",
       "upside": "컨텍스트 현재가 기준 등락률 (예: -20%)",
       "probability": "확률 (예: 30%)"
     },
     {
       "case": "Base",
-      "assumption": "목표주가 도달 조건 — 핵심 이슈가 정상 전개되는 가정 한 문장",
       "target_price": "목표가 산출 단계 최종 목표주가 숫자만 (예: 210000)",
       "upside": "컨텍스트 현재가 기준 등락률 (예: +15%)",
       "probability": "확률 (예: 50%)"
     },
     {
       "case": "Bull",
-      "assumption": "상단 밴드 도달 조건 — 핵심 이슈가 긍정적으로 전개되는 가정 한 문장",
       "target_price": "목표가 산출 단계 상단 밴드 숫자만 (예: 280000)",
       "upside": "컨텍스트 현재가 기준 등락률 (예: +53%)",
       "probability": "확률 (예: 20%)"
@@ -610,19 +602,16 @@ ${COMMON_RULES}`,
   "entry_price": "구체적 진입 가격 (한국 종목은 원화 숫자만, 예: 190000)",
   "target_price": "scenarios Base target_price와 동일한 숫자 (예: 210000)",
   "stop_loss": "손절 가격 (한국 종목은 원화 숫자만, 예: 175000)",
-  "target_price_rationale": "DCF __원 × 60% + 피어 __원 × 40% = __원. (또는 Lead 조율 설명)",
-  "investment_period": "단기 / 중기 / 장기",
-  "risk_reward": "리스크/리워드 비율 (예: 1:3.5)",
   "risks": [
     "핵심 리스크 1",
     "핵심 리스크 2",
     "핵심 리스크 3"
   ],
-  "hypothesis": "투자 가설 1문장 요약. 핵심 이슈가 어떻게 전개될 때 투자 thesis가 성립하는지 포함",
   "monitoring_indicators": [
-    "핵심 이슈 관련 모니터링 지표 1",
+    "모니터링 지표 1",
     "모니터링 지표 2",
-    "모니터링 지표 3"
+    "모니터링 지표 3",
+    "모니터링 지표 4"
   ]
 }`,
     },
