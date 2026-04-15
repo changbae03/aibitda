@@ -115,8 +115,6 @@ function LevelBadge({ label, value, color }: { label: string; value: number | st
 export default function StockChart({ ticker, companyName, chartLevels }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
-  const [showMA, setShowMA] = useState(true);
-  const [showBB, setShowBB] = useState(false);
 
   const { data, isLoading, error } = useGetMarketData(ticker, { period, interval });
 
@@ -127,11 +125,6 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
   const chartData = data?.candles?.map((c) => ({
     ...c,
     close: parseFloat(c.close.toFixed(2)),
-    ma20: c.ma20 != null ? parseFloat(c.ma20.toFixed(2)) : null,
-    ma60: c.ma60 != null ? parseFloat(c.ma60.toFixed(2)) : null,
-    ma120: c.ma120 != null ? parseFloat(c.ma120.toFixed(2)) : null,
-    bbUpper: c.bbUpper != null ? parseFloat(c.bbUpper.toFixed(2)) : null,
-    bbLower: c.bbLower != null ? parseFloat(c.bbLower.toFixed(2)) : null,
     dateLabel: c.date.slice(5),
   })) ?? [];
 
@@ -235,9 +228,6 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
             </button>
           ))}
         </div>
-        <div className="w-px h-3.5 bg-neutral-200 mx-0.5" />
-        <button onClick={() => setShowMA(!showMA)} className={ctrlBtn(showMA)}>이동평균</button>
-        <button onClick={() => setShowBB(!showBB)} className={ctrlBtn(showBB)}>볼린저밴드</button>
       </div>
 
       {/* Chart */}
@@ -319,14 +309,6 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                   isAnimationActive={false}
                 />
 
-                {/* 볼린저 밴드 */}
-                {showBB && (
-                  <>
-                    <Line yAxisId="price" dataKey="bbUpper" name="BB 상단" stroke="#f97316" strokeWidth={1} dot={false} strokeDasharray="3 3" connectNulls legendType="none" />
-                    <Line yAxisId="price" dataKey="bbLower" name="BB 하단" stroke="#f97316" strokeWidth={1} dot={false} strokeDasharray="3 3" connectNulls legendType="none" />
-                  </>
-                )}
-
                 {/* 종가 라인 */}
                 <Line
                   yAxisId="price"
@@ -337,15 +319,6 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                   dot={false}
                   activeDot={{ r: 3, fill: "#0a0a0a" }}
                 />
-
-                {/* 이동평균선 */}
-                {showMA && (
-                  <>
-                    <Line yAxisId="price" dataKey="ma20" name="MA20" stroke="#6366f1" strokeWidth={1.2} dot={false} connectNulls />
-                    <Line yAxisId="price" dataKey="ma60" name="MA60" stroke="#10b981" strokeWidth={1.2} dot={false} connectNulls />
-                    <Line yAxisId="price" dataKey="ma120" name="MA120" stroke="#f59e0b" strokeWidth={1.2} dot={false} connectNulls />
-                  </>
-                )}
 
                 {/* 기술적 분석 라인 */}
                 {chartLevels?.resistance && (
