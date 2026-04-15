@@ -1027,16 +1027,12 @@ router.post("/:id/step", async (req, res) => {
 
   // 현재 단계 이전에 완료된 단계만 context로 전달 (순서 보장)
   const currentStepIndex = STEP_ORDER.indexOf(stepKey);
-  // 이전 단계 컨텍스트는 단계당 1,500자로 잘라 입력 토큰 절감
-  const CTX_LIMIT = 1500;
   const previousStepsForContext = existingSteps
     .filter((s) => STEP_ORDER.indexOf(s.stepKey as AgentKey) < currentStepIndex)
     .map((s) => ({
       stepKey: s.stepKey,
       agentName: s.agentName,
-      content: s.content && s.content.length > CTX_LIMIT
-        ? s.content.slice(0, CTX_LIMIT) + "\n…(요약 생략)"
-        : s.content,
+      content: s.content,
     }));
 
   const { systemPrompt, userPrompt } = buildPrompt(
@@ -1051,17 +1047,8 @@ router.post("/:id/step", async (req, res) => {
   let content = "";
   try {
     try {
-      // 단계별 출력 토큰 한도 — 실제 필요량에 맞게 최소화
-      const TOKEN_LIMITS: Partial<Record<AgentKey, number>> = {
-        company_intro: 1024,      // 4~5문장
-        industry_analysis: 8192,
-        catalyst_analysis: 6144,
-        company_analysis: 16384,
-        relative_valuation: 16384,
-        market_analysis: 6144,
-        investment_strategy: 4096,
-      };
-      const maxOutputTokens = TOKEN_LIMITS[stepKey] ?? 8192;
+      const maxOutputTokens =
+        (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 16384;
 
       const stream = await ai.models.generateContentStream({
         model: "gemini-2.5-flash",
@@ -1107,7 +1094,7 @@ router.post("/:id/step", async (req, res) => {
         try {
           const revisedUserPrompt = userPrompt +
             `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
-          const revisedMaxTokens = stepKey === "company_analysis" ? 8192 : 8192;
+          const revisedMaxTokens = stepKey === "company_analysis" ? 32768 : 16384;
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
