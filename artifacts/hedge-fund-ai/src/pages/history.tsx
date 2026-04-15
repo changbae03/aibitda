@@ -44,17 +44,13 @@ export default function History() {
     e.stopPropagation();
     setDeletingId(id);
     setConfirmId(null);
-    deleteAnalysis(
-      { params: { id } },
-      {
-        onSuccess: () => {
-          try { localStorage.removeItem(`bookmark-${id}`); } catch {}
-          queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey() });
-          setDeletingId(null);
-        },
-        onError: () => setDeletingId(null),
-      }
-    );
+    deleteAnalysis(id, {
+      onSuccess: () => {
+        try { localStorage.removeItem(`bookmark-${id}`); } catch {}
+        setDeletingId(null);
+      },
+      onError: () => setDeletingId(null),
+    });
   };
 
   const cancelConfirm = (e: React.MouseEvent) => {
