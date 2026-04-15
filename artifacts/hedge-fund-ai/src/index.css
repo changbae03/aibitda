@@ -183,8 +183,8 @@
   color: #6b7280;
   font-size: 0.875rem;
 }
-.markdown-body table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
-.markdown-body th, .markdown-body td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+.markdown-body table { width: auto; min-width: 0; max-width: 100%; font-size: 0.85rem; border-collapse: collapse; display: block; overflow-x: auto; }
+.markdown-body th, .markdown-body td { padding: 0.45rem 0.85rem; text-align: left; border: 1px solid #e5e7eb; white-space: nowrap; }
 .markdown-body thead th { font-weight: 600; background: #f9fafb; }
 
 /* ── 인쇄 ── */

@@ -997,8 +997,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               ),
               hr: () => <hr className="my-4 border-border/60" />,
               table: ({ children }) => (
-                <div className="my-4 w-full overflow-x-auto rounded-xl border border-border">
-                  <table className="w-full text-xs border-collapse">{children}</table>
+                <div className="my-4 overflow-x-auto rounded-xl border border-border">
+                  <table className="text-xs border-collapse">{children}</table>
                 </div>
               ),
               thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
