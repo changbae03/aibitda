@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, History, Settings, LogIn } from "lucide-react";
+import { Menu, X, Settings, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -9,7 +9,6 @@ interface AppLayoutProps {
 }
 
 const bottomItems = [
-  { href: "/history", label: "내가 본 자료", icon: History },
   { href: "/settings", label: "설정", icon: Settings },
   { href: "/login", label: "로그인", icon: LogIn },
 ];
@@ -20,6 +19,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석" },
+    { href: "/history", label: "내가 본 자료" },
   ];
 
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
