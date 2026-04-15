@@ -826,7 +826,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
               <span><span className="font-semibold">팀장 피드백:</span> {qcFeedback}</span>
             </div>
           )}
-          <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap font-sans">
+          <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.85", color: "#262626" }}>
             {!content && !isQCPhase ? (
               <span className="flex items-center gap-2 text-muted-foreground/50 select-none py-1">
                 <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
@@ -834,7 +834,9 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
               </span>
             ) : (
               <>
-                {content}
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {content}
+                </ReactMarkdown>
                 {showCursor && (
                   <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
                 )}
