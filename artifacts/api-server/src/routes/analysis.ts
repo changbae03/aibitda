@@ -268,7 +268,7 @@ async function fetchNaverFinanceData(code: string): Promise<string> {
       } catch { /* ignore */ }
     }
 
-    if (infoMap.foreignRate)         lines.push(`외국인 소진율: ${infoMap.foreignRate}`);
+    if (infoMap.foreignRate)         lines.push(`외국인 보유 비중: ${infoMap.foreignRate}`);
     if (infoMap.highPriceOf52Weeks)  lines.push(`52주 최고가: ${infoMap.highPriceOf52Weeks}원`);
     if (infoMap.lowPriceOf52Weeks)   lines.push(`52주 최저가: ${infoMap.lowPriceOf52Weeks}원`);
     if (infoMap.per)                 lines.push(`PER: ${infoMap.per} (기준 ${integration.totalInfos?.find((x: any) => x.code === "per")?.valueDesc ?? ""})`);
