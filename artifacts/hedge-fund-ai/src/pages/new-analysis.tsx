@@ -160,7 +160,7 @@ export default function NewAnalysis() {
         <div className="space-y-2">
           <h1
             className="text-4xl md:text-5xl font-black tracking-tighter text-neutral-900 leading-[1.1]"
-            style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
           >
             어떤 종목을<br />분석할까요?
           </h1>

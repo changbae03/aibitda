@@ -49,7 +49,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <Link href="/analysis/new" className="block">
             <span
               className="text-[22px] font-black tracking-tighter text-neutral-900 leading-none select-none"
-              style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
             >
               애빛다
             </span>
@@ -93,7 +93,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="px-5 h-14 flex items-center justify-between border-b border-neutral-100">
                 <span
                   className="text-[22px] font-black tracking-tighter text-neutral-900 leading-none"
-                  style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+                  style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
                 >
                   애빛다
                 </span>
@@ -118,7 +118,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-neutral-100 bg-white z-30 sticky top-0 shrink-0 print:hidden">
           <span
             className="text-[20px] font-black tracking-tighter text-neutral-900 leading-none"
-            style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
           >
             애빛다
           </span>

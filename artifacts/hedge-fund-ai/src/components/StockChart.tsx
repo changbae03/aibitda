@@ -134,7 +134,7 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
   // 거래량을 차트 아래쪽 25%에만 표시하도록 Y축 스케일 확대
   const volumeDomainMax = maxVolume * 5;
 
-  const axisStyle = { fontSize: 10, fill: "#a3a3a3", fontFamily: "'Noto Sans KR', sans-serif" };
+  const axisStyle = { fontSize: 10, fill: "#a3a3a3", fontFamily: "'Spoqa Han Sans Neo', sans-serif" };
   const gridColor = "#f0f0f0";
 
   return (
@@ -282,7 +282,7 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
-                  wrapperStyle={{ fontSize: "11px", paddingTop: "10px", fontFamily: "'Noto Sans KR', sans-serif" }}
+                  wrapperStyle={{ fontSize: "11px", paddingTop: "10px", fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
                   formatter={(value) => <span style={{ color: "#737373" }}>{value}</span>}
                 />
 
