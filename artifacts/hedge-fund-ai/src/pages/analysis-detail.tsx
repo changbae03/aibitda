@@ -997,15 +997,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               ),
               hr: () => <hr className="my-4 border-border/60" />,
               table: ({ children }) => (
-                <div className="my-4 overflow-x-auto rounded-xl border border-border">
-                  <table className="text-xs border-collapse">{children}</table>
+                <div className="table-wrap">
+                  <table>{children}</table>
                 </div>
               ),
-              thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
-              tbody: ({ children }) => <tbody className="divide-y divide-border">{children}</tbody>,
-              tr: ({ children }) => <tr className="hover:bg-muted/30 transition-colors">{children}</tr>,
-              th: ({ children }) => <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">{children}</th>,
-              td: ({ children }) => <td className="px-3 py-2 text-foreground/75">{children}</td>,
+              thead: ({ children }) => <thead>{children}</thead>,
+              tbody: ({ children }) => <tbody>{children}</tbody>,
+              tr: ({ children }) => <tr>{children}</tr>,
+              th: ({ children }) => <th>{children}</th>,
+              td: ({ children }) => <td>{children}</td>,
             }}
           >
             {displayContent}

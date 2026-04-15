@@ -183,9 +183,11 @@
   color: #6b7280;
   font-size: 0.875rem;
 }
-.markdown-body table { width: auto; min-width: 0; max-width: 100%; font-size: 0.85rem; border-collapse: collapse; display: block; overflow-x: auto; }
-.markdown-body th, .markdown-body td { padding: 0.45rem 0.85rem; text-align: left; border: 1px solid #e5e7eb; white-space: nowrap; }
-.markdown-body thead th { font-weight: 600; background: #f9fafb; }
+.markdown-body .table-wrap { overflow-x: auto; margin: 1rem 0; }
+.markdown-body table { width: auto; font-size: 0.85rem; border-collapse: collapse; table-layout: auto; }
+.markdown-body th { padding: 0.45rem 1rem; text-align: left; border: 1px solid #e5e7eb; font-weight: 600; background: #f9fafb; white-space: nowrap; vertical-align: top; }
+.markdown-body td { padding: 0.45rem 1rem; text-align: left; border: 1px solid #e5e7eb; white-space: normal; word-break: keep-all; vertical-align: top; }
+.markdown-body td:first-child { white-space: nowrap; font-weight: 500; color: #374151; }
 
 /* ── 인쇄 ── */
 @media print {
