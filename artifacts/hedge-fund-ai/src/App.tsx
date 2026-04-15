@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 // Pages
 import NewAnalysis from "@/pages/new-analysis";
 import AnalysisDetail from "@/pages/analysis-detail";
+import History from "@/pages/history";
 import ModelInsights from "@/pages/model-insights";
 import News from "@/pages/news";
 import Reports from "@/pages/reports";
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/" component={NewAnalysis} />
         <Route path="/analysis/new" component={NewAnalysis} />
         <Route path="/analysis/:id" component={AnalysisDetail} />
+        <Route path="/history" component={History} />
         <Route path="/reports" component={Reports} />
         <Route path="/model-insights" component={ModelInsights} />
         <Route path="/news" component={News} />
