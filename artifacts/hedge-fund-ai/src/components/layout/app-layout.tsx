@@ -49,7 +49,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <Link href="/analysis/new" className="block">
             <span
               className="text-[22px] font-black tracking-tighter leading-none select-none"
-              style={{ fontFamily: "'Jua', 'Noto Sans KR', sans-serif", color: "#C9A96E" }}
+              style={{ fontFamily: "'Jua', 'Noto Sans KR', sans-serif", color: "#FACC15" }}
             >
               애빛다
             </span>
@@ -93,7 +93,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="px-5 h-14 flex items-center justify-between border-b border-neutral-100">
                 <span
                   className="text-[22px] font-black tracking-tighter leading-none"
-                  style={{ fontFamily: "'Jua', 'Noto Sans KR', sans-serif", color: "#C9A96E" }}
+                  style={{ fontFamily: "'Jua', 'Noto Sans KR', sans-serif", color: "#FACC15" }}
                 >
                   애빛다
                 </span>
@@ -118,7 +118,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-neutral-100 bg-white z-30 sticky top-0 shrink-0 print:hidden">
           <span
             className="text-[20px] font-black tracking-tighter leading-none"
-            style={{ fontFamily: "'Jua', 'Noto Sans KR', sans-serif", color: "#C9A96E" }}
+            style={{ fontFamily: "'Jua', 'Noto Sans KR', sans-serif", color: "#FACC15" }}
           >
             애빛다
           </span>
