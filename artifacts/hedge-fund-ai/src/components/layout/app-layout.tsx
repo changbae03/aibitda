@@ -59,17 +59,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         className="w-64 flex-col z-20 hidden md:flex print:hidden"
         style={{ background: "hsl(220, 45%, 18%)" }}
       >
-        <div className="px-5 py-5 flex items-center gap-3 border-b border-white/10">
+        <div className="px-5 py-5 flex items-center border-b border-white/10">
           <img
-            src={`${import.meta.env.BASE_URL}images/cbst-logo-nobg.png`}
-            alt="CBST Research"
-            className="h-8 w-auto object-contain"
+            src={`${import.meta.env.BASE_URL}images/aebida-logo-white.svg`}
+            alt="애빛다"
+            className="h-7 w-auto object-contain"
           />
-          <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold text-[13px] tracking-tight text-white">
-              애빛다
-            </span>
-          </div>
         </div>
         <nav className="flex-1 px-3 py-5 space-y-1">
           <div className="text-[11px] font-mono text-white/30 uppercase tracking-widest mb-3 px-3">
@@ -102,15 +97,12 @@ export function AppLayout({ children }: AppLayoutProps) {
               style={{ background: "hsl(220, 45%, 18%)" }}
             >
               <div className="px-5 py-4 flex items-center justify-between border-b border-white/10">
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center">
                   <img
-                    src={`${import.meta.env.BASE_URL}images/cbst-logo-nobg.png`}
-                    alt="CBST"
-                    className="h-7 w-auto object-contain"
+                    src={`${import.meta.env.BASE_URL}images/aebida-logo-white.svg`}
+                    alt="애빛다"
+                    className="h-6 w-auto object-contain"
                   />
-                  <span className="font-display font-bold text-[13px] tracking-tight text-white">
-                    애빛다
-                  </span>
                 </div>
                 <button
                   onClick={() => setMenuOpen(false)}
@@ -134,15 +126,12 @@ export function AppLayout({ children }: AppLayoutProps) {
       <main id="print-main" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-white z-30 sticky top-0 shrink-0 print:hidden">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             <img
-              src={`${import.meta.env.BASE_URL}images/cbst-logo.png`}
-              alt="CBST"
-              className="h-7 w-auto object-contain"
+              src={`${import.meta.env.BASE_URL}images/aebida-logo-dark.svg`}
+              alt="애빛다"
+              className="h-6 w-auto object-contain"
             />
-            <span className="font-display font-bold text-sm text-foreground">
-              애빛다
-            </span>
           </div>
           <button
             onClick={() => setMenuOpen(true)}
