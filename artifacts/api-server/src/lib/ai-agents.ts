@@ -417,7 +417,16 @@ ${COMMON_RULES}`,
 ## 🔢 모델 가정 수립
 
 **WACC 산출 (모든 모델 공통):**
-Rf __%  |  Unlevered β __  |  Relevered β __  |  ERP __%  →  CoE __%  |  CoD(after-tax) __%  |  E%/D% __/__  →  **WACC __%**
+
+절대 표(table) 사용 금지. 아래 불릿 구조 그대로 사용하세요.
+
+- Rf: __% (한국 국고채 10년물 기준)
+- Unlevered β: __ | Relevered β: __ | ERP: __%
+- CoE: __% (= Rf + Relevered β × ERP)
+- CoD(after-tax): __% (= 이자율 __% × (1 - 세율 __))
+- E% / D%: __ / __ (D/E __% 기준)
+- **→ WACC: __%**
+
 ⚠️ WACC가 7% 미만 또는 15% 초과이면 "WACC 이상 감지 — 재검토" 명시
 
 ---
