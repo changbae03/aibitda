@@ -152,6 +152,7 @@ export default function AnalysisDetail() {
     const next = !bookmarked;
     setBookmarked(next);
     try { next ? localStorage.setItem(`bookmark-${id}`, "1") : localStorage.removeItem(`bookmark-${id}`); } catch {}
+    if (next) setLocation("/history");
   };
 
   const copyLink = () => {
