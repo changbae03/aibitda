@@ -133,23 +133,28 @@
   list-style: decimal;
 }
 .markdown-body li {
-  display: flex;
-  gap: 0.6em;
+  position: relative;
+  padding-left: 1.1em;
   margin-bottom: 0.55rem;
   line-height: 1.85;
-  align-items: flex-start;
 }
 .markdown-body ul > li::before {
   content: "";
-  display: inline-block;
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  top: 0.68em;
+  display: block;
   width: 5px;
   height: 5px;
-  margin-top: 0.65em;
   border-radius: 50%;
   background-color: #9ca3af;
+  flex-shrink: 0;
 }
-.markdown-body ol > li { display: list-item; padding-left: 0.3em; }
+.markdown-body li > p {
+  margin-bottom: 0.2rem;
+}
+.markdown-body li > p:last-child { margin-bottom: 0; }
+.markdown-body ol > li { list-style: decimal; padding-left: 0.3em; }
 
 .markdown-body h2 {
   font-size: 1rem;
