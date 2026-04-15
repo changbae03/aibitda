@@ -157,26 +157,31 @@
 .markdown-body ol > li { list-style: decimal; padding-left: 0.3em; }
 
 .markdown-body h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-top: 1.8rem;
-  margin-bottom: 0.8rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid #e5e7eb;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #111827;
+  margin-top: 2.2rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #111827;
 }
 .markdown-body h2:first-child { margin-top: 0; }
 
 .markdown-body h3 {
-  font-size: 0.9rem;
-  font-weight: 600;
-  margin-top: 1.4rem;
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: #1d4ed8;
+  margin-top: 1.5rem;
   margin-bottom: 0.5rem;
+  padding-left: 0.7rem;
+  border-left: 2.5px solid #1d4ed8;
 }
 .markdown-body h4 {
-  font-size: 0.85rem;
+  font-size: 0.825rem;
   font-weight: 600;
   margin-top: 1rem;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.35rem;
   color: #4b5563;
 }
 .markdown-body strong { font-weight: 600; color: #111827; }
