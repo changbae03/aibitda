@@ -1053,7 +1053,7 @@ router.post("/:id/step", async (req, res) => {
     try {
       // 단계별 출력 토큰 한도 — 실제 필요량에 맞게 최소화
       const TOKEN_LIMITS: Partial<Record<AgentKey, number>> = {
-        company_intro: 512,       // 4~5문장
+        company_intro: 1024,      // 4~5문장
         industry_analysis: 4096,
         catalyst_analysis: 3072,
         company_analysis: 8192,
