@@ -67,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           />
           <div className="flex flex-col leading-tight">
             <span className="font-display font-bold text-[13px] tracking-tight text-white">
-              CBST AI 리서치센터
+              애빛다
             </span>
           </div>
         </div>
@@ -109,7 +109,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     className="h-7 w-auto object-contain"
                   />
                   <span className="font-display font-bold text-[13px] tracking-tight text-white">
-                    CBST AI 리서치센터
+                    애빛다
                   </span>
                 </div>
                 <button
@@ -141,7 +141,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               className="h-7 w-auto object-contain"
             />
             <span className="font-display font-bold text-sm text-foreground">
-              CBST AI 리서치센터
+              애빛다
             </span>
           </div>
           <button

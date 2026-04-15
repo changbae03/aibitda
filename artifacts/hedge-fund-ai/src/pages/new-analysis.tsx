@@ -170,7 +170,7 @@ export default function NewAnalysis() {
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center gap-2 mb-1">
             <TrendingUp className="w-6 h-6 text-primary" />
-            <span className="text-sm font-semibold text-primary uppercase tracking-widest">CBST AI 기업분석</span>
+            <span className="text-sm font-semibold text-primary uppercase tracking-widest">애빛다</span>
           </div>
           <h1 className="text-2xl md:text-4xl font-display font-bold text-foreground">
             어떤 종목을 분석할까요?

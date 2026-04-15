@@ -148,7 +148,7 @@ export default function AnalysisDetail() {
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">CBST AI 리서치센터 &nbsp;|&nbsp; AI 기업분석 리포트</div>
+            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">애빛다 &nbsp;|&nbsp; AI 기업분석 리포트</div>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               {analysis.companyName}
               <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
