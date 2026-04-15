@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: 'Inter', sans-serif;
-  --font-display: 'Space Grotesk', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', 'Noto Sans KR', sans-serif;
+  --font-display: 'Inter', 'Noto Sans KR', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -29,53 +29,45 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --color-sidebar: hsl(var(--sidebar));
 
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
-  --animate-fade-in: fade-in 0.4s ease-out;
-  --animate-slide-up: slide-up 0.5s ease-out;
+  --animate-fade-in: fade-in 0.35s ease-out;
+  --animate-slide-up: slide-up 0.4s ease-out;
 }
 
 :root {
-  /* White base theme */
-  --background: 0 0% 97%;
-  --foreground: 220 25% 15%;
+  --background: 0 0% 100%;
+  --foreground: 0 0% 5%;
   --card: 0 0% 100%;
-  --card-foreground: 220 25% 15%;
+  --card-foreground: 0 0% 5%;
   --popover: 0 0% 100%;
-  --popover-foreground: 220 25% 15%;
+  --popover-foreground: 0 0% 5%;
 
-  /* CBST Blue as primary accent */
-  --primary: 218 67% 44%;
+  --primary: 0 0% 5%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 218 30% 94%;
-  --secondary-foreground: 218 67% 35%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 15%;
 
-  --muted: 220 15% 93%;
-  --muted-foreground: 220 15% 48%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 44%;
 
-  --accent: 218 67% 44%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 5%;
 
-  --destructive: 0 84% 58%;
-  --destructive-foreground: 0 0% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
 
   --success: 142 71% 38%;
-  --success-foreground: 0 0% 98%;
+  --success-foreground: 0 0% 100%;
 
   --warning: 38 92% 48%;
-  --warning-foreground: 0 0% 98%;
+  --warning-foreground: 0 0% 100%;
 
-  --border: 220 15% 88%;
-  --input: 220 15% 91%;
-  --ring: 218 67% 44%;
+  --border: 0 0% 90%;
+  --input: 0 0% 93%;
+  --ring: 0 0% 5%;
 
-  /* Sidebar: deep CBST navy */
-  --sidebar: 220 45% 18%;
-
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 }
 
 @layer base {
@@ -83,8 +75,11 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased font-sans;
-    background-image: none;
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: 'kern' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -99,85 +94,30 @@
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  @apply bg-border rounded-full;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.4);
-}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 100px; }
+::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
 
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
+.scrollbar-none::-webkit-scrollbar { display: none; }
 
-/* Card panel */
-.glass-panel {
-  @apply bg-card border border-border shadow-sm;
-}
-
-/* ── 인쇄 / PDF 저장 스타일 ── */
+/* ── 인쇄 ── */
 @media print {
-  @page {
-    size: A4 portrait;
-    margin: 16mm 20mm;
-  }
-
-  /* 스크롤 컨테이너 해제 — 내용 전체 표시 */
-  #print-main,
-  #print-scroll {
-    height: auto !important;
-    overflow: visible !important;
-  }
-
-  /* 전체 배경 흰색 */
-  body,
-  html {
-    background: white !important;
-    color: #111 !important;
-  }
-
-  /* sticky/fixed 위치 해제 */
-  [style*="position: sticky"],
-  [style*="position: fixed"] {
-    position: static !important;
-  }
-
-  /* 카드 그림자 제거, 테두리 정리 */
-  .rounded-xl,
-  .rounded-2xl {
-    box-shadow: none !important;
-    break-inside: avoid;
-  }
-
-  /* 링크 URL 표시 억제 */
-  a[href]::after {
-    content: none !important;
-  }
-
-  /* 테이블 페이지 내 유지 */
-  table {
-    break-inside: avoid;
-  }
-
-  /* 애니메이션 제거 */
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
+  @page { size: A4 portrait; margin: 16mm 20mm; }
+  #print-main, #print-scroll { height: auto !important; overflow: visible !important; }
+  body, html { background: white !important; color: #111 !important; }
+  [style*="position: sticky"], [style*="position: fixed"] { position: static !important; }
+  .rounded-xl, .rounded-2xl { box-shadow: none !important; break-inside: avoid; }
+  a[href]::after { content: none !important; }
+  table { break-inside: avoid; }
+  * { animation: none !important; transition: none !important; }
 }

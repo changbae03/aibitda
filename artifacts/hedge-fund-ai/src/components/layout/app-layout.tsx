@@ -1,12 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import {
-  BrainCircuit,
-  Menu,
-  X,
-  Newspaper,
-  FileText,
-} from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -19,9 +13,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const navItems = [
-    { href: "/analysis/new", label: "AI 기업분석", icon: BrainCircuit },
-    { href: "/reports", label: "투자 아이디어", icon: FileText },
-    { href: "/news", label: "뉴스", icon: Newspaper },
+    { href: "/analysis/new", label: "AI 기업분석" },
+    { href: "/reports", label: "투자 아이디어" },
+    { href: "/news", label: "뉴스" },
   ];
 
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
@@ -35,43 +29,44 @@ export function AppLayout({ children }: AppLayoutProps) {
           href={item.href}
           onClick={onSelect}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group font-medium text-sm",
+            "block px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors duration-150",
             isActive
-              ? "bg-white/15 text-white"
-              : "text-white/55 hover:text-white hover:bg-white/8"
+              ? "bg-neutral-100 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50"
           )}
         >
-          <item.icon
-            className={cn(
-              "w-4 h-4 shrink-0",
-              isActive ? "text-white" : "text-white/50 group-hover:text-white"
-            )}
-          />
           {item.label}
         </Link>
       );
     });
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
+    <div className="min-h-screen bg-white text-neutral-900 flex overflow-hidden">
       {/* ── Desktop Sidebar ── */}
-      <aside
-        className="w-64 flex-col z-20 hidden md:flex print:hidden"
-        style={{ background: "hsl(220, 45%, 18%)" }}
-      >
-        <div className="px-5 py-5 flex items-center border-b border-white/10">
-          <img
-            src={`${import.meta.env.BASE_URL}images/aebida-logo-white.svg`}
-            alt="애빛다"
-            className="h-7 w-auto object-contain"
-          />
+      <aside className="w-52 shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-neutral-100">
+        {/* Logo */}
+        <div className="px-5 h-14 flex items-center border-b border-neutral-100">
+          <Link href="/analysis/new" className="block">
+            <span
+              className="text-[22px] font-black tracking-tighter text-neutral-900 leading-none select-none"
+              style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+            >
+              애빛다
+            </span>
+          </Link>
         </div>
-        <nav className="flex-1 px-3 py-5 space-y-1">
-          <div className="text-[11px] font-mono text-white/30 uppercase tracking-widest mb-3 px-3">
-            메뉴
-          </div>
+
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-4 space-y-0.5">
           <NavLinks />
         </nav>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-neutral-100">
+          <p className="text-[10px] text-neutral-300 leading-relaxed">
+            AI로 기업가치를 밝히다
+          </p>
+        </div>
       </aside>
 
       {/* ── Mobile Drawer ── */}
@@ -81,7 +76,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.45 }}
+              animate={{ opacity: 0.3 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="fixed inset-0 bg-black z-40 md:hidden print:hidden"
@@ -93,28 +88,23 @@ export function AppLayout({ children }: AppLayoutProps) {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 340, damping: 34 }}
-              className="fixed left-0 top-0 h-full w-72 z-50 flex flex-col md:hidden print:hidden"
-              style={{ background: "hsl(220, 45%, 18%)" }}
+              className="fixed left-0 top-0 h-full w-64 z-50 flex flex-col md:hidden print:hidden bg-white border-r border-neutral-100"
             >
-              <div className="px-5 py-4 flex items-center justify-between border-b border-white/10">
-                <div className="flex items-center">
-                  <img
-                    src={`${import.meta.env.BASE_URL}images/aebida-logo-white.svg`}
-                    alt="애빛다"
-                    className="h-6 w-auto object-contain"
-                  />
-                </div>
+              <div className="px-5 h-14 flex items-center justify-between border-b border-neutral-100">
+                <span
+                  className="text-[22px] font-black tracking-tighter text-neutral-900 leading-none"
+                  style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+                >
+                  애빛다
+                </span>
                 <button
                   onClick={() => setMenuOpen(false)}
-                  className="p-2 text-white/50 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+                  className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors rounded-md hover:bg-neutral-100"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-              <nav className="flex-1 px-3 py-5 space-y-1">
-                <div className="text-[11px] font-mono text-white/30 uppercase tracking-widest mb-3 px-3">
-                  메뉴
-                </div>
+              <nav className="flex-1 px-2 py-4 space-y-0.5">
                 <NavLinks onSelect={() => setMenuOpen(false)} />
               </nav>
             </motion.aside>
@@ -124,25 +114,24 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* ── Main Content ── */}
       <main id="print-main" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Mobile Header */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-white z-30 sticky top-0 shrink-0 print:hidden">
-          <div className="flex items-center">
-            <img
-              src={`${import.meta.env.BASE_URL}images/aebida-logo-dark.svg`}
-              alt="애빛다"
-              className="h-6 w-auto object-contain"
-            />
-          </div>
+        {/* Mobile Top Bar */}
+        <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-neutral-100 bg-white z-30 sticky top-0 shrink-0 print:hidden">
+          <span
+            className="text-[20px] font-black tracking-tighter text-neutral-900 leading-none"
+            style={{ fontFamily: "'Noto Sans KR', sans-serif", fontWeight: 900 }}
+          >
+            애빛다
+          </span>
           <button
             onClick={() => setMenuOpen(true)}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+            className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors rounded-md hover:bg-neutral-100"
           >
             <Menu className="w-5 h-5" />
           </button>
         </header>
 
         <div id="print-scroll" className="flex-1 overflow-y-auto">
-          <div className="container max-w-6xl mx-auto p-4 md:p-8 lg:p-10 animate-fade-in">
+          <div className="container max-w-5xl mx-auto p-6 md:p-10 animate-fade-in">
             {children}
           </div>
         </div>
