@@ -14,8 +14,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석" },
-    { href: "/reports", label: "투자 아이디어" },
-    { href: "/news", label: "뉴스" },
   ];
 
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
