@@ -24,8 +24,8 @@ export const AGENTS: Record<string, AgentInfo> = {
     name: "브리핑",
     role: "Lead Portfolio Strategist",
     icon: ShieldCheck,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50",
     description: "분석 의뢰 접수 및 팀 소개"
   },
   industry_analysis: {
@@ -33,8 +33,8 @@ export const AGENTS: Record<string, AgentInfo> = {
     name: "매크로 및 산업 분석",
     role: "Macro & Industry Analyst",
     icon: Globe2,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50",
     description: "산업 구조, 성장률, 정책 환경, 경쟁 구도, 매크로 리스크"
   },
   company_analysis: {
@@ -42,8 +42,8 @@ export const AGENTS: Record<string, AgentInfo> = {
     name: "실적 전망",
     role: "Financial Analyst",
     icon: PieChart,
-    color: "text-indigo-600",
-    bgColor: "bg-indigo-50",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50",
     description: "재무 분석(수익성·현금흐름·건전성) + Base 실적 추정"
   },
   relative_valuation: {
@@ -51,8 +51,8 @@ export const AGENTS: Record<string, AgentInfo> = {
     name: "목표가 산출",
     role: "Valuation Analyst",
     icon: Scale,
-    color: "text-violet-600",
-    bgColor: "bg-violet-50",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50",
     description: "DCF(절대가치) + 피어 멀티플(상대가치) → 조율 목표주가 1개"
   },
   market_analysis: {
@@ -60,8 +60,8 @@ export const AGENTS: Record<string, AgentInfo> = {
     name: "타점 분석",
     role: "Market & Technical Analyst",
     icon: BarChart2,
-    color: "text-rose-600",
-    bgColor: "bg-rose-50",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50",
     description: "수급, 차트 분석, 진입/목표/손절 전략"
   },
   catalyst_analysis: {
@@ -78,8 +78,8 @@ export const AGENTS: Record<string, AgentInfo> = {
     name: "최종 결론",
     role: "Lead Portfolio Strategist",
     icon: ShieldCheck,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50",
     description: "통합 검토 후 최종 투자 전략 도출"
   },
 };

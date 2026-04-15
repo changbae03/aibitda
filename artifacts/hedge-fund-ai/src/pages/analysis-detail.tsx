@@ -742,14 +742,17 @@ function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
   );
 }
 
+const BRAND_BLUE = "#1d4ed8";
+const BRAND_AMBER = "#d97706";
+
 const AGENT_COLORS: Record<string, string> = {
-  company_intro: "hsl(218, 67%, 44%)",
-  industry_analysis: "#059669",
-  company_analysis: "#4f46e5",
-  relative_valuation: "#7c3aed",
-  market_analysis: "#e11d48",
-  catalyst_analysis: "#d97706",
-  investment_strategy: "hsl(218, 67%, 44%)",
+  company_intro: BRAND_BLUE,
+  industry_analysis: BRAND_BLUE,
+  company_analysis: BRAND_BLUE,
+  relative_valuation: BRAND_BLUE,
+  market_analysis: BRAND_BLUE,
+  catalyst_analysis: BRAND_AMBER,
+  investment_strategy: BRAND_BLUE,
 };
 
 function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
@@ -780,7 +783,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
       </div>
     );
     if (qcStatus === "revising") return (
-      <div className="flex items-center gap-1.5 text-xs text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full">
+      <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
         <span>재분석 중... ({qcScore}/10)</span>
       </div>
@@ -821,7 +824,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
       ) : (
         <div className="p-5">
           {qcStatus === "revising" && qcFeedback && (
-            <div className="mb-3 px-3 py-2 rounded-lg bg-orange-500/8 border border-orange-500/20 text-xs text-orange-600 dark:text-orange-400 flex items-start gap-2">
+            <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/20 text-xs text-amber-700 flex items-start gap-2">
               <RefreshCw className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span><span className="font-semibold">팀장 피드백:</span> {qcFeedback}</span>
             </div>
