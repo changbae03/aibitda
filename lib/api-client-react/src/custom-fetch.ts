@@ -6,6 +6,18 @@ export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
 
+let _baseUrl = "";
+
+export function setBaseUrl(url: string) {
+  _baseUrl = url.replace(/\/$/, "");
+}
+
+let _authTokenGetter: (() => string | null | Promise<string | null>) | null = null;
+
+export function setAuthTokenGetter(getter: () => string | null | Promise<string | null>) {
+  _authTokenGetter = getter;
+}
+
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
@@ -297,9 +309,22 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const rawUrl = resolveUrl(input);
+  const resolvedUrl =
+    _baseUrl && rawUrl.startsWith("/") ? `${_baseUrl}${rawUrl}` : rawUrl;
 
-  const response = await fetch(input, { ...init, method, headers });
+  if (_authTokenGetter) {
+    const token = await _authTokenGetter();
+    if (token) headers.set("authorization", `Bearer ${token}`);
+  }
+
+  const requestInfo = { method, url: resolvedUrl };
+
+  const fetchInput = isRequest(input)
+    ? new Request(resolvedUrl, { ...init, method, headers, body: input.body })
+    : resolvedUrl;
+
+  const response = await fetch(fetchInput, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
