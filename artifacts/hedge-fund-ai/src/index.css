@@ -109,6 +109,84 @@
 }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
+/* ── 마크다운 본문 ── */
+.markdown-body {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.markdown-body p {
+  margin-bottom: 1rem;
+  line-height: 1.9;
+}
+.markdown-body p:last-child { margin-bottom: 0; }
+
+.markdown-body ul {
+  margin-bottom: 1.1rem;
+  padding-left: 0;
+  list-style: none;
+}
+.markdown-body ol {
+  margin-bottom: 1.1rem;
+  padding-left: 1.4em;
+  list-style: decimal;
+}
+.markdown-body li {
+  display: flex;
+  gap: 0.6em;
+  margin-bottom: 0.55rem;
+  line-height: 1.85;
+  align-items: flex-start;
+}
+.markdown-body ul > li::before {
+  content: "";
+  display: inline-block;
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  margin-top: 0.65em;
+  border-radius: 50%;
+  background-color: #9ca3af;
+}
+.markdown-body ol > li { display: list-item; padding-left: 0.3em; }
+
+.markdown-body h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: 1.8rem;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.markdown-body h2:first-child { margin-top: 0; }
+
+.markdown-body h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 1.4rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-body h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  color: #4b5563;
+}
+.markdown-body strong { font-weight: 600; color: #111827; }
+.markdown-body hr { margin: 1.2rem 0; border-color: #e5e7eb; }
+.markdown-body blockquote {
+  margin: 1rem 0;
+  padding: 0.4rem 0.8rem;
+  border-left: 3px solid #d1d5db;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+.markdown-body table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+.markdown-body th, .markdown-body td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+.markdown-body thead th { font-weight: 600; background: #f9fafb; }
+
 /* ── 인쇄 ── */
 @media print {
   @page { size: A4 portrait; margin: 16mm 20mm; }

@@ -983,18 +983,13 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 }
                 return <p className="mb-3.5 last:mb-0 text-foreground/80 leading-[1.75]">{children}</p>;
               },
-              ul: ({ children }) => <ul className="mb-4 space-y-2 pl-0">{children}</ul>,
-              ol: ({ children }) => <ol className="mb-4 space-y-2 pl-5 list-decimal">{children}</ol>,
-              li: ({ children }) => (
-                <li className="flex gap-2.5 text-foreground/80 leading-[1.7]">
-                  <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-foreground/30 flex-shrink-0" />
-                  <span className="flex-1">{children}</span>
-                </li>
-              ),
+              ul: ({ children }) => <ul>{children}</ul>,
+              ol: ({ children }) => <ol>{children}</ol>,
+              li: ({ children }) => <li>{children}</li>,
               strong: ({ children }) => (
-                <strong className="font-semibold text-foreground">{children}</strong>
+                <strong>{children}</strong>
               ),
-              em: ({ children }) => <em className="text-foreground/60 not-italic text-[12px]">{children}</em>,
+              em: ({ children }) => <em className="text-foreground/70 not-italic">{children}</em>,
               blockquote: ({ children }) => (
                 <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
                   {children}
@@ -1009,8 +1004,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
               tbody: ({ children }) => <tbody className="divide-y divide-border">{children}</tbody>,
               tr: ({ children }) => <tr className="hover:bg-muted/30 transition-colors">{children}</tr>,
-              th: ({ children }) => <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 whitespace-nowrap border-b border-border">{children}</th>,
-              td: ({ children }) => <td className="px-3 py-2 text-foreground/75 whitespace-nowrap">{children}</td>,
+              th: ({ children }) => <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">{children}</th>,
+              td: ({ children }) => <td className="px-3 py-2 text-foreground/75">{children}</td>,
             }}
           >
             {displayContent}
