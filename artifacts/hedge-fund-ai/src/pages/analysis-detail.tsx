@@ -1133,6 +1133,24 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           </div>
         )}
       </div>
+
+      {/* Disclaimer */}
+      <div className="mt-10 pt-6 border-t border-neutral-100 print:mt-6">
+        <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-4 space-y-2">
+          <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">투자 유의사항</p>
+          <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+            본 리포트는 <span className="font-semibold">애빛다 AI</span>가 공개된 재무 데이터 및 시장 정보를 기반으로 자동 생성한 참고 자료입니다.
+            투자 판단의 최종 책임은 투자자 본인에게 있으며, 본 내용은 특정 종목의 매수·매도를 권유하거나 추천하는 것이 아닙니다.
+          </p>
+          <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+            AI가 생성한 수치와 전망은 실제 결과와 다를 수 있으며, 시장 상황·기업 공시·거시경제 변수에 따라 언제든지 변동될 수 있습니다.
+            과거 수익률이나 목표주가는 미래 수익을 보장하지 않습니다. 투자 전 반드시 공식 공시 자료 및 전문가 의견을 병행하여 검토하시기 바랍니다.
+          </p>
+          <p className="text-[10.5px] text-neutral-400 mt-1">
+            분석 생성일: {analysis?.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © {new Date().getFullYear()} 애빛다. AI로 기업가치를 밝히다.
+          </p>
+        </div>
+      </div>
     </motion.div>
   );
 }
