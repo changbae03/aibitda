@@ -25,6 +25,106 @@ import PeerGroupSection from "@/components/PeerGroupSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// 야후 파이낸스 영문 업종명 → 한국어 변환
+const INDUSTRY_KO: Record<string, string> = {
+  // 자동차
+  "Auto Manufacturers": "자동차",
+  "Auto Parts": "자동차 부품",
+  "Auto & Truck Dealerships": "자동차 딜러",
+  // 반도체·전자
+  "Semiconductors": "반도체",
+  "Semiconductor Equipment & Materials": "반도체 장비·소재",
+  "Electronic Components": "전자부품",
+  "Electronic Technology": "전자기술",
+  "Consumer Electronics": "가전제품",
+  "Electrical Equipment & Parts": "전기장비",
+  // IT·소프트웨어
+  "Software—Application": "소프트웨어",
+  "Software—Infrastructure": "인프라 소프트웨어",
+  "Information Technology Services": "IT 서비스",
+  "Internet Content & Information": "인터넷·정보서비스",
+  "Internet Retail": "인터넷 쇼핑몰",
+  "Communication Equipment": "통신 장비",
+  "Computer Hardware": "컴퓨터 하드웨어",
+  "Scientific & Technical Instruments": "과학·기술 장비",
+  // 통신
+  "Telecom Services": "통신서비스",
+  "Telecommunications Services": "통신서비스",
+  // 금융
+  "Banks—Regional": "지방은행",
+  "Banks—Diversified": "종합은행",
+  "Insurance—Life": "생명보험",
+  "Insurance—Property & Casualty": "손해보험",
+  "Insurance—Diversified": "종합보험",
+  "Financial Services": "금융서비스",
+  "Asset Management": "자산운용",
+  "Capital Markets": "자본시장",
+  "Credit Services": "신용·카드",
+  // 바이오·헬스
+  "Biotechnology": "바이오",
+  "Drug Manufacturers—General": "제약(대형)",
+  "Drug Manufacturers—Specialty & Generic": "제약(전문·제네릭)",
+  "Medical Devices": "의료기기",
+  "Medical Care Facilities": "의료서비스",
+  "Health Information Services": "헬스케어 IT",
+  "Healthcare Plans": "건강보험",
+  "Diagnostics & Research": "진단·연구",
+  // 에너지
+  "Oil & Gas Integrated": "정유·가스(통합)",
+  "Oil & Gas E&P": "석유·가스 탐사",
+  "Oil & Gas Refining & Marketing": "정유·마케팅",
+  "Oil & Gas Equipment & Services": "유전 장비·서비스",
+  "Chemicals": "화학",
+  "Specialty Chemicals": "특수화학",
+  // 소비재
+  "Beverages—Non-Alcoholic": "음료(비알코올)",
+  "Beverages—Brewers": "주류(맥주)",
+  "Food Distribution": "식품 유통",
+  "Packaged Foods": "가공식품",
+  "Household & Personal Products": "생활용품",
+  "Apparel Manufacturing": "의류 제조",
+  "Apparel Retail": "의류 소매",
+  "Luxury Goods": "명품",
+  "Specialty Retail": "전문 소매",
+  "Department Stores": "백화점",
+  // 산업재
+  "Aerospace & Defense": "항공우주·방산",
+  "Industrial Machinery": "산업기계",
+  "Industrial Distribution": "산업 유통",
+  "Engineering & Construction": "건설·엔지니어링",
+  "Building Materials": "건자재",
+  "Steel": "철강",
+  "Aluminum": "알루미늄",
+  "Metal Fabrication": "금속 가공",
+  "Paper & Paper Products": "제지",
+  // 유통·물류
+  "Grocery Stores": "식품 마트",
+  "Discount Stores": "할인점",
+  "Shipping & Ports": "해운·항만",
+  "Airlines": "항공",
+  "Trucking": "육상 화물",
+  "Integrated Freight & Logistics": "종합 물류",
+  // 부동산
+  "Real Estate Services": "부동산 서비스",
+  "Real Estate—Development": "부동산 개발",
+  "REIT—Office": "오피스 리츠",
+  "REIT—Retail": "리테일 리츠",
+  // 기타
+  "Entertainment": "엔터테인먼트",
+  "Media—Diversified": "종합 미디어",
+  "Publishing": "출판",
+  "Education & Training Services": "교육·훈련",
+  "Staffing & Employment Services": "인력파견",
+  "Waste Management": "폐기물 처리",
+  "Utilities—Regulated Electric": "전기 유틸리티",
+  "Utilities—Diversified": "종합 유틸리티",
+};
+
+function toKoreanIndustry(industry: string | null | undefined): string {
+  if (!industry) return "—";
+  return INDUSTRY_KO[industry] ?? industry;
+}
+
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
   const [, setLocation] = useLocation();
@@ -154,7 +254,7 @@ export default function AnalysisDetail() {
               <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
             </h1>
             {analysis.englishName && <p className="text-sm text-gray-500 mt-0.5">{analysis.englishName}</p>}
-            <p className="text-xs text-gray-400 mt-1">{analysis.industry} &nbsp;·&nbsp; {format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} 생성</p>
+            <p className="text-xs text-gray-400 mt-1">{toKoreanIndustry(analysis.industry)} &nbsp;·&nbsp; {format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} 생성</p>
           </div>
           {analysis.investmentVerdict && (
             <div className="text-right">
@@ -201,7 +301,7 @@ export default function AnalysisDetail() {
               <p className="text-sm text-muted-foreground mt-0.5 mb-1 font-normal">{analysis.englishName}</p>
             )}
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mt-2">
-              <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> {analysis.industry}</span>
+              <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> {toKoreanIndustry(analysis.industry)}</span>
               <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
             </div>
           </div>
@@ -857,7 +957,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
       </div>
 
       <div className="p-5">
-        <div className="text-sm text-foreground/85 leading-relaxed markdown-body">
+        <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.85", color: "#262626" }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
