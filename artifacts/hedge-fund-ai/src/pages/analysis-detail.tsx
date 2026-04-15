@@ -517,14 +517,14 @@ function extractJson(raw: string): any | null {
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
   const json = extractJson(step.content);
 
-  const verdictColor = (v: string) => {
-    if (!v) return "text-foreground";
+  const verdictMeta = (v: string) => {
+    if (!v) return { color: "text-foreground", bg: "bg-neutral-100", border: "border-neutral-200", dot: "#6b7280" };
     const s = v.toLowerCase();
-    if (s.includes("strong buy")) return "text-emerald-600";
-    if (s.includes("buy")) return "text-green-600";
-    if (s.includes("strong sell")) return "text-red-600";
-    if (s.includes("sell")) return "text-red-500";
-    return "text-amber-600";
+    if (s.includes("strong buy"))  return { color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", dot: "#059669" };
+    if (s.includes("buy"))         return { color: "text-green-700",   bg: "bg-green-50",    border: "border-green-200",   dot: "#16a34a" };
+    if (s.includes("strong sell")) return { color: "text-red-700",     bg: "bg-red-50",      border: "border-red-200",     dot: "#dc2626" };
+    if (s.includes("sell"))        return { color: "text-red-600",     bg: "bg-red-50",      border: "border-red-200",     dot: "#ef4444" };
+    return { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "#d97706" };
   };
 
   return (
@@ -532,131 +532,168 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="bg-primary/5 border-2 border-primary/30 rounded-2xl overflow-hidden"
+      className="rounded-2xl overflow-hidden border border-neutral-200 bg-white shadow-sm"
     >
-      <div className="bg-primary px-6 py-4 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
-          <agent.icon className="w-4.5 h-4.5 text-white" />
+      {/* ── 상단 헤더 ── */}
+      <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+            <agent.icon className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="text-white font-display font-semibold text-sm leading-tight">최종 투자 전략</p>
+            <p className="text-neutral-400 text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
+          </div>
         </div>
-        <div>
-          <h4 className="font-display font-bold text-sm text-white">최종 투자 전략</h4>
-          <span className="text-[11px] text-primary-foreground/70 font-mono uppercase tracking-wider">{agent.role}</span>
-        </div>
+        {companyName && (
+          <span className="text-[11px] text-neutral-400 font-medium hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
+        )}
       </div>
 
-      {json ? (
-        <div className="p-6 space-y-5">
-          {/* ① 판정 헤더 */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className={cn("text-2xl font-display font-bold", verdictColor(json.verdict))}>{json.verdict}</span>
-            <span className="text-xs font-medium px-2 py-0.5 bg-muted border border-border rounded text-muted-foreground">신뢰도 {json.confidence}</span>
-            <span className="text-xs font-mono px-2 py-0.5 bg-muted border border-border rounded text-muted-foreground">{json.investment_period} · R/R {json.risk_reward}</span>
-          </div>
+      {json ? (() => {
+        const vm = verdictMeta(json.verdict ?? "");
+        return (
+          <div className="divide-y divide-neutral-100">
 
-          {/* ② 핵심 이슈 */}
-          {json.key_issue && (
-            <div className="flex items-start gap-2 text-sm text-foreground/80 border-l-2 border-amber-400 pl-3">
-              <span className="text-amber-500 font-semibold shrink-0 text-xs mt-0.5">핵심 이슈</span>
-              <span>{json.key_issue}</span>
+            {/* ── ① 판정 + 메타 ── */}
+            <div className="px-6 py-5 flex flex-wrap items-center gap-3">
+              <span className={cn("text-[26px] font-display font-bold leading-none", vm.color)}>{json.verdict}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {json.confidence && (
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                    신뢰도 {json.confidence}
+                  </span>
+                )}
+                {json.investment_period && (
+                  <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                    {json.investment_period}
+                  </span>
+                )}
+                {json.risk_reward && (
+                  <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                    R/R {json.risk_reward}
+                  </span>
+                )}
+              </div>
             </div>
-          )}
 
-          {/* ③ 투자 논거 요약 */}
-          {json.summary && (
-            <p className="text-sm text-foreground/80 leading-relaxed">{json.summary}</p>
-          )}
+            {/* ── ② 핵심 이슈 ── */}
+            {json.key_issue && (
+              <div className="px-6 py-4 bg-amber-50/60">
+                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-1">핵심 이슈</p>
+                <p className="text-sm text-neutral-800 leading-relaxed font-medium">{json.key_issue}</p>
+              </div>
+            )}
 
-          {/* ④ 가격 3박스 */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl p-3.5 border border-border bg-muted/30 text-center">
-              <div className="text-[10px] text-muted-foreground font-mono uppercase mb-1">진입가</div>
-              <div className="font-bold text-foreground text-base">{formatPrice(json.entry_price)}</div>
-            </div>
-            <div className="rounded-xl p-3.5 border border-emerald-200 bg-emerald-50 text-center">
-              <div className="text-[10px] text-emerald-600 font-mono uppercase mb-1">목표가</div>
-              <div className="font-bold text-emerald-700 text-base">{formatPrice(json.target_price)}</div>
-            </div>
-            <div className="rounded-xl p-3.5 border border-red-200 bg-red-50 text-center">
-              <div className="text-[10px] text-red-500 font-mono uppercase mb-1">손절가</div>
-              <div className="font-bold text-red-600 text-base">{formatPrice(json.stop_loss)}</div>
-            </div>
-          </div>
+            {/* ── ③ 투자 논거 요약 ── */}
+            {json.summary && (
+              <div className="px-6 py-4">
+                <p className="text-sm text-neutral-600 leading-[1.8]">{json.summary}</p>
+              </div>
+            )}
 
-          {/* ⑤ 시나리오 (가정 컬럼 제거, 숫자만) */}
-          {json.scenarios?.length > 0 && (
-            <div className="rounded-xl border border-border overflow-hidden">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-muted/60 border-b border-border">
-                    <th className="px-3 py-2 text-left font-semibold text-foreground/70">시나리오</th>
-                    <th className="px-3 py-2 text-right font-semibold text-foreground/70">목표가</th>
-                    <th className="px-3 py-2 text-right font-semibold text-foreground/70">등락률</th>
-                    <th className="px-3 py-2 text-right font-semibold text-foreground/70">확률</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {json.scenarios.map((s: any, i: number) => {
-                    const isBear = s.case === "Bear";
-                    const isBull = s.case === "Bull";
-                    const isBase = s.case === "Base";
-                    const uStr = String(s.upside ?? "");
-                    const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
-                    const uDisplay = !isNaN(uNum) && !uStr.includes("%") ? (uNum > 0 ? "+" : "") + uNum + "%" : uStr;
-                    const uColor = uStr.startsWith("+") || (!uStr.startsWith("-") && uNum > 0) ? "text-emerald-600" : uStr.startsWith("-") || uNum < 0 ? "text-red-500" : "text-foreground/70";
-                    const pStr = String(s.probability ?? "");
-                    const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
-                    const pDisplay = !isNaN(pNum) && !pStr.includes("%") ? pNum + "%" : pStr;
-                    return (
-                      <tr key={i} className={cn("transition-colors", isBase ? "bg-primary/5" : "hover:bg-muted/20")}>
-                        <td className="px-3 py-2.5 font-semibold">
-                          <span className={cn("text-xs", isBear && "text-red-500", isBase && "text-primary", isBull && "text-emerald-600")}>
-                            {isBear ? "▼" : isBull ? "▲" : "—"} {s.case}
-                          </span>
-                        </td>
-                        <td className={cn("px-3 py-2.5 text-right font-mono font-semibold", isBear ? "text-red-500" : isBull ? "text-emerald-600" : "text-foreground")}>
-                          {formatPrice(s.target_price)}
-                        </td>
-                        <td className={cn("px-3 py-2.5 text-right font-mono", uColor)}>{uDisplay}</td>
-                        <td className="px-3 py-2.5 text-right text-foreground/50">{pDisplay}</td>
+            {/* ── ④ 가격 3박스 ── */}
+            <div className="px-6 py-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-center">
+                  <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider mb-1.5">진입가</p>
+                  <p className="font-bold text-neutral-900 text-[15px] font-mono">{formatPrice(json.entry_price)}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center relative">
+                  <div className="absolute -top-px left-1/2 -translate-x-1/2 w-10 h-0.5 bg-emerald-400 rounded-full" />
+                  <p className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider mb-1.5">목표가</p>
+                  <p className="font-bold text-emerald-700 text-[15px] font-mono">{formatPrice(json.target_price)}</p>
+                </div>
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
+                  <p className="text-[10px] font-mono text-red-400 uppercase tracking-wider mb-1.5">손절가</p>
+                  <p className="font-bold text-red-600 text-[15px] font-mono">{formatPrice(json.stop_loss)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── ⑤ 시나리오 테이블 ── */}
+            {json.scenarios?.length > 0 && (
+              <div className="px-6 py-4">
+                <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">시나리오 분석</p>
+                <div className="rounded-xl border border-neutral-200 overflow-hidden">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-neutral-50 border-b border-neutral-200">
+                        <th className="px-4 py-2.5 text-left font-semibold text-neutral-500">시나리오</th>
+                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">목표가</th>
+                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">등락률</th>
+                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">확률</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {json.scenarios.map((s: any, i: number) => {
+                        const isBear = s.case === "Bear";
+                        const isBull = s.case === "Bull";
+                        const isBase = s.case === "Base";
+                        const uStr = String(s.upside ?? "");
+                        const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
+                        const uDisplay = !isNaN(uNum) && !uStr.includes("%") ? (uNum > 0 ? "+" : "") + uNum + "%" : uStr;
+                        const uColor = uStr.startsWith("+") || (!uStr.startsWith("-") && uNum > 0) ? "text-emerald-600" : uStr.startsWith("-") || uNum < 0 ? "text-red-500" : "text-neutral-500";
+                        const pStr = String(s.probability ?? "");
+                        const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
+                        const pDisplay = !isNaN(pNum) && !pStr.includes("%") ? pNum + "%" : pStr;
+                        return (
+                          <tr key={i} className={cn("transition-colors", isBase ? "bg-blue-50/60" : "bg-white hover:bg-neutral-50/60")}>
+                            <td className="px-4 py-3 font-semibold">
+                              <span className={cn("text-xs", isBear && "text-red-500", isBase && "text-blue-600", isBull && "text-emerald-600")}>
+                                {isBear ? "▼ Bear" : isBull ? "▲ Bull" : "— Base"}
+                              </span>
+                            </td>
+                            <td className={cn("px-4 py-3 text-right font-mono font-semibold", isBear ? "text-red-600" : isBull ? "text-emerald-600" : "text-neutral-900")}>
+                              {formatPrice(s.target_price)}
+                            </td>
+                            <td className={cn("px-4 py-3 text-right font-mono font-medium", uColor)}>{uDisplay}</td>
+                            <td className="px-4 py-3 text-right text-neutral-400 font-mono">{pDisplay}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
-          {/* ⑥ 핵심 리스크 */}
-          {json.risks?.length > 0 && (
-            <div>
-              <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">핵심 리스크</div>
-              <ul className="space-y-1.5">
-                {json.risks.map((r: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-foreground/75">
-                    <span className="text-red-400 shrink-0 mt-0.5">▲</span>{r}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            {/* ── ⑥ 핵심 리스크 + 모니터링 ── */}
+            {(json.risks?.length > 0 || json.monitoring_indicators?.length > 0) && (
+              <div className="px-6 py-4 grid sm:grid-cols-2 gap-5">
+                {json.risks?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">핵심 리스크</p>
+                    <ul className="space-y-2">
+                      {json.risks.map((r: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-neutral-600 leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {json.monitoring_indicators?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">모니터링 지표</p>
+                    <ul className="space-y-2">
+                      {json.monitoring_indicators.map((m: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-neutral-500 leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-300 mt-1.5 shrink-0" />
+                          {m}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* ⑦ 모니터링 지표 */}
-          {json.monitoring_indicators?.length > 0 && (
-            <div>
-              <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">모니터링 지표</div>
-              <ul className="space-y-1">
-                {json.monitoring_indicators.map((m: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-foreground/65">
-                    <span className="text-primary/50 shrink-0 mt-0.5">·</span>{m}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-        </div>
-      ) : (
-        <div className="p-5 text-sm text-foreground/80 leading-relaxed">
+          </div>
+        );
+      })() : (
+        <div className="p-6 text-sm text-neutral-600 leading-relaxed space-y-2">
           {step.content.split('\n').map((p: string, i: number) => p.trim() ? <p key={i}>{p}</p> : null)}
         </div>
       )}
