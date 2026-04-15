@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.1",
     "@google/genai": "^1.49.0",
     "@types/cookie": "^1.0.0",
     "@types/jsonwebtoken": "^9.0.10",
@@ -19,6 +20,7 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
+    "http-proxy-middleware": "^3.0.5",
     "jsonwebtoken": "^9.0.3",
     "openai": "^6.27.0",
     "rss-parser": "^3.13.0",
