@@ -1054,14 +1054,14 @@ router.post("/:id/step", async (req, res) => {
       // 단계별 출력 토큰 한도 — 실제 필요량에 맞게 최소화
       const TOKEN_LIMITS: Partial<Record<AgentKey, number>> = {
         company_intro: 1024,      // 4~5문장
-        industry_analysis: 4096,
-        catalyst_analysis: 3072,
-        company_analysis: 8192,
-        relative_valuation: 8192,
-        market_analysis: 3072,
-        investment_strategy: 2048,
+        industry_analysis: 8192,
+        catalyst_analysis: 6144,
+        company_analysis: 16384,
+        relative_valuation: 16384,
+        market_analysis: 6144,
+        investment_strategy: 4096,
       };
-      const maxOutputTokens = TOKEN_LIMITS[stepKey] ?? 4096;
+      const maxOutputTokens = TOKEN_LIMITS[stepKey] ?? 8192;
 
       const stream = await ai.models.generateContentStream({
         model: "gemini-2.5-flash",
