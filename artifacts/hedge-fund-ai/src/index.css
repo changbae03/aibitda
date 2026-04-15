@@ -176,6 +176,9 @@
 }
 .markdown-body strong { font-weight: 600; color: #111827; }
 .markdown-body hr { margin: 1.2rem 0; border-color: #e5e7eb; }
+.markdown-body del,
+.markdown-body s { text-decoration: none !important; }
+
 .markdown-body blockquote {
   margin: 1rem 0;
   padding: 0.4rem 0.8rem;
