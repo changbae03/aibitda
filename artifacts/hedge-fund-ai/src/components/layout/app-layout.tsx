@@ -1,12 +1,18 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X } from "lucide-react";
+import { Menu, X, History, Settings, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
+
+const bottomItems = [
+  { href: "/history", label: "내가 본 자료", icon: History },
+  { href: "/settings", label: "설정", icon: Settings },
+  { href: "/login", label: "로그인", icon: LogIn },
+];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
@@ -38,6 +44,30 @@ export function AppLayout({ children }: AppLayoutProps) {
       );
     });
 
+  const BottomNav = ({ onSelect }: { onSelect?: () => void }) => (
+    <div className="px-2 py-3 space-y-0.5 border-t border-neutral-100">
+      {bottomItems.map((item) => {
+        const isActive = location === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onSelect}
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+              isActive
+                ? "bg-neutral-100 text-neutral-900"
+                : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50"
+            )}
+          >
+            <item.icon className="w-3.5 h-3.5 shrink-0" />
+            {item.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-white text-neutral-900 flex overflow-hidden">
       {/* ── Desktop Sidebar ── */}
@@ -59,8 +89,11 @@ export function AppLayout({ children }: AppLayoutProps) {
           <NavLinks />
         </nav>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-neutral-100">
+        {/* Bottom Nav */}
+        <BottomNav />
+
+        {/* Slogan */}
+        <div className="px-5 py-3 border-t border-neutral-100">
           <p className="text-[10px] text-neutral-300 leading-relaxed">
             AI로 기업가치를 밝히다
           </p>
@@ -105,6 +138,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <nav className="flex-1 px-2 py-4 space-y-0.5">
                 <NavLinks onSelect={() => setMenuOpen(false)} />
               </nav>
+              <BottomNav onSelect={() => setMenuOpen(false)} />
             </motion.aside>
           </>
         )}
@@ -132,6 +166,33 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="container max-w-5xl mx-auto p-6 md:p-10 animate-fade-in">
             {children}
           </div>
+
+          {/* Footer */}
+          <footer className="border-t border-neutral-100 mt-8 print:hidden">
+            <div className="container max-w-5xl mx-auto px-6 md:px-10 py-6">
+              <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-neutral-400 mb-4">
+                <a href="#" className="hover:text-neutral-700 transition-colors">개인정보처리방침</a>
+                <span className="text-neutral-200 select-none">|</span>
+                <a href="#" className="hover:text-neutral-700 transition-colors">이용약관</a>
+                <span className="text-neutral-200 select-none">|</span>
+                <a href="#" className="hover:text-neutral-700 transition-colors">공지사항</a>
+                <span className="text-neutral-200 select-none">|</span>
+                <a href="#" className="hover:text-neutral-700 transition-colors">자주 묻는 질문</a>
+                <span className="text-neutral-200 select-none">|</span>
+                <a href="#" className="hover:text-neutral-700 transition-colors">투자 유의사항</a>
+                <span className="text-neutral-200 select-none">|</span>
+                <a href="#" className="hover:text-neutral-700 transition-colors">이용자권리 및 유의사항</a>
+                <span className="text-neutral-200 select-none">|</span>
+                <a href="#" className="hover:text-neutral-700 transition-colors">고객센터</a>
+              </nav>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                애빛다에서 제공하는 투자 정보는 투자 판단을 위한 단순 참고용일 뿐, 투자 제안 및 권유, 종목 추천을 위해 작성된 것이 아닙니다.
+              </p>
+              <p className="text-[11px] text-neutral-300 mt-1">
+                © {new Date().getFullYear()} 애빛다. AI로 기업가치를 밝히다.
+              </p>
+            </div>
+          </footer>
         </div>
       </main>
     </div>
