@@ -16,6 +16,11 @@ import {
   ArrowLeft,
   ShieldCheck,
   RefreshCw,
+  Bookmark,
+  BookmarkCheck,
+  Share2,
+  Link,
+  Check,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -138,6 +143,22 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
+  const [bookmarked, setBookmarked] = useState(() => {
+    try { return localStorage.getItem(`bookmark-${id}`) === "1"; } catch { return false; }
+  });
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const toggleBookmark = () => {
+    const next = !bookmarked;
+    setBookmarked(next);
+    try { next ? localStorage.setItem(`bookmark-${id}`, "1") : localStorage.removeItem(`bookmark-${id}`); } catch {}
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.href).catch(() => {});
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
   type QCStatus = "checking" | "approved" | "revising" | "revised";
   interface StreamingStepState {
     key: string;
@@ -467,8 +488,38 @@ export default function AnalysisDetail() {
         />
       )}
 
+      {/* 보관하기 · 공유하기 */}
+      <div className="mt-8 flex flex-col sm:flex-row gap-3 print:hidden">
+        <button
+          onClick={toggleBookmark}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
+            bookmarked
+              ? "bg-primary border-primary text-white shadow-sm hover:bg-primary/90"
+              : "bg-white border-neutral-200 text-neutral-700 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+          )}
+        >
+          {bookmarked
+            ? <BookmarkCheck className="w-4 h-4" />
+            : <Bookmark className="w-4 h-4" />}
+          {bookmarked ? "보관됨" : "보관하기"}
+        </button>
+        <button
+          onClick={copyLink}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
+            linkCopied
+              ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+              : "bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"
+          )}
+        >
+          {linkCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+          {linkCopied ? "링크 복사됨" : "공유하기"}
+        </button>
+      </div>
+
       {/* Disclaimer */}
-      <div className="mt-10 pt-6 border-t border-neutral-100 print:mt-6">
+      <div className="mt-5 pt-6 border-t border-neutral-100 print:mt-6">
         <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-4 space-y-2">
           <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">투자 유의사항</p>
           <p className="text-[11.5px] text-neutral-500 leading-relaxed">
