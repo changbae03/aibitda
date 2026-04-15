@@ -1057,7 +1057,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
                 <span className="text-xs text-muted-foreground">현재 주가</span>
                 <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(finalValuationData.current)}</span>
-                <span className="text-xs text-muted-foreground">목표가 괴리율</span>
+                <span className="text-xs text-muted-foreground">
+                  {finalValuationData.base >= finalValuationData.current ? "상승여력" : "하락여지"}
+                </span>
                 <span className={`font-mono text-sm font-bold text-right sm:text-left ${finalValuationData.base > finalValuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
                   {finalValuationData.current > 0 ? `${((finalValuationData.base - finalValuationData.current) / finalValuationData.current * 100).toFixed(1)}%` : "-"}
                 </span>
@@ -1108,7 +1110,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
                 <span className="text-xs text-muted-foreground">현재 주가</span>
                 <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(valuationData.current)}</span>
-                <span className="text-xs text-muted-foreground">Base 목표가 괴리율</span>
+                <span className="text-xs text-muted-foreground">
+                  Base {valuationData.dcf_base >= valuationData.current ? "상승여력" : "하락여지"}
+                </span>
                 <span className={`font-mono text-sm font-bold text-right sm:text-left ${valuationData.dcf_base > valuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
                   {valuationData.current > 0 ? `${((valuationData.dcf_base - valuationData.current) / valuationData.current * 100).toFixed(1)}%` : "-"}
                 </span>
