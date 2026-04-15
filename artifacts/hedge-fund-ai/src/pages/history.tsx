@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListAnalyses, useDeleteAnalysis } from "@workspace/api-client-react";
+import { useListAnalyses, useDeleteAnalysis, getListAnalysesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -49,7 +49,7 @@ export default function History() {
       {
         onSuccess: () => {
           try { localStorage.removeItem(`bookmark-${id}`); } catch {}
-          queryClient.invalidateQueries({ queryKey: ["listAnalyses"] });
+          queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey() });
           setDeletingId(null);
         },
         onError: () => setDeletingId(null),
