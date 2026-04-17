@@ -680,15 +680,18 @@ async function selectPeerTickers(
 
 Based on the context below, identify 4-5 publicly traded peer companies for valuation comparison.
 Select peers based on: similar business model, competitive relationship, or meaningful valuation comparison.
-Mix of Korean (KOSPI/KOSDAQ) and global (US/global) peers is fine.
-${previousContext ? `\nContext:\n${previousContext.slice(0, 1000)}` : ""}
+Prefer peers that are well-covered on Yahoo Finance (major Korean listed companies and global companies).
+${previousContext ? `\nContext:\n${previousContext.slice(0, 1500)}` : ""}
 
 Return a JSON object with this exact schema:
 {"peers": [{"ticker": "005930.KS", "name": "삼성전자", "exchange": "KOSPI", "reason": "동일 메모리 반도체 시장 경쟁사, PER/EV/EBITDA 비교 유효"}, ...]}
 
-Rules:
-- Korean stocks: 6-digit code + .KS (KOSPI) or .KQ (KOSDAQ)
-- US/global stocks: standard Yahoo Finance ticker (NVDA, ASML, TSM, etc.)
+CRITICAL ticker format rules:
+- KOSPI listed Korean stocks: use 6-digit code + ".KS" suffix  (e.g., 005930.KS for 삼성전자, 000660.KS for SK하이닉스)
+- KOSDAQ listed Korean stocks: use 6-digit code + ".KQ" suffix (e.g., 086900.KQ for 메디오젠)
+- US stocks: standard Yahoo Finance ticker without suffix (e.g., NVDA, AAPL, TSMC)
+- Do NOT use .KO suffix — it is invalid. Only .KS and .KQ are valid for Korean stocks.
+- Double-check each ticker is the real Yahoo Finance ticker for the named company.
 - reason: 이 기업이 유의미한 피어인 이유를 1~2문장으로 한국어로 설명 (사업 유사성, 경쟁 관계, 밸류에이션 비교 근거 중심)`;
 
     const resp = await ai.models.generateContent({
@@ -734,19 +737,28 @@ async function fetchPeerFinancials(
   const results = await Promise.allSettled(
     peers.map(async (peer) => {
       try {
-        const result = await yahooFinance.quoteSummary(peer.ticker, {
-          modules: [
-            "defaultKeyStatistics",
-            "financialData",
-            "summaryDetail",
-            "price",
-          ] as any,
-        });
+        // quoteSummary와 quote()를 병렬로 호출해 데이터 커버리지 극대화
+        const [summaryResult, quoteResult] = await Promise.allSettled([
+          yahooFinance.quoteSummary(peer.ticker, {
+            modules: [
+              "defaultKeyStatistics",
+              "financialData",
+              "summaryDetail",
+              "price",
+              "incomeStatementHistory",
+            ] as any,
+          }),
+          yahooFinance.quote(peer.ticker),
+        ]);
 
-        const ks: any = result.defaultKeyStatistics ?? {};
-        const fd: any = result.financialData ?? {};
-        const sd: any = result.summaryDetail ?? {};
-        const pr: any = result.price ?? {};
+        const summary = summaryResult.status === "fulfilled" ? summaryResult.value : {};
+        const quote: any = quoteResult.status === "fulfilled" ? quoteResult.value : {};
+
+        const ks: any = (summary as any).defaultKeyStatistics ?? {};
+        const fd: any = (summary as any).financialData ?? {};
+        const sd: any = (summary as any).summaryDetail ?? {};
+        const pr: any = (summary as any).price ?? {};
+        const is: any = (summary as any).incomeStatementHistory ?? {};
 
         const pct = (v: number | null | undefined) =>
           v != null ? `${(v * 100).toFixed(1)}%` : "N/A";
@@ -754,45 +766,55 @@ async function fetchPeerFinancials(
           v != null ? v.toFixed(1) : "N/A";
         const fmt2 = (v: number | null | undefined) =>
           v != null ? v.toFixed(2) : "N/A";
+        const fmtKrw = (v: number | null | undefined, isKrw: boolean) => {
+          if (v == null) return "N/A";
+          if (isKrw) return `${(v / 1e8).toFixed(0)}억원`;
+          return `${(v / 1e9).toFixed(1)}B USD`;
+        };
 
-        const currency = pr.currency ?? "USD";
-        const price = pr.regularMarketPrice ?? null;
-        const mcap = pr.marketCap ?? sd.marketCap ?? null;
+        // 시가총액: quote() > price 모듈 > summaryDetail 순으로 fallback
+        const currency = quote.currency ?? pr.currency ?? "USD";
+        const isKrw = currency === "KRW";
+        const price = quote.regularMarketPrice ?? pr.regularMarketPrice ?? null;
+        const mcap = quote.marketCap ?? pr.marketCap ?? sd.marketCap ?? null;
         const mcapStr = mcap
-          ? currency === "KRW"
-            ? `${(mcap / 1e12).toFixed(1)}조원`
+          ? isKrw
+            ? `${(mcap / 1e12).toFixed(2)}조원`
             : `${(mcap / 1e9).toFixed(1)}B USD`
           : "N/A";
 
-        // Forward PER: use defaultKeyStatistics.forwardPE or summaryDetail
+        // 멀티플
         const fwdPE = ks.forwardPE ?? sd.forwardPE ?? null;
-        // Trailing PER
-        const trailPE = sd.trailingPE ?? ks.trailingPE ?? null;
-        // PBR
+        const trailPE = sd.trailingPE ?? ks.trailingPE ?? quote.trailingPE ?? null;
         const pbr = ks.priceToBook ?? null;
-        // EV/EBITDA
         const evEbitda = ks.enterpriseToEbitda ?? null;
-        // EV/Revenue
         const evRev = ks.enterpriseToRevenue ?? null;
-        // ROE
+
+        // 수익성
         const roe = fd.returnOnEquity ?? null;
-        // Operating margin
         const opMargin = fd.operatingMargins ?? null;
-        // Revenue growth
         const revGrowth = fd.revenueGrowth ?? null;
-        // Gross margin
         const grossMargin = fd.grossMargins ?? null;
+        const netMargin = fd.profitMargins ?? null;
+
+        // 절대값 (최근 연간)
+        const totalRevenue = fd.totalRevenue ?? null;
+        const ebitda = fd.ebitda ?? null;
+        const latestIS = is.incomeStatementHistory?.[0] ?? null;
+        const netIncome = latestIS?.netIncome ?? fd.netIncomeToCommon ?? null;
+        const opIncome = latestIS?.operatingIncome ?? null;
 
         const line = [
           `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
           peer.reason ? `  선정 이유: ${peer.reason}` : null,
-          `  시가총액: ${mcapStr}${price ? ` | 현재가: ${price.toFixed(currency === "KRW" ? 0 : 2)} ${currency}` : ""}`,
+          `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
           `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
-          `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
+          `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
+          `  매출(TTM): ${fmtKrw(totalRevenue, isKrw)} | 영업이익(최근): ${fmtKrw(opIncome, isKrw)} | 순이익(최근): ${fmtKrw(netIncome, isKrw)} | EBITDA: ${fmtKrw(ebitda, isKrw)}`,
         ].filter(Boolean).join("\n");
         return line;
       } catch (err) {
-        return `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 80)}`;
+        return `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 120)}`;
       }
     })
   );
