@@ -1204,6 +1204,23 @@ router.post("/:id/step", async (req, res) => {
   }
 });
 
+// ─── PATCH /analyses/:id/memo ────────────────────────────────────────────────
+router.patch("/:id/memo", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  const { memo } = req.body as { memo?: string };
+  if (typeof memo !== "string" && memo !== null && memo !== undefined) {
+    return res.status(400).json({ error: "memo must be a string or null" });
+  }
+  try {
+    await db.update(analysesTable).set({ memo: memo ?? null, updatedAt: new Date() }).where(eq(analysesTable.id, id));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 function formatStep(step: any) {
   return {
     id: step.id,
@@ -1236,6 +1253,7 @@ function formatAnalysis(analysis: any, steps: any[]) {
     entryPrice: analysis.entryPrice,
     stopLoss: analysis.stopLoss,
     riskRewardRatio: analysis.riskRewardRatio,
+    memo: analysis.memo ?? null,
     steps: sortedSteps.map(formatStep),
     createdAt: analysis.createdAt?.toISOString?.() ?? analysis.createdAt,
     updatedAt: analysis.updatedAt?.toISOString?.() ?? analysis.updatedAt,

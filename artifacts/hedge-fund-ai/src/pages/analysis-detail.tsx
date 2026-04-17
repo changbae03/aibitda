@@ -18,9 +18,8 @@ import {
   RefreshCw,
   Bookmark,
   BookmarkCheck,
-  Share2,
-  Link,
-  Check,
+  NotebookPen,
+  Save,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -156,7 +155,14 @@ export default function AnalysisDetail() {
   const [bookmarked, setBookmarked] = useState(() => {
     try { return localStorage.getItem(`bookmark-${id}`) === "1"; } catch { return false; }
   });
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [memo, setMemo] = useState<string>("");
+  const [memoSaved, setMemoSaved] = useState(false);
+  const [memoSaving, setMemoSaving] = useState(false);
+
+  // analysis 로드 시 memo 초기화
+  useEffect(() => {
+    if (analysis?.memo != null) setMemo(analysis.memo);
+  }, [analysis?.memo]);
 
   const toggleBookmark = () => {
     const next = !bookmarked;
@@ -165,10 +171,18 @@ export default function AnalysisDetail() {
     if (next) setLocation("/history");
   };
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(window.location.href).catch(() => {});
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
+  const saveMemo = async () => {
+    setMemoSaving(true);
+    try {
+      await fetch(`/api/analysis/${id}/memo`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo }),
+      });
+      setMemoSaved(true);
+      setTimeout(() => setMemoSaved(false), 2000);
+    } catch {}
+    setMemoSaving(false);
   };
   type QCStatus = "checking" | "approved" | "revising" | "revised";
   interface StreamingStepState {
@@ -494,12 +508,12 @@ export default function AnalysisDetail() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
           >
-            {/* 보관하기 · 공유하기 */}
-            <div className="mt-8 flex flex-col sm:flex-row gap-3 print:hidden">
+            {/* 보관하기 */}
+            <div className="mt-8 print:hidden">
               <button
                 onClick={toggleBookmark}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
+                  "w-full flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
                   bookmarked
                     ? "bg-primary border-primary text-white shadow-sm hover:bg-primary/90"
                     : "bg-white border-neutral-200 text-neutral-700 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
@@ -510,18 +524,37 @@ export default function AnalysisDetail() {
                   : <Bookmark className="w-4 h-4" />}
                 {bookmarked ? "보관됨" : "보관하기"}
               </button>
-              <button
-                onClick={copyLink}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
-                  linkCopied
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                    : "bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"
-                )}
-              >
-                {linkCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {linkCopied ? "링크 복사됨" : "공유하기"}
-              </button>
+            </div>
+
+            {/* 나의 메모 */}
+            <div className="mt-4 rounded-xl border border-neutral-200 bg-white overflow-hidden print:hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-100">
+                <NotebookPen className="w-3.5 h-3.5 text-neutral-400" />
+                <p className="text-[12px] font-semibold text-neutral-600">나의 메모</p>
+                <span className="ml-auto text-[11px] text-neutral-400">분석에 대한 생각을 자유롭게 기록하세요</span>
+              </div>
+              <textarea
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="투자 논거, 주의사항, 다시 볼 포인트 등 자유롭게 메모하세요..."
+                rows={4}
+                className="w-full px-4 py-3 text-[13px] text-neutral-700 placeholder:text-neutral-300 resize-none focus:outline-none leading-relaxed"
+              />
+              <div className="flex items-center justify-end px-4 py-2.5 border-t border-neutral-100 bg-neutral-50/60">
+                <button
+                  onClick={saveMemo}
+                  disabled={memoSaving}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12px] font-semibold transition-all",
+                    memoSaved
+                      ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                      : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                  )}
+                >
+                  <Save className="w-3 h-3" />
+                  {memoSaving ? "저장 중..." : memoSaved ? "저장됨 ✓" : "저장"}
+                </button>
+              </div>
             </div>
 
             {/* Disclaimer */}

@@ -16,6 +16,7 @@ export const analysesTable = pgTable("analyses", {
   entryPrice: real("entry_price"),
   stopLoss: real("stop_loss"),
   riskRewardRatio: real("risk_reward_ratio"),
+  memo: text("memo"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
