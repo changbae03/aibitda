@@ -643,55 +643,90 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             )}
 
             {/* ── ④ 가격 3박스 ── */}
-            <div className="px-6 py-4">
-              <div className="grid grid-cols-3 gap-3">
-                {/* 진입가 */}
-                <div className="rounded-xl border border-neutral-200 bg-white p-4">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
-                    <p className="text-[11px] font-semibold text-neutral-500">진입가</p>
-                  </div>
-                  <p className="text-[17px] font-bold text-neutral-900 font-mono leading-none">{formatPrice(json.entry_price)}</p>
-                  <p className="text-[11px] text-neutral-400 mt-1.5">진입 목표 가격</p>
-                </div>
+            {(() => {
+              // 현재가: json.current_price (신규) 또는 Base 시나리오 역산
+              const cp = parseFloat(String(json.current_price ?? "").replace(/[^0-9.]/g, "")) || null;
+              const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, "")) || null;
+              const tp = parseFloat(String(json.target_price ?? "").replace(/[^0-9.]/g, "")) || null;
+              const sl = parseFloat(String(json.stop_loss ?? "").replace(/[^0-9.]/g, "")) || null;
 
-                {/* 적정주가 */}
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    <p className="text-[11px] font-semibold text-emerald-700">적정주가</p>
-                  </div>
-                  <p className="text-[17px] font-bold text-emerald-700 font-mono leading-none">{formatPrice(json.target_price)}</p>
-                  {(() => {
-                    const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, ""));
-                    const tp = parseFloat(String(json.target_price ?? "").replace(/[^0-9.]/g, ""));
-                    if (!isNaN(ep) && !isNaN(tp) && ep > 0) {
-                      const pct = ((tp - ep) / ep * 100).toFixed(1);
-                      return <p className="text-[11px] font-bold text-emerald-600 mt-1.5">+{pct}% 상승여력</p>;
-                    }
-                    return <p className="text-[11px] text-emerald-600 mt-1.5">목표 수익</p>;
-                  })()}
-                </div>
+              // 적정주가 ↔ 현재가 기준 upside: Base 시나리오 upside 우선, 없으면 직접 계산
+              const baseScenario = json.scenarios?.find((s: any) => s.case === "Base");
+              const baseUpsideStr = String(baseScenario?.upside ?? "");
+              // parseFloat은 "+15.2%" → 15.2, "-63.3%" → -63.3 자동 처리
+              const baseUpsideNum = parseFloat(baseUpsideStr);
+              const upsideFromCurrent: number | null =
+                !isNaN(baseUpsideNum) ? baseUpsideNum
+                : (cp && tp && cp > 0) ? (tp - cp) / cp * 100
+                : null;
 
-                {/* 손절가 */}
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                    <p className="text-[11px] font-semibold text-red-500">손절가</p>
+              const isBearish = upsideFromCurrent !== null && upsideFromCurrent < 0;
+              const targetCardStyle = isBearish
+                ? { border: "border-rose-200", bg: "bg-rose-50", dotColor: "bg-rose-400", labelColor: "text-rose-600", valColor: "text-rose-700", pctColor: "text-rose-600" }
+                : { border: "border-emerald-200", bg: "bg-emerald-50", dotColor: "bg-emerald-500", labelColor: "text-emerald-700", valColor: "text-emerald-700", pctColor: "text-emerald-600" };
+
+              // 진입가 vs 현재가 거리
+              const entryVsCurrent = (cp && ep && cp > 0)
+                ? ((ep - cp) / cp * 100).toFixed(1)
+                : null;
+
+              // 손절: 진입가 기준
+              const slPct = (ep && sl && ep > 0)
+                ? Math.abs((sl - ep) / ep * 100).toFixed(1)
+                : null;
+
+              return (
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    {/* 진입가 */}
+                    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                      <div className="flex items-center gap-1.5 mb-2.5">
+                        <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
+                        <p className="text-[11px] font-semibold text-neutral-500">진입가</p>
+                      </div>
+                      <p className="text-[17px] font-bold text-neutral-900 font-mono leading-none">{formatPrice(json.entry_price)}</p>
+                      {entryVsCurrent !== null ? (
+                        <p className={`text-[11px] font-bold mt-1.5 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
+                          {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}% 현재가 대비
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-neutral-400 mt-1.5">진입 목표 가격</p>
+                      )}
+                    </div>
+
+                    {/* 적정주가 — 현재가 기준 upside/downside */}
+                    <div className={`rounded-xl border ${targetCardStyle.border} ${targetCardStyle.bg} p-4`}>
+                      <div className="flex items-center gap-1.5 mb-2.5">
+                        <span className={`w-2 h-2 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
+                        <p className={`text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가</p>
+                      </div>
+                      <p className={`text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none`}>{formatPrice(json.target_price)}</p>
+                      {upsideFromCurrent !== null ? (
+                        <p className={`text-[11px] font-bold ${targetCardStyle.pctColor} mt-1.5`}>
+                          {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}% {isBearish ? "하락여지" : "상승여력"}
+                        </p>
+                      ) : (
+                        <p className={`text-[11px] ${targetCardStyle.labelColor} mt-1.5`}>현재가 기준</p>
+                      )}
+                    </div>
+
+                    {/* 손절가 — 진입가 기준 */}
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                      <div className="flex items-center gap-1.5 mb-2.5">
+                        <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                        <p className="text-[11px] font-semibold text-red-500">손절가</p>
+                      </div>
+                      <p className="text-[17px] font-bold text-red-600 font-mono leading-none">{formatPrice(json.stop_loss)}</p>
+                      {slPct !== null ? (
+                        <p className="text-[11px] font-bold text-red-500 mt-1.5">-{slPct}% 이하 손절</p>
+                      ) : (
+                        <p className="text-[11px] text-red-500 mt-1.5">손절 기준선</p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[17px] font-bold text-red-600 font-mono leading-none">{formatPrice(json.stop_loss)}</p>
-                  {(() => {
-                    const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, ""));
-                    const sl = parseFloat(String(json.stop_loss ?? "").replace(/[^0-9.]/g, ""));
-                    if (!isNaN(ep) && !isNaN(sl) && ep > 0) {
-                      const pct = Math.abs((sl - ep) / ep * 100).toFixed(1);
-                      return <p className="text-[11px] font-bold text-red-500 mt-1.5">-{pct}% 이하 손절</p>;
-                    }
-                    return <p className="text-[11px] text-red-500 mt-1.5">손절 기준선</p>;
-                  })()}
                 </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (

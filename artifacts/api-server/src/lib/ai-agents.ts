@@ -1089,6 +1089,7 @@ thesis의 핵심 전제가 실현되는지 판단할 지표 2개를 불릿으로
       "probability": "확률 (예: 20%)"
     }
   ],
+  "current_price": "컨텍스트의 현재 주가 숫자만 (예: 485500)",
   "entry_price": "구체적 진입 가격 (한국 종목은 원화 숫자만, 예: 190000)",
   "target_price": "scenarios Base target_price와 동일한 숫자 (예: 210000)",
   "stop_loss": "손절 가격 (한국 종목은 원화 숫자만, 예: 175000)",
