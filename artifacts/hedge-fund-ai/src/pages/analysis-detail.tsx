@@ -28,8 +28,27 @@ import remarkGfm from "remark-gfm";
 
 function prepareMarkdown(md: string): string {
   if (!md) return md;
-  // 테이블 행 바로 앞에 빈 줄이 없으면 삽입 (remark-gfm은 테이블 전 빈 줄 필요)
-  return md.replace(/([^\n])\n(\|)/g, "$1\n\n$2");
+
+  // 줄 단위로 처리해서 테이블 "첫 번째 행" 바로 앞에만 빈 줄을 삽입
+  // (헤더→구분선→데이터 사이에 빈 줄을 삽입하면 오히려 테이블이 깨짐)
+  const lines = md.split("\n");
+  const out: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const prev = i > 0 ? lines[i - 1] : "";
+    const isTableRow = /^\s*\|/.test(line);
+    const prevIsTableRow = /^\s*\|/.test(prev);
+    const prevIsBlank = prev.trim() === "";
+
+    // 현재 줄이 테이블 행이고, 이전 줄이 테이블 행도 아니고 빈 줄도 아니면 → 빈 줄 삽입
+    if (isTableRow && !prevIsTableRow && !prevIsBlank) {
+      out.push("");
+    }
+    out.push(line);
+  }
+
+  return out.join("\n");
 }
 
 const MD_TABLE_COMPONENTS = {
