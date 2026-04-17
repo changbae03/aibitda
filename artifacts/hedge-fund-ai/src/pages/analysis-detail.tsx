@@ -390,7 +390,7 @@ export default function AnalysisDetail() {
                     {isDone ? <CheckCircle2 className="w-4 h-4" /> : <agent.icon className="w-3.5 h-3.5" />}
                   </div>
                   <span className={cn(
-                    "text-[10px] font-medium leading-tight text-center max-w-[52px]",
+                    "text-[10px] font-medium leading-tight text-center max-w-[64px] break-keep",
                     isDone ? "text-primary" : isCurrent ? "text-primary" : "text-muted-foreground"
                   )}>
                     {agent.name}
