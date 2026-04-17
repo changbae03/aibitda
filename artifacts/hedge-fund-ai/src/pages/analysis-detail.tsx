@@ -26,6 +26,25 @@ import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+function prepareMarkdown(md: string): string {
+  if (!md) return md;
+  // 테이블 행 바로 앞에 빈 줄이 없으면 삽입 (remark-gfm은 테이블 전 빈 줄 필요)
+  return md.replace(/([^\n])\n(\|)/g, "$1\n\n$2");
+}
+
+const MD_TABLE_COMPONENTS = {
+  table: ({ children }: any) => (
+    <div className="table-wrap">
+      <table>{children}</table>
+    </div>
+  ),
+  thead: ({ children }: any) => <thead>{children}</thead>,
+  tbody: ({ children }: any) => <tbody>{children}</tbody>,
+  tr: ({ children }: any) => <tr>{children}</tr>,
+  th: ({ children }: any) => <th>{children}</th>,
+  td: ({ children }: any) => <td>{children}</td>,
+};
+
 // 야후 파이낸스 영문 업종명 → 한국어 변환
 const INDUSTRY_KO: Record<string, string> = {
   // 자동차
@@ -1028,8 +1047,8 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
               </span>
             ) : (
               <>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {content}
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_TABLE_COMPONENTS}>
+                  {prepareMarkdown(content)}
                 </ReactMarkdown>
                 {showCursor && (
                   <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
@@ -1190,19 +1209,10 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 </blockquote>
               ),
               hr: () => <hr className="my-4 border-border/60" />,
-              table: ({ children }) => (
-                <div className="table-wrap">
-                  <table>{children}</table>
-                </div>
-              ),
-              thead: ({ children }) => <thead>{children}</thead>,
-              tbody: ({ children }) => <tbody>{children}</tbody>,
-              tr: ({ children }) => <tr>{children}</tr>,
-              th: ({ children }) => <th>{children}</th>,
-              td: ({ children }) => <td>{children}</td>,
+              ...MD_TABLE_COMPONENTS,
             }}
           >
-            {displayContent}
+            {prepareMarkdown(displayContent)}
           </ReactMarkdown>
         </div>
 
