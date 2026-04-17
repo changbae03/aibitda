@@ -302,15 +302,15 @@ ${COMMON_RULES}`,
 ⚠️ 매출성장률 YoY: (당해년 매출 ÷ 전년 매출 - 1) × 100으로 직접 계산.
 ⚠️ EBITDA = 영업이익 + D&A. cashflowStatements의 depreciationAmortization 항목 사용. 없으면 financialData.ebitda 인용.
 
-| 구분 | ${new Date().getFullYear()-1}(실적) | ${new Date().getFullYear()}E | ${new Date().getFullYear()+1}E |
-|------|------:|------:|------:|
-| 매출 (단위) | | | |
-| 매출성장률 YoY (%) | | | |
-| 영업이익 (단위) | | | |
-| 영업이익률 (%) | | | |
-| EBITDA (단위) | | | |
-| 순이익 (단위) | | | |
-| EPS (원) | | | |
+| 구분 | ${new Date().getFullYear()-2}(실적) | ${new Date().getFullYear()-1}(실적) | ${new Date().getFullYear()}E | ${new Date().getFullYear()+1}E | ${new Date().getFullYear()+2}E |
+|------|------:|------:|------:|------:|------:|
+| 매출 (단위) | | | | | |
+| 매출성장률 YoY (%) | | | | | |
+| 영업이익 (단위) | | | | | |
+| 영업이익률 (%) | | | | | |
+| EBITDA (단위) | | | | | |
+| 순이익 (단위) | | | | | |
+| EPS (원) | | | | | |
 
 ### 전망 근거
 
