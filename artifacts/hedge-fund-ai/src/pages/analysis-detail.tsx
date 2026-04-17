@@ -290,7 +290,6 @@ export default function AnalysisDetail() {
           </div>
           {analysis.investmentVerdict && (
             <div className="text-right">
-              <div className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-1">최종 투자 의견</div>
               <div className="text-xl font-bold text-gray-900">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               {analysis.targetPrice && (
                 <div className="text-sm text-gray-600 mt-0.5">적정주가 {formatCurrency(analysis.targetPrice)}</div>
@@ -343,7 +342,6 @@ export default function AnalysisDetail() {
           {/* Verdict Card */}
           {isComplete && analysis.investmentVerdict && (
             <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
-              <div className="text-[11px] font-mono text-primary/70 mb-1 uppercase tracking-widest">최종 투자 의견</div>
               <div className="text-xl font-bold text-foreground mb-3">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
