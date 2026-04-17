@@ -63,7 +63,7 @@ function RightPanel() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-neutral-50 border-l border-neutral-100 p-8 overflow-hidden">
+    <div className="flex flex-col h-full bg-neutral-50 border-l border-neutral-100 p-8 overflow-hidden justify-center">
 
       {/* 종목 정보 */}
       <div className="mb-6">
@@ -115,7 +115,7 @@ function RightPanel() {
       <div className="border-t border-neutral-200 mb-4" />
 
       {/* 실시간 인사이트 */}
-      <div className="flex-1 overflow-hidden">
+      <div className="overflow-hidden">
         <div className="flex items-center gap-1.5 mb-3">
           <PulsingDot color="#22c55e" />
           <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">실시간 인사이트</span>
