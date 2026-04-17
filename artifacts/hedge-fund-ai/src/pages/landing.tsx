@@ -211,6 +211,14 @@ export default function Landing() {
           </button>
         </div>
 
+        {/* 둘러보기 */}
+        <button
+          onClick={() => setLocation("/analysis/new")}
+          className="w-full text-center text-[13px] text-neutral-400 hover:text-neutral-600 transition-colors py-1"
+        >
+          로그인 없이 둘러보기 →
+        </button>
+
         {/* 특징 3가지 */}
         <div className="grid grid-cols-3 gap-3 mb-8">
           {[
