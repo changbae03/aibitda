@@ -655,65 +655,127 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {/* ── ④ 가격 3박스 ── */}
             <div className="px-6 py-4">
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-center">
-                  <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider mb-1.5">진입가</p>
-                  <p className="font-bold text-neutral-900 text-[15px] font-mono">{formatPrice(json.entry_price)}</p>
+                {/* 진입가 */}
+                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
+                    <p className="text-[11px] font-semibold text-neutral-500">진입가</p>
+                  </div>
+                  <p className="text-[17px] font-bold text-neutral-900 font-mono leading-none">{formatPrice(json.entry_price)}</p>
+                  <p className="text-[11px] text-neutral-400 mt-1.5">진입 목표 가격</p>
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center relative">
-                  <div className="absolute -top-px left-1/2 -translate-x-1/2 w-10 h-0.5 bg-emerald-400 rounded-full" />
-                  <p className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider mb-1.5">적정주가</p>
-                  <p className="font-bold text-emerald-700 text-[15px] font-mono">{formatPrice(json.target_price)}</p>
+
+                {/* 적정주가 */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <p className="text-[11px] font-semibold text-emerald-700">적정주가</p>
+                  </div>
+                  <p className="text-[17px] font-bold text-emerald-700 font-mono leading-none">{formatPrice(json.target_price)}</p>
+                  {(() => {
+                    const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, ""));
+                    const tp = parseFloat(String(json.target_price ?? "").replace(/[^0-9.]/g, ""));
+                    if (!isNaN(ep) && !isNaN(tp) && ep > 0) {
+                      const pct = ((tp - ep) / ep * 100).toFixed(1);
+                      return <p className="text-[11px] font-bold text-emerald-600 mt-1.5">+{pct}% 상승여력</p>;
+                    }
+                    return <p className="text-[11px] text-emerald-600 mt-1.5">목표 수익</p>;
+                  })()}
                 </div>
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
-                  <p className="text-[10px] font-mono text-red-400 uppercase tracking-wider mb-1.5">손절가</p>
-                  <p className="font-bold text-red-600 text-[15px] font-mono">{formatPrice(json.stop_loss)}</p>
+
+                {/* 손절가 */}
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                    <p className="text-[11px] font-semibold text-red-500">손절가</p>
+                  </div>
+                  <p className="text-[17px] font-bold text-red-600 font-mono leading-none">{formatPrice(json.stop_loss)}</p>
+                  {(() => {
+                    const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, ""));
+                    const sl = parseFloat(String(json.stop_loss ?? "").replace(/[^0-9.]/g, ""));
+                    if (!isNaN(ep) && !isNaN(sl) && ep > 0) {
+                      const pct = Math.abs((sl - ep) / ep * 100).toFixed(1);
+                      return <p className="text-[11px] font-bold text-red-500 mt-1.5">-{pct}% 이하 손절</p>;
+                    }
+                    return <p className="text-[11px] text-red-500 mt-1.5">손절 기준선</p>;
+                  })()}
                 </div>
               </div>
             </div>
 
-            {/* ── ⑤ 시나리오 테이블 ── */}
+            {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (
               <div className="px-6 py-4">
                 <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">시나리오 분석</p>
-                <div className="rounded-xl border border-neutral-200 overflow-hidden">
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-neutral-50 border-b border-neutral-200">
-                        <th className="px-4 py-2.5 text-left font-semibold text-neutral-500">시나리오</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">적정주가</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">등락률</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">확률</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {json.scenarios.map((s: any, i: number) => {
-                        const isBear = s.case === "Bear";
-                        const isBull = s.case === "Bull";
-                        const isBase = s.case === "Base";
-                        const uStr = String(s.upside ?? "");
-                        const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
-                        const uDisplay = !isNaN(uNum) && !uStr.includes("%") ? (uNum > 0 ? "+" : "") + uNum + "%" : uStr;
-                        const uColor = uStr.startsWith("+") || (!uStr.startsWith("-") && uNum > 0) ? "text-emerald-600" : uStr.startsWith("-") || uNum < 0 ? "text-red-500" : "text-neutral-500";
-                        const pStr = String(s.probability ?? "");
-                        const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
-                        const pDisplay = !isNaN(pNum) && !pStr.includes("%") ? pNum + "%" : pStr;
-                        return (
-                          <tr key={i} className={cn("transition-colors", isBase ? "bg-blue-50/60" : "bg-white hover:bg-neutral-50/60")}>
-                            <td className="px-4 py-3 font-semibold">
-                              <span className={cn("text-xs", isBear && "text-red-500", isBase && "text-blue-600", isBull && "text-emerald-600")}>
-                                {isBear ? "▼ Bear" : isBull ? "▲ Bull" : "— Base"}
-                              </span>
-                            </td>
-                            <td className={cn("px-4 py-3 text-right font-mono font-semibold", isBear ? "text-red-600" : isBull ? "text-emerald-600" : "text-neutral-900")}>
-                              {formatPrice(s.target_price)}
-                            </td>
-                            <td className={cn("px-4 py-3 text-right font-mono font-medium", uColor)}>{uDisplay}</td>
-                            <td className="px-4 py-3 text-right text-neutral-400 font-mono">{pDisplay}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="space-y-2">
+                  {json.scenarios.map((s: any, i: number) => {
+                    const isBear = s.case === "Bear";
+                    const isBull = s.case === "Bull";
+                    const isBase = s.case === "Base";
+                    const uStr = String(s.upside ?? "");
+                    const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
+                    const uDisplay = !isNaN(uNum) && !uStr.includes("%")
+                      ? (uNum > 0 ? "+" : "") + uNum + "%"
+                      : uStr;
+                    const pStr = String(s.probability ?? "");
+                    const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
+                    return (
+                      <div
+                        key={i}
+                        className={cn(
+                          "rounded-xl border p-3.5 flex items-center gap-4",
+                          isBear ? "border-red-100 bg-red-50/50"
+                            : isBull ? "border-emerald-100 bg-emerald-50/50"
+                            : "border-blue-100 bg-blue-50/60"
+                        )}
+                      >
+                        {/* 시나리오 이름 */}
+                        <div className="w-20 shrink-0">
+                          <span className={cn(
+                            "text-xs font-bold",
+                            isBear ? "text-red-500" : isBull ? "text-emerald-600" : "text-blue-600"
+                          )}>
+                            {isBear ? "▼ Bear" : isBull ? "▲ Bull" : "— Base"}
+                          </span>
+                          {isBase && <p className="text-[10px] text-blue-400 mt-0.5">기본 전망</p>}
+                          {isBull && <p className="text-[10px] text-emerald-400 mt-0.5">낙관 전망</p>}
+                          {isBear && <p className="text-[10px] text-red-400 mt-0.5">비관 전망</p>}
+                        </div>
+
+                        {/* 적정주가 + 등락률 */}
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "text-sm font-bold font-mono",
+                            isBear ? "text-red-700" : isBull ? "text-emerald-700" : "text-neutral-900"
+                          )}>
+                            {formatPrice(s.target_price)}
+                          </p>
+                          <p className={cn(
+                            "text-xs font-semibold mt-0.5",
+                            uNum > 0 ? "text-emerald-600" : uNum < 0 ? "text-red-500" : "text-neutral-400"
+                          )}>
+                            {uDisplay}
+                          </p>
+                        </div>
+
+                        {/* 확률 바 */}
+                        <div className="w-20 shrink-0">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] text-neutral-400">확률</span>
+                            <span className="text-[11px] font-bold text-neutral-700">{!isNaN(pNum) ? pNum + "%" : pStr}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all",
+                                isBear ? "bg-red-400" : isBull ? "bg-emerald-500" : "bg-blue-500"
+                              )}
+                              style={{ width: `${Math.min(isNaN(pNum) ? 0 : pNum, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
