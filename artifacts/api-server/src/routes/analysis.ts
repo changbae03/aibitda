@@ -1141,36 +1141,60 @@ router.post("/:id/step", async (req, res) => {
 
   let content = "";
   try {
-    try {
-      const maxOutputTokens =
-        (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 16384;
+    const maxOutputTokens =
+      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 16384;
 
-      const stream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        config: {
-          systemInstruction: systemPrompt,
-          maxOutputTokens,
-        },
-      });
-      let lastFinishReason: string | undefined;
-      for await (const chunk of stream) {
-        const text = chunk.text ?? "";
-        if (text) {
-          content += text;
-          res.write(`data: ${JSON.stringify({ t: text })}\n\n`);
+    // 일시적 오류(503 UNAVAILABLE, 타임아웃) 여부 판별
+    const isTransient = (err: unknown) => {
+      const msg = String(err);
+      return msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("timed out") || msg.includes("timeout");
+    };
+
+    const MAX_ATTEMPTS = 3;
+    let lastErr: unknown = null;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        if (attempt > 1) {
+          const waitMs = (attempt - 1) * 3000; // 3s, 6s
+          console.warn(`[${stepKey}] Retry ${attempt}/${MAX_ATTEMPTS} after ${waitMs}ms…`);
+          res.write(`data: ${JSON.stringify({ t: "" })}\n\n`); // keep-alive
+          await new Promise((r) => setTimeout(r, waitMs));
         }
-        // 마지막 청크의 종료 이유 기록
-        const reason = chunk.candidates?.[0]?.finishReason;
-        if (reason) lastFinishReason = reason;
+
+        const stream = await ai.models.generateContentStream({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          config: {
+            systemInstruction: systemPrompt,
+            maxOutputTokens,
+          },
+        });
+        let lastFinishReason: string | undefined;
+        for await (const chunk of stream) {
+          const text = chunk.text ?? "";
+          if (text) {
+            content += text;
+            res.write(`data: ${JSON.stringify({ t: text })}\n\n`);
+          }
+          const reason = chunk.candidates?.[0]?.finishReason;
+          if (reason) lastFinishReason = reason;
+        }
+        if (lastFinishReason === "MAX_TOKENS") {
+          console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림`);
+        }
+        console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}, attempt: ${attempt}`);
+        if (!content) content = "분석 결과를 생성하지 못했습니다.";
+        lastErr = null;
+        break; // 성공 — 루프 탈출
+      } catch (err) {
+        lastErr = err;
+        console.error(`[${stepKey}] Gemini error (attempt ${attempt}):`, err);
+        if (!isTransient(err) || attempt === MAX_ATTEMPTS) break; // 비일시적 오류 or 마지막 시도
       }
-      if (lastFinishReason === "MAX_TOKENS") {
-        console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림 — 프롬프트 간소화 필요`);
-      }
-      console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}`);
-      if (!content) content = "분석 결과를 생성하지 못했습니다.";
-    } catch (err) {
-      console.error("Gemini error:", err);
+    }
+
+    if (lastErr) {
       content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
       res.write(`data: ${JSON.stringify({ error: content })}\n\n`);
     }
