@@ -1,7 +1,7 @@
 import { useSignIn, useUser } from "@clerk/react";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -27,123 +27,142 @@ function GoogleIcon() {
   );
 }
 
-const REPORT_SECTIONS = [
-  {
-    step: "산업 분석",
-    color: "#6366f1",
-    summary:
-      "글로벌 AI 서버 투자 확대로 HBM·LPDDR5 수요가 구조적으로 증가하고 있습니다. 2025년 반도체 사이클은 메모리 공급 긴축과 맞물려 상승 국면 초입에 진입한 것으로 판단합니다.",
-  },
-  {
-    step: "투자 촉매",
-    color: "#f59e0b",
-    summary:
-      "2025년 2분기 HBM3E 12단 양산 본격화(4월), 엔비디아 B200 공급망 편입(6월), 파운드리 GAA 2nm 수율 개선 발표(8월)가 핵심 촉매로 작용할 전망입니다.",
-  },
-  {
-    step: "실적 전망",
-    color: "#10b981",
-    summary:
-      "2025년 연간 매출 320조 원(+18% YoY), 영업이익 46조 원(+72% YoY) 전망. DS 부문이 영업이익의 약 68%를 차지하며 실적 회복을 주도할 것으로 예상합니다.",
-  },
-  {
-    step: "기술적 분석",
-    color: "#FF8A7A",
-    summary:
-      "주봉 기준 RSI 44로 과매도 구간에서 반등 중. 53,000~54,500원 지지대가 견고하며 60,000원 저항 돌파 시 추세 전환 가능성이 높습니다.",
-  },
+const DEMO_STEPS = [
+  { key: "company_intro",       label: "기업 브리핑",           done: true,  active: false },
+  { key: "industry_analysis",   label: "매크로 및 산업 분석",    done: true,  active: false },
+  { key: "catalyst_analysis",   label: "투자 촉매 및 수급 분석", done: true,  active: false },
+  { key: "company_analysis",    label: "실적 전망",             done: true,  active: false },
+  { key: "relative_valuation",  label: "적정주가 산출",          done: false, active: true  },
+  { key: "market_analysis",     label: "기술적 분석",            done: false, active: false },
+  { key: "investment_strategy", label: "최종 결론",              done: false, active: false },
 ];
 
-function SampleReport() {
+const SAMPLE_ALERTS = [
+  { time: "방금 전", text: "매크로 산업 분석 완료 — 반도체 수요 회복 사이클 초기" },
+  { time: "1분 전",  text: "카탈리스트 확인 — 외국인 순매수 전환, 보유비중 +0.8%p" },
+  { time: "2분 전",  text: "실적 전망 완료 — 2025E 영업이익 컨센서스 대비 +12%" },
+];
+
+function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
   return (
-    <div className="flex flex-col h-full bg-neutral-50 border-l border-neutral-100 overflow-y-auto">
-      {/* 보고서 헤더 */}
-      <div className="bg-white border-b border-neutral-100 px-8 py-6">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <div className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest mb-2">AI 분석 보고서 예시</div>
-            <div className="flex items-baseline gap-2.5">
-              <span className="text-2xl font-black text-neutral-900">삼성전자</span>
-              <span className="text-xs font-mono text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded-md">005930</span>
-            </div>
-            <div className="text-xs text-neutral-400 mt-0.5">Consumer Electronics · 코스피</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-neutral-400 mb-1">현재가</div>
-            <div className="text-xl font-bold font-mono text-neutral-900">₩54,800</div>
-          </div>
+    <span className="relative flex h-2 w-2">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ backgroundColor: color }} />
+      <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: color }} />
+    </span>
+  );
+}
+
+function RightPanel() {
+  const [visibleAlerts, setVisibleAlerts] = useState(0);
+  const [thinkingDots, setThinkingDots] = useState(1);
+
+  useEffect(() => {
+    const t1 = setInterval(() => setVisibleAlerts(v => Math.min(v + 1, SAMPLE_ALERTS.length)), 1200);
+    const t2 = setInterval(() => setThinkingDots(d => (d % 3) + 1), 500);
+    return () => { clearInterval(t1); clearInterval(t2); };
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full bg-neutral-50 border-l border-neutral-100 p-8 overflow-hidden">
+
+      {/* 종목 정보 */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <PulsingDot color="#FF8A7A" />
+          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-widest">AI 분석 라이브 미리보기</span>
         </div>
-
-        {/* 핵심 지표 행 */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            상승여력
-          </span>
-          <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-            <span className="text-neutral-300">적정주가</span>
-            <span className="font-bold font-mono text-emerald-600">₩72,000</span>
-            <span className="text-emerald-500 font-semibold">(+31.4%)</span>
-          </div>
-          <div className="h-3 w-px bg-neutral-200" />
-          <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-            <span className="text-neutral-300">손절가</span>
-            <span className="font-bold font-mono text-red-500">₩49,500</span>
-          </div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-xl font-bold text-neutral-900">삼성전자</span>
+          <span className="text-xs font-mono text-neutral-400 bg-neutral-200 px-1.5 py-0.5 rounded">005930</span>
         </div>
+        <div className="text-xs text-neutral-400 mt-0.5">Consumer Electronics · 코스피</div>
       </div>
 
-      {/* 최종 결론 */}
-      <div className="px-8 py-5 bg-white border-b border-neutral-100">
-        <div className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest mb-2">최종 결론</div>
-        <p className="text-sm text-neutral-700 leading-relaxed">
-          HBM 수요 구조적 증가와 파운드리 수율 개선이 맞물리는 2025년은 삼성전자의 실적 턴어라운드가 가시화되는 해입니다.
-          현 주가는 12개월 선행 PBR 1.1배로 역사적 저점권에 위치해 있어 <strong>진입 매력도가 높습니다.</strong>
-          53,000원 지지대를 활용한 분할 매수를 권고합니다.
-        </p>
-      </div>
-
-      {/* 섹션별 분석 카드 */}
-      <div className="px-8 py-5 space-y-3">
-        <div className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest mb-3">단계별 분석 요약</div>
-        {REPORT_SECTIONS.map((s, i) => (
-          <motion.div
-            key={s.step}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.12 }}
-            className="bg-white border border-neutral-100 rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className="w-1.5 h-4 rounded-full"
-                style={{ backgroundColor: s.color }}
-              />
-              <span className="text-[11px] font-bold text-neutral-600">{s.step}</span>
-            </div>
-            <p className="text-xs text-neutral-500 leading-relaxed">{s.summary}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* 밸류에이션 */}
-      <div className="px-8 pb-6">
-        <div className="bg-white border border-neutral-100 rounded-xl p-4 shadow-sm">
-          <div className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest mb-3">밸류에이션 요약</div>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            {[
-              { label: "DCF",      value: "₩69,400",  sub: "WACC 8.2%" },
-              { label: "PBR",      value: "₩71,500",  sub: "Target 1.5x" },
-              { label: "EV/EBITDA",value: "₩75,100",  sub: "Target 8.0x" },
-            ].map(v => (
-              <div key={v.label} className="bg-neutral-50 rounded-lg p-2.5">
-                <div className="text-[9px] text-neutral-400 mb-1">{v.label}</div>
-                <div className="text-sm font-bold font-mono text-neutral-800">{v.value}</div>
-                <div className="text-[9px] text-neutral-400 mt-0.5">{v.sub}</div>
+      {/* 분석 단계 */}
+      <div className="mb-6">
+        <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest mb-3">분석 파이프라인 (7단계)</p>
+        <div className="space-y-2">
+          {DEMO_STEPS.map((step, i) => (
+            <motion.div
+              key={step.key}
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="flex items-center gap-2.5"
+            >
+              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                {step.done ? (
+                  <span className="text-emerald-500 text-[11px]">✓</span>
+                ) : step.active ? (
+                  <PulsingDot color="#FF8A7A" />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-300 block" />
+                )}
               </div>
-            ))}
-          </div>
+              <span className={`text-xs ${step.done ? "text-neutral-500" : step.active ? "text-neutral-800 font-semibold" : "text-neutral-300"}`}>
+                {step.label}
+              </span>
+              {step.active && (
+                <span className="text-[10px] text-[#FF8A7A] font-medium">
+                  분석 중{".".repeat(thinkingDots)}
+                </span>
+              )}
+            </motion.div>
+          ))}
         </div>
       </div>
+
+      <div className="border-t border-neutral-200 mb-4" />
+
+      {/* 실시간 인사이트 */}
+      <div className="flex-1 overflow-hidden">
+        <div className="flex items-center gap-1.5 mb-3">
+          <PulsingDot color="#22c55e" />
+          <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">실시간 인사이트</span>
+        </div>
+        <div className="space-y-2.5">
+          <AnimatePresence>
+            {SAMPLE_ALERTS.slice(0, visibleAlerts).map((alert, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white border border-neutral-100 rounded-xl px-3.5 py-2.5 shadow-sm"
+              >
+                <div className="text-[10px] text-neutral-300 mb-0.5 font-mono">{alert.time}</div>
+                <div className="text-xs text-neutral-600 leading-relaxed">{alert.text}</div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* 샘플 적정주가 카드 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.5 }}
+        className="mt-4 bg-white border border-neutral-200 rounded-2xl p-4 shadow-sm"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">AI 분석 결과 예시</span>
+          <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full font-semibold">높은 상승여력</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div className="text-[9px] text-neutral-400 mb-0.5">진입가</div>
+            <div className="text-xs font-mono font-bold text-neutral-800">54,200</div>
+          </div>
+          <div className="border-x border-neutral-100">
+            <div className="text-[9px] text-emerald-600 mb-0.5">적정주가</div>
+            <div className="text-xs font-mono font-bold text-emerald-700">72,500</div>
+          </div>
+          <div>
+            <div className="text-[9px] text-red-400 mb-0.5">손절가</div>
+            <div className="text-xs font-mono font-bold text-red-500">49,100</div>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -239,9 +258,9 @@ export default function Landing() {
         </p>
       </div>
 
-      {/* 오른쪽: 삼성전자 샘플 보고서 (모바일 숨김) */}
+      {/* 오른쪽: 라이브 미리보기 (모바일 숨김) */}
       <div className="hidden md:flex flex-1 flex-col overflow-hidden">
-        <SampleReport />
+        <RightPanel />
       </div>
     </div>
   );
