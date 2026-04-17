@@ -60,8 +60,8 @@ export default function Login() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1
-            className="text-[28px] font-black tracking-tight text-neutral-900 mb-2"
-            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
+            className="text-[28px] font-black tracking-tight mb-2"
+            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", color: "#FF8A7A" }}
           >
             애빛다
           </h1>

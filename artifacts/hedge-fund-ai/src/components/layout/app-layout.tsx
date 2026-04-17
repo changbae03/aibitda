@@ -76,8 +76,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="px-5 h-14 flex items-center border-b border-neutral-100">
           <Link href="/analysis/new" className="block">
             <span
-              className="text-[22px] font-black tracking-tighter text-neutral-900 leading-none select-none"
-              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
+              className="text-[22px] font-black tracking-tighter leading-none select-none"
+              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
             >
               애빛다
             </span>
@@ -123,8 +123,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               <div className="px-5 h-14 flex items-center justify-between border-b border-neutral-100">
                 <span
-                  className="text-[22px] font-black tracking-tighter text-neutral-900 leading-none"
-                  style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
+                  className="text-[22px] font-black tracking-tighter leading-none"
+                  style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
                 >
                   애빛다
                 </span>
@@ -149,8 +149,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Mobile Top Bar */}
         <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-neutral-100 bg-white z-30 sticky top-0 shrink-0 print:hidden">
           <span
-            className="text-[20px] font-black tracking-tighter text-neutral-900 leading-none"
-            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
+            className="text-[20px] font-black tracking-tighter leading-none"
+            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
           >
             애빛다
           </span>
