@@ -562,15 +562,27 @@ export default function AnalysisDetail() {
               <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-4 space-y-2">
                 <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">투자 유의사항</p>
                 <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                  본 리포트는 <span className="font-semibold">애빛다 AI</span>가 공개된 재무 데이터 및 시장 정보를 기반으로 자동 생성한 참고 자료입니다.
-                  투자 판단의 최종 책임은 투자자 본인에게 있으며, 본 내용은 특정 종목의 매수·매도를 권유하거나 추천하는 것이 아닙니다.
+                  본 리포트는 「CBST」(이하 "당사")가 운영하는 AI 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 참고용 자료입니다. 당사는 자본시장과 금융투자업에 관한 법률(이하 "자본시장법") 제101조에 따라 신고를 마친 유사투자자문업자로서, 불특정 다수인을 대상으로 발행되는 정보 서비스입니다.
                 </p>
-                <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                  AI가 생성한 수치와 전망은 실제 결과와 다를 수 있으며, 시장 상황·기업 공시·거시경제 변수에 따라 언제든지 변동될 수 있습니다.
-                  과거 수익률이나 AI 분석 결과(적정주가 포함)는 미래 수익을 보장하지 않습니다. 투자 전 반드시 공식 공시 자료 및 전문가 의견을 병행하여 검토하시기 바랍니다.
+                <div className="space-y-2 mt-1">
+                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+                    <span className="font-semibold text-neutral-600">투자 책임:</span> 본 리포트는 특정 금융투자상품의 매수·매도 또는 보유를 권유하거나 추천하지 않으며, 개별적인 투자자문 계약에 따른 판단을 제공하지 않습니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
+                  </p>
+                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+                    <span className="font-semibold text-neutral-600">데이터의 한계:</span> AI가 산출한 적정주가, 목표주가 및 재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 이는 실제 결과와 크게 다를 수 있으며, 시장 상황·거시경제·금리·기업 공시 변화 등 예측 불가능한 변수에 따라 언제든지 변동될 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
+                  </p>
+                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+                    <span className="font-semibold text-neutral-600">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있으며, 그 결과는 투자자에게 귀속됩니다.
+                  </p>
+                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+                    <span className="font-semibold text-neutral-600">독립적 검토 권고:</span> 투자자는 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
+                  </p>
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-2 pt-2 border-t border-neutral-200">
+                  본 리포트의 무단 복제, 배포 및 재가공은 법적으로 금지됩니다.
                 </p>
                 <p className="text-[10.5px] text-neutral-400 mt-1">
-                  분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © {new Date().getFullYear()} 애빛다. AI로 기업가치를 밝히다.
+                  분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.
                 </p>
               </div>
             </div>
