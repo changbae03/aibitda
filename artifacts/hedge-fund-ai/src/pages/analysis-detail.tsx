@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import StockChart, { type ChartLevels } from "@/components/StockChart";
+import { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
 import PeerGroupSection from "@/components/PeerGroupSection";
 import ReactMarkdown from "react-markdown";
@@ -362,9 +362,6 @@ export default function AnalysisDetail() {
           </div>
         </div>
       </div>
-
-      {/* Stock Chart */}
-      <StockChart ticker={analysis.ticker} companyName={analysis.companyName} />
 
       {/* Financial Chart */}
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -1239,17 +1236,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           </div>
         )}
 
-        {/* Market Analysis 전용 차트 */}
-        {isMarket && ticker && (
-          <div className="mt-5 pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">기술적 분석 차트</span>
-              {chartLevels && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">AI 레벨 오버레이 적용</span>}
-            </div>
-            <StockChart ticker={ticker} companyName={companyName} chartLevels={chartLevels ?? undefined} />
-          </div>
-        )}
       </div>
     </motion.div>
   );
