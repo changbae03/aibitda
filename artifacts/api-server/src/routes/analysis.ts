@@ -402,6 +402,8 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     "annualGrossProfit", "annualTotalRevenue", "annualOperatingIncome",
     "annualNetIncome", "annualReturnOnEquity", "annualReturnOnAssets",
     "annualBasicEPS", "annualTotalLiabilitiesNetMinorityInterest", "annualStockholdersEquity",
+    // 현금흐름 (cashflowStatementHistory Nov 2024 이후 데이터 없음 → fundamentalsTimeSeries 사용)
+    "annualOperatingCashFlow", "annualFreeCashFlow", "annualCapitalExpenditure",
   ];
   const tsPeriod1 = Math.floor(new Date(`${new Date().getFullYear() - 4}-01-01`).getTime() / 1000);
   const tsPeriod2 = Math.floor(Date.now() / 1000);
@@ -530,6 +532,9 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const roeMap  = toYearMap("annualReturnOnEquity");
   const liabMap = toYearMap("annualTotalLiabilitiesNetMinorityInterest");
   const eqMap   = toYearMap("annualStockholdersEquity");
+  const ocfMap  = toYearMap("annualOperatingCashFlow");
+  const fcfMap  = toYearMap("annualFreeCashFlow");
+  const capexMap = toYearMap("annualCapitalExpenditure");
 
   const allYears = [...new Set([
     ...Object.keys(revMap), ...Object.keys(gpMap), ...Object.keys(opMap), ...Object.keys(niMap)
@@ -574,7 +579,39 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
   }
 
-  // Balance sheet
+  // ── 현금흐름표 (fundamentalsTimeSeries 우선, legacy fallback) ──────────────────
+  const cfYears = [...new Set([
+    ...Object.keys(ocfMap), ...Object.keys(fcfMap), ...Object.keys(capexMap)
+  ])].sort((a, b) => Number(b) - Number(a)).slice(0, 4);
+
+  if (cfYears.length > 0) {
+    lines.push("\n[현금흐름표 — fundamentalsTimeSeries]");
+    for (const year of cfYears) {
+      const ocf   = ocfMap[year]   != null ? fmtNum(ocfMap[year], currency)   : "-";
+      const fcf   = fcfMap[year]   != null ? fmtNum(fcfMap[year], currency)   : "-";
+      const capex = capexMap[year] != null ? fmtNum(capexMap[year], currency) : "-";
+      // FCF 전환율 = FCF / OCF (OCF가 양수일 때만)
+      const fcfConv = (ocfMap[year] != null && fcfMap[year] != null && ocfMap[year] > 0)
+        ? ` (FCF전환율 ${(fcfMap[year] / ocfMap[year] * 100).toFixed(0)}%)`
+        : "";
+      lines.push(`  ${year}년: 영업CF ${ocf} | FCF ${fcf}${fcfConv} | CAPEX ${capex}`);
+    }
+  } else {
+    // Legacy fallback
+    const cfStmtsLegacy: any[] = (result.cashflowStatementHistory as any)?.cashflowStatements ?? [];
+    if (cfStmtsLegacy.length > 0) {
+      lines.push("\n[현금흐름표]");
+      for (const stmt of cfStmtsLegacy.slice(0, 4)) {
+        const year  = toYear(stmt.endDate);
+        const ocf   = fmtNum(stmt.totalCashFromOperatingActivities, currency);
+        const capex = fmtNum(stmt.capitalExpenditures, currency);
+        const icf   = fmtNum(stmt.totalCashflowsFromInvestingActivities, currency);
+        lines.push(`  ${year}년: 영업CF ${ocf} | CAPEX ${capex} | 투자CF ${icf}`);
+      }
+    }
+  }
+
+  // ── 재무상태표 ────────────────────────────────────────────────────────────────
   const balanceStmts: any[] = (result.balanceSheetHistory as any)?.balanceSheetStatements ?? [];
   if (balanceStmts.length > 0) {
     lines.push("\n[재무상태표 - 최근 연도]");
@@ -583,19 +620,6 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       lines.push(
         `  ${year}년: 총자산 ${fmtNum(stmt.totalAssets, currency)} | 총부채 ${fmtNum(stmt.totalLiab, currency)} | 자기자본 ${fmtNum(stmt.totalStockholderEquity, currency)} | 현금 ${fmtNum(stmt.cash, currency)}`
       );
-    }
-  }
-
-  // Cash flow
-  const cfStmts: any[] = (result.cashflowStatementHistory as any)?.cashflowStatements ?? [];
-  if (cfStmts.length > 0) {
-    lines.push("\n[현금흐름표]");
-    for (const stmt of cfStmts.slice(0, 2)) {
-      const year = toYear(stmt.endDate);
-      const ocf   = fmtNum(stmt.totalCashFromOperatingActivities, currency);
-      const capex = fmtNum(stmt.capitalExpenditures, currency);
-      const icf   = fmtNum(stmt.totalCashflowsFromInvestingActivities, currency);
-      lines.push(`  ${year}년: 영업CF ${ocf} | CAPEX ${capex} | 투자CF ${icf}`);
     }
   }
 

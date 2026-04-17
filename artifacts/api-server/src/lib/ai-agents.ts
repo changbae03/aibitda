@@ -261,7 +261,8 @@ ${COMMON_RULES}`,
 
 절대 표(table) 사용 금지. 불릿으로만 작성하세요.
 
-⚠️ 컨텍스트에 cashflowStatements가 있으면 영업CF·CAPEX·FCF 직접 계산. 없으면 "N/A" 표기.
+⚠️ 컨텍스트에 "[현금흐름표 — fundamentalsTimeSeries]" 섹션이 있으면 해당 수치 직접 인용. 없으면 "[현금흐름표]" 섹션 확인. 둘 다 없으면 "N/A" 표기.
+⚠️ "[현금흐름표 — fundamentalsTimeSeries]"에는 연도별 영업CF·FCF·CAPEX·FCF전환율이 이미 계산되어 있음 — 최근 연도 기준으로 불릿을 채우세요.
 
 - 영업CF: __ | CAPEX: __ | FCF: __ (단위 통일)
 - FCF 전환율: __% (= FCF ÷ 영업CF × 100) — 70%↑ 우량 / 50%↓ 주의
