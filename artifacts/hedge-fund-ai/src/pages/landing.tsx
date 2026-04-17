@@ -147,6 +147,14 @@ export default function Landing() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      localStorage.setItem("pending_referral", ref);
+    }
+  }, []);
+
+  useEffect(() => {
     if (isLoaded && isSignedIn) {
       setLocation("/analysis/new");
     }

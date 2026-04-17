@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
+import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
 import { eq, desc, not } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
@@ -919,6 +920,15 @@ router.post("/", async (req, res) => {
   if (!ticker) {
     res.status(400).json({ error: "ticker는 필수입니다" });
     return;
+  }
+
+  const userId = getUserId(req);
+  if (userId) {
+    const credit = await checkAndDeductCredit(userId);
+    if (!credit.ok) {
+      res.status(402).json({ error: credit.reason });
+      return;
+    }
   }
 
   const upperTicker = ticker.toUpperCase();

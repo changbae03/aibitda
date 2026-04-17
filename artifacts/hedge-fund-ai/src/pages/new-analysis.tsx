@@ -1,8 +1,90 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Share2, Check, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ApiError } from "@workspace/api-client-react";
+
+interface CreditStatus {
+  dailyUsed: number;
+  dailyLimit: number;
+  bonusCredits: number;
+  remaining: number;
+  referralCode: string | null;
+}
+
+function useCredits() {
+  return useQuery<CreditStatus>({
+    queryKey: ["credits"],
+    queryFn: async () => {
+      const res = await fetch("/api/credits", { credentials: "include" });
+      if (!res.ok) return null as any;
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+}
+
+function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
+  const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const res = await fetch("/api/credits/referral/code", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const { code } = await res.json();
+      const url = `${window.location.origin}/?ref=${code}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  if (!credits) return null;
+
+  const dailyRemaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+        credits.remaining === 0
+          ? "bg-red-50 border-red-200 text-red-600"
+          : credits.remaining <= 1
+          ? "bg-amber-50 border-amber-200 text-amber-600"
+          : "bg-emerald-50 border-emerald-200 text-emerald-600"
+      }`}>
+        <Zap className="w-3 h-3" />
+        오늘 {dailyRemaining}회 남음
+        {credits.bonusCredits > 0 && (
+          <span className="ml-0.5 opacity-70">+{credits.bonusCredits} 보너스</span>
+        )}
+      </div>
+
+      <button
+        onClick={handleShare}
+        disabled={sharing}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-neutral-200 text-neutral-500 hover:border-[#FF8A7A] hover:text-[#FF8A7A] transition-colors"
+      >
+        {copied ? (
+          <><Check className="w-3 h-3 text-emerald-500" /><span className="text-emerald-500">링크 복사됨!</span></>
+        ) : sharing ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <><Share2 className="w-3 h-3" />친구 초대 +1회</>
+        )}
+      </button>
+    </div>
+  );
+}
 
 const EXAMPLES = [
   { ticker: "005930", label: "삼성전자" },
@@ -25,8 +107,24 @@ interface SearchResult {
 export default function NewAnalysis() {
   const [, setLocation] = useLocation();
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
+  const queryClient = useQueryClient();
+  const { data: credits } = useCredits();
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const code = localStorage.getItem("pending_referral");
+    if (!code) return;
+    localStorage.removeItem("pending_referral");
+    fetch("/api/credits/referral/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code }),
+    }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
+    }).catch(() => {});
+  }, [queryClient]);
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -101,9 +199,15 @@ export default function NewAnalysis() {
     setShowDropdown(false);
     try {
       const result = await startAnalysis({ data: { ticker: value } });
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
       setLocation(`/analysis/${result.id}`);
-    } catch {
-      setError("분석을 시작할 수 없습니다. 올바른 종목코드를 확인해주세요.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        const msg = (err.data as any)?.error ?? "오늘 분석 횟수를 모두 사용했습니다.";
+        setError(msg);
+      } else {
+        setError("분석을 시작할 수 없습니다. 올바른 종목코드를 확인해주세요.");
+      }
     }
   };
 
@@ -157,7 +261,7 @@ export default function NewAnalysis() {
         className="w-full max-w-xl flex flex-col gap-10"
       >
         {/* Headline */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <h1
             className="text-4xl md:text-5xl font-black tracking-tighter text-neutral-900 leading-[1.1]"
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
@@ -167,6 +271,7 @@ export default function NewAnalysis() {
           <p className="text-sm text-neutral-400 leading-relaxed">
             코스피·코스닥 종목코드 또는 회사명으로 검색하면<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
           </p>
+          <CreditsBadge credits={credits} />
         </div>
 
         {/* Search */}

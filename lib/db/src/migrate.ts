@@ -78,6 +78,28 @@ export async function runMigrations() {
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS english_name TEXT;
     `);
 
+    // 크레딧 & 추천인 테이블
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_credits (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT UNIQUE NOT NULL,
+        daily_used INTEGER NOT NULL DEFAULT 0,
+        daily_limit INTEGER NOT NULL DEFAULT 3,
+        daily_reset_date TEXT NOT NULL DEFAULT '',
+        bonus_credits INTEGER NOT NULL DEFAULT 0,
+        referral_code TEXT UNIQUE,
+        total_analyses INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS referral_uses (
+        id SERIAL PRIMARY KEY,
+        referral_code TEXT NOT NULL,
+        referee_id TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
