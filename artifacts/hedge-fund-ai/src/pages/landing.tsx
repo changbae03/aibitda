@@ -137,32 +137,6 @@ function RightPanel() {
         </div>
       </div>
 
-      {/* 샘플 적정주가 카드 */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.5 }}
-        className="mt-4 bg-white border border-neutral-200 rounded-2xl p-4 shadow-sm"
-      >
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">AI 분석 결과 예시</span>
-          <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full font-semibold">높은 상승여력</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <div className="text-[9px] text-neutral-400 mb-0.5">진입가</div>
-            <div className="text-xs font-mono font-bold text-neutral-800">54,200</div>
-          </div>
-          <div className="border-x border-neutral-100">
-            <div className="text-[9px] text-emerald-600 mb-0.5">적정주가</div>
-            <div className="text-xs font-mono font-bold text-emerald-700">72,500</div>
-          </div>
-          <div>
-            <div className="text-[9px] text-red-400 mb-0.5">손절가</div>
-            <div className="text-xs font-mono font-bold text-red-500">49,100</div>
-          </div>
-        </div>
-      </motion.div>
     </div>
   );
 }
