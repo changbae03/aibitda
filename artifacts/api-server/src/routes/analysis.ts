@@ -686,12 +686,16 @@ ${previousContext ? `\nContext:\n${previousContext.slice(0, 1500)}` : ""}
 Return a JSON object with this exact schema:
 {"peers": [{"ticker": "005930.KS", "name": "삼성전자", "exchange": "KOSPI", "reason": "동일 메모리 반도체 시장 경쟁사, PER/EV/EBITDA 비교 유효"}, ...]}
 
-CRITICAL ticker format rules:
-- KOSPI listed Korean stocks: use 6-digit code + ".KS" suffix  (e.g., 005930.KS for 삼성전자, 000660.KS for SK하이닉스)
-- KOSDAQ listed Korean stocks: use 6-digit code + ".KQ" suffix (e.g., 086900.KQ for 메디오젠)
-- US stocks: standard Yahoo Finance ticker without suffix (e.g., NVDA, AAPL, TSMC)
-- Do NOT use .KO suffix — it is invalid. Only .KS and .KQ are valid for Korean stocks.
-- Double-check each ticker is the real Yahoo Finance ticker for the named company.
+CRITICAL ticker format rules — Yahoo Finance tickers only:
+- KOSPI stocks: 6-digit + ".KS"  (e.g., 005930.KS=삼성전자, 068270.KS=셀트리온, 207940.KS=삼성바이오로직스, 000660.KS=SK하이닉스)
+- KOSDAQ stocks: 6-digit + ".KQ" (e.g., 086900.KQ=메디오젠, 196170.KQ=알테오젠)
+- US NASDAQ/NYSE stocks: plain ticker (e.g., AMGN, REGN, MRNA, NVO, PFE, JNJ)
+- Swiss SIX stocks: ticker + ".SW"  (e.g., SDZ.SW=Sandoz, NOVN.SW=Novartis, ROG.SW=Roche)
+- Tokyo TSE stocks: 4-digit + ".T"  (e.g., 4502.T=Takeda, 4503.T=Astellas)
+- Hong Kong HKEX: ticker + ".HK"    (e.g., 0941.HK=China Mobile)
+- London LSE: ticker + ".L"         (e.g., AZN.L=AstraZeneca)
+- Do NOT use .KO — invalid. Prefer KS/KQ for Korean stocks.
+- STRONGLY PREFER Korean or US-listed peers (best Yahoo Finance coverage). Swiss/European peers only if no closer Korean/US alternative.
 - reason: 이 기업이 유의미한 피어인 이유를 1~2문장으로 한국어로 설명 (사업 유사성, 경쟁 관계, 밸류에이션 비교 근거 중심)`;
 
     const resp = await ai.models.generateContent({
@@ -737,7 +741,7 @@ async function fetchPeerFinancials(
   const results = await Promise.allSettled(
     peers.map(async (peer) => {
       try {
-        // quoteSummary와 quote()를 병렬로 호출해 데이터 커버리지 극대화
+        // quoteSummary + quote() 병렬 호출 — balanceSheetHistory·earningsTrend 추가로 멀티플 직접 계산 가능
         const [summaryResult, quoteResult] = await Promise.allSettled([
           yahooFinance.quoteSummary(peer.ticker, {
             modules: [
@@ -746,6 +750,8 @@ async function fetchPeerFinancials(
               "summaryDetail",
               "price",
               "incomeStatementHistory",
+              "balanceSheetHistory",
+              "earningsTrend",
             ] as any,
           }),
           yahooFinance.quote(peer.ticker),
@@ -759,6 +765,8 @@ async function fetchPeerFinancials(
         const sd: any = (summary as any).summaryDetail ?? {};
         const pr: any = (summary as any).price ?? {};
         const is: any = (summary as any).incomeStatementHistory ?? {};
+        const bs: any = (summary as any).balanceSheetHistory ?? {};
+        const et: any = (summary as any).earningsTrend ?? {};
 
         const pct = (v: number | null | undefined) =>
           v != null ? `${(v * 100).toFixed(1)}%` : "N/A";
@@ -766,13 +774,13 @@ async function fetchPeerFinancials(
           v != null ? v.toFixed(1) : "N/A";
         const fmt2 = (v: number | null | undefined) =>
           v != null ? v.toFixed(2) : "N/A";
-        const fmtKrw = (v: number | null | undefined, isKrw: boolean) => {
+        const fmtAbs = (v: number | null | undefined, isKrw: boolean) => {
           if (v == null) return "N/A";
           if (isKrw) return `${(v / 1e8).toFixed(0)}억원`;
-          return `${(v / 1e9).toFixed(1)}B USD`;
+          return `${(v / 1e9).toFixed(1)}B`;
         };
 
-        // 시가총액: quote() > price 모듈 > summaryDetail 순으로 fallback
+        // 시가총액 & 가격
         const currency = quote.currency ?? pr.currency ?? "USD";
         const isKrw = currency === "KRW";
         const price = quote.regularMarketPrice ?? pr.regularMarketPrice ?? null;
@@ -780,29 +788,73 @@ async function fetchPeerFinancials(
         const mcapStr = mcap
           ? isKrw
             ? `${(mcap / 1e12).toFixed(2)}조원`
-            : `${(mcap / 1e9).toFixed(1)}B USD`
+            : `${(mcap / 1e9).toFixed(1)}B ${currency}`
           : "N/A";
 
-        // 멀티플
-        const fwdPE = ks.forwardPE ?? sd.forwardPE ?? null;
-        const trailPE = sd.trailingPE ?? ks.trailingPE ?? quote.trailingPE ?? null;
-        const pbr = ks.priceToBook ?? null;
-        const evEbitda = ks.enterpriseToEbitda ?? null;
-        const evRev = ks.enterpriseToRevenue ?? null;
-
-        // 수익성
-        const roe = fd.returnOnEquity ?? null;
-        const opMargin = fd.operatingMargins ?? null;
-        const revGrowth = fd.revenueGrowth ?? null;
-        const grossMargin = fd.grossMargins ?? null;
-        const netMargin = fd.profitMargins ?? null;
-
-        // 절대값 (최근 연간)
-        const totalRevenue = fd.totalRevenue ?? null;
-        const ebitda = fd.ebitda ?? null;
+        // ── 원시 재무 데이터 ────────────────────────────────────────────────
         const latestIS = is.incomeStatementHistory?.[0] ?? null;
-        const netIncome = latestIS?.netIncome ?? fd.netIncomeToCommon ?? null;
-        const opIncome = latestIS?.operatingIncome ?? null;
+        const latestBS = bs.balanceSheetStatements?.[0] ?? null;
+
+        const totalRevenue  = fd.totalRevenue  ?? latestIS?.totalRevenue  ?? null;
+        const ebitda        = fd.ebitda        ?? null;
+        const netIncome     = latestIS?.netIncome     ?? fd.netIncomeToCommon ?? null;
+        const opIncome      = latestIS?.operatingIncome ?? null;
+        const totalEquity   = latestBS?.totalStockholderEquity ?? latestBS?.stockholdersEquity ?? null;
+        const totalDebt     = latestBS?.longTermDebt != null
+                              ? (latestBS.longTermDebt + (latestBS.shortLongTermDebt ?? 0) + (latestBS.currentPortionOfLongTermDebt ?? 0))
+                              : latestBS?.totalLiab ?? null;
+        const cash          = latestBS?.cash ?? latestBS?.cashAndShortTermInvestments ?? latestBS?.cashAndCashEquivalents ?? null;
+
+        // ── 멀티플: 직접 제공 → 계산 폴백 순서 ──────────────────────────
+        // PER Fwd: earningsTrend '0y' 또는 '+1y' 트렌드에서 FY EPS 추출 후 계산
+        let fwdPE: number | null = ks.forwardPE ?? sd.forwardPE ?? null;
+        if (fwdPE == null && price != null) {
+          const trend1y = et.trend?.find((t: any) => t.period === "+1y");
+          const trend0y = et.trend?.find((t: any) => t.period === "0y");
+          const fwdEps = trend1y?.earningsEstimate?.avg ?? trend0y?.earningsEstimate?.avg ?? null;
+          if (fwdEps != null && fwdEps > 0) fwdPE = price / fwdEps;
+        }
+
+        // PER TTM: 직접 제공 → market cap / net income 계산
+        let trailPE: number | null = sd.trailingPE ?? ks.trailingPE ?? quote.trailingPE ?? null;
+        if (trailPE == null && mcap != null && netIncome != null && netIncome > 0) {
+          trailPE = mcap / netIncome;
+        }
+
+        // PBR: priceToBook → market cap / 자본총계
+        let pbr: number | null = ks.priceToBook ?? null;
+        if (pbr == null && mcap != null && totalEquity != null && totalEquity > 0) {
+          pbr = mcap / totalEquity;
+        }
+
+        // EV 계산: enterpriseValue 직접 제공 → market cap + 순부채
+        const ev: number | null = ks.enterpriseValue != null
+          ? ks.enterpriseValue
+          : (mcap != null && totalDebt != null && cash != null)
+            ? mcap + totalDebt - cash
+            : null;
+
+        // EV/EBITDA: 직접 → 계산
+        let evEbitda: number | null = ks.enterpriseToEbitda ?? null;
+        if (evEbitda == null && ev != null && ebitda != null && ebitda > 0) {
+          evEbitda = ev / ebitda;
+        }
+
+        // EV/매출
+        let evRev: number | null = ks.enterpriseToRevenue ?? null;
+        if (evRev == null && ev != null && totalRevenue != null && totalRevenue > 0) {
+          evRev = ev / totalRevenue;
+        }
+
+        // ── 수익성 ────────────────────────────────────────────────────────
+        const roe = fd.returnOnEquity
+          ?? (netIncome != null && totalEquity != null && totalEquity > 0 ? netIncome / totalEquity : null);
+        const opMargin = fd.operatingMargins
+          ?? (opIncome != null && totalRevenue != null && totalRevenue > 0 ? opIncome / totalRevenue : null);
+        const revGrowth  = fd.revenueGrowth  ?? null;
+        const grossMargin = fd.grossMargins  ?? null;
+        const netMargin  = fd.profitMargins
+          ?? (netIncome != null && totalRevenue != null && totalRevenue > 0 ? netIncome / totalRevenue : null);
 
         const line = [
           `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
@@ -810,7 +862,8 @@ async function fetchPeerFinancials(
           `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
           `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
           `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
-          `  매출(TTM): ${fmtKrw(totalRevenue, isKrw)} | 영업이익(최근): ${fmtKrw(opIncome, isKrw)} | 순이익(최근): ${fmtKrw(netIncome, isKrw)} | EBITDA: ${fmtKrw(ebitda, isKrw)}`,
+          `  매출(TTM): ${fmtAbs(totalRevenue, isKrw)} | 영업이익: ${fmtAbs(opIncome, isKrw)} | 순이익: ${fmtAbs(netIncome, isKrw)} | EBITDA: ${fmtAbs(ebitda, isKrw)}`,
+          `  자본총계: ${fmtAbs(totalEquity, isKrw)} | 총부채: ${fmtAbs(totalDebt, isKrw)} | 현금: ${fmtAbs(cash, isKrw)}`,
         ].filter(Boolean).join("\n");
         return line;
       } catch (err) {
