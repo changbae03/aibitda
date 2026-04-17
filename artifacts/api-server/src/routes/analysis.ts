@@ -17,6 +17,41 @@ import { triggerModelReview } from "./model-insights.js";
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
 
+// ─── 한국 업종별 밸류에이션 벤치마크 (KRX 기반, 2024~2025 평균) ──────────────────
+// 출처: KRX 업종 시가총액·멀티플 통계, Damodaran emerging market data 참고
+const KOREAN_SECTOR_MULTIPLES = `
+=== 한국 코스피·코스닥 업종별 밸류에이션 벤치마크 (피어 멀티플 상대가치 참조용) ===
+※ 아래 범위는 KRX 업종 평균 기준입니다. 피어 멀티플 산출 시 이 기준과 비교하세요.
+
+| 업종 | P/E (배) | P/B (배) | EV/EBITDA (배) | EV/Sales (배) | Unlevered β | 비고 |
+|------|---------|---------|--------------|-------------|------------|------|
+| 반도체·메모리 | 18~35 | 1.5~3.0 | 8~15 | 1.5~3.5 | 1.2~1.5 | 업황 사이클 크게 반영 |
+| 반도체장비·소재 | 20~40 | 2.0~4.0 | 12~20 | 2.0~4.0 | 1.1~1.4 | 성장 프리미엄 반영 |
+| IT·소프트웨어·인터넷 | 25~45 | 2.5~5.0 | 15~30 | 2.5~6.0 | 1.0~1.3 | 플랫폼은 EV/Sales 선호 |
+| 2차전지·배터리 | 20~40 | 2.0~4.5 | 10~20 | 1.5~4.0 | 1.2~1.6 | 수주잔고·증설 모멘텀 |
+| 바이오·제약(흑자) | 20~50 | 2.0~5.0 | 10~20 | 3.0~8.0 | 1.3~1.7 | DCF 가능 |
+| 바이오·제약(적자/파이프라인) | N/A | 2.0~6.0 | N/A | 4.0~12.0 | 1.4~1.8 | rNPV 필수, EV/Sales 보조 |
+| 의료기기·진단 | 20~40 | 2.0~4.5 | 12~22 | 2.0~5.0 | 1.1~1.4 | |
+| 자동차·완성차 | 6~12 | 0.5~1.0 | 3~6 | 0.3~0.6 | 0.9~1.2 | PBR 0.7 이하 → 저평가 신호 |
+| 자동차부품·타이어 | 7~14 | 0.6~1.2 | 4~8 | 0.4~0.8 | 0.9~1.2 | |
+| 화학·정유·소재 | 8~16 | 0.7~1.4 | 5~9 | 0.3~0.7 | 1.0~1.3 | |
+| 철강·비철금속 | 7~13 | 0.5~1.0 | 4~8 | 0.4~0.8 | 0.9~1.2 | |
+| 건설·인프라 | 6~11 | 0.5~0.9 | 4~8 | 0.3~0.6 | 0.9~1.2 | |
+| 미디어·엔터·게임 | 18~35 | 2.0~4.0 | 10~18 | 1.5~4.0 | 1.0~1.4 | |
+| 소비재·유통·음식료 | 12~20 | 1.0~2.0 | 7~13 | 0.5~1.2 | 0.7~1.0 | |
+| 에너지·유틸리티 | 9~15 | 0.6~1.1 | 6~10 | 0.8~1.5 | 0.5~0.8 | |
+| 금융·보험·증권 | 6~10 | 0.4~0.9 | N/A | N/A | 0.5~0.8 | PBR·ROE 위주 평가 |
+| 조선·기계·방산 | 10~25 | 1.0~2.5 | 6~14 | 0.5~1.5 | 0.9~1.2 | 수주잔고 모멘텀 |
+| 통신 | 8~14 | 1.0~1.5 | 5~8 | 1.0~2.0 | 0.6~0.8 | 배당수익률 중시 |
+
+WACC 공통 가정 (한국 주식):
+- 무위험수익률(Rf): 한국 국고채 10년물 2.8~3.2% (미국 국채 사용 절대 금지)
+- 시장 ERP(한국): 5.5~6.5% (글로벌 평균 적용 금지)
+- Relevered β = Unlevered β × (1 + (1-세율) × D/E)
+- 법인세율: 25~27.5% (과세표준 200억 초과 기업 기준)
+`;
+
+
 function extractJsonSafe(raw: string): any | null {
   if (!raw) return null;
   let s = raw.trim();
@@ -400,11 +435,21 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
   // Fetch quoteSummary and fundamentalsTimeSeries in parallel
   const tsTypes = [
+    // ── 연간 손익 ──
     "annualGrossProfit", "annualTotalRevenue", "annualOperatingIncome",
     "annualNetIncome", "annualReturnOnEquity", "annualReturnOnAssets",
     "annualBasicEPS", "annualTotalLiabilitiesNetMinorityInterest", "annualStockholdersEquity",
-    // 현금흐름 (cashflowStatementHistory Nov 2024 이후 데이터 없음 → fundamentalsTimeSeries 사용)
+    // ── 연간 현금흐름 (cashflowStatementHistory Nov 2024 이후 중단 → timeseries 사용) ──
     "annualOperatingCashFlow", "annualFreeCashFlow", "annualCapitalExpenditure",
+    // ── WACC·EBITDA 계산 핵심 ──
+    "annualInterestExpense",                          // CoD(이자비용) 계산
+    "annualDepreciationAmortizationDepletion",        // EBITDA = 영업이익 + D&A
+    "annualTotalDebt",                                // D/E·순부채 계산
+    "annualCashAndCashEquivalentsAndShortTermInvestments", // 순현금
+    // ── 분기별 손익 (최근 6분기) ──
+    "quarterlyTotalRevenue", "quarterlyOperatingIncome",
+    "quarterlyNetIncome", "quarterlyBasicEPS",
+    "quarterlyOperatingCashFlow", "quarterlyFreeCashFlow",
   ];
   const tsPeriod1 = Math.floor(new Date(`${new Date().getFullYear() - 4}-01-01`).getTime() / 1000);
   const tsPeriod2 = Math.floor(Date.now() / 1000);
@@ -521,21 +566,26 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.payoutRatio != null)     lines.push(`배당성향: ${pct(ks.payoutRatio)}`);
   }
 
-  // ── fundamentalsTimeSeries annual data ──────────────────────────────────────
+  // ── fundamentalsTimeSeries: 연간 데이터 맵 ────────────────────────────────────
   const toYearMap = (key: string): Record<string, number> =>
     Object.fromEntries((tsTypeMap[key] ?? []).map(e => [e.year, e.value]));
 
-  const revMap  = toYearMap("annualTotalRevenue");
-  const gpMap   = toYearMap("annualGrossProfit");
-  const opMap   = toYearMap("annualOperatingIncome");
-  const niMap   = toYearMap("annualNetIncome");
-  const epsMap  = toYearMap("annualBasicEPS");
-  const roeMap  = toYearMap("annualReturnOnEquity");
-  const liabMap = toYearMap("annualTotalLiabilitiesNetMinorityInterest");
-  const eqMap   = toYearMap("annualStockholdersEquity");
-  const ocfMap  = toYearMap("annualOperatingCashFlow");
-  const fcfMap  = toYearMap("annualFreeCashFlow");
+  const revMap   = toYearMap("annualTotalRevenue");
+  const gpMap    = toYearMap("annualGrossProfit");
+  const opMap    = toYearMap("annualOperatingIncome");
+  const niMap    = toYearMap("annualNetIncome");
+  const epsMap   = toYearMap("annualBasicEPS");
+  const roeMap   = toYearMap("annualReturnOnEquity");
+  const liabMap  = toYearMap("annualTotalLiabilitiesNetMinorityInterest");
+  const eqMap    = toYearMap("annualStockholdersEquity");
+  const ocfMap   = toYearMap("annualOperatingCashFlow");
+  const fcfMap   = toYearMap("annualFreeCashFlow");
   const capexMap = toYearMap("annualCapitalExpenditure");
+  // WACC·EBITDA 계산용
+  const intExpMap = toYearMap("annualInterestExpense");
+  const dnaMap    = toYearMap("annualDepreciationAmortizationDepletion");
+  const debtMap   = toYearMap("annualTotalDebt");
+  const cashTsMap = toYearMap("annualCashAndCashEquivalentsAndShortTermInvestments");
 
   const allYears = [...new Set([
     ...Object.keys(revMap), ...Object.keys(gpMap), ...Object.keys(opMap), ...Object.keys(niMap)
@@ -554,17 +604,20 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         ? roeMap[year] * 100
         : (niMap[year] != null && eqMap[year] != null && eqMap[year] !== 0 ? niMap[year] / eqMap[year] * 100 : null);
       const roe = roeRaw != null ? `${roeRaw.toFixed(1)}%` : "-";
-      // Derived margins
-      const gpM  = revMap[year] && gpMap[year]  ? `${(gpMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
-      const opM  = revMap[year] && opMap[year]  ? `${(opMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
-      const niM  = revMap[year] && niMap[year]  ? `${(niMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
-      const de   = liabMap[year] && eqMap[year] ? `${(liabMap[year] / eqMap[year] * 100).toFixed(1)}%` : "-";
+      const gpM = revMap[year] && gpMap[year]  ? `${(gpMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
+      const opM = revMap[year] && opMap[year]  ? `${(opMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
+      const niM = revMap[year] && niMap[year]  ? `${(niMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
+      const de  = liabMap[year] && eqMap[year] ? `${(liabMap[year] / eqMap[year] * 100).toFixed(1)}%` : "-";
+      // EBITDA = 영업이익 + D&A (직접 계산)
+      const ebitdaRaw = opMap[year] != null && dnaMap[year] != null ? opMap[year] + dnaMap[year] : null;
+      const ebitda = ebitdaRaw != null ? fmtNum(ebitdaRaw, currency) : "-";
+      const ebitdaM = ebitdaRaw != null && revMap[year] ? `${(ebitdaRaw / revMap[year] * 100).toFixed(1)}%` : "-";
       lines.push(
-        `  ${year}년: 매출 ${rev} | 매출총이익 ${gp}(${gpM}) | 영업이익 ${op}(${opM}) | 순이익 ${ni}(${niM}) | EPS ${eps} | ROE ${roe} | D/E ${de}`
+        `  ${year}년: 매출 ${rev} | GP ${gp}(${gpM}) | 영업이익 ${op}(${opM}) | EBITDA ${ebitda}(${ebitdaM}) | 순이익 ${ni}(${niM}) | EPS ${eps} | ROE ${roe} | D/E ${de}`
       );
     }
   } else {
-    // Fallback: legacy incomeStatementHistory (may be empty post-Nov 2024)
+    // Fallback: legacy incomeStatementHistory
     const incomeStmts: any[] = (result.incomeStatementHistory as any)?.incomeStatementHistory ?? [];
     if (incomeStmts.length > 0) {
       lines.push("\n[손익계산서 - 연간 실적 (legacy)]");
@@ -575,7 +628,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const op   = fmtNum(stmt.operatingIncome ?? stmt.totalOperatingExpenses, currency);
         const ni   = fmtNum(stmt.netIncome, currency);
         const eps  = stmt.basicEps != null ? stmt.basicEps.toFixed(2) : (stmt.dilutedEps != null ? stmt.dilutedEps.toFixed(2) : "-");
-        lines.push(`  ${year}년: 매출 ${rev} | 매출총이익 ${gp} | 영업이익 ${op} | 순이익 ${ni} | EPS ${eps}`);
+        lines.push(`  ${year}년: 매출 ${rev} | GP ${gp} | 영업이익 ${op} | 순이익 ${ni} | EPS ${eps}`);
       }
     }
   }
@@ -591,14 +644,11 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       const ocf   = ocfMap[year]   != null ? fmtNum(ocfMap[year], currency)   : "-";
       const fcf   = fcfMap[year]   != null ? fmtNum(fcfMap[year], currency)   : "-";
       const capex = capexMap[year] != null ? fmtNum(capexMap[year], currency) : "-";
-      // FCF 전환율 = FCF / OCF (OCF가 양수일 때만)
       const fcfConv = (ocfMap[year] != null && fcfMap[year] != null && ocfMap[year] > 0)
-        ? ` (FCF전환율 ${(fcfMap[year] / ocfMap[year] * 100).toFixed(0)}%)`
-        : "";
+        ? ` (FCF전환율 ${(fcfMap[year] / ocfMap[year] * 100).toFixed(0)}%)` : "";
       lines.push(`  ${year}년: 영업CF ${ocf} | FCF ${fcf}${fcfConv} | CAPEX ${capex}`);
     }
   } else {
-    // Legacy fallback
     const cfStmtsLegacy: any[] = (result.cashflowStatementHistory as any)?.cashflowStatements ?? [];
     if (cfStmtsLegacy.length > 0) {
       lines.push("\n[현금흐름표]");
@@ -624,6 +674,103 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
   }
 
+  // ── WACC·EBITDA 계산 핵심 데이터 (가장 최근 연도 기준) ───────────────────────────
+  {
+    const latestWaccYear = [...new Set([
+      ...Object.keys(intExpMap), ...Object.keys(dnaMap),
+      ...Object.keys(debtMap), ...Object.keys(cashTsMap),
+    ])].sort((a, b) => Number(b) - Number(a))[0];
+
+    const waccLines: string[] = [];
+    if (latestWaccYear) {
+      if (intExpMap[latestWaccYear] != null) {
+        // Yahoo stores interest expense as negative → take absolute value
+        const intExp = Math.abs(intExpMap[latestWaccYear]);
+        waccLines.push(`이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}  ※ CoD 계산: 이자비용 ÷ 총부채`);
+      }
+      if (dnaMap[latestWaccYear] != null) {
+        waccLines.push(`D&A(감가상각비, ${latestWaccYear}): ${fmtNum(dnaMap[latestWaccYear], currency)}  ※ EBITDA = 영업이익 + 이 D&A`);
+      }
+      if (debtMap[latestWaccYear] != null) {
+        waccLines.push(`총부채(Total Debt, ${latestWaccYear}): ${fmtNum(debtMap[latestWaccYear], currency)}`);
+      }
+      if (cashTsMap[latestWaccYear] != null) {
+        waccLines.push(`현금성자산(${latestWaccYear}): ${fmtNum(cashTsMap[latestWaccYear], currency)}`);
+      }
+      // 순부채 계산
+      if (debtMap[latestWaccYear] != null && cashTsMap[latestWaccYear] != null) {
+        const netDebt = debtMap[latestWaccYear] - cashTsMap[latestWaccYear];
+        waccLines.push(`순부채(Net Debt, ${latestWaccYear}): ${fmtNum(netDebt, currency)} ${netDebt < 0 ? "(순현금 상태)" : "(순부채 상태)"}`);
+      }
+    }
+    // Supplement from financialData if timeseries missing
+    if (!intExpMap[latestWaccYear ?? ""] && fd?.interestExpense != null) {
+      waccLines.push(`이자비용(TTM, financialData): ${fmtNum(Math.abs(fd.interestExpense), currency)}`);
+    }
+    if (!dnaMap[latestWaccYear ?? ""] && fd?.ebitda != null && fd?.operatingCashflow != null) {
+      // Rough D&A estimate from EBITDA - EBIT if both available
+    }
+    if (waccLines.length > 0) {
+      lines.push("\n[⚡ WACC·EBITDA 계산 핵심 데이터 — 반드시 아래 수치를 사용할 것]");
+      lines.push("※ CoD = 이자비용 ÷ 총부채, EBITDA = 영업이익 + D&A (추정 금지, 아래 수치 직접 사용)");
+      lines.push(...waccLines);
+    }
+  }
+
+  // ── 분기별 실적 (fundamentalsTimeSeries quarterly) ───────────────────────────
+  {
+    const toQtrMap = (key: string): Array<{period: string; value: number}> => {
+      const rows = tsTypeMap[key] ?? [];
+      // For quarterly we need the asOfDate with quarter info
+      // tsTypeMap currently stores only year; rebuild from raw tsRows for quarterly
+      for (const row of tsRows) {
+        if (row[key]) {
+          return (row[key] as any[])
+            .filter((e: any) => e?.reportedValue?.raw != null)
+            .map((e: any) => {
+              const d = new Date(e.asOfDate);
+              const q = `${d.getFullYear()}Q${Math.ceil((d.getMonth() + 1) / 3)}`;
+              return { period: q, value: e.reportedValue.raw as number };
+            })
+            .sort((a, b) => b.period.localeCompare(a.period))
+            .slice(0, 6);
+        }
+      }
+      return [];
+    };
+
+    const qRev  = toQtrMap("quarterlyTotalRevenue");
+    const qOp   = toQtrMap("quarterlyOperatingIncome");
+    const qNi   = toQtrMap("quarterlyNetIncome");
+    const qEps  = toQtrMap("quarterlyBasicEPS");
+    const qOcf  = toQtrMap("quarterlyOperatingCashFlow");
+    const qFcf  = toQtrMap("quarterlyFreeCashFlow");
+
+    const qPeriods = [...new Set([
+      ...qRev.map(x => x.period), ...qOp.map(x => x.period), ...qNi.map(x => x.period)
+    ])].sort((a, b) => b.localeCompare(a)).slice(0, 6);
+
+    if (qPeriods.length > 0) {
+      lines.push("\n[분기별 실적 — 최근 6분기 (fundamentalsTimeSeries)]");
+      lines.push("※ 분기 실적 추세로 연간 전망 추정 시 반드시 참고하세요.");
+      for (const p of qPeriods) {
+        const rv  = qRev.find(x => x.period === p)?.value;
+        const op  = qOp.find(x => x.period === p)?.value;
+        const ni  = qNi.find(x => x.period === p)?.value;
+        const eps = qEps.find(x => x.period === p)?.value;
+        const ocf = qOcf.find(x => x.period === p)?.value;
+        const fcf = qFcf.find(x => x.period === p)?.value;
+        const opM = rv && op != null ? ` (${(op / rv * 100).toFixed(1)}%)` : "";
+        const epsStr = eps != null ? ` | EPS ${eps.toFixed(0)}원` : "";
+        const cfStr = ocf != null ? ` | 영업CF ${fmtNum(ocf, currency)}` : "";
+        const fcfStr = fcf != null ? ` | FCF ${fmtNum(fcf, currency)}` : "";
+        lines.push(
+          `  ${p}: 매출 ${rv != null ? fmtNum(rv, currency) : "-"} | 영업이익 ${op != null ? fmtNum(op, currency) : "-"}${opM} | 순이익 ${ni != null ? fmtNum(ni, currency) : "-"}${epsStr}${cfStr}${fcfStr}`
+        );
+      }
+    }
+  }
+
   // Earnings estimates
   const trends: any[] = (result.earningsTrend as any)?.trend ?? [];
   if (trends.length > 0) {
@@ -645,6 +792,9 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     const naverData = await fetchNaverFinanceData(koreanCode);
     if (naverData) lines.push(naverData);
   }
+
+  // 섹터 벤치마크 멀티플 (밸류에이션 단계에서 피어 비교 시 사용)
+  lines.push(KOREAN_SECTOR_MULTIPLES);
 
   const text = lines.join("\n");
   console.log(`[financial-data] Fetched ${text.length} chars for ${resolvedSymbol}`);
