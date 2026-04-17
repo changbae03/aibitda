@@ -12,6 +12,7 @@ import NewAnalysis from "@/pages/new-analysis";
 import AnalysisDetail from "@/pages/analysis-detail";
 import History from "@/pages/history";
 import Login from "@/pages/login";
+import Landing from "@/pages/landing";
 import ModelInsights from "@/pages/model-insights";
 import News from "@/pages/news";
 import Reports from "@/pages/reports";
@@ -66,20 +67,27 @@ function SignInPage() {
 
 function Router() {
   return (
-    <AppLayout>
-      <Switch>
-        <Route path="/" component={NewAnalysis} />
-        <Route path="/analysis/new" component={NewAnalysis} />
-        <Route path="/analysis/:id" component={AnalysisDetail} />
-        <Route path="/history" component={History} />
-        <Route path="/login" component={Login} />
-        <Route path="/sign-in/*?" component={SignInPage} />
-        <Route path="/reports" component={Reports} />
-        <Route path="/model-insights" component={ModelInsights} />
-        <Route path="/news" component={News} />
-        <Route component={NotFound} />
-      </Switch>
-    </AppLayout>
+    <Switch>
+      {/* 풀스크린 페이지 (사이드바 없음) */}
+      <Route path="/" component={Landing} />
+      <Route path="/login" component={Landing} />
+      <Route path="/sign-in/*?" component={SignInPage} />
+
+      {/* 사이드바 있는 앱 페이지 */}
+      <Route>
+        <AppLayout>
+          <Switch>
+            <Route path="/analysis/new" component={NewAnalysis} />
+            <Route path="/analysis/:id" component={AnalysisDetail} />
+            <Route path="/history" component={History} />
+            <Route path="/reports" component={Reports} />
+            <Route path="/model-insights" component={ModelInsights} />
+            <Route path="/news" component={News} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppLayout>
+      </Route>
+    </Switch>
   );
 }
 
