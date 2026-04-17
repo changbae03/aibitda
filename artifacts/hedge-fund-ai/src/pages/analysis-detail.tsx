@@ -23,7 +23,6 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
-import PeerGroupSection from "@/components/PeerGroupSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -465,16 +464,6 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
       </div>
-
-      {/* 연관기업 — 분석 시작 후 표시 */}
-      {analysis.steps.length > 0 && (
-        <PeerGroupSection
-          ticker={analysis.ticker}
-          companyName={analysis.companyName}
-          industry={analysis.industry ?? undefined}
-          analysisSteps={analysis.steps.map(s => ({ stepKey: s.stepKey, content: s.content ?? "" }))}
-        />
-      )}
 
       {/* 보관하기 · 공유하기 + Disclaimer — 분석 완료 후 페이드인 */}
       <AnimatePresence>
