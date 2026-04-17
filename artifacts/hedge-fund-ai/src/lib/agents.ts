@@ -48,21 +48,21 @@ export const AGENTS: Record<string, AgentInfo> = {
   },
   relative_valuation: {
     id: "relative_valuation",
-    name: "목표가 산출",
+    name: "적정주가 산출",
     role: "Valuation Analyst",
     icon: Scale,
     color: "text-blue-700",
     bgColor: "bg-blue-50",
-    description: "DCF(절대가치) + 피어 멀티플(상대가치) → 조율 목표주가 1개"
+    description: "DCF(절대가치) + 피어 멀티플(상대가치) → 조율 적정주가 1개"
   },
   market_analysis: {
     id: "market_analysis",
-    name: "타점 분석",
+    name: "기술적 분석",
     role: "Market & Technical Analyst",
     icon: BarChart2,
     color: "text-blue-700",
     bgColor: "bg-blue-50",
-    description: "수급, 차트 분석, 진입/목표/손절 전략"
+    description: "차트 분석, 진입 구간, 손절 전략"
   },
   catalyst_analysis: {
     id: "catalyst_analysis",

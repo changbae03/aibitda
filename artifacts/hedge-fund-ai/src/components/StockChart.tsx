@@ -134,7 +134,7 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
   // 거래량을 차트 아래쪽 25%에만 표시하도록 Y축 스케일 확대
   const volumeDomainMax = maxVolume * 5;
 
-  const axisStyle = { fontSize: 10, fill: "#a3a3a3", fontFamily: "'Spoqa Han Sans Neo', sans-serif" };
+  const axisStyle = { fontSize: 10, fill: "#a3a3a3", fontFamily: "'Pretendard', sans-serif" };
   const gridColor = "#f0f0f0";
 
   return (
@@ -282,18 +282,46 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
-                  wrapperStyle={{ fontSize: "11px", paddingTop: "10px", fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
+                  wrapperStyle={{ fontSize: "11px", paddingTop: "10px", fontFamily: "'Pretendard', sans-serif" }}
                   formatter={(value) => <span style={{ color: "#737373" }}>{value}</span>}
                 />
 
-                {/* 진입 구간 영역 */}
+                {/* ── 구간 영역 (레이어 순서: 먼저 채움, 나중에 라인) ── */}
+
+                {/* 손절 위험 구간 (stopLoss ~ entryMin) — 연한 빨강 */}
+                {chartLevels?.stopLoss && chartLevels?.entryMin && (
+                  <ReferenceArea
+                    yAxisId="price"
+                    y1={chartLevels.stopLoss}
+                    y2={chartLevels.entryMin}
+                    fill="#ef4444"
+                    fillOpacity={0.05}
+                    strokeOpacity={0}
+                  />
+                )}
+
+                {/* 진입 구간 (entryMin ~ entryMax) — 파란색 */}
                 {chartLevels?.entryMin && chartLevels?.entryMax && (
                   <ReferenceArea
                     yAxisId="price"
                     y1={chartLevels.entryMin}
                     y2={chartLevels.entryMax}
                     fill="#1d4ed8"
-                    fillOpacity={0.06}
+                    fillOpacity={0.1}
+                    stroke="#1d4ed8"
+                    strokeOpacity={0.25}
+                    strokeDasharray="3 3"
+                  />
+                )}
+
+                {/* 목표 구간 (target1 ~ target2) — 초록색 */}
+                {chartLevels?.target1 && chartLevels?.target2 && (
+                  <ReferenceArea
+                    yAxisId="price"
+                    y1={chartLevels.target1}
+                    y2={chartLevels.target2}
+                    fill="#16a34a"
+                    fillOpacity={0.08}
                     strokeOpacity={0}
                   />
                 )}
@@ -320,21 +348,34 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                   activeDot={{ r: 3, fill: "#0a0a0a" }}
                 />
 
-                {/* 기술적 분석 라인 */}
+                {/* ── 기준선 라인 (라벨 포함) ── */}
                 {chartLevels?.resistance && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.2} strokeDasharray="5 3" label={{ value: "저항", position: "right", fontSize: 9, fill: "#ef4444" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 3"
+                    label={{ value: `저항 ${Number(chartLevels.resistance).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.support && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.support} stroke="#22c55e" strokeWidth={1.2} strokeDasharray="5 3" label={{ value: "지지", position: "right", fontSize: 9, fill: "#22c55e" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.support} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3"
+                    label={{ value: `지지 ${Number(chartLevels.support).toLocaleString("ko-KR")}`, position: "insideBottomRight", fontSize: 9, fill: "#22c55e", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.stopLoss && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={1.2} strokeDasharray="3 3" label={{ value: "손절", position: "right", fontSize: 9, fill: "#dc2626" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={2} strokeDasharray="3 2"
+                    label={{ value: `손절 ${Number(chartLevels.stopLoss).toLocaleString("ko-KR")}`, position: "insideBottomRight", fontSize: 9, fill: "#dc2626", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
+                )}
+                {chartLevels?.entryMin && (
+                  <ReferenceLine yAxisId="price" y={chartLevels.entryMin} stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="4 2"
+                    label={{ value: `진입하단 ${Number(chartLevels.entryMin).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
+                )}
+                {chartLevels?.entryMax && (
+                  <ReferenceLine yAxisId="price" y={chartLevels.entryMax} stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="4 2"
+                    label={{ value: `진입상단 ${Number(chartLevels.entryMax).toLocaleString("ko-KR")}`, position: "insideBottomRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.target1 && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.2} strokeDasharray="4 3" label={{ value: "목표1", position: "right", fontSize: 9, fill: "#16a34a" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3"
+                    label={{ value: `1차목표 ${Number(chartLevels.target1).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#16a34a", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.target2 && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={1.5} strokeDasharray="4 3" label={{ value: "목표2", position: "right", fontSize: 9, fill: "#15803d" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3"
+                    label={{ value: `2차목표 ${Number(chartLevels.target2).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#15803d", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
@@ -342,13 +383,13 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
             {/* 기술적 분석 레벨 배지 */}
             {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
               <div className="mt-3 flex flex-wrap gap-2 px-1">
-                {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" />}
-                {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" />}
-                {chartLevels.entryMin && chartLevels.entryMax && (
-                  <LevelBadge label="진입구간" value={`${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`} color="#1d4ed8" />
-                )}
                 {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" />}
-                {chartLevels.target1 && <LevelBadge label="1차 목표" value={chartLevels.target1} color="#16a34a" />}
+                {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" />}
+                {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" />}
+                {chartLevels.entryMin && chartLevels.entryMax && (
+                  <LevelBadge label="진입 구간" value={`${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`} color="#1d4ed8" />
+                )}
+                {chartLevels.target1 && <LevelBadge label="1차 적정주가" value={chartLevels.target1} color="#16a34a" />}
                 {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" />}
               </div>
             )}

@@ -9,17 +9,37 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 const VERDICT_STYLE: Record<string, { label: string; cls: string }> = {
-  BUY:         { label: "매수",     cls: "bg-green-50 text-green-700 border-green-200" },
-  STRONG_BUY:  { label: "강력매수", cls: "bg-green-50 text-green-700 border-green-200" },
-  SELL:        { label: "매도",     cls: "bg-red-50 text-red-700 border-red-200" },
-  STRONG_SELL: { label: "강력매도", cls: "bg-red-50 text-red-700 border-red-200" },
-  HOLD:        { label: "보유",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  NEUTRAL:     { label: "중립",     cls: "bg-neutral-100 text-neutral-600 border-neutral-200" },
+  BUY:         { label: "상승여력",      cls: "bg-green-50 text-green-700 border-green-200" },
+  STRONG_BUY:  { label: "높은 상승여력", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  SELL:        { label: "하락여지",      cls: "bg-red-50 text-red-600 border-red-200" },
+  STRONG_SELL: { label: "높은 하락여지", cls: "bg-red-50 text-red-700 border-red-300" },
+  HOLD:        { label: "적정 수준",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  NEUTRAL:     { label: "적정 수준",     cls: "bg-neutral-100 text-neutral-600 border-neutral-200" },
 };
+
+function toKoreanVerdict(verdict: string): string {
+  const s = verdict.toLowerCase();
+  if (s.includes("strong buy"))  return "높은 상승여력";
+  if (s.includes("buy"))         return "상승여력";
+  if (s.includes("strong sell")) return "높은 하락여지";
+  if (s.includes("sell"))        return "하락여지";
+  return "적정 수준";
+}
+
+function verdictStyle(verdict: string): string {
+  const s = verdict.toLowerCase();
+  if (s.includes("strong buy"))  return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (s.includes("buy"))         return "bg-green-50 text-green-700 border-green-200";
+  if (s.includes("strong sell")) return "bg-red-50 text-red-700 border-red-300";
+  if (s.includes("sell"))        return "bg-red-50 text-red-600 border-red-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+}
 
 function verdictBadge(verdict?: string) {
   if (!verdict) return null;
-  const s = VERDICT_STYLE[verdict.toUpperCase()] ?? { label: verdict, cls: "bg-neutral-100 text-neutral-600 border-neutral-200" };
+  const label = toKoreanVerdict(verdict);
+  const cls = verdictStyle(verdict);
+  const s = { label, cls };
   return (
     <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border", s.cls)}>
       {s.label}
@@ -134,7 +154,7 @@ export default function History() {
                       {a.targetPrice != null && (
                         <>
                           <span className="text-neutral-200">|</span>
-                          <span>목표가 <span className="text-neutral-600 font-medium">{formatCurrency(a.targetPrice)}</span></span>
+                          <span>적정주가 <span className="text-neutral-600 font-medium">{formatCurrency(a.targetPrice)}</span></span>
                         </>
                       )}
                       <span className="text-neutral-200">|</span>

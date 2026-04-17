@@ -130,6 +130,16 @@ function toKoreanIndustry(industry: string | null | undefined): string {
   return INDUSTRY_KO[industry] ?? industry;
 }
 
+function toKoreanVerdict(verdict: string | null | undefined): string {
+  if (!verdict) return "—";
+  const s = verdict.toLowerCase();
+  if (s.includes("strong buy"))  return "높은 상승여력";
+  if (s.includes("buy"))         return "상승여력";
+  if (s.includes("strong sell")) return "높은 하락여지";
+  if (s.includes("sell"))        return "하락여지";
+  return "적정 수준";
+}
+
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
   const [, setLocation] = useLocation();
@@ -281,9 +291,9 @@ export default function AnalysisDetail() {
           {analysis.investmentVerdict && (
             <div className="text-right">
               <div className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-1">최종 투자 의견</div>
-              <div className="text-xl font-bold text-gray-900">{analysis.investmentVerdict}</div>
+              <div className="text-xl font-bold text-gray-900">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               {analysis.targetPrice && (
-                <div className="text-sm text-gray-600 mt-0.5">목표가 {formatCurrency(analysis.targetPrice)}</div>
+                <div className="text-sm text-gray-600 mt-0.5">적정주가 {formatCurrency(analysis.targetPrice)}</div>
               )}
             </div>
           )}
@@ -342,10 +352,10 @@ export default function AnalysisDetail() {
           {isComplete && analysis.investmentVerdict && (
             <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
               <div className="text-[11px] font-mono text-primary/70 mb-1 uppercase tracking-widest">최종 투자 의견</div>
-              <div className="text-xl font-bold text-foreground mb-3">{analysis.investmentVerdict}</div>
+              <div className="text-xl font-bold text-foreground mb-3">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
-                  <span className="text-muted-foreground">목표가</span>
+                  <span className="text-muted-foreground">적정주가</span>
                   <span className="text-success font-bold">{formatCurrency(analysis.targetPrice)}</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
@@ -479,8 +489,8 @@ export default function AnalysisDetail() {
         )}
       </div>
 
-      {/* 연관기업 — 최종 투자 전략 완료 후 표시 (전체 분석 내용 반영) */}
-      {analysis.steps.some(s => s.stepKey === "investment_strategy") && (
+      {/* 연관기업 — 분석 시작 후 표시 */}
+      {analysis.steps.length > 0 && (
         <PeerGroupSection
           ticker={analysis.ticker}
           companyName={analysis.companyName}
@@ -537,7 +547,7 @@ export default function AnalysisDetail() {
                 </p>
                 <p className="text-[11.5px] text-neutral-500 leading-relaxed">
                   AI가 생성한 수치와 전망은 실제 결과와 다를 수 있으며, 시장 상황·기업 공시·거시경제 변수에 따라 언제든지 변동될 수 있습니다.
-                  과거 수익률이나 목표주가는 미래 수익을 보장하지 않습니다. 투자 전 반드시 공식 공시 자료 및 전문가 의견을 병행하여 검토하시기 바랍니다.
+                  과거 수익률이나 AI 분석 결과(적정주가 포함)는 미래 수익을 보장하지 않습니다. 투자 전 반드시 공식 공시 자료 및 전문가 의견을 병행하여 검토하시기 바랍니다.
                 </p>
                 <p className="text-[10.5px] text-neutral-400 mt-1">
                   분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © {new Date().getFullYear()} 애빛다. AI로 기업가치를 밝히다.
@@ -581,13 +591,13 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
   const json = extractJson(step.content);
 
   const verdictMeta = (v: string) => {
-    if (!v) return { color: "text-foreground", bg: "bg-neutral-100", border: "border-neutral-200", dot: "#6b7280" };
+    if (!v) return { label: "—", color: "text-foreground", bg: "bg-neutral-100", border: "border-neutral-200", dot: "#6b7280" };
     const s = v.toLowerCase();
-    if (s.includes("strong buy"))  return { color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", dot: "#059669" };
-    if (s.includes("buy"))         return { color: "text-green-700",   bg: "bg-green-50",    border: "border-green-200",   dot: "#16a34a" };
-    if (s.includes("strong sell")) return { color: "text-red-700",     bg: "bg-red-50",      border: "border-red-200",     dot: "#dc2626" };
-    if (s.includes("sell"))        return { color: "text-red-600",     bg: "bg-red-50",      border: "border-red-200",     dot: "#ef4444" };
-    return { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "#d97706" };
+    if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", dot: "#059669" };
+    if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700",   bg: "bg-green-50",    border: "border-green-200",   dot: "#16a34a" };
+    if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700",     bg: "bg-red-50",      border: "border-red-200",     dot: "#dc2626" };
+    if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600",     bg: "bg-red-50",      border: "border-red-200",     dot: "#ef4444" };
+    return { label: "적정 수준", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "#d97706" };
   };
 
   return (
@@ -620,7 +630,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ① 판정 + 메타 ── */}
             <div className="px-6 py-5 flex flex-wrap items-center gap-3">
-              <span className={cn("text-[26px] font-display font-bold leading-none", vm.color)}>{json.verdict}</span>
+              <span className={cn("text-[26px] font-display font-bold leading-none", vm.color)}>{vm.label}</span>
               <div className="flex flex-wrap gap-1.5">
                 {json.confidence && (
                   <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
@@ -664,7 +674,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center relative">
                   <div className="absolute -top-px left-1/2 -translate-x-1/2 w-10 h-0.5 bg-emerald-400 rounded-full" />
-                  <p className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider mb-1.5">목표가</p>
+                  <p className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider mb-1.5">적정주가</p>
                   <p className="font-bold text-emerald-700 text-[15px] font-mono">{formatPrice(json.target_price)}</p>
                 </div>
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
@@ -683,7 +693,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     <thead>
                       <tr className="bg-neutral-50 border-b border-neutral-200">
                         <th className="px-4 py-2.5 text-left font-semibold text-neutral-500">시나리오</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">목표가</th>
+                        <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">적정주가</th>
                         <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">등락률</th>
                         <th className="px-4 py-2.5 text-right font-semibold text-neutral-500">확률</th>
                       </tr>
@@ -806,7 +816,7 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
     "Reverse DCF로 현재 주가 역산 중이에요",
     "절대가치 vs 상대가치, 어떻게 조율할지 고민 중이에요",
     "FCFF 수치 정합성 검증 중이에요... 빈틈 없이 할게요",
-    "목표주가 두 개를 하나로 좁히는 마지막 단계예요 🎯",
+    "적정주가 두 개를 하나로 좁히는 마지막 단계예요 🎯",
   ],
   market_analysis: [
     "차트 펼쳐보는 중이에요 📉📈",
@@ -819,10 +829,10 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
   ],
   investment_strategy: [
     "6단계 분석 전부 머릿속에서 합치는 중이에요 🧠",
-    "Buy냐 Hold냐... 숫자가 답을 내려줄 거예요",
+    "상승여력이 충분한지... 숫자가 답을 내려줄 거예요",
     "투자 논거 한 문장으로 압축 중이에요 ✍️",
     "리스크와 기회, 마지막으로 저울질 중이에요 ⚖️",
-    "최종 목표주가 확정 중이에요... 거의 다 됐어요!",
+    "최종 적정주가 확정 중이에요... 거의 다 됐어요!",
     "보고서 마무리 검토 중이에요 📝",
   ],
 };
@@ -1138,7 +1148,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           <div className="mt-5 pt-4 border-t border-border">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">최종 조율 목표주가</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">최종 조율 적정주가</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>절대가치 × 상대가치 조율</span>
             </div>
             <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
@@ -1147,7 +1157,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                   <tr className="bg-muted/60">
                     <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">구분</th>
                     <th className="px-3 py-2.5 text-right font-semibold text-rose-600 border-b border-border">하단 밴드</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">목표주가</th>
+                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">적정주가</th>
                     <th className="px-3 py-2.5 text-right font-semibold text-blue-600 border-b border-border">상단 밴드</th>
                   </tr>
                 </thead>
@@ -1165,7 +1175,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                     <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.rel_bull)}</td>
                   </tr>
                   <tr className="bg-muted/20 font-semibold">
-                    <td className="px-3 py-2.5 font-bold text-foreground">조율 목표가</td>
+                    <td className="px-3 py-2.5 font-bold text-foreground">조율 적정주가</td>
                     <td className="px-3 py-2.5 text-right text-rose-600 font-mono font-bold">{formatPrice(finalValuationData.bear)}</td>
                     <td className="px-3 py-2.5 text-right text-emerald-600 font-mono font-bold">{formatPrice(finalValuationData.base)}</td>
                     <td className="px-3 py-2.5 text-right text-blue-600 font-mono font-bold">{formatPrice(finalValuationData.bull)}</td>
@@ -1191,7 +1201,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           <div className="mt-5 pt-4 border-t border-border">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 목표주가</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 적정주가</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">3-Method 종합</span>
             </div>
             <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
