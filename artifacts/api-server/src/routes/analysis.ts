@@ -1085,15 +1085,35 @@ router.post("/:id/step", async (req, res) => {
   // ── relative_valuation: 피어 데이터 자동 수집 ────────────────────────────
   if (stepKey === "relative_valuation") {
     try {
-      const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 1200);
+      // prevContext를 5000자로 확장 — 기업 브리핑·산업 분석이 충분히 포함되도록
+      const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 5000);
       res.write(`data: ${JSON.stringify({ t: "" })}\n\n`); // keep connection alive
-      const peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext);
+
+      let peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext);
       console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
+
+      // 피어 선정 실패 시 1회 재시도 (더 많은 컨텍스트)
+      if (peers.length === 0) {
+        console.warn("[peer-select] 1st attempt returned 0 peers — retrying with full context");
+        const fullContext = existingSteps.map((s) => s.content).join("\n").slice(0, 3000);
+        peers = await selectPeerTickers(analysis.companyName, analysis.industry ?? "바이오/제약", fullContext);
+        console.log(`[peer-select] Retry selected ${peers.length} peers`);
+      }
+
       if (peers.length > 0) {
         const peerData = await fetchPeerFinancials(peers);
         if (peerData) {
           enrichedContext = enrichedContext ? enrichedContext + peerData : peerData;
         }
+      } else {
+        // 피어 수집 완전 실패 시 — AI 지식 기반으로 피어를 직접 구성하도록 지시 노트 삽입
+        const fallbackNote = `\n\n=== 피어 그룹 데이터 수집 실패 ===\n`
+          + `Yahoo Finance 실시간 데이터 수집에 실패했습니다.\n`
+          + `AI 지식 기반으로 ${analysis.companyName}(${analysis.industry ?? "해당 업종"})의 대표 경쟁사 4~5개를 선정하고,\n`
+          + `각 기업의 시가총액, PER, PBR, EV/EBITDA, ROE, 영업이익률을 업종 평균 범위 내에서 추정하여\n`
+          + `피어 비교 표를 완성하세요. 모든 추정 수치에는 "(추정)" 표시를 붙이세요.\n`;
+        enrichedContext = enrichedContext ? enrichedContext + fallbackNote : fallbackNote;
+        console.warn("[peer-fetch] All peer attempts failed — injected AI-knowledge fallback note");
       }
     } catch (err) {
       console.error("[peer-fetch] Failed:", err);
