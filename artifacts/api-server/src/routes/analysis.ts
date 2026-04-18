@@ -1138,27 +1138,73 @@ CRITICAL ticker format rules — Yahoo Finance tickers only:
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
-        systemInstruction: "You are a financial analyst. Respond with a valid JSON object only.",
-        maxOutputTokens: 2048,
+        systemInstruction: "You are a financial analyst. Respond with a valid JSON object only. No explanation, no markdown, just the JSON.",
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
+        // thinking 모드 비활성화 — 사고 토큰이 resp.text에 섞이면 JSON 파싱 실패
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
     const raw = resp.text ?? "";
-    console.log(`[peer-select] Raw response (first 500): ${raw.slice(0, 500)}`);
+    console.log(`[peer-select] Raw response (${raw.length} chars, first 800): ${raw.slice(0, 800)}`);
 
-    // Try direct parse first (JSON mode response)
+    // 다중 폴백 JSON 추출
     let parsed: any = null;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
+
+    // 1. 직접 파싱 (가장 깨끗한 경우)
+    try { parsed = JSON.parse(raw); } catch { /* 다음 시도 */ }
+
+    // 2. 코드펜스·앞뒤 공백 제거 후 파싱
+    if (!parsed?.peers) {
       parsed = extractJsonSafe(raw);
     }
 
-    if (parsed?.peers && Array.isArray(parsed.peers) && parsed.peers.length > 0) {
-      console.log(`[peer-select] Success: ${parsed.peers.length} peers`);
-      return parsed.peers.slice(0, 5);
+    // 3. "peers" 키를 기준으로 서브스트링 추출
+    if (!parsed?.peers) {
+      const peersIdx = raw.indexOf('"peers"');
+      if (peersIdx !== -1) {
+        const braceStart = raw.lastIndexOf("{", peersIdx);
+        const braceEnd = raw.indexOf("]", peersIdx);
+        if (braceStart !== -1 && braceEnd !== -1) {
+          // 닫는 ] 뒤에 }를 붙여 완전한 JSON 만들기
+          const candidate = raw.slice(braceStart, braceEnd + 1) + "}";
+          try { parsed = JSON.parse(candidate); } catch { /* 실패 */ }
+        }
+      }
     }
-    console.warn(`[peer-select] No valid peers in response: ${JSON.stringify(parsed)}`);
+
+    // 4. 개별 ticker 패턴으로 최소 구성
+    if (!parsed?.peers) {
+      const tickerPattern = /["']ticker["']\s*:\s*["']([^"']+)["']/g;
+      const namePattern = /["']name["']\s*:\s*["']([^"']+)["']/g;
+      const reasonPattern = /["']reason["']\s*:\s*["']([^"']+)["']/g;
+      const tickers = [...raw.matchAll(tickerPattern)].map(m => m[1]);
+      const names = [...raw.matchAll(namePattern)].map(m => m[1]);
+      const reasons = [...raw.matchAll(reasonPattern)].map(m => m[1]);
+      if (tickers.length >= 2) {
+        parsed = {
+          peers: tickers.map((t, i) => ({
+            ticker: t,
+            name: names[i] ?? t,
+            exchange: t.endsWith(".KS") ? "KOSPI" : t.endsWith(".KQ") ? "KOSDAQ" : "NYSE/NASDAQ",
+            reason: reasons[i] ?? "피어 비교",
+          }))
+        };
+        console.log(`[peer-select] Fallback regex extracted ${tickers.length} tickers`);
+      }
+    }
+
+    if (parsed?.peers && Array.isArray(parsed.peers) && parsed.peers.length > 0) {
+      // 분석 대상 기업 자체가 피어에 포함된 경우 제거
+      const filtered = parsed.peers.filter((p: any) => {
+        const t = (p.ticker ?? "").toUpperCase();
+        return t !== companyName.toUpperCase() && !p.reason?.includes("분석 대상");
+      });
+      const final = (filtered.length > 0 ? filtered : parsed.peers).slice(0, 5);
+      console.log(`[peer-select] Success: ${final.length} peers — ${final.map((p: any) => p.ticker).join(", ")}`);
+      return final;
+    }
+    console.warn(`[peer-select] No valid peers in response (raw len=${raw.length}): ${JSON.stringify(parsed)?.slice(0, 200)}`);
   } catch (err) {
     console.error("[peer-select] Failed:", err);
   }
