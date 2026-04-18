@@ -1520,6 +1520,35 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               </div>
             )}
 
+            {/* ── ⑦ 핵심 밸류에이션 가정 ── */}
+            {json.key_assumptions && typeof json.key_assumptions === "object" && (
+              <div className="px-4 sm:px-6 py-4 bg-neutral-50/70 border-t border-neutral-100">
+                <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">핵심 밸류에이션 가정</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2.5">
+                  {[
+                    { label: "WACC", key: "wacc" },
+                    { label: "Terminal g", key: "terminal_growth" },
+                    { label: "단기 매출 CAGR", key: "revenue_cagr_short" },
+                    { label: "장기 매출 CAGR", key: "revenue_cagr_long" },
+                    { label: "밸류에이션 모델", key: "valuation_model" },
+                    { label: "괴리율 (절대 vs 피어)", key: "divergence_pct", suffix: "%" },
+                    { label: "조율 방법", key: "weight_method" },
+                  ].map(({ label, key, suffix }) => {
+                    const val = (json.key_assumptions as Record<string, string>)[key];
+                    if (!val || val.includes("예:") || val.includes("인용")) return null;
+                    return (
+                      <div key={key} className="flex flex-col gap-0.5">
+                        <span className="text-[9px] text-neutral-400 uppercase tracking-wider">{label}</span>
+                        <span className="text-[12px] font-semibold text-neutral-700 font-mono">
+                          {val}{suffix && !String(val).includes("%") ? suffix : ""}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
           </div>
         );
       })() : (
