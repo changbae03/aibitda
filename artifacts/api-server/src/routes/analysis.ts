@@ -1492,6 +1492,7 @@ router.get("/popular", async (_req, res) => {
         investmentVerdict: analysesTable.investmentVerdict,
         targetPrice: analysesTable.targetPrice,
         entryPrice: analysesTable.entryPrice,
+        stopLoss: analysesTable.stopLoss,
         createdAt: analysesTable.createdAt,
       })
       .from(analysesTable)
@@ -1504,7 +1505,56 @@ router.get("/popular", async (_req, res) => {
       )
       .orderBy(desc(analysesTable.createdAt))
       .limit(50);
-    res.json(rows);
+
+    // model_insights에서 각 분석의 최신 현재가·수익률·결과 가져오기
+    const analysisIds = rows.map((r) => r.id);
+    let insightMap: Record<number, { currentPrice: number | null; priceReturn: number | null; outcome: string | null; daysElapsed: number | null }> = {};
+
+    if (analysisIds.length > 0) {
+      const insights = await db
+        .select({
+          analysisId: modelInsightsTable.analysisId,
+          priceAtReview: modelInsightsTable.priceAtReview,
+          priceReturn: modelInsightsTable.priceReturn,
+          outcome: modelInsightsTable.outcome,
+          daysElapsed: modelInsightsTable.daysElapsed,
+          reviewedAt: modelInsightsTable.reviewedAt,
+        })
+        .from(modelInsightsTable)
+        .where(not(eq(modelInsightsTable.outcome, "pending")));
+
+      // 분석 ID별 최신 insight만 유지
+      for (const ins of insights) {
+        const aid = ins.analysisId;
+        if (!aid || !analysisIds.includes(aid)) continue;
+        if (!insightMap[aid] || (ins.reviewedAt && insightMap[aid])) {
+          insightMap[aid] = {
+            currentPrice: ins.priceAtReview ?? null,
+            priceReturn: ins.priceReturn ?? null,
+            outcome: ins.outcome ?? null,
+            daysElapsed: ins.daysElapsed ?? null,
+          };
+        }
+      }
+    }
+
+    // 종목별 분석 건수 집계
+    const tickerCounts: Record<string, { count: number; companyName: string }> = {};
+    for (const r of rows) {
+      if (!tickerCounts[r.ticker]) tickerCounts[r.ticker] = { count: 0, companyName: r.companyName };
+      tickerCounts[r.ticker].count++;
+    }
+    const tickerStats = Object.entries(tickerCounts)
+      .map(([ticker, v]) => ({ ticker, companyName: v.companyName, count: v.count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const enriched = rows.map((r) => ({
+      ...r,
+      ...(insightMap[r.id] ?? { currentPrice: null, priceReturn: null, outcome: null, daysElapsed: null }),
+    }));
+
+    res.json({ items: enriched, tickerStats });
   } catch (err: any) {
     console.error("[GET /analysis/popular]", err?.message);
     res.status(500).json({ error: "DB error", detail: err?.message });
