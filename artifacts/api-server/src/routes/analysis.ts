@@ -4,7 +4,7 @@ import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspac
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
 import { fetchDartSubjectBalance } from "../lib/peer-collector.js";
-import { eq, desc, not, sql } from "drizzle-orm";
+import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
 import {
@@ -1478,6 +1478,68 @@ router.delete("/:id", async (req, res) => {
   await db.delete(analysisStepsTable).where(eq(analysisStepsTable.analysisId, id));
   await db.delete(analysesTable).where(eq(analysesTable.id, id));
   res.json({ success: true });
+});
+
+// ─── 인기 피드: 최근 완료된 공개 분석 목록 ──────────────────────────────────────
+router.get("/popular", async (_req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: analysesTable.id,
+        ticker: analysesTable.ticker,
+        companyName: analysesTable.companyName,
+        industry: analysesTable.industry,
+        investmentVerdict: analysesTable.investmentVerdict,
+        targetPrice: analysesTable.targetPrice,
+        entryPrice: analysesTable.entryPrice,
+        createdAt: analysesTable.createdAt,
+      })
+      .from(analysesTable)
+      .where(
+        and(
+          eq(analysesTable.status, "completed"),
+          eq(analysesTable.isPublic, "true"),
+          isNotNull(analysesTable.investmentVerdict),
+        )
+      )
+      .orderBy(desc(analysesTable.createdAt))
+      .limit(50);
+    res.json(rows);
+  } catch (err: any) {
+    console.error("[GET /analysis/popular]", err?.message);
+    res.status(500).json({ error: "DB error", detail: err?.message });
+  }
+});
+
+// ─── 실시간 트래커: 목표주가 있는 완료 분석 목록 ──────────────────────────────
+router.get("/tracker", async (_req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: analysesTable.id,
+        ticker: analysesTable.ticker,
+        companyName: analysesTable.companyName,
+        industry: analysesTable.industry,
+        investmentVerdict: analysesTable.investmentVerdict,
+        targetPrice: analysesTable.targetPrice,
+        entryPrice: analysesTable.entryPrice,
+        createdAt: analysesTable.createdAt,
+      })
+      .from(analysesTable)
+      .where(
+        and(
+          eq(analysesTable.status, "completed"),
+          eq(analysesTable.isPublic, "true"),
+          isNotNull(analysesTable.targetPrice),
+        )
+      )
+      .orderBy(desc(analysesTable.createdAt))
+      .limit(100);
+    res.json(rows);
+  } catch (err: any) {
+    console.error("[GET /analysis/tracker]", err?.message);
+    res.status(500).json({ error: "DB error", detail: err?.message });
+  }
 });
 
 router.get("/:id", async (req, res) => {

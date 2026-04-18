@@ -364,6 +364,42 @@ router.get("/search/:query", async (req, res) => {
   res.json([]);
 });
 
+// ─── 배치 현재가 조회 (트래커용) ─────────────────────────────────────────────
+router.post("/batch-quotes", async (req, res) => {
+  const { tickers } = req.body as { tickers: string[] };
+  if (!Array.isArray(tickers) || tickers.length === 0) {
+    res.status(400).json({ error: "tickers 배열이 필요합니다" });
+    return;
+  }
+
+  const results: Record<string, { price: number | null; currency: string; change: number | null }> = {};
+
+  await Promise.all(
+    tickers.slice(0, 40).map(async (raw) => {
+      const ticker = raw.trim();
+      if (!ticker) return;
+      try {
+        // 한국 종목: 6자리 숫자 → KRX suffix
+        const isKorean = /^\d{5,6}$/.test(ticker.split(".")[0]);
+        const resolved = isKorean && !ticker.includes(".")
+          ? ticker.length === 6 ? `${ticker}.KS` : ticker
+          : ticker;
+
+        const quote = await yahooFinance.quote(resolved, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] });
+        results[ticker] = {
+          price: quote?.regularMarketPrice ?? null,
+          currency: quote?.currency ?? (isKorean ? "KRW" : "USD"),
+          change: quote?.regularMarketChangePercent ?? null,
+        };
+      } catch {
+        results[ticker] = { price: null, currency: "KRW", change: null };
+      }
+    })
+  );
+
+  res.json(results);
+});
+
 router.get("/:ticker", async (req, res) => {
   const { ticker } = req.params;
   const { period = "1y", interval = "1d" } = req.query as {

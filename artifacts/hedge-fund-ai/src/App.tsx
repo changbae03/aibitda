@@ -18,6 +18,8 @@ import News from "@/pages/news";
 import Reports from "@/pages/reports";
 import AdminPeers from "@/pages/admin-peers";
 import Stats from "@/pages/stats";
+import Tracker from "@/pages/tracker";
+import Popular from "@/pages/popular";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -86,6 +88,8 @@ function Router() {
             <Route path="/model-insights" component={ModelInsights} />
             <Route path="/news" component={News} />
             <Route path="/stats" component={Stats} />
+            <Route path="/tracker" component={Tracker} />
+            <Route path="/popular" component={Popular} />
             <Route path="/admin/peers" component={AdminPeers} />
             <Route component={NotFound} />
           </Switch>
