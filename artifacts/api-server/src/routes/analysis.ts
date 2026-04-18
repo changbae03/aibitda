@@ -874,11 +874,12 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       }
       if (latestEq != null) {
         const bpsCalc = latestEq / sharesForBps;
-        lines.push(`BPS 서버계산 (${latestEqYear}): ${fmtNum(latestEq, currency)} ÷ ${sharesForBps.toLocaleString("ko-KR")}주 = **${bpsCalc.toFixed(0)}원/주**`);
+        const bpsUnit = currency === "USD" ? `$` : `원`;
+        lines.push(`BPS 서버계산 (${latestEqYear}): ${fmtNum(latestEq, currency)} ÷ ${sharesForBps.toLocaleString("ko-KR")}주 = **${bpsUnit}${bpsCalc.toFixed(currency === "USD" ? 2 : 0)}/${bpsUnit === "$" ? "주" : "주"}**`);
         if (ks?.bookValue != null) {
           const diff = Math.abs(bpsCalc - ks.bookValue);
           if (diff / ks.bookValue > 0.02) {
-            lines.push(`  ⚠️ Yahoo BPS ${ks.bookValue.toFixed(0)}원 vs 서버계산 BPS ${bpsCalc.toFixed(0)}원 불일치 (${(diff / ks.bookValue * 100).toFixed(1)}% 차이) → 서버계산값 우선`);
+            lines.push(`  ⚠️ Yahoo BPS ${bpsUnit}${ks.bookValue.toFixed(currency === "USD" ? 2 : 0)} vs 서버계산 BPS ${bpsUnit}${bpsCalc.toFixed(currency === "USD" ? 2 : 0)} 불일치 (${(diff / ks.bookValue * 100).toFixed(1)}% 차이) → 서버계산값 우선`);
           }
         }
       }
