@@ -1,9 +1,7 @@
 import { useSignIn, useUser } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
-import { getApiUrl } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -39,26 +37,6 @@ const DEMO_STEPS = [
   { key: "investment_strategy", label: "최종 결론",              done: false, active: false },
 ];
 
-interface LiveInsight {
-  time: string;
-  text: string;
-  companyName: string;
-  ticker: string;
-  stepLabel: string;
-}
-
-function useLiveInsights() {
-  return useQuery<LiveInsight[]>({
-    queryKey: ["live-insights"],
-    queryFn: async () => {
-      const res = await fetch(getApiUrl("api/analysis/live-insights"), { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    staleTime: 1000 * 60 * 2,
-    refetchInterval: 1000 * 60 * 5,
-  });
-}
 
 function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
   return (
@@ -70,20 +48,11 @@ function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
 }
 
 function RightPanel() {
-  const [visibleAlerts, setVisibleAlerts] = useState(0);
   const [thinkingDots, setThinkingDots] = useState(1);
-  const { data: liveInsights = [] } = useLiveInsights();
 
   useEffect(() => {
-    if (liveInsights.length === 0) return;
-    setVisibleAlerts(0);
-    const t1 = setInterval(() => setVisibleAlerts(v => Math.min(v + 1, liveInsights.length)), 1200);
-    return () => clearInterval(t1);
-  }, [liveInsights.length]);
-
-  useEffect(() => {
-    const t2 = setInterval(() => setThinkingDots(d => (d % 3) + 1), 500);
-    return () => clearInterval(t2);
+    const t = setInterval(() => setThinkingDots(d => (d % 3) + 1), 500);
+    return () => clearInterval(t);
   }, []);
 
   return (
@@ -133,31 +102,6 @@ function RightPanel() {
               )}
             </motion.div>
           ))}
-        </div>
-      </div>
-
-      <div className="border-t border-neutral-200 mb-4" />
-
-      {/* 실시간 인사이트 */}
-      <div className="overflow-hidden">
-        <div className="flex items-center gap-1.5 mb-3">
-          <PulsingDot color="#22c55e" />
-          <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">실시간 인사이트</span>
-        </div>
-        <div className="space-y-2.5">
-          <AnimatePresence>
-            {liveInsights.slice(0, visibleAlerts).map((alert, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white border border-neutral-100 rounded-xl px-3.5 py-2.5 shadow-sm"
-              >
-                <div className="text-[10px] text-neutral-300 mb-0.5 font-mono">{alert.time}</div>
-                <div className="text-xs text-neutral-600 leading-relaxed">{alert.text}</div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
         </div>
       </div>
 
