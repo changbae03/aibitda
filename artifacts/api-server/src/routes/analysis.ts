@@ -237,8 +237,9 @@ function naverFmt(val: string | undefined | null): number | null {
   return isNaN(n) ? null : n;
 }
 
-async function fetchNaverFinanceData(code: string): Promise<string> {
+async function fetchNaverFinanceData(code: string): Promise<{ context: string; naverSharesCalc: number | null }> {
   const lines: string[] = [];
+  let naverSharesCalc: number | null = null;
 
   // Fetch all endpoints in parallel
   const [basicResult, integrationResult, summaryResult, priceResult] = await Promise.allSettled([
@@ -298,8 +299,10 @@ async function fetchNaverFinanceData(code: string): Promise<string> {
         const currentPrice = naverFmt(basic.closePrice);
         if (mcapKRW > 0 && currentPrice && currentPrice > 0) {
           const sharesCalc = Math.round(mcapKRW / currentPrice);
-          lines.push(`발행주식수(시총÷현재가 역산): ${sharesCalc.toLocaleString("ko-KR")}주 (${(sharesCalc / 1e8).toFixed(4)}억주)`);
-          lines.push(`※ [DCF 핵심] 주당 내재가치 = 주주가치(조원) × 1,000,000,000,000 ÷ ${sharesCalc.toLocaleString("ko-KR")}주`);
+          naverSharesCalc = sharesCalc; // 전체 함수 공유용 저장
+          lines.push(`⭐ 발행주식수 [KRX/Naver 기준, 권장]: ${sharesCalc.toLocaleString("ko-KR")}주 (${(sharesCalc / 1e8).toFixed(4)}억주)`);
+          lines.push(`  계산식: 네이버 시총 ${mcapKRW.toLocaleString("ko-KR")}원 ÷ 현재가 ${currentPrice.toLocaleString("ko-KR")}원 = ${sharesCalc.toLocaleString("ko-KR")}주`);
+          lines.push(`⛔ 밸류에이션 주당가치 계산 시 반드시 이 수치(${sharesCalc.toLocaleString("ko-KR")}주)를 사용할 것. Yahoo Finance 주식수가 다를 경우 이 KRX 기준값 우선.`);
         }
       } catch { /* ignore */ }
     }
@@ -396,7 +399,7 @@ async function fetchNaverFinanceData(code: string): Promise<string> {
     }
   }
 
-  return lines.join("\n");
+  return { context: lines.join("\n"), naverSharesCalc };
 }
 
 // ─── Financial data fetching ──────────────────────────────────────────────────
@@ -432,6 +435,7 @@ function pct(val: number | undefined | null): string {
 async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   let result: any;
   let tsResult: any = null;
+  let naverSharesCalc: number | null = null; // fetchNaverFinanceData에서 반환 받음
 
   // Fetch quoteSummary and fundamentalsTimeSeries in parallel
   const tsTypes = [
@@ -554,7 +558,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.enterpriseToEbitda != null)  lines.push(`EV/EBITDA: ${ks.enterpriseToEbitda.toFixed(2)}x`);
     if (ks.pegRatio != null)        lines.push(`PEG: ${ks.pegRatio.toFixed(2)}`);
     if (ks.beta != null)            lines.push(`베타: ${ks.beta.toFixed(2)}`);
-    if (ks.bookValue != null)       lines.push(`BPS(주당순자산): ${ks.bookValue.toFixed(2)} ${currency}`);
+    if (ks.bookValue != null)       lines.push(`BPS(Yahoo, 참고용): ${ks.bookValue.toFixed(2)}${currency} ← 아래 서버계산 BPS와 다를 경우 서버계산값 우선`);
     if (ks.sharesOutstanding) {
       const sh = ks.sharesOutstanding;
       const shStr = sh >= 1e8
@@ -562,7 +566,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         : sh >= 1e4
         ? `${(sh / 1e4).toFixed(0)}만주 (${sh.toLocaleString("ko-KR")}주)`
         : `${sh.toLocaleString("ko-KR")}주`;
-      lines.push(`발행주식수: ${shStr}  ※ DCF 주당가치 환산 시 이 주식수(주)를 사용할 것`);
+      lines.push(`발행주식수(Yahoo, 참고용): ${shStr} ← KRX/Naver 기준값과 다를 수 있음. [네이버증권 핵심 투자지표]의 ⭐ 발행주식수 우선 사용`);
     }
     if (ks.heldPercentInsiders != null)     lines.push(`내부자 보유율: ${pct(ks.heldPercentInsiders)}`);
     if (ks.heldPercentInstitutions != null) lines.push(`기관 보유율: ${pct(ks.heldPercentInstitutions)}`);
@@ -839,8 +843,35 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   // Supplement with Naver Finance for Korean stocks
   const koreanCode = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/)?.[1];
   if (koreanCode) {
-    const naverData = await fetchNaverFinanceData(koreanCode);
+    const { context: naverData, naverSharesCalc: naverShares } = await fetchNaverFinanceData(koreanCode);
     if (naverData) lines.push(naverData);
+    if (naverShares != null) naverSharesCalc = naverShares; // fetchFinancialContext 스코프로 전달
+  }
+
+  // ── 서버 계산: 발행주식수·BPS 검증 (Naver fetch 이후 — naverSharesCalc 사용 가능) ────
+  {
+    const latestEqYear = Object.keys(eqMap).sort((a, b) => Number(b) - Number(a))[0];
+    const latestEq = latestEqYear ? eqMap[latestEqYear] : null;
+    const sharesForBps: number | null = naverSharesCalc ?? (ks?.sharesOutstanding ?? null);
+
+    if (sharesForBps != null) {
+      lines.push("\n[⭐ 서버 계산 발행주식수·BPS 검증 — 밸류에이션 주당가치 계산에 이 수치 사용]");
+      const sharesSource = naverSharesCalc ? "KRX/Naver 기준" : "Yahoo Finance (KRX 미확인)";
+      lines.push(`발행주식수 확정: ${sharesForBps.toLocaleString("ko-KR")}주 (출처: ${sharesSource})`);
+      if (naverSharesCalc && ks?.sharesOutstanding && Math.abs(naverSharesCalc - ks.sharesOutstanding) / ks.sharesOutstanding > 0.02) {
+        lines.push(`  ⚠️ Yahoo 주식수 ${ks.sharesOutstanding.toLocaleString("ko-KR")}주 vs KRX 기준 ${naverSharesCalc.toLocaleString("ko-KR")}주 불일치 → KRX 기준 우선`);
+      }
+      if (latestEq != null) {
+        const bpsCalc = latestEq / sharesForBps;
+        lines.push(`BPS 서버계산 (${latestEqYear}): ${fmtNum(latestEq, currency)} ÷ ${sharesForBps.toLocaleString("ko-KR")}주 = **${bpsCalc.toFixed(0)}원/주**`);
+        if (ks?.bookValue != null) {
+          const diff = Math.abs(bpsCalc - ks.bookValue);
+          if (diff / ks.bookValue > 0.02) {
+            lines.push(`  ⚠️ Yahoo BPS ${ks.bookValue.toFixed(0)}원 vs 서버계산 BPS ${bpsCalc.toFixed(0)}원 불일치 (${(diff / ks.bookValue * 100).toFixed(1)}% 차이) → 서버계산값 우선`);
+          }
+        }
+      }
+    }
   }
 
   // 섹터 벤치마크 멀티플 (밸류에이션 단계에서 피어 비교 시 사용)
