@@ -593,24 +593,57 @@ router.get("/financials/:ticker", async (req, res) => {
     }
   }
 
-  // US stocks — Yahoo Finance incomeStatementHistory
+  // US stocks — Yahoo Finance fundamentalsTimeSeries (incomeStatementHistory has no data since Nov 2024)
   try {
-    const result = await yahooFinance.quoteSummary(ticker, {
-      modules: ["incomeStatementHistory", "incomeStatementHistoryQuarterly"],
-    } as any);
-    const toEntry = (s: any) => ({
-      period: s.endDate ? new Date(s.endDate).toISOString().slice(0, 7) : "",
-      isEstimate: false,
-      revenue: s.totalRevenue ?? null,
-      operatingIncome: s.operatingIncome ?? null,
-      netIncome: s.netIncome ?? null,
-      operatingMargin:
-        s.totalRevenue && s.operatingIncome && s.totalRevenue > 0
-          ? (s.operatingIncome / s.totalRevenue) * 100
-          : null,
-    });
-    const annual = ((result as any).incomeStatementHistory?.incomeStatementHistory ?? []).map(toEntry);
-    const quarterly = ((result as any).incomeStatementHistoryQuarterly?.incomeStatementHistory ?? []).map(toEntry);
+    const fiveYearsAgo = new Date();
+    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 6);
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+
+    const [annualRaw, quarterlyRaw] = await Promise.all([
+      (yahooFinance as any).fundamentalsTimeSeries(ticker, {
+        period1: fiveYearsAgo,
+        type: "annual",
+        module: "financials",
+      }),
+      (yahooFinance as any).fundamentalsTimeSeries(ticker, {
+        period1: twoYearsAgo,
+        type: "quarterly",
+        module: "financials",
+      }),
+    ]);
+
+    // fundamentalsTimeSeries processResponse strips the type prefix:
+    // annualTotalRevenue → totalRevenue, annualOperatingIncome → operatingIncome, etc.
+    // Both annual and quarterly entries share the same field names after stripping.
+    const toEntry = (e: any) => {
+      const rev: number | null = e.totalRevenue ?? null;
+      const opIncome: number | null = e.operatingIncome ?? null;
+      const netIncome: number | null = e.netIncome ?? null;
+      // date is a Unix timestamp in milliseconds in fundamentalsTimeSeries response
+      const dateStr = e.date
+        ? new Date(e.date).toISOString().slice(0, 7)
+        : "";
+      return {
+        period: dateStr,
+        isEstimate: false,
+        revenue: rev,
+        operatingIncome: opIncome,
+        netIncome,
+        operatingMargin: rev && opIncome != null && rev > 0 ? (opIncome / rev) * 100 : null,
+      };
+    };
+
+    const annual = (Array.isArray(annualRaw) ? annualRaw : [])
+      .map(toEntry)
+      .filter((e: any) => e.revenue != null)
+      .sort((a: any, b: any) => b.period.localeCompare(a.period));
+
+    const quarterly = (Array.isArray(quarterlyRaw) ? quarterlyRaw : [])
+      .map(toEntry)
+      .filter((e: any) => e.revenue != null)
+      .sort((a: any, b: any) => b.period.localeCompare(a.period));
+
     res.json({ ticker, currency: "USD", annual, quarterly });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Failed to fetch Yahoo financials" });
