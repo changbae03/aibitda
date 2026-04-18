@@ -22,7 +22,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     { href: "/popular", label: "최신 피드" },
     { href: "/tracker", label: "실시간 트래커" },
     { href: "/history", label: "내가 본 자료" },
-    { href: "/stats", label: "AI 정확도" },
   ];
 
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
