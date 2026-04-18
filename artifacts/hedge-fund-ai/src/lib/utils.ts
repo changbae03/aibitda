@@ -11,13 +11,25 @@ export function getApiUrl(path: string): string {
   return `${base}${p}`;
 }
 
-export function formatCurrency(value: number | undefined | null) {
+export function formatCurrency(value: number | undefined | null, currency: string = "KRW") {
   if (value == null) return "N/A";
+  if (currency === "USD") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
   return new Intl.NumberFormat("ko-KR", {
     style: "currency",
     currency: "KRW",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+export function isUSTicker(ticker: string | undefined | null): boolean {
+  if (!ticker) return false;
+  return !ticker.match(/^\d{6}/) && !ticker.match(/\.(KS|KQ)$/i);
 }
 
 export function formatPercent(value: number | undefined | null) {

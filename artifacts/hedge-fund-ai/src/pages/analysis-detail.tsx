@@ -20,7 +20,7 @@ import {
   BookmarkCheck,
   Database,
 } from "lucide-react";
-import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
+import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
@@ -504,7 +504,7 @@ export default function AnalysisDetail() {
             <div className="text-right">
               <div className="text-xl font-bold text-gray-900">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               {analysis.targetPrice && (
-                <div className="text-sm text-gray-600 mt-0.5">적정주가 {formatCurrency(analysis.targetPrice)}</div>
+                <div className="text-sm text-gray-600 mt-0.5">적정주가 {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</div>
               )}
             </div>
           )}
@@ -558,15 +558,15 @@ export default function AnalysisDetail() {
               <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
                   <span className="text-muted-foreground">적정주가</span>
-                  <span className="text-success font-bold">{formatCurrency(analysis.targetPrice)}</span>
+                  <span className="text-success font-bold">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
                   <span className="text-muted-foreground">진입가</span>
-                  <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice)}</span>
+                  <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
                 <div className="flex justify-between items-center pt-0.5">
                   <span className="text-muted-foreground">손절가</span>
-                  <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss)}</span>
+                  <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
               </div>
             </div>
@@ -753,11 +753,14 @@ export default function AnalysisDetail() {
   );
 }
 
-function formatPrice(val: string | number | undefined | null): string {
+function formatPrice(val: string | number | undefined | null, currency: "KRW" | "USD" = "KRW"): string {
   if (val == null) return "N/A";
   const str = String(val).trim();
   const num = parseFloat(str.replace(/[^0-9.]/g, ""));
   if (isNaN(num)) return str;
+  if (currency === "USD") {
+    return "$" + new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(num);
+  }
   return new Intl.NumberFormat("ko-KR").format(num) + "원";
 }
 
@@ -781,6 +784,7 @@ function extractJson(raw: string): any | null {
 
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
   const json = extractJson(step.content);
+  const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
 
   const verdictMeta = (v: string) => {
     if (!v) return { label: "—", color: "text-foreground", bg: "bg-neutral-100", border: "border-neutral-200", dot: "#6b7280" };
@@ -899,7 +903,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
                         <p className="text-[11px] font-semibold text-neutral-500">진입가</p>
                       </div>
-                      <p className="text-[17px] font-bold text-neutral-900 font-mono leading-none">{formatPrice(json.entry_price)}</p>
+                      <p className="text-[17px] font-bold text-neutral-900 font-mono leading-none">{formatPrice(json.entry_price, priceCurrency)}</p>
                       {entryVsCurrent !== null ? (
                         <p className={`text-[11px] font-bold mt-1.5 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
                           {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}% 현재가 대비
@@ -915,7 +919,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className={`w-2 h-2 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
                         <p className={`text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가</p>
                       </div>
-                      <p className={`text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none`}>{formatPrice(json.target_price)}</p>
+                      <p className={`text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none`}>{formatPrice(json.target_price, priceCurrency)}</p>
                       {upsideFromCurrent !== null ? (
                         <p className={`text-[11px] font-bold ${targetCardStyle.pctColor} mt-1.5`}>
                           {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}% {isBearish ? "하락여지" : "상승여력"}
@@ -931,7 +935,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
                         <p className="text-[11px] font-semibold text-red-500">손절가</p>
                       </div>
-                      <p className="text-[17px] font-bold text-red-600 font-mono leading-none">{formatPrice(json.stop_loss)}</p>
+                      <p className="text-[17px] font-bold text-red-600 font-mono leading-none">{formatPrice(json.stop_loss, priceCurrency)}</p>
                       {slPct !== null ? (
                         <p className="text-[11px] font-bold text-red-500 mt-1.5">-{slPct}% 이하 손절</p>
                       ) : (
@@ -988,7 +992,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                             "text-sm font-bold font-mono",
                             isBear ? "text-red-700" : isBull ? "text-emerald-700" : "text-neutral-900"
                           )}>
-                            {formatPrice(s.target_price)}
+                            {formatPrice(s.target_price, priceCurrency)}
                           </p>
                           <p className={cn(
                             "text-xs font-semibold mt-0.5",
@@ -1330,6 +1334,7 @@ function stripFinalValuationData(content: string): string {
 }
 
 function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
+  const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
     name: step.agentName ?? "에이전트",
@@ -1444,27 +1449,27 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 <tbody className="divide-y divide-border">
                   <tr className="hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-2 font-medium text-foreground/80">절대가치(DCF)</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.abs_bear)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.abs_base)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.abs_bull)}</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.abs_bear, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.abs_base, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.abs_bull, priceCurrency)}</td>
                   </tr>
                   <tr className="hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-2 font-medium text-foreground/80">상대가치(피어)</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.rel_bear)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.rel_base)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.rel_bull)}</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.rel_bear, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.rel_base, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.rel_bull, priceCurrency)}</td>
                   </tr>
                   <tr className="bg-muted/20 font-semibold">
                     <td className="px-3 py-2.5 font-bold text-foreground">조율 적정주가</td>
-                    <td className="px-3 py-2.5 text-right text-rose-600 font-mono font-bold">{formatPrice(finalValuationData.bear)}</td>
-                    <td className="px-3 py-2.5 text-right text-emerald-600 font-mono font-bold">{formatPrice(finalValuationData.base)}</td>
-                    <td className="px-3 py-2.5 text-right text-blue-600 font-mono font-bold">{formatPrice(finalValuationData.bull)}</td>
+                    <td className="px-3 py-2.5 text-right text-rose-600 font-mono font-bold">{formatPrice(finalValuationData.bear, priceCurrency)}</td>
+                    <td className="px-3 py-2.5 text-right text-emerald-600 font-mono font-bold">{formatPrice(finalValuationData.base, priceCurrency)}</td>
+                    <td className="px-3 py-2.5 text-right text-blue-600 font-mono font-bold">{formatPrice(finalValuationData.bull, priceCurrency)}</td>
                   </tr>
                 </tbody>
               </table>
               <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
                 <span className="text-xs text-muted-foreground">현재 주가</span>
-                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(finalValuationData.current)}</span>
+                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(finalValuationData.current, priceCurrency)}</span>
                 <span className="text-xs text-muted-foreground">
                   {finalValuationData.base >= finalValuationData.current ? "상승여력" : "하락여지"}
                 </span>
@@ -1497,27 +1502,27 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 <tbody className="divide-y divide-border">
                   <tr className="hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-2 font-medium text-foreground/80">DCF</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.dcf_bear)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.dcf_base)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.dcf_bull)}</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.dcf_bear, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.dcf_base, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.dcf_bull, priceCurrency)}</td>
                   </tr>
                   <tr className="hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-2 font-medium text-foreground/80">Forward P/E</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.pe_bear)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.pe_base)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.pe_bull)}</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.pe_bear, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.pe_base, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.pe_bull, priceCurrency)}</td>
                   </tr>
                   <tr className="hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-2 font-medium text-foreground/80">EV/EBITDA</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.ev_bear)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.ev_base)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.ev_bull)}</td>
+                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.ev_bear, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.ev_base, priceCurrency)}</td>
+                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.ev_bull, priceCurrency)}</td>
                   </tr>
                 </tbody>
               </table>
               <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
                 <span className="text-xs text-muted-foreground">현재 주가</span>
-                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(valuationData.current)}</span>
+                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(valuationData.current, priceCurrency)}</span>
                 <span className="text-xs text-muted-foreground">
                   Base {valuationData.dcf_base >= valuationData.current ? "상승여력" : "하락여지"}
                 </span>
