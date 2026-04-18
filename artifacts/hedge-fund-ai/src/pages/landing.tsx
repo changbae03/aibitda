@@ -63,7 +63,7 @@ function RightPanel() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-neutral-50 border-l border-neutral-100 p-8 overflow-hidden justify-center">
+    <div className="flex flex-col bg-neutral-50 border-t md:border-t-0 md:border-l border-neutral-100 px-6 py-8 md:p-8 overflow-hidden md:justify-center md:h-full">
 
       {/* 종목 정보 */}
       <div className="mb-6">
@@ -178,10 +178,10 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ fontFamily: "'Pretendard', sans-serif" }}>
+    <div className="min-h-screen flex flex-col md:flex-row" style={{ fontFamily: "'Pretendard', sans-serif" }}>
 
       {/* 왼쪽: 로그인 폼 */}
-      <div className="w-full md:w-[420px] lg:w-[440px] shrink-0 flex flex-col justify-center px-10 py-12 bg-white">
+      <div className="w-full md:w-[420px] lg:w-[440px] shrink-0 flex flex-col justify-center px-8 py-10 md:px-10 md:py-12 bg-white">
 
         {/* 로고 */}
         <div className="mb-10">
@@ -248,8 +248,8 @@ export default function Landing() {
         </p>
       </div>
 
-      {/* 오른쪽: 라이브 미리보기 (모바일 숨김) */}
-      <div className="hidden md:flex flex-1 flex-col overflow-hidden">
+      {/* 오른쪽: 라이브 미리보기 */}
+      <div className="flex flex-1 flex-col overflow-hidden">
         <RightPanel />
       </div>
     </div>
