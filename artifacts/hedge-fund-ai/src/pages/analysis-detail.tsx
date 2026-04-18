@@ -548,6 +548,42 @@ export default function AnalysisDetail() {
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // 동적 OG 태그 & 페이지 타이틀 업데이트 (공유 미리보기 개선)
+  useEffect(() => {
+    if (!analysis) return;
+    const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+    const verdict = analysis.investmentVerdict ? toKoreanVerdict(analysis.investmentVerdict) : "";
+    const targetStr = analysis.targetPrice ? formatCurrency(analysis.targetPrice, currency) : "";
+    const title = verdict && targetStr
+      ? `${analysis.ticker} ${analysis.companyName} — ${verdict} · 적정주가 ${targetStr} | 애빛다`
+      : `${analysis.ticker} ${analysis.companyName} | 애빛다`;
+    const desc = verdict && targetStr
+      ? `${analysis.companyName} AI 분석 리포트 · ${verdict} · 적정주가 ${targetStr}. DCF·rNPV 기반 7단계 파이프라인 분석.`
+      : `${analysis.companyName} AI 7단계 분석 리포트 · 산업·실적·밸류에이션·기술적 분석 | 애빛다`;
+
+    document.title = title;
+    const setMeta = (prop: string, content: string) => {
+      let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement | null;
+      if (!el) { el = document.createElement("meta"); el.setAttribute("property", prop); document.head.appendChild(el); }
+      el.setAttribute("content", content);
+    };
+    const setMetaName = (name: string, content: string) => {
+      let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
+      if (!el) { el = document.createElement("meta"); el.setAttribute("name", name); document.head.appendChild(el); }
+      el.setAttribute("content", content);
+    };
+    setMeta("og:title", title);
+    setMeta("og:description", desc);
+    setMetaName("twitter:title", title);
+    setMetaName("twitter:description", desc);
+
+    return () => {
+      document.title = "애빛다 — AI로 기업가치를 밝히다";
+      setMeta("og:title", "애빛다 — AI로 기업가치를 밝히다");
+      setMeta("og:description", "AI 7단계 파이프라인이 코스피·코스닥·미국 주식을 분석합니다. DCF·rNPV 기반 적정주가 산출.");
+    };
+  }, [analysis?.investmentVerdict, analysis?.targetPrice, analysis?.ticker, analysis?.companyName]);
+
   type QCStatus = "checking" | "approved" | "revising" | "revised";
   interface StreamingStepState {
     key: string;
@@ -735,6 +771,15 @@ export default function AnalysisDetail() {
                   <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
               </div>
+
+              {/* 인라인 공유 버튼 */}
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                이 분석 공유하기
+              </button>
             </div>
           )}
           </div>
