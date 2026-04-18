@@ -117,26 +117,50 @@
 }
 
 .markdown-body p {
-  margin-bottom: 1rem;
-  line-height: 1.9;
+  margin-bottom: 1.3rem;
+  line-height: 1.95;
 }
 .markdown-body p:last-child { margin-bottom: 0; }
+@media (max-width: 640px) {
+  .markdown-body p {
+    margin-bottom: 1.6rem;
+    line-height: 2;
+  }
+}
 
 .markdown-body ul {
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.3rem;
   padding-left: 0;
   list-style: none;
 }
 .markdown-body ol {
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.3rem;
   padding-left: 1.4em;
   list-style: decimal;
 }
 .markdown-body li {
   position: relative;
   padding-left: 1.1em;
-  margin-bottom: 0.55rem;
-  line-height: 1.85;
+  margin-bottom: 0.65rem;
+  line-height: 1.9;
+}
+@media (max-width: 640px) {
+  .markdown-body li {
+    margin-bottom: 0.85rem;
+    line-height: 1.95;
+  }
+  .markdown-body ul,
+  .markdown-body ol {
+    margin-bottom: 1.6rem;
+  }
+  .markdown-body h2 {
+    margin-top: 2.5rem;
+    margin-bottom: 1.1rem;
+  }
+  .markdown-body h3 {
+    margin-top: 1.8rem;
+    margin-bottom: 0.7rem;
+  }
 }
 .markdown-body ul > li::before {
   content: "";

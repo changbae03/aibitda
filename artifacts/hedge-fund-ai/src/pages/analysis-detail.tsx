@@ -1577,9 +1577,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               p: ({ children }) => {
                 const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
                 if (text.startsWith("출처:") || text.startsWith("출처 :")) {
-                  return <p className="mt-4 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
+                  return <p className="mt-5 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
                 }
-                return <p className="mb-3.5 last:mb-0 text-foreground/80 leading-[1.75]">{children}</p>;
+                return <p className="mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]">{children}</p>;
               },
               ul: ({ children }) => <ul>{children}</ul>,
               ol: ({ children }) => <ol>{children}</ol>,
