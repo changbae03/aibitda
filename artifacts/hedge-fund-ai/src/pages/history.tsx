@@ -1,12 +1,22 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useListAnalyses, useDeleteAnalysis, getListAnalysesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2, History as HistoryIcon, Pencil, Check, X } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2, History as HistoryIcon, Pencil, Check, X, TrendingUp, TrendingDown, RefreshCw, Target } from "lucide-react";
+import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+
+interface QuoteResult {
+  price: number | null;
+  currency: string;
+  change: number | null;
+}
+
+function isUSTicker(t: string) {
+  return !/^\d{5,6}/.test(t.split(".")[0]);
+}
 
 const STORAGE_KEY = "avitda-recent-analyses";
 const MEMO_KEY = "avitda-memos";
@@ -204,6 +214,9 @@ export default function History() {
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
+  const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [quotesUpdatedAt, setQuotesUpdatedAt] = useState<Date | null>(null);
 
   const list = useMemo(() => {
     const serverList = serverAnalyses ?? [];
@@ -211,6 +224,30 @@ export default function History() {
     const localOnly = localItems.filter((x) => !serverIds.has(x.id));
     return [...serverList, ...localOnly];
   }, [serverAnalyses, localItems]);
+
+  const fetchQuotes = useCallback(async (items: any[]) => {
+    const tickers = [...new Set(
+      items.filter((a) => a.status === "completed" && a.targetPrice != null).map((a) => a.ticker)
+    )];
+    if (tickers.length === 0) return;
+    setQuotesLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/market-data/batch-quotes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers }),
+      });
+      if (r.ok) {
+        setQuotes(await r.json());
+        setQuotesUpdatedAt(new Date());
+      }
+    } catch {}
+    setQuotesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (list.length > 0) fetchQuotes(list);
+  }, [list.length]);
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -252,14 +289,110 @@ export default function History() {
 
   const serverIds = new Set((serverAnalyses ?? []).map((a: any) => a.id));
 
+  // ─── 업사이드 / 정확도 계산 ───────────────────────────────────────────────
+  const statsItems = list.filter(
+    (a) => a.status === "completed" && a.targetPrice != null && quotes[a.ticker]?.price != null
+  );
+  const upsides = statsItems.map((a) => {
+    const q = quotes[a.ticker];
+    const current = q!.price!;
+    const upside = ((a.targetPrice - current) / current) * 100;
+    const verdict = (a.investmentVerdict ?? "").toLowerCase();
+    const isBuy  = verdict.includes("buy");
+    const isSell = verdict.includes("sell");
+    const returnPct = a.entryPrice ? ((current - a.entryPrice) / a.entryPrice) * 100 : null;
+    const correct = returnPct != null
+      ? (isBuy ? returnPct > 0 : isSell ? returnPct < 0 : null)
+      : null;
+    return { upside, returnPct, correct, isBuy, isSell };
+  });
+
+  const trackedCount = statsItems.length;
+  const avgUpside   = trackedCount > 0 ? upsides.reduce((s, u) => s + u.upside, 0) / trackedCount : null;
+  const judged      = upsides.filter((u) => u.correct !== null);
+  const accuracy    = judged.length > 0 ? (judged.filter((u) => u.correct).length / judged.length) * 100 : null;
+  const avgReturn   = (() => {
+    const with_ret = upsides.filter((u) => u.returnPct != null);
+    return with_ret.length > 0 ? with_ret.reduce((s, u) => s + u.returnPct!, 0) / with_ret.length : null;
+  })();
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
     <div>
-      <h1
-        className="text-[22px] font-black tracking-tight text-neutral-900 mb-6"
-        style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
-      >
-        내가 본 자료
-      </h1>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <h1
+          className="text-[22px] font-black tracking-tight text-neutral-900"
+          style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
+        >
+          내가 본 자료
+        </h1>
+        {trackedCount > 0 && (
+          <button
+            onClick={() => fetchQuotes(list)}
+            disabled={quotesLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors text-xs font-medium text-neutral-500 disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
+            현재가 갱신
+          </button>
+        )}
+      </div>
+
+      {/* 실시간 통계 요약 */}
+      {trackedCount > 0 && (
+        <div className="mb-5 grid grid-cols-3 gap-3">
+          {/* 업사이드 */}
+          <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
+            <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">평균 업사이드</p>
+            {quotesLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+            ) : avgUpside != null ? (
+              <p className={cn("text-[22px] font-black leading-none",
+                avgUpside >= 10 ? "text-emerald-600" : avgUpside >= 0 ? "text-green-600" : "text-red-500"
+              )}>
+                {avgUpside >= 0 ? "+" : ""}{avgUpside.toFixed(1)}%
+              </p>
+            ) : <p className="text-neutral-300 text-sm">—</p>}
+            <p className="text-[10px] text-neutral-300 mt-1">현재가 기준 잔여 업사이드</p>
+          </div>
+
+          {/* 실현 수익률 */}
+          <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
+            <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">평균 수익률</p>
+            {quotesLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+            ) : avgReturn != null ? (
+              <p className={cn("text-[22px] font-black leading-none",
+                avgReturn >= 5 ? "text-emerald-600" : avgReturn >= 0 ? "text-green-600" : "text-red-500"
+              )}>
+                {avgReturn >= 0 ? "+" : ""}{avgReturn.toFixed(1)}%
+              </p>
+            ) : <p className="text-neutral-300 text-sm">—</p>}
+            <p className="text-[10px] text-neutral-300 mt-1">분석 당시 vs 현재가</p>
+          </div>
+
+          {/* AI 방향성 정확도 */}
+          <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
+            <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">AI 방향성 정확도</p>
+            {quotesLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+            ) : accuracy != null ? (
+              <p className={cn("text-[22px] font-black leading-none",
+                accuracy >= 70 ? "text-emerald-600" : accuracy >= 50 ? "text-amber-600" : "text-red-500"
+              )}>
+                {accuracy.toFixed(0)}%
+              </p>
+            ) : <p className="text-neutral-300 text-sm">—</p>}
+            <p className="text-[10px] text-neutral-300 mt-1">매수↑·매도↓ 방향 일치율 ({judged.length}건)</p>
+          </div>
+        </div>
+      )}
+      {quotesUpdatedAt && trackedCount > 0 && (
+        <p className="text-[10px] text-neutral-300 -mt-3 mb-4">
+          마지막 업데이트: {quotesUpdatedAt.toLocaleTimeString("ko-KR")}
+        </p>
+      )}
 
       {list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
@@ -319,14 +452,31 @@ export default function History() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-[12px] text-neutral-400">
+                    <div className="flex items-center gap-3 mt-1 text-[12px] text-neutral-400 flex-wrap">
                       <span>{a.industry || "—"}</span>
                       {a.targetPrice != null && (
                         <>
                           <span className="text-neutral-200">|</span>
-                          <span>적정주가 <span className="text-neutral-600 font-medium">{formatCurrency(a.targetPrice)}</span></span>
+                          <span>적정주가 <span className="text-neutral-600 font-medium">{formatCurrency(a.targetPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}</span></span>
                         </>
                       )}
+                      {/* 실시간 업사이드 */}
+                      {(() => {
+                        const q = quotes[a.ticker];
+                        if (!q?.price || !a.targetPrice) return null;
+                        const upside = ((a.targetPrice - q.price) / q.price) * 100;
+                        const color = upside >= 10 ? "text-emerald-600" : upside >= 0 ? "text-green-600" : "text-red-500";
+                        return (
+                          <>
+                            <span className="text-neutral-200">|</span>
+                            <span className={cn("flex items-center gap-0.5 font-semibold", color)}>
+                              {upside >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
+                            </span>
+                            <span className="text-neutral-300 text-[11px]">현재 {formatCurrency(q.price, q.currency)}</span>
+                          </>
+                        );
+                      })()}
                       <span className="text-neutral-200">|</span>
                       <span>{format(new Date(a.createdAt), "yyyy.MM.dd HH:mm", { locale: ko })}</span>
                     </div>
