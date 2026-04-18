@@ -67,7 +67,7 @@ const COLORS = {
   },
 };
 
-const CustomTooltip = ({ active, payload, label, currency }: any) => {
+const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis }: any) => {
   if (!active || !payload?.length) return null;
   const entry: FinancialEntry | undefined = payload[0]?.payload;
   return (
@@ -96,6 +96,11 @@ const CustomTooltip = ({ active, payload, label, currency }: any) => {
           </div>
         )
       ))}
+      {separateIncomeAxis && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/50 text-[10px] text-muted-foreground">
+          * 매출·영업이익 축 독립 적용
+        </div>
+      )}
     </div>
   );
 };
@@ -144,13 +149,35 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   }
 
   const currency = data.currency;
-  const allVals = entries.flatMap((e) =>
-    [e.revenue, e.operatingIncome].filter((v): v is number => v != null)
-  );
-  const maxVal = Math.max(...allVals);
-  const minVal = Math.min(...allVals);
-  const hasNegative = minVal < 0;
 
+  const revenueVals = entries.map((e) => e.revenue).filter((v): v is number => v != null);
+  const incomeVals = entries.map((e) => e.operatingIncome).filter((v): v is number => v != null);
+
+  const maxRevenue = revenueVals.length ? Math.max(...revenueVals) : 0;
+  const minRevenue = revenueVals.length ? Math.min(...revenueVals) : 0;
+  const maxIncome = incomeVals.length ? Math.max(...incomeVals) : 0;
+  const minIncome = incomeVals.length ? Math.min(...incomeVals) : 0;
+
+  // Use separate axes when the scale difference is extreme (> 12x)
+  // This prevents operating income from being invisible when revenue >> income
+  const scaleRatio = maxRevenue > 0 && Math.abs(maxIncome) > 0
+    ? maxRevenue / Math.abs(maxIncome)
+    : 1;
+  const separateIncomeAxis = scaleRatio > 12;
+
+  // Left axis (revenue)
+  const revenueHasNeg = minRevenue < 0;
+  const revenueDomain: [number, number] = revenueHasNeg
+    ? [Math.floor(minRevenue * 1.3), Math.ceil(maxRevenue * 1.15)]
+    : [0, Math.ceil(maxRevenue * 1.15)];
+
+  // Income axis (separate when scale is extreme)
+  const incomeHasNeg = minIncome < 0;
+  const incomeDomain: [number, number] = incomeHasNeg
+    ? [Math.floor(minIncome * 1.3), Math.ceil(maxIncome * 1.15)]
+    : [0, Math.ceil(maxIncome * 1.15) || 1];
+
+  // Margin axis (right)
   const allMargins = entries
     .map((e) => e.operatingMargin)
     .filter((v): v is number => v != null);
@@ -162,7 +189,14 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">매출 · 이익 추이</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground">매출 · 이익 추이</h3>
+          {separateIncomeAxis && (
+            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
+              이익 별도 축
+            </span>
+          )}
+        </div>
         <div className="flex gap-1">
           {(["annual", "quarterly"] as const).map((v) => (
             <button
@@ -190,20 +224,44 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
             axisLine={false}
             tickLine={false}
           />
+
+          {/* Left axis: Revenue */}
           <YAxis
-            yAxisId="left"
+            yAxisId="revenue"
             orientation="left"
             tickFormatter={(v) => formatYAxis(v, currency)}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: COLORS.revenue }}
             axisLine={false}
             tickLine={false}
-            domain={hasNegative
-              ? [Math.floor(minVal * 1.3), Math.ceil(maxVal * 1.15)]
-              : [0, Math.ceil(maxVal * 1.15)]}
+            domain={revenueDomain}
             width={52}
           />
+
+          {/* Income axis: separate when scale is extreme, hidden otherwise (shares left axis domain) */}
+          {separateIncomeAxis ? (
+            <YAxis
+              yAxisId="income"
+              orientation="left"
+              tickFormatter={(v) => formatYAxis(v, currency)}
+              tick={{ fontSize: 10, fill: COLORS.operatingIncome }}
+              axisLine={false}
+              tickLine={false}
+              domain={incomeDomain}
+              hide
+            />
+          ) : (
+            // Shared left axis for income when scales are similar: use revenue domain
+            <YAxis
+              yAxisId="income"
+              orientation="left"
+              hide
+              domain={revenueDomain}
+            />
+          )}
+
+          {/* Right axis: Operating margin % */}
           <YAxis
-            yAxisId="right"
+            yAxisId="margin"
             orientation="right"
             tickFormatter={(v) => `${v.toFixed(0)}%`}
             tick={{ fontSize: 10, fill: "#94a3b8" }}
@@ -212,32 +270,37 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
             domain={[marginMin, marginMax]}
             width={36}
           />
-          {hasNegative && (
-            <ReferenceLine yAxisId="left" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
+
+          {(revenueHasNeg || incomeHasNeg) && (
+            <ReferenceLine yAxisId="revenue" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
           )}
-          <Tooltip content={<CustomTooltip currency={currency} />} />
+
+          <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={separateIncomeAxis} />} />
           <Legend
             iconType="circle"
             iconSize={8}
             wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
             formatter={(value) =>
               value === "revenue" ? "매출" :
-              value === "operatingIncome" ? "영업이익" :
+              value === "operatingIncome" ? (separateIncomeAxis ? "영업이익 (별도 축)" : "영업이익") :
               "영업이익률"
             }
           />
-          <Bar yAxisId="left" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
+
+          <Bar yAxisId="revenue" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
             {entries.map((e, i) => (
               <Cell key={i} fill={e.isEstimate ? COLORS.estimate.revenue : COLORS.revenue} />
             ))}
           </Bar>
-          <Bar yAxisId="left" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
+
+          <Bar yAxisId="income" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
             {entries.map((e, i) => (
               <Cell key={i} fill={e.isEstimate ? COLORS.estimate.operatingIncome : COLORS.operatingIncome} />
             ))}
           </Bar>
+
           <Line
-            yAxisId="right"
+            yAxisId="margin"
             dataKey="operatingMargin"
             name="operatingMargin"
             stroke={COLORS.margin}
@@ -249,11 +312,16 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {entries.some((e) => e.isEstimate) && (
-        <div className="flex flex-col items-end gap-0.5">
+      <div className="flex flex-col items-end gap-0.5">
+        {entries.some((e) => e.isEstimate) && (
           <p className="text-[10px] text-muted-foreground">옅은 색 = 컨센서스 추정치</p>
-        </div>
-      )}
+        )}
+        {separateIncomeAxis && (
+          <p className="text-[10px] text-muted-foreground">
+            매출(보라) · 영업이익(초록) 축 독립 적용 — 막대 높이는 각 수치 기준
+          </p>
+        )}
+      </div>
     </div>
   );
 }
