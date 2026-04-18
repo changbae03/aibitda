@@ -86,12 +86,15 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
   );
 }
 
-const EXAMPLES = [
+const EXAMPLES_KR = [
   { ticker: "005930", label: "삼성전자" },
   { ticker: "000660", label: "SK하이닉스" },
+  { ticker: "035420", label: "NAVER" },
+];
+
+const EXAMPLES_US = [
   { ticker: "NVDA", label: "NVIDIA" },
   { ticker: "AAPL", label: "Apple" },
-  { ticker: "035420", label: "NAVER" },
   { ticker: "TSLA", label: "Tesla" },
 ];
 
@@ -396,18 +399,39 @@ export default function NewAnalysis() {
         </form>
 
         {/* Quick picks */}
-        <div className="flex flex-wrap gap-2">
-          {EXAMPLES.map((ex) => (
-            <button
-              key={ex.ticker}
-              onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
-              disabled={isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-[12.5px] text-neutral-500 hover:border-neutral-900 hover:text-neutral-900 transition-colors disabled:opacity-40"
-            >
-              <span className="font-mono text-[11px] text-neutral-300">{ex.ticker}</span>
-              <span>{ex.label}</span>
-            </button>
-          ))}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium text-neutral-300 uppercase tracking-wider whitespace-nowrap">국내</span>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES_KR.map((ex) => (
+                <button
+                  key={ex.ticker}
+                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-[12.5px] text-neutral-500 hover:border-neutral-900 hover:text-neutral-900 transition-colors disabled:opacity-40"
+                >
+                  <span className="font-mono text-[11px] text-neutral-300">{ex.ticker}</span>
+                  <span>{ex.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium text-neutral-300 uppercase tracking-wider whitespace-nowrap">미국</span>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES_US.map((ex) => (
+                <button
+                  key={ex.ticker}
+                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-[12.5px] text-neutral-500 hover:border-neutral-900 hover:text-neutral-900 transition-colors disabled:opacity-40"
+                >
+                  <span className="font-mono text-[11px] text-neutral-300">{ex.ticker}</span>
+                  <span>{ex.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>
