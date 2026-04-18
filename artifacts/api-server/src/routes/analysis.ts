@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
+import { fetchDartSubjectBalance } from "../lib/peer-collector.js";
 import { eq, desc, not } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
@@ -1192,13 +1193,45 @@ router.post("/", async (req, res) => {
   industry = industry || info.industry;
   resolvedSymbol = info.resolvedSymbol;
 
-  // Fetch financial data and news in parallel
-  const [financialData, newsData] = await Promise.all([
+  // 한국 종목 코드 추출 (078160.KQ → 078160)
+  const krxCode = upperTicker.split(".")[0];
+  const isKoreanTicker = /^\d{6}$/.test(krxCode);
+
+  // Fetch financial data, news, DART balance sheet in parallel
+  const [financialData, newsData, dartBalance] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
+    isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
   ]);
+
+  // DART 재무상태표 컨텍스트 구성
+  let dartBalanceContext = "";
+  if (dartBalance) {
+    const fmtKrw = (v: number | null) =>
+      v == null ? "N/A" : `${(v / 1e8).toFixed(1)}억원`;
+    const netDebt = (dartBalance.totalDebt != null && dartBalance.cash != null)
+      ? dartBalance.totalDebt - dartBalance.cash : null;
+    const netDebtStr = netDebt == null ? "N/A"
+      : netDebt < 0 ? `${fmtKrw(-netDebt)} (순현금)` : `${fmtKrw(netDebt)} (순부채)`;
+    dartBalanceContext = [
+      `\n[⭐ DART 사업보고서 재무상태표 — ${dartBalance.year}년 ${dartBalance.fsType === "CFS" ? "연결" : "별도"} 기준]`,
+      `⚠️ 이 데이터는 DART OpenAPI 원천 데이터입니다. Yahoo Finance 수치와 다를 경우 이 값을 우선 사용하세요.`,
+      `현금및현금성자산: ${fmtKrw(dartBalance.cash)}`,
+      `자산총계: ${fmtKrw(dartBalance.totalAssets)}`,
+      `부채총계: ${fmtKrw(dartBalance.totalLiab)}`,
+      `자본총계: ${fmtKrw(dartBalance.equity)}`,
+      dartBalance.totalDebt != null ? `금융부채(차입금 합계): ${fmtKrw(dartBalance.totalDebt)}` : "",
+      `순현금/순부채: ${netDebtStr}`,
+    ].filter(Boolean).join("\n");
+  }
+
   const userContext = additionalContext ?? null;
-  const fullContext = [financialData, newsData, userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : ""]
+  const fullContext = [
+    financialData,
+    dartBalanceContext,
+    newsData,
+    userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
+  ]
     .filter(Boolean)
     .join("\n\n") || null;
 

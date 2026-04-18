@@ -170,6 +170,71 @@ async function fetchDartFinancials(corpCode: string): Promise<{
   return { revenue: null, operating_income: null, equity: null, name: null };
 }
 
+// ─── Subject company DART balance sheet (exported for main analysis pipeline) ─
+
+export interface DartSubjectBalance {
+  year: number;
+  fsType: "CFS" | "OFS";
+  cash: number | null;
+  totalAssets: number | null;
+  totalLiab: number | null;
+  equity: number | null;
+  totalDebt: number | null;
+}
+
+export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSubjectBalance | null> {
+  const key = process.env["DART_API_KEY"];
+  if (!key) return null;
+
+  const corpCode = await fetchDartCorpCode(stockCode);
+  if (!corpCode) return null;
+
+  const currentYear = new Date().getFullYear();
+
+  for (const year of [currentYear - 1, currentYear - 2]) {
+    for (const sj of ["CFS", "OFS"] as const) {
+      try {
+        const url = `https://opendart.fss.or.kr/api/fnlttSinglAcnt.json?crtfc_key=${key}&corp_code=${corpCode}&bsns_year=${year}&reprt_code=11011&fs_div=${sj}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        if (!res.ok) continue;
+        const data = await res.json() as any;
+        if (data.status !== "000" || !data.list?.length) continue;
+
+        const list: any[] = data.list;
+        const findBS = (names: string[]): number | null => {
+          for (const name of names) {
+            const item = list.find((r: any) =>
+              r.sj_div === "BS" && r.account_nm?.replace(/\s/g, "").includes(name)
+            );
+            if (item) {
+              const raw = String(item.thstrm_amount ?? "").replace(/,/g, "");
+              const n = Number(raw);
+              return isNaN(n) ? null : n;
+            }
+          }
+          return null;
+        };
+
+        const cash       = findBS(["현금및현금성자산", "현금및단기금융상품", "현금성자산"]);
+        const totalAssets = findBS(["자산총계"]);
+        const totalLiab  = findBS(["부채총계"]);
+        const equity     = findBS(["자본총계"]);
+        const shortTermDebt = findBS(["단기차입금"]);
+        const longTermDebt  = findBS(["장기차입금", "장기차입"]);
+        const totalDebt = (shortTermDebt != null || longTermDebt != null)
+          ? (shortTermDebt ?? 0) + (longTermDebt ?? 0) : null;
+
+        if (cash !== null || totalAssets !== null) {
+          return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt };
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Collect single peer ──────────────────────────────────────────────────────
 
 async function collectPeer(ticker: string): Promise<PeerMultiples> {
