@@ -1333,6 +1333,15 @@ function stripFinalValuationData(content: string): string {
   return content.replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/, "").trim();
 }
 
+function stripEstimationLabels(content: string): string {
+  return content
+    .replace(/\s*\(추정\)/g, "")
+    .replace(/\s*\(추정치\)/g, "")
+    .replace(/\s*\(E\)/g, "")
+    .replace(/\s*\(F\)/g, "")
+    .replace(/\s*\(컨센서스\)/g, "");
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -1355,13 +1364,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
   const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
   const finalValuationData = isRelativeVal ? parseFinalValuationData(step.content ?? "") : null;
-  const displayContent = isMarket
-    ? stripChartData(step.content ?? "")
-    : isFundamental
-      ? stripValuationData(step.content ?? "")
-      : isRelativeVal
-        ? stripFinalValuationData(step.content ?? "")
-        : (step.content ?? "");
+  const displayContent = stripEstimationLabels(
+    isMarket
+      ? stripChartData(step.content ?? "")
+      : isFundamental
+        ? stripValuationData(step.content ?? "")
+        : isRelativeVal
+          ? stripFinalValuationData(step.content ?? "")
+          : (step.content ?? "")
+  );
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
