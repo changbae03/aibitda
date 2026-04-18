@@ -510,7 +510,10 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const fd = result.financialData as any;
   const ks = result.defaultKeyStatistics as any;
   const sd = result.summaryDetail as any;
-  const currency: string = fd?.financialCurrency ?? "USD";
+  // 한국 주식(.KS/.KQ)은 Yahoo가 financialCurrency를 누락하거나 USD로 잘못 반환할 수 있음
+  // → 심볼 기준으로 강제 KRW 고정 (fmtNum의 $B 폴백 경로 차단)
+  const isKorean = /\.(KS|KQ)$/i.test(resolvedSymbol);
+  const currency: string = isKorean ? "KRW" : (fd?.financialCurrency ?? "USD");
 
   // Current financial metrics
   if (fd) {
