@@ -725,7 +725,20 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       if (intExpMap[latestWaccYear] != null) {
         // Yahoo stores interest expense as negative → take absolute value
         const intExp = Math.abs(intExpMap[latestWaccYear]);
-        waccLines.push(`이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}  ※ CoD 계산: 이자비용 ÷ 총부채`);
+        const debt = debtMap[latestWaccYear];
+        const codRaw = (debt != null && debt > 0) ? (intExp / debt) : null;
+        if (codRaw != null && codRaw > 0.30) {
+          // 이자비용 > 총부채(×0.3) → 부채 분류 오류 또는 이자 데이터 이상
+          waccLines.push(
+            `이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}` +
+            `  ⚠️ [CoD 계산값 비정상] 역산 CoD(세전) = ${(codRaw * 100).toFixed(1)}% — ` +
+            `이자비용(${fmtNum(intExp, currency)})이 총부채(${fmtNum(debt ?? 0, currency)})보다 큽니다. ` +
+            `부채 분류 오류 또는 단기차입 미반영 의심. ` +
+            `⛔ AI는 이 이자비용으로 CoD 계산하지 말 것 → 업종 시장 기본값 CoD(세전) 4~6% 사용.`
+          );
+        } else {
+          waccLines.push(`이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}  ※ CoD 계산: 이자비용 ÷ 총부채`);
+        }
       }
       if (dnaMap[latestWaccYear] != null) {
         waccLines.push(`D&A(감가상각비, ${latestWaccYear}): ${fmtNum(dnaMap[latestWaccYear], currency)}  ※ EBITDA = 영업이익 + 이 D&A`);

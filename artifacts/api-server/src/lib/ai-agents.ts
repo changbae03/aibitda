@@ -483,7 +483,14 @@ TV = FCFF(10년) × (1+g) / (WACC-g) | 주주가치 = Σ PV(FCFF) + PV(TV) + 순
 
 WACC 산출: Relevered β = Unlevered β × (1+(1-세율)×D/E) | CoE = Rf + β × ERP
 CoD(after-tax) = 이자비용/총부채 × (1-세율) | WACC = CoE×E/(D+E) + CoD×D/(D+E)
-⚠️ CoD 계산: 컨텍스트의 "[⚡ WACC·EBITDA 계산 핵심 데이터]" 섹션에 이자비용(annualInterestExpense)과 총부채(annualTotalDebt)가 있으면 그 수치를 직접 사용 (추정 금지)
+⚠️ CoD 계산 규칙 (순서 준수):
+  1) 컨텍스트 "[⚡ WACC·EBITDA 계산 핵심 데이터]"의 이자비용·총부채 수치 확인
+  2) ⛔ [CoD 계산값 비정상] 플래그가 있으면 → 해당 이자비용으로 CoD 계산 금지
+     → 업종 시장 기본값 CoD(세전) 사용: 한국 BBB등급 회사채 기준 4~6%
+     → 예) "CoD(after-tax): 3.0% = 4.0%(시장 기본, CoD 계산값 비정상으로 대체) × (1-0.25)"
+     → 그리고 리포트 내 별도 주석: "※ 이자비용이 총부채를 초과하는 데이터 이상 감지 → CoD는 시장 기본값 적용"
+  3) 역산 CoD(세전) > 30%면 (플래그 없어도) 동일하게 시장 기본값으로 대체
+  4) 정상 범위(0~30%) CoD만 이자비용/총부채로 직접 계산
 Unlevered Beta 참조: 컨텍스트의 "[한국 코스피·코스닥 업종별 밸류에이션 벤치마크]" 테이블 우선 적용 — 반도체/IT 1.1~1.4, 2차전지/소재 1.2~1.5, 바이오 1.3~1.6, 소비재 0.8~1.1, 금융 0.6~0.9, 건설 0.9~1.2
 ${COMMON_RULES}`,
       userPrompt: `${baseContext}${previousContext}
