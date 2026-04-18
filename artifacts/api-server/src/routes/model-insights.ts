@@ -206,6 +206,62 @@ router.get("/", async (_req, res) => {
   res.json(insights.map(formatInsight));
 });
 
+// 퍼블릭 집계 통계 (로그인 불필요)
+router.get("/public-stats", async (_req, res) => {
+  const all = await db.select().from(modelInsightsTable);
+  const reviewed = all.filter((i) => i.outcome !== "pending");
+  const hitTarget = reviewed.filter((i) => i.outcome === "hit_target");
+  const hitStop = reviewed.filter((i) => i.outcome === "hit_stoploss");
+  const ongoing = reviewed.filter((i) => i.outcome === "ongoing");
+  const withReturn = reviewed.filter((i) => i.priceReturn != null);
+
+  const avgReturn = withReturn.length
+    ? withReturn.reduce((s, i) => s + (i.priceReturn ?? 0), 0) / withReturn.length
+    : null;
+
+  // 업종별 집계
+  const byIndustry: Record<string, { total: number; hitTarget: number; avgReturn: number | null }> = {};
+  for (const item of reviewed) {
+    const ind = item.industry ?? "기타";
+    if (!byIndustry[ind]) byIndustry[ind] = { total: 0, hitTarget: 0, avgReturn: null };
+    byIndustry[ind].total++;
+    if (item.outcome === "hit_target") byIndustry[ind].hitTarget++;
+  }
+  for (const ind of Object.keys(byIndustry)) {
+    const items = reviewed.filter((i) => (i.industry ?? "기타") === ind && i.priceReturn != null);
+    byIndustry[ind].avgReturn = items.length
+      ? items.reduce((s, i) => s + (i.priceReturn ?? 0), 0) / items.length
+      : null;
+  }
+
+  // 최근 적중/손절 사례 (10건)
+  const recentCases = reviewed
+    .filter((i) => i.outcome !== "ongoing")
+    .sort((a, b) => new Date(b.reviewedAt ?? 0).getTime() - new Date(a.reviewedAt ?? 0).getTime())
+    .slice(0, 10)
+    .map((i) => ({
+      ticker: i.ticker,
+      companyName: i.companyName,
+      verdict: i.verdict,
+      priceReturn: i.priceReturn,
+      daysElapsed: i.daysElapsed,
+      outcome: i.outcome,
+      analysisId: i.analysisId,
+    }));
+
+  res.json({
+    totalAnalyses: all.length,
+    reviewedCount: reviewed.length,
+    hitTargetCount: hitTarget.length,
+    hitStopCount: hitStop.length,
+    ongoingCount: ongoing.length,
+    winRate: reviewed.length ? (hitTarget.length / reviewed.length) * 100 : null,
+    avgReturn,
+    byIndustry,
+    recentCases,
+  });
+});
+
 router.post("/review", async (_req, res) => {
   res.json({ message: "Review started" });
   triggerModelReview().catch(console.error);

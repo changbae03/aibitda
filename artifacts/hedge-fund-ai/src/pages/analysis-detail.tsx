@@ -298,6 +298,8 @@ function loadKakaoSDK(): Promise<void> {
 
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const url = window.location.href;
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
   const vs = verdictStyle(analysis?.verdict);
@@ -338,6 +340,28 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExportImage = async () => {
+    if (!cardRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 3,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement("a");
+      link.download = `애빛다_${analysis?.ticker ?? "분석"}_${analysis?.companyName ?? ""}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -370,7 +394,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           </div>
 
           {/* Report Preview Card */}
-          <div className="mx-5 mt-4 rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
+          <div ref={cardRef} className="mx-5 mt-4 rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
             <div className="px-4 py-3 flex items-start gap-3">
               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
                 <span className="text-primary text-xs font-bold">AI</span>
@@ -392,7 +416,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           </div>
 
           {/* Share Buttons */}
-          <div className="px-5 py-4 grid grid-cols-3 gap-2.5">
+          <div className="px-5 py-4 grid grid-cols-4 gap-2">
             {/* KakaoTalk */}
             <button
               onClick={handleKakao}
@@ -431,6 +455,23 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               }
               <span className={cn("text-[10px] font-semibold", copied ? "text-white" : "text-neutral-500")}>
                 {copied ? "복사됨!" : "링크 복사"}
+              </span>
+            </button>
+
+            {/* 이미지 저장 */}
+            <button
+              onClick={handleExportImage}
+              disabled={exporting}
+              className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-neutral-100 hover:bg-neutral-200 transition-colors disabled:opacity-60"
+            >
+              {exporting
+                ? <Loader2 className="w-6 h-6 text-neutral-500 animate-spin" />
+                : <svg className="w-6 h-6 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+              }
+              <span className="text-[10px] font-semibold text-neutral-500">
+                {exporting ? "생성중..." : "이미지 저장"}
               </span>
             </button>
           </div>
