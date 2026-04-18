@@ -377,12 +377,11 @@ ${COMMON_RULES}`,
 ⚠️ 매출성장률 YoY: (당해년 매출 ÷ 전년 매출 - 1) × 100으로 직접 계산.
 ⚠️ EBITDA = 영업이익 + D&A. 컨텍스트 "[⚡ WACC·EBITDA 계산 핵심 데이터]"의 D&A(annualDepreciationAmortizationDepletion) 수치를 직접 사용 (없으면 cashflowStatements depreciationAmortization, 그것도 없으면 financialData.ebitda 인용).
 
-🔒 **컨센서스 앵커 원칙 (위반 시 분석 신뢰도 심각 훼손)**
+💡 **컨센서스 참고 원칙 (감 교정용)**
 컨텍스트에 "[EPS 및 매출 전망 (애널리스트 컨센서스)]" 또는 "[네이버 분기 EPS]" 섹션이 있으면:
-- ${new Date().getFullYear()}E(올해) 및 ${new Date().getFullYear()+1}E(내년) 매출·영업이익 추정치는 **컨센서스를 출발점(앵커)으로 반드시 사용**하세요.
-- 컨센서스와 ±20% 이상 괴리를 두려면 **구체적 이유(특수 이벤트·구조적 차이·데이터 시점 등)를 전망 근거에 명시**해야 합니다.
-- 컨센서스가 없거나 한국 주식에서 Yahoo 컨센서스가 부실한 경우: 네이버증권 EPS 컨센서스([E] 표기 항목)를 역산해 매출·영업이익을 추정하세요.
-- ⛔ 컨센서스가 제공됐음에도 이유 없이 크게 낮거나 높은 추정치를 쓰는 것은 금지입니다.
+- ${new Date().getFullYear()}E·${new Date().getFullYear()+1}E 추정 전 컨센서스 수치를 먼저 확인하고, 본인 추정치가 컨센서스와 크게 다른 방향이면 **"왜 다른가"를 한 줄 점검**하세요.
+- 컨센서스를 그대로 따를 필요는 없습니다. 단, 컨센서스 대비 ±30% 이상 차이가 난다면 전망 근거에 그 이유(업황 변화·비용 구조 차이·특수 이벤트 등)를 간략히 언급하세요.
+- 한국 주식에서 Yahoo 컨센서스가 부실한 경우: 네이버증권 EPS 컨센서스([E] 항목)를 보조 참고로 활용하세요.
 
 | 구분 | ${new Date().getFullYear()-2}(실적) | ${new Date().getFullYear()-1}(실적) | ${new Date().getFullYear()}E | ${new Date().getFullYear()+1}E | ${new Date().getFullYear()+2}E |
 |------|------:|------:|------:|------:|------:|
