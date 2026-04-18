@@ -155,29 +155,40 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
 
   const maxRevenue = revenueVals.length ? Math.max(...revenueVals) : 0;
   const minRevenue = revenueVals.length ? Math.min(...revenueVals) : 0;
-  const maxIncome = incomeVals.length ? Math.max(...incomeVals) : 0;
+  const maxIncomeAbs = incomeVals.length ? Math.max(...incomeVals.map(Math.abs)) : 0;
   const minIncome = incomeVals.length ? Math.min(...incomeVals) : 0;
+  const maxIncome = incomeVals.length ? Math.max(...incomeVals) : 0;
 
-  // Use separate axes when the scale difference is extreme (> 12x)
-  // This prevents operating income from being invisible when revenue >> income
-  const scaleRatio = maxRevenue > 0 && Math.abs(maxIncome) > 0
-    ? maxRevenue / Math.abs(maxIncome)
+  // Detect extreme scale difference: use separate income axis only when revenue >> income
+  // e.g. Tesla 2024: revenue $97B, operating income $2B → ratio ~48 → separate
+  // NVIDIA: revenue $130B, operating income $81B → ratio ~1.6 → same axis
+  const scaleRatio = maxRevenue > 0 && maxIncomeAbs > 0
+    ? maxRevenue / maxIncomeAbs
     : 1;
-  const separateIncomeAxis = scaleRatio > 12;
+  const separateIncomeAxis = scaleRatio > 12 && incomeVals.length > 0;
 
-  // Left axis (revenue)
-  const revenueHasNeg = minRevenue < 0;
-  const revenueDomain: [number, number] = revenueHasNeg
-    ? [Math.floor(minRevenue * 1.3), Math.ceil(maxRevenue * 1.15)]
-    : [0, Math.ceil(maxRevenue * 1.15)];
+  // Combined domain (for single-axis mode)
+  const allVals = [...revenueVals, ...incomeVals];
+  const allMax = allVals.length ? Math.max(...allVals) : 0;
+  const allMin = allVals.length ? Math.min(...allVals) : 0;
+  const hasNegative = allMin < 0;
+  const leftDomain: [number, number] = hasNegative
+    ? [Math.floor(allMin * 1.3), Math.ceil(allMax * 1.15)]
+    : [0, Math.ceil(allMax * 1.15) || 1];
 
-  // Income axis (separate when scale is extreme)
+  // Separate income domain (for extreme-scale mode)
   const incomeHasNeg = minIncome < 0;
   const incomeDomain: [number, number] = incomeHasNeg
     ? [Math.floor(minIncome * 1.3), Math.ceil(maxIncome * 1.15)]
     : [0, Math.ceil(maxIncome * 1.15) || 1];
 
-  // Margin axis (right)
+  // Revenue-only domain (for extreme-scale mode left axis)
+  const revHasNeg = minRevenue < 0;
+  const revenueDomain: [number, number] = revHasNeg
+    ? [Math.floor(minRevenue * 1.3), Math.ceil(maxRevenue * 1.15)]
+    : [0, Math.ceil(maxRevenue * 1.15) || 1];
+
+  // Margin axis
   const allMargins = entries
     .map((e) => e.operatingMargin)
     .filter((v): v is number => v != null);
@@ -216,100 +227,77 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
       </div>
 
       <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={entries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-          <XAxis
-            dataKey="period"
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
-            axisLine={false}
-            tickLine={false}
-          />
-
-          {/* Left axis: Revenue */}
-          <YAxis
-            yAxisId="revenue"
-            orientation="left"
-            tickFormatter={(v) => formatYAxis(v, currency)}
-            tick={{ fontSize: 10, fill: COLORS.revenue }}
-            axisLine={false}
-            tickLine={false}
-            domain={revenueDomain}
-            width={52}
-          />
-
-          {/* Income axis: separate when scale is extreme, hidden otherwise (shares left axis domain) */}
-          {separateIncomeAxis ? (
-            <YAxis
-              yAxisId="income"
-              orientation="left"
+        {separateIncomeAxis ? (
+          // ── Extreme-scale mode: revenue on left, income on right (hidden) ──
+          <ComposedChart data={entries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="rev" orientation="left"
+              tickFormatter={(v) => formatYAxis(v, currency)}
+              tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+              domain={revenueDomain} width={52} />
+            <YAxis yAxisId="inc" orientation="right"
               tickFormatter={(v) => formatYAxis(v, currency)}
               tick={{ fontSize: 10, fill: COLORS.operatingIncome }}
-              axisLine={false}
-              tickLine={false}
-              domain={incomeDomain}
-              hide
-            />
-          ) : (
-            // Shared left axis for income when scales are similar: use revenue domain
-            <YAxis
-              yAxisId="income"
-              orientation="left"
-              hide
-              domain={revenueDomain}
-            />
-          )}
-
-          {/* Right axis: Operating margin % */}
-          <YAxis
-            yAxisId="margin"
-            orientation="right"
-            tickFormatter={(v) => `${v.toFixed(0)}%`}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
-            axisLine={false}
-            tickLine={false}
-            domain={[marginMin, marginMax]}
-            width={36}
-          />
-
-          {(revenueHasNeg || incomeHasNeg) && (
-            <ReferenceLine yAxisId="revenue" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
-          )}
-
-          <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={separateIncomeAxis} />} />
-          <Legend
-            iconType="circle"
-            iconSize={8}
-            wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-            formatter={(value) =>
-              value === "revenue" ? "매출" :
-              value === "operatingIncome" ? (separateIncomeAxis ? "영업이익 (별도 축)" : "영업이익") :
-              "영업이익률"
-            }
-          />
-
-          <Bar yAxisId="revenue" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
-            {entries.map((e, i) => (
-              <Cell key={i} fill={e.isEstimate ? COLORS.estimate.revenue : COLORS.revenue} />
-            ))}
-          </Bar>
-
-          <Bar yAxisId="income" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
-            {entries.map((e, i) => (
-              <Cell key={i} fill={e.isEstimate ? COLORS.estimate.operatingIncome : COLORS.operatingIncome} />
-            ))}
-          </Bar>
-
-          <Line
-            yAxisId="margin"
-            dataKey="operatingMargin"
-            name="operatingMargin"
-            stroke={COLORS.margin}
-            strokeWidth={2}
-            dot={{ r: 3, fill: COLORS.margin, strokeWidth: 0 }}
-            activeDot={{ r: 4 }}
-            connectNullData={false}
-          />
-        </ComposedChart>
+              axisLine={false} tickLine={false} domain={incomeDomain} hide />
+            <YAxis yAxisId="margin" orientation="right"
+              tickFormatter={(v) => `${v.toFixed(0)}%`}
+              tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+              domain={[marginMin, marginMax]} width={36} />
+            {(hasNegative || incomeHasNeg) && (
+              <ReferenceLine yAxisId="rev" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
+            )}
+            <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={separateIncomeAxis} />} />
+            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+              formatter={(value) =>
+                value === "revenue" ? "매출" :
+                value === "operatingIncome" ? "영업이익 (별도 축)" : "영업이익률"
+              } />
+            <Bar yAxisId="rev" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
+              {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.revenue : COLORS.revenue} />)}
+            </Bar>
+            <Bar yAxisId="inc" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
+              {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.operatingIncome : COLORS.operatingIncome} />)}
+            </Bar>
+            <Line yAxisId="margin" dataKey="operatingMargin" name="operatingMargin"
+              stroke={COLORS.margin} strokeWidth={2}
+              dot={{ r: 3, fill: COLORS.margin, strokeWidth: 0 }} activeDot={{ r: 4 }}
+              connectNullData={false} />
+          </ComposedChart>
+        ) : (
+          // ── Normal mode: revenue + income share the left axis ──
+          <ComposedChart data={entries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="left" orientation="left"
+              tickFormatter={(v) => formatYAxis(v, currency)}
+              tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+              domain={leftDomain} width={52} />
+            <YAxis yAxisId="right" orientation="right"
+              tickFormatter={(v) => `${v.toFixed(0)}%`}
+              tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+              domain={[marginMin, marginMax]} width={36} />
+            {hasNegative && (
+              <ReferenceLine yAxisId="left" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
+            )}
+            <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={false} />} />
+            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+              formatter={(value) =>
+                value === "revenue" ? "매출" :
+                value === "operatingIncome" ? "영업이익" : "영업이익률"
+              } />
+            <Bar yAxisId="left" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
+              {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.revenue : COLORS.revenue} />)}
+            </Bar>
+            <Bar yAxisId="left" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
+              {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.operatingIncome : COLORS.operatingIncome} />)}
+            </Bar>
+            <Line yAxisId="right" dataKey="operatingMargin" name="operatingMargin"
+              stroke={COLORS.margin} strokeWidth={2}
+              dot={{ r: 3, fill: COLORS.margin, strokeWidth: 0 }} activeDot={{ r: 4 }}
+              connectNullData={false} />
+          </ComposedChart>
+        )}
       </ResponsiveContainer>
 
       <div className="flex flex-col items-end gap-0.5">
@@ -318,7 +306,7 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
         )}
         {separateIncomeAxis && (
           <p className="text-[10px] text-muted-foreground">
-            매출(보라) · 영업이익(초록) 축 독립 적용 — 막대 높이는 각 수치 기준
+            매출·영업이익 스케일 차이로 독립 축 적용 — 실제값은 툴팁 참조
           </p>
         )}
       </div>
