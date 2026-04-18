@@ -1527,6 +1527,96 @@ router.delete("/:id", async (req, res) => {
 });
 
 // ─── 인기 피드: 최근 완료된 공개 분석 목록 ──────────────────────────────────────
+router.get("/live-insights", async (_req, res) => {
+  try {
+    const STEP_LABELS: Record<string, string> = {
+      company_intro:      "기업 브리핑",
+      industry_analysis:  "산업 분석",
+      catalyst_analysis:  "촉매 분석",
+      company_analysis:   "실적 분석",
+      relative_valuation: "적정주가 산출",
+      market_analysis:    "기술적 분석",
+      investment_strategy:"최종 결론",
+    };
+
+    const rows = await db
+      .select({
+        companyName: analysesTable.companyName,
+        ticker: analysesTable.ticker,
+        stepKey: analysisStepsTable.stepKey,
+        content: analysisStepsTable.content,
+        createdAt: analysisStepsTable.createdAt,
+      })
+      .from(analysisStepsTable)
+      .innerJoin(analysesTable, eq(analysisStepsTable.analysisId, analysesTable.id))
+      .where(
+        and(
+          eq(analysesTable.status, "completed"),
+          isNotNull(analysisStepsTable.content),
+        )
+      )
+      .orderBy(desc(analysisStepsTable.createdAt))
+      .limit(30);
+
+    // 종목당 하나만 (가장 최신 분석 기준)
+    const seen = new Set<string>();
+    const items: { time: string; text: string; companyName: string; ticker: string; stepLabel: string }[] = [];
+
+    for (const row of rows) {
+      const key = `${row.ticker}_${row.stepKey}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let snippet = "";
+      if (row.stepKey === "company_intro" || row.stepKey === "investment_strategy") {
+        // 이미 짧은 텍스트 — JSON이면 파싱해서 summary 추출
+        try {
+          const parsed = JSON.parse(row.content ?? "");
+          snippet = parsed.summary ?? parsed.key_issue ?? "";
+        } catch {
+          snippet = (row.content ?? "").replace(/\n.*/s, "").trim();
+        }
+      } else {
+        // 마크다운에서 첫 의미있는 문장 추출
+        const clean = (row.content ?? "")
+          .replace(/^#+.+/gm, "")      // 헤더 제거
+          .replace(/\|.*\|/g, "")       // 테이블 제거
+          .replace(/[*_`]/g, "")        // 마크다운 기호 제거
+          .replace(/\n+/g, " ")
+          .trim();
+        const firstSentence = clean.match(/[^.!?。]+[.!?。]/)?.[0]?.trim() ?? clean.slice(0, 80);
+        snippet = firstSentence;
+      }
+
+      if (!snippet || snippet.length < 10) continue;
+
+      const elapsedMs = Date.now() - new Date(row.createdAt ?? "").getTime();
+      const elapsedMin = Math.floor(elapsedMs / 60000);
+      const timeLabel =
+        elapsedMin < 1   ? "방금 전" :
+        elapsedMin < 60  ? `${elapsedMin}분 전` :
+        elapsedMin < 1440? `${Math.floor(elapsedMin / 60)}시간 전` :
+                           `${Math.floor(elapsedMin / 1440)}일 전`;
+
+      const stepLabel = STEP_LABELS[row.stepKey ?? ""] ?? row.stepKey ?? "";
+      items.push({
+        time: timeLabel,
+        text: `${stepLabel} 완료 — ${row.companyName}: ${snippet.slice(0, 80)}`,
+        companyName: row.companyName ?? "",
+        ticker: row.ticker ?? "",
+        stepLabel,
+      });
+
+      if (items.length >= 5) break;
+    }
+
+    res.json(items);
+  } catch (err: any) {
+    console.error("[GET /analysis/live-insights]", err?.message);
+    res.status(500).json({ error: "인사이트를 가져오지 못했습니다" });
+  }
+});
+
 router.get("/popular", async (_req, res) => {
   try {
     const rows = await db

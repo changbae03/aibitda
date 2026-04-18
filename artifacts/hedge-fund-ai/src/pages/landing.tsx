@@ -2,6 +2,8 @@ import { useSignIn, useUser } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { getApiUrl } from "@/lib/utils";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -37,11 +39,26 @@ const DEMO_STEPS = [
   { key: "investment_strategy", label: "최종 결론",              done: false, active: false },
 ];
 
-const SAMPLE_ALERTS = [
-  { time: "방금 전", text: "매크로 산업 분석 완료 — 반도체 수요 회복 사이클 초기" },
-  { time: "1분 전",  text: "카탈리스트 확인 — 외국인 순매수 전환, 보유비중 +0.8%p" },
-  { time: "2분 전",  text: "실적 전망 완료 — 2025E 영업이익 컨센서스 대비 +12%" },
-];
+interface LiveInsight {
+  time: string;
+  text: string;
+  companyName: string;
+  ticker: string;
+  stepLabel: string;
+}
+
+function useLiveInsights() {
+  return useQuery<LiveInsight[]>({
+    queryKey: ["live-insights"],
+    queryFn: async () => {
+      const res = await fetch(getApiUrl("api/analysis/live-insights"), { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 2,
+    refetchInterval: 1000 * 60 * 5,
+  });
+}
 
 function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
   return (
@@ -55,11 +72,18 @@ function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
 function RightPanel() {
   const [visibleAlerts, setVisibleAlerts] = useState(0);
   const [thinkingDots, setThinkingDots] = useState(1);
+  const { data: liveInsights = [] } = useLiveInsights();
 
   useEffect(() => {
-    const t1 = setInterval(() => setVisibleAlerts(v => Math.min(v + 1, SAMPLE_ALERTS.length)), 1200);
+    if (liveInsights.length === 0) return;
+    setVisibleAlerts(0);
+    const t1 = setInterval(() => setVisibleAlerts(v => Math.min(v + 1, liveInsights.length)), 1200);
+    return () => clearInterval(t1);
+  }, [liveInsights.length]);
+
+  useEffect(() => {
     const t2 = setInterval(() => setThinkingDots(d => (d % 3) + 1), 500);
-    return () => { clearInterval(t1); clearInterval(t2); };
+    return () => clearInterval(t2);
   }, []);
 
   return (
@@ -122,7 +146,7 @@ function RightPanel() {
         </div>
         <div className="space-y-2.5">
           <AnimatePresence>
-            {SAMPLE_ALERTS.slice(0, visibleAlerts).map((alert, i) => (
+            {liveInsights.slice(0, visibleAlerts).map((alert, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 8 }}
