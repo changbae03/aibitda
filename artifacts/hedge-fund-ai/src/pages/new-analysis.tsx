@@ -6,7 +6,6 @@ import { Search, Loader2, Building2, ArrowRight, ChevronRight, Share2, Check, Za
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl } from "@/lib/utils";
-import { useAuth } from "@/lib/auth";
 
 interface CreditStatus {
   dailyUsed: number;
@@ -148,7 +147,6 @@ export default function NewAnalysis() {
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
   const queryClient = useQueryClient();
   const { data: credits } = useCredits();
-  const { data: authData } = useAuth();
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
   const trending = useTrendingTickers();
@@ -237,12 +235,6 @@ export default function NewAnalysis() {
       return;
     }
 
-    // 로그인 여부 사전 확인 — 비로그인 시 로그인 페이지로 이동
-    if (authData !== undefined && !authData?.user) {
-      setLocation("/login");
-      return;
-    }
-
     setError("");
     setShowDropdown(false);
     try {
@@ -250,10 +242,7 @@ export default function NewAnalysis() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       setLocation(`/analysis/${result.id}`);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        // 세션 만료 또는 비로그인 → 로그인 페이지로
-        setLocation("/login");
-      } else if (err instanceof ApiError && err.status === 402) {
+      if (err instanceof ApiError && err.status === 402) {
         const msg = (err.data as any)?.error ?? "오늘 분석 횟수를 모두 사용했습니다.";
         setError(msg);
       } else {
