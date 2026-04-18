@@ -16,8 +16,8 @@ import {
   ArrowLeft,
   ShieldCheck,
   RefreshCw,
-  Bookmark,
-  BookmarkCheck,
+  Share2,
+  Check,
   Database,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
@@ -372,14 +372,16 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
-  const [bookmarked, setBookmarked] = useState(() => {
-    try { return localStorage.getItem(`bookmark-${id}`) === "1"; } catch { return false; }
-  });
-  const toggleBookmark = () => {
-    const next = !bookmarked;
-    setBookmarked(next);
-    try { next ? localStorage.setItem(`bookmark-${id}`, "1") : localStorage.removeItem(`bookmark-${id}`); } catch {}
-    if (next) setLocation("/history");
+  const [shared, setShared] = useState(false);
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title: analysis?.ticker ?? "애빛다 리포트", url }); } catch {}
+    } else {
+      try { await navigator.clipboard.writeText(url); } catch {}
+    }
+    setShared(true);
+    setTimeout(() => setShared(false), 2000);
   };
 
   type QCStatus = "checking" | "approved" | "revising" | "revised";
@@ -699,21 +701,19 @@ export default function AnalysisDetail() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
           >
-            {/* 보관하기 */}
+            {/* 공유하기 */}
             <div className="mt-8 print:hidden">
               <button
-                onClick={toggleBookmark}
+                onClick={handleShare}
                 className={cn(
                   "w-full flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
-                  bookmarked
-                    ? "bg-primary border-primary text-white shadow-sm hover:bg-primary/90"
+                  shared
+                    ? "bg-primary border-primary text-white shadow-sm"
                     : "bg-white border-neutral-200 text-neutral-700 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
                 )}
               >
-                {bookmarked
-                  ? <BookmarkCheck className="w-4 h-4" />
-                  : <Bookmark className="w-4 h-4" />}
-                {bookmarked ? "보관됨" : "보관하기"}
+                {shared ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {shared ? "링크 복사됨" : "공유하기"}
               </button>
             </div>
 
