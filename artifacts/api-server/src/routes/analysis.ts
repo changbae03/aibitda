@@ -952,6 +952,13 @@ Select peers based on: similar business model, competitive relationship, or mean
 Prefer peers that are well-covered on Yahoo Finance (major Korean listed companies and global companies).
 ${previousContext ? `\nContext:\n${previousContext.slice(0, 1500)}` : ""}
 
+PEER SELECTION RULES (strictly enforce):
+- Business model match is MANDATORY. Do NOT mix these types in the same peer group:
+  * Pure pipeline biotech (파이프라인 바이오텍) vs CDMO/CMO (위탁생산기업, e.g., 삼성바이오로직스, 에스티팜, 바이넥스). EV/Sales comparison between them is invalid.
+  * Drug discovery/royalty model vs self-commercialization model — flag if you must include a mixed model peer.
+- For pipeline-only biotechs (pre-revenue or minimal revenue), prefer peers that are also pre-revenue or early-commercial stage with similar therapeutic area and modality (RNA, cell therapy, small molecule, etc.)
+- If a strictly comparable peer set cannot be found in Korea, include 1-2 US-listed peers of similar stage and modality.
+
 Return a JSON object with this exact schema:
 {"peers": [{"ticker": "005930.KS", "name": "삼성전자", "exchange": "KOSPI", "reason": "동일 메모리 반도체 시장 경쟁사, PER/EV/EBITDA 비교 유효"}, ...]}
 
