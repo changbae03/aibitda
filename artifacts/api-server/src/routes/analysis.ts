@@ -460,6 +460,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       modules: [
         "financialData",
         "defaultKeyStatistics",
+        "summaryDetail",
         "incomeStatementHistory",
         "balanceSheetHistory",
         "cashflowStatementHistory",
@@ -508,6 +509,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
   const fd = result.financialData as any;
   const ks = result.defaultKeyStatistics as any;
+  const sd = result.summaryDetail as any;
   const currency: string = fd?.financialCurrency ?? "USD";
 
   // Current financial metrics
@@ -710,9 +712,24 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (!dnaMap[latestWaccYear ?? ""] && fd?.ebitda != null && fd?.operatingCashflow != null) {
       // Rough D&A estimate from EBITDA - EBIT if both available
     }
+    // 시가총액을 억원 단위로 명시 — AI가 조→억 변환 시 ×100,000 오류를 방지
+    // summaryDetail.marketCap이 한국 주식에서 가장 안정적으로 값 제공
+    const waccMcap: number | null = sd?.marketCap ?? ks?.marketCap ?? null;
+    if (waccMcap != null) {
+      if (currency === "KRW") {
+        const mcapOkWon = Math.round(waccMcap / 1e8);
+        waccLines.unshift(
+          `시가총액(E, 억원 정확값): ${mcapOkWon.toLocaleString("ko-KR")}억원` +
+          `  ← E% 계산 시 반드시 이 억원 숫자를 사용 (조원 직접 사용·재변환 금지)`
+        );
+      } else {
+        waccLines.unshift(`시가총액(E): $${(waccMcap / 1e9).toFixed(2)}B`);
+      }
+    }
     if (waccLines.length > 0) {
       lines.push("\n[⚡ WACC·EBITDA 계산 핵심 데이터 — 반드시 아래 수치를 사용할 것]");
       lines.push("※ CoD = 이자비용 ÷ 총부채, EBITDA = 영업이익 + D&A (추정 금지, 아래 수치 직접 사용)");
+      lines.push("※ 단위 주의: 1조 = 10,000억 (AI 변환 오류 빈번) — 아래 시가총액은 이미 억원으로 변환된 값임");
       lines.push(...waccLines);
     }
   }
