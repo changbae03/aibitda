@@ -598,27 +598,57 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
   if (allYears.length > 0) {
     lines.push("\n[연간 손익계산서 — fundamentalsTimeSeries]");
-    lines.push("※ 이 수치로 매출총이익률·영업이익률·순이익률·ROE를 직접 계산하세요.");
+    lines.push("⛔ 아래 수치는 서버가 원천 데이터로부터 직접 계산한 확정값임. AI가 다른 소스로 재계산하거나 다른 값을 사용하는 것은 금지.");
     for (const year of allYears) {
-      const rev  = revMap[year]  != null ? fmtNum(revMap[year], currency)  : "-";
+      const revRaw = revMap[year] ?? null;
+      const opRaw  = opMap[year] ?? null;
+      const niRaw  = niMap[year] ?? null;
+      const eqRaw  = eqMap[year] ?? null;
+
+      const rev  = revRaw != null ? fmtNum(revRaw, currency)  : "-";
       const gp   = gpMap[year]   != null ? fmtNum(gpMap[year], currency)   : "-";
-      const op   = opMap[year]   != null ? fmtNum(opMap[year], currency)   : "-";
-      const ni   = niMap[year]   != null ? fmtNum(niMap[year], currency)   : "-";
+      const op   = opRaw  != null ? fmtNum(opRaw, currency)   : "-";
+      const ni   = niRaw  != null ? fmtNum(niRaw, currency)   : "-";
+      const eq   = eqRaw  != null ? fmtNum(eqRaw, currency)   : "-";
       const eps  = epsMap[year]  != null ? epsMap[year].toFixed(2)         : "-";
-      const roeRaw = roeMap[year] != null
-        ? roeMap[year] * 100
-        : (niMap[year] != null && eqMap[year] != null && eqMap[year] !== 0 ? niMap[year] / eqMap[year] * 100 : null);
-      const roe = roeRaw != null ? `${roeRaw.toFixed(1)}%` : "-";
-      const gpM = revMap[year] && gpMap[year]  ? `${(gpMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
-      const opM = revMap[year] && opMap[year]  ? `${(opMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
-      const niM = revMap[year] && niMap[year]  ? `${(niMap[year]  / revMap[year]  * 100).toFixed(1)}%` : "-";
-      const de  = liabMap[year] && eqMap[year] ? `${(liabMap[year] / eqMap[year] * 100).toFixed(1)}%` : "-";
-      // EBITDA = 영업이익 + D&A (직접 계산)
-      const ebitdaRaw = opMap[year] != null && dnaMap[year] != null ? opMap[year] + dnaMap[year] : null;
-      const ebitda = ebitdaRaw != null ? fmtNum(ebitdaRaw, currency) : "-";
-      const ebitdaM = ebitdaRaw != null && revMap[year] ? `${(ebitdaRaw / revMap[year] * 100).toFixed(1)}%` : "-";
+
+      // OPM: 서버에서 직접 계산해 제공 — AI 재계산 금지
+      const opM = (revRaw && opRaw != null) ? `${(opRaw / revRaw * 100).toFixed(1)}%` : "-";
+      const gpM = (revRaw && gpMap[year] != null) ? `${(gpMap[year] / revRaw * 100).toFixed(1)}%` : "-";
+      const niM = (revRaw && niRaw != null) ? `${(niRaw / revRaw * 100).toFixed(1)}%` : "-";
+      const de  = (liabMap[year] && eqRaw) ? `${(liabMap[year] / eqRaw * 100).toFixed(1)}%` : "-";
+
+      // ROE: 서버에서 직접 계산 (NI÷자기자본). Yahoo annualReturnOnEquity는 일부 종목에서 누락되므로 항상 직접 계산 사용
+      const roeCalc = (niRaw != null && eqRaw != null && eqRaw !== 0) ? niRaw / eqRaw * 100 : null;
+      // Yahoo timeseries ROE는 참고용으로만 병기
+      const roeTs  = roeMap[year] != null ? roeMap[year] * 100 : null;
+      let roeStr: string;
+      if (roeCalc != null) {
+        roeStr = `${roeCalc.toFixed(1)}%[계산: ${fmtNum(niRaw!, currency)}÷${eq}]`;
+        if (roeTs != null && Math.abs(roeTs - roeCalc) > 2) {
+          roeStr += `(Yahoo제공ROE ${roeTs.toFixed(1)}%와 차이→계산값 우선)`;
+        }
+      } else {
+        roeStr = roeTs != null ? `${roeTs.toFixed(1)}%(Yahoo)` : "-";
+      }
+
+      // OPM 극단값 경고 (바이오 등 소매출 기업에서 -수천% 발생 가능 — 오류 아님)
+      const opMRaw = (revRaw && opRaw != null) ? opRaw / revRaw * 100 : null;
+      const opMFlag = opMRaw != null && Math.abs(opMRaw) > 200
+        ? `⚠️OPM극단값(매출 ${rev}, 영업이익 ${op}, 비율 ${opM} — 소매출 기업 특성)` : "";
+
+      // 순이익 부호 설명 (영업손실이지만 순이익 양수인 경우)
+      const niNote = (opRaw != null && niRaw != null && opRaw < 0 && niRaw > 0)
+        ? " ※영업손실에도 순이익양수=영업외수익(정부지원금·투자수익 등) 반영"
+        : "";
+
+      // EBITDA = 영업이익 + D&A
+      const ebitdaRaw = (opRaw != null && dnaMap[year] != null) ? opRaw + dnaMap[year] : null;
+      const ebitda  = ebitdaRaw != null ? fmtNum(ebitdaRaw, currency) : "-";
+      const ebitdaM = (ebitdaRaw != null && revRaw) ? `${(ebitdaRaw / revRaw * 100).toFixed(1)}%` : "-";
+
       lines.push(
-        `  ${year}년: 매출 ${rev} | GP ${gp}(${gpM}) | 영업이익 ${op}(${opM}) | EBITDA ${ebitda}(${ebitdaM}) | 순이익 ${ni}(${niM}) | EPS ${eps} | ROE ${roe} | D/E ${de}`
+        `  ${year}년: 매출 ${rev} | GP ${gp}(${gpM}) | 영업이익 ${op}(${opM})${opMFlag} | EBITDA ${ebitda}(${ebitdaM}) | 순이익 ${ni}(${niM})${niNote} | EPS ${eps} | ROE ${roeStr} | 자기자본 ${eq} | D/E ${de}`
       );
     }
   } else {
