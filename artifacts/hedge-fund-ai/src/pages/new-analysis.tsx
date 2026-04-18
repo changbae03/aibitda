@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Share2, Check, Zap } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Share2, Check, Zap, Flame } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
+import { getApiUrl } from "@/lib/utils";
 
 interface CreditStatus {
   dailyUsed: number;
@@ -109,6 +110,38 @@ interface SearchResult {
   quoteType: string;
 }
 
+interface PopularTicker {
+  ticker: string;
+  companyName: string;
+  count: number;
+  investmentVerdict: string | null;
+}
+
+function useTrendingTickers(): PopularTicker[] {
+  const [trending, setTrending] = useState<PopularTicker[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(getApiUrl("/api/analysis/popular"));
+        if (!r.ok) return;
+        const data: { ticker: string; companyName: string; investmentVerdict: string | null }[] = await r.json();
+        // Count by ticker
+        const map = new Map<string, { companyName: string; count: number; investmentVerdict: string | null }>();
+        for (const d of data) {
+          const existing = map.get(d.ticker);
+          if (existing) { existing.count++; } else { map.set(d.ticker, { companyName: d.companyName, count: 1, investmentVerdict: d.investmentVerdict }); }
+        }
+        const sorted = [...map.entries()]
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 8)
+          .map(([ticker, v]) => ({ ticker, ...v }));
+        setTrending(sorted);
+      } catch {}
+    })();
+  }, []);
+  return trending;
+}
+
 export default function NewAnalysis() {
   const [, setLocation] = useLocation();
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
@@ -116,6 +149,7 @@ export default function NewAnalysis() {
   const { data: credits } = useCredits();
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
+  const trending = useTrendingTickers();
 
   useEffect(() => {
     const code = localStorage.getItem("pending_referral");
@@ -397,6 +431,42 @@ export default function NewAnalysis() {
             </motion.p>
           )}
         </form>
+
+        {/* 인기 종목 */}
+        <AnimatePresence>
+          {trending.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col gap-2"
+            >
+              <div className="flex items-center gap-1.5">
+                <Flame className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">많이 찾은 기업</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {trending.map((t) => (
+                  <motion.button
+                    key={t.ticker}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => { setTicker(t.ticker); handleSubmit(t.ticker); }}
+                    disabled={isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-50 border border-neutral-200 hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-40 group"
+                  >
+                    <span className="font-mono text-[10px] text-neutral-300 group-hover:text-primary/60 transition-colors">{t.ticker}</span>
+                    <span className="text-[12.5px] text-neutral-700 font-medium">{t.companyName}</span>
+                    {t.count > 1 && (
+                      <span className="text-[9px] text-neutral-300 font-medium">×{t.count}</span>
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Quick picks */}
         <div className="flex flex-col gap-2">
