@@ -215,14 +215,28 @@ export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSu
           return null;
         };
 
-        const cash       = findBS(["현금및현금성자산", "현금및단기금융상품", "현금성자산"]);
+        const cash       = findBS(["현금및현금성자산", "현금및단기금융상품", "현금성자산", "현금및현금성자산등"]);
         const totalAssets = findBS(["자산총계"]);
         const totalLiab  = findBS(["부채총계"]);
         const equity     = findBS(["자본총계"]);
-        const shortTermDebt = findBS(["단기차입금"]);
-        const longTermDebt  = findBS(["장기차입금", "장기차입"]);
-        const totalDebt = (shortTermDebt != null || longTermDebt != null)
-          ? (shortTermDebt ?? 0) + (longTermDebt ?? 0) : null;
+
+        // 금융부채 항목 포괄 수집 (단기차입금·사채·리스부채 등)
+        const shortTermDebt      = findBS(["단기차입금"]);
+        const longTermDebt       = findBS(["장기차입금", "장기차입"]);
+        const shortTermBond      = findBS(["단기사채"]);
+        const longTermBond       = findBS(["사채"]);           // 장기 사채
+        const currentPortionLT   = findBS(["유동성장기부채", "유동성장기차입금"]);
+        const convertibleBond    = findBS(["전환사채", "교환사채", "신주인수권부사채"]);
+        const leaseLiab          = findBS(["리스부채", "금융리스부채"]);
+        const shortFinLiab       = findBS(["단기금융부채", "유동금융부채"]);
+        const longFinLiab        = findBS(["장기금융부채", "비유동금융부채"]);
+
+        const debtItems = [
+          shortTermDebt, longTermDebt, shortTermBond, longTermBond,
+          currentPortionLT, convertibleBond, leaseLiab,
+          shortFinLiab, longFinLiab,
+        ].filter((v): v is number => v != null);
+        const totalDebt = debtItems.length > 0 ? debtItems.reduce((a, b) => a + b, 0) : null;
 
         if (cash !== null || totalAssets !== null) {
           return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt };

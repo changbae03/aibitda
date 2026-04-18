@@ -1371,18 +1371,30 @@ router.post("/", async (req, res) => {
   if (dartBalance) {
     const fmtKrw = (v: number | null) =>
       v == null ? "N/A" : `${(v / 1e8).toFixed(1)}억원`;
-    const netDebt = (dartBalance.totalDebt != null && dartBalance.cash != null)
-      ? dartBalance.totalDebt - dartBalance.cash : null;
-    const netDebtStr = netDebt == null ? "N/A"
-      : netDebt < 0 ? `${fmtKrw(-netDebt)} (순현금)` : `${fmtKrw(netDebt)} (순부채)`;
+
+    // 순현금 계산: totalDebt가 null이면 금융부채 항목이 DART에서 미검출된 것
+    // → Yahoo Finance의 WACC 섹션에서 totalDebt를 보완 사용하도록 안내
+    let netDebtStr: string;
+    if (dartBalance.totalDebt != null && dartBalance.cash != null) {
+      const netDebt = dartBalance.totalDebt - dartBalance.cash;
+      netDebtStr = netDebt < 0
+        ? `${fmtKrw(-netDebt)} (순현금)  ← DCF 주주가치 환산 시 이 값 사용`
+        : `${fmtKrw(netDebt)} (순부채)  ← DCF 주주가치 환산 시 이 값 사용`;
+    } else if (dartBalance.cash != null && dartBalance.totalDebt == null) {
+      // 금융부채 항목 미검출 — Yahoo Finance WACC 섹션의 총부채 수치로 보완
+      netDebtStr = `금융부채 항목 미검출 (차입금·사채 계정이 DART 별도 항목으로 존재하지 않을 수 있음) — Yahoo Finance "[⚡ WACC·EBITDA 계산 핵심 데이터]" 섹션의 총부채(Total Debt) 수치로 보완하세요. 보완 후: 순현금 = 현금 ${fmtKrw(dartBalance.cash)} − Yahoo총부채`;
+    } else {
+      netDebtStr = "N/A";
+    }
+
     dartBalanceContext = [
       `\n[⭐ DART 사업보고서 재무상태표 — ${dartBalance.year}년 ${dartBalance.fsType === "CFS" ? "연결" : "별도"} 기준]`,
       `⚠️ 이 데이터는 DART OpenAPI 원천 데이터입니다. Yahoo Finance 수치와 다를 경우 이 값을 우선 사용하세요.`,
       `현금및현금성자산: ${fmtKrw(dartBalance.cash)}`,
       `자산총계: ${fmtKrw(dartBalance.totalAssets)}`,
-      `부채총계: ${fmtKrw(dartBalance.totalLiab)}`,
+      `부채총계(DART전체): ${fmtKrw(dartBalance.totalLiab)}  ※ 매입채무·충당부채 등 영업부채 포함, 순현금 계산엔 금융부채만 사용`,
       `자본총계: ${fmtKrw(dartBalance.equity)}`,
-      dartBalance.totalDebt != null ? `금융부채(차입금 합계): ${fmtKrw(dartBalance.totalDebt)}` : "",
+      dartBalance.totalDebt != null ? `금융부채(차입금+사채+리스 합계): ${fmtKrw(dartBalance.totalDebt)}` : `금융부채: 개별 차입금·사채 항목 미검출 (무차입/소액 차입 가능성)`,
       `순현금/순부채: ${netDebtStr}`,
     ].filter(Boolean).join("\n");
   }
