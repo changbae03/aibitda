@@ -336,18 +336,27 @@ router.get("/search/:query", async (req, res) => {
       const result = await (yahooFinance as any).search(query, { newsCount: 0, quotesCount: 20 });
       const quotes: any[] = result?.quotes ?? [];
       yahoo = quotes
-        .filter((q: any) => q.symbol && (q.symbol.endsWith(".KS") || q.symbol.endsWith(".KQ")))
-        .map((q: any) => ({
-          symbol: q.symbol,
-          shortname: q.longname || q.shortname || q.symbol,
-          exchange: q.symbol.endsWith(".KS") ? "KOSPI" : "KOSDAQ",
-          quoteType: "EQUITY",
-        }));
+        .filter((q: any) => q.symbol && q.quoteType === "EQUITY")
+        .map((q: any) => {
+          let exchange = q.exchange ?? "";
+          if (q.symbol.endsWith(".KS")) exchange = "KOSPI";
+          else if (q.symbol.endsWith(".KQ")) exchange = "KOSDAQ";
+          else if (exchange === "NMS" || exchange === "NGM" || exchange === "NCM") exchange = "NASDAQ";
+          else if (exchange === "NYQ" || exchange === "NYS") exchange = "NYSE";
+          else if (exchange === "ASE" || exchange === "AMX") exchange = "AMEX";
+          else if (!exchange) exchange = "US";
+          return {
+            symbol: q.symbol,
+            shortname: q.longname || q.shortname || q.symbol,
+            exchange,
+            quoteType: "EQUITY",
+          };
+        });
     } catch { /* fall through */ }
 
     // 로컬 결과 우선, Yahoo Finance 결과 추가 (중복 심볼 제거)
     const seen = new Set(local.map(r => r.symbol));
-    const merged = [...local, ...yahoo.filter(r => !seen.has(r.symbol))].slice(0, 8);
+    const merged = [...local, ...yahoo.filter(r => !seen.has(r.symbol))].slice(0, 10);
     res.json(merged);
     return;
   }

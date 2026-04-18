@@ -89,8 +89,10 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
 const EXAMPLES = [
   { ticker: "005930", label: "삼성전자" },
   { ticker: "000660", label: "SK하이닉스" },
+  { ticker: "NVDA", label: "NVIDIA" },
+  { ticker: "AAPL", label: "Apple" },
   { ticker: "035420", label: "NAVER" },
-  { ticker: "005380", label: "현대차" },
+  { ticker: "TSLA", label: "Tesla" },
 ];
 
 function isKorean(str: string) {
@@ -269,7 +271,7 @@ export default function NewAnalysis() {
             어떤 종목을<br />분석할까요?
           </h1>
           <p className="text-sm text-neutral-400 leading-relaxed">
-            코스피·코스닥 종목코드 또는 회사명으로 검색하면<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
+            코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
           </p>
           <CreditsBadge credits={credits} />
         </div>
@@ -295,7 +297,7 @@ export default function NewAnalysis() {
                 setTicker(e.currentTarget.value);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="삼성전자 또는 005930"
+              placeholder="삼성전자, NVDA, 005930, AAPL..."
               className="flex-1 min-w-0 bg-transparent border-none outline-none text-neutral-900 text-[15px] placeholder:text-neutral-300 placeholder:text-sm"
               autoFocus
               disabled={isPending}
@@ -327,8 +329,19 @@ export default function NewAnalysis() {
                 className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-neutral-200 rounded-xl shadow-lg z-50 overflow-hidden"
               >
                 {suggestions.map((s, i) => {
-                  const code = s.symbol.replace(/\.(KS|KQ)$/, "");
-                  const isKospi = s.exchange === "KOSPI";
+                  const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
+                  const code = isKrStock ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
+                  const ex = s.exchange;
+                  const badgeStyle =
+                    ex === "KOSPI" ? "bg-blue-50 text-blue-500" :
+                    ex === "KOSDAQ" ? "bg-emerald-50 text-emerald-600" :
+                    ex === "NASDAQ" ? "bg-violet-50 text-violet-600" :
+                    ex === "NYSE" ? "bg-orange-50 text-orange-600" :
+                    "bg-neutral-100 text-neutral-500";
+                  const badgeLabel =
+                    ex === "KOSPI" ? "코스피" :
+                    ex === "KOSDAQ" ? "코스닥" :
+                    ex || "US";
                   return (
                     <button
                       key={s.symbol}
@@ -344,12 +357,8 @@ export default function NewAnalysis() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[13px] font-semibold text-neutral-900 truncate">{s.shortname}</span>
-                          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                            isKospi
-                              ? "bg-blue-50 text-blue-500"
-                              : "bg-emerald-50 text-emerald-600"
-                          }`}>
-                            {isKospi ? "코스피" : "코스닥"}
+                          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badgeStyle}`}>
+                            {badgeLabel}
                           </span>
                         </div>
                         <span className="font-mono text-xs text-neutral-400">{code}</span>
