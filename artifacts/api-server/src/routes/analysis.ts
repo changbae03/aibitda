@@ -628,12 +628,9 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       const roeTs  = roeMap[year] != null ? roeMap[year] * 100 : null;
       let roeStr: string;
       if (roeCalc != null) {
-        roeStr = `${roeCalc.toFixed(1)}%[계산: ${fmtNum(niRaw!, currency)}÷${eq}]`;
-        if (roeTs != null && Math.abs(roeTs - roeCalc) > 2) {
-          roeStr += `(Yahoo제공ROE ${roeTs.toFixed(1)}%와 차이→계산값 우선)`;
-        }
+        roeStr = `${roeCalc.toFixed(1)}%`;
       } else {
-        roeStr = roeTs != null ? `${roeTs.toFixed(1)}%(Yahoo)` : "-";
+        roeStr = roeTs != null ? `${roeTs.toFixed(1)}%` : "-";
       }
 
       // OPM 극단값 경고 (바이오 등 소매출 기업에서 -수천% 발생 가능 — 오류 아님)
