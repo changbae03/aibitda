@@ -190,6 +190,175 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
   return "적정 수준";
 }
 
+function verdictStyle(verdict: string | null | undefined) {
+  if (!verdict) return { label: "—", color: "text-neutral-500", bg: "bg-neutral-100" };
+  const s = verdict.toLowerCase();
+  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700", bg: "bg-emerald-50" };
+  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700",   bg: "bg-green-50" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700",     bg: "bg-red-50" };
+  if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600",     bg: "bg-red-50" };
+  return { label: "적정 수준", color: "text-amber-700", bg: "bg-amber-50" };
+}
+
+declare global { interface Window { Kakao: any } }
+
+function loadKakaoSDK(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.getElementById("kakao-sdk")) { resolve(); return; }
+    const s = document.createElement("script");
+    s.id = "kakao-sdk";
+    s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => resolve();
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const url = window.location.href;
+  const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
+  const vs = verdictStyle(analysis?.verdict);
+  const targetPriceStr = analysis?.targetPrice
+    ? formatCurrency(analysis.targetPrice, currency)
+    : null;
+
+  const shareText = `${analysis?.ticker ?? ""} ${analysis?.companyName ?? ""} — ${vs.label}${targetPriceStr ? ` | 적정주가 ${targetPriceStr}` : ""}\nAI 7단계 파이프라인 분석 리포트 · 애빛다`;
+
+  const handleKakao = async () => {
+    const key = import.meta.env.VITE_KAKAO_JS_KEY;
+    if (!key) { handleCopy(); return; }
+    try {
+      await loadKakaoSDK();
+      if (!window.Kakao.isInitialized()) window.Kakao.init(key);
+      const imageUrl = `${window.location.origin}${import.meta.env.BASE_URL}opengraph.jpg`;
+      window.Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: {
+          title: `${analysis?.ticker ?? ""} ${analysis?.companyName ?? ""} — 애빛다`,
+          description: `${vs.label}${targetPriceStr ? ` · 적정주가 ${targetPriceStr}` : ""} | AI 분석 리포트`,
+          imageUrl,
+          link: { mobileWebUrl: url, webUrl: url },
+        },
+        buttons: [{ title: "리포트 보기", link: { mobileWebUrl: url, webUrl: url } }],
+      });
+    } catch { handleCopy(); }
+  };
+
+  const handleTelegram = () => {
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`;
+    window.open(tgUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopy = async () => {
+    try { await navigator.clipboard.writeText(url); } catch {}
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+        {/* Sheet */}
+        <motion.div
+          className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-white rounded-2xl shadow-2xl overflow-hidden"
+          initial={{ y: 60, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 60, opacity: 0 }}
+          transition={{ type: "spring", damping: 28, stiffness: 300 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-neutral-100">
+            <span className="text-sm font-semibold text-neutral-700">공유하기</span>
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-neutral-100 transition-colors">
+              <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Report Preview Card */}
+          <div className="mx-5 mt-4 rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
+            <div className="px-4 py-3 flex items-start gap-3">
+              <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <span className="text-primary text-xs font-bold">AI</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">{analysis?.ticker}</span>
+                  <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", vs.bg, vs.color)}>{vs.label}</span>
+                </div>
+                <p className="text-sm font-semibold text-neutral-800 mt-0.5 truncate">{analysis?.companyName}</p>
+                {targetPriceStr && (
+                  <p className="text-xs text-neutral-500 mt-0.5">적정주가 <span className="font-semibold text-neutral-700">{targetPriceStr}</span></p>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-2 border-t border-neutral-200 bg-white">
+              <p className="text-[10px] text-neutral-400">애빛다 · AI 기업분석 리포트</p>
+            </div>
+          </div>
+
+          {/* Share Buttons */}
+          <div className="px-5 py-4 grid grid-cols-3 gap-2.5">
+            {/* KakaoTalk */}
+            <button
+              onClick={handleKakao}
+              className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-[#FEE500] hover:bg-[#F5DB00] transition-colors group"
+            >
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.706 1.574 5.083 3.96 6.549L4.8 21l4.6-2.4A11.7 11.7 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" fill="#391B1B"/>
+              </svg>
+              <span className="text-[10px] font-semibold text-[#391B1B]">카카오톡</span>
+            </button>
+
+            {/* Telegram */}
+            <button
+              onClick={handleTelegram}
+              className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-[#229ED9] hover:bg-[#1a8fc4] transition-colors"
+            >
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="white">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8.02c-.12.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.52.26l.18-2.65 4.74-4.28c.21-.18-.04-.28-.31-.1L7.5 14.97 4.96 14.2c-.56-.17-.57-.56.12-.83l8.9-3.44c.47-.17.88.11.72.87z"/>
+              </svg>
+              <span className="text-[10px] font-semibold text-white">텔레그램</span>
+            </button>
+
+            {/* Copy Link */}
+            <button
+              onClick={handleCopy}
+              className={cn(
+                "flex flex-col items-center gap-1.5 py-3 rounded-xl transition-colors",
+                copied ? "bg-emerald-500" : "bg-neutral-100 hover:bg-neutral-200"
+              )}
+            >
+              {copied
+                ? <Check className="w-6 h-6 text-white" />
+                : <svg className="w-6 h-6 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+              }
+              <span className={cn("text-[10px] font-semibold", copied ? "text-white" : "text-neutral-500")}>
+                {copied ? "복사됨!" : "링크 복사"}
+              </span>
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 // ─── PeerMultiplesPanel ───────────────────────────────────────────────────────
 
 interface PeerMultiples {
@@ -372,17 +541,7 @@ export default function AnalysisDetail() {
   });
 
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
-  const [shared, setShared] = useState(false);
-  const handleShare = async () => {
-    const url = window.location.href;
-    if (navigator.share) {
-      try { await navigator.share({ title: analysis?.ticker ?? "애빛다 리포트", url }); } catch {}
-    } else {
-      try { await navigator.clipboard.writeText(url); } catch {}
-    }
-    setShared(true);
-    setTimeout(() => setShared(false), 2000);
-  };
+  const [showShareModal, setShowShareModal] = useState(false);
 
   type QCStatus = "checking" | "approved" | "revising" | "revised";
   interface StreamingStepState {
@@ -704,18 +863,16 @@ export default function AnalysisDetail() {
             {/* 공유하기 */}
             <div className="mt-8 print:hidden">
               <button
-                onClick={handleShare}
-                className={cn(
-                  "w-full flex items-center justify-center gap-2.5 rounded-xl border px-5 py-3.5 text-sm font-semibold transition-all duration-200",
-                  shared
-                    ? "bg-primary border-primary text-white shadow-sm"
-                    : "bg-white border-neutral-200 text-neutral-700 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
-                )}
+                onClick={() => setShowShareModal(true)}
+                className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-neutral-200 bg-white px-5 py-3.5 text-sm font-semibold text-neutral-700 transition-all duration-200 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
               >
-                {shared ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {shared ? "링크 복사됨" : "공유하기"}
+                <Share2 className="w-4 h-4" />
+                공유하기
               </button>
             </div>
+            {showShareModal && (
+              <ShareModal analysis={analysis} onClose={() => setShowShareModal(false)} />
+            )}
 
             {/* Disclaimer */}
             <div className="mt-5 pt-6 border-t border-neutral-100 print:mt-6">
