@@ -20,7 +20,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석" },
     { href: "/history", label: "내가 본 자료" },
-    { href: "/admin/peers", label: "피어 멀티플" },
   ];
 
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
