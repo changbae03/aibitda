@@ -27,6 +27,20 @@ import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+/**
+ * 한국 금융 단위 앞 4자리 이상 숫자에 천단위 쉼표를 삽입합니다.
+ * 연도(2024년), 종목코드(078160), 원/주 단위는 제외합니다.
+ */
+function addKrwCommas(text: string): string {
+  return text.replace(
+    /(-?)(\d{4,})(\.\d+)?(억원|억|조원|조|만원|만|달러|원(?!\/주))/g,
+    (_match, sign: string, intPart: string, decimal: string | undefined, unit: string) => {
+      const formatted = parseInt(intPart, 10).toLocaleString("ko-KR");
+      return `${sign}${formatted}${decimal ?? ""}${unit}`;
+    }
+  );
+}
+
 function prepareMarkdown(md: string): string {
   if (!md) return md;
 
@@ -46,7 +60,8 @@ function prepareMarkdown(md: string): string {
     if (isTableRow && !prevIsTableRow && !prevIsBlank) {
       out.push("");
     }
-    out.push(line);
+    // 한국 금융 단위 앞 숫자에 천단위 쉼표 삽입
+    out.push(addKrwCommas(line));
   }
 
   return out.join("\n");
