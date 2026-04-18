@@ -19,6 +19,8 @@ export const analysesTable = pgTable("analyses", {
   riskRewardRatio: real("risk_reward_ratio"),
   memo: text("memo"),
   isPublic: text("is_public").notNull().default("true"),
+  userRating: integer("user_rating"), // 1=부정적, 3=보통, 5=긍정적
+  userFeedback: text("user_feedback"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

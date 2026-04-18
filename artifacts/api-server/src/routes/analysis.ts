@@ -1627,19 +1627,65 @@ router.post("/:id/step", async (req, res) => {
   let enrichedContext = analysis.additionalContext ?? null;
   if (stepKey === "company_intro" || stepKey === "investment_strategy") {
     try {
-      const insights = await db
+      // ── Feature 1: 동일 종목 이전 분석 참고 ──────────────────────────────
+      if (stepKey === "company_intro") {
+        const prevAnalyses = await db
+          .select({
+            id: analysesTable.id,
+            createdAt: analysesTable.createdAt,
+            investmentVerdict: analysesTable.investmentVerdict,
+            targetPrice: analysesTable.targetPrice,
+            entryPrice: analysesTable.entryPrice,
+            stopLoss: analysesTable.stopLoss,
+            userRating: analysesTable.userRating,
+            userFeedback: analysesTable.userFeedback,
+          })
+          .from(analysesTable)
+          .where(
+            and(
+              eq(analysesTable.ticker, analysis.ticker),
+              eq(analysesTable.status, "completed"),
+              not(eq(analysesTable.id, analysis.id))
+            )
+          )
+          .orderBy(desc(analysesTable.createdAt))
+          .limit(3);
+
+        if (prevAnalyses.length > 0) {
+          const fmt = (n: number | null) => n == null ? "N/A" : n.toLocaleString();
+          const prevBlock = prevAnalyses.map((p, idx) => {
+            const date = p.createdAt.toISOString().slice(0, 10);
+            const rating = p.userRating == null ? "" : ` | 사용자 평가: ${p.userRating >= 4 ? "👍 긍정" : p.userRating <= 2 ? "👎 부정" : "보통"}`;
+            const feedback = p.userFeedback ? ` | 피드백: "${p.userFeedback}"` : "";
+            return `  [${idx + 1}차 분석 - ${date}] 판정: ${p.investmentVerdict ?? "N/A"} | 목표가: ${fmt(p.targetPrice)} | 진입가: ${fmt(p.entryPrice)} | 손절가: ${fmt(p.stopLoss)}${rating}${feedback}`;
+          }).join("\n");
+
+          const prevAnalysisBlock = `\n\n[⚡ ${analysis.companyName}(${analysis.ticker}) 이전 분석 이력 — 최신 ${prevAnalyses.length}건]\n`
+            + `이전 분석과의 일관성을 검토하고, 견해가 바뀌었다면 그 이유를 명확히 설명하세요.\n`
+            + prevBlock;
+          enrichedContext = enrichedContext ? enrichedContext + prevAnalysisBlock : prevAnalysisBlock;
+        }
+      }
+
+      // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
+      const allInsights = await db
         .select()
         .from(modelInsightsTable)
         .where(not(eq(modelInsightsTable.outcome, "pending")));
 
-      const relevantLessons = insights
-        .filter((i) => i.lesson && i.lesson.trim())
-        .slice(-5)
-        .map((i) => `[${i.companyName}(${i.ticker}) ${i.daysElapsed}일, ${i.priceReturn?.toFixed(1)}%] ${i.lesson}`)
-        .join("\n");
+      // 동일 종목 교훈 우선, 나머지는 최신 5건
+      const sameTickerLessons = allInsights
+        .filter((i) => i.ticker === analysis.ticker && i.lesson && i.lesson.trim())
+        .map((i) => `  [동일종목·${i.daysElapsed}일 경과, ${i.priceReturn?.toFixed(1)}% 수익률] ${i.lesson}`);
 
-      if (relevantLessons) {
-        const lessonBlock = `\n\n[AI 모델 과거 교훈]\n${relevantLessons}`;
+      const otherLessons = allInsights
+        .filter((i) => i.ticker !== analysis.ticker && i.lesson && i.lesson.trim())
+        .slice(-4)
+        .map((i) => `  [${i.companyName}(${i.ticker})·${i.daysElapsed}일, ${i.priceReturn?.toFixed(1)}%] ${i.lesson}`);
+
+      const allLessons = [...sameTickerLessons, ...otherLessons];
+      if (allLessons.length > 0) {
+        const lessonBlock = `\n\n[🎯 AI 모델 과거 예측 교훈 — 반드시 반영하세요]\n${allLessons.join("\n")}`;
         enrichedContext = enrichedContext ? enrichedContext + lessonBlock : lessonBlock;
       }
     } catch {
@@ -1916,6 +1962,62 @@ router.patch("/:id/memo", async (req, res) => {
   }
 });
 
+// ─── POST /analyses/:id/feedback ─────────────────────────────────────────────
+router.post("/:id/feedback", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+
+  const { rating, feedback } = req.body as { rating?: number; feedback?: string };
+  if (rating !== undefined && (typeof rating !== "number" || rating < 1 || rating > 5)) {
+    return res.status(400).json({ error: "rating은 1~5 사이 숫자입니다" });
+  }
+
+  try {
+    const [updated] = await db
+      .update(analysesTable)
+      .set({
+        userRating: rating ?? null,
+        userFeedback: typeof feedback === "string" ? feedback.slice(0, 500) : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(analysesTable.id, id))
+      .returning({ id: analysesTable.id });
+
+    if (!updated) return res.status(404).json({ error: "Analysis not found" });
+
+    // 사용자 피드백을 model_insights lesson으로 자동 반영 (부정 피드백 우선)
+    if (feedback && feedback.trim()) {
+      try {
+        const [a] = await db.select().from(analysesTable).where(eq(analysesTable.id, id));
+        if (a) {
+          const verdictLabel = rating && rating <= 2 ? "[부정 피드백]" : "[긍정 피드백]";
+          const lessonNote = `${verdictLabel} ${a.companyName}(${a.ticker}) 사용자 평가 ${rating ?? "?"}/5: ${feedback.trim()}`;
+          await db.insert(modelInsightsTable).values({
+            ticker: a.ticker,
+            companyName: a.companyName,
+            industry: a.industry,
+            verdict: a.investmentVerdict ?? null,
+            entryPrice: a.entryPrice ?? null,
+            targetPrice: a.targetPrice ?? null,
+            priceAtReview: null,
+            priceReturn: null,
+            daysElapsed: null,
+            outcome: "user_feedback",
+            lesson: lessonNote,
+          });
+        }
+      } catch {
+        // lesson 기록 실패해도 피드백 저장은 성공
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 function formatStep(step: any) {
   return {
     id: step.id,
@@ -1949,6 +2051,8 @@ function formatAnalysis(analysis: any, steps: any[]) {
     stopLoss: analysis.stopLoss,
     riskRewardRatio: analysis.riskRewardRatio,
     memo: analysis.memo ?? null,
+    userRating: analysis.userRating ?? null,
+    userFeedback: analysis.userFeedback ?? null,
     steps: sortedSteps.map(formatStep),
     createdAt: analysis.createdAt?.toISOString?.() ?? analysis.createdAt,
     updatedAt: analysis.updatedAt?.toISOString?.() ?? analysis.updatedAt,
