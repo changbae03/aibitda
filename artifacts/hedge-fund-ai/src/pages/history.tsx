@@ -1,12 +1,29 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useListAnalyses, useDeleteAnalysis, getListAnalysesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2, X } from "lucide-react";
+import { Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2, History as HistoryIcon } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+
+const STORAGE_KEY = "avitda-recent-analyses";
+
+function getLocalRecents(): any[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function removeLocalRecent(id: number) {
+  try {
+    const stored = getLocalRecents().filter((x: any) => x.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  } catch {}
+}
 
 const VERDICT_STYLE: Record<string, { label: string; cls: string }> = {
   BUY:         { label: "상승여력",      cls: "bg-green-50 text-green-700 border-green-200" },
@@ -50,27 +67,47 @@ function verdictBadge(verdict?: string) {
 export default function History() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const { data: analyses, isLoading } = useListAnalyses();
-  const { mutate: deleteAnalysis, isPending: isDeleting } = useDeleteAnalysis();
+  const { data: serverAnalyses, isLoading } = useListAnalyses();
+  const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
+
+  // 서버 목록 + 로컬 방문 기록 병합 (서버에 없는 것만 로컬에서 보완)
+  const list = useMemo(() => {
+    const serverList = serverAnalyses ?? [];
+    const serverIds = new Set(serverList.map((a: any) => a.id));
+    const localOnly = localItems.filter((x) => !serverIds.has(x.id));
+    // 서버 목록을 앞에, 로컬 only 항목을 뒤에 (방문순)
+    return [
+      ...serverList,
+      ...localOnly,
+    ];
+  }, [serverAnalyses, localItems]);
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmId(id);
   };
 
-  const confirmDelete = (id: number, e: React.MouseEvent) => {
+  const confirmDelete = (id: number, isLocalOnly: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     setDeletingId(id);
     setConfirmId(null);
-    deleteAnalysis(id, {
-      onSuccess: () => {
-        try { localStorage.removeItem(`bookmark-${id}`); } catch {}
-        setDeletingId(null);
-      },
-      onError: () => setDeletingId(null),
-    });
+    if (isLocalOnly) {
+      removeLocalRecent(id);
+      setLocalItems(getLocalRecents());
+      setDeletingId(null);
+    } else {
+      deleteAnalysis(id, {
+        onSuccess: () => {
+          removeLocalRecent(id);
+          setLocalItems(getLocalRecents());
+          setDeletingId(null);
+        },
+        onError: () => setDeletingId(null),
+      });
+    }
   };
 
   const cancelConfirm = (e: React.MouseEvent) => {
@@ -86,7 +123,7 @@ export default function History() {
     );
   }
 
-  const list = analyses ?? [];
+  const serverIds = new Set((serverAnalyses ?? []).map((a: any) => a.id));
 
   return (
     <div>
@@ -117,6 +154,7 @@ export default function History() {
             {list.map((a) => {
               const isConfirming = confirmId === a.id;
               const isThisDeleting = deletingId === a.id;
+              const isLocalOnly = !serverIds.has(a.id);
 
               return (
                 <motion.div
@@ -148,6 +186,11 @@ export default function History() {
                       </span>
                       <span className="text-[12px] text-neutral-400 font-mono">{a.ticker}</span>
                       {verdictBadge(a.investmentVerdict)}
+                      {isLocalOnly && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] text-neutral-300 border border-neutral-100 rounded px-1.5 py-0.5">
+                          <HistoryIcon className="w-2.5 h-2.5" /> 방문 기록
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-[12px] text-neutral-400">
                       <span>{a.industry || "—"}</span>
@@ -177,7 +220,7 @@ export default function History() {
                         >
                           <span className="text-[12px] text-neutral-500 mr-0.5">삭제할까요?</span>
                           <button
-                            onClick={(e) => confirmDelete(a.id, e)}
+                            onClick={(e) => confirmDelete(a.id, isLocalOnly, e)}
                             className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors"
                           >
                             삭제

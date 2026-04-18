@@ -548,6 +548,30 @@ export default function AnalysisDetail() {
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // 방문한 분석을 localStorage에 저장 ("내가 본 자료" 기능)
+  useEffect(() => {
+    if (!analysis) return;
+    try {
+      const STORAGE_KEY = "avitda-recent-analyses";
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as any[];
+      const entry = {
+        id: analysis.id,
+        ticker: analysis.ticker,
+        companyName: analysis.companyName,
+        englishName: analysis.englishName ?? null,
+        industry: analysis.industry ?? null,
+        investmentVerdict: analysis.investmentVerdict ?? null,
+        targetPrice: analysis.targetPrice ?? null,
+        createdAt: analysis.createdAt,
+        status: analysis.status,
+        visitedAt: new Date().toISOString(),
+      };
+      const filtered = stored.filter((x: any) => x.id !== analysis.id);
+      const updated = [entry, ...filtered].slice(0, 30);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+  }, [analysis?.id, analysis?.status, analysis?.investmentVerdict, analysis?.targetPrice]);
+
   // 동적 OG 태그 & 페이지 타이틀 업데이트 (공유 미리보기 개선)
   useEffect(() => {
     if (!analysis) return;
