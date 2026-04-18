@@ -230,7 +230,7 @@ export default function Landing() {
         {/* 특징 3가지 */}
         <div className="grid grid-cols-3 gap-3 mb-8">
           {[
-            { icon: "🏢", label: "2,700+", desc: "코스피·코스닥 종목" },
+            { icon: "🏢", label: "미국·한국", desc: "주식 분석 지원" },
             { icon: "🤖", label: "7단계", desc: "AI 분석 파이프라인" },
             { icon: "📊", label: "실시간", desc: "주가·재무 데이터" },
           ].map(f => (
