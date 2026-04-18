@@ -1604,6 +1604,8 @@ router.post("/:id/step", async (req, res) => {
       }
 
       // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
+      const tickerKrxCode = analysis.ticker.split(".")[0];
+      const isKoreanTicker = /^\d{6}$/.test(tickerKrxCode);
       if (peers.length === 0 && !isKoreanTicker) {
         const mappedPeers = US_PEER_MAP[analysis.ticker.toUpperCase()];
         if (mappedPeers?.length) {
