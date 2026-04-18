@@ -1411,6 +1411,56 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               );
             })()}
 
+            {/* ── ④.5 핵심 밸류에이션 가정 (눈에 띄게) ── */}
+            {json.key_assumptions && typeof json.key_assumptions === "object" && (() => {
+              const KA = json.key_assumptions as Record<string, unknown>;
+              const rows = [
+                { label: "WACC",        key: "wacc",               icon: "%" },
+                { label: "영구성장률",   key: "terminal_growth",    icon: "%" },
+                { label: "단기 CAGR",   key: "revenue_cagr_short", icon: "" },
+                { label: "장기 CAGR",   key: "revenue_cagr_long",  icon: "" },
+                { label: "밸류에이션",  key: "valuation_model",    icon: "" },
+                { label: "절대↔피어 괴리", key: "divergence_pct",  icon: "%" },
+                { label: "조율 방법",   key: "weight_method",      icon: "" },
+              ].filter(({ key }) => {
+                const v = KA[key];
+                if (v === null || v === undefined || v === "") return false;
+                const s = String(v);
+                return !s.includes("예:") && !s.includes("인용") && !s.includes("__");
+              });
+              if (rows.length === 0) return null;
+              return (
+                <div className="mx-4 sm:mx-6 my-2 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-blue-50/60 overflow-hidden">
+                  {/* 헤더 */}
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-indigo-100/70 bg-indigo-50/80">
+                    <div className="w-5 h-5 rounded-md bg-indigo-500 flex items-center justify-center shrink-0">
+                      <span className="text-white text-[9px] font-bold">AI</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-indigo-700 tracking-wide">핵심 밸류에이션 가정</p>
+                    <span className="ml-auto text-[9px] text-indigo-400 font-medium">DCF 모델 핵심 드라이버</span>
+                  </div>
+                  {/* 가정값 그리드 */}
+                  <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+                    {rows.map(({ label, key }) => {
+                      const val = String(KA[key]);
+                      return (
+                        <div key={key} className="flex flex-col gap-0.5">
+                          <span className="text-[9px] font-semibold text-indigo-400 uppercase tracking-wider">{label}</span>
+                          <span className="text-[14px] font-bold text-indigo-900 font-mono leading-tight">{val}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* 안내 문구 */}
+                  <div className="px-4 pb-2.5">
+                    <p className="text-[10px] text-indigo-400 leading-relaxed">
+                      위 가정값이 적정주가 산출의 핵심 변수입니다. 실제 수치가 달라지면 목표가도 변동됩니다.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (
               <div className="px-4 sm:px-6 py-4">
@@ -1520,36 +1570,6 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               </div>
             )}
 
-            {/* ── ⑦ 핵심 밸류에이션 가정 ── */}
-            {json.key_assumptions && typeof json.key_assumptions === "object" && (
-              <div className="px-4 sm:px-6 py-4 bg-neutral-50/70 border-t border-neutral-100">
-                <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">핵심 밸류에이션 가정</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2.5">
-                  {[
-                    { label: "WACC", key: "wacc" },
-                    { label: "Terminal g", key: "terminal_growth" },
-                    { label: "단기 매출 CAGR", key: "revenue_cagr_short" },
-                    { label: "장기 매출 CAGR", key: "revenue_cagr_long" },
-                    { label: "밸류에이션 모델", key: "valuation_model" },
-                    { label: "괴리율 (절대 vs 피어)", key: "divergence_pct", suffix: "%" },
-                    { label: "조율 방법", key: "weight_method" },
-                  ].map(({ label, key, suffix }) => {
-                    const rawVal = (json.key_assumptions as Record<string, unknown>)[key];
-                    if (rawVal === null || rawVal === undefined || rawVal === "") return null;
-                    const val = String(rawVal);
-                    if (val.includes("예:") || val.includes("인용") || val.includes("__")) return null;
-                    return (
-                      <div key={key} className="flex flex-col gap-0.5">
-                        <span className="text-[9px] text-neutral-400 uppercase tracking-wider">{label}</span>
-                        <span className="text-[12px] font-semibold text-neutral-700 font-mono">
-                          {val}{suffix && !String(val).includes("%") ? suffix : ""}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
           </div>
         );
