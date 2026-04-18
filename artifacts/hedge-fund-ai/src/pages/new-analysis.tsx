@@ -319,8 +319,9 @@ export default function NewAnalysis() {
           >
             어떤 종목을<br />분석할까요?
           </h1>
-          <p className="text-sm text-neutral-400 leading-relaxed">
-            코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
+          <p className="text-sm text-neutral-400 leading-relaxed break-keep">
+            코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{" "}
+            <br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
           </p>
           <CreditsBadge credits={credits} />
         </div>
