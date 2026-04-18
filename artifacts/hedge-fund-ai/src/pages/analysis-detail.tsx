@@ -19,6 +19,9 @@ import {
   Share2,
   Check,
   Database,
+  Pencil,
+  X,
+  StickyNote,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,6 +29,84 @@ import { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+// ── 메모 헬퍼 ─────────────────────────────────────────────────────────────────
+const MEMO_KEY = "avitda-memos";
+function getMemo(id: number): string {
+  try { return JSON.parse(localStorage.getItem(MEMO_KEY) || "{}")[String(id)] || ""; } catch { return ""; }
+}
+function saveMemo(id: number, text: string) {
+  try {
+    const memos = JSON.parse(localStorage.getItem(MEMO_KEY) || "{}");
+    if (text.trim()) memos[String(id)] = text.trim(); else delete memos[String(id)];
+    localStorage.setItem(MEMO_KEY, JSON.stringify(memos));
+  } catch {}
+}
+
+function MemoSection({ analysisId }: { analysisId: number }) {
+  const [saved, setSaved] = useState(() => getMemo(analysisId));
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const startEdit = () => { setDraft(saved); setEditing(true); setTimeout(() => textareaRef.current?.focus(), 50); };
+  const handleSave = () => { saveMemo(analysisId, draft); setSaved(draft.trim()); setEditing(false); };
+  const handleCancel = () => setEditing(false);
+
+  if (!saved && !editing) {
+    return (
+      <button
+        onClick={startEdit}
+        className="flex items-center gap-1.5 text-[12px] text-neutral-400 hover:text-amber-500 transition-colors print:hidden"
+      >
+        <StickyNote className="w-3.5 h-3.5" />
+        메모 추가
+      </button>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div className="print:hidden mt-1 flex flex-col gap-2">
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="이 보고서에 대한 메모를 입력하세요..."
+          rows={2}
+          className="w-full text-[13px] text-neutral-700 placeholder-neutral-300 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { e.preventDefault(); handleCancel(); }
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
+          }}
+        />
+        <div className="flex items-center gap-2">
+          <button onClick={handleSave} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[12px] font-semibold transition-colors">
+            <Check className="w-3.5 h-3.5" /> 저장
+          </button>
+          <button onClick={handleCancel} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-500 text-[12px] font-semibold transition-colors">
+            <X className="w-3.5 h-3.5" /> 취소
+          </button>
+          <span className="text-[11px] text-neutral-300">⌘Enter로 저장</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group/memo flex items-start gap-2 print:hidden">
+      <StickyNote className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+      <p className="flex-1 text-[13px] text-neutral-600 leading-relaxed whitespace-pre-wrap break-words">{saved}</p>
+      <button
+        onClick={startEdit}
+        className="shrink-0 p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors opacity-0 group-hover/memo:opacity-100"
+        title="메모 수정"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
 
 /**
  * 한국 금융 단위 앞 4자리 이상 숫자에 천단위 쉼표를 삽입합니다.
@@ -808,6 +889,11 @@ export default function AnalysisDetail() {
           )}
           </div>
         </div>
+      </div>
+
+      {/* 내 메모 */}
+      <div className="bg-amber-50/60 border border-amber-100 rounded-2xl px-5 py-4 print:hidden">
+        <MemoSection analysisId={analysis.id} />
       </div>
 
       {/* Financial Chart */}
