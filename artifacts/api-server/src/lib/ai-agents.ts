@@ -493,6 +493,7 @@ TV = FCFF(10년) × (1+g) / (WACC-g) | 주주가치 = Σ PV(FCFF) + PV(TV) + 순
 ⚠️ 비정상 FCF 보정: FCF > 영업CF×2 또는 영업적자인데 FCF 양수 → NOPAT 기반 DCF, "FCF 비정상 감지" 명시
 
 WACC 산출: Relevered β = Unlevered β × (1+(1-세율)×D/E) | CoE = Rf + β × ERP
+⚠️ β 산출 세율: CoD와 동일 기준 — 영업적자 기업 0%, 흑자 기업 25%. (단, D/E ≈ 0이면 Relevered β ≈ Unlevered β로 세율 무관)
 CoD(after-tax) = 이자비용/총부채 × (1-세율) | WACC = CoE×E/(D+E) + CoD×D/(D+E)
 ⚠️ CoD 계산 규칙 (순서 준수):
   1) 컨텍스트 "[⚡ WACC·EBITDA 계산 핵심 데이터]"의 이자비용·총부채 수치 확인
