@@ -1534,8 +1534,10 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     { label: "괴리율 (절대 vs 피어)", key: "divergence_pct", suffix: "%" },
                     { label: "조율 방법", key: "weight_method" },
                   ].map(({ label, key, suffix }) => {
-                    const val = (json.key_assumptions as Record<string, string>)[key];
-                    if (!val || val.includes("예:") || val.includes("인용")) return null;
+                    const rawVal = (json.key_assumptions as Record<string, unknown>)[key];
+                    if (rawVal === null || rawVal === undefined || rawVal === "") return null;
+                    const val = String(rawVal);
+                    if (val.includes("예:") || val.includes("인용") || val.includes("__")) return null;
                     return (
                       <div key={key} className="flex flex-col gap-0.5">
                         <span className="text-[9px] text-neutral-400 uppercase tracking-wider">{label}</span>
