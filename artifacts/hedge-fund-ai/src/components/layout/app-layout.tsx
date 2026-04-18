@@ -20,7 +20,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석" },
     { href: "/popular", label: "최신 피드" },
-    { href: "/tracker", label: "실시간 트래커" },
     { href: "/history", label: "내가 본 자료" },
   ];
 
