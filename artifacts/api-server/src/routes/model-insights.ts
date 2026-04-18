@@ -1,9 +1,17 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { modelInsightsTable, analysesTable } from "@workspace/db";
-import { eq, desc, and, not, isNull } from "drizzle-orm";
+import { pool } from "@workspace/db";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
+
+async function rawQuery(sql: string, params: any[] = []): Promise<any[]> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(sql, params);
+    return result.rows;
+  } finally {
+    client.release();
+  }
+}
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -82,27 +90,31 @@ async function generateLesson(
 
 export async function triggerModelReview(): Promise<void> {
   try {
-    const completed = await db
-      .select()
-      .from(analysesTable)
-      .where(
-        and(
-          eq(analysesTable.status, "completed"),
-          not(isNull(analysesTable.entryPrice))
-        )
-      );
+    const completedRows = await rawQuery(
+      `SELECT * FROM analyses WHERE status = 'completed' AND entry_price IS NOT NULL`
+    );
+    const completed = completedRows.map((r: any) => ({
+      id: r.id,
+      ticker: r.ticker,
+      companyName: r.company_name,
+      industry: r.industry,
+      investmentVerdict: r.investment_verdict ?? null,
+      entryPrice: r.entry_price ?? null,
+      targetPrice: r.target_price ?? null,
+      stopLoss: r.stop_loss ?? null,
+      createdAt: r.created_at,
+    }));
 
     for (const analysis of completed) {
-      const existing = await db
-        .select()
-        .from(modelInsightsTable)
-        .where(eq(modelInsightsTable.analysisId, analysis.id))
-        .limit(1);
+      const existing = await rawQuery(
+        `SELECT * FROM model_insights WHERE analysis_id = $1 LIMIT 1`,
+        [analysis.id]
+      );
 
       if (existing.length > 0) {
         const last = existing[0];
-        const hoursSinceReview = last.reviewedAt
-          ? (Date.now() - new Date(last.reviewedAt).getTime()) / (1000 * 3600)
+        const hoursSinceReview = last.reviewed_at
+          ? (Date.now() - new Date(last.reviewed_at).getTime()) / (1000 * 3600)
           : Infinity;
         if (hoursSinceReview < 6) continue;
       }
@@ -161,35 +173,18 @@ export async function triggerModelReview(): Promise<void> {
       }
 
       if (existing.length > 0) {
-        await db
-          .update(modelInsightsTable)
-          .set({
-            priceAtReview: currentPrice,
-            priceReturn,
-            daysElapsed,
-            outcome,
-            lesson,
-            reviewedAt: new Date(),
-          })
-          .where(eq(modelInsightsTable.id, existing[0].id));
+        await rawQuery(
+          `UPDATE model_insights SET price_at_review=$1, price_return=$2, days_elapsed=$3, outcome=$4, lesson=$5, reviewed_at=NOW() WHERE id=$6`,
+          [currentPrice, priceReturn, daysElapsed, outcome, lesson, existing[0].id]
+        );
       } else {
-        await db.insert(modelInsightsTable).values({
-          analysisId: analysis.id,
-          ticker,
-          companyName: analysis.companyName,
-          industry: analysis.industry,
-          verdict: analysis.investmentVerdict,
-          entryPrice: analysis.entryPrice,
-          targetPrice: analysis.targetPrice,
-          stopLoss: analysis.stopLoss,
-          priceAtReview: currentPrice,
-          priceReturn,
-          daysElapsed,
-          outcome,
-          lesson,
-          analysisDate: analysis.createdAt,
-          reviewedAt: new Date(),
-        });
+        await rawQuery(
+          `INSERT INTO model_insights (analysis_id, ticker, company_name, industry, verdict, entry_price, target_price, stop_loss, price_at_review, price_return, days_elapsed, outcome, lesson, analysis_date, reviewed_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())`,
+          [analysis.id, ticker, analysis.companyName, analysis.industry, analysis.investmentVerdict,
+           analysis.entryPrice, analysis.targetPrice, analysis.stopLoss,
+           currentPrice, priceReturn, daysElapsed, outcome, lesson, analysis.createdAt]
+        );
       }
     }
   } catch (err) {
@@ -198,25 +193,21 @@ export async function triggerModelReview(): Promise<void> {
 }
 
 router.get("/", async (_req, res) => {
-  const insights = await db
-    .select()
-    .from(modelInsightsTable)
-    .orderBy(desc(modelInsightsTable.reviewedAt));
-
-  res.json(insights.map(formatInsight));
+  const rows = await rawQuery(`SELECT * FROM model_insights ORDER BY reviewed_at DESC`);
+  res.json(rows.map(formatInsight));
 });
 
 // 퍼블릭 집계 통계 (로그인 불필요)
 router.get("/public-stats", async (_req, res) => {
-  const all = await db.select().from(modelInsightsTable);
+  const all = await rawQuery(`SELECT * FROM model_insights`);
   const reviewed = all.filter((i) => i.outcome !== "pending");
   const hitTarget = reviewed.filter((i) => i.outcome === "hit_target");
   const hitStop = reviewed.filter((i) => i.outcome === "hit_stoploss");
   const ongoing = reviewed.filter((i) => i.outcome === "ongoing");
-  const withReturn = reviewed.filter((i) => i.priceReturn != null);
+  const withReturn = reviewed.filter((i) => i.price_return != null);
 
   const avgReturn = withReturn.length
-    ? withReturn.reduce((s, i) => s + (i.priceReturn ?? 0), 0) / withReturn.length
+    ? withReturn.reduce((s, i) => s + (i.price_return ?? 0), 0) / withReturn.length
     : null;
 
   // 업종별 집계
@@ -228,25 +219,25 @@ router.get("/public-stats", async (_req, res) => {
     if (item.outcome === "hit_target") byIndustry[ind].hitTarget++;
   }
   for (const ind of Object.keys(byIndustry)) {
-    const items = reviewed.filter((i) => (i.industry ?? "기타") === ind && i.priceReturn != null);
+    const items = reviewed.filter((i) => (i.industry ?? "기타") === ind && i.price_return != null);
     byIndustry[ind].avgReturn = items.length
-      ? items.reduce((s, i) => s + (i.priceReturn ?? 0), 0) / items.length
+      ? items.reduce((s, i) => s + (i.price_return ?? 0), 0) / items.length
       : null;
   }
 
   // 최근 적중/손절 사례 (10건)
   const recentCases = reviewed
     .filter((i) => i.outcome !== "ongoing")
-    .sort((a, b) => new Date(b.reviewedAt ?? 0).getTime() - new Date(a.reviewedAt ?? 0).getTime())
+    .sort((a, b) => new Date(b.reviewed_at ?? 0).getTime() - new Date(a.reviewed_at ?? 0).getTime())
     .slice(0, 10)
     .map((i) => ({
       ticker: i.ticker,
-      companyName: i.companyName,
+      companyName: i.company_name,
       verdict: i.verdict,
-      priceReturn: i.priceReturn,
-      daysElapsed: i.daysElapsed,
+      priceReturn: i.price_return,
+      daysElapsed: i.days_elapsed,
       outcome: i.outcome,
-      analysisId: i.analysisId,
+      analysisId: i.analysis_id,
     }));
 
   res.json({
@@ -270,22 +261,22 @@ router.post("/review", async (_req, res) => {
 function formatInsight(i: any) {
   return {
     id: i.id,
-    analysisId: i.analysisId,
+    analysisId: i.analysis_id ?? i.analysisId,
     ticker: i.ticker,
-    companyName: i.companyName,
+    companyName: i.company_name ?? i.companyName,
     industry: i.industry,
     verdict: i.verdict,
-    entryPrice: i.entryPrice,
-    targetPrice: i.targetPrice,
-    stopLoss: i.stopLoss,
-    priceAtReview: i.priceAtReview,
-    priceReturn: i.priceReturn,
-    daysElapsed: i.daysElapsed,
+    entryPrice: i.entry_price ?? i.entryPrice,
+    targetPrice: i.target_price ?? i.targetPrice,
+    stopLoss: i.stop_loss ?? i.stopLoss,
+    priceAtReview: i.price_at_review ?? i.priceAtReview,
+    priceReturn: i.price_return ?? i.priceReturn,
+    daysElapsed: i.days_elapsed ?? i.daysElapsed,
     outcome: i.outcome,
     lesson: i.lesson,
-    analysisDate: i.analysisDate?.toISOString?.() ?? i.analysisDate,
-    reviewedAt: i.reviewedAt?.toISOString?.() ?? i.reviewedAt,
-    createdAt: i.createdAt?.toISOString?.() ?? i.createdAt,
+    analysisDate: (i.analysis_date ?? i.analysisDate)?.toISOString?.() ?? (i.analysis_date ?? i.analysisDate),
+    reviewedAt: (i.reviewed_at ?? i.reviewedAt)?.toISOString?.() ?? (i.reviewed_at ?? i.reviewedAt),
+    createdAt: (i.created_at ?? i.createdAt)?.toISOString?.() ?? (i.created_at ?? i.createdAt),
   };
 }
 

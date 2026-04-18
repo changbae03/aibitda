@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
@@ -1364,6 +1364,56 @@ async function fetchPeerFinancials(
   return text;
 }
 
+// ─── Raw SQL helpers (production-safe: bypasses drizzle CJS bundle issues) ───
+async function rawQuery<T = any>(sqlText: string, params: any[] = []): Promise<T[]> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(sqlText, params);
+    return result.rows as T[];
+  } finally {
+    client.release();
+  }
+}
+
+function mapAnalysisRow(row: any): typeof analysesTable.$inferSelect {
+  return {
+    id: row.id,
+    userId: row.user_id ?? null,
+    ticker: row.ticker,
+    companyName: row.company_name,
+    englishName: row.english_name ?? null,
+    industry: row.industry,
+    additionalContext: row.additional_context ?? null,
+    status: row.status,
+    currentStep: row.current_step ?? null,
+    investmentVerdict: row.investment_verdict ?? null,
+    targetPrice: row.target_price ?? null,
+    entryPrice: row.entry_price ?? null,
+    stopLoss: row.stop_loss ?? null,
+    riskRewardRatio: row.risk_reward_ratio ?? null,
+    memo: row.memo ?? null,
+    isPublic: row.is_public ?? "true",
+    userRating: row.user_rating ?? null,
+    userFeedback: row.user_feedback ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  } as typeof analysesTable.$inferSelect;
+}
+
+function mapStepRow(row: any): typeof analysisStepsTable.$inferSelect {
+  return {
+    id: row.id,
+    analysisId: row.analysis_id,
+    stepKey: row.step_key,
+    agentName: row.agent_name,
+    agentRole: row.agent_role,
+    content: row.content,
+    validationNotes: row.validation_notes ?? null,
+    informationType: row.information_type ?? "data_based_estimate",
+    createdAt: row.created_at,
+  } as typeof analysisStepsTable.$inferSelect;
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post("/", async (req, res) => {
@@ -1455,20 +1505,39 @@ router.post("/", async (req, res) => {
     .filter(Boolean)
     .join("\n\n") || null;
 
-  const [analysis] = await db
-    .insert(analysesTable)
-    .values({
-      userId: userId ?? null,
-      ticker: upperTicker,
-      companyName,
-      englishName,
-      industry,
-      additionalContext: fullContext,
-      status: "in_progress",
-      currentStep: "company_intro",
-      isPublic: "true",
-    })
-    .returning();
+  let analysis: typeof analysesTable.$inferSelect;
+  try {
+    const client = await pool.connect();
+    try {
+      const insertResult = await client.query(
+        `INSERT INTO analyses
+           (user_id, ticker, company_name, english_name, industry, additional_context, status, current_step, is_public)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          userId ?? null,
+          upperTicker,
+          companyName,
+          englishName ?? null,
+          industry ?? "Unknown",
+          fullContext,
+          "in_progress",
+          "company_intro",
+          "true",
+        ]
+      );
+      analysis = mapAnalysisRow(insertResult.rows[0]);
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    const pgMsg = err?.cause?.message ?? err?.message ?? String(err);
+    const pgCode = err?.cause?.code ?? err?.code;
+    const pgDetail = err?.cause?.detail ?? err?.detail;
+    console.error("[POST /analysis] INSERT failed:", { pgMsg, pgCode, pgDetail, fullError: String(err) });
+    res.status(500).json({ error: "분석 시작 실패: DB INSERT 오류", detail: pgMsg });
+    return;
+  }
 
   res.json(formatAnalysis(analysis, []));
 });
@@ -1476,19 +1545,15 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const userId = getUserId(req);
-    const analyses = await db
-      .select()
-      .from(analysesTable)
-      .where(userId ? eq(analysesTable.userId, userId) : sql`1=0`)
-      .orderBy(desc(analysesTable.createdAt));
+    const aRows = userId
+      ? await rawQuery(`SELECT * FROM analyses WHERE user_id = $1 ORDER BY created_at DESC`, [userId])
+      : [];
+    const analyses = aRows.map(mapAnalysisRow);
 
     const results = await Promise.all(
       analyses.map(async (a) => {
-        const steps = await db
-          .select()
-          .from(analysisStepsTable)
-          .where(eq(analysisStepsTable.analysisId, a.id));
-        return formatAnalysis(a, steps);
+        const sRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [a.id]);
+        return formatAnalysis(a, sRows.map(mapStepRow));
       })
     );
 
@@ -1500,8 +1565,8 @@ router.get("/", async (req, res) => {
 });
 
 router.delete("/", async (_req, res) => {
-  await db.delete(analysisStepsTable);
-  await db.delete(analysesTable);
+  await rawQuery(`DELETE FROM analysis_steps`);
+  await rawQuery(`DELETE FROM analyses`);
   res.json({ success: true });
 });
 
@@ -1512,17 +1577,17 @@ router.delete("/:id", async (req, res) => {
     return;
   }
   const userId = getUserId(req);
-  const [analysis] = await db.select().from(analysesTable).where(eq(analysesTable.id, id)).limit(1);
-  if (!analysis) {
+  const aRows = await rawQuery(`SELECT user_id FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+  if (!aRows[0]) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (analysis.userId && analysis.userId !== userId) {
+  if (aRows[0].user_id && aRows[0].user_id !== userId) {
     res.status(403).json({ error: "권한이 없습니다" });
     return;
   }
-  await db.delete(analysisStepsTable).where(eq(analysisStepsTable.analysisId, id));
-  await db.delete(analysesTable).where(eq(analysesTable.id, id));
+  await rawQuery(`DELETE FROM analysis_steps WHERE analysis_id = $1`, [id]);
+  await rawQuery(`DELETE FROM analyses WHERE id = $1`, [id]);
   res.json({ success: true });
 });
 
@@ -1539,24 +1604,20 @@ router.get("/live-insights", async (_req, res) => {
       investment_strategy:"최종 결론",
     };
 
-    const rows = await db
-      .select({
-        companyName: analysesTable.companyName,
-        ticker: analysesTable.ticker,
-        stepKey: analysisStepsTable.stepKey,
-        content: analysisStepsTable.content,
-        createdAt: analysisStepsTable.createdAt,
-      })
-      .from(analysisStepsTable)
-      .innerJoin(analysesTable, eq(analysisStepsTable.analysisId, analysesTable.id))
-      .where(
-        and(
-          eq(analysesTable.status, "completed"),
-          isNotNull(analysisStepsTable.content),
-        )
-      )
-      .orderBy(desc(analysisStepsTable.createdAt))
-      .limit(30);
+    const rawRows = await rawQuery(
+      `SELECT a.company_name, a.ticker, s.step_key, s.content, s.created_at
+       FROM analysis_steps s
+       INNER JOIN analyses a ON s.analysis_id = a.id
+       WHERE a.status = 'completed' AND s.content IS NOT NULL
+       ORDER BY s.created_at DESC LIMIT 30`
+    );
+    const rows = rawRows.map(r => ({
+      companyName: r.company_name,
+      ticker: r.ticker,
+      stepKey: r.step_key,
+      content: r.content,
+      createdAt: r.created_at,
+    }));
 
     // 종목당 하나만 (가장 최신 분석 기준)
     const seen = new Set<string>();
@@ -1619,62 +1680,48 @@ router.get("/live-insights", async (_req, res) => {
 
 router.get("/popular", async (_req, res) => {
   try {
-    const rows = await db
-      .select({
-        id: analysesTable.id,
-        ticker: analysesTable.ticker,
-        companyName: analysesTable.companyName,
-        industry: analysesTable.industry,
-        investmentVerdict: analysesTable.investmentVerdict,
-        targetPrice: analysesTable.targetPrice,
-        entryPrice: analysesTable.entryPrice,
-        stopLoss: analysesTable.stopLoss,
-        createdAt: analysesTable.createdAt,
-      })
-      .from(analysesTable)
-      .where(
-        and(
-          eq(analysesTable.status, "completed"),
-          eq(analysesTable.isPublic, "true"),
-          isNotNull(analysesTable.investmentVerdict),
-        )
-      )
-      .orderBy(desc(analysesTable.createdAt))
-      .limit(50);
+    const rawRows = await rawQuery(
+      `SELECT id, ticker, company_name, industry, investment_verdict, target_price, entry_price, stop_loss, created_at
+       FROM analyses
+       WHERE status = 'completed' AND is_public = 'true' AND investment_verdict IS NOT NULL
+       ORDER BY created_at DESC LIMIT 50`
+    );
 
-    // model_insights에서 각 분석의 최신 현재가·수익률·결과 가져오기
+    const rows = rawRows.map(r => ({
+      id: r.id as number,
+      ticker: r.ticker as string,
+      companyName: r.company_name as string,
+      industry: r.industry as string,
+      investmentVerdict: r.investment_verdict as string | null,
+      targetPrice: r.target_price as number | null,
+      entryPrice: r.entry_price as number | null,
+      stopLoss: r.stop_loss as number | null,
+      createdAt: r.created_at,
+    }));
+
     const analysisIds = rows.map((r) => r.id);
     let insightMap: Record<number, { currentPrice: number | null; priceReturn: number | null; outcome: string | null; daysElapsed: number | null }> = {};
 
     if (analysisIds.length > 0) {
-      const insights = await db
-        .select({
-          analysisId: modelInsightsTable.analysisId,
-          priceAtReview: modelInsightsTable.priceAtReview,
-          priceReturn: modelInsightsTable.priceReturn,
-          outcome: modelInsightsTable.outcome,
-          daysElapsed: modelInsightsTable.daysElapsed,
-          reviewedAt: modelInsightsTable.reviewedAt,
-        })
-        .from(modelInsightsTable)
-        .where(not(eq(modelInsightsTable.outcome, "pending")));
+      const insightRows = await rawQuery(
+        `SELECT analysis_id, price_at_review, price_return, outcome, days_elapsed, reviewed_at
+         FROM model_insights WHERE outcome != 'pending'`
+      );
 
-      // 분석 ID별 최신 insight만 유지
-      for (const ins of insights) {
-        const aid = ins.analysisId;
+      for (const ins of insightRows) {
+        const aid = ins.analysis_id;
         if (!aid || !analysisIds.includes(aid)) continue;
-        if (!insightMap[aid] || (ins.reviewedAt && insightMap[aid])) {
+        if (!insightMap[aid] || ins.reviewed_at) {
           insightMap[aid] = {
-            currentPrice: ins.priceAtReview ?? null,
-            priceReturn: ins.priceReturn ?? null,
+            currentPrice: ins.price_at_review ?? null,
+            priceReturn: ins.price_return ?? null,
             outcome: ins.outcome ?? null,
-            daysElapsed: ins.daysElapsed ?? null,
+            daysElapsed: ins.days_elapsed ?? null,
           };
         }
       }
     }
 
-    // 종목별 분석 건수 집계
     const tickerCounts: Record<string, { count: number; companyName: string }> = {};
     for (const r of rows) {
       if (!tickerCounts[r.ticker]) tickerCounts[r.ticker] = { count: 0, companyName: r.companyName };
@@ -1692,7 +1739,7 @@ router.get("/popular", async (_req, res) => {
 
     res.json({ items: enriched, tickerStats });
   } catch (err: any) {
-    console.error("[GET /analysis/popular]", err?.message);
+    console.error("[GET /analysis/popular]", err?.message, err?.cause?.message);
     res.status(500).json({ error: "DB error", detail: err?.message });
   }
 });
@@ -1700,27 +1747,21 @@ router.get("/popular", async (_req, res) => {
 // ─── 실시간 트래커: 목표주가 있는 완료 분석 목록 ──────────────────────────────
 router.get("/tracker", async (_req, res) => {
   try {
-    const rows = await db
-      .select({
-        id: analysesTable.id,
-        ticker: analysesTable.ticker,
-        companyName: analysesTable.companyName,
-        industry: analysesTable.industry,
-        investmentVerdict: analysesTable.investmentVerdict,
-        targetPrice: analysesTable.targetPrice,
-        entryPrice: analysesTable.entryPrice,
-        createdAt: analysesTable.createdAt,
-      })
-      .from(analysesTable)
-      .where(
-        and(
-          eq(analysesTable.status, "completed"),
-          eq(analysesTable.isPublic, "true"),
-          isNotNull(analysesTable.targetPrice),
-        )
-      )
-      .orderBy(desc(analysesTable.createdAt))
-      .limit(100);
+    const rawRows = await rawQuery(
+      `SELECT id, ticker, company_name, industry, investment_verdict, target_price, entry_price, created_at
+       FROM analyses WHERE status='completed' AND is_public='true' AND target_price IS NOT NULL
+       ORDER BY created_at DESC LIMIT 100`
+    );
+    const rows = rawRows.map(r => ({
+      id: r.id,
+      ticker: r.ticker,
+      companyName: r.company_name,
+      industry: r.industry,
+      investmentVerdict: r.investment_verdict ?? null,
+      targetPrice: r.target_price ?? null,
+      entryPrice: r.entry_price ?? null,
+      createdAt: r.created_at,
+    }));
     res.json(rows);
   } catch (err: any) {
     console.error("[GET /analysis/tracker]", err?.message);
@@ -1735,23 +1776,18 @@ router.get("/:id", async (req, res) => {
     return;
   }
 
-  const analysis = await db
-    .select()
-    .from(analysesTable)
-    .where(eq(analysesTable.id, id))
-    .limit(1);
-
-  if (!analysis[0]) {
-    res.status(404).json({ error: "Not found" });
-    return;
+  try {
+    const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+    if (!aRows[0]) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
+    res.json(formatAnalysis(mapAnalysisRow(aRows[0]), stepsRows.map(mapStepRow)));
+  } catch (err: any) {
+    console.error("[GET /analysis/:id] error:", err?.message, err?.cause?.message);
+    res.status(500).json({ error: "DB error" });
   }
-
-  const steps = await db
-    .select()
-    .from(analysisStepsTable)
-    .where(eq(analysisStepsTable.analysisId, id));
-
-  res.json(formatAnalysis(analysis[0], steps));
 });
 
 router.post("/:id/step", async (req, res) => {
@@ -1767,21 +1803,16 @@ router.post("/:id/step", async (req, res) => {
     return;
   }
 
-  const [analysis] = await db
-    .select()
-    .from(analysesTable)
-    .where(eq(analysesTable.id, id))
-    .limit(1);
+  const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+  const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
 
   if (!analysis) {
     res.status(404).json({ error: "Analysis not found" });
     return;
   }
 
-  const rawSteps = await db
-    .select()
-    .from(analysisStepsTable)
-    .where(eq(analysisStepsTable.analysisId, id));
+  const stepsRaw = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
+  const rawSteps = stepsRaw.map(mapStepRow);
 
   // STEP_ORDER 순서로 정렬하고, 현재 단계 이전 단계만 context로 전달
   const existingSteps = [...rawSteps].sort(
@@ -1815,27 +1846,21 @@ router.post("/:id/step", async (req, res) => {
     try {
       // ── Feature 1: 동일 종목 이전 분석 참고 ──────────────────────────────
       if (stepKey === "company_intro") {
-        const prevAnalyses = await db
-          .select({
-            id: analysesTable.id,
-            createdAt: analysesTable.createdAt,
-            investmentVerdict: analysesTable.investmentVerdict,
-            targetPrice: analysesTable.targetPrice,
-            entryPrice: analysesTable.entryPrice,
-            stopLoss: analysesTable.stopLoss,
-            userRating: analysesTable.userRating,
-            userFeedback: analysesTable.userFeedback,
-          })
-          .from(analysesTable)
-          .where(
-            and(
-              eq(analysesTable.ticker, analysis.ticker),
-              eq(analysesTable.status, "completed"),
-              not(eq(analysesTable.id, analysis.id))
-            )
-          )
-          .orderBy(desc(analysesTable.createdAt))
-          .limit(3);
+        const prevAnalyses = await rawQuery(
+          `SELECT id, created_at, investment_verdict, target_price, entry_price, stop_loss, user_rating, user_feedback
+           FROM analyses WHERE ticker = $1 AND status = 'completed' AND id != $2
+           ORDER BY created_at DESC LIMIT 3`,
+          [analysis.ticker, analysis.id]
+        ).then(rows => rows.map(r => ({
+          id: r.id,
+          createdAt: r.created_at,
+          investmentVerdict: r.investment_verdict ?? null,
+          targetPrice: r.target_price ?? null,
+          entryPrice: r.entry_price ?? null,
+          stopLoss: r.stop_loss ?? null,
+          userRating: r.user_rating ?? null,
+          userFeedback: r.user_feedback ?? null,
+        })));
 
         if (prevAnalyses.length > 0) {
           const fmt = (n: number | null) => n == null ? "N/A" : n.toLocaleString();
@@ -1854,10 +1879,17 @@ router.post("/:id/step", async (req, res) => {
       }
 
       // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
-      const allInsights = await db
-        .select()
-        .from(modelInsightsTable)
-        .where(not(eq(modelInsightsTable.outcome, "pending")));
+      const allInsightRows = await rawQuery(
+        `SELECT * FROM model_insights WHERE outcome != 'pending'`
+      );
+      const allInsights = allInsightRows.map(r => ({
+        ticker: r.ticker,
+        companyName: r.company_name,
+        lesson: r.lesson ?? null,
+        daysElapsed: r.days_elapsed ?? null,
+        priceReturn: r.price_return ?? null,
+        outcome: r.outcome,
+      }));
 
       // 동일 종목 교훈 우선, 나머지는 최신 5건
       const sameTickerLessons = allInsights
@@ -2050,18 +2082,12 @@ router.post("/:id/step", async (req, res) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const [step] = await db
-      .insert(analysisStepsTable)
-      .values({
-        analysisId: id,
-        stepKey,
-        agentName: agent.name,
-        agentRole: agent.role,
-        content: finalContent,
-        validationNotes,
-        informationType: "data_based_estimate",
-      })
-      .returning();
+    const stepRows = await rawQuery(
+      `INSERT INTO analysis_steps (analysis_id, step_key, agent_name, agent_role, content, validation_notes, information_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [id, stepKey, agent.name, agent.role, finalContent, validationNotes, "data_based_estimate"]
+    );
+    const step = stepRows[0] ? mapStepRow(stepRows[0]) : null;
 
     const nextStepIndex = STEP_ORDER.indexOf(stepKey) + 1;
     const nextStep = nextStepIndex < STEP_ORDER.length ? STEP_ORDER[nextStepIndex] : null;
@@ -2102,26 +2128,19 @@ router.post("/:id/step", async (req, res) => {
         // JSON parse failed
       }
 
-      await db
-        .update(analysesTable)
-        .set({
-          status: "completed",
-          currentStep: null,
-          investmentVerdict,
-          targetPrice,
-          entryPrice,
-          stopLoss,
-          riskRewardRatio,
-          updatedAt: new Date(),
-        })
-        .where(eq(analysesTable.id, id));
+      await rawQuery(
+        `UPDATE analyses SET status='completed', current_step=NULL, investment_verdict=$1,
+         target_price=$2, entry_price=$3, stop_loss=$4, risk_reward_ratio=$5, updated_at=NOW()
+         WHERE id=$6`,
+        [investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, id]
+      );
 
       triggerModelReview().catch(console.error);
     } else if (nextStep) {
-      await db
-        .update(analysesTable)
-        .set({ currentStep: nextStep, updatedAt: new Date() })
-        .where(eq(analysesTable.id, id));
+      await rawQuery(
+        `UPDATE analyses SET current_step=$1, updated_at=NOW() WHERE id=$2`,
+        [nextStep, id]
+      );
     }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
@@ -2140,7 +2159,7 @@ router.patch("/:id/memo", async (req, res) => {
     return res.status(400).json({ error: "memo must be a string or null" });
   }
   try {
-    await db.update(analysesTable).set({ memo: memo ?? null, updatedAt: new Date() }).where(eq(analysesTable.id, id));
+    await rawQuery(`UPDATE analyses SET memo=$1, updated_at=NOW() WHERE id=$2`, [memo ?? null, id]);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);
@@ -2159,38 +2178,26 @@ router.post("/:id/feedback", async (req, res) => {
   }
 
   try {
-    const [updated] = await db
-      .update(analysesTable)
-      .set({
-        userRating: rating ?? null,
-        userFeedback: typeof feedback === "string" ? feedback.slice(0, 500) : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(analysesTable.id, id))
-      .returning({ id: analysesTable.id });
+    const updRows = await rawQuery(
+      `UPDATE analyses SET user_rating=$1, user_feedback=$2, updated_at=NOW() WHERE id=$3 RETURNING id`,
+      [rating ?? null, typeof feedback === "string" ? feedback.slice(0, 500) : null, id]
+    );
 
-    if (!updated) return res.status(404).json({ error: "Analysis not found" });
+    if (!updRows[0]) return res.status(404).json({ error: "Analysis not found" });
 
     // 사용자 피드백을 model_insights lesson으로 자동 반영 (부정 피드백 우선)
     if (feedback && feedback.trim()) {
       try {
-        const [a] = await db.select().from(analysesTable).where(eq(analysesTable.id, id));
+        const aRows2 = await rawQuery(`SELECT * FROM analyses WHERE id=$1 LIMIT 1`, [id]);
+        const a = aRows2[0] ? mapAnalysisRow(aRows2[0]) : null;
         if (a) {
           const verdictLabel = rating && rating <= 2 ? "[부정 피드백]" : "[긍정 피드백]";
           const lessonNote = `${verdictLabel} ${a.companyName}(${a.ticker}) 사용자 평가 ${rating ?? "?"}/5: ${feedback.trim()}`;
-          await db.insert(modelInsightsTable).values({
-            ticker: a.ticker,
-            companyName: a.companyName,
-            industry: a.industry,
-            verdict: a.investmentVerdict ?? null,
-            entryPrice: a.entryPrice ?? null,
-            targetPrice: a.targetPrice ?? null,
-            priceAtReview: null,
-            priceReturn: null,
-            daysElapsed: null,
-            outcome: "user_feedback",
-            lesson: lessonNote,
-          });
+          await rawQuery(
+            `INSERT INTO model_insights (ticker, company_name, industry, verdict, entry_price, target_price, price_at_review, price_return, days_elapsed, outcome, lesson)
+             VALUES ($1,$2,$3,$4,$5,$6,NULL,NULL,NULL,'user_feedback',$7)`,
+            [a.ticker, a.companyName, a.industry, a.investmentVerdict ?? null, a.entryPrice ?? null, a.targetPrice ?? null, lessonNote]
+          );
         }
       } catch {
         // lesson 기록 실패해도 피드백 저장은 성공
