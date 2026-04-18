@@ -479,23 +479,42 @@ ${COMMON_RULES}`,
 | 소비재·유통 | 12~20x | 7~13x | 1.0~2.0x | 0.5~1.2x |
 | 조선·기계·방산 | 10~25x | 6~14x | 1.0~2.5x | 0.5~1.5x |
 
-**[미국 NYSE·NASDAQ 업종별 밸류에이션 벤치마크]**
+**[미국 NYSE·NASDAQ 업종별 밸류에이션 벤치마크 — Damodaran Jan 2025 US Sector Data]**
+출처: Aswath Damodaran, "Valuation Multiples by Sector (US)", NYU Stern, January 2025
 
-| 업종 | PER(Fwd) | EV/EBITDA | EV/Sales | PBR |
-|-----|---------|---------|---------|-----|
-| 반도체(팹리스/설계) | 25~45x | 20~35x | 8~18x | 8~20x |
-| 반도체(종합/파운드리) | 18~35x | 15~25x | 5~12x | 4~12x |
-| 클라우드·엔터프라이즈 SW | 30~60x | 25~45x | 8~20x | 10~30x |
-| 소비자 인터넷·플랫폼 | 22~40x | 18~30x | 4~12x | 5~15x |
-| 빅테크(FAANGM급) | 25~35x | 18~28x | 5~10x | 8~20x |
-| 바이오·제약(흑자) | 15~30x | 12~22x | 3~8x | 4~10x |
-| 바이오(임상단계) | N/A | N/A | 5~15x | 3~8x |
-| 에너지(오일가스) | 10~18x | 6~10x | 1~3x | 1~2.5x |
-| 금융(은행·보험) | 10~16x | — | 2~4x | 1~2x |
-| 자동차(전통) | 7~14x | 4~8x | 0.3~0.8x | 1~2x |
-| EV·미래차 | 30~80x | 20~40x | 3~8x | 5~15x |
-| 소비재·리테일 | 15~25x | 10~16x | 0.5~2x | 3~8x |
-| 헬스케어(의료기기·서비스) | 20~35x | 14~22x | 2~6x | 3~8x |
+| 업종 (Damodaran 분류) | EV/EBITDA | EV/Sales | PBR | 순이익률(참고) |
+|---------------------|---------|---------|-----|------------|
+| Semiconductor | 23.9x | 7.1x | 6.7x | 17.3% |
+| Semiconductor Equipment | 19.9x | 5.5x | 5.3x | 15.3% |
+| Software (System & Application) | 27.7x | 7.8x | 10.6x | 14.2% |
+| Software (Internet / SaaS) | 22.3x | 7.4x | 7.4x | 11.9% |
+| Information Services | 19.0x | 5.3x | 11.4x | 17.5% |
+| Internet (Ad/Platform) | 22.1x | 4.7x | 4.3x | 7.8% |
+| IT Services | 14.6x | 1.7x | 4.6x | 5.3% |
+| Computer Services | 14.4x | 1.3x | 3.2x | 4.8% |
+| Biotech (pre-revenue) | N/A | 9.0x | 4.3x | 적자 |
+| Pharmaceutical | 16.7x | 3.9x | 3.5x | 10.8% |
+| Healthcare Products | 19.7x | 3.6x | 4.6x | 8.7% |
+| Medical Devices | 19.8x | 3.1x | 3.5x | 8.0% |
+| Healthcare Services | 12.6x | 0.7x | 2.9x | 3.9% |
+| Oil/Gas (Integrated/E&P) | 5.0x | 1.9x | 1.4x | 10.9% |
+| Banks (Regional) | N/A | N/A | 1.2x | 28.4%(ROE) |
+| Banks (Money Center) | N/A | N/A | 1.5x | — |
+| Financial Services | N/A | N/A | 2.5x | 22.6%(ROE) |
+| Insurance | N/A | 0.9x | 1.6x | 9.4% |
+| Auto & Truck | 8.0x | 0.7x | 1.5x | 4~6% |
+| Retail (Online / E-Commerce) | 17.7x | 2.3x | 6.5x | 5.3% |
+| Retail (General) | 10.5x | 0.6x | 4.9x | 4.8% |
+| Aerospace / Defense | 23.5x | 2.4x | 5.5x | 7.5% |
+| Machinery | 16.0x | 1.5x | 3.6x | 6.6% |
+| Entertainment | 15.3x | 2.0x | 3.5x | 5.3% |
+| Telecom Services | 6.1x | 1.8x | 1.8x | 4.4% |
+| Utility | 10.0x | 1.9x | 1.4x | 10.4% |
+| Steel / Metals | 4.7x | 0.5x | 1.2x | 7.9% |
+
+⚠️ **Damodaran EV/Sales 적용 원칙**: EV/Sales 배수는 수익성(영업이익률)에 연동됩니다. 동일 업종이라도 영업이익률이 업종 평균보다 유의하게 높으면 프리미엄, 낮으면 디스카운트 배수를 적용하세요. 공식 참조: EV/Sales ≈ (영업이익률 × (1-세율) × (1+g) × (1 - g/ROIC)) / (WACC - g)
+
+⚠️ **Damodaran 배수 vs 한국 배수 혼용 금지**: 미국 종목은 위 Damodaran 미국 데이터만, 한국 종목은 한국 벤치마크만 적용하세요. 국가 간 배수 혼용은 절대 금지.
 
 ⚠️ 적용 배수가 위 범위를 크게 벗어나면 반드시 벗어난 이유(성장 프리미엄/구조적 할인)를 명시하세요
 
@@ -521,8 +540,16 @@ TV = FCFF(10년) × (1+g) / (WACC-g) | 주주가치 = Σ PV(FCFF) + PV(TV) + 순
 주당 내재가치 = 주주가치(현지통화) ÷ 발행주식수
 - KRW 기업: 주당 내재가치(원) = 주주가치(억원) × 100,000,000 ÷ 발행주식수
 - USD 기업: 주당 내재가치($) = 주주가치($백만) × 1,000,000 ÷ 발행주식수
-⚠️ 단위 일관성: 실적 전망 인계 요약의 단위(조원/억원)를 DCF 전체에서 동일하게 사용
+⚠️ 단위 일관성: 실적 전망 인계 요약의 단위(조원/억원 또는 $백만)를 DCF 전체에서 동일하게 사용
 ⚠️ 비정상 FCF 보정: FCF > 영업CF×2 또는 영업적자인데 FCF 양수 → NOPAT 기반 DCF, "FCF 비정상 감지" 명시
+
+⚠️ **[미국 종목 DCF — Damodaran 방법론 추가 원칙]**:
+- **Terminal Year ROIC 수렴**: TV 계산 시 성숙단계 기업의 ROIC는 WACC 수준으로 수렴한다고 가정. Reinvestment Rate(TV) = g / ROIC. ROIC >> WACC인 초과이익은 경쟁 압력으로 영구 지속 불가.
+  - TV에서 Reinvestment Rate 반영: FCFF(TV) = NOPAT(TV) × (1 - g/ROIC) → TV = FCFF(TV) / (WACC - g)
+- **Terminal g 상한**: 미국 기업의 g는 반드시 미국 장기 명목 GDP 성장률(~2.0~2.5%) 이하. g > 2.5% 적용 시 "⚠️ 터미널 성장률이 미국 장기 GDP 성장률 상한을 초과" 경고 명시 필수.
+- **2단계 / 3단계 모델 권장**: 고성장 기업(매출성장률 > 15%)은 [고성장기 5년 + 전환기 5년 + 영구성장] 3단계 적용. 성숙기 기업은 2단계로 충분.
+- **스톡옵션·RSU 희석**: 미국 빅테크·스타트업은 SBC(Stock-Based Compensation)가 크므로 주당가치 계산 시 희석주식수(Diluted Shares Outstanding) 사용.
+- **Excess Cash vs Operating Cash 분리**: 초과 현금(Excess Cash)만 주주가치에 가산. 운전자본 필요 현금은 제외.
 
 WACC 산출: Relevered β = Unlevered β × (1+(1-세율)×D/E) | CoE = Rf + β × ERP
 ⚠️ β 산출 세율: CoD와 동일 기준 — 영업적자 기업 0%, 흑자 기업 법인세율. (단, D/E ≈ 0이면 Relevered β ≈ Unlevered β로 세율 무관)
@@ -537,14 +564,34 @@ CoD(after-tax) = 이자비용/총부채 × (1-세율) | WACC = CoE×E/(D+E) + Co
 - CoD 시장 기본값: BBB등급 회사채 기준 4~6%
 - Unlevered β 참조: 반도체/IT 1.1~1.4, 2차전지/소재 1.2~1.5, 바이오 1.3~1.6, 소비재 0.8~1.1, 금융 0.6~0.9, 건설 0.9~1.2
 
-[미국 종목 — USD]
-- Rf (무위험이자율): 미국 국채 10년(US 10Y T-bond) 기준 ~4.5% (컨텍스트 수치 있으면 우선 적용)
-- ERP (주식위험 프리미엄): 미국 시장 ~5.5% (Damodaran US ERP 기준)
+[미국 종목 — USD] ※ Damodaran Framework 적용
+- Rf (무위험이자율): 미국 국채 10년(US 10Y T-bond) 기준 ~4.3~4.5% (2025년 기준; 컨텍스트 수치 있으면 우선 적용)
+- ERP (주식위험 프리미엄): **4.6%** — Damodaran의 Implied ERP (Jan 2025, S&P 500 역산 기준). 역사적 산술평균(~5.5%)이 아닌 IMPLIED ERP를 사용. 미국은 Country Risk Premium(CRP) = 0.
 - 법인세율: 21% (미국 연방 법인세, 영업흑자 기업), 0% (영업적자 기업)
-- CoD 시장 기본값: Investment Grade BBB 회사채 기준 5~7%
-- Unlevered β 참조 (Damodaran US 업종별): 반도체 1.5~2.0, 소프트웨어/IT 1.2~1.7, 바이오/제약 1.0~1.5, 소비재 0.7~1.0, 금융 0.5~0.8, 에너지 0.9~1.3, 자동차 1.0~1.4
+- CoD 시장 기본값: Investment Grade A/BBB 회사채 기준 4.5~6.5% (2025년 기준 스프레드 + Rf)
+- 터미널 성장률(g): 미국 장기 명목 GDP 성장률 기준 **2.0~2.5%** 상한. g > 2.5% 적용 시 과잉낙관 경고 필수.
 - 주당 내재가치 단위: USD/share ($/주)
 - 목표주가 산출식: 주당 내재가치 = 주주가치($백만) × 1,000,000 ÷ 발행주식수 = $/주
+
+Unlevered β (Damodaran Jan 2025 US Sector Betas — 1순위 참조):
+| 업종 | Unlevered β | 업종 | Unlevered β |
+|-----|-----------|-----|-----------|
+| Semiconductor | 1.39 | Semiconductor Equipment | 1.49 |
+| Software (System & Application) | 1.21 | Information Services | 1.22 |
+| Software (Internet / SaaS) | 1.01 | Biotech | 1.24 |
+| Internet (Ad/Platform) | 0.93 | Retail (Online) | 1.18 |
+| IT Services | 0.84 | Pharmaceutical | 0.84 |
+| Computer Services | 0.80 | Healthcare Products | 0.87 |
+| Aerospace / Defense | 0.93 | Medical Devices | 0.78 |
+| Machinery | 0.83 | Healthcare Services | 0.63 |
+| Auto & Truck | 0.89 | Retail (General) | 0.75 |
+| Oil/Gas | 1.00 | Telecom Services | 0.57 |
+| Bank (Money Center) | 0.51 | Financial Services | 0.64 |
+| Banks (Regional) | 0.38 | Insurance | 0.54 |
+| Consumer Electronics | 0.84 | Utility | 0.34 |
+| Entertainment | 0.97 | Steel / Metals | 0.87 |
+
+⚠️ Unlevered β 선택 규칙: 위 테이블에서 분석 대상 업종과 가장 유사한 Damodaran 분류를 선택하고, 선택 근거를 한 줄 명시하세요. 범주에 없는 업종은 유사 업종 평균을 산술 평균으로 산출.
 
 ⚠️ CoD 계산 규칙 (순서 준수):
   1) 컨텍스트 "[⚡ WACC·EBITDA 계산 핵심 데이터]"의 이자비용·총부채 수치 확인
