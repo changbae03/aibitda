@@ -470,6 +470,8 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         "balanceSheetHistory",
         "cashflowStatementHistory",
         "earningsTrend",
+        "institutionOwnership",
+        "insiderTransactions",
       ] as any,
     }),
     fetch(tsUrl, { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) })
@@ -571,9 +573,50 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
     if (ks.heldPercentInsiders != null)     lines.push(`내부자 보유율: ${pct(ks.heldPercentInsiders)}`);
     if (ks.heldPercentInstitutions != null) lines.push(`기관 보유율: ${pct(ks.heldPercentInstitutions)}`);
+    if ((ks as any).shortPercentOfFloat != null) lines.push(`공매도 비중(Float): ${pct((ks as any).shortPercentOfFloat)}`);
     if (ks.shortRatio != null)      lines.push(`공매도 커버일수: ${ks.shortRatio.toFixed(1)}일`);
     if (ks.dividendYield != null)   lines.push(`배당수익률: ${pct(ks.dividendYield)}`);
     if (ks.payoutRatio != null)     lines.push(`배당성향: ${pct(ks.payoutRatio)}`);
+  }
+
+  // ── US 주식 수급 동향: 기관 투자자 13F + 내부자 거래 (SEC Form 4) ─────────────
+  if (currency !== "KRW") {
+    // Top institutional holders (13F)
+    const instOwn: any = (result as any).institutionOwnership;
+    if (instOwn?.ownershipList?.length) {
+      lines.push("\n[주요 기관 투자자 보유 현황 — 13F 최신]");
+      const top = (instOwn.ownershipList as any[]).slice(0, 8);
+      for (const h of top) {
+        const changePct = h.pctChange != null
+          ? (h.pctChange > 0 ? `▲${(h.pctChange * 100).toFixed(1)}%` : h.pctChange < 0 ? `▼${Math.abs(h.pctChange * 100).toFixed(1)}%` : "변동없음")
+          : "";
+        const reportDate = h.reportDate ? new Date(h.reportDate).toISOString().slice(0, 7) : "";
+        lines.push(`- ${h.organization}: 보유 ${h.pctHeld != null ? pct(h.pctHeld) : "-"} (포지션 ${h.position?.toLocaleString("en-US") ?? "-"}주${changePct ? ", 전분기比 " + changePct : ""}${reportDate ? ", " + reportDate : ""})`);
+      }
+      // Summarize net direction
+      const buyers = (instOwn.ownershipList as any[]).filter((h: any) => h.pctChange > 0).length;
+      const sellers = (instOwn.ownershipList as any[]).filter((h: any) => h.pctChange < 0).length;
+      if (buyers + sellers > 0) {
+        lines.push(`→ 상위 기관 순매수 방향: 증가 ${buyers}곳 / 감소 ${sellers}곳 / 총 ${buyers + sellers}곳 집계`);
+      }
+    }
+
+    // Recent insider transactions (SEC Form 4)
+    const insiderTxns: any = (result as any).insiderTransactions;
+    if (insiderTxns?.transactions?.length) {
+      lines.push("\n[내부자 최근 거래 — SEC Form 4]");
+      const txns = (insiderTxns.transactions as any[]).slice(0, 6);
+      for (const t of txns) {
+        const dir = t.shares != null && t.shares > 0 ? "매수" : "매도";
+        const sharesAbs = Math.abs(t.shares ?? 0).toLocaleString("en-US");
+        const val = t.value != null ? ` ($${(t.value / 1e6).toFixed(1)}M)` : "";
+        const txDate = t.startDate ? new Date(t.startDate).toISOString().slice(0, 10) : "";
+        lines.push(`- ${txDate} ${t.filerName ?? "내부자"} (${t.filerRelation ?? "임원"}): ${dir} ${sharesAbs}주${val}`);
+      }
+      const netBuys = txns.filter((t: any) => t.shares > 0).length;
+      const netSells = txns.filter((t: any) => t.shares < 0).length;
+      lines.push(`→ 최근 내부자 거래: 매수 ${netBuys}건 / 매도 ${netSells}건`);
+    }
   }
 
   // ── fundamentalsTimeSeries: 연간 데이터 맵 ────────────────────────────────────
