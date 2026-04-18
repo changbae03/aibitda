@@ -163,7 +163,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         <div id="print-scroll" className="flex-1 overflow-y-auto">
-          <div className="container max-w-5xl mx-auto p-6 md:p-10 animate-fade-in">
+          <div className="container max-w-5xl mx-auto p-4 md:p-10 animate-fade-in">
             {children}
           </div>
 

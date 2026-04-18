@@ -455,72 +455,77 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
       </div>
 
       {open && data && rows.length > 0 && (
-        <div className="overflow-x-auto border-t border-border">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">종목</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/B</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E TTM</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E Fwd</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">EV/EBITDA</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">EV/Sales</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">ROE</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">OPM</th>
-                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">시총</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {rows.map(([t, p]) => (
-                <tr key={t} className="hover:bg-muted/20">
-                  <td className="px-3 py-1.5 whitespace-nowrap">
-                    <span className="font-mono text-blue-600 font-medium">{t}</span>
-                    <span className="text-muted-foreground ml-1.5 text-[10px]">{p.name}</span>
-                    <span className="ml-1 text-[9px] bg-sky-100 text-sky-600 rounded px-1 py-0.5">실측</span>
-                  </td>
-                  {([
-                    [p.pbr, 2, "x"],
-                    [p.per_trailing, 1, "x"],
-                  ] as [number|null, number, string][]).map((args, i) => (
-                    <td key={i} className={cn("px-3 py-1.5 text-right tabular-nums", args[0] == null ? "text-muted-foreground/40" : "text-foreground")}>
-                      {fmtNum(args[0], args[1], args[2])}
-                    </td>
-                  ))}
-                  <td className={cn("px-3 py-1.5 text-right tabular-nums", p.per_fwd == null ? "text-muted-foreground/40" : "text-foreground")}>
-                    {p.per_fwd != null ? (
-                      <span>{fmtNum(p.per_fwd, 1, "x")} <span className="text-[9px] text-orange-500">수동</span></span>
-                    ) : "N/A"}
-                  </td>
-                  {([
-                    [p.ev_ebitda, 1, "x"],
-                    [p.ev_sales, 2, "x"],
-                    [p.roe, 1, "%"],
-                    [p.operating_margin, 1, "%"],
-                  ] as [number|null, number, string][]).map((args, i) => (
-                    <td key={i} className={cn("px-3 py-1.5 text-right tabular-nums", args[0] == null ? "text-muted-foreground/40" : "text-foreground")}>
-                      {fmtNum(args[0], args[1], args[2])}
-                    </td>
-                  ))}
-                  <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">{fmtMC(p.marketCap)}</td>
+        <div className="border-t border-border">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">종목</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/B</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E</th>
+                  <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">P/E Fwd</th>
+                  <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">EV/EBIT</th>
+                  <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">EV/Sales</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">ROE</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">OPM</th>
+                  <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">시총</th>
                 </tr>
-              ))}
-              {avg && rows.length > 1 && (
-                <tr className="bg-blue-50/70 font-semibold border-t border-blue-200/50">
-                  <td className="px-3 py-1.5 text-blue-700 text-[11px]">피어 평균</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.per_fwd, 1, "x")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.ev_ebitda, 1, "x")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.ev_sales, 2, "x")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.roe, 1, "%")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.operating_margin, 1, "%")}</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtMC(avg.marketCap)}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {rows.map(([t, p]) => (
+                  <tr key={t} className="hover:bg-muted/20">
+                    <td className="px-3 py-1.5 whitespace-nowrap max-w-[90px] sm:max-w-none">
+                      <span className="font-mono text-blue-600 font-medium text-[11px]">{t}</span>
+                      <span className="text-muted-foreground ml-1 text-[9px] hidden sm:inline">{p.name}</span>
+                    </td>
+                    {([
+                      [p.pbr, 2, "x"],
+                      [p.per_trailing, 1, "x"],
+                    ] as [number|null, number, string][]).map((args, i) => (
+                      <td key={i} className={cn("px-3 py-1.5 text-right tabular-nums", args[0] == null ? "text-muted-foreground/40" : "text-foreground")}>
+                        {fmtNum(args[0], args[1], args[2])}
+                      </td>
+                    ))}
+                    <td className={cn("px-2 py-1.5 text-right tabular-nums hidden sm:table-cell", p.per_fwd == null ? "text-muted-foreground/40" : "text-foreground")}>
+                      {p.per_fwd != null ? (
+                        <span>{fmtNum(p.per_fwd, 1, "x")}</span>
+                      ) : "N/A"}
+                    </td>
+                    <td className={cn("px-2 py-1.5 text-right tabular-nums", p.ev_ebitda == null ? "text-muted-foreground/40" : "text-foreground")}>
+                      {fmtNum(p.ev_ebitda, 1, "x")}
+                    </td>
+                    <td className={cn("px-2 py-1.5 text-right tabular-nums hidden sm:table-cell", p.ev_sales == null ? "text-muted-foreground/40" : "text-foreground")}>
+                      {fmtNum(p.ev_sales, 2, "x")}
+                    </td>
+                    {([
+                      [p.roe, 1, "%"],
+                      [p.operating_margin, 1, "%"],
+                    ] as [number|null, number, string][]).map((args, i) => (
+                      <td key={i} className={cn("px-3 py-1.5 text-right tabular-nums", args[0] == null ? "text-muted-foreground/40" : "text-foreground")}>
+                        {fmtNum(args[0], args[1], args[2])}
+                      </td>
+                    ))}
+                    <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums hidden sm:table-cell">{fmtMC(p.marketCap)}</td>
+                  </tr>
+                ))}
+                {avg && rows.length > 1 && (
+                  <tr className="bg-blue-50/70 font-semibold border-t border-blue-200/50">
+                    <td className="px-3 py-1.5 text-blue-700 text-[11px]">피어 평균</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums hidden sm:table-cell">{fmtNum(avg.per_fwd, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.ev_ebitda, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums hidden sm:table-cell">{fmtNum(avg.ev_sales, 2, "x")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.roe, 1, "%")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.operating_margin, 1, "%")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums hidden sm:table-cell">{fmtMC(avg.marketCap)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           <p className="px-4 py-2 text-[10px] text-muted-foreground border-t border-border/50">
-            실측 = Yahoo Finance 자동 수집 · 수동 = 관리자 직접 입력 · EV/Sales = (시총+순차입금)÷매출 직접 계산
+            실측 = Yahoo Finance 자동 수집 · <span className="sm:hidden">모바일: P/E Fwd·EV/Sales·시총은 PC에서 확인 · </span>EV/Sales = (시총+순차입금)÷매출
           </p>
         </div>
       )}
@@ -682,7 +687,7 @@ export default function AnalysisDetail() {
       </button>
 
       {/* Header */}
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
           <div>
             <div className="flex items-center gap-2.5 mb-2">
@@ -961,7 +966,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       className="rounded-2xl overflow-hidden border border-neutral-200 bg-white shadow-sm"
     >
       {/* ── 상단 헤더 ── */}
-      <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between gap-3">
+      <div className="bg-neutral-900 px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
             <agent.icon className="w-4 h-4 text-white" />
@@ -982,7 +987,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
           <div className="divide-y divide-neutral-100">
 
             {/* ── ① 판정 + 메타 ── */}
-            <div className="px-6 py-5 flex flex-wrap items-center gap-3">
+            <div className="px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3">
               <span className={cn("text-[26px] font-display font-bold leading-none", vm.color)}>{vm.label}</span>
               <div className="flex flex-wrap gap-1.5">
                 {json.confidence && (
@@ -1005,7 +1010,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ② 핵심 이슈 ── */}
             {json.key_issue && (
-              <div className="px-6 py-4 bg-amber-50/60">
+              <div className="px-4 sm:px-6 py-4 bg-amber-50/60">
                 <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-1">핵심 이슈</p>
                 <p className="text-sm text-neutral-800 leading-relaxed font-medium">{json.key_issue}</p>
               </div>
@@ -1013,7 +1018,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ③ 투자 논거 요약 ── */}
             {json.summary && (
-              <div className="px-6 py-4">
+              <div className="px-4 sm:px-6 py-4">
                 <p className="text-sm text-neutral-600 leading-[1.8]">{json.summary}</p>
               </div>
             )}
@@ -1052,51 +1057,51 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 : null;
 
               return (
-                <div className="px-6 py-4">
-                  <div className="grid grid-cols-3 gap-3">
+                <div className="px-4 sm:px-6 py-4">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {/* 진입가 */}
-                    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-                      <div className="flex items-center gap-1.5 mb-2.5">
-                        <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
-                        <p className="text-[11px] font-semibold text-neutral-500">진입가</p>
+                    <div className="rounded-xl border border-neutral-200 bg-white p-3 sm:p-4">
+                      <div className="flex items-center gap-1 mb-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" />
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-neutral-500">진입가</p>
                       </div>
-                      <p className="text-[17px] font-bold text-neutral-900 font-mono leading-none">{formatPrice(json.entry_price, priceCurrency)}</p>
+                      <p className="text-[13px] sm:text-[17px] font-bold text-neutral-900 font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency)}</p>
                       {entryVsCurrent !== null ? (
-                        <p className={`text-[11px] font-bold mt-1.5 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
-                          {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}% 현재가 대비
+                        <p className={`text-[10px] sm:text-[11px] font-bold mt-1 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
+                          {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
                         </p>
                       ) : (
-                        <p className="text-[11px] text-neutral-400 mt-1.5">진입 목표 가격</p>
+                        <p className="text-[10px] text-neutral-400 mt-1 hidden sm:block">진입 목표 가격</p>
                       )}
                     </div>
 
                     {/* 적정주가 — 현재가 기준 upside/downside */}
-                    <div className={`rounded-xl border ${targetCardStyle.border} ${targetCardStyle.bg} p-4`}>
-                      <div className="flex items-center gap-1.5 mb-2.5">
-                        <span className={`w-2 h-2 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
-                        <p className={`text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가</p>
+                    <div className={`rounded-xl border ${targetCardStyle.border} ${targetCardStyle.bg} p-3 sm:p-4`}>
+                      <div className="flex items-center gap-1 mb-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
+                        <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가</p>
                       </div>
-                      <p className={`text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none`}>{formatPrice(json.target_price, priceCurrency)}</p>
+                      <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{formatPrice(json.target_price, priceCurrency)}</p>
                       {upsideFromCurrent !== null ? (
-                        <p className={`text-[11px] font-bold ${targetCardStyle.pctColor} mt-1.5`}>
-                          {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}% {isBearish ? "하락여지" : "상승여력"}
+                        <p className={`text-[10px] sm:text-[11px] font-bold ${targetCardStyle.pctColor} mt-1`}>
+                          {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
                         </p>
                       ) : (
-                        <p className={`text-[11px] ${targetCardStyle.labelColor} mt-1.5`}>현재가 기준</p>
+                        <p className={`text-[10px] ${targetCardStyle.labelColor} mt-1 hidden sm:block`}>현재가 기준</p>
                       )}
                     </div>
 
                     {/* 손절가 — 진입가 기준 */}
-                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                      <div className="flex items-center gap-1.5 mb-2.5">
-                        <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                        <p className="text-[11px] font-semibold text-red-500">손절가</p>
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 sm:p-4">
+                      <div className="flex items-center gap-1 mb-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-red-500">손절가</p>
                       </div>
-                      <p className="text-[17px] font-bold text-red-600 font-mono leading-none">{formatPrice(json.stop_loss, priceCurrency)}</p>
+                      <p className="text-[13px] sm:text-[17px] font-bold text-red-600 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency)}</p>
                       {slPct !== null ? (
-                        <p className="text-[11px] font-bold text-red-500 mt-1.5">-{slPct}% 이하 손절</p>
+                        <p className="text-[10px] sm:text-[11px] font-bold text-red-500 mt-1">-{slPct}%</p>
                       ) : (
-                        <p className="text-[11px] text-red-500 mt-1.5">손절 기준선</p>
+                        <p className="text-[10px] text-red-500 mt-1 hidden sm:block">손절 기준선</p>
                       )}
                     </div>
                   </div>
@@ -1106,7 +1111,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (
-              <div className="px-6 py-4">
+              <div className="px-4 sm:px-6 py-4">
                 <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">시나리오 분석</p>
                 <div className="space-y-2">
                   {json.scenarios.map((s: any, i: number) => {
@@ -1183,7 +1188,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ⑥ 핵심 리스크 + 모니터링 ── */}
             {(json.risks?.length > 0 || json.monitoring_indicators?.length > 0) && (
-              <div className="px-6 py-4 grid sm:grid-cols-2 gap-5">
+              <div className="px-4 sm:px-6 py-4 grid sm:grid-cols-2 gap-5">
                 {json.risks?.length > 0 && (
                   <div>
                     <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">핵심 리스크</p>
@@ -1551,8 +1556,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
         </div>
       </div>
 
-      <div className="p-5">
-        <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.85", color: "#262626" }}>
+      <div className="p-4 sm:p-5">
+        <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8", color: "#262626" }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
