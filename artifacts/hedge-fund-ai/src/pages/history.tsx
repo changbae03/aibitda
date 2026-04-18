@@ -452,34 +452,112 @@ export default function History() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-[12px] text-neutral-400 flex-wrap">
+                    {/* 메타 라인 */}
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-neutral-400 flex-wrap">
                       <span>{a.industry || "—"}</span>
-                      {a.targetPrice != null && (
-                        <>
-                          <span className="text-neutral-200">|</span>
-                          <span>적정주가 <span className="text-neutral-600 font-medium">{formatCurrency(a.targetPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}</span></span>
-                        </>
-                      )}
-                      {/* 실시간 업사이드 */}
-                      {(() => {
-                        const q = quotes[a.ticker];
-                        if (!q?.price || !a.targetPrice) return null;
-                        const upside = ((a.targetPrice - q.price) / q.price) * 100;
-                        const color = upside >= 10 ? "text-emerald-600" : upside >= 0 ? "text-green-600" : "text-red-500";
-                        return (
-                          <>
-                            <span className="text-neutral-200">|</span>
-                            <span className={cn("flex items-center gap-0.5 font-semibold", color)}>
-                              {upside >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                              {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
-                            </span>
-                            <span className="text-neutral-300 text-[11px]">현재 {formatCurrency(q.price, q.currency)}</span>
-                          </>
-                        );
-                      })()}
                       <span className="text-neutral-200">|</span>
-                      <span>{format(new Date(a.createdAt), "yyyy.MM.dd HH:mm", { locale: ko })}</span>
+                      <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
                     </div>
+
+                    {/* 목표주가 달성 현황 */}
+                    {(() => {
+                      const q = quotes[a.ticker];
+                      const cur = q?.price ?? null;
+                      const tgt = a.targetPrice;
+                      const entry = a.entryPrice;
+                      const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
+                      const dayChange = q?.change ?? null;
+                      const isBuy = (a.investmentVerdict ?? "").toLowerCase().includes("buy");
+                      const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
+
+                      if (!cur || !tgt) {
+                        if (tgt) return (
+                          <div className="mt-2 text-[11px] text-neutral-400">
+                            적정주가 <span className="font-semibold text-neutral-600">{formatCurrency(tgt, currency)}</span>
+                            <span className="text-neutral-300 ml-1.5">· 현재가 로딩 중</span>
+                          </div>
+                        );
+                        return null;
+                      }
+
+                      const upside = ((tgt - cur) / cur) * 100;
+
+                      // 상태 판단
+                      const exceeded = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
+                      const approaching = !exceeded && (isBuy ? (dayChange ?? 0) > 0 : isSell ? (dayChange ?? 0) < 0 : (dayChange ?? 0) > 0);
+                      const diverging = !exceeded && !approaching && dayChange !== null;
+
+                      let statusLabel = "";
+                      let statusCls = "";
+                      if (exceeded) {
+                        statusLabel = "목표 돌파 ✓";
+                        statusCls = "bg-emerald-100 text-emerald-700";
+                      } else if (approaching) {
+                        statusLabel = "목표 접근 중 ↑";
+                        statusCls = "bg-blue-50 text-blue-600";
+                      } else if (diverging) {
+                        statusLabel = "목표 이탈 중 ↓";
+                        statusCls = "bg-red-50 text-red-500";
+                      } else {
+                        statusLabel = `업사이드 ${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`;
+                        statusCls = upside >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500";
+                      }
+
+                      // 프로그레스 바
+                      let progressPct: number | null = null;
+                      if (entry && tgt !== entry) {
+                        progressPct = Math.min(Math.max(((cur - entry) / (tgt - entry)) * 100, 0), 100);
+                      } else {
+                        // entry 없으면 upside 기반으로 반대로 그려줌
+                        // target 기준으로 current가 얼마나 왔는지
+                        progressPct = Math.min(Math.max(100 - Math.abs(upside), 0), 100);
+                      }
+
+                      return (
+                        <div className="mt-2.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                          {/* 가격 레일 */}
+                          {entry != null && (
+                            <div className="relative">
+                              <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                                <motion.div
+                                  className={cn("h-full rounded-full",
+                                    exceeded ? "bg-emerald-500" : approaching ? "bg-blue-400" : diverging ? "bg-red-400" : "bg-neutral-300"
+                                  )}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${progressPct ?? 0}%` }}
+                                  transition={{ duration: 0.6, ease: "easeOut" }}
+                                />
+                              </div>
+                              {/* 레이블 */}
+                              <div className="flex justify-between mt-0.5 text-[10px]">
+                                <span className="text-neutral-400">분석 시 <span className="font-medium text-neutral-500">{formatCurrency(entry, currency)}</span></span>
+                                <span className="text-neutral-400">목표 <span className="font-semibold text-neutral-600">{formatCurrency(tgt, currency)}</span></span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 상태 + 현재가 */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", statusCls)}>
+                              {statusLabel}
+                            </span>
+                            <span className="text-[11px] text-neutral-500">
+                              현재가 <span className="font-semibold text-neutral-700">{formatCurrency(cur, currency)}</span>
+                            </span>
+                            {entry == null && (
+                              <span className="text-[11px] text-neutral-400">
+                                목표 <span className="font-semibold text-neutral-600">{formatCurrency(tgt, currency)}</span>
+                              </span>
+                            )}
+                            {dayChange != null && (
+                              <span className={cn("text-[10px] font-medium", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
+                                오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Memo */}
                     <MemoInline id={a.id} />
