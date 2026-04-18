@@ -109,6 +109,12 @@ function MemoInline({ id }: { id: number }) {
     setEditing(true);
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    saveMemo(id, "");
+    setSaved("");
+  };
+
   if (editing) {
     return (
       <div
@@ -159,13 +165,22 @@ function MemoInline({ id }: { id: number }) {
         <div className="flex-1 text-[12px] text-neutral-500 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">
           {saved}
         </div>
-        <button
-          onClick={handleEdit}
-          className="shrink-0 mt-0.5 p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors opacity-0 group-hover/memo:opacity-100"
-          title="메모 수정"
-        >
-          <Pencil className="w-3 h-3" />
-        </button>
+        <div className="shrink-0 mt-0.5 flex items-center gap-0.5 opacity-0 group-hover/memo:opacity-100 transition-opacity">
+          <button
+            onClick={handleEdit}
+            className="p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+            title="메모 수정"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button
+            onClick={handleDelete}
+            className="p-1 rounded text-neutral-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+            title="메모 삭제"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
     );
   }
