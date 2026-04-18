@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const analysesTable = pgTable("analyses", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   ticker: text("ticker").notNull(),
   companyName: text("company_name").notNull(),
   englishName: text("english_name"),
@@ -17,6 +18,7 @@ export const analysesTable = pgTable("analyses", {
   stopLoss: real("stop_loss"),
   riskRewardRatio: real("risk_reward_ratio"),
   memo: text("memo"),
+  isPublic: text("is_public").notNull().default("true"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

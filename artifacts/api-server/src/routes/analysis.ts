@@ -4,7 +4,7 @@ import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspac
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
 import { fetchDartSubjectBalance } from "../lib/peer-collector.js";
-import { eq, desc, not } from "drizzle-orm";
+import { eq, desc, not, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
 import {
@@ -1400,6 +1400,7 @@ router.post("/", async (req, res) => {
   const [analysis] = await db
     .insert(analysesTable)
     .values({
+      userId: userId ?? null,
       ticker: upperTicker,
       companyName,
       englishName,
@@ -1407,17 +1408,20 @@ router.post("/", async (req, res) => {
       additionalContext: fullContext,
       status: "in_progress",
       currentStep: "company_intro",
+      isPublic: "true",
     })
     .returning();
 
   res.json(formatAnalysis(analysis, []));
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const analyses = await db
       .select()
       .from(analysesTable)
+      .where(userId ? eq(analysesTable.userId, userId) : sql`1=0`)
       .orderBy(desc(analysesTable.createdAt));
 
     const results = await Promise.all(
@@ -1447,6 +1451,16 @@ router.delete("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const userId = getUserId(req);
+  const [analysis] = await db.select().from(analysesTable).where(eq(analysesTable.id, id)).limit(1);
+  if (!analysis) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (analysis.userId && analysis.userId !== userId) {
+    res.status(403).json({ error: "권한이 없습니다" });
     return;
   }
   await db.delete(analysisStepsTable).where(eq(analysisStepsTable.analysisId, id));
