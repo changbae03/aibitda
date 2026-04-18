@@ -18,8 +18,9 @@ import {
   RefreshCw,
   Bookmark,
   BookmarkCheck,
+  Database,
 } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
@@ -172,6 +173,175 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
   if (s.includes("strong sell")) return "높은 하락여지";
   if (s.includes("sell"))        return "하락여지";
   return "적정 수준";
+}
+
+// ─── PeerMultiplesPanel ───────────────────────────────────────────────────────
+
+interface PeerMultiples {
+  name: string;
+  marketCap: number | null;
+  pbr: number | null;
+  per_trailing: number | null;
+  per_fwd: number | null;
+  ev_ebitda: number | null;
+  ev_sales: number | null;
+  roe: number | null;
+  operating_margin: number | null;
+  revenue: number | null;
+  net_debt: number | null;
+  _sources?: { yahoo: boolean; dart: boolean; calculated: string[] };
+}
+interface PeerSnapshotResponse {
+  subject: string;
+  collected_at: string;
+  peers: Record<string, PeerMultiples>;
+  averages?: Partial<PeerMultiples>;
+}
+
+function fmtNum(v: number | null | undefined, decimals = 1, suffix = ""): string {
+  if (v == null) return "N/A";
+  return `${v.toFixed(decimals)}${suffix}`;
+}
+function fmtMC(v: number | null | undefined): string {
+  if (v == null) return "N/A";
+  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+  if (v >= 1e8) return `${(v / 1e8).toFixed(0)}억`;
+  return `${(v / 1e6).toFixed(0)}M`;
+}
+
+function PeerMultiplesPanel({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<PeerSnapshotResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`api/peers/latest?subject=${encodeURIComponent(ticker)}`), { credentials: "include" });
+      if (r.ok) setData(await r.json());
+      else setData(null);
+    } catch { setData(null); }
+    finally { setLoading(false); }
+  }, [ticker]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const rows = data ? Object.entries(data.peers) : [];
+  const avg = data?.averages;
+
+  if (!loading && !data) return null;
+
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => e.key === "Enter" && setOpen(o => !o)}
+        className="w-full px-5 py-3.5 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors select-none"
+      >
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-blue-500" />
+          <span className="font-semibold text-sm">피어 멀티플 실측 데이터</span>
+          {data && (
+            <span className="text-[10px] bg-green-100 text-green-700 rounded px-1.5 py-0.5 font-medium">
+              {rows.length}개 피어
+            </span>
+          )}
+          {loading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+        </div>
+        <div className="flex items-center gap-2">
+          {data && (
+            <span className="text-[10px] text-muted-foreground hidden sm:block">
+              수집: {new Date(data.collected_at).toLocaleDateString("ko-KR")}
+            </span>
+          )}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={e => { e.stopPropagation(); load(); }}
+            onKeyDown={e => e.key === "Enter" && (e.stopPropagation(), load())}
+            className="p-1 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+            title="새로고침"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </span>
+          <span className="text-muted-foreground text-xs">{open ? "▲" : "▼"}</span>
+        </div>
+      </div>
+
+      {open && data && rows.length > 0 && (
+        <div className="overflow-x-auto border-t border-border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-muted/50">
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">종목</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/B</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E TTM</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E Fwd</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">EV/EBITDA</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">EV/Sales</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">ROE</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">OPM</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">시총</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {rows.map(([t, p]) => (
+                <tr key={t} className="hover:bg-muted/20">
+                  <td className="px-3 py-1.5 whitespace-nowrap">
+                    <span className="font-mono text-blue-600 font-medium">{t}</span>
+                    <span className="text-muted-foreground ml-1.5 text-[10px]">{p.name}</span>
+                    <span className="ml-1 text-[9px] bg-sky-100 text-sky-600 rounded px-1 py-0.5">실측</span>
+                  </td>
+                  {([
+                    [p.pbr, 2, "x"],
+                    [p.per_trailing, 1, "x"],
+                  ] as [number|null, number, string][]).map((args, i) => (
+                    <td key={i} className={cn("px-3 py-1.5 text-right tabular-nums", args[0] == null ? "text-muted-foreground/40" : "text-foreground")}>
+                      {fmtNum(args[0], args[1], args[2])}
+                    </td>
+                  ))}
+                  <td className={cn("px-3 py-1.5 text-right tabular-nums", p.per_fwd == null ? "text-muted-foreground/40" : "text-foreground")}>
+                    {p.per_fwd != null ? (
+                      <span>{fmtNum(p.per_fwd, 1, "x")} <span className="text-[9px] text-orange-500">수동</span></span>
+                    ) : "N/A"}
+                  </td>
+                  {([
+                    [p.ev_ebitda, 1, "x"],
+                    [p.ev_sales, 2, "x"],
+                    [p.roe, 1, "%"],
+                    [p.operating_margin, 1, "%"],
+                  ] as [number|null, number, string][]).map((args, i) => (
+                    <td key={i} className={cn("px-3 py-1.5 text-right tabular-nums", args[0] == null ? "text-muted-foreground/40" : "text-foreground")}>
+                      {fmtNum(args[0], args[1], args[2])}
+                    </td>
+                  ))}
+                  <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">{fmtMC(p.marketCap)}</td>
+                </tr>
+              ))}
+              {avg && rows.length > 1 && (
+                <tr className="bg-blue-50/70 font-semibold border-t border-blue-200/50">
+                  <td className="px-3 py-1.5 text-blue-700 text-[11px]">피어 평균</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.per_fwd, 1, "x")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.ev_ebitda, 1, "x")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.ev_sales, 2, "x")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.roe, 1, "%")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.operating_margin, 1, "%")}</td>
+                  <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtMC(avg.marketCap)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <p className="px-4 py-2 text-[10px] text-muted-foreground border-t border-border/50">
+            실측 = Yahoo Finance 자동 수집 · 수동 = 관리자 직접 입력 · EV/Sales = (시총+순차입금)÷매출 직접 계산
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AnalysisDetail() {
@@ -394,6 +564,9 @@ export default function AnalysisDetail() {
       <div className="bg-card border border-border rounded-2xl p-5">
         <FinancialChart ticker={analysis.ticker} />
       </div>
+
+      {/* Peer Multiples Panel */}
+      <PeerMultiplesPanel ticker={analysis.ticker} />
 
       {/* Progress Track */}
       <div className="bg-card border border-border rounded-2xl p-5 print:hidden">

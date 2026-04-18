@@ -1,0 +1,32 @@
+{
+  "subject": "TEST",
+  "subject_name": "TEST",
+  "collected_at": "2026-04-18T05:39:04.695Z",
+  "peers": {
+    "005380.KS": {
+      "name": "Hyundai Motor Company",
+      "marketCap": 140039581335552,
+      "totalDebt": 176514918252544,
+      "totalCash": 26399209422848,
+      "pbr": null,
+      "per_trailing": null,
+      "per_fwd": null,
+      "ev_ebitda": 20.304,
+      "roe": 8.361,
+      "operating_margin": 3.6189999999999998,
+      "revenue": 186254478016512,
+      "operating_income": null,
+      "equity": null,
+      "net_debt": 150115708829696,
+      "ev_sales": 1.56,
+      "_sources": {
+        "yahoo": true,
+        "dart": false,
+        "calculated": [
+          "net_debt",
+          "ev_sales"
+        ]
+      }
+    }
+  }
+}
