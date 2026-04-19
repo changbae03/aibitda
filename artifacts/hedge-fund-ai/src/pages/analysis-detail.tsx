@@ -914,7 +914,7 @@ export default function AnalysisDetail() {
             <div className="text-right">
               <div className="text-xl font-bold text-gray-900">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               {analysis.targetPrice && (
-                <div className="text-sm text-gray-600 mt-0.5">적정주가 {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</div>
+                <div className="text-sm text-gray-600 mt-0.5">12개월 적정주가 {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</div>
               )}
             </div>
           )}
@@ -967,7 +967,7 @@ export default function AnalysisDetail() {
               <div className="text-xl font-bold text-foreground mb-3">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
-                  <span className="text-muted-foreground">적정주가</span>
+                  <span className="text-muted-foreground">적정주가 <span className="text-xs opacity-60">(12개월)</span></span>
                   <span className="text-success font-bold">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-border pb-1.5">
@@ -1448,7 +1448,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     <div className={`rounded-xl border ${targetCardStyle.border} ${targetCardStyle.bg} p-3 sm:p-4`}>
                       <div className="flex items-center gap-1 mb-2">
                         <span className={`w-1.5 h-1.5 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
-                        <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가</p>
+                        <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가 <span className="font-normal opacity-70">(12개월)</span></p>
                       </div>
                       <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{formatPrice(json.target_price, priceCurrency)}</p>
                       {upsideFromCurrent !== null ? (
