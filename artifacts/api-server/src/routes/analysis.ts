@@ -2066,8 +2066,10 @@ router.post("/:id/step", async (req, res) => {
 
   let content = "";
   try {
+    // 토큰 최적화: 실제 생성량 기반으로 상한 축소
+    // company_analysis는 긴 재무 테이블 포함하므로 16k, 나머지 8k로 충분
     const maxOutputTokens =
-      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 16384;
+      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 16384 : 8192;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃) 여부 판별
     const isTransient = (err: unknown) => {
@@ -2093,10 +2095,11 @@ router.post("/:id/step", async (req, res) => {
           config: {
             systemInstruction: systemPrompt,
             maxOutputTokens,
-            // 일관성 확보: temperature 낮게 고정 (기본값 1.0은 매번 다른 결과 초래)
-            // 실적 수치·밸류에이션처럼 정답이 있는 영역은 0.3이 최적
             temperature: 0.3,
             topP: 0.9,
+            // 토큰 절약: thinking 비활성화 — 재무 분석은 구조화 프롬프트로 충분
+            // thinking 활성화 시 호출당 1만~2만 토큰 추가 소비됨
+            thinkingConfig: { thinkingBudget: 0 },
           },
         });
         let lastFinishReason: string | undefined;
@@ -2142,15 +2145,16 @@ router.post("/:id/step", async (req, res) => {
         try {
           const revisedUserPrompt = userPrompt +
             `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
-          const revisedMaxTokens = stepKey === "company_analysis" ? 32768 : 16384;
+          const revisedMaxTokens = stepKey === "company_analysis" ? 16384 : 8192;
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
             config: {
               systemInstruction: systemPrompt,
               maxOutputTokens: revisedMaxTokens,
-              temperature: 0.2, // 재검토는 더 엄격하게 — 지시 사항을 정확히 따라야 함
+              temperature: 0.2,
               topP: 0.85,
+              thinkingConfig: { thinkingBudget: 0 },
             },
           });
           let revisedContent = "";

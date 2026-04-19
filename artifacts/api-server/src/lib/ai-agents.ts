@@ -74,13 +74,19 @@ export function buildPrompt(
 현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
+  // 이전 단계 컨텍스트 — 토큰 절약: 단계당 최대 1,500자로 트리밍
+  // (전체 내용 전달 시 7단계 누적으로 입력 토큰이 폭발적으로 증가)
+  const MAX_PREV_STEP_CHARS = 1500;
   const previousContext =
     previousSteps.length > 0
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
           .map((s, i) => {
             const stepNum = STEP_ORDER.indexOf(s.stepKey as AgentKey);
             const label = stepNum === 0 ? "팀장 브리핑" : s.agentName;
-            return `【${i + 1}단계: ${label}】\n${s.content}`;
+            const trimmed = s.content.length > MAX_PREV_STEP_CHARS
+              ? s.content.slice(0, MAX_PREV_STEP_CHARS) + "…[이하 생략]"
+              : s.content;
+            return `【${i + 1}단계: ${label}】\n${trimmed}`;
           })
           .join("\n\n" + "─".repeat(60) + "\n\n")}\n\n${"=".repeat(60)}`
       : "";
