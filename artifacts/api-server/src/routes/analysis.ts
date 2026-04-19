@@ -1858,6 +1858,51 @@ router.post("/:id/step", async (req, res) => {
 
   const agent = AGENTS[stepKey];
 
+  // ── 24시간 캐시: 동일 종목 + 동일 단계를 오늘 이미 완료한 경우 재사용 ──────
+  // 여러 사용자가 같은 종목을 동시에 분석해도 동일한 결과를 제공
+  try {
+    const cachedRows = await rawQuery(
+      `SELECT s.content, s.validation_notes, s.agent_name, s.agent_role
+       FROM analysis_steps s
+       JOIN analyses a ON s.analysis_id = a.id
+       WHERE a.ticker = $1 AND s.step_key = $2
+         AND a.status = 'completed' AND a.id != $3
+         AND a.created_at >= NOW() - INTERVAL '24 hours'
+         AND s.content IS NOT NULL AND length(s.content) > 100
+       ORDER BY a.created_at DESC LIMIT 1`,
+      [analysis.ticker, stepKey, id]
+    );
+    if (cachedRows[0]?.content) {
+      const cachedContent = cachedRows[0].content as string;
+      const cachedNotes = (cachedRows[0].validation_notes as string | null) ?? null;
+      console.log(`[step-cache HIT] ${stepKey} for ${analysis.ticker} — reusing ${cachedContent.length} chars from recent analysis`);
+
+      // 캐시된 내용을 청크 단위로 스트리밍 (UX 일관성 유지)
+      const CHUNK = 300;
+      for (let i = 0; i < cachedContent.length; i += CHUNK) {
+        res.write(`data: ${JSON.stringify({ t: cachedContent.slice(i, i + CHUNK) })}\n\n`);
+        await new Promise((r) => setTimeout(r, 5)); // 너무 빠르면 클라이언트 버퍼 초과
+      }
+
+      // DB 저장
+      await rawQuery(
+        `INSERT INTO analysis_steps (analysis_id, step_key, agent_name, agent_role, content, validation_notes, information_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (analysis_id, step_key) DO NOTHING`,
+        [id, stepKey, agent.name, agent.role, cachedContent, cachedNotes, "data_based_estimate"]
+      );
+
+      res.write(`data: ${JSON.stringify({ done: true, cached: true })}\n\n`);
+      res.end();
+      runningStepsLock.delete(lockKey);
+      return;
+    }
+    console.log(`[step-cache MISS] ${stepKey} for ${analysis.ticker} — running AI`);
+  } catch (cacheErr) {
+    console.warn("[step-cache] lookup error (fallback to AI):", cacheErr);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   let enrichedContext = analysis.additionalContext ?? null;
   if (stepKey === "company_intro" || stepKey === "investment_strategy") {
     try {
