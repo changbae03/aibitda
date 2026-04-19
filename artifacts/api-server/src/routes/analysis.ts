@@ -167,7 +167,12 @@ ${excerpt}
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 256 },
+      config: {
+        maxOutputTokens: 256,
+        temperature: 0.1, // QC는 채점 로직 — 거의 결정론적으로
+        topP: 0.8,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     });
     const raw = response.text ?? "";
     const parsed = extractJsonSafe(raw);
@@ -1923,6 +1928,44 @@ router.post("/:id/step", async (req, res) => {
     }
   }
 
+  // ── company_analysis: 이전 동일 종목 실적 전망 수치 앵커 주입 ─────────────
+  // 일관성 확보: 직전 완료 분석의 재무 전망 요약을 참조로 제공
+  if (stepKey === "company_analysis") {
+    try {
+      const prevStepRows = await rawQuery(
+        `SELECT s.content, a.created_at
+         FROM analysis_steps s
+         JOIN analyses a ON s.analysis_id = a.id
+         WHERE a.ticker = $1 AND a.status = 'completed' AND a.id != $2
+           AND s.step_key = 'company_analysis' AND s.content IS NOT NULL
+         ORDER BY a.created_at DESC LIMIT 1`,
+        [analysis.ticker, analysis.id]
+      );
+      if (prevStepRows[0]) {
+        const prevContent: string = prevStepRows[0].content ?? "";
+        const prevDate = new Date(prevStepRows[0].created_at).toISOString().slice(0, 10);
+        // 핵심 지표 도출 블록 추출 (맨 마지막 부분)
+        const keyMetricsIdx = prevContent.lastIndexOf("밸류에이션을 위한 핵심 지표");
+        const summarySection = keyMetricsIdx !== -1
+          ? prevContent.slice(keyMetricsIdx, keyMetricsIdx + 1500)
+          : prevContent.slice(-1200);
+        // 실적 전망 테이블 추출 (추정 재무 모델 섹션)
+        const forecastIdx = prevContent.indexOf("추정 재무 모델");
+        const forecastSection = forecastIdx !== -1
+          ? prevContent.slice(forecastIdx, forecastIdx + 800)
+          : "";
+        const anchorBlock = `\n\n[📌 ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 실적 전망 앵커]\n`
+          + `⚠️ 아래는 직전 분석에서 산출된 재무 전망 수치입니다. 새로운 분기 데이터나 업황 변화가 없는 한 수치 방향성을 유지하세요. 크게 달라진다면 그 이유를 전망 근거에 명시하세요.\n`
+          + (forecastSection ? forecastSection.slice(0, 600) + "\n" : "")
+          + summarySection.slice(0, 800);
+        enrichedContext = enrichedContext ? enrichedContext + anchorBlock : anchorBlock;
+        console.log(`[company_analysis] Injected prev forecast anchor from ${prevDate} (${anchorBlock.length} chars)`);
+      }
+    } catch {
+      // optional — 이전 데이터 없어도 무방
+    }
+  }
+
   // ── relative_valuation: 피어 데이터 자동 수집 ────────────────────────────
   if (stepKey === "relative_valuation") {
     try {
@@ -2020,6 +2063,10 @@ router.post("/:id/step", async (req, res) => {
           config: {
             systemInstruction: systemPrompt,
             maxOutputTokens,
+            // 일관성 확보: temperature 낮게 고정 (기본값 1.0은 매번 다른 결과 초래)
+            // 실적 수치·밸류에이션처럼 정답이 있는 영역은 0.3이 최적
+            temperature: 0.3,
+            topP: 0.9,
           },
         });
         let lastFinishReason: string | undefined;
@@ -2069,7 +2116,12 @@ router.post("/:id/step", async (req, res) => {
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
-            config: { systemInstruction: systemPrompt, maxOutputTokens: revisedMaxTokens },
+            config: {
+              systemInstruction: systemPrompt,
+              maxOutputTokens: revisedMaxTokens,
+              temperature: 0.2, // 재검토는 더 엄격하게 — 지시 사항을 정확히 따라야 함
+              topP: 0.85,
+            },
           });
           let revisedContent = "";
           for await (const chunk of revisedStream) {
