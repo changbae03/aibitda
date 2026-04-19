@@ -297,8 +297,9 @@ export default function History() {
     };
     const getReturnForSort = (a: any): number => {
       const q = quotes[a.ticker];
-      if (!q?.price || !a.entryPrice) return -Infinity;
-      return ((q.price - a.entryPrice) / a.entryPrice) * 100;
+      const ep = a.startPrice ?? a.entryPrice;
+      if (!q?.price || !ep) return -Infinity;
+      return ((q.price - ep) / ep) * 100;
     };
     let items = list.filter((a) =>
       verdictMatch(a.investmentVerdict) &&
@@ -512,7 +513,7 @@ export default function History() {
               const sparkData = sparklines[a.ticker];
               const q = quotes[a.ticker];
               const cur = q?.price ?? null;
-              const reanalysisLevel = getReanalysisLevel(a.createdAt, a.entryPrice, cur);
+              const reanalysisLevel = getReanalysisLevel(a.createdAt, a.startPrice ?? a.entryPrice, cur);
 
               return (
                 <motion.div
@@ -565,7 +566,8 @@ export default function History() {
                     {/* 적정주가 달성 현황 */}
                     {(() => {
                       const tgt = a.targetPrice;
-                      const entry = a.entryPrice;
+                      // startPrice: 분석 시작 시 실제 시장가 (신규). entryPrice: AI 추천 진입가 (구형 fallback)
+                      const entry = a.startPrice ?? a.entryPrice;
                       const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
                       const dayChange = q?.change ?? null;
                       const isBuy = (a.investmentVerdict ?? "").toLowerCase().includes("buy");

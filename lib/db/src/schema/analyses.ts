@@ -14,6 +14,7 @@ export const analysesTable = pgTable("analyses", {
   currentStep: text("current_step"),
   investmentVerdict: text("investment_verdict"),
   targetPrice: real("target_price"),
+  startPrice: real("start_price"),
   entryPrice: real("entry_price"),
   stopLoss: real("stop_loss"),
   riskRewardRatio: real("risk_reward_ratio"),

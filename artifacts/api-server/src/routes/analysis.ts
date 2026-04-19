@@ -1438,6 +1438,7 @@ function mapAnalysisRow(row: any): typeof analysesTable.$inferSelect {
     currentStep: row.current_step ?? null,
     investmentVerdict: row.investment_verdict ?? null,
     targetPrice: row.target_price ?? null,
+    startPrice: row.start_price ?? null,
     entryPrice: row.entry_price ?? null,
     stopLoss: row.stop_loss ?? null,
     riskRewardRatio: row.risk_reward_ratio ?? null,
@@ -1505,12 +1506,14 @@ router.post("/", async (req, res) => {
   const krxCode = upperTicker.split(".")[0];
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
-  // Fetch financial data, news, DART balance sheet in parallel
-  const [financialData, newsData, dartBalance] = await Promise.all([
+  // Fetch financial data, news, DART balance sheet, start price in parallel
+  const [financialData, newsData, dartBalance, startQuote] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
+    yahooFinance.quote(resolvedSymbol).catch(() => null),
   ]);
+  const startPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
 
   // DART 재무상태표 컨텍스트 구성
   let dartBalanceContext = "";
@@ -1561,8 +1564,8 @@ router.post("/", async (req, res) => {
     try {
       const insertResult = await client.query(
         `INSERT INTO analyses
-           (user_id, ticker, company_name, english_name, industry, additional_context, status, current_step, is_public)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           (user_id, ticker, company_name, english_name, industry, additional_context, status, current_step, is_public, start_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           userId ?? null,
@@ -1574,6 +1577,7 @@ router.post("/", async (req, res) => {
           "in_progress",
           "company_intro",
           "true",
+          startPrice,
         ]
       );
       analysis = mapAnalysisRow(insertResult.rows[0]);
@@ -2469,6 +2473,7 @@ function formatAnalysis(analysis: any, steps: any[]) {
     currentStep: analysis.currentStep,
     investmentVerdict: analysis.investmentVerdict,
     targetPrice: analysis.targetPrice,
+    startPrice: analysis.startPrice ?? null,
     entryPrice: analysis.entryPrice,
     stopLoss: analysis.stopLoss,
     riskRewardRatio: analysis.riskRewardRatio,

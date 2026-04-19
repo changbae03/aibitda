@@ -84,6 +84,7 @@ export interface Analysis {
   currentStep?: string;
   investmentVerdict?: string;
   targetPrice?: number;
+  startPrice?: number;
   entryPrice?: number;
   stopLoss?: number;
   riskRewardRatio?: number;
