@@ -1212,8 +1212,8 @@ export default function AnalysisDetail() {
               )}
             </div>
 
-            {/* 관리자 종목 보정 메모 */}
-            {isComplete && (
+            {/* 관리자 종목 보정 메모 — 개발 환경에서만 표시 */}
+            {isComplete && import.meta.env.DEV && (
               <div className="mt-4 print:hidden">
                 <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 space-y-3">
                   <div className="flex items-center gap-2">
