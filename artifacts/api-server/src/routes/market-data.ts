@@ -612,8 +612,42 @@ router.get("/financials/:ticker", async (req, res) => {
       };
 
       let annual = parseStmt(summary.chartIncomeStatement?.annual);
-      const quarterly = parseStmt(summary.chartIncomeStatement?.quarter);
+      let quarterly = parseStmt(summary.chartIncomeStatement?.quarter);
 
+      // 네이버는 최근 3~4분기만 반환 → Yahoo Finance로 과거 분기 보충 (최대 8분기)
+      try {
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const yahooTicker = ticker.includes(".") ? ticker : `${koreanCode}.KS`;
+        const qRaw = await (yahooFinance as any).fundamentalsTimeSeries(yahooTicker, {
+          period1: twoYearsAgo,
+          type: "quarterly",
+          module: "financials",
+        });
+        if (Array.isArray(qRaw) && qRaw.length > 0) {
+          const naverPeriods = new Set(quarterly.map((e: any) => e.period));
+          const yahooEntries = qRaw
+            .map((e: any) => {
+              const rev: number | null = e.totalRevenue ?? null;
+              const op: number | null = e.operatingIncome ?? null;
+              const ni: number | null = e.netIncome ?? null;
+              const dateStr = e.date ? new Date(e.date).toISOString().slice(0, 7) : "";
+              return {
+                period: dateStr,
+                isEstimate: false,
+                revenue: rev,
+                operatingIncome: op,
+                netIncome: ni,
+                operatingMargin: rev && op != null && rev > 0 ? (op / rev) * 100 : null,
+              };
+            })
+            .filter((e: any) => e.period && (e.revenue != null || e.operatingIncome != null))
+            .filter((e: any) => !naverPeriods.has(e.period)); // 네이버 데이터 우선
+          quarterly = [...quarterly, ...yahooEntries]
+            .sort((a: any, b: any) => b.period.localeCompare(a.period))
+            .slice(0, 10); // 최대 10분기
+        }
+      } catch { /* Yahoo 보충 실패해도 Naver 데이터로 진행 */ }
 
       res.json({
         ticker,
@@ -633,8 +667,8 @@ router.get("/financials/:ticker", async (req, res) => {
   try {
     const fiveYearsAgo = new Date();
     fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 6);
-    const twoYearsAgo = new Date();
-    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
 
     const [annualRaw, quarterlyRaw] = await Promise.all([
       (yahooFinance as any).fundamentalsTimeSeries(ticker, {
@@ -643,7 +677,7 @@ router.get("/financials/:ticker", async (req, res) => {
         module: "financials",
       }),
       (yahooFinance as any).fundamentalsTimeSeries(ticker, {
-        period1: twoYearsAgo,
+        period1: threeYearsAgo,
         type: "quarterly",
         module: "financials",
       }),
@@ -678,7 +712,8 @@ router.get("/financials/:ticker", async (req, res) => {
     const quarterly = (Array.isArray(quarterlyRaw) ? quarterlyRaw : [])
       .map(toEntry)
       .filter((e: any) => e.revenue != null)
-      .sort((a: any, b: any) => b.period.localeCompare(a.period));
+      .sort((a: any, b: any) => b.period.localeCompare(a.period))
+      .slice(0, 10); // 최대 10분기
 
     res.json({ ticker, currency: "USD", annual, quarterly });
   } catch (err: any) {
