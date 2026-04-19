@@ -136,9 +136,9 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
     );
   }
 
-  const entries = (view === "annual" ? data.annual : data.quarterly).filter(
-    (e) => e.revenue != null || e.operatingIncome != null
-  );
+  const entries = (view === "annual" ? data.annual : data.quarterly)
+    .filter((e) => e.revenue != null || e.operatingIncome != null)
+    .sort((a, b) => a.period.localeCompare(b.period)); // 왼쪽=옛날, 오른쪽=최신
 
   if (!entries.length) {
     return (
