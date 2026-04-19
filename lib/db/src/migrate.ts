@@ -76,6 +76,25 @@ export async function runMigrations() {
     // 컬럼 추가 마이그레이션 (이미 존재하면 무시)
     await client.query(`
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS english_name TEXT;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_id TEXT;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS is_public TEXT NOT NULL DEFAULT 'true';
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS memo TEXT;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_rating INTEGER;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_feedback TEXT;
+    `);
+
+    // analysis_steps UNIQUE 제약 (캐시 ON CONFLICT DO NOTHING 사용)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'analysis_steps_analysis_id_step_key_key'
+        ) THEN
+          ALTER TABLE analysis_steps
+            ADD CONSTRAINT analysis_steps_analysis_id_step_key_key
+            UNIQUE (analysis_id, step_key);
+        END IF;
+      END $$;
     `);
 
     // 크레딧 & 추천인 테이블
