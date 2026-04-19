@@ -4,7 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2, History as HistoryIcon, Pencil, Check, X, TrendingUp, TrendingDown, RefreshCw, Target } from "lucide-react";
+import {
+  Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2,
+  History as HistoryIcon, Pencil, Check, X, RefreshCw,
+  ChevronDown, AlertTriangle, SlidersHorizontal,
+} from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -12,6 +16,11 @@ interface QuoteResult {
   price: number | null;
   currency: string;
   change: number | null;
+}
+
+interface SparklineResult {
+  closes: number[];
+  change3m: number | null;
 }
 
 function isUSTicker(t: string) {
@@ -22,40 +31,25 @@ const STORAGE_KEY = "avitda-recent-analyses";
 const MEMO_KEY = "avitda-memos";
 
 function getLocalRecents(): any[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
 }
-
 function removeLocalRecent(id: number) {
   try {
     const stored = getLocalRecents().filter((x: any) => x.id !== id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   } catch {}
 }
-
 function getAllMemos(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(MEMO_KEY) || "{}");
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(localStorage.getItem(MEMO_KEY) || "{}"); } catch { return {}; }
 }
-
 function saveMemo(id: number, text: string) {
   try {
     const memos = getAllMemos();
-    if (text.trim()) {
-      memos[String(id)] = text.trim();
-    } else {
-      delete memos[String(id)];
-    }
+    if (text.trim()) memos[String(id)] = text.trim();
+    else delete memos[String(id)];
     localStorage.setItem(MEMO_KEY, JSON.stringify(memos));
   } catch {}
 }
-
 function getMemo(id: number): string {
   return getAllMemos()[String(id)] || "";
 }
@@ -68,7 +62,6 @@ function toKoreanVerdict(verdict: string): string {
   if (s.includes("sell"))        return "하락여지";
   return "적정 수준";
 }
-
 function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -77,7 +70,6 @@ function verdictStyle(verdict: string): string {
   if (s.includes("sell"))        return "bg-red-50 text-red-600 border-red-200";
   return "bg-amber-50 text-amber-700 border-amber-200";
 }
-
 function verdictBadge(verdict?: string) {
   if (!verdict) return null;
   const label = toKoreanVerdict(verdict);
@@ -89,6 +81,37 @@ function verdictBadge(verdict?: string) {
   );
 }
 
+// ── Sparkline SVG ─────────────────────────────────────────────────────────────
+function Sparkline({ closes }: { closes: number[] }) {
+  if (closes.length < 2) {
+    return <div className="w-[72px] h-[28px] flex items-center justify-center text-[9px] text-neutral-200">—</div>;
+  }
+  const W = 72, H = 28, PAD = 2;
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = max - min || 1;
+  const pts = closes.map((v, i) => [
+    PAD + (i / (closes.length - 1)) * (W - PAD * 2),
+    (H - PAD) - ((v - min) / range) * (H - PAD * 2),
+  ]);
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const isUp = closes[closes.length - 1] >= closes[0];
+  const lineColor = isUp ? "#10b981" : "#ef4444";
+  const fillColor = isUp ? "#10b98118" : "#ef444418";
+  const last = pts[pts.length - 1];
+  // area fill
+  const areaD = d + ` L${pts[pts.length - 1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
+
+  return (
+    <svg width={W} height={H} style={{ display: "block", flexShrink: 0 }}>
+      <path d={areaD} fill={fillColor} />
+      <path d={d} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r="2.5" fill={lineColor} />
+    </svg>
+  );
+}
+
+// ── Memo inline ───────────────────────────────────────────────────────────────
 function MemoInline({ id }: { id: number }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -96,41 +119,20 @@ function MemoInline({ id }: { id: number }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (editing) {
-      setDraft(saved);
-      setTimeout(() => textareaRef.current?.focus(), 50);
-    }
+    if (editing) { setDraft(saved); setTimeout(() => textareaRef.current?.focus(), 50); }
   }, [editing]);
 
   const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
-    saveMemo(id, draft);
-    setSaved(draft.trim());
-    setEditing(false);
+    saveMemo(id, draft); setSaved(draft.trim()); setEditing(false);
   };
-
-  const handleCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditing(false);
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditing(true);
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    saveMemo(id, "");
-    setSaved("");
-  };
+  const handleCancel = (e: React.MouseEvent) => { e.stopPropagation(); setEditing(false); };
+  const handleEdit = (e: React.MouseEvent) => { e.stopPropagation(); setEditing(true); };
+  const handleDelete = (e: React.MouseEvent) => { e.stopPropagation(); saveMemo(id, ""); setSaved(""); };
 
   if (editing) {
     return (
-      <div
-        className="mt-2.5 flex flex-col gap-1.5"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="mt-2.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
         <textarea
           ref={textareaRef}
           value={draft}
@@ -140,24 +142,14 @@ function MemoInline({ id }: { id: number }) {
           className="w-full text-[12px] text-neutral-700 placeholder-neutral-300 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
           onKeyDown={(e) => {
             if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              saveMemo(id, draft);
-              setSaved(draft.trim());
-              setEditing(false);
-            }
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { saveMemo(id, draft); setSaved(draft.trim()); setEditing(false); }
           }}
         />
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[11px] font-semibold transition-colors"
-          >
+          <button onClick={handleSave} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[11px] font-semibold transition-colors">
             <Check className="w-3 h-3" /> 저장
           </button>
-          <button
-            onClick={handleCancel}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-500 text-[11px] font-semibold transition-colors"
-          >
+          <button onClick={handleCancel} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-500 text-[11px] font-semibold transition-colors">
             <X className="w-3 h-3" /> 취소
           </button>
           <span className="text-[10px] text-neutral-300 ml-1">⌘Enter로 저장</span>
@@ -165,46 +157,45 @@ function MemoInline({ id }: { id: number }) {
       </div>
     );
   }
-
   if (saved) {
     return (
-      <div
-        className="mt-2 flex items-start gap-1.5 group/memo"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex-1 text-[12px] text-neutral-500 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">
-          {saved}
-        </div>
+      <div className="mt-2 flex items-start gap-1.5 group/memo" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-1 text-[12px] text-neutral-500 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">{saved}</div>
         <div className="shrink-0 mt-0.5 flex items-center gap-0.5 opacity-0 group-hover/memo:opacity-100 transition-opacity">
-          <button
-            onClick={handleEdit}
-            className="p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors"
-            title="메모 수정"
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button
-            onClick={handleDelete}
-            className="p-1 rounded text-neutral-300 hover:text-red-400 hover:bg-red-50 transition-colors"
-            title="메모 삭제"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          <button onClick={handleEdit} className="p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="메모 수정"><Pencil className="w-3 h-3" /></button>
+          <button onClick={handleDelete} className="p-1 rounded text-neutral-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="메모 삭제"><Trash2 className="w-3 h-3" /></button>
         </div>
       </div>
     );
   }
-
   return (
-    <button
-      onClick={handleEdit}
-      className="mt-1.5 flex items-center gap-1 text-[11px] text-neutral-300 hover:text-amber-500 transition-colors opacity-0 group-hover:opacity-100"
-    >
-      <Pencil className="w-3 h-3" />
-      메모 추가
+    <button onClick={handleEdit} className="mt-1.5 flex items-center gap-1 text-[11px] text-neutral-300 hover:text-amber-500 transition-colors opacity-0 group-hover:opacity-100">
+      <Pencil className="w-3 h-3" /> 메모 추가
     </button>
   );
 }
+
+// ── Re-analysis badge logic ───────────────────────────────────────────────────
+function getReanalysisLevel(
+  createdAt: string,
+  entryPrice: number | null,
+  currentPrice: number | null
+): "urgent" | "recommend" | null {
+  const daysOld = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (daysOld < 14) return null;
+
+  if (entryPrice && currentPrice) {
+    const changePct = Math.abs((currentPrice - entryPrice) / entryPrice) * 100;
+    if (changePct >= 25 && daysOld >= 14) return "urgent";
+    if (changePct >= 15 && daysOld >= 30) return "recommend";
+  }
+  if (daysOld >= 90) return "recommend";
+  return null;
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+type SortKey = "date" | "upside" | "return" | "name";
+type VerdictFilter = "all" | "buy" | "sell" | "hold";
 
 export default function History() {
   const [, setLocation] = useLocation();
@@ -215,8 +206,16 @@ export default function History() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
   const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
+  const [sparklines, setSparklines] = useState<Record<string, SparklineResult>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesUpdatedAt, setQuotesUpdatedAt] = useState<Date | null>(null);
+
+  // ── Filter / Sort state ────────────────────────────────────────────────────
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("date");
+  const [industryFilter, setIndustryFilter] = useState<string>("all");
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showIndustryMenu, setShowIndustryMenu] = useState(false);
 
   const list = useMemo(() => {
     const serverList = serverAnalyses ?? [];
@@ -224,6 +223,13 @@ export default function History() {
     const localOnly = localItems.filter((x) => !serverIds.has(x.id));
     return [...serverList, ...localOnly];
   }, [serverAnalyses, localItems]);
+
+  // 전체 업종 목록
+  const industries = useMemo(() => {
+    const set = new Set<string>();
+    list.forEach((a) => { if (a.industry) set.add(a.industry); });
+    return Array.from(set).sort();
+  }, [list]);
 
   const fetchQuotes = useCallback(async (items: any[]) => {
     const tickers = [...new Set(
@@ -237,46 +243,76 @@ export default function History() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tickers }),
       });
-      if (r.ok) {
-        setQuotes(await r.json());
-        setQuotesUpdatedAt(new Date());
-      }
+      if (r.ok) { setQuotes(await r.json()); setQuotesUpdatedAt(new Date()); }
     } catch {}
     setQuotesLoading(false);
   }, []);
 
+  const fetchSparklines = useCallback(async (items: any[]) => {
+    const tickers = [...new Set(items.map((a) => a.ticker))];
+    if (tickers.length === 0) return;
+    try {
+      const r = await fetch(getApiUrl("/api/market-data/batch-sparklines"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers, days: 90 }),
+      });
+      if (r.ok) setSparklines(await r.json());
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (list.length > 0) fetchQuotes(list);
+    if (list.length > 0) { fetchQuotes(list); fetchSparklines(list); }
   }, [list.length]);
 
-  const handleDelete = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmId(id);
-  };
-
+  const handleDelete = (id: number, e: React.MouseEvent) => { e.stopPropagation(); setConfirmId(id); };
   const confirmDelete = (id: number, isLocalOnly: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
-    setDeletingId(id);
-    setConfirmId(null);
+    setDeletingId(id); setConfirmId(null);
     if (isLocalOnly) {
-      removeLocalRecent(id);
-      setLocalItems(getLocalRecents());
-      setDeletingId(null);
+      removeLocalRecent(id); setLocalItems(getLocalRecents()); setDeletingId(null);
     } else {
       deleteAnalysis(id, {
-        onSuccess: () => {
-          removeLocalRecent(id);
-          setLocalItems(getLocalRecents());
-          setDeletingId(null);
-        },
+        onSuccess: () => { removeLocalRecent(id); setLocalItems(getLocalRecents()); setDeletingId(null); queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey() }); },
         onError: () => setDeletingId(null),
       });
     }
   };
+  const cancelConfirm = (e: React.MouseEvent) => { e.stopPropagation(); setConfirmId(null); };
 
-  const cancelConfirm = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmId(null);
+  // ── 필터 + 정렬 (모든 useMemo는 early return 전에 위치해야 함) ────────────
+  const filteredAndSorted = useMemo(() => {
+    const verdictMatch = (verdict: string | undefined): boolean => {
+      if (verdictFilter === "all") return true;
+      const s = (verdict ?? "").toLowerCase();
+      if (verdictFilter === "buy")  return s.includes("buy");
+      if (verdictFilter === "sell") return s.includes("sell");
+      if (verdictFilter === "hold") return !s.includes("buy") && !s.includes("sell");
+      return true;
+    };
+    const getUpsideForSort = (a: any): number => {
+      const q = quotes[a.ticker];
+      if (!q?.price || !a.targetPrice) return -Infinity;
+      return ((a.targetPrice - q.price) / q.price) * 100;
+    };
+    const getReturnForSort = (a: any): number => {
+      const q = quotes[a.ticker];
+      if (!q?.price || !a.entryPrice) return -Infinity;
+      return ((q.price - a.entryPrice) / a.entryPrice) * 100;
+    };
+    let items = list.filter((a) =>
+      verdictMatch(a.investmentVerdict) &&
+      (industryFilter === "all" || a.industry === industryFilter)
+    );
+    if (sortBy === "date")   items = [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (sortBy === "upside") items = [...items].sort((a, b) => getUpsideForSort(b) - getUpsideForSort(a));
+    if (sortBy === "return") items = [...items].sort((a, b) => getReturnForSort(b) - getReturnForSort(a));
+    if (sortBy === "name")   items = [...items].sort((a, b) => (a.companyName ?? "").localeCompare(b.companyName ?? "", "ko"));
+    return items;
+  }, [list, verdictFilter, industryFilter, sortBy, quotes]);
+
+  const sortLabels: Record<SortKey, string> = {
+    date: "최신순", upside: "업사이드 큰 순", return: "수익률 순", name: "기업명순",
   };
 
   if (isLoading) {
@@ -289,7 +325,7 @@ export default function History() {
 
   const serverIds = new Set((serverAnalyses ?? []).map((a: any) => a.id));
 
-  // ─── 업사이드 / 정확도 계산 ───────────────────────────────────────────────
+  // ── 업사이드 / 정확도 계산 ───────────────────────────────────────────────
   const statsItems = list.filter(
     (a) => a.status === "completed" && a.targetPrice != null && quotes[a.ticker]?.price != null
   );
@@ -301,35 +337,29 @@ export default function History() {
     const isBuy  = verdict.includes("buy");
     const isSell = verdict.includes("sell");
     const returnPct = a.entryPrice ? ((current - a.entryPrice) / a.entryPrice) * 100 : null;
-    const correct = returnPct != null
-      ? (isBuy ? returnPct > 0 : isSell ? returnPct < 0 : null)
-      : null;
+    const correct = returnPct != null ? (isBuy ? returnPct > 0 : isSell ? returnPct < 0 : null) : null;
     return { upside, returnPct, correct, isBuy, isSell };
   });
 
   const trackedCount = statsItems.length;
-  const avgUpside   = trackedCount > 0 ? upsides.reduce((s, u) => s + u.upside, 0) / trackedCount : null;
-  const judged      = upsides.filter((u) => u.correct !== null);
-  const accuracy    = judged.length > 0 ? (judged.filter((u) => u.correct).length / judged.length) * 100 : null;
-  const avgReturn   = (() => {
-    const with_ret = upsides.filter((u) => u.returnPct != null);
-    return with_ret.length > 0 ? with_ret.reduce((s, u) => s + u.returnPct!, 0) / with_ret.length : null;
+  const avgUpside = trackedCount > 0 ? upsides.reduce((s, u) => s + u.upside, 0) / trackedCount : null;
+  const judged = upsides.filter((u) => u.correct !== null);
+  const accuracy = judged.length > 0 ? (judged.filter((u) => u.correct).length / judged.length) * 100 : null;
+  const avgReturn = (() => {
+    const wr = upsides.filter((u) => u.returnPct != null);
+    return wr.length > 0 ? wr.reduce((s, u) => s + u.returnPct!, 0) / wr.length : null;
   })();
-  // ──────────────────────────────────────────────────────────────────────────
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h1
-          className="text-[22px] font-black tracking-tight text-neutral-900"
-          style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
-        >
+        <h1 className="text-[22px] font-black tracking-tight text-neutral-900" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
           내가 본 자료
         </h1>
         {trackedCount > 0 && (
           <button
-            onClick={() => fetchQuotes(list)}
+            onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
             disabled={quotesLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors text-xs font-medium text-neutral-500 disabled:opacity-50"
           >
@@ -342,48 +372,34 @@ export default function History() {
       {/* 실시간 통계 요약 */}
       {trackedCount > 0 && (
         <div className="mb-5 grid grid-cols-3 gap-3">
-          {/* 업사이드 */}
           <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
             <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">평균 업사이드</p>
-            {quotesLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-            ) : avgUpside != null ? (
-              <p className={cn("text-[22px] font-black leading-none",
-                avgUpside >= 10 ? "text-emerald-600" : avgUpside >= 0 ? "text-green-600" : "text-red-500"
-              )}>
-                {avgUpside >= 0 ? "+" : ""}{avgUpside.toFixed(1)}%
-              </p>
-            ) : <p className="text-neutral-300 text-sm">—</p>}
+            {quotesLoading ? <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+              : avgUpside != null ? (
+                <p className={cn("text-[22px] font-black leading-none", avgUpside >= 10 ? "text-emerald-600" : avgUpside >= 0 ? "text-green-600" : "text-red-500")}>
+                  {avgUpside >= 0 ? "+" : ""}{avgUpside.toFixed(1)}%
+                </p>
+              ) : <p className="text-neutral-300 text-sm">—</p>}
             <p className="text-[10px] text-neutral-300 mt-1">현재가 기준 잔여 업사이드</p>
           </div>
-
-          {/* 실현 수익률 */}
           <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
             <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">평균 수익률</p>
-            {quotesLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-            ) : avgReturn != null ? (
-              <p className={cn("text-[22px] font-black leading-none",
-                avgReturn >= 5 ? "text-emerald-600" : avgReturn >= 0 ? "text-green-600" : "text-red-500"
-              )}>
-                {avgReturn >= 0 ? "+" : ""}{avgReturn.toFixed(1)}%
-              </p>
-            ) : <p className="text-neutral-300 text-sm">—</p>}
+            {quotesLoading ? <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+              : avgReturn != null ? (
+                <p className={cn("text-[22px] font-black leading-none", avgReturn >= 5 ? "text-emerald-600" : avgReturn >= 0 ? "text-green-600" : "text-red-500")}>
+                  {avgReturn >= 0 ? "+" : ""}{avgReturn.toFixed(1)}%
+                </p>
+              ) : <p className="text-neutral-300 text-sm">—</p>}
             <p className="text-[10px] text-neutral-300 mt-1">분석 당시 vs 현재가</p>
           </div>
-
-          {/* AI 방향성 정확도 */}
           <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
             <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">AI 방향성 정확도</p>
-            {quotesLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-            ) : accuracy != null ? (
-              <p className={cn("text-[22px] font-black leading-none",
-                accuracy >= 70 ? "text-emerald-600" : accuracy >= 50 ? "text-amber-600" : "text-red-500"
-              )}>
-                {accuracy.toFixed(0)}%
-              </p>
-            ) : <p className="text-neutral-300 text-sm">—</p>}
+            {quotesLoading ? <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+              : accuracy != null ? (
+                <p className={cn("text-[22px] font-black leading-none", accuracy >= 70 ? "text-emerald-600" : accuracy >= 50 ? "text-amber-600" : "text-red-500")}>
+                  {accuracy.toFixed(0)}%
+                </p>
+              ) : <p className="text-neutral-300 text-sm">—</p>}
             <p className="text-[10px] text-neutral-300 mt-1">매수↑·매도↓ 방향 일치율 ({judged.length}건)</p>
           </div>
         </div>
@@ -394,13 +410,122 @@ export default function History() {
         </p>
       )}
 
+      {/* ── 필터 + 정렬 바 ─────────────────────────────────────────────── */}
+      {list.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+
+          {/* Verdict 필터 */}
+          {(["all", "buy", "sell", "hold"] as VerdictFilter[]).map((v) => {
+            const labels: Record<VerdictFilter, string> = { all: "전체", buy: "매수", sell: "매도", hold: "중립" };
+            const active = verdictFilter === v;
+            return (
+              <button
+                key={v}
+                onClick={() => setVerdictFilter(v)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors border",
+                  active
+                    ? "bg-neutral-900 text-white border-neutral-900"
+                    : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-400 hover:text-neutral-700"
+                )}
+              >
+                {labels[v]}
+              </button>
+            );
+          })}
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-neutral-200 mx-0.5" />
+
+          {/* 정렬 드롭다운 */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowSortMenu(!showSortMenu); setShowIndustryMenu(false); }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-400 hover:text-neutral-700 transition-colors"
+            >
+              {sortLabels[sortBy]} <ChevronDown className="w-3 h-3" />
+            </button>
+            <AnimatePresence>
+              {showSortMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute top-full mt-1 left-0 z-20 bg-white border border-neutral-100 rounded-xl shadow-lg py-1 min-w-[130px]"
+                >
+                  {(Object.entries(sortLabels) as [SortKey, string][]).map(([k, label]) => (
+                    <button
+                      key={k}
+                      onClick={() => { setSortBy(k); setShowSortMenu(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 transition-colors",
+                        sortBy === k ? "font-semibold text-neutral-900" : "text-neutral-500"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 업종 드롭다운 */}
+          {industries.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => { setShowIndustryMenu(!showIndustryMenu); setShowSortMenu(false); }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-400 hover:text-neutral-700 transition-colors"
+              >
+                {industryFilter === "all" ? "업종 전체" : industryFilter} <ChevronDown className="w-3 h-3" />
+              </button>
+              <AnimatePresence>
+                {showIndustryMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.1 }}
+                    className="absolute top-full mt-1 left-0 z-20 bg-white border border-neutral-100 rounded-xl shadow-lg py-1 min-w-[150px] max-h-52 overflow-y-auto"
+                  >
+                    <button
+                      onClick={() => { setIndustryFilter("all"); setShowIndustryMenu(false); }}
+                      className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50", industryFilter === "all" ? "font-semibold text-neutral-900" : "text-neutral-500")}
+                    >
+                      전체 업종
+                    </button>
+                    {industries.map((ind) => (
+                      <button
+                        key={ind}
+                        onClick={() => { setIndustryFilter(ind); setShowIndustryMenu(false); }}
+                        className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 transition-colors", industryFilter === ind ? "font-semibold text-neutral-900" : "text-neutral-500")}
+                      >
+                        {ind}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* 결과 카운트 */}
+          {(verdictFilter !== "all" || industryFilter !== "all") && (
+            <span className="text-[11px] text-neutral-400 ml-auto">
+              {filteredAndSorted.length}건
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── 리스트 ───────────────────────────────────────────────────────── */}
       {list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
           <Inbox className="w-10 h-10 text-neutral-200" />
           <p className="text-[15px] font-medium text-neutral-400">아직 분석한 기업이 없어요</p>
-          <p className="text-[13px] text-neutral-300">
-            AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요
-          </p>
+          <p className="text-[13px] text-neutral-300">AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요</p>
           <button
             onClick={() => setLocation("/analysis/new")}
             className="mt-2 px-4 py-2 rounded-md text-[13px] font-medium bg-[#1d4ed8] text-white hover:bg-blue-700 transition-colors"
@@ -408,13 +533,24 @@ export default function History() {
             분석 시작하기
           </button>
         </div>
+      ) : filteredAndSorted.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+          <p className="text-[14px] font-medium text-neutral-400">필터 조건에 맞는 항목이 없어요</p>
+          <button onClick={() => { setVerdictFilter("all"); setIndustryFilter("all"); }} className="text-[12px] text-blue-500 hover:underline">
+            필터 초기화
+          </button>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2" onClick={() => { setShowSortMenu(false); setShowIndustryMenu(false); }}>
           <AnimatePresence initial={false}>
-            {list.map((a) => {
+            {filteredAndSorted.map((a) => {
               const isConfirming = confirmId === a.id;
               const isThisDeleting = deletingId === a.id;
               const isLocalOnly = !serverIds.has(a.id);
+              const sparkData = sparklines[a.ticker];
+              const q = quotes[a.ticker];
+              const cur = q?.price ?? null;
+              const reanalysisLevel = getReanalysisLevel(a.createdAt, a.entryPrice, cur);
 
               return (
                 <motion.div
@@ -438,12 +574,10 @@ export default function History() {
                     )}
                   </div>
 
-                  {/* Main info + memo */}
+                  {/* Main info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[15px] font-semibold text-neutral-900 truncate">
-                        {a.companyName}
-                      </span>
+                      <span className="text-[15px] font-semibold text-neutral-900 truncate">{a.companyName}</span>
                       <span className="text-[12px] text-neutral-400 font-mono">{a.ticker}</span>
                       {verdictBadge(a.investmentVerdict)}
                       {isLocalOnly && (
@@ -451,7 +585,19 @@ export default function History() {
                           <HistoryIcon className="w-2.5 h-2.5" /> 방문 기록
                         </span>
                       )}
+                      {/* ── 재분석 추천 배지 ─────────────────────────── */}
+                      {reanalysisLevel === "urgent" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
+                          <AlertTriangle className="w-2.5 h-2.5" /> 긴급 재분석
+                        </span>
+                      )}
+                      {reanalysisLevel === "recommend" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200">
+                          <RefreshCw className="w-2.5 h-2.5" /> 재분석 추천
+                        </span>
+                      )}
                     </div>
+
                     {/* 메타 라인 */}
                     <div className="flex items-center gap-2 mt-1 text-[11px] text-neutral-400 flex-wrap">
                       <span>{a.industry || "—"}</span>
@@ -461,8 +607,6 @@ export default function History() {
 
                     {/* 적정주가 달성 현황 */}
                     {(() => {
-                      const q = quotes[a.ticker];
-                      const cur = q?.price ?? null;
                       const tgt = a.targetPrice;
                       const entry = a.entryPrice;
                       const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
@@ -481,66 +625,47 @@ export default function History() {
                       }
 
                       const upside = ((tgt - cur) / cur) * 100;
-
-                      // 상태 판단
                       const exceeded = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
                       const approaching = !exceeded && (isBuy ? (dayChange ?? 0) > 0 : isSell ? (dayChange ?? 0) < 0 : (dayChange ?? 0) > 0);
                       const diverging = !exceeded && !approaching && dayChange !== null;
 
                       let statusLabel = "";
                       let statusCls = "";
-                      if (exceeded) {
-                        statusLabel = "목표 돌파 ✓";
-                        statusCls = "bg-emerald-100 text-emerald-700";
-                      } else if (approaching) {
-                        statusLabel = "목표 접근 중 ↑";
-                        statusCls = "bg-blue-50 text-blue-600";
-                      } else if (diverging) {
-                        statusLabel = "목표 이탈 중 ↓";
-                        statusCls = "bg-red-50 text-red-500";
-                      } else {
+                      if (exceeded)       { statusLabel = "목표 돌파 ✓"; statusCls = "bg-emerald-100 text-emerald-700"; }
+                      else if (approaching) { statusLabel = "목표 접근 중 ↑"; statusCls = "bg-blue-50 text-blue-600"; }
+                      else if (diverging)  { statusLabel = "목표 이탈 중 ↓"; statusCls = "bg-red-50 text-red-500"; }
+                      else {
                         statusLabel = `업사이드 ${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`;
                         statusCls = upside >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500";
                       }
 
-                      // 프로그레스 바
                       let progressPct: number | null = null;
                       if (entry && tgt !== entry) {
                         progressPct = Math.min(Math.max(((cur - entry) / (tgt - entry)) * 100, 0), 100);
                       } else {
-                        // entry 없으면 upside 기반으로 반대로 그려줌
-                        // target 기준으로 current가 얼마나 왔는지
                         progressPct = Math.min(Math.max(100 - Math.abs(upside), 0), 100);
                       }
 
                       return (
                         <div className="mt-2.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                          {/* 가격 레일 */}
                           {entry != null && (
                             <div className="relative">
                               <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
                                 <motion.div
-                                  className={cn("h-full rounded-full",
-                                    exceeded ? "bg-emerald-500" : approaching ? "bg-blue-400" : diverging ? "bg-red-400" : "bg-neutral-300"
-                                  )}
+                                  className={cn("h-full rounded-full", exceeded ? "bg-emerald-500" : approaching ? "bg-blue-400" : diverging ? "bg-red-400" : "bg-neutral-300")}
                                   initial={{ width: 0 }}
                                   animate={{ width: `${progressPct ?? 0}%` }}
                                   transition={{ duration: 0.6, ease: "easeOut" }}
                                 />
                               </div>
-                              {/* 레이블 */}
                               <div className="flex justify-between mt-0.5 text-[10px]">
                                 <span className="text-neutral-400">분석 시 <span className="font-medium text-neutral-500">{formatCurrency(entry, currency)}</span></span>
                                 <span className="text-neutral-400">목표 <span className="font-semibold text-neutral-600">{formatCurrency(tgt, currency)}</span></span>
                               </div>
                             </div>
                           )}
-
-                          {/* 상태 + 현재가 */}
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", statusCls)}>
-                              {statusLabel}
-                            </span>
+                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", statusCls)}>{statusLabel}</span>
                             <span className="text-[11px] text-neutral-500">
                               현재가 <span className="font-semibold text-neutral-700">{formatCurrency(cur, currency)}</span>
                             </span>
@@ -563,8 +688,20 @@ export default function History() {
                     <MemoInline id={a.id} />
                   </div>
 
-                  {/* Right side: delete confirm or arrow */}
-                  <div className="shrink-0 flex items-center gap-2 self-start pt-0.5">
+                  {/* Right side: sparkline + delete/arrow */}
+                  <div className="shrink-0 flex flex-col items-end gap-2 self-start pt-0.5">
+                    {/* ── 스파크라인 ───────────────────────────────────── */}
+                    {sparkData && sparkData.closes.length >= 2 && (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <Sparkline closes={sparkData.closes} />
+                        {sparkData.change3m != null && (
+                          <span className={cn("text-[9px] font-semibold tabular-nums", sparkData.change3m >= 0 ? "text-emerald-500" : "text-red-400")}>
+                            3M {sparkData.change3m >= 0 ? "+" : ""}{sparkData.change3m.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <AnimatePresence mode="wait">
                       {isConfirming ? (
                         <motion.div
@@ -577,18 +714,8 @@ export default function History() {
                           onClick={cancelConfirm}
                         >
                           <span className="text-[12px] text-neutral-500 mr-0.5">삭제할까요?</span>
-                          <button
-                            onClick={(e) => confirmDelete(a.id, isLocalOnly, e)}
-                            className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors"
-                          >
-                            삭제
-                          </button>
-                          <button
-                            onClick={cancelConfirm}
-                            className="px-2.5 py-1 rounded-lg bg-neutral-100 text-neutral-600 text-[11px] font-semibold hover:bg-neutral-200 transition-colors"
-                          >
-                            취소
-                          </button>
+                          <button onClick={(e) => confirmDelete(a.id, isLocalOnly, e)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
+                          <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-neutral-100 text-neutral-600 text-[11px] font-semibold hover:bg-neutral-200 transition-colors">취소</button>
                         </motion.div>
                       ) : (
                         <motion.div

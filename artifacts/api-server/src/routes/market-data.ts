@@ -400,6 +400,50 @@ router.post("/batch-quotes", async (req, res) => {
   res.json(results);
 });
 
+// POST /api/market-data/batch-sparklines — 다수 티커 3개월 종가 일괄 조회
+router.post("/batch-sparklines", async (req, res) => {
+  const { tickers, days = 90 } = req.body as { tickers: string[]; days?: number };
+  if (!Array.isArray(tickers) || tickers.length === 0) {
+    res.status(400).json({ error: "tickers 필수" });
+    return;
+  }
+
+  const result: Record<string, { closes: number[]; change3m: number | null }> = {};
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - Math.min(days, 180));
+  const p1 = startDate.toISOString().split("T")[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const p2 = tomorrow.toISOString().split("T")[0];
+
+  await Promise.allSettled(
+    tickers.slice(0, 20).map(async (raw) => {
+      const ticker = raw.trim();
+      if (!ticker) return;
+      try {
+        const isKorean = /^\d{5,6}$/.test(ticker.split(".")[0]);
+        const resolved = isKorean && !ticker.includes(".")
+          ? `${ticker}.KS` : ticker;
+        const chart = await yahooFinance.chart(resolved, {
+          period1: p1, period2: p2, interval: "1d",
+        });
+        const closes = (chart?.quotes ?? [])
+          .filter((d: any) => d.close != null && d.close > 0)
+          .map((d: any) => d.close as number);
+        const change3m = closes.length >= 2
+          ? ((closes[closes.length - 1] - closes[0]) / closes[0]) * 100
+          : null;
+        result[ticker] = { closes, change3m };
+      } catch {
+        result[ticker] = { closes: [], change3m: null };
+      }
+    })
+  );
+
+  res.json(result);
+});
+
 router.get("/:ticker", async (req, res) => {
   const { ticker } = req.params;
   const { period = "1y", interval = "1d" } = req.query as {
