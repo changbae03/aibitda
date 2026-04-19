@@ -459,7 +459,7 @@ export default function History() {
                       <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
                     </div>
 
-                    {/* 목표주가 달성 현황 */}
+                    {/* 적정주가 달성 현황 */}
                     {(() => {
                       const q = quotes[a.ticker];
                       const cur = q?.price ?? null;

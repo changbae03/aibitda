@@ -1193,7 +1193,7 @@ export default function AnalysisDetail() {
                     <span className="font-semibold text-neutral-600">투자 책임:</span> 본 리포트는 특정 금융투자상품의 매수·매도 또는 보유를 권유하거나 추천하지 않으며, 개별적인 투자자문 계약에 따른 판단을 제공하지 않습니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
                   </p>
                   <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">데이터의 한계:</span> AI가 산출한 적정주가, 목표주가 및 재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 이는 실제 결과와 크게 다를 수 있으며, 시장 상황·거시경제·금리·기업 공시 변화 등 예측 불가능한 변수에 따라 언제든지 변동될 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
+                    <span className="font-semibold text-neutral-600">데이터의 한계:</span> AI가 산출한 적정주가, 적정주가 및 재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 이는 실제 결과와 크게 다를 수 있으며, 시장 상황·거시경제·금리·기업 공시 변화 등 예측 불가능한 변수에 따라 언제든지 변동될 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
                   </p>
                   <p className="text-[11.5px] text-neutral-500 leading-relaxed">
                     <span className="font-semibold text-neutral-600">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있으며, 그 결과는 투자자에게 귀속됩니다.
@@ -1954,7 +1954,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           </ReactMarkdown>
         </div>
 
-        {/* Valuation B 최종 조율 목표주가 요약 박스 */}
+        {/* Valuation B 최종 조율 적정주가 요약 박스 */}
         {isRelativeVal && finalValuationData && (
           <div className="mt-5 pt-4 border-t border-border">
             <div className="flex items-center gap-2 mb-3">
@@ -2007,7 +2007,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           </div>
         )}
 
-        {/* Fundamental & Valuation 목표주가 요약 박스 */}
+        {/* Fundamental & Valuation 적정주가 요약 박스 */}
         {isFundamental && valuationData && (
           <div className="mt-5 pt-4 border-t border-border">
             <div className="flex items-center gap-2 mb-3">

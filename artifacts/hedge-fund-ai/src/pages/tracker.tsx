@@ -127,7 +127,7 @@ export default function Tracker() {
         <div>
           <h1 className="text-xl font-bold text-neutral-800">업사이드 실시간 트래커</h1>
           <p className="text-sm text-neutral-500 mt-0.5">
-            AI 목표주가 vs 현재가 · {REFRESH_INTERVAL / 1000}초마다 자동 갱신
+            AI 적정주가 vs 현재가 · {REFRESH_INTERVAL / 1000}초마다 자동 갱신
           </p>
         </div>
         <button
@@ -166,7 +166,7 @@ export default function Tracker() {
                   <th className="px-5 py-3 text-left">종목</th>
                   <th className="px-4 py-3 text-left">의견</th>
                   <th className="px-4 py-3 text-right">현재가</th>
-                  <th className="px-4 py-3 text-right">목표주가</th>
+                  <th className="px-4 py-3 text-right">적정주가</th>
                   <th className="px-4 py-3 text-right">업사이드</th>
                   <th className="px-4 py-3 text-right">일간 등락</th>
                   <th className="px-3 py-3" />
