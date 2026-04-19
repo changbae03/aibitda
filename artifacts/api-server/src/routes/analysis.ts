@@ -79,9 +79,13 @@ async function runQCCheck(
   const agentName = AGENTS[stepKey].name;
   const isFundamental = stepKey === "company_analysis";
   const isRelativeValuation = stepKey === "relative_valuation";
-  // Use longer excerpt for relative_valuation so FINAL_VALUATION_DATA at end is captured
-  const excerptLength = isRelativeValuation ? 6000 : 3000;
-  const excerpt = content.slice(0, excerptLength);
+  // Use longer excerpts so full financial tables and key-metrics blocks are captured
+  const excerptLength = isRelativeValuation ? 8000 : isFundamental ? 8000 : 3000;
+  // For fundamental analysis also include the tail (핵심 지표 도출 블록은 맨 끝에 위치)
+  const tailLength = isFundamental ? 3000 : 0;
+  const excerpt = tailLength > 0
+    ? content.slice(0, excerptLength) + (content.length > excerptLength ? "\n...[중략]...\n" + content.slice(-tailLength) : "")
+    : content.slice(0, excerptLength);
   const fundamentalExtra = isFundamental ? `
 
 5. 실적 전망 정합성 (실적 전망 단계 전용 필수 검증):
@@ -92,7 +96,15 @@ async function runQCCheck(
    - Base 실적 추정 테이블(매출·영업이익·EBITDA·EPS 행)이 없으면: 불승인
    - EPS 수치가 아예 없으면: 불승인 (적자 기업의 음수 EPS는 유효, 추정값 명시 필요)
    - 밸류에이션을 위한 핵심 지표 도출 블록이 없으면: 불승인
-   - 성장 동력 또는 리스크 요인 서술이 없으면: 불승인` : isRelativeValuation ? `
+   - 성장 동력 또는 리스크 요인 서술이 없으면: 불승인
+
+6. 수치 정합성 검증 (실적 전망 단계 전용 — 수치 오류는 밸류에이션 전체를 망침):
+   - 실적 추정 테이블의 EPS와 "순이익 ÷ 발행주식수" 결과가 ±20% 이상 차이 나면: 불승인
+   - 매출성장률 YoY(%)가 테이블에 명시되어 있는데 실제 매출 수치로 역산한 성장률과 방향이 다르면(예: 매출은 감소인데 성장률은 +면): 불승인
+   - EBITDA = 영업이익 + D&A 원칙이 지켜지지 않아 EBITDA < 영업이익인 비바이오 흑자 기업이면: 불승인 (단, D&A 데이터 없는 경우 통과)
+   - 발행주식수 출처가 명시되지 않으면(KRX/Naver/Yahoo/서버계산 중 어느 것인지 불분명): 감점(−2점)
+   - 컨텍스트에 애널리스트 컨센서스(EPS 또는 매출 전망)가 있음에도 전망 섹션에서 컨센서스를 전혀 언급하지 않으면: 불승인
+   - 올해E 또는 내년E 영업이익률이 전년 실적 대비 +15%p 이상 점프했는데 전망 근거에 구체적 드라이버(원가 구조 변화·매출 레버리지·사업 믹스 개선 등) 없으면: 불승인` : isRelativeValuation ? `
 
 5. 목표가 산출 정합성 — 팀장 직접 조율 검수 (전용 필수 검증):
 
