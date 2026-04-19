@@ -675,10 +675,9 @@ export default function AnalysisDetail() {
 
   // 피드백 상태
   const [feedbackRating, setFeedbackRating] = useState<1 | 5 | null>(null);
-  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackChips, setFeedbackChips] = useState<string[]>([]);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
-  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
 
   // 종목별 관리자 메모 상태
   const [tickerMemo, setTickerMemo] = useState("");
@@ -690,7 +689,10 @@ export default function AnalysisDetail() {
   useEffect(() => {
     if (!analysis) return;
     if (analysis.userRating) setFeedbackRating(analysis.userRating >= 4 ? 5 : 1);
-    if (analysis.userFeedback) { setFeedbackText(analysis.userFeedback); setFeedbackSubmitted(true); }
+    if (analysis.userFeedback) {
+      setFeedbackChips(analysis.userFeedback.split(", ").filter(Boolean));
+      setFeedbackSubmitted(true);
+    }
   }, [analysis?.id, analysis?.userRating, analysis?.userFeedback]);
 
   // 종목별 메모 로드
@@ -718,14 +720,16 @@ export default function AnalysisDetail() {
     }
   }
 
-  const submitFeedback = async () => {
-    if (feedbackSubmitting || !feedbackRating) return;
+  const submitFeedback = async (ratingOverride?: 1 | 5, chipsOverride?: string[]) => {
+    const rating = ratingOverride ?? feedbackRating;
+    const chips = chipsOverride ?? feedbackChips;
+    if (feedbackSubmitting || !rating) return;
     setFeedbackSubmitting(true);
     try {
       await fetch(getApiUrl(`/api/analysis/${id}/feedback`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: feedbackRating, feedback: feedbackText.trim() || undefined }),
+        body: JSON.stringify({ rating, feedback: chips.length > 0 ? chips.join(", ") : undefined }),
       });
       setFeedbackSubmitted(true);
     } catch {}
@@ -1150,55 +1154,78 @@ export default function AnalysisDetail() {
                 </motion.div>
               ) : (
                 <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-5 py-4 space-y-3">
+                  {/* 헤더 */}
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-3.5 h-3.5 text-neutral-400" />
                     <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">이 분석이 도움이 됐나요?</span>
                     <span className="text-[10px] text-neutral-400">— 답변이 AI 개선에 사용됩니다</span>
                   </div>
+
+                  {/* 👍 / 👎 버튼 — 클릭 즉시 칩 펼침 */}
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => { setFeedbackRating(5); setShowFeedbackInput(true); }}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all",
-                        feedbackRating === 5
-                          ? "bg-emerald-50 border-emerald-400 text-emerald-700"
-                          : "bg-white border-neutral-200 text-neutral-600 hover:border-emerald-300 hover:text-emerald-700"
-                      )}
-                    >
-                      <ThumbsUp className="w-3.5 h-3.5" />
-                      도움됐어요
-                    </button>
-                    <button
-                      onClick={() => { setFeedbackRating(1); setShowFeedbackInput(true); }}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all",
-                        feedbackRating === 1
-                          ? "bg-rose-50 border-rose-400 text-rose-700"
-                          : "bg-white border-neutral-200 text-neutral-600 hover:border-rose-300 hover:text-rose-700"
-                      )}
-                    >
-                      <ThumbsDown className="w-3.5 h-3.5" />
-                      아쉬웠어요
-                    </button>
+                    {(
+                      [
+                        { value: 5 as const, label: "도움됐어요", icon: <ThumbsUp className="w-3.5 h-3.5" />, active: "bg-emerald-50 border-emerald-400 text-emerald-700", hover: "hover:border-emerald-300 hover:text-emerald-700" },
+                        { value: 1 as const, label: "아쉬웠어요", icon: <ThumbsDown className="w-3.5 h-3.5" />, active: "bg-rose-50 border-rose-400 text-rose-700", hover: "hover:border-rose-300 hover:text-rose-700" },
+                      ] as const
+                    ).map(({ value, label, icon, active, hover }) => (
+                      <button
+                        key={value}
+                        onClick={() => { setFeedbackRating(value); setFeedbackChips([]); }}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all",
+                          feedbackRating === value ? active : `bg-white border-neutral-200 text-neutral-600 ${hover}`
+                        )}
+                      >
+                        {icon}{label}
+                      </button>
+                    ))}
                   </div>
+
+                  {/* 세부 이유 칩 */}
                   <AnimatePresence>
-                    {showFeedbackInput && (
+                    {feedbackRating && (
                       <motion.div
+                        key={feedbackRating}
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="space-y-2 overflow-hidden"
+                        className="overflow-hidden space-y-2.5"
                       >
-                        <textarea
-                          value={feedbackText}
-                          onChange={(e) => setFeedbackText(e.target.value)}
-                          placeholder={feedbackRating === 1 ? "어떤 점이 부족했나요? (선택)" : "어떤 점이 좋았나요? (선택)"}
-                          className="w-full text-[13px] rounded-lg border border-neutral-200 bg-white px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-300 text-neutral-700 placeholder:text-neutral-300"
-                          rows={2}
-                          maxLength={500}
-                        />
+                        <p className="text-[11px] text-neutral-400">
+                          {feedbackRating === 5 ? "어떤 점이 좋았나요?" : "어떤 점이 아쉬웠나요?"}
+                          <span className="ml-1 text-neutral-300">(여러 개 선택 가능)</span>
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(feedbackRating === 5
+                            ? ["밸류에이션 근거가 명확해요", "투자 판단에 도움됐어요", "데이터가 풍부해요", "리스크 분석이 탄탄해요", "업종 이해가 깊어요"]
+                            : ["데이터가 부정확해요", "밸류에이션 근거가 약해요", "결론이 모호해요", "업종 이해가 부족해요", "리스크가 간과됐어요"]
+                          ).map((chip) => {
+                            const selected = feedbackChips.includes(chip);
+                            return (
+                              <button
+                                key={chip}
+                                onClick={() => setFeedbackChips(prev =>
+                                  selected ? prev.filter(c => c !== chip) : [...prev, chip]
+                                )}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-full border text-[12px] font-medium transition-all",
+                                  feedbackRating === 5
+                                    ? selected
+                                      ? "bg-emerald-50 border-emerald-400 text-emerald-700"
+                                      : "bg-white border-neutral-200 text-neutral-500 hover:border-emerald-300 hover:text-emerald-600"
+                                    : selected
+                                      ? "bg-rose-50 border-rose-400 text-rose-700"
+                                      : "bg-white border-neutral-200 text-neutral-500 hover:border-rose-300 hover:text-rose-600"
+                                )}
+                              >
+                                {selected && <span className="mr-1">✓</span>}{chip}
+                              </button>
+                            );
+                          })}
+                        </div>
                         <button
-                          onClick={submitFeedback}
+                          onClick={() => submitFeedback()}
                           disabled={feedbackSubmitting}
                           className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neutral-900 text-white text-[13px] font-semibold hover:bg-neutral-700 transition-colors disabled:opacity-50"
                         >
