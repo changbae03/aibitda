@@ -81,6 +81,7 @@ export async function runMigrations() {
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS memo TEXT;
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_rating INTEGER;
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_feedback TEXT;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS start_price REAL;
     `);
 
     // analysis_steps UNIQUE 제약 (캐시 ON CONFLICT DO NOTHING 사용)
