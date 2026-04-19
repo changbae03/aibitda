@@ -217,7 +217,9 @@
 .markdown-body strong { font-weight: 600; color: #111827; }
 .markdown-body hr { margin: 1.2rem 0; border-color: #e5e7eb; }
 .markdown-body del,
-.markdown-body s { text-decoration: none !important; }
+.markdown-body s { text-decoration: none !important; color: inherit; }
+/* remark-gfm 단일 ~ 가 <sub>로 파싱될 때 가시성 보장 */
+.markdown-body sub { vertical-align: baseline; font-size: inherit; color: inherit; }
 
 .markdown-body blockquote {
   margin: 1rem 0;
