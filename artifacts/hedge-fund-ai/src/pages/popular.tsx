@@ -52,11 +52,11 @@ function isUSTicker(t: string) {
 function verdictStyle(verdict: string | null) {
   if (!verdict) return { label: "—", cls: "bg-neutral-100 text-neutral-500" };
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "강력 매수", cls: "bg-emerald-100 text-emerald-700" };
-  if (s.includes("buy"))         return { label: "매수",     cls: "bg-green-100 text-green-700" };
-  if (s.includes("strong sell")) return { label: "강력 매도", cls: "bg-red-100 text-red-700" };
-  if (s.includes("sell"))        return { label: "매도",     cls: "bg-red-100 text-red-600" };
-  return { label: "중립", cls: "bg-amber-100 text-amber-700" };
+  if (s.includes("strong buy"))  return { label: "높은 상승여력", cls: "bg-emerald-100 text-emerald-700" };
+  if (s.includes("buy"))         return { label: "상승여력",     cls: "bg-green-100 text-green-700" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", cls: "bg-red-100 text-red-700" };
+  if (s.includes("sell"))        return { label: "하락여지",     cls: "bg-red-100 text-red-600" };
+  return { label: "보유", cls: "bg-amber-100 text-amber-700" };
 }
 
 function relativeTime(iso: string) {
