@@ -1928,18 +1928,59 @@ router.post("/:id/step", async (req, res) => {
 
         if (prevAnalyses.length > 0) {
           const fmt = (n: number | null) => n == null ? "N/A" : n.toLocaleString();
+          const currentEntryPrice = analysis.entryPrice ?? null;
+
           const prevBlock = prevAnalyses.map((p, idx) => {
             const date = p.createdAt.toISOString().slice(0, 10);
-            const rating = p.userRating == null ? "" : ` | 사용자 평가: ${p.userRating >= 4 ? "👍 긍정" : p.userRating <= 2 ? "👎 부정" : "보통"}`;
+            const rating = p.userRating == null ? "" : ` | 사용자 평가: ${p.userRating >= 4 ? "긍정" : p.userRating <= 2 ? "부정" : "보통"}`;
             const feedback = p.userFeedback ? ` | 피드백: "${p.userFeedback}"` : "";
-            return `  [${idx + 1}차 분석 - ${date}] 판정: ${p.investmentVerdict ?? "N/A"} | 목표가: ${fmt(p.targetPrice)} | 진입가: ${fmt(p.entryPrice)} | 손절가: ${fmt(p.stopLoss)}${rating}${feedback}`;
+
+            // 예측 방향 적중률: 이전 목표가 대비 현재 진입가 비교
+            let directionCheck = "";
+            if (p.targetPrice && p.entryPrice && currentEntryPrice) {
+              const predictedUp = p.targetPrice > p.entryPrice;
+              const actualChange = currentEntryPrice - p.entryPrice;
+              const actualPct = ((actualChange / p.entryPrice) * 100).toFixed(1);
+              const actuallyUp = actualChange > 0;
+              const hit = predictedUp === actuallyUp;
+              directionCheck = ` | 예측 후 주가 실제 변화: ${actualChange >= 0 ? "+" : ""}${actualPct}% → 방향 ${hit ? "✓ 적중" : "✗ 미적중"}`;
+            }
+
+            return `  [${idx + 1}차 - ${date}] 판정: ${p.investmentVerdict ?? "N/A"} | 목표가: ${fmt(p.targetPrice)} | 진입가: ${fmt(p.entryPrice)} | 손절가: ${fmt(p.stopLoss)}${directionCheck}${rating}${feedback}`;
           }).join("\n");
 
-          const prevAnalysisBlock = `\n\n[⚡ ${analysis.companyName}(${analysis.ticker}) 이전 분석 이력 — 최신 ${prevAnalyses.length}건]\n`
-            + `이전 분석과의 일관성을 검토하고, 견해가 바뀌었다면 그 이유를 명확히 설명하세요.\n`
+          const prevAnalysisBlock = `\n\n[⚡ ${analysis.companyName}(${analysis.ticker}) 종목별 누적 학습 이력 — 최신 ${prevAnalyses.length}건]\n`
+            + `- 이전 분석 대비 견해가 바뀌었다면 반드시 그 이유를 명확히 설명하세요.\n`
+            + `- 예측 방향이 틀렸던 경우 그 원인을 이번 분석에 반영하세요.\n`
+            + `- 사용자 피드백이 있는 경우 해당 관점을 보완하세요.\n`
             + prevBlock;
           enrichedContext = enrichedContext ? enrichedContext + prevAnalysisBlock : prevAnalysisBlock;
         }
+
+        // ── auto_learning 누적 통계 주입 ──────────────────────────────────
+        try {
+          const learningRows = await rawQuery(
+            `SELECT auto_learning FROM ticker_notes WHERE ticker = $1`,
+            [analysis.ticker]
+          );
+          const learningData = learningRows[0]?.auto_learning as { history?: Array<{ date: string; verdict: string; targetPrice: number; entryPrice: number; upsidePct: number }> } | null;
+          if (learningData?.history && learningData.history.length >= 2) {
+            const hist = learningData.history;
+            const avgUpside = hist.reduce((s, h) => s + h.upsidePct, 0) / hist.length;
+            const bullishCount = hist.filter(h => ["Strong Buy", "Buy"].includes(h.verdict)).length;
+            const bullishPct = Math.round((bullishCount / hist.length) * 100);
+            const upsides = hist.map(h => `${h.date.slice(0, 7)}: ${h.upsidePct > 0 ? "+" : ""}${h.upsidePct}%`).join(", ");
+
+            const statsBlock = `\n\n[📊 ${analysis.ticker} 밸류에이션 누적 통계 — ${hist.length}회 분석 기반]`
+              + `\n- 평균 upside: ${avgUpside > 0 ? "+" : ""}${avgUpside.toFixed(1)}% | 매수 판정 비율: ${bullishPct}%`
+              + `\n- 회차별 upside: ${upsides}`
+              + `\n- 이 통계를 참고해 지나치게 낙관적/비관적인 편향이 있었는지 자기검토 후 이번 분석에 반영하세요.`;
+            enrichedContext = enrichedContext ? enrichedContext + statsBlock : statsBlock;
+          }
+        } catch {
+          // optional
+        }
+        // ─────────────────────────────────────────────────────────────────
       }
 
       // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
@@ -2251,6 +2292,46 @@ router.post("/:id/step", async (req, res) => {
       );
 
       triggerModelReview().catch(console.error);
+
+      // ── 종목별 자동 학습 데이터 저장 ─────────────────────────────────────
+      // 분석 완료 시마다 ticker_notes.auto_learning 업데이트 (누적)
+      if (targetPrice && entryPrice && investmentVerdict) {
+        try {
+          const upsidePct = ((targetPrice - entryPrice) / entryPrice) * 100;
+          const newEntry = {
+            analysisId: id,
+            date: new Date().toISOString().slice(0, 10),
+            verdict: investmentVerdict,
+            targetPrice,
+            entryPrice,
+            upsidePct: Math.round(upsidePct * 10) / 10,
+          };
+
+          // 기존 학습 데이터 가져오기
+          const existingRows = await rawQuery(
+            `SELECT auto_learning FROM ticker_notes WHERE ticker = $1`,
+            [analysis.ticker]
+          );
+
+          let existing: { history?: typeof newEntry[] } = {};
+          if (existingRows[0]?.auto_learning) {
+            existing = existingRows[0].auto_learning as typeof existing;
+          }
+          const history = (existing.history ?? []).slice(-9); // 최대 10건 유지
+          history.push(newEntry);
+
+          await rawQuery(
+            `INSERT INTO ticker_notes (ticker, memo, auto_learning, updated_at)
+             VALUES ($1, '', $2, NOW())
+             ON CONFLICT (ticker) DO UPDATE SET auto_learning = $2, updated_at = NOW()`,
+            [analysis.ticker, JSON.stringify({ history })]
+          );
+          console.log(`[learning] Updated auto_learning for ${analysis.ticker} (${history.length} entries)`);
+        } catch (e) {
+          console.error("[learning] Failed to save auto_learning:", e);
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────────
     } else if (nextStep) {
       await rawQuery(
         `UPDATE analyses SET current_step=$1, updated_at=NOW() WHERE id=$2`,
