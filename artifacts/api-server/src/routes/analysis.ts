@@ -805,7 +805,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
             `⛔ AI는 이 이자비용으로 CoD 계산하지 말 것 → 업종 시장 기본값 CoD(세전) 4~6% 사용.`
           );
         } else {
-          waccLines.push(`이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}  ※ CoD 계산: 이자비용 ÷ 총부채`);
+          waccLines.push(`이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}  ※ CoD 계산: 이자비용 ÷ 이자부 금융부채(하단 총부채 수치 사용, 단위 통일 필수)`);
         }
       }
       if (dnaMap[latestWaccYear] != null) {
