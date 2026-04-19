@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
   Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2,
-  History as HistoryIcon, Pencil, Check, X, RefreshCw,
+  Pencil, Check, X, RefreshCw,
   ChevronDown, AlertTriangle, SlidersHorizontal,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
@@ -325,90 +325,52 @@ export default function History() {
 
   const serverIds = new Set((serverAnalyses ?? []).map((a: any) => a.id));
 
-  // ── 업사이드 / 정확도 계산 ───────────────────────────────────────────────
-  const statsItems = list.filter(
-    (a) => a.status === "completed" && a.targetPrice != null && quotes[a.ticker]?.price != null
-  );
-  const upsides = statsItems.map((a) => {
-    const q = quotes[a.ticker];
-    const current = q!.price!;
-    const upside = ((a.targetPrice - current) / current) * 100;
-    const verdict = (a.investmentVerdict ?? "").toLowerCase();
-    const isBuy  = verdict.includes("buy");
-    const isSell = verdict.includes("sell");
-    const returnPct = a.entryPrice ? ((current - a.entryPrice) / a.entryPrice) * 100 : null;
-    const correct = returnPct != null ? (isBuy ? returnPct > 0 : isSell ? returnPct < 0 : null) : null;
-    return { upside, returnPct, correct, isBuy, isSell };
-  });
-
-  const trackedCount = statsItems.length;
-  const avgUpside = trackedCount > 0 ? upsides.reduce((s, u) => s + u.upside, 0) / trackedCount : null;
-  const judged = upsides.filter((u) => u.correct !== null);
-  const accuracy = judged.length > 0 ? (judged.filter((u) => u.correct).length / judged.length) * 100 : null;
-  const avgReturn = (() => {
-    const wr = upsides.filter((u) => u.returnPct != null);
-    return wr.length > 0 ? wr.reduce((s, u) => s + u.returnPct!, 0) / wr.length : null;
-  })();
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-[22px] font-black tracking-tight text-neutral-900" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
-          내가 본 자료
-        </h1>
-        {trackedCount > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-[22px] font-black tracking-tight text-neutral-900" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
+            내가 본 자료
+          </h1>
+          {list.length > 0 && (() => {
+            const buyCount  = list.filter((a) => (a.investmentVerdict ?? "").toLowerCase().includes("buy")).length;
+            const sellCount = list.filter((a) => (a.investmentVerdict ?? "").toLowerCase().includes("sell")).length;
+            const holdCount = list.filter((a) => {
+              const s = (a.investmentVerdict ?? "").toLowerCase();
+              return !s.includes("buy") && !s.includes("sell") && a.investmentVerdict;
+            }).length;
+            const reanalysisCount = list.filter((a) => {
+              const cur = quotes[a.ticker]?.price ?? null;
+              return getReanalysisLevel(a.createdAt, a.entryPrice, cur) != null;
+            }).length;
+            return (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-neutral-300">{list.length}건</span>
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">매수 {buyCount}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-100">중립 {holdCount}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">매도 {sellCount}</span>}
+                {reanalysisCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200">
+                    재분석 {reanalysisCount}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+        {list.length > 0 && (
           <button
             onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
             disabled={quotesLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors text-xs font-medium text-neutral-500 disabled:opacity-50"
           >
             <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
-            현재가 갱신
+            갱신
           </button>
         )}
       </div>
-
-      {/* 실시간 통계 요약 */}
-      {trackedCount > 0 && (
-        <div className="mb-5 grid grid-cols-3 gap-3">
-          <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
-            <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">평균 업사이드</p>
-            {quotesLoading ? <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-              : avgUpside != null ? (
-                <p className={cn("text-[22px] font-black leading-none", avgUpside >= 10 ? "text-emerald-600" : avgUpside >= 0 ? "text-green-600" : "text-red-500")}>
-                  {avgUpside >= 0 ? "+" : ""}{avgUpside.toFixed(1)}%
-                </p>
-              ) : <p className="text-neutral-300 text-sm">—</p>}
-            <p className="text-[10px] text-neutral-300 mt-1">현재가 기준 잔여 업사이드</p>
-          </div>
-          <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
-            <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">평균 수익률</p>
-            {quotesLoading ? <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-              : avgReturn != null ? (
-                <p className={cn("text-[22px] font-black leading-none", avgReturn >= 5 ? "text-emerald-600" : avgReturn >= 0 ? "text-green-600" : "text-red-500")}>
-                  {avgReturn >= 0 ? "+" : ""}{avgReturn.toFixed(1)}%
-                </p>
-              ) : <p className="text-neutral-300 text-sm">—</p>}
-            <p className="text-[10px] text-neutral-300 mt-1">분석 당시 vs 현재가</p>
-          </div>
-          <div className="bg-white border border-neutral-100 rounded-2xl p-4 shadow-sm">
-            <p className="text-[11px] font-semibold text-neutral-400 mb-1 uppercase tracking-wide">AI 방향성 정확도</p>
-            {quotesLoading ? <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-              : accuracy != null ? (
-                <p className={cn("text-[22px] font-black leading-none", accuracy >= 70 ? "text-emerald-600" : accuracy >= 50 ? "text-amber-600" : "text-red-500")}>
-                  {accuracy.toFixed(0)}%
-                </p>
-              ) : <p className="text-neutral-300 text-sm">—</p>}
-            <p className="text-[10px] text-neutral-300 mt-1">매수↑·매도↓ 방향 일치율 ({judged.length}건)</p>
-          </div>
-        </div>
-      )}
-      {quotesUpdatedAt && trackedCount > 0 && (
-        <p className="text-[10px] text-neutral-300 -mt-3 mb-4">
-          마지막 업데이트: {quotesUpdatedAt.toLocaleTimeString("ko-KR")}
-        </p>
-      )}
 
       {/* ── 필터 + 정렬 바 ─────────────────────────────────────────────── */}
       {list.length > 0 && (
@@ -580,11 +542,6 @@ export default function History() {
                       <span className="text-[15px] font-semibold text-neutral-900 truncate">{a.companyName}</span>
                       <span className="text-[12px] text-neutral-400 font-mono">{a.ticker}</span>
                       {verdictBadge(a.investmentVerdict)}
-                      {isLocalOnly && (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] text-neutral-300 border border-neutral-100 rounded px-1.5 py-0.5">
-                          <HistoryIcon className="w-2.5 h-2.5" /> 방문 기록
-                        </span>
-                      )}
                       {/* ── 재분석 추천 배지 ─────────────────────────── */}
                       {reanalysisLevel === "urgent" && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
