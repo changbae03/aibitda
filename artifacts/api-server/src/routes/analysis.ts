@@ -794,19 +794,24 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         // Yahoo stores interest expense as negative → take absolute value
         const intExp = Math.abs(intExpMap[latestWaccYear]);
         const debt = debtMap[latestWaccYear];
+        // ─── 서버에서 CoD를 직접 계산해 전달 (AI 단위 변환 오류 방지) ─────────────
+        // intExp와 debt는 Yahoo Finance raw 값으로 같은 단위(KRW 또는 USD)이므로 직접 나눠도 됨
         const codRaw = (debt != null && debt > 0) ? (intExp / debt) : null;
-        if (codRaw != null && codRaw > 0.30) {
-          // 이자비용 > 총부채(×0.3) → 부채 분류 오류 또는 이자 데이터 이상
-          waccLines.push(
-            `이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}` +
-            `  ⚠️ [CoD 계산값 비정상] 역산 CoD(세전) = ${(codRaw * 100).toFixed(1)}% — ` +
-            `이자비용(${fmtNum(intExp, currency)})이 총부채(${fmtNum(debt ?? 0, currency)})보다 큽니다. ` +
-            `부채 분류 오류 또는 단기차입 미반영 의심. ` +
-            `⛔ AI는 이 이자비용으로 CoD 계산하지 말 것 → 업종 시장 기본값 CoD(세전) 4~6% 사용.`
-          );
+        const codPct = codRaw != null ? parseFloat((codRaw * 100).toFixed(2)) : null;
+
+        let codTag = "";
+        if (codPct == null) {
+          codTag = "  ⚠️ [CoD 계산 불가] 이자부 금융부채 데이터 없음 → 신용등급 기준표 사용";
+        } else if (codPct > 30) {
+          codTag = `  ⚠️ [CoD 비정상 ↑] 서버 계산 CoD(세전) = ${codPct}% (30% 초과) → 신용등급 기준표 사용`;
+        } else if (codPct < 0.5) {
+          codTag = `  ⚠️ [CoD 비정상 ↓] 서버 계산 CoD(세전) = ${codPct}% (0.5% 미만 — 금융자회사 부채 혼입 가능) → 신용등급 기준표 사용`;
         } else {
-          waccLines.push(`이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)}  ※ CoD 계산: 이자비용 ÷ 이자부 금융부채(하단 총부채 수치 사용, 단위 통일 필수)`);
+          codTag = `  ✅ 서버 계산 CoD(세전) = ${codPct}% → AI는 이 값을 직접 사용 (단위 환산 불필요)`;
         }
+        waccLines.push(
+          `이자비용(Interest Expense, ${latestWaccYear}): ${fmtNum(intExp, currency)} | 이자부 금융부채(Total Debt): ${debt != null ? fmtNum(debt, currency) : "N/A"}${codTag}`
+        );
       }
       if (dnaMap[latestWaccYear] != null) {
         waccLines.push(`D&A(감가상각비, ${latestWaccYear}): ${fmtNum(dnaMap[latestWaccYear], currency)}  ※ EBITDA = 영업이익 + 이 D&A`);
