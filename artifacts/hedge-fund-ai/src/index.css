@@ -227,16 +227,22 @@
   font-size: 0.875rem;
 }
 .markdown-body .table-wrap { overflow-x: auto; margin: 1rem 0; -webkit-overflow-scrolling: touch; border-radius: 0.5rem; border: 1px solid #e5e7eb; }
-.markdown-body table { width: 100%; font-size: 0.82rem; border-collapse: collapse; table-layout: auto; }
+.markdown-body table { width: 100%; min-width: 480px; font-size: 0.82rem; border-collapse: collapse; table-layout: auto; }
 .markdown-body th { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; font-weight: 600; background: #f9fafb; white-space: nowrap; vertical-align: top; font-size: 0.78rem; }
 .markdown-body td { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid #f3f4f6; white-space: normal; word-break: keep-all; vertical-align: top; }
 .markdown-body td:first-child { white-space: nowrap; font-weight: 500; color: #374151; }
+/* 거래소·시가총액처럼 짧은 2·3번 칸은 nowrap으로 최소 너비만 차지 */
+.markdown-body td:nth-child(2) { white-space: nowrap; }
+.markdown-body td:nth-child(3) { white-space: nowrap; }
+/* 선정 이유 같은 긴 설명 칸은 최소 폭 보장 */
+.markdown-body td:nth-child(4) { min-width: 200px; word-break: keep-all; line-height: 1.55; }
 .markdown-body tr:last-child td { border-bottom: none; }
 @media (max-width: 640px) {
   .markdown-body .table-wrap { margin: 0.75rem 0; }
-  .markdown-body table { font-size: 0.75rem; }
+  .markdown-body table { font-size: 0.75rem; min-width: 420px; }
   .markdown-body th { padding: 0.35rem 0.5rem; font-size: 0.72rem; }
   .markdown-body td { padding: 0.35rem 0.5rem; }
+  .markdown-body td:nth-child(4) { min-width: 160px; }
 }
 
 /* ── 인쇄 ── */
