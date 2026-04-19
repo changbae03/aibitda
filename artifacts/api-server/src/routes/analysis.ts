@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, pool } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
-import { loadKRXList, lookupKoreanName } from "../lib/krx-cache";
+import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
 import { fetchDartSubjectBalance } from "../lib/peer-collector.js";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
@@ -1232,7 +1232,19 @@ CRITICAL ticker format rules — Yahoo Finance tickers only:
         const t = (p.ticker ?? "").toUpperCase();
         return t !== companyName.toUpperCase() && !p.reason?.includes("분석 대상");
       });
-      const final = (filtered.length > 0 ? filtered : parsed.peers).slice(0, 5);
+      const raw_final = (filtered.length > 0 ? filtered : parsed.peers).slice(0, 5);
+
+      // ── KRX 캐시로 한국 티커 교정 (.KS/.KQ 오류 방지) ──────────────────────
+      const final = raw_final.map((p: any) => {
+        const corrected = correctKoreanTicker(p.ticker ?? "");
+        if (corrected !== p.ticker) {
+          const newExchange = corrected.endsWith(".KS") ? "KOSPI" : "KOSDAQ";
+          console.log(`[peer-select] Ticker corrected: ${p.ticker} → ${corrected} (${p.name})`);
+          return { ...p, ticker: corrected, exchange: newExchange };
+        }
+        return p;
+      });
+
       console.log(`[peer-select] Success: ${final.length} peers — ${final.map((p: any) => p.ticker).join(", ")}`);
       return final;
     }
@@ -1320,8 +1332,8 @@ async function fetchPeerFinancials(
         const cash          = latestBS?.cash ?? latestBS?.cashAndShortTermInvestments ?? latestBS?.cashAndCashEquivalents ?? null;
 
         // ── 멀티플: 직접 제공 → 계산 폴백 순서 ──────────────────────────
-        // PER Fwd: earningsTrend '0y' 또는 '+1y' 트렌드에서 FY EPS 추출 후 계산
-        let fwdPE: number | null = ks.forwardPE ?? sd.forwardPE ?? null;
+        // PER Fwd: earningsTrend '0y'/'+1y' → quote.forwardPE
+        let fwdPE: number | null = ks.forwardPE ?? sd.forwardPE ?? (quote as any).forwardPE ?? null;
         if (fwdPE == null && price != null) {
           const trend1y = et.trend?.find((t: any) => t.period === "+1y");
           const trend0y = et.trend?.find((t: any) => t.period === "0y");
@@ -1329,14 +1341,18 @@ async function fetchPeerFinancials(
           if (fwdEps != null && fwdEps > 0) fwdPE = price / fwdEps;
         }
 
-        // PER TTM: 직접 제공 → market cap / net income 계산
-        let trailPE: number | null = sd.trailingPE ?? ks.trailingPE ?? quote.trailingPE ?? null;
+        // PER TTM: 직접 제공 → price / TTM EPS (quote) → mcap / 순이익 계산
+        let trailPE: number | null = sd.trailingPE ?? ks.trailingPE ?? (quote as any).trailingPE ?? null;
+        if (trailPE == null && price != null) {
+          const eps = (quote as any).epsTrailingTwelveMonths ?? null;
+          if (eps != null && eps > 0) trailPE = price / eps;
+        }
         if (trailPE == null && mcap != null && netIncome != null && netIncome > 0) {
           trailPE = mcap / netIncome;
         }
 
-        // PBR: priceToBook → market cap / 자본총계
-        let pbr: number | null = ks.priceToBook ?? null;
+        // PBR: priceToBook (ks → quote) → market cap / 자본총계
+        let pbr: number | null = ks.priceToBook ?? (quote as any).priceToBook ?? null;
         if (pbr == null && mcap != null && totalEquity != null && totalEquity > 0) {
           pbr = mcap / totalEquity;
         }
@@ -1344,9 +1360,11 @@ async function fetchPeerFinancials(
         // EV 계산: enterpriseValue 직접 제공 → market cap + 순부채
         const ev: number | null = ks.enterpriseValue != null
           ? ks.enterpriseValue
-          : (mcap != null && totalDebt != null && cash != null)
-            ? mcap + totalDebt - cash
-            : null;
+          : (quote as any).enterpriseValue != null
+            ? (quote as any).enterpriseValue
+            : (mcap != null && totalDebt != null && cash != null)
+              ? mcap + totalDebt - cash
+              : null;
 
         // EV/EBITDA: 직접 → 계산
         let evEbitda: number | null = ks.enterpriseToEbitda ?? null;

@@ -55,4 +55,18 @@ export function lookupKoreanName(tickerOrCode: string): string | null {
   return entry?.name ?? null;
 }
 
+/**
+ * AI가 .KS/.KQ 를 잘못 붙일 수 있으므로 KRX 캐시로 교정.
+ * 6자리 코드를 추출 → 캐시에서 정확한 심볼 반환.
+ * 캐시 미로드·코드 미존재 시 원본 반환.
+ */
+export function correctKoreanTicker(ticker: string): string {
+  if (cache.length === 0) return ticker;
+  const code = ticker.replace(/\.(KS|KQ)$/i, "");
+  if (!/^\d{6}$/.test(code)) return ticker; // 한국 주식 아님
+  const entry = cache.find(e => e.code === code);
+  if (!entry) return ticker; // 캐시에 없으면 원본 유지
+  return entry.symbol; // e.g. "079550.KS" (올바른 거래소)
+}
+
 loadKRXList().catch(() => {});

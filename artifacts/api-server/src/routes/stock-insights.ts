@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
+import { correctKoreanTicker } from "../lib/krx-cache.js";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
@@ -246,7 +247,16 @@ ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피�
     const raw = result.text ?? "{}";
     let parsed: any = null;
     try { parsed = JSON.parse(raw); } catch { /* ignore */ }
-    const peers: any[] = parsed?.peers ?? [];
+    // KRX 캐시로 한국 티커 교정 (.KS/.KQ 오류 방지)
+    const peers: any[] = (parsed?.peers ?? []).map((p: any) => {
+      const corrected = correctKoreanTicker(p.ticker ?? "");
+      if (corrected !== p.ticker) {
+        const newExchange = corrected.endsWith(".KS") ? "KOSPI" : "KOSDAQ";
+        console.log(`[peer-group] Ticker corrected: ${p.ticker} → ${corrected}`);
+        return { ...p, ticker: corrected, exchange: newExchange };
+      }
+      return p;
+    });
 
     // 각 피어에 대해 Yahoo Finance 재무 데이터 병렬 조회
     const peerFinancials = await Promise.allSettled(

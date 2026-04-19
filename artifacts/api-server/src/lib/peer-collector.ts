@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs/promises";
 import YahooFinance from "yahoo-finance2";
+import { correctKoreanTicker } from "./krx-cache.js";
 
 const yahooFinance = new YahooFinance();
 const DATA_DIR = path.join(process.cwd(), "data", "peers");
@@ -59,26 +60,43 @@ async function fetchYahooData(ticker: string): Promise<{
   name: string | null;
 }> {
   try {
-    const quote = await yahooFinance.quoteSummary(ticker, {
-      modules: ["financialData", "defaultKeyStatistics", "summaryDetail", "price"] as any,
-    });
-    const fd = quote.financialData as any;
-    const ks = quote.defaultKeyStatistics as any;
-    const sd = quote.summaryDetail as any;
-    const pr = (quote as any).price as any;
+    const [summaryResult, quoteResult] = await Promise.allSettled([
+      yahooFinance.quoteSummary(ticker, {
+        modules: ["financialData", "defaultKeyStatistics", "summaryDetail", "price"] as any,
+      }),
+      yahooFinance.quote(ticker),
+    ]);
 
-    const marketCap: number | null = pr?.marketCap ?? sd?.marketCap ?? null;
+    const summary = summaryResult.status === "fulfilled" ? summaryResult.value : {};
+    const q: any = quoteResult.status === "fulfilled" ? quoteResult.value : {};
+
+    const fd = (summary as any).financialData as any ?? {};
+    const ks = (summary as any).defaultKeyStatistics as any ?? {};
+    const sd = (summary as any).summaryDetail as any ?? {};
+    const pr = (summary as any).price as any ?? {};
+
+    const marketCap: number | null = q?.marketCap ?? pr?.marketCap ?? sd?.marketCap ?? null;
     const totalDebt: number | null = fd?.totalDebt ?? null;
     const totalCash: number | null = fd?.totalCash ?? null;
 
+    // PBR: quoteSummary → quote.priceToBook
+    const pbr: number | null = ks?.priceToBook ?? q?.priceToBook ?? null;
+
+    // PER TTM: quoteSummary → quote.trailingPE → price/EPS 계산
+    let per_trailing: number | null = sd?.trailingPE ?? ks?.trailingPE ?? q?.trailingPE ?? null;
+    if (per_trailing == null && q?.regularMarketPrice != null) {
+      const eps = q?.epsTrailingTwelveMonths ?? null;
+      if (eps != null && eps > 0) per_trailing = q.regularMarketPrice / eps;
+    }
+
     return {
-      name: pr?.longName ?? pr?.shortName ?? null,
+      name: pr?.longName ?? pr?.shortName ?? q?.longName ?? q?.shortName ?? null,
       data: {
         marketCap,
         totalDebt,
         totalCash,
-        pbr: ks?.priceToBook ?? null,
-        per_trailing: ks?.trailingPE ?? null,
+        pbr,
+        per_trailing,
         ev_ebitda: ks?.enterpriseToEbitda ?? null,
         roe: fd?.returnOnEquity != null ? fd.returnOnEquity * 100 : null,
         operating_margin: fd?.operatingMargins != null ? fd.operatingMargins * 100 : null,
@@ -330,7 +348,12 @@ export async function collectPeers(
   const results: Record<string, PeerMultiples> = {};
 
   await Promise.allSettled(
-    peerTickers.map(async (ticker) => {
+    peerTickers.map(async (rawTicker) => {
+      // KRX 캐시로 한국 티커 교정 (.KS/.KQ 오류 방지)
+      const ticker = correctKoreanTicker(rawTicker);
+      if (ticker !== rawTicker) {
+        console.log(`[peer-collector] Ticker corrected: ${rawTicker} → ${ticker}`);
+      }
       try {
         console.log(`[peer-collector] Collecting ${ticker}...`);
         const data = await collectPeer(ticker);
