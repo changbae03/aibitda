@@ -32,6 +32,20 @@ interface FinancialData {
   quarterly: FinancialEntry[];
 }
 
+function formatPeriodLabel(period: string, view: "annual" | "quarterly"): string {
+  if (view === "annual") {
+    // 연간: "2024" or "2024-12" → "2024"
+    return period.slice(0, 4);
+  }
+  // 분기: "2025-06" → month=06 → Q2 → "2Q25"
+  const match = period.match(/^(\d{4})[-.](\d{2})$/);
+  if (!match) return period;
+  const year = match[1].slice(2); // "25"
+  const month = parseInt(match[2], 10);
+  const q = Math.ceil(month / 3); // 1~12 → Q1~Q4
+  return `${q}Q${year}`;
+}
+
 function formatAmount(value: number, currency: string): string {
   if (currency === "KRW") {
     const tril = value / 1e12;
@@ -231,7 +245,7 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
           // ── Extreme-scale mode: revenue on left, income on right (hidden) ──
           <ComposedChart data={entries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(p) => formatPeriodLabel(p, view)} />
             <YAxis yAxisId="rev" orientation="left"
               tickFormatter={(v) => formatYAxis(v, currency)}
               tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
@@ -268,7 +282,7 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
           // ── Normal mode: revenue + income share the left axis ──
           <ComposedChart data={entries} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(p) => formatPeriodLabel(p, view)} />
             <YAxis yAxisId="left" orientation="left"
               tickFormatter={(v) => formatYAxis(v, currency)}
               tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}

@@ -598,8 +598,10 @@ router.get("/financials/:ticker", async (req, res) => {
         const revenues = cols.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
         const opIncomes = cols.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
         const netIncomes = cols.find((c: string[]) => c[0] === "당기순이익")?.slice(1) ?? [];
+        // 네이버 분기 포맷 "2025.06" → "2025-06" 으로 정규화 (Yahoo 포맷과 통일)
+        const normPeriod = (p: string) => p.replace(".", "-");
         return periods.map((period: string, i: number) => ({
-          period,
+          period: normPeriod(period),
           isEstimate: titleList[i]?.isConsensus === "Y",
           revenue: revenues[i] ? Number(revenues[i]) * 1e8 : null,
           operatingIncome: opIncomes[i] ? Number(opIncomes[i]) * 1e8 : null,
