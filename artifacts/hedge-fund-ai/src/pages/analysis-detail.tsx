@@ -680,12 +680,43 @@ export default function AnalysisDetail() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
 
+  // 종목별 관리자 메모 상태
+  const [tickerMemo, setTickerMemo] = useState("");
+  const [tickerMemoSaved, setTickerMemoSaved] = useState("");
+  const [tickerMemoSaving, setTickerMemoSaving] = useState(false);
+  const [tickerMemoSavedOk, setTickerMemoSavedOk] = useState(false);
+
   // 기존 피드백 로드
   useEffect(() => {
     if (!analysis) return;
     if (analysis.userRating) setFeedbackRating(analysis.userRating >= 4 ? 5 : 1);
     if (analysis.userFeedback) { setFeedbackText(analysis.userFeedback); setFeedbackSubmitted(true); }
   }, [analysis?.id, analysis?.userRating, analysis?.userFeedback]);
+
+  // 종목별 메모 로드
+  useEffect(() => {
+    if (!analysis?.ticker) return;
+    fetch(getApiUrl(`/api/ticker-notes/${encodeURIComponent(analysis.ticker)}`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.memo) { setTickerMemo(d.memo); setTickerMemoSaved(d.memo); } })
+      .catch(() => {});
+  }, [analysis?.ticker]);
+
+  async function saveTickerMemo() {
+    if (tickerMemoSaving || !analysis?.ticker) return;
+    setTickerMemoSaving(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/ticker-notes/${encodeURIComponent(analysis.ticker)}`), {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo: tickerMemo }),
+      });
+      if (r.ok) { setTickerMemoSaved(tickerMemo); setTickerMemoSavedOk(true); setTimeout(() => setTickerMemoSavedOk(false), 2000); }
+    } finally {
+      setTickerMemoSaving(false);
+    }
+  }
 
   const submitFeedback = async () => {
     if (feedbackSubmitting || !feedbackRating) return;
@@ -1180,6 +1211,42 @@ export default function AnalysisDetail() {
                 </div>
               )}
             </div>
+
+            {/* 관리자 종목 보정 메모 */}
+            {isComplete && (
+              <div className="mt-4 print:hidden">
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">📝 종목 보정 메모</span>
+                    <span className="text-[10px] text-amber-600">— 다음 AI 분석에 자동 반영됩니다</span>
+                  </div>
+                  <textarea
+                    value={tickerMemo}
+                    onChange={e => setTickerMemo(e.target.value)}
+                    placeholder={`${analysis.companyName}(${analysis.ticker})에 대한 특수 사항, 보정 지시, 사업 특성 등을 입력하세요.\n예) HBM 점유율 변화가 핵심 드라이버 / 2023년 DS 적자는 일회성 처리할 것`}
+                    className="w-full text-[13px] rounded-lg border border-amber-200 bg-white px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 text-neutral-700 placeholder:text-amber-300"
+                    rows={3}
+                    maxLength={1000}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={saveTickerMemo}
+                      disabled={tickerMemoSaving || tickerMemo === tickerMemoSaved}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 text-white text-[13px] font-semibold hover:bg-amber-700 transition-colors disabled:opacity-40"
+                    >
+                      {tickerMemoSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      저장하기
+                    </button>
+                    {tickerMemoSavedOk && (
+                      <span className="text-[12px] text-emerald-600 font-medium">✓ 저장됐습니다. 다음 분석부터 반영됩니다.</span>
+                    )}
+                    {tickerMemo.length > 0 && (
+                      <span className="text-[11px] text-amber-500 ml-auto">{tickerMemo.length}/1000</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Disclaimer */}
             <div className="mt-5 pt-6 border-t border-neutral-100 print:mt-6">

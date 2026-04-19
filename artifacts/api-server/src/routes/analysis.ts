@@ -1889,6 +1889,23 @@ router.post("/:id/step", async (req, res) => {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── 종목별 관리자 보정 메모 주입 (모든 분석 단계 공통) ──────────────────
+  // 운영자가 특정 종목에 입력한 보정 노트를 AI 컨텍스트에 항상 반영
+  try {
+    const noteRows = await rawQuery(
+      `SELECT memo FROM ticker_notes WHERE ticker = $1 AND memo != ''`,
+      [analysis.ticker]
+    );
+    if (noteRows[0]?.memo) {
+      const memoBlock = `\n\n[📝 운영자 종목 보정 메모 — ${analysis.companyName}(${analysis.ticker}) — 반드시 반영하세요]\n${noteRows[0].memo}`;
+      enrichedContext = enrichedContext ? enrichedContext + memoBlock : memoBlock;
+      console.log(`[ticker-note] Injected ${memoBlock.length}chars for ${analysis.ticker}`);
+    }
+  } catch {
+    // 실패해도 분석 진행
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (stepKey === "company_intro" || stepKey === "investment_strategy") {
     try {
       // ── Feature 1: 동일 종목 이전 분석 참고 ──────────────────────────────

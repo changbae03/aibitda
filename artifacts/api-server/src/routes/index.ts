@@ -9,6 +9,7 @@ import feedRouter from "./feed.js";
 import stockInsightsRouter from "./stock-insights.js";
 import creditsRouter from "./credits.js";
 import peersRouter from "./peers.js";
+import tickerNotesRouter from "./ticker-notes.js";
 
 const router: IRouter = Router();
 
@@ -16,6 +17,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(creditsRouter);
 router.use("/peers", peersRouter);
+router.use("/ticker-notes", tickerNotesRouter);
 router.use("/analysis", analysisRouter);
 router.use("/market-data", marketDataRouter);
 router.use("/market-data", stockInsightsRouter);

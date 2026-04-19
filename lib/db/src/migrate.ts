@@ -119,6 +119,15 @@ export async function runMigrations() {
       );
     `);
 
+    // 종목별 관리자 보정 메모 테이블
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticker_notes (
+        ticker TEXT PRIMARY KEY,
+        memo TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
