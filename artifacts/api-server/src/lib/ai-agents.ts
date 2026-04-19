@@ -74,18 +74,30 @@ export function buildPrompt(
 현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
-  // 이전 단계 컨텍스트 — 토큰 절약: 단계당 최대 1,500자로 트리밍
-  // (전체 내용 전달 시 7단계 누적으로 입력 토큰이 폭발적으로 증가)
-  const MAX_PREV_STEP_CHARS = 1500;
+  // 토큰 절약 전략:
+  //   - 직전 단계(마지막): 결론·수치가 뒷부분에 있으므로 끝 2,000자 우선 전달
+  //   - 그 외 단계: 앞 700자 (맥락·방향성만)
   const previousContext =
     previousSteps.length > 0
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
           .map((s, i) => {
             const stepNum = STEP_ORDER.indexOf(s.stepKey as AgentKey);
             const label = stepNum === 0 ? "팀장 브리핑" : s.agentName;
-            const trimmed = s.content.length > MAX_PREV_STEP_CHARS
-              ? s.content.slice(0, MAX_PREV_STEP_CHARS) + "…[이하 생략]"
-              : s.content;
+            const isLastStep = i === previousSteps.length - 1;
+            let trimmed: string;
+            if (isLastStep) {
+              // 직전 단계: 앞 500자(개요) + 뒤 1,800자(최종 수치·결론) 합쳐서 전달
+              const head = s.content.slice(0, 500);
+              const tail = s.content.length > 500 + 1800
+                ? "…[중략]…\n" + s.content.slice(-1800)
+                : s.content.slice(500);
+              trimmed = head + tail;
+            } else {
+              // 이전 단계: 앞 700자만 (맥락·방향성)
+              trimmed = s.content.length > 700
+                ? s.content.slice(0, 700) + "…[이하 생략]"
+                : s.content;
+            }
             return `【${i + 1}단계: ${label}】\n${trimmed}`;
           })
           .join("\n\n" + "─".repeat(60) + "\n\n")}\n\n${"=".repeat(60)}`
@@ -1649,15 +1661,30 @@ thesis의 핵심 전제가 실현되는지 판단할 지표 2개를 불릿으로
 - 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지. 코드블록(\`\`\`) 절대 사용 금지.`,
       userPrompt: `${baseContext}${previousContext}
 
+══════════════════════════════════════════
+📌 STEP A — JSON 작성 전 필수 수치 추출 (이 작업을 먼저 하세요)
+══════════════════════════════════════════
+위 컨텍스트의 【Valuation Analyst】 단계에서 아래 수치를 찾아 메모하세요:
+  ① 최종 적정주가(Base 목표가): _______
+  ② 상단 밴드(Bull target): _______
+  ③ 하단 밴드(Bear target): _______
+  ④ 현재 주가: _______
+  ⑤ Base upside = (①-④)/④×100 = _______%
+
+→ 이 수치를 그대로 JSON 필드에 채웁니다. 임의 변경 금지.
+→ 만약 위 단계에서 수치를 못 찾겠다면 scenarios의 target_price를 0으로 채우지 말고,
+   찾을 수 있는 모든 단서("목표가", "적정가", "밸류에이션", "TP")를 재탐색하세요.
+══════════════════════════════════════════
+
 위의 분석(산업 → 촉매 → 실적 전망 → 목표가 산출 → 기술적 분석)을 종합하여 최종 투자 전략을 도출하세요.
 
 필드별 작성 기준:
 - summary: 각 애널리스트 핵심 결론을 한 문장씩 녹여 3~4문장 통합 서술. 반드시 목표주가 수치 포함.
 - key_issue: Catalyst & Smart Money Analyst가 식별한 최대 이슈 한 문장으로.
-- scenarios[].target_price: 목표가 산출 단계의 최종 밸류에이션 인계 요약에서 직접 인용. 확률 합계 반드시 100%.
-  - Bear case = 하단 밴드 숫자, Base case = 최종 목표주가 숫자, Bull case = 상단 밴드 숫자
-- scenarios[].upside: 컨텍스트의 현재가(KRW 종목: 원, USD 종목: 달러) 수치로 계산. (target_price - 현재가) / 현재가 × 100%.
-- target_price (최상위): scenarios Base의 target_price와 반드시 동일한 숫자.
+- scenarios[].target_price: STEP A에서 추출한 수치를 그대로 입력. 확률 합계 반드시 100%.
+  - Bear case = ③ 하단 밴드, Base case = ① 최종 적정주가, Bull case = ② 상단 밴드
+- scenarios[].upside: STEP A ④ 현재가로 계산. (target_price - 현재가) / 현재가 × 100%.
+- target_price (최상위): STEP A ① 수치와 반드시 동일. Base 시나리오와 일치해야 함.
 - entry_price: Market & Technical Analyst의 진입 구간 하단·상단 참고.
 - stop_loss: Market & Technical Analyst 손절선과 하단 밴드 중 보수적인 값.
 - monitoring_indicators: Catalyst 체크포인트 + Valuation/Technical 모니터링 지표 결합. 최대 4개.
