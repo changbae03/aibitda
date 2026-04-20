@@ -528,7 +528,7 @@ export default function History() {
 
           {/* 목표가 달성률 */}
           <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">목표 달성률</p>
+            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">적정주가 달성률</p>
             <p className={cn(
               "text-[20px] font-black leading-none tabular-nums",
               accuracyStats.achievementRate >= 40 ? "text-emerald-600" : accuracyStats.achievementRate >= 20 ? "text-amber-500" : "text-neutral-400"
