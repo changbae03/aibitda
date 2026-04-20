@@ -177,22 +177,20 @@ function MemoInline({ id }: { id: number }) {
 
 // ── PriceTrack: 중앙 진입가 기준 좌우 이동 시각화 ───────────────────────────────
 function PriceTrack({
-  entry, tgt, cur, stopLoss, currency, isSell,
+  entry, tgt, cur, currency, isSell,
 }: {
   entry: number; tgt: number; cur: number;
-  stopLoss?: number | null; currency: string; isSell?: boolean;
+  currency: string; isSell?: boolean;
 }) {
   const tgtDist  = Math.abs(tgt - entry);
   const curDist  = Math.abs(cur - entry);
-  const slDist   = stopLoss ? Math.abs(stopLoss - entry) : 0;
-  const halfRange = Math.max(tgtDist, curDist, slDist) * 1.4 || tgtDist * 2 || 1;
+  const halfRange = Math.max(tgtDist, curDist) * 1.4 || tgtDist * 2 || 1;
 
   const toX = (price: number) =>
     Math.min(Math.max(50 + ((price - entry) / halfRange) * 50, 1), 99);
 
   const tgtX   = toX(tgt);
   const curX   = toX(cur);
-  const slX    = stopLoss ? toX(stopLoss) : null;
   const fillLeft  = Math.min(50, curX);
   const fillWidth = Math.abs(curX - 50);
 
@@ -243,13 +241,6 @@ function PriceTrack({
           transition={{ duration: 0.8, ease: "easeOut" }}
         />
 
-        {/* Stop-loss marker */}
-        {slX != null && (
-          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${slX}%` }}>
-            <div className="w-px h-4 bg-red-300 rounded-full" />
-          </div>
-        )}
-
         {/* Target marker */}
         <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
           <div className={cn("w-px h-5 rounded-full", exceeded ? "bg-emerald-500" : "bg-emerald-400")} />
@@ -276,14 +267,11 @@ function PriceTrack({
       <div className="relative h-4 mt-0.5 select-none">
         <span className="absolute left-0 text-[9px] text-neutral-300">◀ 하락</span>
         <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-neutral-400">진입가</span>
-        {slX != null && (
-          <span className="absolute text-[9px] text-red-400 -translate-x-1/2 whitespace-nowrap" style={{ left: `${slX}%` }}>손절</span>
-        )}
         <span
           className={cn("absolute text-[9px] font-medium -translate-x-1/2 whitespace-nowrap", exceeded ? "text-emerald-600" : "text-emerald-500")}
           style={{ left: `${Math.max(Math.min(tgtX, 90), 15)}%` }}
         >
-          목표
+          적정주가
         </span>
         <span className="absolute right-0 text-[9px] text-neutral-300">상승 ▶</span>
       </div>
@@ -824,7 +812,6 @@ export default function History() {
                             entry={entry ?? cur}
                             tgt={tgt}
                             cur={cur}
-                            stopLoss={a.stopLoss ?? null}
                             currency={currency}
                             isSell={isSell}
                           />
