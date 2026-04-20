@@ -1574,23 +1574,23 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 ? "bg-emerald-500"
                 : "bg-indigo-500";
               const borderColor = isPBROE
-                ? "border-emerald-100 dark:border-emerald-900/50"
-                : "border-indigo-100 dark:border-indigo-900/50";
+                ? "border-emerald-200 dark:border-emerald-700/50"
+                : "border-indigo-200 dark:border-indigo-600/50";
               const bgColor = isPBROE
-                ? "from-emerald-50/80 to-teal-50/40 dark:from-emerald-950/40 dark:to-teal-950/20"
-                : "from-indigo-50/80 to-blue-50/40 dark:from-indigo-950/40 dark:to-blue-950/20";
+                ? "from-emerald-50/80 to-teal-50/40 dark:from-card dark:to-card"
+                : "from-indigo-50/80 to-blue-50/40 dark:from-card dark:to-card";
               const textColor = isPBROE
-                ? "text-emerald-700 dark:text-emerald-300"
-                : "text-indigo-700 dark:text-indigo-300";
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-indigo-700 dark:text-indigo-400";
               const subBorderColor = isPBROE
-                ? "border-emerald-100 dark:border-emerald-900/40"
-                : "border-indigo-100 dark:border-indigo-900/40";
+                ? "border-emerald-100 dark:border-emerald-700/30"
+                : "border-indigo-100 dark:border-indigo-700/30";
               const chipBg = isPBROE
-                ? "text-emerald-700 dark:text-white bg-emerald-100 dark:bg-emerald-600/50"
-                : "text-indigo-700 dark:text-white bg-indigo-100 dark:bg-indigo-600/50";
+                ? "text-emerald-700 dark:text-white bg-emerald-100 dark:bg-emerald-600/40"
+                : "text-indigo-700 dark:text-white bg-indigo-100 dark:bg-indigo-600/40";
               const valBg = isPBROE
-                ? "bg-emerald-50 dark:bg-emerald-600/50"
-                : "bg-indigo-50 dark:bg-indigo-600/50";
+                ? "bg-emerald-50 dark:bg-emerald-600/40"
+                : "bg-indigo-50 dark:bg-indigo-600/40";
 
               return (
                 <div className={`mx-4 sm:mx-6 my-2 rounded-2xl border ${borderColor} bg-gradient-to-br ${bgColor} overflow-hidden`}>
@@ -1616,7 +1616,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <p className="text-[9px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-2">
                           P/B-ROE 밸류에이션 공식
                         </p>
-                        <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl border border-emerald-100 dark:border-emerald-700/40 p-3 space-y-3">
+                        <div className="bg-white/60 dark:bg-muted/50 rounded-xl border border-emerald-100 dark:border-emerald-700/40 p-3 space-y-3">
                           {/* Gordon Growth P/B 공식 */}
                           <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono">
                             <span className="text-[10px] text-muted-foreground">목표 P/B =</span>
@@ -1719,13 +1719,13 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                           할인율 (WACC / CoE) 산출
                         </p>
                         {hasWaccBreakdown ? (
-                          <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl border border-indigo-100 dark:border-indigo-700/40 p-3">
+                          <div className="bg-white/60 dark:bg-muted/50 rounded-xl border border-indigo-100 dark:border-indigo-700/40 p-3">
                             {/* 공식 표시 */}
                             <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono mb-3">
                               {v("wacc_rf") && (
                                 <>
                                   <div className="flex flex-col items-center">
-                                    <span className="text-[8px] text-muted-foreground mb-0.5">Rf</span>
+                                    <span className="text-[8px] text-muted-foreground dark:text-slate-300 mb-0.5">Rf</span>
                                     <span className="font-bold text-foreground dark:text-white bg-indigo-50 dark:bg-indigo-600/50 px-2 py-0.5 rounded">{v("wacc_rf")}</span>
                                   </div>
                                   <span className="text-muted-foreground">+</span>
@@ -1757,16 +1757,16 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                               )}
                             </div>
                             {/* CoD & D/E → WACC */}
-                            <div className="flex flex-wrap gap-4 pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+                            <div className="flex flex-wrap gap-4 pt-2 border-t border-indigo-100 dark:border-indigo-700/30">
                               {v("wacc_cod") && v("wacc_cod") !== "N/A" && (
                                 <div className="flex flex-col">
-                                  <span className="text-[8px] text-muted-foreground">CoD (세후)</span>
+                                  <span className="text-[8px] text-muted-foreground dark:text-slate-300">CoD (세후)</span>
                                   <span className="text-[12px] font-bold font-mono text-foreground">{v("wacc_cod")}</span>
                                 </div>
                               )}
                               {v("wacc_de_ratio") && (
                                 <div className="flex flex-col">
-                                  <span className="text-[8px] text-muted-foreground">D/E 비율</span>
+                                  <span className="text-[8px] text-muted-foreground dark:text-slate-300">D/E 비율</span>
                                   <span className="text-[12px] font-bold font-mono text-foreground">{v("wacc_de_ratio")}</span>
                                 </div>
                               )}
@@ -1801,8 +1801,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                             { label: "영구성장률 (g)", key: "terminal_growth" },
                             { label: "Terminal ROIC", key: "terminal_roic" },
                           ].filter(({ key }) => isValid(KA[key])).map(({ label, key }) => (
-                            <div key={key} className="bg-white/60 dark:bg-white/[0.06] rounded-lg border border-indigo-100 dark:border-indigo-700/40 px-3 py-2">
-                              <span className="text-[8px] text-muted-foreground block mb-0.5">{label}</span>
+                            <div key={key} className="bg-white/60 dark:bg-muted/50 rounded-lg border border-indigo-100 dark:border-indigo-700/40 px-3 py-2">
+                              <span className="text-[8px] text-muted-foreground dark:text-slate-300 block mb-0.5">{label}</span>
                               <span className="text-[14px] font-bold font-mono text-foreground">{v(key)}</span>
                             </div>
                           ))}
@@ -1816,11 +1816,11 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <p className="text-[9px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-widest mb-2">
                           절대가치 ↔ 피어가치 조율
                         </p>
-                        <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl border border-indigo-100 dark:border-indigo-700/40 p-3">
+                        <div className="bg-white/60 dark:bg-muted/50 rounded-xl border border-indigo-100 dark:border-indigo-700/40 p-3">
                           <div className="flex items-center gap-3 flex-wrap">
                             {v("abs_value") && (
                               <div className="flex flex-col flex-1 min-w-[80px]">
-                                <span className="text-[8px] text-muted-foreground">절대가치 (DCF/rNPV)</span>
+                                <span className="text-[8px] text-muted-foreground dark:text-slate-300">절대가치 (DCF/rNPV)</span>
                                 <span className="text-[15px] font-bold font-mono text-foreground">{Number(v("abs_value")).toLocaleString("ko-KR")}원</span>
                               </div>
                             )}
@@ -1828,7 +1828,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                               <>
                                 <span className="text-muted-foreground text-lg">↔</span>
                                 <div className="flex flex-col flex-1 min-w-[80px]">
-                                  <span className="text-[8px] text-muted-foreground">피어 상대가치</span>
+                                  <span className="text-[8px] text-muted-foreground dark:text-slate-300">피어 상대가치</span>
                                   <span className="text-[15px] font-bold font-mono text-foreground">{Number(v("peer_value")).toLocaleString("ko-KR")}원</span>
                                 </div>
                               </>
