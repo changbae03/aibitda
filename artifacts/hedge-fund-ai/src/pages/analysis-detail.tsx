@@ -1562,28 +1562,155 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               const hasWaccBreakdown = isValid(KA.wacc_rf) || isValid(KA.wacc_coe) || isValid(KA.wacc_beta);
               const hasGrowth = isValid(KA.terminal_growth) || isValid(KA.revenue_cagr_short);
               const hasRecon = isValid(KA.abs_value) || isValid(KA.peer_value);
-              if (!hasWacc && !hasGrowth && !hasRecon && !isValid(KA.valuation_model)) return null;
+              const isPBROE = isValid(KA.pb_roe_target_pb) || isValid(KA.pb_roe_bvps) ||
+                (isValid(KA.valuation_model) && String(KA.valuation_model).includes("P/B"));
+              if (!hasWacc && !hasGrowth && !hasRecon && !isValid(KA.valuation_model) && !isPBROE) return null;
+
+              const modelLabel = isPBROE ? "P/B" : "DCF";
+              const modelColor = isPBROE
+                ? "bg-emerald-500"
+                : "bg-indigo-500";
+              const borderColor = isPBROE
+                ? "border-emerald-100 dark:border-emerald-900/50"
+                : "border-indigo-100 dark:border-indigo-900/50";
+              const bgColor = isPBROE
+                ? "from-emerald-50/80 to-teal-50/40 dark:from-emerald-950/40 dark:to-teal-950/20"
+                : "from-indigo-50/80 to-blue-50/40 dark:from-indigo-950/40 dark:to-blue-950/20";
+              const textColor = isPBROE
+                ? "text-emerald-700 dark:text-emerald-300"
+                : "text-indigo-700 dark:text-indigo-300";
+              const subBorderColor = isPBROE
+                ? "border-emerald-100 dark:border-emerald-900/40"
+                : "border-indigo-100 dark:border-indigo-900/40";
+              const chipBg = isPBROE
+                ? "text-emerald-500 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/50"
+                : "text-indigo-500 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/50";
+              const valBg = isPBROE
+                ? "bg-emerald-50 dark:bg-emerald-900/30"
+                : "bg-indigo-50 dark:bg-indigo-900/30";
 
               return (
-                <div className="mx-4 sm:mx-6 my-2 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/80 to-blue-50/40 dark:from-indigo-950/40 dark:to-blue-950/20 overflow-hidden">
+                <div className={`mx-4 sm:mx-6 my-2 rounded-2xl border ${borderColor} bg-gradient-to-br ${bgColor} overflow-hidden`}>
                   {/* 헤더 */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-indigo-100 dark:border-indigo-900/50">
-                    <div className="w-5 h-5 rounded-md bg-indigo-500 flex items-center justify-center shrink-0">
-                      <span className="text-white text-[9px] font-bold">DCF</span>
+                  <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${borderColor}`}>
+                    <div className={`w-5 h-5 rounded-md ${modelColor} flex items-center justify-center shrink-0`}>
+                      <span className="text-white text-[9px] font-bold">{modelLabel}</span>
                     </div>
-                    <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 tracking-wide">
+                    <p className={`text-[11px] font-bold ${textColor} tracking-wide`}>
                       밸류에이션 가정 — 완전 공개
                     </p>
                     {v("valuation_model") && (
-                      <span className="ml-auto text-[10px] font-semibold text-indigo-500 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded-full">
+                      <span className={`ml-auto text-[10px] font-semibold ${chipBg} px-2 py-0.5 rounded-full`}>
                         {v("valuation_model")}
                       </span>
                     )}
                   </div>
 
                   <div className="px-4 py-3 space-y-4">
-                    {/* ① WACC 분해 공식 */}
-                    {hasWacc && (
+                    {/* ① P/B-ROE 전용 공식 카드 */}
+                    {isPBROE && (isValid(KA.pb_roe_bvps) || isValid(KA.pb_roe_target_pb) || isValid(KA.pb_roe_roe)) && (
+                      <div>
+                        <p className="text-[9px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-2">
+                          P/B-ROE 밸류에이션 공식
+                        </p>
+                        <div className="bg-white/60 dark:bg-black/20 rounded-xl border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-3">
+                          {/* Gordon Growth P/B 공식 */}
+                          <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono">
+                            <span className="text-[10px] text-muted-foreground">목표 P/B =</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-[8px] text-muted-foreground mb-0.5">ROE</span>
+                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                                {v("pb_roe_roe") || "—"}
+                              </span>
+                            </div>
+                            <span className="text-muted-foreground">−</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-[8px] text-muted-foreground mb-0.5">g</span>
+                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                                {v("pb_roe_g") || "—"}
+                              </span>
+                            </div>
+                            <span className="text-muted-foreground text-[14px]">÷</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-[8px] text-muted-foreground mb-0.5">CoE</span>
+                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                                {v("pb_roe_coe") || "—"}
+                              </span>
+                            </div>
+                            <span className="text-muted-foreground">−</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-[8px] text-muted-foreground mb-0.5">g</span>
+                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                                {v("pb_roe_g") || "—"}
+                              </span>
+                            </div>
+                            <span className="text-muted-foreground">=</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-[8px] text-muted-foreground mb-0.5">목표 P/B</span>
+                              <span className="font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded">
+                                {v("pb_roe_target_pb") ? `${v("pb_roe_target_pb")}배` : "—"}
+                              </span>
+                            </div>
+                          </div>
+                          {/* 목표주가 계산 */}
+                          {(isValid(KA.pb_roe_bvps) || isValid(KA.pb_roe_target_pb)) && (
+                            <div className={`flex flex-wrap gap-3 items-center pt-2 border-t ${subBorderColor}`}>
+                              {v("pb_roe_bvps") && (
+                                <div className="flex flex-col">
+                                  <span className="text-[8px] text-muted-foreground">12m fwd BVPS</span>
+                                  <span className="text-[12px] font-bold font-mono text-foreground">
+                                    {Number(v("pb_roe_bvps")).toLocaleString()}원
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-muted-foreground font-bold">×</span>
+                              {v("pb_roe_target_pb") && (
+                                <div className="flex flex-col">
+                                  <span className="text-[8px] text-muted-foreground">목표 P/B</span>
+                                  <span className="text-[12px] font-bold font-mono text-foreground">{v("pb_roe_target_pb")}배</span>
+                                </div>
+                              )}
+                              <span className="text-muted-foreground font-bold">=</span>
+                              <div className="flex flex-col ml-auto">
+                                <span className="text-[8px] font-bold text-emerald-500 uppercase">→ 목표주가</span>
+                                <span className="text-[18px] font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                                  {v("abs_value") ? `${Number(v("abs_value")).toLocaleString()}원` : "—"}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {/* 시나리오별 Implied P/B */}
+                          {(isValid(KA.pb_roe_bull_pb) || isValid(KA.pb_roe_bear_pb)) && (
+                            <div className={`pt-2 border-t ${subBorderColor}`}>
+                              <p className="text-[8px] text-muted-foreground mb-1.5">시나리오별 Implied P/B</p>
+                              <div className="flex gap-4">
+                                {v("pb_roe_bull_pb") && (
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[8px] text-blue-500 font-semibold">Bull</span>
+                                    <span className="text-[13px] font-bold font-mono text-blue-600 dark:text-blue-400">{v("pb_roe_bull_pb")}배</span>
+                                  </div>
+                                )}
+                                {v("pb_roe_target_pb") && (
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[8px] text-emerald-500 font-semibold">Base</span>
+                                    <span className="text-[13px] font-bold font-mono text-emerald-600 dark:text-emerald-400">{v("pb_roe_target_pb")}배</span>
+                                  </div>
+                                )}
+                                {v("pb_roe_bear_pb") && (
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[8px] text-red-400 font-semibold">Bear</span>
+                                    <span className="text-[13px] font-bold font-mono text-red-500 dark:text-red-400">{v("pb_roe_bear_pb")}배</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ② WACC 분해 공식 (DCF/rNPV 모델일 때만) */}
+                    {hasWacc && !isPBROE && (
                       <div>
                         <p className="text-[9px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-widest mb-2">
                           할인율 (WACC / CoE) 산출
