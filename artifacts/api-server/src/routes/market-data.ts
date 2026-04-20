@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
+import { GoogleGenAI } from "@google/genai";
 
 const yahooFinance = new YahooFinance();
 
@@ -765,6 +766,62 @@ router.get("/financials/:ticker", async (req, res) => {
     res.json({ ticker, currency: "USD", annual, quarterly });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Failed to fetch Yahoo financials" });
+  }
+});
+
+// ─── 주가 급변 이슈 분석 (Gemini + Google Search grounding) ─────────────────
+router.post("/price-events", async (req, res) => {
+  const { ticker, events } = req.body as {
+    ticker: string;
+    events: { date: string; changePercent: number }[];
+  };
+  if (!ticker || !Array.isArray(events) || events.length === 0) {
+    return res.status(400).json({ error: "ticker and events required" });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "No Gemini key" });
+
+  const genAI = new GoogleGenAI({ apiKey });
+
+  const eventList = events
+    .map((e, i) => `${i + 1}. ${e.date.slice(0, 10)} (${e.changePercent > 0 ? "+" : ""}${e.changePercent.toFixed(1)}%)`)
+    .join("\n");
+
+  const prompt = `주식 티커 "${ticker}"의 주가가 아래 날짜에 크게 변동했습니다. 각 날짜의 주요 뉴스/이슈를 조사해서 한국어로 간결하게 요약해주세요.
+
+${eventList}
+
+각 날짜마다 다음 JSON 배열 형식으로 답변하세요:
+[
+  {"date": "YYYY-MM-DD", "changePercent": 숫자, "summary": "이슈 요약 (50자 이내)"},
+  ...
+]
+
+JSON만 출력하세요. 코드블록 없이.`;
+
+  try {
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.1,
+      },
+    });
+
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    const clean = text.replace(/```json|```/g, "").trim();
+    try {
+      const parsed = JSON.parse(clean);
+      return res.json(parsed);
+    } catch {
+      // 파싱 실패시 빈 배열 반환
+      return res.json([]);
+    }
+  } catch (err: any) {
+    console.error("price-events error:", err?.message);
+    return res.status(500).json({ error: err?.message ?? "Gemini error" });
   }
 });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ComposedChart,
   Line,
@@ -7,14 +7,15 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceLine,
   ReferenceArea,
+  ReferenceDot,
 } from "recharts";
+
 import { useGetMarketData } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Loader2, AlertCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, Loader2, AlertCircle, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 
 type Period = "3m" | "6m" | "1y" | "2y" | "5y";
 type Interval = "1d" | "1wk" | "1mo";
@@ -35,18 +36,25 @@ export interface ChartEvent {
   type: "catalyst" | "risk" | "earnings" | "news";
 }
 
+interface PriceSwing {
+  date: string;
+  dateLabel: string;
+  close: number;
+  changePercent: number;
+  index: number;
+}
+
+interface PriceEventNews {
+  date: string;
+  changePercent: number;
+  summary: string;
+}
+
 const EVENT_COLORS: Record<ChartEvent["type"], string> = {
   catalyst: "#16a34a",
   risk: "#dc2626",
   earnings: "#2563eb",
   news: "#7c3aed",
-};
-
-const EVENT_ICONS: Record<ChartEvent["type"], string> = {
-  catalyst: "▲",
-  risk: "▼",
-  earnings: "●",
-  news: "◆",
 };
 
 interface StockChartProps {
@@ -115,6 +123,13 @@ const CustomTooltip = ({ active, payload, label, currency = "KRW" }: any) => {
               <span className="text-foreground/70 font-mono">{formatVolume(d.volume)}</span>
             </div>
           )}
+          {d._swingIdx != null && (
+            <div className="border-t border-border pt-1.5 mt-0.5">
+              <span className="font-bold" style={{ color: d._swingIsUp ? "#16a34a" : "#dc2626" }}>
+                {d._swingIsUp ? "▲" : "▼"} {d._swingIsUp ? "+" : ""}{d._swingPct?.toFixed(1)}% 급변
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -140,9 +155,70 @@ function LevelBadge({ label, value, color, currency = "KRW" }: { label: string; 
   );
 }
 
+// 주가 급변 자동 감지 (>= minPct % 변화)
+function detectPriceSwings(chartData: any[], minPct = 4, maxCount = 5): PriceSwing[] {
+  if (chartData.length < 2) return [];
+  const swings: PriceSwing[] = [];
+  for (let i = 1; i < chartData.length; i++) {
+    const prev = chartData[i - 1].close;
+    const curr = chartData[i].close;
+    if (!prev || !curr) continue;
+    const changePct = ((curr - prev) / prev) * 100;
+    if (Math.abs(changePct) >= minPct) {
+      swings.push({
+        date: chartData[i].date ?? "",
+        dateLabel: chartData[i].dateLabel,
+        close: curr,
+        changePercent: changePct,
+        index: i,
+      });
+    }
+  }
+  // 상위 N개 (절대값 기준, 시간순 정렬)
+  swings.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+  const top = swings.slice(0, maxCount);
+  top.sort((a, b) => a.index - b.index);
+
+  // 너무 가까운 날짜는 합치기 (7일 이내)
+  const filtered: PriceSwing[] = [];
+  for (const s of top) {
+    const last = filtered[filtered.length - 1];
+    if (last && s.index - last.index < 7) {
+      if (Math.abs(s.changePercent) > Math.abs(last.changePercent)) {
+        filtered[filtered.length - 1] = s;
+      }
+    } else {
+      filtered.push(s);
+    }
+  }
+  return filtered;
+}
+
+// 백엔드 price-events 조회
+async function fetchPriceEvents(ticker: string, swings: PriceSwing[]): Promise<PriceEventNews[]> {
+  const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  const res = await fetch(`${BASE}/api/market-data/price-events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ticker,
+      events: swings.map(s => ({ date: s.date, changePercent: s.changePercent })),
+    }),
+  });
+  if (!res.ok) throw new Error("price-events fetch failed");
+  return res.json();
+}
+
+// 번호 뱃지 (①②...)
+const NUM_BADGES = ["①", "②", "③", "④", "⑤"];
+
 export default function StockChart({ ticker, companyName, chartLevels, events = [], currency = "KRW" }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
+  const [showEvents, setShowEvents] = useState(true);
+  const [priceEventNews, setPriceEventNews] = useState<PriceEventNews[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState(false);
 
   const { data, isLoading, error } = useGetMarketData(ticker, { period, interval });
 
@@ -156,24 +232,30 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
     dateLabel: c.date.slice(5),
   })) ?? [];
 
-  // Map each event "YYYY-MM" → closest candle dateLabel (MM-DD)
+  // 주가 급변 자동 감지
+  const minSwingPct = period === "5y" ? 8 : period === "2y" ? 6 : 4;
+  const swings = chartData.length > 1 ? detectPriceSwings(chartData, minSwingPct, 5) : [];
+
+  // 급변 데이터 차트에 합치기
+  const swingDateSet = new Set(swings.map(s => s.dateLabel));
+  const chartDataWithSwings = chartData.map((d, i) => {
+    const swing = swings.find(s => s.dateLabel === d.dateLabel);
+    if (!swing) return d;
+    return {
+      ...d,
+      _swingIdx: swings.indexOf(swing),
+      _swingIsUp: swing.changePercent > 0,
+      _swingPct: swing.changePercent,
+    };
+  });
+
+  // AI 이벤트 매핑
   const eventMarkers: { dateLabel: string; event: ChartEvent }[] = [];
   if (events.length > 0 && chartData.length > 0) {
     for (const ev of events) {
-      // Find first candle whose full date starts with "YYYY-MM"
       const match = chartData.find((c) => (c.date ?? "").startsWith(ev.date));
       if (match) {
         eventMarkers.push({ dateLabel: match.dateLabel, event: ev });
-      } else {
-        // Closest by prefix comparison (e.g., if monthly candle)
-        const prefix = ev.date; // "YYYY-MM"
-        const closest = chartData.reduce<typeof chartData[number] | null>((best, c) => {
-          if (!best) return c;
-          const cDiff = Math.abs(c.date.slice(0, 7).localeCompare(prefix));
-          const bDiff = Math.abs(best.date.slice(0, 7).localeCompare(prefix));
-          return cDiff <= bDiff ? c : best;
-        }, null);
-        if (closest) eventMarkers.push({ dateLabel: closest.dateLabel, event: ev });
       }
     }
   }
@@ -181,11 +263,22 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const priceMin = chartData.length ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99 : 0;
   const priceMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) * 1.01 : 100;
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
-  // 거래량을 차트 아래쪽 25%에만 표시하도록 Y축 스케일 확대
   const volumeDomainMax = maxVolume * 5;
 
-  const axisStyle = { fontSize: 10, fill: "#a3a3a3", fontFamily: "'Pretendard', sans-serif" };
-  const gridColor = "#f0f0f0";
+  // 가격 급변 뉴스 조회 (데이터 로드 완료 + swings 감지 시 자동 실행)
+  useEffect(() => {
+    if (swings.length === 0) return;
+    setPriceEventNews([]);
+    setNewsLoading(true);
+    setNewsError(false);
+    fetchPriceEvents(ticker, swings)
+      .then(setPriceEventNews)
+      .catch(() => setNewsError(true))
+      .finally(() => setNewsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, period, interval, chartData.length]);
+
+  const axisStyle = { fontSize: 10, fill: "var(--muted-foreground, #a3a3a3)", fontFamily: "'Pretendard', sans-serif" };
 
   return (
     <div className="bg-background border border-border rounded-xl overflow-hidden">
@@ -266,7 +359,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
       </div>
 
       {/* Controls */}
-      <div className="px-4 py-2 border-b border-border flex gap-1.5 items-center overflow-x-auto scrollbar-none bg-muted/50/50">
+      <div className="px-4 py-2 border-b border-border flex gap-1.5 items-center overflow-x-auto scrollbar-none bg-muted/30">
         <div className="flex gap-1">
           {PERIOD_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setPeriod(opt.value)} className={ctrlBtn(period === opt.value)}>
@@ -274,7 +367,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
             </button>
           ))}
         </div>
-        <div className="w-px h-3.5 bg-muted mx-0.5" />
+        <div className="w-px h-3.5 bg-border mx-0.5" />
         <div className="flex gap-1">
           {INTERVAL_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setInterval(opt.value)} className={ctrlBtn(interval === opt.value)}>
@@ -304,9 +397,9 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
         )}
         {data && chartData.length > 0 && (
           <>
-            <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={chartDataWithSwings} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e7eb)" vertical={false} />
                 <XAxis
                   dataKey="dateLabel"
                   tick={axisStyle}
@@ -321,10 +414,10 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   tick={axisStyle}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(v) => currency === "USD" ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : v.toLocaleString("ko-KR")}
+                  tickFormatter={(v) => currency === "USD" ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : v.toLocaleString("ko-KR")}
                   width={currency === "USD" ? 64 : 72}
                 />
-                {/* 거래량 Y축 (오른쪽 숨김 — 스케일만 담당) */}
+                {/* 거래량 Y축 (오른쪽 숨김) */}
                 <YAxis
                   yAxisId="volume"
                   orientation="right"
@@ -335,61 +428,20 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   width={0}
                 />
                 <Tooltip content={<CustomTooltip currency={currency} />} />
-                <Legend
-                  wrapperStyle={{ fontSize: "11px", paddingTop: "10px", fontFamily: "'Pretendard', sans-serif" }}
-                  formatter={(value) => <span style={{ color: "#737373" }}>{value}</span>}
-                />
 
-                {/* ── 구간 영역 (레이어 순서: 먼저 채움, 나중에 라인) ── */}
-
-                {/* 손절 위험 구간 (stopLoss ~ entryMin) — 연한 빨강 */}
+                {/* ── 구간 영역 ── */}
                 {chartLevels?.stopLoss && chartLevels?.entryMin && (
-                  <ReferenceArea
-                    yAxisId="price"
-                    y1={chartLevels.stopLoss}
-                    y2={chartLevels.entryMin}
-                    fill="#ef4444"
-                    fillOpacity={0.05}
-                    strokeOpacity={0}
-                  />
+                  <ReferenceArea yAxisId="price" y1={chartLevels.stopLoss} y2={chartLevels.entryMin} fill="#ef4444" fillOpacity={0.04} strokeOpacity={0} />
                 )}
-
-                {/* 진입 구간 (entryMin ~ entryMax) — 파란색 */}
                 {chartLevels?.entryMin && chartLevels?.entryMax && (
-                  <ReferenceArea
-                    yAxisId="price"
-                    y1={chartLevels.entryMin}
-                    y2={chartLevels.entryMax}
-                    fill="#1d4ed8"
-                    fillOpacity={0.1}
-                    stroke="#1d4ed8"
-                    strokeOpacity={0.25}
-                    strokeDasharray="3 3"
-                  />
+                  <ReferenceArea yAxisId="price" y1={chartLevels.entryMin} y2={chartLevels.entryMax} fill="#1d4ed8" fillOpacity={0.08} stroke="#1d4ed8" strokeOpacity={0.2} strokeDasharray="3 3" />
                 )}
-
-                {/* 목표 구간 (target1 ~ target2) — 초록색 */}
                 {chartLevels?.target1 && chartLevels?.target2 && (
-                  <ReferenceArea
-                    yAxisId="price"
-                    y1={chartLevels.target1}
-                    y2={chartLevels.target2}
-                    fill="#16a34a"
-                    fillOpacity={0.08}
-                    strokeOpacity={0}
-                  />
+                  <ReferenceArea yAxisId="price" y1={chartLevels.target1} y2={chartLevels.target2} fill="#16a34a" fillOpacity={0.06} strokeOpacity={0} />
                 )}
 
-                {/* 거래량 바 — 아래쪽 20%에 반투명 표시 */}
-                <Bar
-                  yAxisId="volume"
-                  dataKey="volume"
-                  name="거래량"
-                  fill="#d4d4d4"
-                  opacity={0.6}
-                  radius={[1, 1, 0, 0]}
-                  isAnimationActive={false}
-                />
+                {/* 거래량 바 */}
+                <Bar yAxisId="volume" dataKey="volume" name="거래량" fill="#d4d4d4" opacity={0.5} radius={[1, 1, 0, 0]} isAnimationActive={false} />
 
                 {/* 종가 라인 */}
                 <Line
@@ -402,62 +454,68 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   activeDot={{ r: 3, fill: "#0a0a0a" }}
                 />
 
-                {/* ── 기준선 라인 (라벨 포함) ── */}
+                {/* ── 기준선 — 라벨 없음, 색상만으로 구분 ── */}
                 {chartLevels?.resistance && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 3"
-                    label={{ value: `저항 ${priceLabel(chartLevels.resistance, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444", fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 3" />
                 )}
                 {chartLevels?.support && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.support} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3"
-                    label={{ value: `지지 ${priceLabel(chartLevels.support, currency)}`, position: "insideBottomRight", fontSize: 9, fill: "#22c55e", fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.support} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3" />
                 )}
                 {chartLevels?.stopLoss && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={2} strokeDasharray="3 2"
-                    label={{ value: `손절 ${priceLabel(chartLevels.stopLoss, currency)}`, position: "insideBottomRight", fontSize: 9, fill: "#dc2626", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 2" />
                 )}
                 {chartLevels?.entryMin && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.entryMin} stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `진입하단 ${priceLabel(chartLevels.entryMin, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.entryMin} stroke="#1d4ed8" strokeWidth={1} strokeDasharray="4 2" />
                 )}
                 {chartLevels?.entryMax && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.entryMax} stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `진입상단 ${priceLabel(chartLevels.entryMax, currency)}`, position: "insideBottomRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.entryMax} stroke="#1d4ed8" strokeWidth={1} strokeDasharray="4 2" />
                 )}
                 {chartLevels?.target1 && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3"
-                    label={{ value: `1차목표 ${priceLabel(chartLevels.target1, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#16a34a", fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" />
                 )}
                 {chartLevels?.target2 && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3"
-                    label={{ value: `2차목표 ${priceLabel(chartLevels.target2, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#15803d", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
+                  <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3" />
                 )}
 
-                {/* ── 이벤트 수직선 마커 ── */}
+                {/* ── AI 이벤트 수직선 ── */}
                 {eventMarkers.map(({ dateLabel, event }, idx) => (
                   <ReferenceLine
                     key={`ev-${idx}`}
                     yAxisId="price"
                     x={dateLabel}
                     stroke={EVENT_COLORS[event.type]}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    strokeOpacity={0.5}
+                  />
+                ))}
+
+                {/* ── 주가 급변 마커 — 원형 닷 ── */}
+                {swings.map((swing, idx) => (
+                  <ReferenceDot
+                    key={`swing-${idx}`}
+                    yAxisId="price"
+                    x={swing.dateLabel}
+                    y={swing.close}
+                    r={5}
+                    fill={swing.changePercent > 0 ? "#16a34a" : "#dc2626"}
+                    stroke="white"
                     strokeWidth={1.5}
-                    strokeDasharray="3 3"
-                    strokeOpacity={0.7}
                     label={{
-                      value: `${EVENT_ICONS[event.type]} ${event.label}`,
-                      position: idx % 2 === 0 ? "insideTopLeft" : "insideTopRight",
-                      fontSize: 8,
-                      fill: EVENT_COLORS[event.type],
-                      fontFamily: "'Pretendard', sans-serif",
-                      fontWeight: 600,
+                      value: NUM_BADGES[idx] ?? `${idx + 1}`,
+                      position: swing.changePercent > 0 ? "top" : "bottom",
+                      fontSize: 10,
+                      fill: swing.changePercent > 0 ? "#16a34a" : "#dc2626",
+                      fontWeight: 700,
                     }}
                   />
                 ))}
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* 기술적 분석 레벨 배지 */}
+            {/* ── 기준선 배지 (차트 바깥에서 레이블 표시) ── */}
             {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
-              <div className="mt-3 flex flex-wrap gap-2 px-1">
+              <div className="mt-3 flex flex-wrap gap-1.5 px-1">
                 {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" currency={currency} />}
                 {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" currency={currency} />}
                 {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" currency={currency} />}
@@ -477,19 +535,86 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
               </div>
             )}
 
-            {/* 이벤트 범례 */}
+            {/* ── AI 이벤트 ── */}
             {eventMarkers.length > 0 && (
               <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">핵심 이슈</p>
+                <p className="text-[10px] text-muted-foreground mb-2 font-semibold uppercase tracking-wider">AI 분석 이벤트</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {eventMarkers.map(({ event }, idx) => (
                     <div key={idx} className="flex items-center gap-1.5 text-[11px]">
-                      <span style={{ color: EVENT_COLORS[event.type], fontWeight: 700 }}>{EVENT_ICONS[event.type]}</span>
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: EVENT_COLORS[event.type] }} />
                       <span className="text-muted-foreground font-mono">{event.date}</span>
                       <span className="text-foreground/80 font-medium">{event.label}</span>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* ── 주가 급변 이슈 섹션 ── */}
+            {swings.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <button
+                  className="flex items-center gap-2 w-full text-left mb-2"
+                  onClick={() => setShowEvents(!showEvents)}
+                >
+                  <Sparkles size={12} className="text-amber-500 flex-shrink-0" />
+                  <span className="text-[11px] font-semibold text-foreground/80 uppercase tracking-wider">
+                    주요 주가 급변 이슈
+                  </span>
+                  <span className="text-[10px] text-muted-foreground ml-1">
+                    ({minSwingPct}% 이상 급변 {swings.length}건)
+                  </span>
+                  <span className="ml-auto text-muted-foreground">
+                    {showEvents ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </span>
+                </button>
+
+                {showEvents && (
+                  <div className="space-y-2">
+                    {swings.map((swing, idx) => {
+                      const news = priceEventNews.find(n => n.date === swing.date);
+                      const isPos = swing.changePercent > 0;
+                      return (
+                        <div
+                          key={idx}
+                          className="flex gap-3 p-2.5 rounded-lg border border-border bg-muted/30"
+                        >
+                          {/* 번호 뱃지 */}
+                          <div
+                            className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                            style={{ backgroundColor: isPos ? "#16a34a" : "#dc2626" }}
+                          >
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[11px] font-mono text-muted-foreground">{swing.date.slice(0, 10)}</span>
+                              <span className={cn("text-[11px] font-bold", isPos ? "text-emerald-600" : "text-red-500")}>
+                                {isPos ? "+" : ""}{swing.changePercent.toFixed(1)}%
+                              </span>
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {priceLabel(swing.close, currency)}
+                              </span>
+                            </div>
+                            {newsLoading && !news && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Loader2 size={10} className="animate-spin" />
+                                <span>이슈 분석 중...</span>
+                              </div>
+                            )}
+                            {news && (
+                              <p className="text-[11px] text-foreground/80 leading-relaxed">{news.summary}</p>
+                            )}
+                            {newsError && !news && (
+                              <p className="text-[11px] text-muted-foreground">{swing.date.slice(0, 7)} 이슈 조회 실패</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </>
