@@ -50,12 +50,6 @@ interface PriceEventNews {
   summary: string;
 }
 
-const EVENT_COLORS: Record<ChartEvent["type"], string> = {
-  catalyst: "#16a34a",
-  risk: "#dc2626",
-  earnings: "#2563eb",
-  news: "#7c3aed",
-};
 
 interface StockChartProps {
   ticker: string;
@@ -250,17 +244,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
       _swingPct: swing.changePercent,
     };
   });
-
-  // AI 이벤트 매핑
-  const eventMarkers: { dateLabel: string; event: ChartEvent }[] = [];
-  if (events.length > 0 && chartData.length > 0) {
-    for (const ev of events) {
-      const match = chartData.find((c) => (c.date ?? "").startsWith(ev.date));
-      if (match) {
-        eventMarkers.push({ dateLabel: match.dateLabel, event: ev });
-      }
-    }
-  }
 
   const priceMin = chartData.length ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99 : 0;
   const priceMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) * 1.01 : 100;
@@ -484,19 +467,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3" />
                 )}
 
-                {/* ── AI 이벤트 수직선 ── */}
-                {eventMarkers.map(({ dateLabel, event }, idx) => (
-                  <ReferenceLine
-                    key={`ev-${idx}`}
-                    yAxisId="price"
-                    x={dateLabel}
-                    stroke={EVENT_COLORS[event.type]}
-                    strokeWidth={1}
-                    strokeDasharray="2 3"
-                    strokeOpacity={0.5}
-                  />
-                ))}
-
                 {/* ── 주가 급변 마커 — 원형 닷 ── */}
                 {swings.map((swing, idx) => (
                   <ReferenceDot
@@ -539,22 +509,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                 )}
                 {chartLevels.target1 && <LevelBadge label="1차 적정주가" value={chartLevels.target1} color="#16a34a" currency={currency} />}
                 {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" currency={currency} />}
-              </div>
-            )}
-
-            {/* ── AI 이벤트 ── */}
-            {eventMarkers.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-[10px] text-muted-foreground mb-2 font-semibold uppercase tracking-wider">AI 분석 이벤트</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                  {eventMarkers.map(({ event }, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5 text-[11px]">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: EVENT_COLORS[event.type] }} />
-                      <span className="text-muted-foreground font-mono">{event.date}</span>
-                      <span className="text-foreground/80 font-medium">{event.label}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
