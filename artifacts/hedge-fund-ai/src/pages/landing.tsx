@@ -56,24 +56,24 @@ function RightPanel() {
   }, []);
 
   return (
-    <div className="flex flex-col bg-neutral-50 border-t md:border-t-0 md:border-l border-neutral-100 px-6 py-8 md:p-8 overflow-hidden md:justify-center md:h-full">
+    <div className="flex flex-col bg-muted/50 border-t md:border-t-0 md:border-l border-border px-6 py-8 md:p-8 overflow-hidden md:justify-center md:h-full">
 
       {/* 종목 정보 */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
           <PulsingDot color="#FF8A7A" />
-          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-widest">AI 분석 라이브 미리보기</span>
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">AI 분석 라이브 미리보기</span>
         </div>
         <div className="flex items-baseline gap-2">
-          <span className="text-xl font-bold text-neutral-900">삼성전자</span>
-          <span className="text-xs font-mono text-neutral-400 bg-neutral-200 px-1.5 py-0.5 rounded">005930</span>
+          <span className="text-xl font-bold text-foreground">삼성전자</span>
+          <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">005930</span>
         </div>
-        <div className="text-xs text-neutral-400 mt-0.5">Consumer Electronics · 코스피</div>
+        <div className="text-xs text-muted-foreground mt-0.5">Consumer Electronics · 코스피</div>
       </div>
 
       {/* 분석 단계 */}
       <div className="mb-6">
-        <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest mb-3">분석 파이프라인 (7단계)</p>
+        <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-3">분석 파이프라인 (7단계)</p>
         <div className="space-y-2">
           {DEMO_STEPS.map((step, i) => (
             <motion.div
@@ -89,10 +89,10 @@ function RightPanel() {
                 ) : step.active ? (
                   <PulsingDot color="#FF8A7A" />
                 ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-300 block" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 block" />
                 )}
               </div>
-              <span className={`text-xs ${step.done ? "text-neutral-500" : step.active ? "text-neutral-800 font-semibold" : "text-neutral-300"}`}>
+              <span className={`text-xs ${step.done ? "text-muted-foreground" : step.active ? "text-foreground/90 font-semibold" : "text-muted-foreground/50"}`}>
                 {step.label}
               </span>
               {step.active && (
@@ -149,19 +149,19 @@ export default function Landing() {
     <div className="min-h-screen flex flex-col md:flex-row" style={{ fontFamily: "'Pretendard', sans-serif" }}>
 
       {/* 왼쪽: 로그인 폼 */}
-      <div className="w-full md:w-[420px] lg:w-[440px] shrink-0 flex flex-col justify-center px-8 py-10 md:px-10 md:py-12 bg-white">
+      <div className="w-full md:w-[420px] lg:w-[440px] shrink-0 flex flex-col justify-center px-8 py-10 md:px-10 md:py-12 bg-background">
 
         {/* 로고 */}
         <div className="mb-10">
           <h1 className="text-[32px] font-black tracking-tight mb-1" style={{ color: "#FF8A7A" }}>
             애빛다
           </h1>
-          <p className="text-[15px] text-neutral-400 font-medium">AI로 기업가치를 밝히다</p>
+          <p className="text-[15px] text-muted-foreground font-medium">AI로 기업가치를 밝히다</p>
         </div>
 
         {/* 설명 */}
         <div className="mb-8">
-          <p className="text-[15px] text-neutral-600 leading-relaxed">
+          <p className="text-[15px] text-foreground/70 leading-relaxed">
             산업 분석부터 기술적 분석, 적정주가 산출까지<br />
             7단계에 걸쳐 분석합니다.
           </p>
@@ -180,7 +180,7 @@ export default function Landing() {
 
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] border border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50 active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] border border-border bg-background text-foreground/90 hover:bg-muted/50 active:scale-[0.98] transition-all"
           >
             <GoogleIcon />
             구글로 시작하기
@@ -190,7 +190,7 @@ export default function Landing() {
         {/* 둘러보기 */}
         <button
           onClick={() => setLocation("/analysis/new")}
-          className="w-full text-center text-[13px] text-neutral-400 hover:text-neutral-600 transition-colors py-1"
+          className="w-full text-center text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
         >
           로그인 없이 둘러보기 →
         </button>
@@ -202,17 +202,17 @@ export default function Landing() {
             { icon: "🤖", label: "7단계", desc: "AI 분석 파이프라인" },
             { icon: "📊", label: "실시간", desc: "주가·재무 데이터" },
           ].map(f => (
-            <div key={f.label} className="bg-neutral-50 rounded-xl p-3 text-center border border-neutral-100">
+            <div key={f.label} className="bg-muted/50 rounded-xl p-3 text-center border border-border">
               <div className="text-base mb-1">{f.icon}</div>
-              <div className="text-xs font-bold text-neutral-800">{f.label}</div>
-              <div className="text-[10px] text-neutral-400 mt-0.5">{f.desc}</div>
+              <div className="text-xs font-bold text-foreground/90">{f.label}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{f.desc}</div>
             </div>
           ))}
         </div>
 
-        <p className="text-center text-[11px] text-neutral-300 leading-relaxed">
-          로그인 시 <span className="underline cursor-pointer text-neutral-400">이용약관</span> 및{" "}
-          <span className="underline cursor-pointer text-neutral-400">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.
+        <p className="text-center text-[11px] text-muted-foreground/50 leading-relaxed">
+          로그인 시 <span className="underline cursor-pointer text-muted-foreground">이용약관</span> 및{" "}
+          <span className="underline cursor-pointer text-muted-foreground">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.
         </p>
       </div>
 

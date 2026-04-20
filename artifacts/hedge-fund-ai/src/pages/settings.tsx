@@ -11,11 +11,11 @@ const themes = [
     description: "항상 밝은 테마로 표시합니다",
     icon: Sun,
     preview: {
-      bg: "bg-white",
-      sidebar: "bg-neutral-100",
-      card: "bg-white border-neutral-200",
-      dot: "bg-neutral-800",
-      line: "bg-neutral-200",
+      bg: "bg-background",
+      sidebar: "bg-muted",
+      card: "bg-background border-border",
+      dot: "bg-foreground",
+      line: "bg-muted",
     },
   },
   {
@@ -39,9 +39,9 @@ const themes = [
     preview: {
       bg: "bg-gradient-to-br from-white to-[#0f172a]",
       sidebar: "bg-gradient-to-b from-neutral-100 to-[#1e293b]",
-      card: "bg-gradient-to-br from-white to-[#1e293b] border-neutral-300",
-      dot: "bg-neutral-500",
-      line: "bg-neutral-300",
+      card: "bg-gradient-to-br from-white to-[#1e293b] border-border",
+      dot: "bg-muted-foreground",
+      line: "bg-muted-foreground/40",
     },
   },
 ] as const;

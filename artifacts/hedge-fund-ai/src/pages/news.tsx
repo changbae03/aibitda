@@ -81,7 +81,7 @@ function DetailPanel({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 340, damping: 34 }}
-            className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col"
+            className="fixed right-0 top-0 h-full w-full max-w-lg bg-background shadow-2xl z-50 flex flex-col"
           >
             {/* Panel header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
@@ -214,7 +214,7 @@ function CurationCard({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left group bg-white border border-border rounded-xl overflow-hidden hover:border-violet-300 hover:shadow-md transition-all duration-200"
+      className="w-full text-left group bg-background border border-border rounded-xl overflow-hidden hover:border-violet-300 hover:shadow-md transition-all duration-200"
     >
       {hasImage && (
         <div className="w-full h-40 bg-slate-100 overflow-hidden">
@@ -298,7 +298,7 @@ function NewsColumn({
       </div>
 
       <div className={cn(
-        "overflow-y-auto max-h-[50vh] md:max-h-none md:flex-1 rounded-xl border border-border bg-white",
+        "overflow-y-auto max-h-[50vh] md:max-h-none md:flex-1 rounded-xl border border-border bg-background",
         compact ? "divide-y divide-border" : "flex flex-col gap-3 p-3 bg-transparent border-0"
       )}>
         {loading ? (

@@ -85,7 +85,7 @@ const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis }:
   if (!active || !payload?.length) return null;
   const entry: FinancialEntry | undefined = payload[0]?.payload;
   return (
-    <div className="bg-white border border-border rounded-xl shadow-lg p-3 text-xs min-w-[160px]">
+    <div className="bg-background border border-border rounded-xl shadow-lg p-3 text-xs min-w-[160px]">
       <div className="font-semibold text-foreground mb-2">
         {label}
         {entry?.isEstimate && (

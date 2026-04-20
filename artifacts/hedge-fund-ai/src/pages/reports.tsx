@@ -169,7 +169,7 @@ export default function Reports() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="group bg-white border border-border rounded-xl overflow-hidden hover:border-orange-300 hover:shadow-md transition-all duration-200 flex flex-col"
+                  className="group bg-background border border-border rounded-xl overflow-hidden hover:border-orange-300 hover:shadow-md transition-all duration-200 flex flex-col"
                 >
                   {/* Thumbnail */}
                   {item.image ? (

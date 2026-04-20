@@ -44,7 +44,7 @@ function fmtMarketCap(v: number | null | undefined): string {
 function Cell({ v, suffix = "", decimals = 1 }: { v: number | null | undefined; suffix?: string; decimals?: number }) {
   const text = fmt(v, decimals, suffix);
   return (
-    <td className={cn("px-3 py-2 text-right text-xs tabular-nums", v == null ? "text-neutral-400" : "text-neutral-800")}>
+    <td className={cn("px-3 py-2 text-right text-xs tabular-nums", v == null ? "text-muted-foreground" : "text-foreground/90")}>
       {text}
     </td>
   );
@@ -152,30 +152,30 @@ export default function AdminPeers() {
       <div className="flex items-center gap-3">
         <Database size={22} className="text-blue-600" />
         <div>
-          <h1 className="text-xl font-bold text-neutral-900">피어 멀티플 수집</h1>
-          <p className="text-xs text-neutral-500 mt-0.5">Yahoo Finance + DART 기반 자동 수집 · 아카이빙</p>
+          <h1 className="text-xl font-bold text-foreground">피어 멀티플 수집</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Yahoo Finance + DART 기반 자동 수집 · 아카이빙</p>
         </div>
       </div>
 
       {/* Input Panel */}
-      <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
+      <div className="bg-background border border-border rounded-xl p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1.5">분석 대상 종목 티커</label>
+            <label className="block text-xs font-medium text-foreground/70 mb-1.5">분석 대상 종목 티커</label>
             <input
               value={subject}
               onChange={e => setSubject(e.target.value.toUpperCase())}
               placeholder="078160.KQ"
-              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1.5">피어 종목 (콤마 또는 줄바꿈 구분)</label>
+            <label className="block text-xs font-medium text-foreground/70 mb-1.5">피어 종목 (콤마 또는 줄바꿈 구분)</label>
             <input
               value={peersInput}
               onChange={e => setPeersInput(e.target.value.toUpperCase())}
               placeholder="235980.KQ, 144510.KQ, MRNA"
-              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -192,7 +192,7 @@ export default function AdminPeers() {
           <button
             onClick={loadLatest}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-muted text-foreground/80 text-sm font-medium rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
           >
             <RefreshCw size={14} />
             최신 데이터 불러오기
@@ -202,7 +202,7 @@ export default function AdminPeers() {
             <select
               value={selectedDate}
               onChange={e => loadByDate(e.target.value)}
-              className="px-3 py-2 border border-neutral-200 rounded-lg text-sm text-neutral-700 focus:outline-none"
+              className="px-3 py-2 border border-border rounded-lg text-sm text-foreground/80 focus:outline-none"
             >
               <option value="">히스토리 선택...</option>
               {history.map(d => (
@@ -223,13 +223,13 @@ export default function AdminPeers() {
 
       {/* Results Table */}
       {snapshot && (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
+        <div className="bg-background border border-border rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
             <div>
-              <span className="font-semibold text-neutral-900 text-sm">{snapshot.subject}</span>
-              <span className="text-neutral-400 text-xs ml-2">피어 그룹 멀티플</span>
+              <span className="font-semibold text-foreground text-sm">{snapshot.subject}</span>
+              <span className="text-muted-foreground text-xs ml-2">피어 그룹 멀티플</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-neutral-500">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <CheckCircle size={12} className="text-green-500" />
               마지막 수집: {new Date(snapshot.collected_at).toLocaleString("ko-KR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" })}
             </div>
@@ -238,27 +238,27 @@ export default function AdminPeers() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-neutral-50 border-b border-neutral-100">
-                  <th className="px-3 py-2.5 text-left font-semibold text-neutral-600 whitespace-nowrap">티커</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-neutral-600 whitespace-nowrap">기업명</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">시총</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">P/B (배)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">P/E TTM (배)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">P/E Fwd (배) ✏️</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">EV/EBITDA (배)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">EV/Sales (배)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">ROE (%)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">OPM (%)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">매출</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-neutral-600 whitespace-nowrap">출처</th>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="px-3 py-2.5 text-left font-semibold text-foreground/70 whitespace-nowrap">티커</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-foreground/70 whitespace-nowrap">기업명</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">시총</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">P/B (배)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">P/E TTM (배)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">P/E Fwd (배) ✏️</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">EV/EBITDA (배)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">EV/Sales (배)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">ROE (%)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">OPM (%)</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">매출</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-foreground/70 whitespace-nowrap">출처</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-50">
                 {rows.map(([ticker, p]) => (
-                  <tr key={ticker} className="hover:bg-neutral-50 transition-colors">
+                  <tr key={ticker} className="hover:bg-muted/50 transition-colors">
                     <td className="px-3 py-2 font-mono text-blue-700 font-medium whitespace-nowrap">{ticker}</td>
-                    <td className="px-3 py-2 text-neutral-800 whitespace-nowrap max-w-[120px] truncate">{p.name}</td>
-                    <td className="px-3 py-2 text-right text-neutral-600 text-xs tabular-nums whitespace-nowrap">
+                    <td className="px-3 py-2 text-foreground/90 whitespace-nowrap max-w-[120px] truncate">{p.name}</td>
+                    <td className="px-3 py-2 text-right text-foreground/70 text-xs tabular-nums whitespace-nowrap">
                       {fmtMarketCap(p.marketCap)}
                     </td>
                     <Cell v={p.pbr} decimals={2} suffix="x" />
@@ -268,7 +268,7 @@ export default function AdminPeers() {
                       {editingFwd[ticker] !== undefined ? (
                         <span className="flex items-center justify-end gap-1">
                           <input
-                            className="w-16 border border-neutral-300 rounded px-1.5 py-0.5 text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-16 border border-border rounded px-1.5 py-0.5 text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                             value={editingFwd[ticker]}
                             onChange={e => setEditingFwd(prev => ({ ...prev, [ticker]: e.target.value }))}
                             onKeyDown={e => e.key === "Enter" && saveFwd(ticker)}
@@ -288,8 +288,8 @@ export default function AdminPeers() {
                           className={cn(
                             "cursor-pointer rounded px-1.5 py-0.5 text-xs tabular-nums",
                             p.per_fwd == null
-                              ? "text-neutral-300 hover:bg-neutral-100"
-                              : "text-neutral-800 hover:bg-blue-50 font-medium"
+                              ? "text-muted-foreground/50 hover:bg-muted"
+                              : "text-foreground/90 hover:bg-blue-50 font-medium"
                           )}
                         >
                           {p.per_fwd != null ? `${p.per_fwd.toFixed(1)}x` : "—"}
@@ -301,8 +301,8 @@ export default function AdminPeers() {
                     <Cell v={p.ev_sales} decimals={2} suffix="x" />
                     <Cell v={p.roe} decimals={1} suffix="%" />
                     <Cell v={p.operating_margin} decimals={1} suffix="%" />
-                    <td className="px-3 py-2 text-right text-xs tabular-nums text-neutral-600 whitespace-nowrap">
-                      {p.revenue != null ? fmtMarketCap(p.revenue) : <span className="text-neutral-300">N/A</span>}
+                    <td className="px-3 py-2 text-right text-xs tabular-nums text-foreground/70 whitespace-nowrap">
+                      {p.revenue != null ? fmtMarketCap(p.revenue) : <span className="text-muted-foreground/50">N/A</span>}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <span className="flex gap-1 justify-end">
@@ -343,7 +343,7 @@ export default function AdminPeers() {
             </table>
           </div>
 
-          <div className="px-5 py-3 border-t border-neutral-100 text-xs text-neutral-400">
+          <div className="px-5 py-3 border-t border-border text-xs text-muted-foreground">
             * EV/Sales = (시총 + 순차입금) ÷ 매출 (직접 계산) · DART 미연동 시 Yahoo Finance 매출 사용 · Fwd P/E는 셀 클릭 후 수동 입력
           </div>
         </div>

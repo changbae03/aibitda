@@ -93,26 +93,26 @@ const CustomTooltip = ({ active, payload, label, currency = "KRW" }: any) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   return (
-    <div className="bg-white border border-neutral-200 rounded-lg p-3 text-xs shadow-lg min-w-[160px]">
-      <p className="text-neutral-400 mb-2 font-medium">{label}</p>
+    <div className="bg-background border border-border rounded-lg p-3 text-xs shadow-lg min-w-[160px]">
+      <p className="text-muted-foreground mb-2 font-medium">{label}</p>
       {d?.close != null && (
         <div className="space-y-1.5">
           <div className="flex justify-between gap-4">
-            <span className="text-neutral-400">종가</span>
-            <span className="text-neutral-900 font-bold font-mono">{priceLabel(d.close, currency)}</span>
+            <span className="text-muted-foreground">종가</span>
+            <span className="text-foreground font-bold font-mono">{priceLabel(d.close, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-neutral-400">고가</span>
+            <span className="text-muted-foreground">고가</span>
             <span className="text-emerald-600 font-mono">{priceLabel(d.high, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-neutral-400">저가</span>
+            <span className="text-muted-foreground">저가</span>
             <span className="text-red-500 font-mono">{priceLabel(d.low, currency)}</span>
           </div>
           {d.volume != null && (
-            <div className="flex justify-between gap-4 border-t border-neutral-100 pt-1.5 mt-0.5">
-              <span className="text-neutral-400">거래량</span>
-              <span className="text-neutral-600 font-mono">{formatVolume(d.volume)}</span>
+            <div className="flex justify-between gap-4 border-t border-border pt-1.5 mt-0.5">
+              <span className="text-muted-foreground">거래량</span>
+              <span className="text-foreground/70 font-mono">{formatVolume(d.volume)}</span>
             </div>
           )}
         </div>
@@ -125,8 +125,8 @@ const ctrlBtn = (active: boolean) =>
   cn(
     "px-2.5 py-1 text-xs rounded-md font-medium transition-colors whitespace-nowrap shrink-0",
     active
-      ? "bg-neutral-900 text-white"
-      : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+      ? "bg-foreground text-white"
+      : "text-muted-foreground hover:text-foreground hover:bg-muted"
   );
 
 function LevelBadge({ label, value, color, currency = "KRW" }: { label: string; value: number | string; color: string; currency?: "KRW" | "USD" }) {
@@ -134,7 +134,7 @@ function LevelBadge({ label, value, color, currency = "KRW" }: { label: string; 
   return (
     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium" style={{ borderColor: `${color}40`, backgroundColor: `${color}10`, color }}>
       <span className="w-2 h-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-      <span className="text-neutral-400 font-normal">{label}</span>
+      <span className="text-muted-foreground font-normal">{label}</span>
       <span className="font-mono font-semibold">{display}</span>
     </div>
   );
@@ -188,21 +188,21 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const gridColor = "#f0f0f0";
 
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+    <div className="bg-background border border-border rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="px-5 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-neutral-900">{companyName ?? ticker}</span>
-            <span className="text-xs text-neutral-400 font-mono bg-neutral-100 px-1.5 py-0.5 rounded">{ticker}</span>
+            <span className="text-base font-bold text-foreground">{companyName ?? ticker}</span>
+            <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">{ticker}</span>
           </div>
           {data && (
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-neutral-900 font-mono tracking-tight">
+                <span className="text-2xl font-bold text-foreground font-mono tracking-tight">
                   {currency === "USD"
                     ? <>${formatPrice(data.currentPrice, "USD").replace("$", "")}</>
-                    : <>{formatPrice(data.currentPrice)}<span className="text-sm font-normal text-neutral-400 ml-0.5">원</span></>
+                    : <>{formatPrice(data.currentPrice)}<span className="text-sm font-normal text-muted-foreground ml-0.5">원</span></>
                   }
                 </span>
                 <span className={cn(
@@ -212,23 +212,23 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                   {isUp ? "+" : ""}{data.changePercent.toFixed(2)}%
                 </span>
-                <span className="text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded font-mono">
+                <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
                   {currency === "USD" ? "NYSE/NASDAQ" : "KRX"}
                 </span>
               </div>
               {nxtInfo && currency === "KRW" && (
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] font-bold text-neutral-900 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200">
+                  <span className="text-[10px] font-bold text-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
                     {nxtInfo.sessionType === "AFTER_MARKET" ? "NXT 장후" : "NXT 장전"}
                     {nxtInfo.status === "OPEN" ? " 거래중" : ""}
                   </span>
-                  <span className="font-mono font-bold text-sm text-neutral-900">{formatPrice(nxtInfo.price)}</span>
+                  <span className="font-mono font-bold text-sm text-foreground">{formatPrice(nxtInfo.price)}</span>
                   <span className={cn("text-xs font-semibold", nxtIsUp ? "text-emerald-600" : "text-red-500")}>
                     {nxtIsUp ? "+" : ""}{nxtInfo.changePercent.toFixed(2)}%
                   </span>
-                  <span className="text-[10px] text-neutral-400">({nxtInfo.compareToPrev}원)</span>
+                  <span className="text-[10px] text-muted-foreground">({nxtInfo.compareToPrev}원)</span>
                   {nxtInfo.at && (
-                    <span className="text-[10px] text-neutral-400 hidden sm:inline">
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">
                       {nxtInfo.at.replace("T", " ").substring(0, 16)} KST
                     </span>
                   )}
@@ -241,17 +241,17 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
         {data && (
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
             <div>
-              <div className="text-neutral-400 mb-0.5 text-[11px]">52주 고가</div>
+              <div className="text-muted-foreground mb-0.5 text-[11px]">52주 고가</div>
               <div className="text-emerald-600 font-mono font-bold">{formatPrice(data.yearHigh)}</div>
             </div>
             <div>
-              <div className="text-neutral-400 mb-0.5 text-[11px]">52주 저가</div>
+              <div className="text-muted-foreground mb-0.5 text-[11px]">52주 저가</div>
               <div className="text-red-500 font-mono font-bold">{formatPrice(data.yearLow)}</div>
             </div>
             {(data as any).quoteInfo?.marketCap != null && (
               <div>
-                <div className="text-neutral-400 mb-0.5 text-[11px]">시가총액</div>
-                <div className="font-mono font-bold text-neutral-900">
+                <div className="text-muted-foreground mb-0.5 text-[11px]">시가총액</div>
+                <div className="font-mono font-bold text-foreground">
                   {(() => {
                     const cap = (data as any).quoteInfo.marketCap as number;
                     const tril = cap / 1e12;
@@ -266,7 +266,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
       </div>
 
       {/* Controls */}
-      <div className="px-4 py-2 border-b border-neutral-100 flex gap-1.5 items-center overflow-x-auto scrollbar-none bg-neutral-50/50">
+      <div className="px-4 py-2 border-b border-border flex gap-1.5 items-center overflow-x-auto scrollbar-none bg-muted/50/50">
         <div className="flex gap-1">
           {PERIOD_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setPeriod(opt.value)} className={ctrlBtn(period === opt.value)}>
@@ -274,7 +274,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
             </button>
           ))}
         </div>
-        <div className="w-px h-3.5 bg-neutral-200 mx-0.5" />
+        <div className="w-px h-3.5 bg-muted mx-0.5" />
         <div className="flex gap-1">
           {INTERVAL_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setInterval(opt.value)} className={ctrlBtn(interval === opt.value)}>
@@ -288,7 +288,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
       <div className="p-4">
         {isLoading && (
           <div className="h-80 flex items-center justify-center">
-            <div className="flex items-center gap-2 text-neutral-400">
+            <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="animate-spin" size={16} />
               <span className="text-sm">데이터 로딩 중...</span>
             </div>
@@ -479,14 +479,14 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
 
             {/* 이벤트 범례 */}
             {eventMarkers.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-neutral-100">
-                <p className="text-[10px] text-neutral-400 mb-1.5 font-medium uppercase tracking-wider">핵심 이슈</p>
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">핵심 이슈</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {eventMarkers.map(({ event }, idx) => (
                     <div key={idx} className="flex items-center gap-1.5 text-[11px]">
                       <span style={{ color: EVENT_COLORS[event.type], fontWeight: 700 }}>{EVENT_ICONS[event.type]}</span>
-                      <span className="text-neutral-400 font-mono">{event.date}</span>
-                      <span className="text-neutral-700 font-medium">{event.label}</span>
+                      <span className="text-muted-foreground font-mono">{event.date}</span>
+                      <span className="text-foreground/80 font-medium">{event.label}</span>
                     </div>
                   ))}
                 </div>

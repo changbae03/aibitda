@@ -61,7 +61,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
     return (
       <button
         onClick={startEdit}
-        className="flex items-center gap-1.5 text-[12px] text-neutral-400 hover:text-amber-500 transition-colors print:hidden"
+        className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-amber-500 transition-colors print:hidden"
       >
         <StickyNote className="w-3.5 h-3.5" />
         메모 추가
@@ -78,7 +78,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="이 보고서에 대한 메모를 입력하세요..."
           rows={2}
-          className="w-full text-[13px] text-neutral-700 placeholder-neutral-300 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
+          className="w-full text-[13px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
           onKeyDown={(e) => {
             if (e.key === "Escape") { e.preventDefault(); handleCancel(); }
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
@@ -88,10 +88,10 @@ function MemoSection({ analysisId }: { analysisId: number }) {
           <button onClick={handleSave} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[12px] font-semibold transition-colors">
             <Check className="w-3.5 h-3.5" /> 저장
           </button>
-          <button onClick={handleCancel} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-500 text-[12px] font-semibold transition-colors">
+          <button onClick={handleCancel} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted hover:bg-muted text-muted-foreground text-[12px] font-semibold transition-colors">
             <X className="w-3.5 h-3.5" /> 취소
           </button>
-          <span className="text-[11px] text-neutral-300">⌘Enter로 저장</span>
+          <span className="text-[11px] text-muted-foreground/50">⌘Enter로 저장</span>
         </div>
       </div>
     );
@@ -100,10 +100,10 @@ function MemoSection({ analysisId }: { analysisId: number }) {
   return (
     <div className="group/memo flex items-start gap-2 print:hidden">
       <StickyNote className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-      <p className="flex-1 text-[13px] text-neutral-600 leading-relaxed whitespace-pre-wrap break-words">{saved}</p>
+      <p className="flex-1 text-[13px] text-foreground/70 leading-relaxed whitespace-pre-wrap break-words">{saved}</p>
       <button
         onClick={startEdit}
-        className="shrink-0 p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors opacity-0 group-hover/memo:opacity-100"
+        className="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 transition-colors opacity-0 group-hover/memo:opacity-100"
         title="메모 수정"
       >
         <Pencil className="w-3.5 h-3.5" />
@@ -276,7 +276,7 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
 }
 
 function verdictStyle(verdict: string | null | undefined) {
-  if (!verdict) return { label: "—", color: "text-neutral-500", bg: "bg-neutral-100" };
+  if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted" };
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700", bg: "bg-emerald-50" };
   if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700",   bg: "bg-green-50" };
@@ -369,7 +369,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
         <motion.div
-          className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-white rounded-2xl shadow-2xl overflow-hidden"
+          className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-background rounded-2xl shadow-2xl overflow-hidden"
           initial={{ y: 60, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 60, opacity: 0 }}
@@ -378,18 +378,18 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         >
           {/* ── Header ── */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
-            <span className="text-sm font-bold text-neutral-800">리포트 공유</span>
-            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-neutral-100 transition-colors">
-              <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <span className="text-sm font-bold text-foreground/90">리포트 공유</span>
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-muted transition-colors">
+              <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           {/* ── 리포트 정보 ── */}
-          <div className="mx-5 mb-4 rounded-xl border border-neutral-200 overflow-hidden">
+          <div className="mx-5 mb-4 rounded-xl border border-border overflow-hidden">
             <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-4 py-3 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-background/10 flex items-center justify-center flex-shrink-0">
                 <span className="text-white text-[10px] font-black tracking-tight">AI</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -408,11 +408,11 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 </div>
               )}
             </div>
-            <div className="bg-neutral-50 px-4 py-1.5 flex items-center gap-1.5">
-              <svg className="w-3 h-3 text-neutral-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="bg-muted/50 px-4 py-1.5 flex items-center gap-1.5">
+              <svg className="w-3 h-3 text-muted-foreground flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
-              <span className="text-[10px] text-neutral-400 truncate font-mono">{displayUrl}</span>
+              <span className="text-[10px] text-muted-foreground truncate font-mono">{displayUrl}</span>
             </div>
           </div>
 
@@ -436,14 +436,14 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                   링크 복사하기</>
               }
             </motion.button>
-            <p className="text-center text-[10px] text-neutral-400 mt-1.5">
+            <p className="text-center text-[10px] text-muted-foreground mt-1.5">
               로그인 없이도 누구나 리포트를 볼 수 있습니다
             </p>
           </div>
 
           {/* ── 소셜 공유 ── */}
           <div className="px-5 mb-4">
-            <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">소셜 공유</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">소셜 공유</p>
             <div className="grid grid-cols-3 gap-2">
               {/* KakaoTalk */}
               <button
@@ -470,7 +470,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               {/* X (Twitter) */}
               <button
                 onClick={handleTwitter}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-700 transition-colors"
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground hover:bg-foreground/80 transition-colors"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="white">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
@@ -1140,7 +1140,7 @@ export default function AnalysisDetail() {
             <div className="mt-8 print:hidden">
               <button
                 onClick={() => setShowShareModal(true)}
-                className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-neutral-200 bg-white px-5 py-3.5 text-sm font-semibold text-neutral-700 transition-all duration-200 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground/80 transition-all duration-200 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
               >
                 <Share2 className="w-4 h-4" />
                 공유하기
@@ -1188,12 +1188,12 @@ export default function AnalysisDetail() {
                   피드백이 AI 학습에 반영되었습니다. 감사합니다!
                 </motion.div>
               ) : (
-                <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-5 py-4 space-y-3">
+                <div className="rounded-xl border border-border bg-muted/50 px-5 py-4 space-y-3">
                   {/* 헤더 */}
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="w-3.5 h-3.5 text-neutral-400" />
-                    <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">이 분석이 도움이 됐나요?</span>
-                    <span className="text-[10px] text-neutral-400">— 답변이 AI 개선에 사용됩니다</span>
+                    <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">이 분석이 도움이 됐나요?</span>
+                    <span className="text-[10px] text-muted-foreground">— 답변이 AI 개선에 사용됩니다</span>
                   </div>
 
                   {/* 👍 / 👎 버튼 — 클릭 즉시 칩 펼침 */}
@@ -1209,7 +1209,7 @@ export default function AnalysisDetail() {
                         onClick={() => { setFeedbackRating(value); setFeedbackChips([]); }}
                         className={cn(
                           "flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-medium transition-all",
-                          feedbackRating === value ? active : `bg-white border-neutral-200 text-neutral-600 ${hover}`
+                          feedbackRating === value ? active : `bg-background border-border text-foreground/70 ${hover}`
                         )}
                       >
                         {icon}{label}
@@ -1227,9 +1227,9 @@ export default function AnalysisDetail() {
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden space-y-2.5"
                       >
-                        <p className="text-[11px] text-neutral-400">
+                        <p className="text-[11px] text-muted-foreground">
                           {feedbackRating === 5 ? "어떤 점이 좋았나요?" : "어떤 점이 아쉬웠나요?"}
-                          <span className="ml-1 text-neutral-300">(여러 개 선택 가능)</span>
+                          <span className="ml-1 text-muted-foreground/50">(여러 개 선택 가능)</span>
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {(feedbackRating === 5
@@ -1248,10 +1248,10 @@ export default function AnalysisDetail() {
                                   feedbackRating === 5
                                     ? selected
                                       ? "bg-emerald-50 border-emerald-400 text-emerald-700"
-                                      : "bg-white border-neutral-200 text-neutral-500 hover:border-emerald-300 hover:text-emerald-600"
+                                      : "bg-background border-border text-muted-foreground hover:border-emerald-300 hover:text-emerald-600"
                                     : selected
                                       ? "bg-rose-50 border-rose-400 text-rose-700"
-                                      : "bg-white border-neutral-200 text-neutral-500 hover:border-rose-300 hover:text-rose-600"
+                                      : "bg-background border-border text-muted-foreground hover:border-rose-300 hover:text-rose-600"
                                 )}
                               >
                                 {selected && <span className="mr-1">✓</span>}{chip}
@@ -1262,7 +1262,7 @@ export default function AnalysisDetail() {
                         <button
                           onClick={() => submitFeedback()}
                           disabled={feedbackSubmitting}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neutral-900 text-white text-[13px] font-semibold hover:bg-neutral-700 transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-foreground text-white text-[13px] font-semibold hover:bg-foreground/80 transition-colors disabled:opacity-50"
                         >
                           {feedbackSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                           제출하기
@@ -1286,7 +1286,7 @@ export default function AnalysisDetail() {
                     value={tickerMemo}
                     onChange={e => setTickerMemo(e.target.value)}
                     placeholder={`${analysis.companyName}(${analysis.ticker})에 대한 특수 사항, 보정 지시, 사업 특성 등을 입력하세요.\n예) HBM 점유율 변화가 핵심 드라이버 / 2023년 DS 적자는 일회성 처리할 것`}
-                    className="w-full text-[13px] rounded-lg border border-amber-200 bg-white px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 text-neutral-700 placeholder:text-amber-300"
+                    className="w-full text-[13px] rounded-lg border border-amber-200 bg-background px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 text-foreground/80 placeholder:text-amber-300"
                     rows={3}
                     maxLength={1000}
                   />
@@ -1311,7 +1311,7 @@ export default function AnalysisDetail() {
             )}
 
             {/* Disclaimer */}
-            <div className="mt-5 pt-6 border-t border-neutral-100 print:mt-6">
+            <div className="mt-5 pt-6 border-t border-border print:mt-6">
               {/* AI 생성 명시 배너 (AI 기본법 투명성 의무) */}
               <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
                 <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
@@ -1320,29 +1320,29 @@ export default function AnalysisDetail() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-4 space-y-2">
-                <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">투자 유의사항 (Legal Disclaimer)</p>
-                <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+              <div className="rounded-xl bg-muted/50 border border-border px-5 py-4 space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">투자 유의사항 (Legal Disclaimer)</p>
+                <p className="text-[11.5px] text-muted-foreground leading-relaxed">
                   본 리포트는 「CBST」가 운영하는 AI 정보 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 자본시장과 금융투자업에 관한 법률상 투자자문업 또는 투자일임업에 해당하지 않으며, 특정인을 대상으로 한 개별 투자 판단·조언을 제공하지 않습니다.
                 </p>
                 <div className="space-y-2 mt-1">
-                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
+                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground/70">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
                   </p>
-                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
+                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground/70">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
                   </p>
-                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
+                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground/70">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
                   </p>
-                  <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
+                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground/70">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
                   </p>
                 </div>
-                <p className="text-[11px] text-neutral-400 mt-2 pt-2 border-t border-neutral-200">
+                <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
                   본 리포트의 무단 복제·배포·재가공은 금지됩니다. &nbsp;·&nbsp; 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
                 </p>
-                <p className="text-[10.5px] text-neutral-400 mt-1">
+                <p className="text-[10.5px] text-muted-foreground mt-1">
                   분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.
                 </p>
               </div>
@@ -1388,7 +1388,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
 
   const verdictMeta = (v: string) => {
-    if (!v) return { label: "—", color: "text-foreground", bg: "bg-neutral-100", border: "border-neutral-200", dot: "#6b7280" };
+    if (!v) return { label: "—", color: "text-foreground", bg: "bg-muted", border: "border-border", dot: "#6b7280" };
     const s = v.toLowerCase();
     if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", dot: "#059669" };
     if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700",   bg: "bg-green-50",    border: "border-green-200",   dot: "#16a34a" };
@@ -1402,45 +1402,45 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="rounded-2xl overflow-hidden border border-neutral-200 bg-white shadow-sm"
+      className="rounded-2xl overflow-hidden border border-border bg-background shadow-sm"
     >
       {/* ── 상단 헤더 ── */}
-      <div className="bg-neutral-900 px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+      <div className="bg-foreground px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-background/10 flex items-center justify-center">
             <agent.icon className="w-4 h-4 text-white" />
           </div>
           <div>
             <p className="text-white font-display font-semibold text-sm leading-tight">최종 투자 전략</p>
-            <p className="text-neutral-400 text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
+            <p className="text-muted-foreground text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
           </div>
         </div>
         {companyName && (
-          <span className="text-[11px] text-neutral-400 font-medium hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
+          <span className="text-[11px] text-muted-foreground font-medium hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
         )}
       </div>
 
       {json ? (() => {
         const vm = verdictMeta(json.verdict ?? "");
         return (
-          <div className="divide-y divide-neutral-100">
+          <div className="divide-y divide-border">
 
             {/* ── ① 판정 + 메타 ── */}
             <div className="px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3">
               <span className={cn("text-[26px] font-display font-bold leading-none", vm.color)}>{vm.label}</span>
               <div className="flex flex-wrap gap-1.5">
                 {json.confidence && (
-                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-muted text-foreground/70 border border-border">
                     신뢰도 {json.confidence}
                   </span>
                 )}
                 {json.investment_period && (
-                  <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                  <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-muted text-foreground/70 border border-border">
                     {json.investment_period}
                   </span>
                 )}
                 {json.risk_reward && (
-                  <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                  <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-muted text-foreground/70 border border-border">
                     R/R {json.risk_reward}
                   </span>
                 )}
@@ -1451,14 +1451,14 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {json.key_issue && (
               <div className="px-4 sm:px-6 py-4 bg-amber-50/60">
                 <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-1">핵심 이슈</p>
-                <p className="text-sm text-neutral-800 leading-relaxed font-medium">{json.key_issue}</p>
+                <p className="text-sm text-foreground/90 leading-relaxed font-medium">{json.key_issue}</p>
               </div>
             )}
 
             {/* ── ③ 투자 논거 요약 ── */}
             {json.summary && (
               <div className="px-4 sm:px-6 py-4">
-                <p className="text-sm text-neutral-600 leading-[1.8]">{json.summary}</p>
+                <p className="text-sm text-foreground/70 leading-[1.8]">{json.summary}</p>
               </div>
             )}
 
@@ -1499,18 +1499,18 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 <div className="px-4 sm:px-6 py-4">
                   <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {/* 진입가 */}
-                    <div className="rounded-xl border border-neutral-200 bg-white p-3 sm:p-4">
+                    <div className="rounded-xl border border-border bg-background p-3 sm:p-4">
                       <div className="flex items-center gap-1 mb-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" />
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-neutral-500">진입가</p>
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground">진입가</p>
                       </div>
-                      <p className="text-[13px] sm:text-[17px] font-bold text-neutral-900 font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency)}</p>
+                      <p className="text-[13px] sm:text-[17px] font-bold text-foreground font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency)}</p>
                       {entryVsCurrent !== null ? (
                         <p className={`text-[10px] sm:text-[11px] font-bold mt-1 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
                           {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
                         </p>
                       ) : (
-                        <p className="text-[10px] text-neutral-400 mt-1 hidden sm:block">진입 목표 가격</p>
+                        <p className="text-[10px] text-muted-foreground mt-1 hidden sm:block">진입 목표 가격</p>
                       )}
                     </div>
 
@@ -1601,7 +1601,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (
               <div className="px-4 sm:px-6 py-4">
-                <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">시나리오 분석</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">시나리오 분석</p>
                 <div className="space-y-2">
                   {json.scenarios.map((s: any, i: number) => {
                     const isBear = s.case === "Bear";
@@ -1641,13 +1641,13 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <div className="flex-1 min-w-0">
                           <p className={cn(
                             "text-sm font-bold font-mono",
-                            isBear ? "text-red-700" : isBull ? "text-emerald-700" : "text-neutral-900"
+                            isBear ? "text-red-700" : isBull ? "text-emerald-700" : "text-foreground"
                           )}>
                             {formatPrice(s.target_price, priceCurrency)}
                           </p>
                           <p className={cn(
                             "text-xs font-semibold mt-0.5",
-                            uNum > 0 ? "text-emerald-600" : uNum < 0 ? "text-red-500" : "text-neutral-400"
+                            uNum > 0 ? "text-emerald-600" : uNum < 0 ? "text-red-500" : "text-muted-foreground"
                           )}>
                             {uDisplay}
                           </p>
@@ -1656,10 +1656,10 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         {/* 확률 바 */}
                         <div className="w-20 shrink-0">
                           <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] text-neutral-400">확률</span>
-                            <span className="text-[11px] font-bold text-neutral-700">{!isNaN(pNum) ? pNum + "%" : pStr}</span>
+                            <span className="text-[10px] text-muted-foreground">확률</span>
+                            <span className="text-[11px] font-bold text-foreground/80">{!isNaN(pNum) ? pNum + "%" : pStr}</span>
                           </div>
-                          <div className="h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                             <div
                               className={cn("h-full rounded-full transition-all",
                                 isBear ? "bg-red-400" : isBull ? "bg-emerald-500" : "bg-blue-500"
@@ -1680,10 +1680,10 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               <div className="px-4 sm:px-6 py-4 grid sm:grid-cols-2 gap-5">
                 {json.risks?.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">핵심 리스크</p>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">핵심 리스크</p>
                     <ul className="space-y-2">
                       {json.risks.map((r: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-neutral-600 leading-relaxed">
+                        <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-foreground/70 leading-relaxed">
                           <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
                           {r}
                         </li>
@@ -1693,10 +1693,10 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 )}
                 {json.monitoring_indicators?.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-3">모니터링 지표</p>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">모니터링 지표</p>
                     <ul className="space-y-2">
                       {json.monitoring_indicators.map((m: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-neutral-500 leading-relaxed">
+                        <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-muted-foreground leading-relaxed">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-300 mt-1.5 shrink-0" />
                           {m}
                         </li>
@@ -1711,7 +1711,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
           </div>
         );
       })() : (
-        <div className="p-6 text-sm text-neutral-600 leading-relaxed space-y-2">
+        <div className="p-6 text-sm text-foreground/70 leading-relaxed space-y-2">
           {step.content.split('\n').map((p: string, i: number) => p.trim() ? <p key={i}>{p}</p> : null)}
         </div>
       )}

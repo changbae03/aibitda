@@ -50,7 +50,7 @@ function isUSTicker(t: string) {
 }
 
 function verdictStyle(verdict: string | null) {
-  if (!verdict) return { label: "—", cls: "bg-neutral-100 text-neutral-500" };
+  if (!verdict) return { label: "—", cls: "bg-muted text-muted-foreground" };
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return { label: "높은 상승여력", cls: "bg-emerald-100 text-emerald-700" };
   if (s.includes("buy"))         return { label: "상승여력",     cls: "bg-green-100 text-green-700" };
@@ -89,7 +89,7 @@ function priceStatus(item: PopularItem): { label: string; cls: string; icon: Rea
     return { label: "손절선 도달", cls: "bg-red-100 text-red-600", icon: <AlertTriangle className="w-3 h-3" /> };
   }
 
-  if (!currentPrice || !targetPrice) return { label: "추적 전", cls: "bg-neutral-100 text-neutral-400", icon: <Minus className="w-3 h-3" /> };
+  if (!currentPrice || !targetPrice) return { label: "추적 전", cls: "bg-muted text-muted-foreground", icon: <Minus className="w-3 h-3" /> };
 
   const upsideCurrent = calcUpsideFromCurrent(targetPrice, currentPrice);
   const upsideEntry = calcUpsideFromEntry(targetPrice, entryPrice);
@@ -117,7 +117,7 @@ function priceStatus(item: PopularItem): { label: string; cls: string; icon: Rea
     return { label: "업사이드 확대 중", cls: "bg-amber-100 text-amber-700", icon: <TrendingDown className="w-3 h-3" /> };
   }
 
-  return { label: "진행 중", cls: "bg-neutral-100 text-neutral-500", icon: <Minus className="w-3 h-3" /> };
+  return { label: "진행 중", cls: "bg-muted text-muted-foreground", icon: <Minus className="w-3 h-3" /> };
 }
 
 export default function Popular() {
@@ -152,20 +152,20 @@ export default function Popular() {
           <Flame className="w-4 h-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-neutral-800">최신 분석 피드</h1>
-          <p className="text-sm text-neutral-500">애빛다 AI가 완료한 최신 기업 분석 리포트</p>
+          <h1 className="text-xl font-bold text-foreground/90">최신 분석 피드</h1>
+          <p className="text-sm text-muted-foreground">애빛다 AI가 완료한 최신 기업 분석 리포트</p>
         </div>
       </div>
 
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm text-neutral-400">불러오는 중…</p>
+          <p className="text-sm text-muted-foreground">불러오는 중…</p>
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-20">
-          <Flame className="w-12 h-12 text-neutral-200 mx-auto mb-3" />
-          <p className="text-neutral-400 text-sm">아직 공개된 분석이 없습니다.</p>
+          <Flame className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-muted-foreground text-sm">아직 공개된 분석이 없습니다.</p>
         </div>
       ) : (
         <>
@@ -174,11 +174,11 @@ export default function Popular() {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white border border-neutral-100 rounded-2xl shadow-sm p-4"
+              className="bg-background border border-border rounded-2xl shadow-sm p-4"
             >
               <div className="flex items-center gap-2 mb-3">
-                <BarChart2 className="w-4 h-4 text-neutral-400" />
-                <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-widest">많이 분석된 종목</p>
+                <BarChart2 className="w-4 h-4 text-muted-foreground" />
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">많이 분석된 종목</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {tickerStats.map((ts) => (
@@ -188,10 +188,10 @@ export default function Popular() {
                       const found = items.find((i) => i.ticker === ts.ticker);
                       if (found) setLocation(`/analysis/${found.id}`);
                     }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-50 hover:bg-primary/5 border border-neutral-200 rounded-full transition-colors group"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted/50 hover:bg-primary/5 border border-border rounded-full transition-colors group"
                   >
-                    <span className="text-[10px] font-mono text-neutral-400">{ts.ticker}</span>
-                    <span className="text-[11px] font-semibold text-neutral-700">{ts.companyName}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{ts.ticker}</span>
+                    <span className="text-[11px] font-semibold text-foreground/80">{ts.companyName}</span>
                     <span className="text-[10px] font-bold text-white bg-primary rounded-full px-1.5 py-0.5 leading-none">
                       {ts.count}
                     </span>
@@ -216,7 +216,7 @@ export default function Popular() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  className="bg-white border border-neutral-100 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-neutral-200 hover:shadow-md transition-all group"
+                  className="bg-background border border-border rounded-2xl shadow-sm p-4 cursor-pointer hover:border-border hover:shadow-md transition-all group"
                   onClick={() => setLocation(`/analysis/${item.id}`)}
                 >
                   <div className="flex items-start gap-3">
@@ -228,17 +228,17 @@ export default function Popular() {
                     <div className="flex-1 min-w-0">
                       {/* Top row */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] font-semibold text-neutral-400 font-mono uppercase tracking-wide">
+                        <span className="text-[11px] font-semibold text-muted-foreground font-mono uppercase tracking-wide">
                           {item.ticker}
                         </span>
                         <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", badge.cls)}>
                           {badge.label}
                         </span>
-                        <span className="text-[10px] text-neutral-300">{toKoIndustry(item.industry)}</span>
+                        <span className="text-[10px] text-muted-foreground/50">{toKoIndustry(item.industry)}</span>
                       </div>
 
                       {/* Company name */}
-                      <p className="text-[15px] font-semibold text-neutral-800 mt-0.5 leading-snug">
+                      <p className="text-[15px] font-semibold text-foreground/90 mt-0.5 leading-snug">
                         {item.companyName}
                       </p>
 
@@ -246,35 +246,35 @@ export default function Popular() {
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         {/* 현재가 */}
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-neutral-400 uppercase tracking-wider">현재가</span>
-                          <span className="text-[12px] font-semibold text-neutral-700 font-mono">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">현재가</span>
+                          <span className="text-[12px] font-semibold text-foreground/80 font-mono">
                             {item.currentPrice != null
                               ? formatCurrency(item.currentPrice, currency)
-                              : <span className="text-neutral-300">—</span>
+                              : <span className="text-muted-foreground/50">—</span>
                             }
                           </span>
                           {item.daysElapsed != null && (
-                            <span className="text-[9px] text-neutral-300">{item.daysElapsed}일 전 기준</span>
+                            <span className="text-[9px] text-muted-foreground/50">{item.daysElapsed}일 전 기준</span>
                           )}
                         </div>
 
                         {/* 적정주가 */}
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-neutral-400 uppercase tracking-wider">적정주가</span>
-                          <span className="text-[12px] font-semibold text-neutral-700 font-mono">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">적정주가</span>
+                          <span className="text-[12px] font-semibold text-foreground/80 font-mono">
                             {item.targetPrice != null
                               ? formatCurrency(item.targetPrice, currency)
-                              : <span className="text-neutral-300">—</span>
+                              : <span className="text-muted-foreground/50">—</span>
                             }
                           </span>
                           {upsideEntry != null && (
-                            <span className="text-[9px] text-neutral-300">분석 시 +{upsideEntry.toFixed(1)}%</span>
+                            <span className="text-[9px] text-muted-foreground/50">분석 시 +{upsideEntry.toFixed(1)}%</span>
                           )}
                         </div>
 
                         {/* 현재 업사이드 */}
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-neutral-400 uppercase tracking-wider">현재 업사이드</span>
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">현재 업사이드</span>
                           {upsideCurrent != null ? (
                             <span className={cn(
                               "text-[13px] font-bold font-mono flex items-center gap-0.5",
@@ -287,7 +287,7 @@ export default function Popular() {
                               {upsideCurrent >= 0 ? "+" : ""}{upsideCurrent.toFixed(1)}%
                             </span>
                           ) : (
-                            <span className="text-[12px] text-neutral-300 font-mono">—</span>
+                            <span className="text-[12px] text-muted-foreground/50 font-mono">—</span>
                           )}
                           {item.priceReturn != null && (
                             <span className={cn(
@@ -314,8 +314,8 @@ export default function Popular() {
 
                     {/* Right: time + arrow */}
                     <div className="shrink-0 flex flex-col items-end gap-2 ml-1">
-                      <span className="text-[10px] text-neutral-400">{relativeTime(item.createdAt)}</span>
-                      <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-400 transition-colors" />
+                      <span className="text-[10px] text-muted-foreground">{relativeTime(item.createdAt)}</span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
                     </div>
                   </div>
                 </motion.div>

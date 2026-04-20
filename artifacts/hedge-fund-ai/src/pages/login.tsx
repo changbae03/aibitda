@@ -65,7 +65,7 @@ export default function Login() {
           >
             애빛다
           </h1>
-          <p className="text-[14px] text-neutral-400">AI로 기업가치를 밝히다</p>
+          <p className="text-[14px] text-muted-foreground">AI로 기업가치를 밝히다</p>
         </div>
 
         {/* Login Buttons */}
@@ -83,7 +83,7 @@ export default function Login() {
           {/* Google */}
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] border border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50 transition-all"
+            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] border border-border bg-background text-foreground/90 hover:bg-muted/50 transition-all"
           >
             <GoogleIcon />
             구글로 계속하기
@@ -91,7 +91,7 @@ export default function Login() {
         </div>
 
         {/* Disclaimer */}
-        <p className="text-center text-[11.5px] text-neutral-400 mt-8 leading-relaxed">
+        <p className="text-center text-[11.5px] text-muted-foreground mt-8 leading-relaxed">
           로그인하면 <span className="underline cursor-pointer">이용약관</span> 및{" "}
           <span className="underline cursor-pointer">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.
         </p>

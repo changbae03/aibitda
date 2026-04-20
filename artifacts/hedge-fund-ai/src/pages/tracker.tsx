@@ -125,15 +125,15 @@ export default function Tracker() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-neutral-800">업사이드 실시간 트래커</h1>
-          <p className="text-sm text-neutral-500 mt-0.5">
+          <h1 className="text-xl font-bold text-foreground/90">업사이드 실시간 트래커</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             AI 적정주가 vs 현재가 · {REFRESH_INTERVAL / 1000}초마다 자동 갱신
           </p>
         </div>
         <button
           onClick={refresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors text-sm font-medium text-neutral-600 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted transition-colors text-sm font-medium text-foreground/70 disabled:opacity-50"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
           갱신
@@ -141,7 +141,7 @@ export default function Tracker() {
       </div>
 
       {lastUpdated && (
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-muted-foreground">
           마지막 업데이트: {lastUpdated.toLocaleTimeString("ko-KR")}
         </p>
       )}
@@ -149,20 +149,20 @@ export default function Tracker() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm text-neutral-400">현재가 로딩 중…</p>
+          <p className="text-sm text-muted-foreground">현재가 로딩 중…</p>
         </div>
       ) : sorted.length === 0 ? (
         <div className="text-center py-20">
-          <TrendingUp className="w-12 h-12 text-neutral-200 mx-auto mb-3" />
-          <p className="text-neutral-400 text-sm">아직 분석된 종목이 없습니다.</p>
+          <TrendingUp className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-muted-foreground text-sm">아직 분석된 종목이 없습니다.</p>
         </div>
       ) : (
         <>
           {/* Desktop Table */}
-          <div className="hidden md:block bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+          <div className="hidden md:block bg-background rounded-2xl border border-border shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-neutral-100 bg-neutral-50 text-neutral-400 text-xs font-semibold uppercase tracking-wide">
+                <tr className="border-b border-border bg-muted/50 text-muted-foreground text-xs font-semibold uppercase tracking-wide">
                   <th className="px-5 py-3 text-left">종목</th>
                   <th className="px-4 py-3 text-left">의견</th>
                   <th className="px-4 py-3 text-right">현재가</th>
@@ -181,12 +181,12 @@ export default function Tracker() {
                         key={item.id}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="hover:bg-neutral-50 cursor-pointer transition-colors"
+                        className="hover:bg-muted/50 cursor-pointer transition-colors"
                         onClick={() => setLocation(`/analysis/${item.id}`)}
                       >
                         <td className="px-5 py-3.5">
-                          <div className="font-semibold text-neutral-800 text-sm">{item.companyName}</div>
-                          <div className="text-xs text-neutral-400 font-mono mt-0.5">{item.ticker}</div>
+                          <div className="font-semibold text-foreground/90 text-sm">{item.companyName}</div>
+                          <div className="text-xs text-muted-foreground font-mono mt-0.5">{item.ticker}</div>
                         </td>
                         <td className="px-4 py-3.5">
                           {badge && (
@@ -197,14 +197,14 @@ export default function Tracker() {
                         </td>
                         <td className="px-4 py-3.5 text-right font-mono">
                           {item.currentPrice != null
-                            ? <span className="text-neutral-700">{formatCurrency(item.currentPrice, item.currency)}</span>
-                            : <span className="text-neutral-300 text-xs">—</span>
+                            ? <span className="text-foreground/80">{formatCurrency(item.currentPrice, item.currency)}</span>
+                            : <span className="text-muted-foreground/50 text-xs">—</span>
                           }
                         </td>
                         <td className="px-4 py-3.5 text-right font-mono">
                           {item.targetPrice != null
-                            ? <span className="text-neutral-700">{formatCurrency(item.targetPrice, item.currency)}</span>
-                            : <span className="text-neutral-300 text-xs">—</span>
+                            ? <span className="text-foreground/80">{formatCurrency(item.targetPrice, item.currency)}</span>
+                            : <span className="text-muted-foreground/50 text-xs">—</span>
                           }
                         </td>
                         <td className="px-4 py-3.5 text-right">
@@ -217,7 +217,7 @@ export default function Tracker() {
                               {item.upside >= 0 ? "+" : ""}{item.upside.toFixed(1)}%
                             </div>
                           ) : (
-                            <span className="text-neutral-300 text-xs">—</span>
+                            <span className="text-muted-foreground/50 text-xs">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right">
@@ -226,10 +226,10 @@ export default function Tracker() {
                               {item.dayChange >= 0 ? "+" : ""}{item.dayChange.toFixed(2)}%
                             </span>
                           ) : (
-                            <span className="text-neutral-300 text-xs">—</span>
+                            <span className="text-muted-foreground/50 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-3 py-3.5 text-neutral-300">
+                        <td className="px-3 py-3.5 text-muted-foreground/50">
                           <ChevronRight className="w-4 h-4" />
                         </td>
                       </motion.tr>
@@ -249,13 +249,13 @@ export default function Tracker() {
                   key={item.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-xl border border-neutral-100 shadow-sm p-4 cursor-pointer active:bg-neutral-50"
+                  className="bg-background rounded-xl border border-border shadow-sm p-4 cursor-pointer active:bg-muted/50"
                   onClick={() => setLocation(`/analysis/${item.id}`)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-neutral-800 truncate">{item.companyName}</div>
-                      <div className="text-xs text-neutral-400 font-mono mt-0.5">{item.ticker}</div>
+                      <div className="font-semibold text-foreground/90 truncate">{item.companyName}</div>
+                      <div className="text-xs text-muted-foreground font-mono mt-0.5">{item.ticker}</div>
                     </div>
                     {item.upside != null && (
                       <div className={cn("font-bold text-base flex items-center gap-0.5 shrink-0", upsideColor(item.upside))}>
@@ -264,15 +264,15 @@ export default function Tracker() {
                       </div>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-neutral-500">
+                  <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
                     {badge && (
                       <span className={cn("font-semibold px-1.5 py-0.5 rounded-full", badge.cls)}>{badge.label}</span>
                     )}
                     {item.currentPrice != null && (
-                      <span>현재가 <span className="font-semibold text-neutral-700">{formatCurrency(item.currentPrice, item.currency)}</span></span>
+                      <span>현재가 <span className="font-semibold text-foreground/80">{formatCurrency(item.currentPrice, item.currency)}</span></span>
                     )}
                     {item.targetPrice != null && (
-                      <span>목표 <span className="font-semibold text-neutral-700">{formatCurrency(item.targetPrice, item.currency)}</span></span>
+                      <span>목표 <span className="font-semibold text-foreground/80">{formatCurrency(item.targetPrice, item.currency)}</span></span>
                     )}
                   </div>
                 </motion.div>
