@@ -275,6 +275,58 @@
   .markdown-body td { padding: 0.35rem 0.5rem; }
 }
 
+/* ── 다크모드: markdown-body 색상 오버라이드 ── */
+.dark .markdown-body {
+  color: hsl(var(--foreground));
+}
+.dark .markdown-body h2 {
+  color: hsl(var(--foreground));
+  border-bottom-color: hsl(var(--foreground) / 0.3);
+}
+.dark .markdown-body h3 {
+  color: #60a5fa;
+  border-left-color: #60a5fa;
+}
+.dark .markdown-body h4 {
+  color: hsl(var(--foreground) / 0.8);
+  background: hsl(var(--muted));
+  border-color: hsl(var(--border));
+}
+.dark .markdown-body p {
+  color: hsl(var(--foreground) / 0.85);
+}
+.dark .markdown-body li {
+  color: hsl(var(--foreground) / 0.85);
+}
+.dark .markdown-body ul > li::before {
+  background-color: hsl(var(--muted-foreground) / 0.6);
+}
+.dark .markdown-body strong {
+  color: hsl(var(--foreground));
+}
+.dark .markdown-body hr {
+  border-color: hsl(var(--border));
+}
+.dark .markdown-body blockquote {
+  border-left-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+.dark .markdown-body .table-wrap {
+  border-color: hsl(var(--border));
+}
+.dark .markdown-body th {
+  background: hsl(var(--muted));
+  border-bottom-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+.dark .markdown-body td {
+  border-bottom-color: hsl(var(--border) / 0.5);
+  color: hsl(var(--foreground) / 0.85);
+}
+.dark .markdown-body td:first-child {
+  color: hsl(var(--foreground));
+}
+
 /* ── 인쇄 / PDF ── */
 @media print {
   @page { size: A4 portrait; margin: 14mm 18mm; }
