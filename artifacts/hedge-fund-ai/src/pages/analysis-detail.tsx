@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { type ChartLevels } from "@/components/StockChart";
+import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1890,7 +1890,6 @@ function parseChartLevels(content: string): ChartLevels | null {
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[1]) as ChartLevels;
-    // Zero values are treated as absent
     const clean: ChartLevels = {};
     for (const [k, v] of Object.entries(parsed)) {
       if (typeof v === "number" && v > 0) (clean as any)[k] = v;
@@ -1899,8 +1898,24 @@ function parseChartLevels(content: string): ChartLevels | null {
   } catch { return null; }
 }
 
+export interface ChartEvent { date: string; label: string; type: "catalyst" | "risk" | "earnings" | "news" }
+
+function parseChartEvents(content: string): ChartEvent[] {
+  const match = content.match(/EVENTS_DATA:(\[[^\n]*\])/);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[1]) as ChartEvent[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(e => e.date && e.label && /^\d{4}-\d{2}$/.test(e.date)).slice(0, 6);
+  } catch { return []; }
+}
+
 function stripChartData(content: string): string {
-  return content.replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "").replace(/\nCHART_DATA:\{[^\n]+\}\s*$/, "").trim();
+  return content
+    .replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "")
+    .replace(/\nCHART_DATA:\{[^\n]+\}\s*(\nEVENTS_DATA:\[[^\n]*\])?\s*$/, "")
+    .replace(/\nEVENTS_DATA:\[[^\n]*\]\s*$/, "")
+    .trim();
 }
 
 interface ValuationData {
@@ -1974,6 +1989,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   const isFundamental = step.stepKey === "company_analysis";
   const isRelativeVal = step.stepKey === "relative_valuation";
   const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
+  const chartEvents = isMarket ? parseChartEvents(step.content ?? "") : [];
   const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
   const finalValuationData = isRelativeVal ? parseFinalValuationData(step.content ?? "") : null;
   const displayContent = stripEstimationLabels(
@@ -2050,6 +2066,32 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
             {prepareMarkdown(displayContent)}
           </ReactMarkdown>
         </div>
+
+        {/* 기술적 분석: 주가 차트 (지지/저항·진입·목표·이벤트 포함) */}
+        {isMarket && ticker && (
+          <div className="mt-5 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">주가 차트</span>
+              {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
+                  진입·목표·손절 레벨 포함
+                </span>
+              )}
+              {chartEvents.length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 text-violet-600 border border-violet-200">
+                  핵심 이슈 {chartEvents.length}건
+                </span>
+              )}
+            </div>
+            <StockChart
+              ticker={ticker}
+              companyName={companyName}
+              chartLevels={chartLevels ?? undefined}
+              events={chartEvents}
+            />
+          </div>
+        )}
 
         {/* Valuation B 최종 조율 적정주가 요약 박스 */}
         {isRelativeVal && finalValuationData && (

@@ -29,10 +29,31 @@ export interface ChartLevels {
   target2?: number;
 }
 
+export interface ChartEvent {
+  date: string; // "YYYY-MM"
+  label: string;
+  type: "catalyst" | "risk" | "earnings" | "news";
+}
+
+const EVENT_COLORS: Record<ChartEvent["type"], string> = {
+  catalyst: "#16a34a",
+  risk: "#dc2626",
+  earnings: "#2563eb",
+  news: "#7c3aed",
+};
+
+const EVENT_ICONS: Record<ChartEvent["type"], string> = {
+  catalyst: "▲",
+  risk: "▼",
+  earnings: "●",
+  news: "◆",
+};
+
 interface StockChartProps {
   ticker: string;
   companyName?: string;
   chartLevels?: ChartLevels;
+  events?: ChartEvent[];
 }
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
@@ -112,7 +133,7 @@ function LevelBadge({ label, value, color }: { label: string; value: number | st
   );
 }
 
-export default function StockChart({ ticker, companyName, chartLevels }: StockChartProps) {
+export default function StockChart({ ticker, companyName, chartLevels, events = [] }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
 
@@ -127,6 +148,28 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
     close: parseFloat(c.close.toFixed(2)),
     dateLabel: c.date.slice(5),
   })) ?? [];
+
+  // Map each event "YYYY-MM" → closest candle dateLabel (MM-DD)
+  const eventMarkers: { dateLabel: string; event: ChartEvent }[] = [];
+  if (events.length > 0 && chartData.length > 0) {
+    for (const ev of events) {
+      // Find first candle whose full date starts with "YYYY-MM"
+      const match = chartData.find((c) => (c.date ?? "").startsWith(ev.date));
+      if (match) {
+        eventMarkers.push({ dateLabel: match.dateLabel, event: ev });
+      } else {
+        // Closest by prefix comparison (e.g., if monthly candle)
+        const prefix = ev.date; // "YYYY-MM"
+        const closest = chartData.reduce<typeof chartData[number] | null>((best, c) => {
+          if (!best) return c;
+          const cDiff = Math.abs(c.date.slice(0, 7).localeCompare(prefix));
+          const bDiff = Math.abs(best.date.slice(0, 7).localeCompare(prefix));
+          return cDiff <= bDiff ? c : best;
+        }, null);
+        if (closest) eventMarkers.push({ dateLabel: closest.dateLabel, event: ev });
+      }
+    }
+  }
 
   const priceMin = chartData.length ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99 : 0;
   const priceMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) * 1.01 : 100;
@@ -377,6 +420,27 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                   <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3"
                     label={{ value: `2차목표 ${Number(chartLevels.target2).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#15803d", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
                 )}
+
+                {/* ── 이벤트 수직선 마커 ── */}
+                {eventMarkers.map(({ dateLabel, event }, idx) => (
+                  <ReferenceLine
+                    key={`ev-${idx}`}
+                    yAxisId="price"
+                    x={dateLabel}
+                    stroke={EVENT_COLORS[event.type]}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                    strokeOpacity={0.7}
+                    label={{
+                      value: `${EVENT_ICONS[event.type]} ${event.label}`,
+                      position: idx % 2 === 0 ? "insideTopLeft" : "insideTopRight",
+                      fontSize: 8,
+                      fill: EVENT_COLORS[event.type],
+                      fontFamily: "'Pretendard', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  />
+                ))}
               </ComposedChart>
             </ResponsiveContainer>
 
@@ -391,6 +455,22 @@ export default function StockChart({ ticker, companyName, chartLevels }: StockCh
                 )}
                 {chartLevels.target1 && <LevelBadge label="1차 적정주가" value={chartLevels.target1} color="#16a34a" />}
                 {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" />}
+              </div>
+            )}
+
+            {/* 이벤트 범례 */}
+            {eventMarkers.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-neutral-100">
+                <p className="text-[10px] text-neutral-400 mb-1.5 font-medium uppercase tracking-wider">핵심 이슈</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {eventMarkers.map(({ event }, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5 text-[11px]">
+                      <span style={{ color: EVENT_COLORS[event.type], fontWeight: 700 }}>{EVENT_ICONS[event.type]}</span>
+                      <span className="text-neutral-400 font-mono">{event.date}</span>
+                      <span className="text-neutral-700 font-medium">{event.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>

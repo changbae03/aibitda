@@ -1677,17 +1677,27 @@ ${COMMON_RULES}`,
 
 ---
 
-위 분석을 마친 후, 반드시 아래 JSON을 응답의 마지막 줄에 단독으로 출력하세요 (코드블록·설명 없이 한 줄로만):
+위 분석을 마친 후, 반드시 아래 두 JSON을 응답의 마지막에 각각 단독 줄로 출력하세요 (코드블록·설명 없이):
+
+① 가격 레벨 데이터 (한 줄):
 CHART_DATA:{"support":0,"resistance":0,"entryMin":0,"entryMax":0,"stopLoss":0,"target1":0,"target2":0}
 
-각 필드 (단위: 원, 정수):
+각 필드 (단위: 원 또는 USD 정수):
 - support: 핵심 지지선 1
 - resistance: 핵심 저항선 1
-- entryMin: 저가 매수 구간 하단 (현재가보다 낮은 매수 구간; 케이스 A이면 현재가, 케이스 C이면 상단 밴드 부근)
+- entryMin: 저가 매수 구간 하단
 - entryMax: 저가 매수 구간 상단
 - stopLoss: 최종 손절가
 - target1: 1차 목표가 (적정주가)
-- target2: 2차 목표가 (상단 밴드)`,
+- target2: 2차 목표가 (상단 밴드)
+
+② 차트 이벤트 주석 (한 줄) — 최근 1~2년 내 주가에 영향을 준 핵심 이슈 최대 6개:
+EVENTS_DATA:[{"date":"YYYY-MM","label":"이벤트명 (10자 이내)","type":"catalyst"}]
+
+type 분류: "catalyst"(긍정 촉매), "risk"(리스크·악재), "earnings"(실적 발표), "news"(중요 뉴스)
+날짜 형식: "YYYY-MM" (해당 이벤트가 발생한 연월, 예: "2024-11")
+label: 핵심만 10자 이내 — 예) "HBM4 공급계약", "4Q24 어닝쇼크", "AI칩 수출규제", "엔비디아 파트너십"
+이벤트가 불분명하면 빈 배열 [] 출력 (추측 금지)`,
     },
 
     catalyst_analysis: {
