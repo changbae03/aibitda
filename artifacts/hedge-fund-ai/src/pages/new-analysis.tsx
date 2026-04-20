@@ -164,6 +164,19 @@ export default function NewAnalysis() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
     }).catch(() => {});
   }, [queryClient]);
+
+  // ── 이탈 종목 재분석: ?ticker= 쿼리 파라미터로 자동 pre-fill + 제출 ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get("ticker");
+    if (!prefill) return;
+    const val = prefill.trim().toUpperCase();
+    setTicker(val);
+    const t = setTimeout(() => {
+      handleSubmitRef.current(val);
+    }, 350);
+    return () => clearTimeout(t);
+  }, []);
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
