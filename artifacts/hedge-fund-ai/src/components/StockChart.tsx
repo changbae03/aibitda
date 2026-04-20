@@ -445,12 +445,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                 />
 
                 {/* ── 기준선 — 라벨 없음, 색상만으로 구분 ── */}
-                {chartLevels?.resistance && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 3" />
-                )}
-                {chartLevels?.support && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.support} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3" />
-                )}
                 {chartLevels?.stopLoss && (
                   <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 2" />
                 )}
@@ -494,8 +488,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
             {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
               <div className="mt-3 flex flex-wrap gap-1.5 px-1">
                 {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" currency={currency} />}
-                {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" currency={currency} />}
-                {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" currency={currency} />}
                 {chartLevels.entryMin && chartLevels.entryMax && (
                   <LevelBadge
                     label="진입 구간"
