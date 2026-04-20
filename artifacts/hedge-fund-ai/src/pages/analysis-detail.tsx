@@ -348,79 +348,67 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     if (exporting) return;
     setExporting(true);
     try {
-      const [{ toJpeg }, jspdfMod] = await Promise.all([
-        import("html-to-image"),
-        import("jspdf"),
-      ]);
+      const [{ default: html2canvas }, jspdfMod, { default: ReportPDFTemplate }, { createElement }, { createRoot }] =
+        await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+          import("@/components/ReportPDFTemplate"),
+          import("react"),
+          import("react-dom/client"),
+        ]);
       const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default;
 
-      const target = document.getElementById("analysis-report-content");
-      if (!target) throw new Error("report element not found");
+      // 오프스크린 컨테이너: 794px 고정폭, 인라인 스타일만 사용 → oklch 문제 없음
+      const container = document.createElement("div");
+      container.style.cssText =
+        "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-9999;";
+      document.body.appendChild(container);
 
-      // print:hidden 요소 임시 숨김
-      const allHide = Array.from(
-        document.querySelectorAll<HTMLElement>(".print\\:hidden")
-      );
-      const origDisplay: string[] = allHide.map((el) => el.style.display);
-      allHide.forEach((el) => { el.style.display = "none"; });
+      const root = createRoot(container);
+      root.render(createElement(ReportPDFTemplate, { analysis }));
 
-      // print:block 요소 표시 (인쇄 전용 헤더)
-      const printOnly = Array.from(
-        target.querySelectorAll<HTMLElement>(".hidden.print\\:block")
-      );
-      const origPrint: string[] = printOnly.map((el) => el.style.display);
-      printOnly.forEach((el) => { el.style.display = "block"; });
+      // 렌더링 + 폰트 로드 대기
+      await new Promise<void>((r) => setTimeout(r, 900));
 
-      await new Promise<void>((r) => setTimeout(r, 200));
-
-      // html-to-image: 브라우저 네이티브 렌더링 → oklch 등 최신 CSS 완벽 지원
-      const dataUrl = await toJpeg(target, {
-        quality: 0.95,
-        pixelRatio: 2,
+      const el = container.firstElementChild as HTMLElement;
+      const canvas = await html2canvas(el, {
+        scale: 2.5,
         backgroundColor: "#ffffff",
-        skipAutoScale: false,
-        style: { paddingBottom: "40px" },
+        useCORS: true,
+        logging: false,
+        width: 794,
+        windowWidth: 794,
       });
 
-      // 복원
-      allHide.forEach((el, i) => { el.style.display = origDisplay[i]; });
-      printOnly.forEach((el, i) => { el.style.display = origPrint[i]; });
+      root.unmount();
+      document.body.removeChild(container);
 
-      // 이미지 크기로 canvas 생성해 실제 픽셀 수 확인
-      const img = new Image();
-      await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
-      const imgW = img.naturalWidth;
-      const imgH = img.naturalHeight;
-
-      // A4 멀티페이지 PDF 생성
-      const A4_W_MM = 210;
-      const A4_H_MM = 297;
-      const MARGIN_MM = 12;
-      const contentW_mm = A4_W_MM - MARGIN_MM * 2;
-      const pageH_mm = A4_H_MM - MARGIN_MM * 2;
-
-      const pxToMm = contentW_mm / imgW;
-      const pageH_px = Math.round(pageH_mm / pxToMm);
-      const totalPages = Math.ceil(imgH / pageH_px);
+      // A4 멀티페이지 PDF
+      const A4_W = 210;
+      const A4_H = 297;
+      const MARGIN = 0;
+      const pxToMm = A4_W / canvas.width;
+      const pageH_px = Math.round(A4_H / pxToMm);
+      const totalPages = Math.ceil(canvas.height / pageH_px);
 
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-      for (let page = 0; page < totalPages; page++) {
-        if (page > 0) pdf.addPage();
-        const srcY = page * pageH_px;
-        const srcH = Math.min(pageH_px, imgH - srcY);
+      for (let p = 0; p < totalPages; p++) {
+        if (p > 0) pdf.addPage();
+        const srcY = p * pageH_px;
+        const srcH = Math.min(pageH_px, canvas.height - srcY);
 
         const slice = document.createElement("canvas");
-        slice.width = imgW;
-        slice.height = pageH_px;
+        slice.width = canvas.width;
+        slice.height = srcH;
         const ctx = slice.getContext("2d")!;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(img, 0, srcY, imgW, srcH, 0, 0, imgW, srcH);
+        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
 
-        const sliceData = slice.toDataURL("image/jpeg", 0.93);
+        const imgData = slice.toDataURL("image/jpeg", 0.95);
         const sliceH_mm = srcH * pxToMm;
-        pdf.addImage(sliceData, "JPEG", MARGIN_MM, MARGIN_MM, contentW_mm, sliceH_mm);
+        pdf.addImage(imgData, "JPEG", MARGIN, MARGIN, A4_W, sliceH_mm);
       }
 
       const filename = `애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`;
