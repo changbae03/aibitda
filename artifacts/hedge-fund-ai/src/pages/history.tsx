@@ -177,11 +177,14 @@ function MemoInline({ id }: { id: number }) {
 
 // ── PriceTrack: 중앙 진입가 기준 좌우 이동 시각화 ───────────────────────────────
 function PriceTrack({
-  entry, tgt, cur, currency, isSell,
+  entry, tgt, cur, currency,
 }: {
   entry: number; tgt: number; cur: number;
-  currency: string; isSell?: boolean;
+  currency: string;
 }) {
+  // 방향: target이 entry보다 낮으면 하락 목표 (과평가 해소)
+  const isDownside = tgt < entry;
+
   const tgtDist  = Math.abs(tgt - entry);
   const curDist  = Math.abs(cur - entry);
   const halfRange = Math.max(tgtDist, curDist) * 1.4 || tgtDist * 2 || 1;
@@ -194,10 +197,21 @@ function PriceTrack({
   const fillLeft  = Math.min(50, curX);
   const fillWidth = Math.abs(curX - 50);
 
-  const exceeded  = isSell ? cur <= tgt : cur >= tgt;
+  // 달성: 상승 목표면 cur≥tgt, 하락 목표면 cur≤tgt
+  const exceeded  = isDownside ? cur <= tgt : cur >= tgt;
   const isPositive = cur >= entry;
   const returnPct = ((cur - entry) / entry) * 100;
-  const upside    = ((tgt - cur) / cur) * 100;
+
+  // 레이블용: 상승 목표 → 남은 업사이드, 하락 목표 → 과열 정도
+  const gapPct = isDownside
+    ? ((cur - tgt) / tgt) * 100      // 적정가 대비 고평가율 (양수=과열)
+    : ((tgt - cur) / cur) * 100;     // 적정가까지 남은 상승률 (양수=업사이드)
+
+  const tgtLabel = (() => {
+    if (exceeded) return isDownside ? "✓ 적정가 도달" : "✓ 달성";
+    if (isDownside) return gapPct > 0 ? `과열 +${gapPct.toFixed(1)}%` : "적정가 근접";
+    return `${gapPct >= 0 ? "+" : ""}${gapPct.toFixed(1)}%`;
+  })();
 
   return (
     <div className="mt-3" onClick={(e) => e.stopPropagation()}>
@@ -211,13 +225,21 @@ function PriceTrack({
           <p className={cn("text-[9px] mb-0.5", returnPct >= 0 ? "text-blue-400" : "text-red-400")}>
             {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
           </p>
-          <p className={cn("font-mono text-[13px] font-bold", exceeded ? "text-emerald-600" : isPositive ? "text-blue-600" : "text-red-500")}>
+          <p className={cn("font-mono text-[13px] font-bold",
+            exceeded ? (isDownside ? "text-emerald-600" : "text-emerald-600")
+            : isPositive ? (isDownside ? "text-red-500" : "text-blue-600")
+            : (isDownside ? "text-blue-500" : "text-red-500")
+          )}>
             {formatCurrency(cur, currency)}
           </p>
         </div>
         <div className="text-right">
-          <p className={cn("text-[9px] mb-0.5", exceeded ? "text-emerald-500" : "text-neutral-400")}>
-            적정주가 {exceeded ? "✓ 달성" : `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`}
+          <p className={cn("text-[9px] mb-0.5",
+            exceeded ? "text-emerald-500"
+            : isDownside ? "text-red-400"
+            : "text-neutral-400"
+          )}>
+            적정주가 {tgtLabel}
           </p>
           <p className={cn("font-mono text-[11px] font-semibold", exceeded ? "text-emerald-600" : "text-neutral-500")}>
             {formatCurrency(tgt, currency)}
@@ -231,15 +253,22 @@ function PriceTrack({
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-neutral-100" />
 
         {/* Colored fill: entry → current */}
-        <motion.div
-          className={cn(
-            "absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full",
-            exceeded ? "bg-emerald-300" : isPositive ? "bg-blue-200" : "bg-red-200"
-          )}
-          initial={{ left: "50%", width: 0 }}
-          animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        />
+        {/* 하락목표: cur가 entry 아래로 가야 좋음 → 왼쪽이동=파랑, 오른쪽=빨강 */}
+        {/* 상승목표: cur가 entry 위로 가야 좋음 → 오른쪽이동=파랑, 왼쪽=빨강 */}
+        {(() => {
+          const movingCorrect = isDownside ? !isPositive : isPositive;
+          return (
+            <motion.div
+              className={cn(
+                "absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full",
+                exceeded ? "bg-emerald-300" : movingCorrect ? "bg-blue-200" : "bg-red-200"
+              )}
+              initial={{ left: "50%", width: 0 }}
+              animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            />
+          );
+        })()}
 
         {/* Target marker */}
         <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
@@ -252,15 +281,20 @@ function PriceTrack({
         </div>
 
         {/* Current price dot */}
-        <motion.div
-          className={cn(
-            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
-            exceeded ? "bg-emerald-500" : isPositive ? "bg-blue-500" : "bg-red-400"
-          )}
-          initial={{ left: "50%" }}
-          animate={{ left: `${curX}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        />
+        {(() => {
+          const movingCorrect = isDownside ? !isPositive : isPositive;
+          return (
+            <motion.div
+              className={cn(
+                "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
+                exceeded ? "bg-emerald-500" : movingCorrect ? "bg-blue-500" : "bg-red-400"
+              )}
+              initial={{ left: "50%" }}
+              animate={{ left: `${curX}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            />
+          );
+        })()}
       </div>
 
       {/* Under-track labels */}
@@ -430,9 +464,8 @@ export default function History() {
       const cur = quotes[a.ticker]!.price!;
       const tgt = a.targetPrice!;
       const entry = a.startPrice ?? a.entryPrice;
-      const isBuy  = (a.investmentVerdict ?? "").toLowerCase().includes("buy");
-      const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
-      const exceeded  = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
+      const isDownside = entry != null ? tgt < entry : false;
+      const exceeded  = isDownside ? cur <= tgt : cur >= tgt;
       const distNow   = Math.abs(cur - tgt);
       const distThen  = entry != null ? Math.abs(entry - tgt) : null;
       const approaching = !exceeded && distThen != null && distNow < distThen;
@@ -707,9 +740,8 @@ export default function History() {
                 const tgt = a.targetPrice;
                 const entry = a.startPrice ?? a.entryPrice;
                 if (!cur || !tgt) return null;
-                const isBuy  = (a.investmentVerdict ?? "").toLowerCase().includes("buy");
-                const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
-                const exceeded = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
+                const isDownside = entry != null ? tgt < entry : false;
+                const exceeded = isDownside ? cur <= tgt : cur >= tgt;
                 if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-50 text-emerald-600 border-emerald-200" };
                 const distNow  = Math.abs(cur - tgt);
                 const distThen = entry != null ? Math.abs(entry - tgt) : null;
@@ -782,7 +814,6 @@ export default function History() {
                       const entry = a.startPrice ?? a.entryPrice;
                       const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
                       const dayChange = q?.change ?? null;
-                      const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
 
                       if (!cur || !tgt) {
                         if (tgt) return (
@@ -813,7 +844,6 @@ export default function History() {
                             tgt={tgt}
                             cur={cur}
                             currency={currency}
-                            isSell={isSell}
                           />
                           {dayChange != null && (
                             <p className={cn("text-[10px] font-medium text-right mt-1", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
