@@ -175,6 +175,122 @@ function MemoInline({ id }: { id: number }) {
   );
 }
 
+// ── PriceTrack: 중앙 진입가 기준 좌우 이동 시각화 ───────────────────────────────
+function PriceTrack({
+  entry, tgt, cur, stopLoss, currency, isSell,
+}: {
+  entry: number; tgt: number; cur: number;
+  stopLoss?: number | null; currency: string; isSell?: boolean;
+}) {
+  const tgtDist  = Math.abs(tgt - entry);
+  const curDist  = Math.abs(cur - entry);
+  const slDist   = stopLoss ? Math.abs(stopLoss - entry) : 0;
+  const halfRange = Math.max(tgtDist, curDist, slDist) * 1.4 || tgtDist * 2 || 1;
+
+  const toX = (price: number) =>
+    Math.min(Math.max(50 + ((price - entry) / halfRange) * 50, 1), 99);
+
+  const tgtX   = toX(tgt);
+  const curX   = toX(cur);
+  const slX    = stopLoss ? toX(stopLoss) : null;
+  const fillLeft  = Math.min(50, curX);
+  const fillWidth = Math.abs(curX - 50);
+
+  const exceeded  = isSell ? cur <= tgt : cur >= tgt;
+  const isPositive = cur >= entry;
+  const returnPct = ((cur - entry) / entry) * 100;
+  const upside    = ((tgt - cur) / cur) * 100;
+
+  return (
+    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+      {/* 3 key prices — compact */}
+      <div className="flex justify-between items-end px-0.5 mb-2.5">
+        <div>
+          <p className="text-[9px] text-neutral-400 mb-0.5">분석 당시</p>
+          <p className="font-mono text-[11px] font-semibold text-neutral-500">{formatCurrency(entry, currency)}</p>
+        </div>
+        <div className="text-center">
+          <p className={cn("text-[9px] mb-0.5", returnPct >= 0 ? "text-blue-400" : "text-red-400")}>
+            {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
+          </p>
+          <p className={cn("font-mono text-[13px] font-bold", exceeded ? "text-emerald-600" : isPositive ? "text-blue-600" : "text-red-500")}>
+            {formatCurrency(cur, currency)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className={cn("text-[9px] mb-0.5", exceeded ? "text-emerald-500" : "text-neutral-400")}>
+            목표 {exceeded ? "✓ 달성" : `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`}
+          </p>
+          <p className={cn("font-mono text-[11px] font-semibold", exceeded ? "text-emerald-600" : "text-neutral-500")}>
+            {formatCurrency(tgt, currency)}
+          </p>
+        </div>
+      </div>
+
+      {/* Track */}
+      <div className="relative h-7">
+        {/* Rail */}
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-neutral-100" />
+
+        {/* Colored fill: entry → current */}
+        <motion.div
+          className={cn(
+            "absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full",
+            exceeded ? "bg-emerald-300" : isPositive ? "bg-blue-200" : "bg-red-200"
+          )}
+          initial={{ left: "50%", width: 0 }}
+          animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        />
+
+        {/* Stop-loss marker */}
+        {slX != null && (
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${slX}%` }}>
+            <div className="w-px h-4 bg-red-300 rounded-full" />
+          </div>
+        )}
+
+        {/* Target marker */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
+          <div className={cn("w-px h-5 rounded-full", exceeded ? "bg-emerald-500" : "bg-emerald-400")} />
+        </div>
+
+        {/* Entry / center marker */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: "50%" }}>
+          <div className="w-px h-4 bg-neutral-300 rounded-full" />
+        </div>
+
+        {/* Current price dot */}
+        <motion.div
+          className={cn(
+            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
+            exceeded ? "bg-emerald-500" : isPositive ? "bg-blue-500" : "bg-red-400"
+          )}
+          initial={{ left: "50%" }}
+          animate={{ left: `${curX}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        />
+      </div>
+
+      {/* Under-track labels */}
+      <div className="relative h-4 mt-0.5 select-none">
+        <span className="absolute left-0 text-[9px] text-neutral-300">◀ 하락</span>
+        <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-neutral-400">진입가</span>
+        {slX != null && (
+          <span className="absolute text-[9px] text-red-400 -translate-x-1/2 whitespace-nowrap" style={{ left: `${slX}%` }}>손절</span>
+        )}
+        <span
+          className={cn("absolute text-[9px] font-medium -translate-x-1/2 whitespace-nowrap", exceeded ? "text-emerald-600" : "text-emerald-500")}
+          style={{ left: `${Math.max(Math.min(tgtX, 90), 15)}%` }}
+        >
+          목표
+        </span>
+        <span className="absolute right-0 text-[9px] text-neutral-300">상승 ▶</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Re-analysis badge logic ───────────────────────────────────────────────────
 function getReanalysisLevel(
   createdAt: string,
@@ -672,160 +788,52 @@ export default function History() {
                       <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
                     </div>
 
-                    {/* 적정주가 달성 현황 */}
+                    {/* 적정주가 달성 현황 — PriceTrack */}
                     {(() => {
                       const tgt = a.targetPrice;
-                      // startPrice: 분석 시작 시 실제 시장가 (신규). entryPrice: AI 추천 진입가 (구형 fallback)
                       const entry = a.startPrice ?? a.entryPrice;
                       const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
                       const dayChange = q?.change ?? null;
-                      const isBuy = (a.investmentVerdict ?? "").toLowerCase().includes("buy");
                       const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
 
                       if (!cur || !tgt) {
                         if (tgt) return (
-                          <div className="mt-3 flex items-stretch gap-0 rounded-xl overflow-hidden border border-neutral-100 text-center">
+                          <div className="mt-3 flex items-stretch rounded-xl overflow-hidden border border-neutral-100 text-center">
                             <div className="flex-1 px-2.5 py-2 bg-neutral-50 border-r border-neutral-100">
-                              <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-0.5">분석 당시</p>
-                              <p className="text-[13px] font-bold text-neutral-600 leading-none tabular-nums">
+                              <p className="text-[9px] text-neutral-400 mb-0.5">분석 당시</p>
+                              <p className="text-[12px] font-bold text-neutral-600 tabular-nums">
                                 {entry != null ? formatCurrency(entry, currency) : <span className="text-neutral-300">—</span>}
                               </p>
                             </div>
                             <div className="flex-1 px-2.5 py-2 bg-white border-r border-neutral-100">
-                              <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-0.5">현재가</p>
-                              <p className="text-[13px] font-bold text-neutral-300 leading-none">—</p>
+                              <p className="text-[9px] text-neutral-400 mb-0.5">현재가</p>
+                              <p className="text-[12px] font-bold text-neutral-300">—</p>
                             </div>
                             <div className="flex-1 px-2.5 py-2 bg-white">
-                              <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-0.5">적정주가</p>
-                              <p className="text-[13px] font-bold text-neutral-700 leading-none tabular-nums">{formatCurrency(tgt, currency)}</p>
+                              <p className="text-[9px] text-neutral-400 mb-0.5">적정주가</p>
+                              <p className="text-[12px] font-bold text-neutral-700 tabular-nums">{formatCurrency(tgt, currency)}</p>
                             </div>
                           </div>
                         );
                         return null;
                       }
 
-                      const upside = ((tgt - cur) / cur) * 100;
-                      const exceeded = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
-
-                      // ── 4. 방향 판단: 오늘 등락 아닌 "시작 대비 목표까지 거리" 기반 ──
-                      const distNow  = Math.abs(cur - tgt);
-                      const distThen = entry != null ? Math.abs(entry - tgt) : null;
-                      const approaching = !exceeded && distThen != null && distNow < distThen;
-                      const diverging   = !exceeded && distThen != null && distNow > distThen;
-
-                      // ── 5. 정확도: 시작→목표 구간에서 현재까지 얼마나 왔는지 ──
-                      // 100% = 목표 도달, 0% = 제자리, 음수 = 반대 방향
-                      const accuracyPct = (entry != null && tgt !== entry)
-                        ? ((cur - entry) / (tgt - entry)) * 100
-                        : null;
-
-                      // 진행바용 (0~100 클램프)
-                      const progressPct = accuracyPct != null
-                        ? Math.min(Math.max(accuracyPct, 0), 100)
-                        : null;
-
-                      const returnPct = entry ? ((cur - entry) / entry) * 100 : null;
-
                       return (
-                        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                          {/* ── 3-price row ─────────────────────────────── */}
-                          <div className="flex items-stretch gap-0 rounded-xl overflow-hidden border border-neutral-100 text-center">
-                            {/* 분석 당시 */}
-                            <div className="flex-1 px-2.5 py-2 bg-neutral-50 border-r border-neutral-100">
-                              <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-0.5">분석 당시</p>
-                              <p className="text-[13px] font-bold text-neutral-600 leading-none tabular-nums">
-                                {entry != null ? formatCurrency(entry, currency) : <span className="text-neutral-300">—</span>}
-                              </p>
-                            </div>
-                            {/* 현재가 */}
-                            <div className={cn(
-                              "flex-1 px-2.5 py-2 border-r border-neutral-100",
-                              returnPct == null ? "bg-white" : returnPct > 0 ? "bg-green-50" : "bg-red-50"
-                            )}>
-                              <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-0.5">현재가</p>
-                              <p className={cn(
-                                "text-[13px] font-bold leading-none tabular-nums",
-                                returnPct == null ? "text-neutral-700" : returnPct > 0 ? "text-green-700" : "text-red-600"
-                              )}>
-                                {formatCurrency(cur, currency)}
-                              </p>
-                              {returnPct != null && (
-                                <p className={cn("text-[9px] font-semibold mt-0.5", returnPct > 0 ? "text-green-500" : "text-red-400")}>
-                                  {returnPct > 0 ? "+" : ""}{returnPct.toFixed(1)}%
-                                </p>
-                              )}
-                              {dayChange != null && returnPct == null && (
-                                <p className={cn("text-[9px] font-semibold mt-0.5", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
-                                  오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(1)}%
-                                </p>
-                              )}
-                            </div>
-                            {/* 적정주가 */}
-                            <div className={cn(
-                              "flex-1 px-2.5 py-2",
-                              exceeded ? "bg-emerald-50" : "bg-white"
-                            )}>
-                              <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-0.5">적정주가</p>
-                              <p className={cn(
-                                "text-[13px] font-bold leading-none tabular-nums",
-                                exceeded ? "text-emerald-700" : "text-neutral-700"
-                              )}>
-                                {formatCurrency(tgt, currency)}
-                              </p>
-                              <p className={cn(
-                                "text-[9px] font-semibold mt-0.5",
-                                exceeded ? "text-emerald-500" : upside >= 0 ? "text-blue-500" : "text-red-400"
-                              )}>
-                                {exceeded ? "달성 ✓" : `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* ── 방향 + 정확도 + 진행 바 ────────────────── */}
-                          {entry != null && (
-                            <div className="mt-2 space-y-1">
-                              {/* 방향 레이블 + 정확도 */}
-                              <div className="flex items-center justify-between">
-                                <span className={cn(
-                                  "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                                  exceeded   ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                                  : approaching ? "bg-blue-50 text-blue-600 border border-blue-200"
-                                  : diverging   ? "bg-red-50 text-red-500 border border-red-200"
-                                  : "bg-neutral-50 text-neutral-400 border border-neutral-200"
-                                )}>
-                                  {exceeded ? "🎯 목표 달성" : approaching ? "▲ 목표 접근 중" : diverging ? "▼ 목표 이탈 중" : "— 보합"}
-                                </span>
-                                {accuracyPct != null && (
-                                  <span className={cn(
-                                    "text-[10px] font-bold tabular-nums",
-                                    accuracyPct >= 100 ? "text-emerald-600"
-                                    : accuracyPct > 0  ? "text-blue-600"
-                                    : "text-red-500"
-                                  )}>
-                                    달성도 {accuracyPct >= 0 ? "+" : ""}{accuracyPct.toFixed(1)}%
-                                  </span>
-                                )}
-                              </div>
-                              {/* 진행 바 */}
-                              <div className="h-1 rounded-full bg-neutral-100 overflow-hidden">
-                                <motion.div
-                                  className={cn("h-full rounded-full",
-                                    exceeded ? "bg-emerald-400" : approaching ? "bg-blue-400" : diverging ? "bg-red-300" : "bg-neutral-300"
-                                  )}
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${progressPct ?? 0}%` }}
-                                  transition={{ duration: 0.6, ease: "easeOut" }}
-                                />
-                              </div>
-                              {/* 오늘 등락 */}
-                              {dayChange != null && (
-                                <p className={cn("text-[10px] font-medium text-right", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
-                                  오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
-                                </p>
-                              )}
-                            </div>
+                        <>
+                          <PriceTrack
+                            entry={entry ?? cur}
+                            tgt={tgt}
+                            cur={cur}
+                            stopLoss={a.stopLoss ?? null}
+                            currency={currency}
+                            isSell={isSell}
+                          />
+                          {dayChange != null && (
+                            <p className={cn("text-[10px] font-medium text-right mt-1", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
+                              오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
+                            </p>
                           )}
-                        </div>
+                        </>
                       );
                     })()}
 
