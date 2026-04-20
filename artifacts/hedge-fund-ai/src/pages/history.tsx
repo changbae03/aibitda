@@ -597,25 +597,23 @@ export default function History() {
 
                       const upside = ((tgt - cur) / cur) * 100;
                       const exceeded = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
-                      const approaching = !exceeded && (isBuy ? (dayChange ?? 0) > 0 : isSell ? (dayChange ?? 0) < 0 : (dayChange ?? 0) > 0);
-                      const diverging = !exceeded && !approaching && dayChange !== null;
 
-                      let statusLabel = "";
-                      let statusCls = "";
-                      if (exceeded)       { statusLabel = "목표 돌파 ✓"; statusCls = "bg-emerald-100 text-emerald-700"; }
-                      else if (approaching) { statusLabel = "목표 접근 중 ↑"; statusCls = "bg-blue-50 text-blue-600"; }
-                      else if (diverging)  { statusLabel = "목표 이탈 중 ↓"; statusCls = "bg-red-50 text-red-500"; }
-                      else {
-                        statusLabel = `업사이드 ${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`;
-                        statusCls = upside >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500";
-                      }
+                      // ── 4. 방향 판단: 오늘 등락 아닌 "시작 대비 목표까지 거리" 기반 ──
+                      const distNow  = Math.abs(cur - tgt);
+                      const distThen = entry != null ? Math.abs(entry - tgt) : null;
+                      const approaching = !exceeded && distThen != null && distNow < distThen;
+                      const diverging   = !exceeded && distThen != null && distNow > distThen;
 
-                      let progressPct: number | null = null;
-                      if (entry && tgt !== entry) {
-                        progressPct = Math.min(Math.max(((cur - entry) / (tgt - entry)) * 100, 0), 100);
-                      } else {
-                        progressPct = Math.min(Math.max(100 - Math.abs(upside), 0), 100);
-                      }
+                      // ── 5. 정확도: 시작→목표 구간에서 현재까지 얼마나 왔는지 ──
+                      // 100% = 목표 도달, 0% = 제자리, 음수 = 반대 방향
+                      const accuracyPct = (entry != null && tgt !== entry)
+                        ? ((cur - entry) / (tgt - entry)) * 100
+                        : null;
+
+                      // 진행바용 (0~100 클램프)
+                      const progressPct = accuracyPct != null
+                        ? Math.min(Math.max(accuracyPct, 0), 100)
+                        : null;
 
                       const returnPct = entry ? ((cur - entry) / entry) * 100 : null;
 
@@ -674,23 +672,49 @@ export default function History() {
                             </div>
                           </div>
 
-                          {/* 진행 바 */}
+                          {/* ── 방향 + 정확도 + 진행 바 ────────────────── */}
                           {entry != null && (
-                            <div className="mt-2">
+                            <div className="mt-2 space-y-1">
+                              {/* 방향 레이블 + 정확도 */}
+                              <div className="flex items-center justify-between">
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                                  exceeded   ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                  : approaching ? "bg-blue-50 text-blue-600 border border-blue-200"
+                                  : diverging   ? "bg-red-50 text-red-500 border border-red-200"
+                                  : "bg-neutral-50 text-neutral-400 border border-neutral-200"
+                                )}>
+                                  {exceeded ? "🎯 목표 달성" : approaching ? "▲ 목표 접근 중" : diverging ? "▼ 목표 이탈 중" : "— 보합"}
+                                </span>
+                                {accuracyPct != null && (
+                                  <span className={cn(
+                                    "text-[10px] font-bold tabular-nums",
+                                    accuracyPct >= 100 ? "text-emerald-600"
+                                    : accuracyPct > 0  ? "text-blue-600"
+                                    : "text-red-500"
+                                  )}>
+                                    달성도 {accuracyPct >= 0 ? "+" : ""}{accuracyPct.toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
+                              {/* 진행 바 */}
                               <div className="h-1 rounded-full bg-neutral-100 overflow-hidden">
                                 <motion.div
-                                  className={cn("h-full rounded-full", exceeded ? "bg-emerald-400" : approaching ? "bg-blue-400" : diverging ? "bg-red-300" : "bg-neutral-300")}
+                                  className={cn("h-full rounded-full",
+                                    exceeded ? "bg-emerald-400" : approaching ? "bg-blue-400" : diverging ? "bg-red-300" : "bg-neutral-300"
+                                  )}
                                   initial={{ width: 0 }}
                                   animate={{ width: `${progressPct ?? 0}%` }}
                                   transition={{ duration: 0.6, ease: "easeOut" }}
                                 />
                               </div>
+                              {/* 오늘 등락 */}
+                              {dayChange != null && (
+                                <p className={cn("text-[10px] font-medium text-right", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
+                                  오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
+                                </p>
+                              )}
                             </div>
-                          )}
-                          {dayChange != null && returnPct != null && (
-                            <p className={cn("mt-1 text-[10px] font-medium text-right", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
-                              오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
-                            </p>
                           )}
                         </div>
                       );
