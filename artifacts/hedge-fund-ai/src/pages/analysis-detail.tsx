@@ -28,6 +28,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
+import { useUser } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
@@ -303,7 +304,6 @@ function loadKakaoSDK(): Promise<void> {
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
   const url = window.location.href;
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
   const vs = verdictStyle(analysis?.verdict);
@@ -338,10 +338,15 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     window.open(tgUrl, "_blank", "noopener,noreferrer");
   };
 
+  const handleTwitter = () => {
+    const twUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`;
+    window.open(twUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handleCopy = async () => {
     try { await navigator.clipboard.writeText(url); } catch {}
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const handleExportPdf = async () => {
@@ -358,7 +363,6 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         ]);
       const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default;
 
-      // 오프스크린 컨테이너: 794px 고정폭, 인라인 스타일만 사용 → oklch 문제 없음
       const container = document.createElement("div");
       container.style.cssText =
         "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-9999;";
@@ -366,53 +370,36 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
 
       const root = createRoot(container);
       root.render(createElement(ReportPDFTemplate, { analysis }));
-
-      // 렌더링 + 폰트 로드 대기
       await new Promise<void>((r) => setTimeout(r, 900));
 
       const el = container.firstElementChild as HTMLElement;
       const canvas = await html2canvas(el, {
-        scale: 2.5,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: 794,
-        windowWidth: 794,
+        scale: 2.5, backgroundColor: "#ffffff",
+        useCORS: true, logging: false, width: 794, windowWidth: 794,
       });
 
       root.unmount();
       document.body.removeChild(container);
 
-      // A4 멀티페이지 PDF
-      const A4_W = 210;
-      const A4_H = 297;
-      const MARGIN = 0;
+      const A4_W = 210, A4_H = 297;
       const pxToMm = A4_W / canvas.width;
       const pageH_px = Math.round(A4_H / pxToMm);
       const totalPages = Math.ceil(canvas.height / pageH_px);
-
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
       for (let p = 0; p < totalPages; p++) {
         if (p > 0) pdf.addPage();
         const srcY = p * pageH_px;
         const srcH = Math.min(pageH_px, canvas.height - srcY);
-
         const slice = document.createElement("canvas");
-        slice.width = canvas.width;
-        slice.height = srcH;
+        slice.width = canvas.width; slice.height = srcH;
         const ctx = slice.getContext("2d")!;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-
-        const imgData = slice.toDataURL("image/jpeg", 0.95);
-        const sliceH_mm = srcH * pxToMm;
-        pdf.addImage(imgData, "JPEG", MARGIN, MARGIN, A4_W, sliceH_mm);
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, A4_W, srcH * pxToMm);
       }
 
-      const filename = `애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`;
-      pdf.save(filename);
+      pdf.save(`애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`);
       onClose();
     } catch (e: any) {
       console.error("PDF 생성 실패:", e?.message ?? e);
@@ -422,27 +409,15 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     }
   };
 
-  const handleExportImage = async () => {
-    if (!cardRef.current || exporting) return;
-    setExporting(true);
+  // URL 표시용 단축 (긴 dev URL 일 때 잘라서 보여줌)
+  const displayUrl = (() => {
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 3,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-      });
-      const link = document.createElement("a");
-      link.download = `애빛다_${analysis?.ticker ?? "분석"}_${analysis?.companyName ?? ""}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setExporting(false);
-    }
-  };
+      const u = new URL(url);
+      return u.hostname.length > 30
+        ? u.hostname.slice(0, 28) + "…" + u.pathname
+        : u.hostname + u.pathname;
+    } catch { return url; }
+  })();
 
   return (
     <AnimatePresence>
@@ -453,10 +428,8 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         exit={{ opacity: 0 }}
         onClick={onClose}
       >
-        {/* Backdrop */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
-        {/* Sheet */}
         <motion.div
           className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-white rounded-2xl shadow-2xl overflow-hidden"
           initial={{ y: 60, opacity: 0 }}
@@ -465,9 +438,9 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           transition={{ type: "spring", damping: 28, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-neutral-100">
-            <span className="text-sm font-semibold text-neutral-700">공유하기</span>
+          {/* ── Header ── */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <span className="text-sm font-bold text-neutral-800">리포트 공유</span>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-neutral-100 transition-colors">
               <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -475,111 +448,112 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
             </button>
           </div>
 
-          {/* Report Preview Card */}
-          <div ref={cardRef} className="mx-5 mt-4 rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
-            <div className="px-4 py-3 flex items-start gap-3">
-              <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <span className="text-primary text-xs font-bold">AI</span>
+          {/* ── 리포트 정보 ── */}
+          <div className="mx-5 mb-4 rounded-xl border border-neutral-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-4 py-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-[10px] font-black tracking-tight">AI</span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">{analysis?.ticker}</span>
-                  <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", vs.bg, vs.color)}>{vs.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/60 text-[10px] font-semibold uppercase tracking-wider">{analysis?.ticker}</span>
+                  <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", vs.bg, vs.color)}>
+                    {vs.label}
+                  </span>
                 </div>
-                <p className="text-sm font-semibold text-neutral-800 mt-0.5 truncate">{analysis?.companyName}</p>
-                {targetPriceStr && (
-                  <p className="text-xs text-neutral-500 mt-0.5">적정주가 <span className="font-semibold text-neutral-700">{targetPriceStr}</span></p>
-                )}
+                <p className="text-white text-[13px] font-bold truncate mt-0.5">{analysis?.companyName}</p>
               </div>
+              {targetPriceStr && (
+                <div className="text-right flex-shrink-0">
+                  <div className="text-white/50 text-[9px]">적정주가</div>
+                  <div className="text-white text-[13px] font-black">{targetPriceStr}</div>
+                </div>
+              )}
             </div>
-            <div className="px-4 py-2 border-t border-neutral-200 bg-white">
-              <p className="text-[10px] text-neutral-400">애빛다 · AI 기업분석 리포트</p>
+            <div className="bg-neutral-50 px-4 py-1.5 flex items-center gap-1.5">
+              <svg className="w-3 h-3 text-neutral-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <span className="text-[10px] text-neutral-400 truncate font-mono">{displayUrl}</span>
             </div>
           </div>
 
-          {/* Share Buttons */}
-          <div className="px-5 py-4 grid grid-cols-4 gap-2">
-            {/* KakaoTalk */}
-            <button
-              onClick={handleKakao}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-[#FEE500] hover:bg-[#F5DB00] transition-colors group"
-            >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.706 1.574 5.083 3.96 6.549L4.8 21l4.6-2.4A11.7 11.7 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" fill="#391B1B"/>
-              </svg>
-              <span className="text-[10px] font-semibold text-[#391B1B]">카카오톡</span>
-            </button>
-
-            {/* Telegram */}
-            <button
-              onClick={handleTelegram}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-[#229ED9] hover:bg-[#1a8fc4] transition-colors"
-            >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="white">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8.02c-.12.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.52.26l.18-2.65 4.74-4.28c.21-.18-.04-.28-.31-.1L7.5 14.97 4.96 14.2c-.56-.17-.57-.56.12-.83l8.9-3.44c.47-.17.88.11.72.87z"/>
-              </svg>
-              <span className="text-[10px] font-semibold text-white">텔레그램</span>
-            </button>
-
-            {/* Copy Link */}
-            <button
+          {/* ── 메인 CTA: 링크 복사 ── */}
+          <div className="px-5 mb-4">
+            <motion.button
               onClick={handleCopy}
               className={cn(
-                "flex flex-col items-center gap-1.5 py-3 rounded-xl transition-colors",
-                copied ? "bg-emerald-500" : "bg-neutral-100 hover:bg-neutral-200"
+                "w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-[14px] font-bold transition-all",
+                copied
+                  ? "bg-emerald-500 text-white"
+                  : "bg-primary text-white hover:bg-primary/90"
               )}
+              whileTap={{ scale: 0.98 }}
             >
               {copied
-                ? <Check className="w-6 h-6 text-white" />
-                : <svg className="w-6 h-6 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                ? <><Check className="w-4.5 h-4.5" /> 링크가 복사되었습니다!</>
+                : <><svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                   </svg>
+                  링크 복사하기</>
               }
-              <span className={cn("text-[10px] font-semibold", copied ? "text-white" : "text-neutral-500")}>
-                {copied ? "복사됨!" : "링크 복사"}
-              </span>
-            </button>
-
-            {/* 이미지 저장 */}
-            <button
-              onClick={handleExportImage}
-              disabled={exporting}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-neutral-100 hover:bg-neutral-200 transition-colors disabled:opacity-60"
-            >
-              {exporting
-                ? <Loader2 className="w-6 h-6 text-neutral-500 animate-spin" />
-                : <svg className="w-6 h-6 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-              }
-              <span className="text-[10px] font-semibold text-neutral-500">
-                {exporting ? "생성중..." : "이미지 저장"}
-              </span>
-            </button>
+            </motion.button>
+            <p className="text-center text-[10px] text-neutral-400 mt-1.5">
+              로그인 없이도 누구나 리포트를 볼 수 있습니다
+            </p>
           </div>
 
-          {/* PDF 저장 — 전체 너비 */}
-          <div className="px-5 pb-5">
+          {/* ── 소셜 공유 ── */}
+          <div className="px-5 mb-4">
+            <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">소셜 공유</p>
+            <div className="grid grid-cols-3 gap-2">
+              {/* KakaoTalk */}
+              <button
+                onClick={handleKakao}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#FEE500] hover:bg-[#F5DB00] transition-colors"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.706 1.574 5.083 3.96 6.549L4.8 21l4.6-2.4A11.7 11.7 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" fill="#391B1B"/>
+                </svg>
+                <span className="text-[11px] font-bold text-[#391B1B]">카카오톡</span>
+              </button>
+
+              {/* Telegram */}
+              <button
+                onClick={handleTelegram}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1a8fc4] transition-colors"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="white">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8.02c-.12.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.52.26l.18-2.65 4.74-4.28c.21-.18-.04-.28-.31-.1L7.5 14.97 4.96 14.2c-.56-.17-.57-.56.12-.83l8.9-3.44c.47-.17.88.11.72.87z"/>
+                </svg>
+                <span className="text-[11px] font-bold text-white">텔레그램</span>
+              </button>
+
+              {/* X (Twitter) */}
+              <button
+                onClick={handleTwitter}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-700 transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="white">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                <span className="text-[11px] font-bold text-white">X (트위터)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ── PDF 저장 (보조) ── */}
+          <div className="px-5 pb-5 border-t border-neutral-100 pt-3">
             <button
               onClick={handleExportPdf}
               disabled={exporting}
-              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-700 transition-colors text-white text-[13px] font-semibold disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 transition-colors text-neutral-600 text-[12px] font-semibold disabled:opacity-50"
             >
               {exporting
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> PDF 생성 중...</>
-                : <><FileDown className="w-4 h-4" /> PDF로 저장하기</>
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> PDF 생성 중 (10~20초)...</>
+                : <><FileDown className="w-3.5 h-3.5" /> PDF로 저장</>
               }
             </button>
-            {!exporting && (
-              <p className="text-center text-[10px] text-neutral-400 mt-2">
-                아름다운 리포트 형식으로 즉시 다운로드
-              </p>
-            )}
-            {exporting && (
-              <p className="text-center text-[10px] text-amber-500 mt-2">
-                AI 분석 내용을 PDF로 변환하는 중입니다 (10~20초)...
-              </p>
-            )}
           </div>
         </motion.div>
       </motion.div>
@@ -767,6 +741,7 @@ export default function AnalysisDetail() {
   const id = params?.id ? parseInt(params.id, 10) : 0;
   
   const queryClient = useQueryClient();
+  const { isSignedIn, isLoaded: isAuthLoaded } = useUser();
   const { data: analysis, isLoading, error } = useGetAnalysis(id, {
     query: {
       refetchInterval: (query) => query.state.data?.status === 'in_progress' ? 3000 : false
@@ -1248,6 +1223,32 @@ export default function AnalysisDetail() {
             </div>
             {showShareModal && (
               <ShareModal analysis={analysis} onClose={() => setShowShareModal(false)} />
+            )}
+
+            {/* 비로그인 방문자 가입 유도 배너 */}
+            {isAuthLoaded && !isSignedIn && (
+              <div className="print:hidden fixed bottom-0 left-0 right-0 z-40 pointer-events-none flex justify-center px-4 pb-4">
+                <motion.div
+                  initial={{ y: 80, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 1.2, type: "spring", damping: 25 }}
+                  className="pointer-events-auto w-full max-w-lg rounded-2xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl px-5 py-4 flex items-center gap-4"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <BrainCircuit className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-[13px] font-bold leading-tight">이 분석이 마음에 드셨나요?</p>
+                    <p className="text-white/50 text-[11px] mt-0.5">무료로 가입하고 직접 AI 분석을 시작해 보세요</p>
+                  </div>
+                  <a
+                    href="/sign-in"
+                    className="flex-shrink-0 px-4 py-2 rounded-xl bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors whitespace-nowrap"
+                  >
+                    무료로 시작 →
+                  </a>
+                </motion.div>
+              </div>
             )}
 
             {/* 사용자 피드백 */}
