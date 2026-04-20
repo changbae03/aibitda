@@ -278,11 +278,11 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
 function verdictStyle(verdict: string | null | undefined) {
   if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted" };
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700", bg: "bg-emerald-50" };
-  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700",   bg: "bg-green-50" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700",     bg: "bg-red-50" };
-  if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600",     bg: "bg-red-50" };
-  return { label: "적정 수준", color: "text-amber-700", bg: "bg-amber-50" };
+  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/40" };
+  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700 dark:text-green-400",   bg: "bg-green-50 dark:bg-green-950/40" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700 dark:text-red-400",       bg: "bg-red-50 dark:bg-red-950/40" };
+  if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600 dark:text-red-400",       bg: "bg-red-50 dark:bg-red-950/40" };
+  return { label: "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20" };
 }
 
 declare global { interface Window { Kakao: any } }
@@ -1008,7 +1008,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* 내 메모 */}
-      <div className="bg-amber-50/60 border border-amber-100 rounded-2xl px-5 py-4 print:hidden">
+      <div className="bg-amber-50/60 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-5 py-4 print:hidden">
         <MemoSection analysisId={analysis.id} />
       </div>
 
@@ -1277,10 +1277,10 @@ export default function AnalysisDetail() {
             {/* 관리자 종목 보정 메모 — 개발 환경에서만 표시 */}
             {isComplete && import.meta.env.DEV && (
               <div className="mt-4 print:hidden">
-                <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 space-y-3">
+                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/15 px-5 py-4 space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">📝 종목 보정 메모</span>
-                    <span className="text-[10px] text-amber-600">— 다음 AI 분석에 자동 반영됩니다</span>
+                    <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">📝 종목 보정 메모</span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-500">— 다음 AI 분석에 자동 반영됩니다</span>
                   </div>
                   <textarea
                     value={tickerMemo}
@@ -1313,9 +1313,9 @@ export default function AnalysisDetail() {
             {/* Disclaimer */}
             <div className="mt-5 pt-6 border-t border-border print:mt-6">
               {/* AI 생성 명시 배너 (AI 기본법 투명성 의무) */}
-              <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+              <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/50 px-4 py-3">
                 <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
-                <p className="text-[11.5px] text-amber-800 leading-relaxed">
+                <p className="text-[11.5px] text-amber-800 dark:text-amber-300 leading-relaxed">
                   <span className="font-bold">AI 자동 생성 콘텐츠.</span> 본 리포트는 대형 언어모델(LLM) AI가 공개 데이터를 바탕으로 자동 생성한 분석 참고 자료입니다. 인간 전문가의 검토를 거치지 않았으며, 사실 오류·추론 오류가 포함될 수 있습니다. 투자 결정 전 반드시 공식 공시 자료 및 전문가 의견을 별도로 확인하십시오.
                 </p>
               </div>
@@ -1393,11 +1393,11 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
   const verdictMeta = (v: string) => {
     if (!v) return { label: "—", color: "text-foreground", bg: "bg-muted", border: "border-border", dot: "#6b7280" };
     const s = v.toLowerCase();
-    if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", dot: "#059669" };
-    if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700",   bg: "bg-green-50",    border: "border-green-200",   dot: "#16a34a" };
-    if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700",     bg: "bg-red-50",      border: "border-red-200",     dot: "#dc2626" };
-    if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600",     bg: "bg-red-50",      border: "border-red-200",     dot: "#ef4444" };
-    return { label: "적정 수준", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "#d97706" };
+    if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/40",  border: "border-emerald-200 dark:border-emerald-800", dot: "#059669" };
+    if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700 dark:text-green-400",     bg: "bg-green-50 dark:bg-green-950/40",      border: "border-green-200 dark:border-green-800",     dot: "#16a34a" };
+    if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/40",          border: "border-red-200 dark:border-red-800",         dot: "#dc2626" };
+    if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/40",          border: "border-red-200 dark:border-red-800",         dot: "#ef4444" };
+    return { label: "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-700", dot: "#d97706" };
   };
 
   return (
@@ -1452,8 +1452,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ② 핵심 이슈 ── */}
             {json.key_issue && (
-              <div className="px-4 sm:px-6 py-4 bg-amber-50/60">
-                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-1">핵심 이슈</p>
+              <div className="px-4 sm:px-6 py-4 bg-amber-50/60 dark:bg-amber-900/15">
+                <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">핵심 이슈</p>
                 <p className="text-sm text-foreground/90 leading-relaxed font-medium">{json.key_issue}</p>
               </div>
             )}
@@ -1485,8 +1485,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
               const isBearish = upsideFromCurrent !== null && upsideFromCurrent < 0;
               const targetCardStyle = isBearish
-                ? { border: "border-rose-200", bg: "bg-rose-50", dotColor: "bg-rose-400", labelColor: "text-rose-600", valColor: "text-rose-700", pctColor: "text-rose-600" }
-                : { border: "border-emerald-200", bg: "bg-emerald-50", dotColor: "bg-emerald-500", labelColor: "text-emerald-700", valColor: "text-emerald-700", pctColor: "text-emerald-600" };
+                ? { border: "border-rose-200 dark:border-rose-800", bg: "bg-rose-50 dark:bg-rose-950/40", dotColor: "bg-rose-400", labelColor: "text-rose-600 dark:text-rose-400", valColor: "text-rose-700 dark:text-rose-400", pctColor: "text-rose-600 dark:text-rose-400" }
+                : { border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50 dark:bg-emerald-950/40", dotColor: "bg-emerald-500", labelColor: "text-emerald-700 dark:text-emerald-400", valColor: "text-emerald-700 dark:text-emerald-400", pctColor: "text-emerald-600 dark:text-emerald-400" };
 
               // 진입가 vs 현재가 거리
               const entryVsCurrent = (cp && ep && cp > 0)
@@ -1534,16 +1534,16 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     </div>
 
                     {/* 손절가 — 진입가 기준 */}
-                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 sm:p-4">
+                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 sm:p-4">
                       <div className="flex items-center gap-1 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-red-500">손절가</p>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-red-500 dark:text-red-400">손절가</p>
                       </div>
-                      <p className="text-[13px] sm:text-[17px] font-bold text-red-600 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency)}</p>
+                      <p className="text-[13px] sm:text-[17px] font-bold text-red-600 dark:text-red-400 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency)}</p>
                       {slPct !== null ? (
-                        <p className="text-[10px] sm:text-[11px] font-bold text-red-500 mt-1">-{slPct}%</p>
+                        <p className="text-[10px] sm:text-[11px] font-bold text-red-500 dark:text-red-400 mt-1">-{slPct}%</p>
                       ) : (
-                        <p className="text-[10px] text-red-500 mt-1 hidden sm:block">손절 기준선</p>
+                        <p className="text-[10px] text-red-500 dark:text-red-400 mt-1 hidden sm:block">손절 기준선</p>
                       )}
                     </div>
                   </div>
@@ -1880,9 +1880,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         key={i}
                         className={cn(
                           "rounded-xl border p-3.5 flex items-center gap-4",
-                          isBear ? "border-red-100 bg-red-50/50"
-                            : isBull ? "border-emerald-100 bg-emerald-50/50"
-                            : "border-blue-100 bg-blue-50/60"
+                          isBear ? "border-red-100 dark:border-red-900 bg-red-50/50 dark:bg-red-950/30"
+                            : isBull ? "border-emerald-100 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30"
+                            : "border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/30"
                         )}
                       >
                         {/* 시나리오 이름 */}
