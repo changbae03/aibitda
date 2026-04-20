@@ -217,7 +217,7 @@ function PriceTrack({
         </div>
         <div className="text-right">
           <p className={cn("text-[9px] mb-0.5", exceeded ? "text-emerald-500" : "text-neutral-400")}>
-            목표 {exceeded ? "✓ 달성" : `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`}
+            적정주가 {exceeded ? "✓ 달성" : `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`}
           </p>
           <p className={cn("font-mono text-[11px] font-semibold", exceeded ? "text-emerald-600" : "text-neutral-500")}>
             {formatCurrency(tgt, currency)}
