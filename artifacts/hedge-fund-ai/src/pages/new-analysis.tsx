@@ -73,7 +73,7 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
       <button
         onClick={handleShare}
         disabled={sharing}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-neutral-200 text-neutral-500 hover:border-[#FF8A7A] hover:text-[#FF8A7A] transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-[#FF8A7A] hover:text-[#FF8A7A] transition-colors"
       >
         {copied ? (
           <><Check className="w-3 h-3 text-emerald-500" /><span className="text-emerald-500">링크 복사됨!</span></>
@@ -316,12 +316,12 @@ export default function NewAnalysis() {
         {/* Headline */}
         <div className="space-y-3">
           <h1
-            className="text-4xl md:text-5xl font-black tracking-tighter text-neutral-900 leading-[1.1]"
+            className="text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.1]"
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
           >
             어떤 종목을<br />분석할까요?
           </h1>
-          <p className="text-sm text-neutral-400 leading-relaxed break-keep">
+          <p className="text-sm text-muted-foreground leading-relaxed break-keep">
             코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{" "}
             <br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
           </p>
@@ -331,13 +331,13 @@ export default function NewAnalysis() {
         {/* Search */}
         <form onSubmit={onSubmit} className="w-full relative">
           <div
-            className={`flex items-center gap-3 bg-white border rounded-xl px-4 py-3 transition-all duration-150 ${
+            className={`flex items-center gap-3 bg-background border rounded-xl px-4 py-3 transition-all duration-150 ${
               error
                 ? "border-red-400 ring-2 ring-red-100"
-                : "border-neutral-200 focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-100"
+                : "border-border focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/10"
             }`}
           >
-            <Search className="w-4 h-4 text-neutral-300 shrink-0" />
+            <Search className="w-4 h-4 text-muted-foreground/50 shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -350,16 +350,16 @@ export default function NewAnalysis() {
               }}
               onKeyDown={handleKeyDown}
               placeholder="삼성전자, NVDA, 005930, AAPL..."
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-neutral-900 text-[15px] placeholder:text-neutral-300 placeholder:text-sm"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-foreground text-[15px] placeholder:text-muted-foreground/40 placeholder:text-sm"
               autoFocus
               disabled={isPending}
               autoComplete="off"
             />
-            {isSearching && <Loader2 className="w-4 h-4 animate-spin text-neutral-300 shrink-0" />}
+            {isSearching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50 shrink-0" />}
             <button
               type="submit"
               disabled={isPending || !ticker.trim()}
-              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-neutral-900 text-white text-[13px] font-semibold hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -378,7 +378,7 @@ export default function NewAnalysis() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.1 }}
-                className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-neutral-200 rounded-xl shadow-lg z-50 overflow-hidden"
+                className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden"
               >
                 {suggestions.map((s, i) => {
                   const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
@@ -389,7 +389,7 @@ export default function NewAnalysis() {
                     ex === "KOSDAQ" ? "bg-emerald-50 text-emerald-600" :
                     ex === "NASDAQ" ? "bg-violet-50 text-violet-600" :
                     ex === "NYSE" ? "bg-orange-50 text-orange-600" :
-                    "bg-neutral-100 text-neutral-500";
+                    "bg-muted text-muted-foreground";
                   const badgeLabel =
                     ex === "KOSPI" ? "코스피" :
                     ex === "KOSDAQ" ? "코스닥" :
@@ -399,23 +399,23 @@ export default function NewAnalysis() {
                       key={s.symbol}
                       type="button"
                       onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-neutral-100 last:border-0 ${
-                        i === selectedIndex ? "bg-neutral-50" : "hover:bg-neutral-50"
+                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-border last:border-0 ${
+                        i === selectedIndex ? "bg-accent" : "hover:bg-accent"
                       }`}
                     >
-                      <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
-                        <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-semibold text-neutral-900 truncate">{s.shortname}</span>
+                          <span className="text-[13px] font-semibold text-foreground truncate">{s.shortname}</span>
                           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badgeStyle}`}>
                             {badgeLabel}
                           </span>
                         </div>
-                        <span className="font-mono text-xs text-neutral-400">{code}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{code}</span>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
                     </button>
                   );
                 })}
@@ -440,7 +440,7 @@ export default function NewAnalysis() {
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mt-3 text-xs text-neutral-400 text-center"
+              className="mt-3 text-xs text-muted-foreground text-center"
             >
               기업 정보 조회 중...
             </motion.p>
@@ -459,7 +459,7 @@ export default function NewAnalysis() {
             >
               <div className="flex items-center gap-1.5">
                 <Flame className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">많이 찾은 기업</span>
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">많이 찾은 기업</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {trending.map((t) => (
@@ -469,12 +469,12 @@ export default function NewAnalysis() {
                     whileTap={{ scale: 0.98 }}
                     onClick={() => { setTicker(t.ticker); handleSubmit(t.ticker); }}
                     disabled={isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-50 border border-neutral-200 hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-40 group"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-40 group"
                   >
-                    <span className="font-mono text-[10px] text-neutral-300 group-hover:text-primary/60 transition-colors">{t.ticker}</span>
-                    <span className="text-[12.5px] text-neutral-700 font-medium">{t.companyName}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground/50 group-hover:text-primary/60 transition-colors">{t.ticker}</span>
+                    <span className="text-[12.5px] text-foreground/80 font-medium">{t.companyName}</span>
                     {t.count > 1 && (
-                      <span className="text-[9px] text-neutral-300 font-medium">×{t.count}</span>
+                      <span className="text-[9px] text-muted-foreground/50 font-medium">×{t.count}</span>
                     )}
                   </motion.button>
                 ))}
@@ -486,32 +486,32 @@ export default function NewAnalysis() {
         {/* Quick picks */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-neutral-300 uppercase tracking-wider whitespace-nowrap">국내</span>
+            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">국내</span>
             <div className="flex flex-wrap gap-2">
               {EXAMPLES_KR.map((ex) => (
                 <button
                   key={ex.ticker}
                   onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-[12.5px] text-neutral-500 hover:border-neutral-900 hover:text-neutral-900 transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
                 >
-                  <span className="font-mono text-[11px] text-neutral-300">{ex.ticker}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
                   <span>{ex.label}</span>
                 </button>
               ))}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-neutral-300 uppercase tracking-wider whitespace-nowrap">미국</span>
+            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">미국</span>
             <div className="flex flex-wrap gap-2">
               {EXAMPLES_US.map((ex) => (
                 <button
                   key={ex.ticker}
                   onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-[12.5px] text-neutral-500 hover:border-neutral-900 hover:text-neutral-900 transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
                 >
-                  <span className="font-mono text-[11px] text-neutral-300">{ex.ticker}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
                   <span>{ex.label}</span>
                 </button>
               ))}
