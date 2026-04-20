@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -20,6 +21,7 @@ import AdminPeers from "@/pages/admin-peers";
 import Stats from "@/pages/stats";
 import Tracker from "@/pages/tracker";
 import Popular from "@/pages/popular";
+import SettingsPage from "@/pages/settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +93,7 @@ function Router() {
             <Route path="/tracker" component={Tracker} />
             <Route path="/popular" component={Popular} />
             <Route path="/admin/peers" component={AdminPeers} />
+            <Route path="/settings" component={SettingsPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>
@@ -122,9 +125,11 @@ function ClerkProviderWithRoutes() {
 
 function App() {
   return (
-    <WouterRouter base={basePath}>
-      <ClerkProviderWithRoutes />
-    </WouterRouter>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <WouterRouter base={basePath}>
+        <ClerkProviderWithRoutes />
+      </WouterRouter>
+    </ThemeProvider>
   );
 }
 

@@ -36,8 +36,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           className={cn(
             "block px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors duration-150",
             isActive
-              ? "bg-neutral-100 text-neutral-900"
-              : "text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50"
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent"
           )}
         >
           {item.label}
@@ -46,7 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     });
 
   const BottomNav = ({ onSelect }: { onSelect?: () => void }) => (
-    <div className="px-2 py-3 space-y-0.5 border-t border-neutral-100">
+    <div className="px-2 py-3 space-y-0.5 border-t border-border">
       {bottomItems.map((item) => {
         const isActive = location === item.href;
         return (
@@ -57,8 +57,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             className={cn(
               "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
               isActive
-                ? "bg-neutral-100 text-neutral-900"
-                : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50"
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent"
             )}
           >
             <item.icon className="w-3.5 h-3.5 shrink-0" />
@@ -70,11 +70,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 flex overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
       {/* ── Desktop Sidebar ── */}
-      <aside className="w-52 shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-neutral-100">
+      <aside className="w-52 shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-border bg-background">
         {/* Logo */}
-        <div className="px-5 h-14 flex items-center border-b border-neutral-100">
+        <div className="px-5 h-14 flex items-center border-b border-border">
           <Link href="/analysis/new" className="block">
             <span
               className="text-[22px] font-black tracking-tighter leading-none select-none"
@@ -94,8 +94,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         <BottomNav />
 
         {/* Slogan */}
-        <div className="px-5 py-3 border-t border-neutral-100">
-          <p className="text-[10px] text-neutral-300 leading-relaxed">
+        <div className="px-5 py-3 border-t border-border">
+          <p className="text-[10px] text-muted-foreground/50 leading-relaxed">
             AI로 기업가치를 밝히다
           </p>
         </div>
@@ -108,7 +108,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.3 }}
+              animate={{ opacity: 0.4 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="fixed inset-0 bg-black z-40 md:hidden print:hidden"
@@ -120,9 +120,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 340, damping: 34 }}
-              className="fixed left-0 top-0 h-full w-64 z-50 flex flex-col md:hidden print:hidden bg-white border-r border-neutral-100"
+              className="fixed left-0 top-0 h-full w-64 z-50 flex flex-col md:hidden print:hidden bg-background border-r border-border"
             >
-              <div className="px-5 h-14 flex items-center justify-between border-b border-neutral-100">
+              <div className="px-5 h-14 flex items-center justify-between border-b border-border">
                 <span
                   className="text-[22px] font-black tracking-tighter leading-none"
                   style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
@@ -131,7 +131,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </span>
                 <button
                   onClick={() => setMenuOpen(false)}
-                  className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors rounded-md hover:bg-neutral-100"
+                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -148,7 +148,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* ── Main Content ── */}
       <main id="print-main" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Mobile Top Bar */}
-        <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-neutral-100 bg-white z-30 sticky top-0 shrink-0 print:hidden">
+        <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border bg-background z-30 sticky top-0 shrink-0 print:hidden">
           <span
             className="text-[20px] font-black tracking-tighter leading-none"
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
@@ -157,7 +157,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </span>
           <button
             onClick={() => setMenuOpen(true)}
-            className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-colors rounded-md hover:bg-neutral-100"
+            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -169,30 +169,30 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
 
           {/* Footer */}
-          <footer className="border-t border-neutral-100 mt-8 print:hidden">
+          <footer className="border-t border-border mt-8 print:hidden">
             <div className="container max-w-5xl mx-auto px-6 md:px-10 py-6">
-              <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-neutral-400 mb-4">
-                <a href="#" className="hover:text-neutral-700 transition-colors">개인정보처리방침</a>
-                <span className="text-neutral-200 select-none">|</span>
-                <a href="#" className="hover:text-neutral-700 transition-colors">이용약관</a>
-                <span className="text-neutral-200 select-none">|</span>
-                <a href="#" className="hover:text-neutral-700 transition-colors">공지사항</a>
-                <span className="text-neutral-200 select-none">|</span>
-                <a href="#" className="hover:text-neutral-700 transition-colors">자주 묻는 질문</a>
-                <span className="text-neutral-200 select-none">|</span>
-                <a href="#" className="hover:text-neutral-700 transition-colors">투자 유의사항</a>
-                <span className="text-neutral-200 select-none">|</span>
-                <a href="#" className="hover:text-neutral-700 transition-colors">이용자권리 및 유의사항</a>
-                <span className="text-neutral-200 select-none">|</span>
-                <a href="#" className="hover:text-neutral-700 transition-colors">고객센터</a>
+              <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-muted-foreground mb-4">
+                <a href="#" className="hover:text-foreground transition-colors">개인정보처리방침</a>
+                <span className="text-border select-none">|</span>
+                <a href="#" className="hover:text-foreground transition-colors">이용약관</a>
+                <span className="text-border select-none">|</span>
+                <a href="#" className="hover:text-foreground transition-colors">공지사항</a>
+                <span className="text-border select-none">|</span>
+                <a href="#" className="hover:text-foreground transition-colors">자주 묻는 질문</a>
+                <span className="text-border select-none">|</span>
+                <a href="#" className="hover:text-foreground transition-colors">투자 유의사항</a>
+                <span className="text-border select-none">|</span>
+                <a href="#" className="hover:text-foreground transition-colors">이용자권리 및 유의사항</a>
+                <span className="text-border select-none">|</span>
+                <a href="#" className="hover:text-foreground transition-colors">고객센터</a>
               </nav>
-              <p className="text-[11px] text-neutral-300 leading-relaxed">
+              <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
                 애빛다의 모든 콘텐츠는 AI가 자동 생성한 참고용 정보이며, 특정 금융투자상품의 매수·매도·보유를 권유하거나 추천하지 않습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.
               </p>
-              <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+              <p className="text-[11px] text-muted-foreground/70 mt-1 leading-relaxed">
                 본 서비스는 자본시장법상 투자자문업·투자일임업에 해당하지 않으며, 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
               </p>
-              <p className="text-[11px] text-neutral-300 mt-1.5">
+              <p className="text-[11px] text-muted-foreground/50 mt-1.5">
                 © {new Date().getFullYear()} 애빛다 · CBST. AI로 기업가치를 밝히다.
               </p>
             </div>
