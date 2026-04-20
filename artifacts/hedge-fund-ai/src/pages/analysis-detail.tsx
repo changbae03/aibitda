@@ -348,10 +348,11 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     if (exporting) return;
     setExporting(true);
     try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+      const [{ default: html2canvas }, jspdfMod] = await Promise.all([
         import("html2canvas"),
         import("jspdf"),
       ]);
+      const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default;
 
       const target = document.getElementById("analysis-report-content");
       if (!target) throw new Error("report element not found");
@@ -391,15 +392,14 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       // A4 멀티페이지 PDF 생성
       const A4_W_MM = 210;
       const A4_H_MM = 297;
-      const MARGIN_MM = 14;
+      const MARGIN_MM = 12;
       const contentW_mm = A4_W_MM - MARGIN_MM * 2;
-      const scale = contentW_mm / (canvas.width / (96 / 25.4)); // px → mm
-      const contentH_mm = (canvas.height / (96 / 25.4)) * scale;
-      const pageContentH_mm = A4_H_MM - MARGIN_MM * 2;
-      const totalPages = Math.ceil(contentH_mm / pageContentH_mm);
+      const pageH_mm = A4_H_MM - MARGIN_MM * 2;
 
-      const contentW_px = canvas.width;
-      const pageH_px = Math.round((pageContentH_mm / contentH_mm) * canvas.height);
+      // 캔버스 px → mm 변환 비율 (콘텐츠 폭 기준)
+      const pxToMm = contentW_mm / canvas.width;
+      const pageH_px = Math.round(pageH_mm / pxToMm);
+      const totalPages = Math.ceil(canvas.height / pageH_px);
 
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
@@ -409,23 +409,24 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         const srcH = Math.min(pageH_px, canvas.height - srcY);
 
         const slice = document.createElement("canvas");
-        slice.width = contentW_px;
+        slice.width = canvas.width;
         slice.height = pageH_px;
         const ctx = slice.getContext("2d")!;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, srcY, contentW_px, srcH, 0, 0, contentW_px, srcH);
+        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
 
         const imgData = slice.toDataURL("image/jpeg", 0.92);
-        const renderedH = (srcH / canvas.height) * contentH_mm;
-        pdf.addImage(imgData, "JPEG", MARGIN_MM, MARGIN_MM, contentW_mm, renderedH);
+        const sliceH_mm = srcH * pxToMm;
+        pdf.addImage(imgData, "JPEG", MARGIN_MM, MARGIN_MM, contentW_mm, sliceH_mm);
       }
 
       const filename = `애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`;
       pdf.save(filename);
       onClose();
-    } catch (e) {
-      console.error("PDF 생성 실패:", e);
+    } catch (e: any) {
+      console.error("PDF 생성 실패:", e?.message ?? e);
+      alert(`PDF 생성 실패: ${e?.message ?? "알 수 없는 오류"}`);
     } finally {
       setExporting(false);
     }
