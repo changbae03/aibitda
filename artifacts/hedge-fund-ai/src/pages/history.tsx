@@ -464,7 +464,8 @@ export default function History() {
       const cur = quotes[a.ticker]!.price!;
       const tgt = a.targetPrice!;
       const entry = a.startPrice ?? a.entryPrice;
-      const isDownside = entry != null ? tgt < entry : false;
+      const effectiveEntry = entry ?? cur;
+      const isDownside = tgt < effectiveEntry;
       const exceeded  = isDownside ? cur <= tgt : cur >= tgt;
       const distNow   = Math.abs(cur - tgt);
       const distThen  = entry != null ? Math.abs(entry - tgt) : null;
@@ -740,7 +741,8 @@ export default function History() {
                 const tgt = a.targetPrice;
                 const entry = a.startPrice ?? a.entryPrice;
                 if (!cur || !tgt) return null;
-                const isDownside = entry != null ? tgt < entry : false;
+                const effectiveEntry = entry ?? cur;
+                const isDownside = tgt < effectiveEntry;
                 const exceeded = isDownside ? cur <= tgt : cur >= tgt;
                 if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-50 text-emerald-600 border-emerald-200" };
                 const distNow  = Math.abs(cur - tgt);
