@@ -102,7 +102,7 @@ const CustomTooltip = ({ active, payload, label, currency = "KRW" }: any) => {
   const d = payload[0]?.payload;
   return (
     <div className="bg-background border border-border rounded-lg p-3 text-xs shadow-lg min-w-[160px]">
-      <p className="text-muted-foreground mb-2 font-medium">{label}</p>
+      <p className="text-muted-foreground mb-2 font-medium">{d?.date ?? label}</p>
       {d?.close != null && (
         <div className="space-y-1.5">
           <div className="flex justify-between gap-4">
@@ -226,10 +226,12 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const nxtInfo = (data as any)?.nxtInfo as { price: number; changePercent: number; compareToPrev: string; at: string; sessionType: string; status: string } | null | undefined;
   const nxtIsUp = (nxtInfo?.changePercent ?? 0) >= 0;
 
+  // 기간이 2년/5년이면 연도를 포함한 전체 날짜를 dateLabel로 사용 (같은 MM-DD가 여러 해에 걸쳐 중복되는 문제 방지)
+  const useLongDate = period === "5y" || period === "2y";
   const chartData = data?.candles?.map((c) => ({
     ...c,
     close: parseFloat(c.close.toFixed(2)),
-    dateLabel: c.date.slice(5),
+    dateLabel: useLongDate ? c.date.slice(0, 10) : c.date.slice(5),
   })) ?? [];
 
   // 주가 급변 자동 감지
@@ -406,6 +408,11 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   tickLine={false}
                   axisLine={false}
                   interval={Math.floor(chartData.length / 7)}
+                  tickFormatter={(v: string) => {
+                    if (!useLongDate) return v; // "MM-DD" 그대로
+                    // "YYYY-MM-DD" → "YY.MM" 형식으로 축약
+                    return v.slice(2, 7).replace("-", ".");
+                  }}
                 />
                 {/* 주가 Y축 (왼쪽) */}
                 <YAxis
