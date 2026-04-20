@@ -245,16 +245,22 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
     };
   });
 
+  const currentPrice = data?.currentPrice ?? 0;
+  // 현재가 대비 50% 초과 차이나는 레벨은 차트에서 제외 (차트 가독성 보호)
+  const MAX_LEVEL_RATIO = 1.5;
+  const showTarget1OnChart = chartLevels?.target1 && currentPrice > 0 && chartLevels.target1 <= currentPrice * MAX_LEVEL_RATIO;
+  const showTarget2OnChart = chartLevels?.target2 && currentPrice > 0 && chartLevels.target2 <= currentPrice * MAX_LEVEL_RATIO;
+  const showStopLossOnChart = chartLevels?.stopLoss && currentPrice > 0 && chartLevels.stopLoss >= currentPrice * (2 - MAX_LEVEL_RATIO);
+
   const priceMin = chartData.length ? Math.min(
     ...chartData.map((d) => d.low ?? d.close),
-    ...(chartLevels?.stopLoss ? [chartLevels.stopLoss] : [])
+    ...(showStopLossOnChart ? [chartLevels!.stopLoss!] : [])
   ) * 0.99 : 0;
-  // 목표주가가 차트 가격보다 높으면 Y축을 그 이상까지 확장
   const dataMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) : 100;
   const levelMax = Math.max(
     dataMax,
-    chartLevels?.target1 ?? 0,
-    chartLevels?.target2 ?? 0,
+    showTarget1OnChart ? chartLevels!.target1! : 0,
+    showTarget2OnChart ? chartLevels!.target2! : 0,
   );
   const priceMax = levelMax * 1.03;
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
@@ -454,9 +460,9 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   activeDot={{ r: 3, fill: "#0a0a0a" }}
                 />
 
-                {/* ── 기준선 — 라벨 없음, 색상만으로 구분 ── */}
-                {chartLevels?.stopLoss && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 2" />
+                {/* ── 기준선 — 현재가 대비 50% 이내 레벨만 표시 ── */}
+                {showStopLossOnChart && (
+                  <ReferenceLine yAxisId="price" y={chartLevels!.stopLoss!} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 2" />
                 )}
                 {chartLevels?.entryMin && (
                   <ReferenceLine yAxisId="price" y={chartLevels.entryMin} stroke="#1d4ed8" strokeWidth={1} strokeDasharray="4 2" />
@@ -464,11 +470,11 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                 {chartLevels?.entryMax && (
                   <ReferenceLine yAxisId="price" y={chartLevels.entryMax} stroke="#1d4ed8" strokeWidth={1} strokeDasharray="4 2" />
                 )}
-                {chartLevels?.target1 && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" />
+                {showTarget1OnChart && (
+                  <ReferenceLine yAxisId="price" y={chartLevels!.target1!} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" />
                 )}
-                {chartLevels?.target2 && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3" />
+                {showTarget2OnChart && (
+                  <ReferenceLine yAxisId="price" y={chartLevels!.target2!} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3" />
                 )}
 
                 {/* ── 주가 급변 마커 — 원형 닷 ── */}
