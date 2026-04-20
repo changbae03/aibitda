@@ -1376,11 +1376,14 @@ function extractJson(raw: string): any | null {
   if (start !== -1 && end !== -1 && end > start) {
     s = s.slice(start, end + 1);
   }
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
+  // 시도 1: 원본 그대로
+  try { return JSON.parse(s); } catch { /* 계속 */ }
+  // 시도 2: trailing comma 제거 (AI가 자주 실수)
+  try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { /* 계속 */ }
+  // 시도 3: 제어 문자 제거
+  try { return JSON.parse(s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")); } catch { /* 계속 */ }
+  // 시도 4: 단일 따옴표 → 이중 따옴표 변환 후 재시도
+  try { return JSON.parse(s.replace(/'/g, '"')); } catch { return null; }
 }
 
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
@@ -1969,8 +1972,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
           </div>
         );
       })() : (
-        <div className="p-6 text-sm text-foreground/70 leading-relaxed space-y-2">
-          {step.content.split('\n').map((p: string, i: number) => p.trim() ? <p key={i}>{p}</p> : null)}
+        <div className="p-6 text-sm text-foreground/60 leading-relaxed">
+          <p className="text-amber-600 font-medium mb-2 text-xs uppercase tracking-widest">분석 결과 로드 중 오류</p>
+          <p>최종 투자 전략 데이터를 불러오지 못했습니다. 분석을 다시 실행해 주세요.</p>
         </div>
       )}
     </motion.div>
