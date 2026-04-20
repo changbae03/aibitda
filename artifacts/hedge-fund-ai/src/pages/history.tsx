@@ -84,7 +84,7 @@ function verdictBadge(verdict?: string) {
 // ── Sparkline SVG ─────────────────────────────────────────────────────────────
 function Sparkline({ closes }: { closes: number[] }) {
   if (closes.length < 2) {
-    return <div className="w-[72px] h-[28px] flex items-center justify-center text-[9px] text-neutral-200">—</div>;
+    return <div className="w-[72px] h-[28px] flex items-center justify-center text-[9px] text-muted-foreground/30">—</div>;
   }
   const W = 72, H = 28, PAD = 2;
   const min = Math.min(...closes);
@@ -139,7 +139,7 @@ function MemoInline({ id }: { id: number }) {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="이 보고서에 대한 메모를 입력하세요..."
           rows={2}
-          className="w-full text-[12px] text-neutral-700 placeholder-neutral-300 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
+          className="w-full text-[12px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
           onKeyDown={(e) => {
             if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { saveMemo(id, draft); setSaved(draft.trim()); setEditing(false); }
@@ -149,10 +149,10 @@ function MemoInline({ id }: { id: number }) {
           <button onClick={handleSave} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[11px] font-semibold transition-colors">
             <Check className="w-3 h-3" /> 저장
           </button>
-          <button onClick={handleCancel} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-500 text-[11px] font-semibold transition-colors">
+          <button onClick={handleCancel} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted hover:bg-muted text-muted-foreground text-[11px] font-semibold transition-colors">
             <X className="w-3 h-3" /> 취소
           </button>
-          <span className="text-[10px] text-neutral-300 ml-1">⌘Enter로 저장</span>
+          <span className="text-[10px] text-muted-foreground/50 ml-1">⌘Enter로 저장</span>
         </div>
       </div>
     );
@@ -160,16 +160,16 @@ function MemoInline({ id }: { id: number }) {
   if (saved) {
     return (
       <div className="mt-2 flex items-start gap-1.5 group/memo" onClick={(e) => e.stopPropagation()}>
-        <div className="flex-1 text-[12px] text-neutral-500 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">{saved}</div>
+        <div className="flex-1 text-[12px] text-muted-foreground leading-relaxed bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">{saved}</div>
         <div className="shrink-0 mt-0.5 flex items-center gap-0.5 opacity-0 group-hover/memo:opacity-100 transition-opacity">
-          <button onClick={handleEdit} className="p-1 rounded text-neutral-300 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="메모 수정"><Pencil className="w-3 h-3" /></button>
-          <button onClick={handleDelete} className="p-1 rounded text-neutral-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="메모 삭제"><Trash2 className="w-3 h-3" /></button>
+          <button onClick={handleEdit} className="p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="메모 수정"><Pencil className="w-3 h-3" /></button>
+          <button onClick={handleDelete} className="p-1 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-50 transition-colors" title="메모 삭제"><Trash2 className="w-3 h-3" /></button>
         </div>
       </div>
     );
   }
   return (
-    <button onClick={handleEdit} className="mt-1.5 flex items-center gap-1 text-[11px] text-neutral-300 hover:text-amber-500 transition-colors opacity-0 group-hover:opacity-100">
+    <button onClick={handleEdit} className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-amber-500 transition-colors opacity-0 group-hover:opacity-100">
       <Pencil className="w-3 h-3" /> 메모 추가
     </button>
   );
@@ -218,8 +218,8 @@ function PriceTrack({
       {/* 3 key prices — compact */}
       <div className="flex justify-between items-end px-0.5 mb-2.5">
         <div>
-          <p className="text-[9px] text-neutral-400 mb-0.5">분석 당시</p>
-          <p className="font-mono text-[11px] font-semibold text-neutral-500">{formatCurrency(entry, currency)}</p>
+          <p className="text-[9px] text-muted-foreground mb-0.5">분석 당시</p>
+          <p className="font-mono text-[11px] font-semibold text-muted-foreground">{formatCurrency(entry, currency)}</p>
         </div>
         <div className="text-center">
           <p className={cn("text-[9px] mb-0.5", returnPct >= 0 ? "text-blue-400" : "text-red-400")}>
@@ -237,11 +237,11 @@ function PriceTrack({
           <p className={cn("text-[9px] mb-0.5",
             exceeded ? "text-emerald-500"
             : isDownside ? "text-red-400"
-            : "text-neutral-400"
+            : "text-muted-foreground"
           )}>
             적정주가 {tgtLabel}
           </p>
-          <p className={cn("font-mono text-[11px] font-semibold", exceeded ? "text-emerald-600" : "text-neutral-500")}>
+          <p className={cn("font-mono text-[11px] font-semibold", exceeded ? "text-emerald-600" : "text-muted-foreground")}>
             {formatCurrency(tgt, currency)}
           </p>
         </div>
@@ -250,7 +250,7 @@ function PriceTrack({
       {/* Track */}
       <div className="relative h-7">
         {/* Rail */}
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-neutral-100" />
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-muted" />
 
         {/* Colored fill: entry → current */}
         {/* 하락목표: cur가 entry 아래로 가야 좋음 → 왼쪽이동=파랑, 오른쪽=빨강 */}
@@ -277,7 +277,7 @@ function PriceTrack({
 
         {/* Entry / center marker */}
         <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: "50%" }}>
-          <div className="w-px h-4 bg-neutral-300 rounded-full" />
+          <div className="w-px h-4 bg-muted-foreground/40 rounded-full" />
         </div>
 
         {/* Current price dot */}
@@ -299,15 +299,15 @@ function PriceTrack({
 
       {/* Under-track labels */}
       <div className="relative h-4 mt-0.5 select-none">
-        <span className="absolute left-0 text-[9px] text-neutral-300">◀ 하락</span>
-        <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-neutral-400">분석 당시</span>
+        <span className="absolute left-0 text-[9px] text-muted-foreground/50">◀ 하락</span>
+        <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground">분석 당시</span>
         <span
           className={cn("absolute text-[9px] font-medium -translate-x-1/2 whitespace-nowrap", exceeded ? "text-emerald-600" : "text-emerald-500")}
           style={{ left: `${Math.max(Math.min(tgtX, 90), 15)}%` }}
         >
           적정주가
         </span>
-        <span className="absolute right-0 text-[9px] text-neutral-300">상승 ▶</span>
+        <span className="absolute right-0 text-[9px] text-muted-foreground/50">상승 ▶</span>
       </div>
     </div>
   );
@@ -491,7 +491,7 @@ export default function History() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-5 h-5 animate-spin text-neutral-300" />
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" />
       </div>
     );
   }
@@ -504,7 +504,7 @@ export default function History() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-[22px] font-black tracking-tight text-neutral-900" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
+          <h1 className="text-[22px] font-black tracking-tight text-foreground" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
             내가 본 자료
           </h1>
           {list.length > 0 && (() => {
@@ -520,7 +520,7 @@ export default function History() {
             }).length;
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-neutral-300">{list.length}건</span>
+                <span className="text-[11px] text-muted-foreground/50">{list.length}건</span>
                 {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">상승여력 {buyCount}</span>}
                 {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-100">적정수준 {holdCount}</span>}
                 {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">하락여지 {sellCount}</span>}
@@ -537,7 +537,7 @@ export default function History() {
           <button
             onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
             disabled={quotesLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors text-xs font-medium text-neutral-500 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted transition-colors text-xs font-medium text-muted-foreground disabled:opacity-50"
           >
             <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
             갱신
@@ -549,32 +549,32 @@ export default function History() {
       {accuracyStats && (
         <div className="mb-4 grid grid-cols-3 gap-2">
           {/* 방향 정확도 */}
-          <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">방향 정확도</p>
+          <div className="rounded-xl border border-border bg-background px-3 py-2.5 text-center">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">방향 정확도</p>
             <p className={cn(
               "text-[20px] font-black leading-none tabular-nums",
               accuracyStats.dirAccuracy >= 60 ? "text-blue-600" : accuracyStats.dirAccuracy >= 40 ? "text-amber-500" : "text-red-500"
             )}>
-              {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-neutral-400 ml-0.5">%</span>
+              {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-muted-foreground ml-0.5">%</span>
             </p>
-            <p className="text-[9px] text-neutral-300 mt-1">접근+달성 / 전체</p>
+            <p className="text-[9px] text-muted-foreground/50 mt-1">접근+달성 / 전체</p>
           </div>
 
           {/* 목표가 달성률 */}
-          <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">적정주가 달성률</p>
+          <div className="rounded-xl border border-border bg-background px-3 py-2.5 text-center">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">적정주가 달성률</p>
             <p className={cn(
               "text-[20px] font-black leading-none tabular-nums",
-              accuracyStats.achievementRate >= 40 ? "text-emerald-600" : accuracyStats.achievementRate >= 20 ? "text-amber-500" : "text-neutral-400"
+              accuracyStats.achievementRate >= 40 ? "text-emerald-600" : accuracyStats.achievementRate >= 20 ? "text-amber-500" : "text-muted-foreground"
             )}>
-              {accuracyStats.achievementRate.toFixed(0)}<span className="text-[11px] font-semibold text-neutral-400 ml-0.5">%</span>
+              {accuracyStats.achievementRate.toFixed(0)}<span className="text-[11px] font-semibold text-muted-foreground ml-0.5">%</span>
             </p>
-            <p className="text-[9px] text-neutral-300 mt-1">{accuracyStats.exceededCount} / {accuracyStats.total}건</p>
+            <p className="text-[9px] text-muted-foreground/50 mt-1">{accuracyStats.exceededCount} / {accuracyStats.total}건</p>
           </div>
 
           {/* 평균 달성도 */}
-          <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">평균 달성도</p>
+          <div className="rounded-xl border border-border bg-background px-3 py-2.5 text-center">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">평균 달성도</p>
             {accuracyStats.avgAccuracy != null ? (
               <>
                 <p className={cn(
@@ -583,12 +583,12 @@ export default function History() {
                   : accuracyStats.avgAccuracy > 0  ? "text-blue-600"
                   : "text-red-500"
                 )}>
-                  {accuracyStats.avgAccuracy >= 0 ? "+" : ""}{accuracyStats.avgAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-neutral-400 ml-0.5">%</span>
+                  {accuracyStats.avgAccuracy >= 0 ? "+" : ""}{accuracyStats.avgAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-muted-foreground ml-0.5">%</span>
                 </p>
-                <p className="text-[9px] text-neutral-300 mt-1">목표 대비 진행도</p>
+                <p className="text-[9px] text-muted-foreground/50 mt-1">목표 대비 진행도</p>
               </>
             ) : (
-              <p className="text-[20px] font-black leading-none text-neutral-200">—</p>
+              <p className="text-[20px] font-black leading-none text-muted-foreground/30">—</p>
             )}
           </div>
         </div>
@@ -597,7 +597,7 @@ export default function History() {
       {/* ── 필터 + 정렬 바 ─────────────────────────────────────────────── */}
       {list.length > 0 && (
         <div className="mb-4 flex items-center gap-2 flex-wrap">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+          <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
 
           {/* Verdict 필터 */}
           {(["all", "buy", "sell", "hold"] as VerdictFilter[]).map((v) => {
@@ -610,8 +610,8 @@ export default function History() {
                 className={cn(
                   "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors border",
                   active
-                    ? "bg-neutral-900 text-white border-neutral-900"
-                    : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-400 hover:text-neutral-700"
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground"
                 )}
               >
                 {labels[v]}
@@ -620,13 +620,13 @@ export default function History() {
           })}
 
           {/* Divider */}
-          <div className="w-px h-4 bg-neutral-200 mx-0.5" />
+          <div className="w-px h-4 bg-muted mx-0.5" />
 
           {/* 정렬 드롭다운 */}
           <div className="relative">
             <button
               onClick={() => { setShowSortMenu(!showSortMenu); setShowIndustryMenu(false); }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-400 hover:text-neutral-700 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-background text-muted-foreground border border-border hover:border-foreground/40 hover:text-foreground transition-colors"
             >
               {sortLabels[sortBy]} <ChevronDown className="w-3 h-3" />
             </button>
@@ -637,15 +637,15 @@ export default function History() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.1 }}
-                  className="absolute top-full mt-1 left-0 z-20 bg-white border border-neutral-100 rounded-xl shadow-lg py-1 min-w-[130px]"
+                  className="absolute top-full mt-1 left-0 z-20 bg-background border border-border rounded-xl shadow-lg py-1 min-w-[130px]"
                 >
                   {(Object.entries(sortLabels) as [SortKey, string][]).map(([k, label]) => (
                     <button
                       key={k}
                       onClick={() => { setSortBy(k); setShowSortMenu(false); }}
                       className={cn(
-                        "w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 transition-colors",
-                        sortBy === k ? "font-semibold text-neutral-900" : "text-neutral-500"
+                        "w-full text-left px-3 py-1.5 text-[12px] hover:bg-muted/50 transition-colors",
+                        sortBy === k ? "font-semibold text-foreground" : "text-muted-foreground"
                       )}
                     >
                       {label}
@@ -661,7 +661,7 @@ export default function History() {
             <div className="relative">
               <button
                 onClick={() => { setShowIndustryMenu(!showIndustryMenu); setShowSortMenu(false); }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-400 hover:text-neutral-700 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-background text-muted-foreground border border-border hover:border-foreground/40 hover:text-foreground transition-colors"
               >
                 {industryFilter === "all" ? "업종 전체" : industryFilter} <ChevronDown className="w-3 h-3" />
               </button>
@@ -672,11 +672,11 @@ export default function History() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.1 }}
-                    className="absolute top-full mt-1 left-0 z-20 bg-white border border-neutral-100 rounded-xl shadow-lg py-1 min-w-[150px] max-h-52 overflow-y-auto"
+                    className="absolute top-full mt-1 left-0 z-20 bg-background border border-border rounded-xl shadow-lg py-1 min-w-[150px] max-h-52 overflow-y-auto"
                   >
                     <button
                       onClick={() => { setIndustryFilter("all"); setShowIndustryMenu(false); }}
-                      className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50", industryFilter === "all" ? "font-semibold text-neutral-900" : "text-neutral-500")}
+                      className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-muted/50", industryFilter === "all" ? "font-semibold text-foreground" : "text-muted-foreground")}
                     >
                       전체 업종
                     </button>
@@ -684,7 +684,7 @@ export default function History() {
                       <button
                         key={ind}
                         onClick={() => { setIndustryFilter(ind); setShowIndustryMenu(false); }}
-                        className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 transition-colors", industryFilter === ind ? "font-semibold text-neutral-900" : "text-neutral-500")}
+                        className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-muted/50 transition-colors", industryFilter === ind ? "font-semibold text-foreground" : "text-muted-foreground")}
                       >
                         {ind}
                       </button>
@@ -697,7 +697,7 @@ export default function History() {
 
           {/* 결과 카운트 */}
           {(verdictFilter !== "all" || industryFilter !== "all") && (
-            <span className="text-[11px] text-neutral-400 ml-auto">
+            <span className="text-[11px] text-muted-foreground ml-auto">
               {filteredAndSorted.length}건
             </span>
           )}
@@ -707,9 +707,9 @@ export default function History() {
       {/* ── 리스트 ───────────────────────────────────────────────────────── */}
       {list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-          <Inbox className="w-10 h-10 text-neutral-200" />
-          <p className="text-[15px] font-medium text-neutral-400">아직 분석한 기업이 없어요</p>
-          <p className="text-[13px] text-neutral-300">AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요</p>
+          <Inbox className="w-10 h-10 text-muted-foreground/30" />
+          <p className="text-[15px] font-medium text-muted-foreground">아직 분석한 기업이 없어요</p>
+          <p className="text-[13px] text-muted-foreground/50">AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요</p>
           <button
             onClick={() => setLocation("/analysis/new")}
             className="mt-2 px-4 py-2 rounded-md text-[13px] font-medium bg-[#1d4ed8] text-white hover:bg-blue-700 transition-colors"
@@ -719,7 +719,7 @@ export default function History() {
         </div>
       ) : filteredAndSorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-          <p className="text-[14px] font-medium text-neutral-400">필터 조건에 맞는 항목이 없어요</p>
+          <p className="text-[14px] font-medium text-muted-foreground">필터 조건에 맞는 항목이 없어요</p>
           <button onClick={() => { setVerdictFilter("all"); setIndustryFilter("all"); }} className="text-[12px] text-blue-500 hover:underline">
             필터 초기화
           </button>
@@ -750,7 +750,7 @@ export default function History() {
                 if (distThen == null) return null;
                 if (distNow < distThen) return { label: "▲ 목표 접근", cls: "bg-blue-50 text-blue-600 border-blue-200" };
                 if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "bg-red-50 text-red-500 border-red-200" };
-                return { label: "— 보합", cls: "bg-neutral-50 text-neutral-400 border-neutral-200" };
+                return { label: "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
               return (
@@ -761,13 +761,13 @@ export default function History() {
                   animate={{ opacity: isThisDeleting ? 0.4 : 1, y: 0 }}
                   exit={{ opacity: 0, x: -24, transition: { duration: 0.22 } }}
                   transition={{ duration: 0.18 }}
-                  className="group relative flex gap-4 px-5 py-4 rounded-xl border border-neutral-100 hover:border-neutral-200 hover:bg-neutral-50 transition-all cursor-pointer"
+                  className="group relative flex gap-4 px-5 py-4 rounded-xl border border-border hover:border-border hover:bg-muted/50 transition-all cursor-pointer"
                   onClick={() => !isConfirming && !isThisDeleting && setLocation(`/analysis/${a.id}`)}
                 >
                   {/* Status icon */}
                   <div className="shrink-0 pt-0.5">
                     {isThisDeleting ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
                     ) : a.status === "completed" ? (
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
                     ) : (
@@ -778,8 +778,8 @@ export default function History() {
                   {/* Main info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[15px] font-semibold text-neutral-900 truncate">{a.companyName}</span>
-                      <span className="text-[12px] text-neutral-400 font-mono">{a.ticker}</span>
+                      <span className="text-[15px] font-semibold text-foreground truncate">{a.companyName}</span>
+                      <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
                       {verdictBadge(a.investmentVerdict)}
                       {/* ── 방향 배지 ──────────────────────────────────── */}
                       {directionBadge && (
@@ -804,9 +804,9 @@ export default function History() {
                     </div>
 
                     {/* 메타 라인 */}
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-neutral-400 flex-wrap">
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground flex-wrap">
                       <span>{a.industry || "—"}</span>
-                      <span className="text-neutral-200">|</span>
+                      <span className="text-muted-foreground/30">|</span>
                       <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
                     </div>
 
@@ -819,20 +819,20 @@ export default function History() {
 
                       if (!cur || !tgt) {
                         if (tgt) return (
-                          <div className="mt-3 flex items-stretch rounded-xl overflow-hidden border border-neutral-100 text-center">
-                            <div className="flex-1 px-2.5 py-2 bg-neutral-50 border-r border-neutral-100">
-                              <p className="text-[9px] text-neutral-400 mb-0.5">분석 당시</p>
-                              <p className="text-[12px] font-bold text-neutral-600 tabular-nums">
-                                {entry != null ? formatCurrency(entry, currency) : <span className="text-neutral-300">—</span>}
+                          <div className="mt-3 flex items-stretch rounded-xl overflow-hidden border border-border text-center">
+                            <div className="flex-1 px-2.5 py-2 bg-muted/50 border-r border-border">
+                              <p className="text-[9px] text-muted-foreground mb-0.5">분석 당시</p>
+                              <p className="text-[12px] font-bold text-foreground/70 tabular-nums">
+                                {entry != null ? formatCurrency(entry, currency) : <span className="text-muted-foreground/50">—</span>}
                               </p>
                             </div>
-                            <div className="flex-1 px-2.5 py-2 bg-white border-r border-neutral-100">
-                              <p className="text-[9px] text-neutral-400 mb-0.5">현재가</p>
-                              <p className="text-[12px] font-bold text-neutral-300">—</p>
+                            <div className="flex-1 px-2.5 py-2 bg-background border-r border-border">
+                              <p className="text-[9px] text-muted-foreground mb-0.5">현재가</p>
+                              <p className="text-[12px] font-bold text-muted-foreground/50">—</p>
                             </div>
-                            <div className="flex-1 px-2.5 py-2 bg-white">
-                              <p className="text-[9px] text-neutral-400 mb-0.5">적정주가</p>
-                              <p className="text-[12px] font-bold text-neutral-700 tabular-nums">{formatCurrency(tgt, currency)}</p>
+                            <div className="flex-1 px-2.5 py-2 bg-background">
+                              <p className="text-[9px] text-muted-foreground mb-0.5">적정주가</p>
+                              <p className="text-[12px] font-bold text-foreground/80 tabular-nums">{formatCurrency(tgt, currency)}</p>
                             </div>
                           </div>
                         );
@@ -885,9 +885,9 @@ export default function History() {
                           className="flex items-center gap-1.5"
                           onClick={cancelConfirm}
                         >
-                          <span className="text-[12px] text-neutral-500 mr-0.5">삭제할까요?</span>
+                          <span className="text-[12px] text-muted-foreground mr-0.5">삭제할까요?</span>
                           <button onClick={(e) => confirmDelete(a.id, isLocalOnly, e)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
-                          <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-neutral-100 text-neutral-600 text-[11px] font-semibold hover:bg-neutral-200 transition-colors">취소</button>
+                          <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-muted text-foreground/70 text-[11px] font-semibold hover:bg-muted transition-colors">취소</button>
                         </motion.div>
                       ) : (
                         <motion.div
@@ -900,12 +900,12 @@ export default function History() {
                         >
                           <button
                             onClick={(e) => handleDelete(a.id, e)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-neutral-300 hover:text-red-400 hover:bg-red-50"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-50"
                             title="삭제"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                          <ArrowRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
+                          <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
                         </motion.div>
                       )}
                     </AnimatePresence>
