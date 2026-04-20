@@ -54,6 +54,7 @@ interface StockChartProps {
   companyName?: string;
   chartLevels?: ChartLevels;
   events?: ChartEvent[];
+  currency?: "KRW" | "USD";
 }
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
@@ -70,9 +71,15 @@ const INTERVAL_OPTIONS: { value: Interval; label: string }[] = [
   { value: "1mo", label: "월봉" },
 ];
 
-function formatPrice(v: number | null | undefined) {
+function formatPrice(v: number | null | undefined, currency: "KRW" | "USD" = "KRW") {
   if (v == null) return "—";
+  if (currency === "USD") return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return v.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+}
+
+function priceLabel(v: number, currency: "KRW" | "USD"): string {
+  if (currency === "USD") return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${v.toLocaleString("ko-KR")}원`;
 }
 
 function formatVolume(v: number | null | undefined) {
@@ -82,7 +89,7 @@ function formatVolume(v: number | null | undefined) {
   return v.toString();
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, currency = "KRW" }: any) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   return (
@@ -92,15 +99,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <div className="space-y-1.5">
           <div className="flex justify-between gap-4">
             <span className="text-neutral-400">종가</span>
-            <span className="text-neutral-900 font-bold font-mono">{formatPrice(d.close)}원</span>
+            <span className="text-neutral-900 font-bold font-mono">{priceLabel(d.close, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
             <span className="text-neutral-400">고가</span>
-            <span className="text-emerald-600 font-mono">{formatPrice(d.high)}원</span>
+            <span className="text-emerald-600 font-mono">{priceLabel(d.high, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
             <span className="text-neutral-400">저가</span>
-            <span className="text-red-500 font-mono">{formatPrice(d.low)}원</span>
+            <span className="text-red-500 font-mono">{priceLabel(d.low, currency)}</span>
           </div>
           {d.volume != null && (
             <div className="flex justify-between gap-4 border-t border-neutral-100 pt-1.5 mt-0.5">
@@ -122,8 +129,8 @@ const ctrlBtn = (active: boolean) =>
       : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
   );
 
-function LevelBadge({ label, value, color }: { label: string; value: number | string; color: string }) {
-  const display = typeof value === "number" ? `${value.toLocaleString("ko-KR")}원` : value + "원";
+function LevelBadge({ label, value, color, currency = "KRW" }: { label: string; value: number | string; color: string; currency?: "KRW" | "USD" }) {
+  const display = typeof value === "number" ? priceLabel(value, currency) : (currency === "USD" ? `$${value}` : `${value}원`);
   return (
     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium" style={{ borderColor: `${color}40`, backgroundColor: `${color}10`, color }}>
       <span className="w-2 h-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
@@ -133,7 +140,7 @@ function LevelBadge({ label, value, color }: { label: string; value: number | st
   );
 }
 
-export default function StockChart({ ticker, companyName, chartLevels, events = [] }: StockChartProps) {
+export default function StockChart({ ticker, companyName, chartLevels, events = [], currency = "KRW" }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
 
@@ -193,8 +200,10 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-neutral-900 font-mono tracking-tight">
-                  {formatPrice(data.currentPrice)}
-                  <span className="text-sm font-normal text-neutral-400 ml-0.5">원</span>
+                  {currency === "USD"
+                    ? <>${formatPrice(data.currentPrice, "USD").replace("$", "")}</>
+                    : <>{formatPrice(data.currentPrice)}<span className="text-sm font-normal text-neutral-400 ml-0.5">원</span></>
+                  }
                 </span>
                 <span className={cn(
                   "flex items-center gap-0.5 text-sm font-semibold",
@@ -203,9 +212,11 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                   {isUp ? "+" : ""}{data.changePercent.toFixed(2)}%
                 </span>
-                <span className="text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded font-mono">KRX</span>
+                <span className="text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded font-mono">
+                  {currency === "USD" ? "NYSE/NASDAQ" : "KRX"}
+                </span>
               </div>
-              {nxtInfo && (
+              {nxtInfo && currency === "KRW" && (
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="text-[10px] font-bold text-neutral-900 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200">
                     {nxtInfo.sessionType === "AFTER_MARKET" ? "NXT 장후" : "NXT 장전"}
@@ -310,8 +321,8 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   tick={axisStyle}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(v) => v.toLocaleString("ko-KR")}
-                  width={72}
+                  tickFormatter={(v) => currency === "USD" ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : v.toLocaleString("ko-KR")}
+                  width={currency === "USD" ? 64 : 72}
                 />
                 {/* 거래량 Y축 (오른쪽 숨김 — 스케일만 담당) */}
                 <YAxis
@@ -323,7 +334,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   axisLine={false}
                   width={0}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip currency={currency} />} />
                 <Legend
                   wrapperStyle={{ fontSize: "11px", paddingTop: "10px", fontFamily: "'Pretendard', sans-serif" }}
                   formatter={(value) => <span style={{ color: "#737373" }}>{value}</span>}
@@ -394,31 +405,31 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                 {/* ── 기준선 라인 (라벨 포함) ── */}
                 {chartLevels?.resistance && (
                   <ReferenceLine yAxisId="price" y={chartLevels.resistance} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 3"
-                    label={{ value: `저항 ${Number(chartLevels.resistance).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444", fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `저항 ${priceLabel(chartLevels.resistance, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.support && (
                   <ReferenceLine yAxisId="price" y={chartLevels.support} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3"
-                    label={{ value: `지지 ${Number(chartLevels.support).toLocaleString("ko-KR")}`, position: "insideBottomRight", fontSize: 9, fill: "#22c55e", fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `지지 ${priceLabel(chartLevels.support, currency)}`, position: "insideBottomRight", fontSize: 9, fill: "#22c55e", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.stopLoss && (
                   <ReferenceLine yAxisId="price" y={chartLevels.stopLoss} stroke="#dc2626" strokeWidth={2} strokeDasharray="3 2"
-                    label={{ value: `손절 ${Number(chartLevels.stopLoss).toLocaleString("ko-KR")}`, position: "insideBottomRight", fontSize: 9, fill: "#dc2626", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `손절 ${priceLabel(chartLevels.stopLoss, currency)}`, position: "insideBottomRight", fontSize: 9, fill: "#dc2626", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.entryMin && (
                   <ReferenceLine yAxisId="price" y={chartLevels.entryMin} stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `진입하단 ${Number(chartLevels.entryMin).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `진입하단 ${priceLabel(chartLevels.entryMin, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.entryMax && (
                   <ReferenceLine yAxisId="price" y={chartLevels.entryMax} stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="4 2"
-                    label={{ value: `진입상단 ${Number(chartLevels.entryMax).toLocaleString("ko-KR")}`, position: "insideBottomRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `진입상단 ${priceLabel(chartLevels.entryMax, currency)}`, position: "insideBottomRight", fontSize: 9, fill: "#1d4ed8", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.target1 && (
                   <ReferenceLine yAxisId="price" y={chartLevels.target1} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3"
-                    label={{ value: `1차목표 ${Number(chartLevels.target1).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#16a34a", fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `1차목표 ${priceLabel(chartLevels.target1, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#16a34a", fontFamily: "'Pretendard', sans-serif" }} />
                 )}
                 {chartLevels?.target2 && (
                   <ReferenceLine yAxisId="price" y={chartLevels.target2} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3"
-                    label={{ value: `2차목표 ${Number(chartLevels.target2).toLocaleString("ko-KR")}`, position: "insideTopRight", fontSize: 9, fill: "#15803d", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
+                    label={{ value: `2차목표 ${priceLabel(chartLevels.target2, currency)}`, position: "insideTopRight", fontSize: 9, fill: "#15803d", fontWeight: 600, fontFamily: "'Pretendard', sans-serif" }} />
                 )}
 
                 {/* ── 이벤트 수직선 마커 ── */}
@@ -447,14 +458,22 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
             {/* 기술적 분석 레벨 배지 */}
             {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
               <div className="mt-3 flex flex-wrap gap-2 px-1">
-                {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" />}
-                {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" />}
-                {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" />}
+                {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" currency={currency} />}
+                {chartLevels.support && <LevelBadge label="지지선" value={chartLevels.support} color="#22c55e" currency={currency} />}
+                {chartLevels.resistance && <LevelBadge label="저항선" value={chartLevels.resistance} color="#ef4444" currency={currency} />}
                 {chartLevels.entryMin && chartLevels.entryMax && (
-                  <LevelBadge label="진입 구간" value={`${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`} color="#1d4ed8" />
+                  <LevelBadge
+                    label="진입 구간"
+                    value={currency === "USD"
+                      ? `$${chartLevels.entryMin.toLocaleString("en-US", { minimumFractionDigits: 2 })} ~ $${chartLevels.entryMax.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+                      : `${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`
+                    }
+                    color="#1d4ed8"
+                    currency={currency}
+                  />
                 )}
-                {chartLevels.target1 && <LevelBadge label="1차 적정주가" value={chartLevels.target1} color="#16a34a" />}
-                {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" />}
+                {chartLevels.target1 && <LevelBadge label="1차 적정주가" value={chartLevels.target1} color="#16a34a" currency={currency} />}
+                {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" currency={currency} />}
               </div>
             )}
 

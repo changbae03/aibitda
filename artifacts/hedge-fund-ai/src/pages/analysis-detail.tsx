@@ -2100,6 +2100,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
               companyName={companyName}
               chartLevels={chartLevels ?? undefined}
               events={chartEvents}
+              currency={priceCurrency}
             />
           </div>
         )}
