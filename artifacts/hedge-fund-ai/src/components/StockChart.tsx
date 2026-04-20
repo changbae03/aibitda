@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ComposedChart,
   Line,
@@ -213,6 +213,15 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const [priceEventNews, setPriceEventNews] = useState<PriceEventNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState(false);
+
+  // 다크모드 감지
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+  useEffect(() => {
+    const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains("dark")));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  const lineColor = isDark ? "#e2e8f0" : "#0a0a0a";  // 다크: 밝은 회백색 / 라이트: 거의 검정
 
   const { data, isLoading, error } = useGetMarketData(ticker, { period, interval });
 
@@ -454,10 +463,10 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   yAxisId="price"
                   dataKey="close"
                   name="주가"
-                  stroke="#0a0a0a"
+                  stroke={lineColor}
                   strokeWidth={1.8}
                   dot={false}
-                  activeDot={{ r: 3, fill: "#0a0a0a" }}
+                  activeDot={{ r: 3, fill: lineColor }}
                 />
 
                 {/* ── 기준선 — 현재가 대비 50% 이내 레벨만 표시 ── */}
