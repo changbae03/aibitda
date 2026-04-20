@@ -487,9 +487,9 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-neutral-300">{list.length}건</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">매수 {buyCount}</span>}
-                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-100">중립 {holdCount}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">매도 {sellCount}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">상승여력 {buyCount}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-100">적정수준 {holdCount}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">하락여지 {sellCount}</span>}
                 {reanalysisCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200">
                     재분석 {reanalysisCount}
@@ -567,7 +567,7 @@ export default function History() {
 
           {/* Verdict 필터 */}
           {(["all", "buy", "sell", "hold"] as VerdictFilter[]).map((v) => {
-            const labels: Record<VerdictFilter, string> = { all: "전체", buy: "매수", sell: "매도", hold: "중립" };
+            const labels: Record<VerdictFilter, string> = { all: "전체", buy: "상승여력", sell: "하락여지", hold: "적정수준" };
             const active = verdictFilter === v;
             return (
               <button
