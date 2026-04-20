@@ -241,9 +241,9 @@
   .markdown-body td { padding: 0.35rem 0.5rem; }
 }
 
-/* ── 인쇄 ── */
+/* ── 인쇄 / PDF ── */
 @media print {
-  @page { size: A4 portrait; margin: 16mm 20mm; }
+  @page { size: A4 portrait; margin: 14mm 18mm; }
   #print-main, #print-scroll { height: auto !important; overflow: visible !important; }
   body, html { background: white !important; color: #111 !important; }
   [style*="position: sticky"], [style*="position: fixed"] { position: static !important; }
@@ -251,4 +251,17 @@
   a[href]::after { content: none !important; }
   table { break-inside: avoid; }
   * { animation: none !important; transition: none !important; }
+
+  /* 분석 보고서 인쇄 최적화 */
+  .space-y-6 > * { break-inside: avoid; }
+  .prose { font-size: 11pt !important; line-height: 1.6 !important; }
+  .prose h1, .prose h2 { break-after: avoid; }
+  .prose h3 { break-after: avoid; font-size: 12pt !important; }
+  .prose p, .prose li { orphans: 3; widows: 3; }
+  .border { border-color: #d1d5db !important; }
+  .bg-card, .bg-muted { background: white !important; }
+  .text-muted-foreground { color: #6b7280 !important; }
+  /* 페이지 너비 전체 사용 */
+  .max-w-4xl, .max-w-3xl, .max-w-2xl { max-width: 100% !important; }
+  .pb-20 { padding-bottom: 0 !important; }
 }

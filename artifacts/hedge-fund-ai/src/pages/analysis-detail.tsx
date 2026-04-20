@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Share2,
   Check,
+  FileDown,
   Database,
   Pencil,
   X,
@@ -343,6 +344,11 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExportPdf = () => {
+    onClose();
+    setTimeout(() => window.print(), 350);
+  };
+
   const handleExportImage = async () => {
     if (!cardRef.current || exporting) return;
     setExporting(true);
@@ -477,6 +483,20 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 {exporting ? "생성중..." : "이미지 저장"}
               </span>
             </button>
+          </div>
+
+          {/* PDF 저장 — 전체 너비 */}
+          <div className="px-5 pb-5">
+            <button
+              onClick={handleExportPdf}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-700 transition-colors text-white text-[13px] font-semibold"
+            >
+              <FileDown className="w-4 h-4" />
+              PDF로 저장하기
+            </button>
+            <p className="text-center text-[10px] text-neutral-400 mt-2">
+              인쇄 대화상자에서 &apos;PDF로 저장&apos; 선택
+            </p>
           </div>
         </motion.div>
       </motion.div>
