@@ -941,7 +941,7 @@ export default function AnalysisDetail() {
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
           <div>
-            <div className="flex items-center gap-2.5 mb-2">
+            <div className="flex items-center gap-2.5 mb-2 flex-wrap">
               <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-md font-mono font-bold tracking-wider text-sm border border-primary/20">
                 {analysis.ticker}
               </span>
@@ -952,6 +952,9 @@ export default function AnalysisDetail() {
                   : "bg-warning/10 text-warning border-warning/20 animate-pulse"
               )}>
                 {isComplete ? '분석 완료' : '분석 진행중'}
+              </span>
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+                <span>⚡</span>AI 자동 생성 · 참고용
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground leading-tight">
@@ -1280,27 +1283,35 @@ export default function AnalysisDetail() {
 
             {/* Disclaimer */}
             <div className="mt-5 pt-6 border-t border-neutral-100 print:mt-6">
+              {/* AI 생성 명시 배너 (AI 기본법 투명성 의무) */}
+              <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
+                <p className="text-[11.5px] text-amber-800 leading-relaxed">
+                  <span className="font-bold">AI 자동 생성 콘텐츠.</span> 본 리포트는 대형 언어모델(LLM) AI가 공개 데이터를 바탕으로 자동 생성한 분석 참고 자료입니다. 인간 전문가의 검토를 거치지 않았으며, 사실 오류·추론 오류가 포함될 수 있습니다. 투자 결정 전 반드시 공식 공시 자료 및 전문가 의견을 별도로 확인하십시오.
+                </p>
+              </div>
+
               <div className="rounded-xl bg-neutral-50 border border-neutral-200 px-5 py-4 space-y-2">
-                <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">투자 유의사항</p>
+                <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">투자 유의사항 (Legal Disclaimer)</p>
                 <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                  본 리포트는 「CBST」(이하 "당사")가 운영하는 AI 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 참고용 자료입니다. 당사는 자본시장과 금융투자업에 관한 법률(이하 "자본시장법") 제101조에 따라 신고를 마친 유사투자자문업자로서, 불특정 다수인을 대상으로 발행되는 정보 서비스입니다.
+                  본 리포트는 「CBST」가 운영하는 AI 정보 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 자본시장과 금융투자업에 관한 법률상 투자자문업 또는 투자일임업에 해당하지 않으며, 특정인을 대상으로 한 개별 투자 판단·조언을 제공하지 않습니다.
                 </p>
                 <div className="space-y-2 mt-1">
                   <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">투자 책임:</span> 본 리포트는 특정 금융투자상품의 매수·매도 또는 보유를 권유하거나 추천하지 않으며, 개별적인 투자자문 계약에 따른 판단을 제공하지 않습니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
+                    <span className="font-semibold text-neutral-600">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
                   </p>
                   <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">데이터의 한계:</span> AI가 산출한 적정주가, 적정주가 및 재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 이는 실제 결과와 크게 다를 수 있으며, 시장 상황·거시경제·금리·기업 공시 변화 등 예측 불가능한 변수에 따라 언제든지 변동될 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
+                    <span className="font-semibold text-neutral-600">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
                   </p>
                   <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있으며, 그 결과는 투자자에게 귀속됩니다.
+                    <span className="font-semibold text-neutral-600">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
                   </p>
                   <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                    <span className="font-semibold text-neutral-600">독립적 검토 권고:</span> 투자자는 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
+                    <span className="font-semibold text-neutral-600">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
                   </p>
                 </div>
                 <p className="text-[11px] text-neutral-400 mt-2 pt-2 border-t border-neutral-200">
-                  본 리포트의 무단 복제, 배포 및 재가공은 법적으로 금지됩니다.
+                  본 리포트의 무단 복제·배포·재가공은 금지됩니다. &nbsp;·&nbsp; 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
                 </p>
                 <p className="text-[10.5px] text-neutral-400 mt-1">
                   분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.

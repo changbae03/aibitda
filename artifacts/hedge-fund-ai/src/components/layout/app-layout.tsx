@@ -187,10 +187,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <a href="#" className="hover:text-neutral-700 transition-colors">고객센터</a>
               </nav>
               <p className="text-[11px] text-neutral-300 leading-relaxed">
-                애빛다에서 제공하는 투자 정보는 투자 판단을 위한 단순 참고용일 뿐, 투자 제안 및 권유, 종목 추천을 위해 작성된 것이 아닙니다.
+                애빛다의 모든 콘텐츠는 AI가 자동 생성한 참고용 정보이며, 특정 금융투자상품의 매수·매도·보유를 권유하거나 추천하지 않습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.
               </p>
-              <p className="text-[11px] text-neutral-300 mt-1">
-                © {new Date().getFullYear()} 애빛다. AI로 기업가치를 밝히다.
+              <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                본 서비스는 자본시장법상 투자자문업·투자일임업에 해당하지 않으며, 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
+              </p>
+              <p className="text-[11px] text-neutral-300 mt-1.5">
+                © {new Date().getFullYear()} 애빛다 · CBST. AI로 기업가치를 밝히다.
               </p>
             </div>
           </footer>
