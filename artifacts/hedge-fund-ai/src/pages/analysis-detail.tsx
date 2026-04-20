@@ -18,7 +18,6 @@ import {
   RefreshCw,
   Share2,
   Check,
-  FileDown,
   Database,
   Pencil,
   X,
@@ -303,7 +302,6 @@ function loadKakaoSDK(): Promise<void> {
 
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const url = window.location.href;
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
   const vs = verdictStyle(analysis?.verdict);
@@ -347,66 +345,6 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     try { await navigator.clipboard.writeText(url); } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleExportPdf = async () => {
-    if (exporting) return;
-    setExporting(true);
-    try {
-      const [{ default: html2canvas }, jspdfMod, { default: ReportPDFTemplate }, { createElement }, { createRoot }] =
-        await Promise.all([
-          import("html2canvas"),
-          import("jspdf"),
-          import("@/components/ReportPDFTemplate"),
-          import("react"),
-          import("react-dom/client"),
-        ]);
-      const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default;
-
-      const container = document.createElement("div");
-      container.style.cssText =
-        "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-9999;";
-      document.body.appendChild(container);
-
-      const root = createRoot(container);
-      root.render(createElement(ReportPDFTemplate, { analysis }));
-      await new Promise<void>((r) => setTimeout(r, 900));
-
-      const el = container.firstElementChild as HTMLElement;
-      const canvas = await html2canvas(el, {
-        scale: 2.5, backgroundColor: "#ffffff",
-        useCORS: true, logging: false, width: 794, windowWidth: 794,
-      });
-
-      root.unmount();
-      document.body.removeChild(container);
-
-      const A4_W = 210, A4_H = 297;
-      const pxToMm = A4_W / canvas.width;
-      const pageH_px = Math.round(A4_H / pxToMm);
-      const totalPages = Math.ceil(canvas.height / pageH_px);
-      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
-      for (let p = 0; p < totalPages; p++) {
-        if (p > 0) pdf.addPage();
-        const srcY = p * pageH_px;
-        const srcH = Math.min(pageH_px, canvas.height - srcY);
-        const slice = document.createElement("canvas");
-        slice.width = canvas.width; slice.height = srcH;
-        const ctx = slice.getContext("2d")!;
-        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-        pdf.addImage(slice.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, A4_W, srcH * pxToMm);
-      }
-
-      pdf.save(`애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`);
-      onClose();
-    } catch (e: any) {
-      console.error("PDF 생성 실패:", e?.message ?? e);
-      alert(`PDF 생성 실패: ${e?.message ?? "알 수 없는 오류"}`);
-    } finally {
-      setExporting(false);
-    }
   };
 
   // URL 표시용 단축 (긴 dev URL 일 때 잘라서 보여줌)
@@ -542,19 +480,6 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
             </div>
           </div>
 
-          {/* ── PDF 저장 (보조) ── */}
-          <div className="px-5 pb-5 border-t border-neutral-100 pt-3">
-            <button
-              onClick={handleExportPdf}
-              disabled={exporting}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 transition-colors text-neutral-600 text-[12px] font-semibold disabled:opacity-50"
-            >
-              {exporting
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> PDF 생성 중 (10~20초)...</>
-                : <><FileDown className="w-3.5 h-3.5" /> PDF로 저장</>
-              }
-            </button>
-          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
