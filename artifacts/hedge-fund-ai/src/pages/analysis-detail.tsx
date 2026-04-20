@@ -344,9 +344,74 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleExportPdf = () => {
-    onClose();
-    setTimeout(() => window.print(), 350);
+  const handleExportPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }, { default: ReportPDFTemplate }, { createRoot }] =
+        await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+          import("@/components/ReportPDFTemplate"),
+          import("react-dom/client"),
+        ]);
+
+      // 오프스크린 컨테이너 생성
+      const container = document.createElement("div");
+      container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;z-index:-1;";
+      document.body.appendChild(container);
+
+      // React 컴포넌트 렌더링
+      const root = createRoot(container);
+      const { createElement } = await import("react");
+      root.render(createElement(ReportPDFTemplate, { analysis }));
+
+      // 폰트/이미지 로드 대기
+      await new Promise<void>((r) => setTimeout(r, 800));
+
+      const canvas = await html2canvas(container.firstChild as HTMLElement, {
+        scale: 2.5,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+        windowWidth: 794,
+      });
+
+      root.unmount();
+      document.body.removeChild(container);
+
+      // jsPDF A4 멀티페이지 생성
+      const A4_W = 210; // mm
+      const A4_H = 297; // mm
+      const px_per_mm = canvas.width / A4_W;
+      const pageHeightPx = A4_H * px_per_mm;
+      const totalPages = Math.ceil(canvas.height / pageHeightPx);
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+      for (let page = 0; page < totalPages; page++) {
+        if (page > 0) pdf.addPage();
+        const srcY = page * pageHeightPx;
+        const srcH = Math.min(pageHeightPx, canvas.height - srcY);
+
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = srcH;
+        const ctx = pageCanvas.getContext("2d")!;
+        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+        const imgData = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const renderedH = (srcH / canvas.width) * A4_W;
+        pdf.addImage(imgData, "JPEG", 0, 0, A4_W, renderedH);
+      }
+
+      const filename = `애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`;
+      pdf.save(filename);
+    } catch (e) {
+      console.error("PDF 생성 실패:", e);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleExportImage = async () => {
@@ -489,14 +554,24 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           <div className="px-5 pb-5">
             <button
               onClick={handleExportPdf}
-              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-700 transition-colors text-white text-[13px] font-semibold"
+              disabled={exporting}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-700 transition-colors text-white text-[13px] font-semibold disabled:opacity-60"
             >
-              <FileDown className="w-4 h-4" />
-              PDF로 저장하기
+              {exporting
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> PDF 생성 중...</>
+                : <><FileDown className="w-4 h-4" /> PDF로 저장하기</>
+              }
             </button>
-            <p className="text-center text-[10px] text-neutral-400 mt-2">
-              인쇄 대화상자에서 &apos;PDF로 저장&apos; 선택
-            </p>
+            {!exporting && (
+              <p className="text-center text-[10px] text-neutral-400 mt-2">
+                아름다운 리포트 형식으로 즉시 다운로드
+              </p>
+            )}
+            {exporting && (
+              <p className="text-center text-[10px] text-amber-500 mt-2">
+                AI 분석 내용을 PDF로 변환하는 중입니다 (10~20초)...
+              </p>
+            )}
           </div>
         </motion.div>
       </motion.div>
