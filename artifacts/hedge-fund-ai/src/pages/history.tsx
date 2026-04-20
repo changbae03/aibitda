@@ -266,7 +266,7 @@ function PriceTrack({
       {/* Under-track labels */}
       <div className="relative h-4 mt-0.5 select-none">
         <span className="absolute left-0 text-[9px] text-neutral-300">◀ 하락</span>
-        <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-neutral-400">진입가</span>
+        <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-neutral-400">분석 당시</span>
         <span
           className={cn("absolute text-[9px] font-medium -translate-x-1/2 whitespace-nowrap", exceeded ? "text-emerald-600" : "text-emerald-500")}
           style={{ left: `${Math.max(Math.min(tgtX, 90), 15)}%` }}
