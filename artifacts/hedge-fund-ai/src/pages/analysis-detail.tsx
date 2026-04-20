@@ -348,8 +348,8 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     if (exporting) return;
     setExporting(true);
     try {
-      const [{ default: html2canvas }, jspdfMod] = await Promise.all([
-        import("html2canvas"),
+      const [{ toJpeg }, jspdfMod] = await Promise.all([
+        import("html-to-image"),
         import("jspdf"),
       ]);
       const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default;
@@ -358,13 +358,9 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       if (!target) throw new Error("report element not found");
 
       // print:hidden 요소 임시 숨김
-      const hiddenEls = Array.from(
-        target.querySelectorAll<HTMLElement>(".print\\:hidden, [data-pdf-hide]")
-      );
-      const memoEls = Array.from(
+      const allHide = Array.from(
         document.querySelectorAll<HTMLElement>(".print\\:hidden")
       );
-      const allHide = [...new Set([...hiddenEls, ...memoEls])];
       const origDisplay: string[] = allHide.map((el) => el.style.display);
       allHide.forEach((el) => { el.style.display = "none"; });
 
@@ -375,19 +371,26 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       const origPrint: string[] = printOnly.map((el) => el.style.display);
       printOnly.forEach((el) => { el.style.display = "block"; });
 
-      await new Promise<void>((r) => setTimeout(r, 100));
+      await new Promise<void>((r) => setTimeout(r, 200));
 
-      const canvas = await html2canvas(target, {
-        scale: 2,
+      // html-to-image: 브라우저 네이티브 렌더링 → oklch 등 최신 CSS 완벽 지원
+      const dataUrl = await toJpeg(target, {
+        quality: 0.95,
+        pixelRatio: 2,
         backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        scrollY: -window.scrollY,
+        skipAutoScale: false,
+        style: { paddingBottom: "40px" },
       });
 
       // 복원
       allHide.forEach((el, i) => { el.style.display = origDisplay[i]; });
       printOnly.forEach((el, i) => { el.style.display = origPrint[i]; });
+
+      // 이미지 크기로 canvas 생성해 실제 픽셀 수 확인
+      const img = new Image();
+      await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
+      const imgW = img.naturalWidth;
+      const imgH = img.naturalHeight;
 
       // A4 멀티페이지 PDF 생성
       const A4_W_MM = 210;
@@ -396,29 +399,28 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       const contentW_mm = A4_W_MM - MARGIN_MM * 2;
       const pageH_mm = A4_H_MM - MARGIN_MM * 2;
 
-      // 캔버스 px → mm 변환 비율 (콘텐츠 폭 기준)
-      const pxToMm = contentW_mm / canvas.width;
+      const pxToMm = contentW_mm / imgW;
       const pageH_px = Math.round(pageH_mm / pxToMm);
-      const totalPages = Math.ceil(canvas.height / pageH_px);
+      const totalPages = Math.ceil(imgH / pageH_px);
 
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
       for (let page = 0; page < totalPages; page++) {
         if (page > 0) pdf.addPage();
         const srcY = page * pageH_px;
-        const srcH = Math.min(pageH_px, canvas.height - srcY);
+        const srcH = Math.min(pageH_px, imgH - srcY);
 
         const slice = document.createElement("canvas");
-        slice.width = canvas.width;
+        slice.width = imgW;
         slice.height = pageH_px;
         const ctx = slice.getContext("2d")!;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+        ctx.drawImage(img, 0, srcY, imgW, srcH, 0, 0, imgW, srcH);
 
-        const imgData = slice.toDataURL("image/jpeg", 0.92);
+        const sliceData = slice.toDataURL("image/jpeg", 0.93);
         const sliceH_mm = srcH * pxToMm;
-        pdf.addImage(imgData, "JPEG", MARGIN_MM, MARGIN_MM, contentW_mm, sliceH_mm);
+        pdf.addImage(sliceData, "JPEG", MARGIN_MM, MARGIN_MM, contentW_mm, sliceH_mm);
       }
 
       const filename = `애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`;
