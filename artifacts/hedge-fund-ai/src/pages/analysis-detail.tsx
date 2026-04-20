@@ -1586,11 +1586,11 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 ? "border-emerald-100 dark:border-emerald-900/40"
                 : "border-indigo-100 dark:border-indigo-900/40";
               const chipBg = isPBROE
-                ? "text-emerald-500 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/50"
-                : "text-indigo-500 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/50";
+                ? "text-emerald-700 dark:text-white bg-emerald-100 dark:bg-emerald-600/50"
+                : "text-indigo-700 dark:text-white bg-indigo-100 dark:bg-indigo-600/50";
               const valBg = isPBROE
-                ? "bg-emerald-50 dark:bg-emerald-900/30"
-                : "bg-indigo-50 dark:bg-indigo-900/30";
+                ? "bg-emerald-50 dark:bg-emerald-600/50"
+                : "bg-indigo-50 dark:bg-indigo-600/50";
 
               return (
                 <div className={`mx-4 sm:mx-6 my-2 rounded-2xl border ${borderColor} bg-gradient-to-br ${bgColor} overflow-hidden`}>
@@ -1616,41 +1616,41 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <p className="text-[9px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-2">
                           P/B-ROE 밸류에이션 공식
                         </p>
-                        <div className="bg-white/60 dark:bg-black/20 rounded-xl border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-3">
+                        <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl border border-emerald-100 dark:border-emerald-700/40 p-3 space-y-3">
                           {/* Gordon Growth P/B 공식 */}
                           <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono">
                             <span className="text-[10px] text-muted-foreground">목표 P/B =</span>
                             <div className="flex flex-col items-center">
                               <span className="text-[8px] text-muted-foreground mb-0.5">ROE</span>
-                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                              <span className="font-bold text-foreground dark:text-white bg-emerald-50 dark:bg-emerald-600/50 px-2 py-0.5 rounded">
                                 {v("pb_roe_roe") || "—"}
                               </span>
                             </div>
                             <span className="text-muted-foreground">−</span>
                             <div className="flex flex-col items-center">
-                              <span className="text-[8px] text-muted-foreground mb-0.5">g</span>
-                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                              <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">g</span>
+                              <span className="font-bold text-foreground dark:text-white bg-emerald-50 dark:bg-emerald-600/50 px-2 py-0.5 rounded">
                                 {v("pb_roe_g") || "—"}
                               </span>
                             </div>
                             <span className="text-muted-foreground text-[14px]">÷</span>
                             <div className="flex flex-col items-center">
-                              <span className="text-[8px] text-muted-foreground mb-0.5">CoE</span>
-                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                              <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">CoE</span>
+                              <span className="font-bold text-foreground dark:text-white bg-emerald-50 dark:bg-emerald-600/50 px-2 py-0.5 rounded">
                                 {v("pb_roe_coe") || "—"}
                               </span>
                             </div>
                             <span className="text-muted-foreground">−</span>
                             <div className="flex flex-col items-center">
-                              <span className="text-[8px] text-muted-foreground mb-0.5">g</span>
-                              <span className="font-bold text-foreground bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                              <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">g</span>
+                              <span className="font-bold text-foreground dark:text-white bg-emerald-50 dark:bg-emerald-600/50 px-2 py-0.5 rounded">
                                 {v("pb_roe_g") || "—"}
                               </span>
                             </div>
                             <span className="text-muted-foreground">=</span>
                             <div className="flex flex-col items-center">
-                              <span className="text-[8px] text-muted-foreground mb-0.5">목표 P/B</span>
-                              <span className="font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded">
+                              <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">목표 P/B</span>
+                              <span className="font-bold text-emerald-700 dark:text-white bg-emerald-100 dark:bg-emerald-500/60 px-2 py-0.5 rounded">
                                 {v("pb_roe_target_pb") ? `${v("pb_roe_target_pb")}배` : "—"}
                               </span>
                             </div>
@@ -1719,14 +1719,14 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                           할인율 (WACC / CoE) 산출
                         </p>
                         {hasWaccBreakdown ? (
-                          <div className="bg-white/60 dark:bg-black/20 rounded-xl border border-indigo-100 dark:border-indigo-900/40 p-3">
+                          <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl border border-indigo-100 dark:border-indigo-700/40 p-3">
                             {/* 공식 표시 */}
                             <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono mb-3">
                               {v("wacc_rf") && (
                                 <>
                                   <div className="flex flex-col items-center">
                                     <span className="text-[8px] text-muted-foreground mb-0.5">Rf</span>
-                                    <span className="font-bold text-foreground bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{v("wacc_rf")}</span>
+                                    <span className="font-bold text-foreground dark:text-white bg-indigo-50 dark:bg-indigo-600/50 px-2 py-0.5 rounded">{v("wacc_rf")}</span>
                                   </div>
                                   <span className="text-muted-foreground">+</span>
                                 </>
@@ -1734,8 +1734,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                               {v("wacc_beta") && (
                                 <>
                                   <div className="flex flex-col items-center">
-                                    <span className="text-[8px] text-muted-foreground mb-0.5">β</span>
-                                    <span className="font-bold text-foreground bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{v("wacc_beta")}</span>
+                                    <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">β</span>
+                                    <span className="font-bold text-foreground dark:text-white bg-indigo-50 dark:bg-indigo-600/50 px-2 py-0.5 rounded">{v("wacc_beta")}</span>
                                   </div>
                                   <span className="text-muted-foreground">×</span>
                                 </>
@@ -1743,16 +1743,16 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                               {v("wacc_erp") && (
                                 <>
                                   <div className="flex flex-col items-center">
-                                    <span className="text-[8px] text-muted-foreground mb-0.5">ERP</span>
-                                    <span className="font-bold text-foreground bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{v("wacc_erp")}</span>
+                                    <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">ERP</span>
+                                    <span className="font-bold text-foreground dark:text-white bg-indigo-50 dark:bg-indigo-600/50 px-2 py-0.5 rounded">{v("wacc_erp")}</span>
                                   </div>
                                   <span className="text-muted-foreground">=</span>
                                 </>
                               )}
                               {v("wacc_coe") && (
                                 <div className="flex flex-col items-center">
-                                  <span className="text-[8px] text-muted-foreground mb-0.5">CoE</span>
-                                  <span className="font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded">{v("wacc_coe")}</span>
+                                  <span className="text-[8px] text-muted-foreground dark:text-slate-400 mb-0.5">CoE</span>
+                                  <span className="font-bold text-indigo-700 dark:text-white bg-indigo-100 dark:bg-indigo-500/60 px-2 py-0.5 rounded">{v("wacc_coe")}</span>
                                 </div>
                               )}
                             </div>
@@ -1801,7 +1801,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                             { label: "영구성장률 (g)", key: "terminal_growth" },
                             { label: "Terminal ROIC", key: "terminal_roic" },
                           ].filter(({ key }) => isValid(KA[key])).map(({ label, key }) => (
-                            <div key={key} className="bg-white/60 dark:bg-black/20 rounded-lg border border-indigo-100 dark:border-indigo-900/40 px-3 py-2">
+                            <div key={key} className="bg-white/60 dark:bg-white/[0.06] rounded-lg border border-indigo-100 dark:border-indigo-700/40 px-3 py-2">
                               <span className="text-[8px] text-muted-foreground block mb-0.5">{label}</span>
                               <span className="text-[14px] font-bold font-mono text-foreground">{v(key)}</span>
                             </div>
@@ -1816,7 +1816,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <p className="text-[9px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-widest mb-2">
                           절대가치 ↔ 피어가치 조율
                         </p>
-                        <div className="bg-white/60 dark:bg-black/20 rounded-xl border border-indigo-100 dark:border-indigo-900/40 p-3">
+                        <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl border border-indigo-100 dark:border-indigo-700/40 p-3">
                           <div className="flex items-center gap-3 flex-wrap">
                             {v("abs_value") && (
                               <div className="flex flex-col flex-1 min-w-[80px]">
