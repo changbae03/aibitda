@@ -316,6 +316,40 @@ export default function History() {
     date: "최신순", upside: "업사이드 큰 순", return: "수익률 순", name: "기업명순",
   };
 
+  // ── 정확도 통계 ────────────────────────────────────────────────────────
+  const accuracyStats = useMemo(() => {
+    const tracked = list.filter((a) => quotes[a.ticker]?.price != null && a.targetPrice != null);
+    if (tracked.length === 0) return null;
+    let exceededCount = 0, approachingCount = 0, divergingCount = 0;
+    let accSum = 0, accCount = 0;
+    tracked.forEach((a) => {
+      const cur = quotes[a.ticker]!.price!;
+      const tgt = a.targetPrice!;
+      const entry = a.startPrice ?? a.entryPrice;
+      const isBuy  = (a.investmentVerdict ?? "").toLowerCase().includes("buy");
+      const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
+      const exceeded  = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
+      const distNow   = Math.abs(cur - tgt);
+      const distThen  = entry != null ? Math.abs(entry - tgt) : null;
+      const approaching = !exceeded && distThen != null && distNow < distThen;
+      const diverging   = !exceeded && distThen != null && distNow > distThen;
+      if (exceeded)   exceededCount++;
+      if (approaching) approachingCount++;
+      if (diverging)  divergingCount++;
+      if (entry != null && tgt !== entry) {
+        accSum += ((cur - entry) / (tgt - entry)) * 100;
+        accCount++;
+      }
+    });
+    return {
+      total: tracked.length,
+      exceededCount,
+      dirAccuracy: ((exceededCount + approachingCount) / tracked.length) * 100,
+      achievementRate: (exceededCount / tracked.length) * 100,
+      avgAccuracy: accCount > 0 ? accSum / accCount : null,
+    };
+  }, [list, quotes]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -372,6 +406,55 @@ export default function History() {
           </button>
         )}
       </div>
+
+      {/* ── 정확도 통계 패널 ─────────────────────────────────────────────── */}
+      {accuracyStats && (
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          {/* 방향 정확도 */}
+          <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
+            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">방향 정확도</p>
+            <p className={cn(
+              "text-[20px] font-black leading-none tabular-nums",
+              accuracyStats.dirAccuracy >= 60 ? "text-blue-600" : accuracyStats.dirAccuracy >= 40 ? "text-amber-500" : "text-red-500"
+            )}>
+              {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-neutral-400 ml-0.5">%</span>
+            </p>
+            <p className="text-[9px] text-neutral-300 mt-1">접근+달성 / 전체</p>
+          </div>
+
+          {/* 목표가 달성률 */}
+          <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
+            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">목표 달성률</p>
+            <p className={cn(
+              "text-[20px] font-black leading-none tabular-nums",
+              accuracyStats.achievementRate >= 40 ? "text-emerald-600" : accuracyStats.achievementRate >= 20 ? "text-amber-500" : "text-neutral-400"
+            )}>
+              {accuracyStats.achievementRate.toFixed(0)}<span className="text-[11px] font-semibold text-neutral-400 ml-0.5">%</span>
+            </p>
+            <p className="text-[9px] text-neutral-300 mt-1">{accuracyStats.exceededCount} / {accuracyStats.total}건</p>
+          </div>
+
+          {/* 평균 달성도 */}
+          <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5 text-center">
+            <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">평균 달성도</p>
+            {accuracyStats.avgAccuracy != null ? (
+              <>
+                <p className={cn(
+                  "text-[20px] font-black leading-none tabular-nums",
+                  accuracyStats.avgAccuracy >= 100 ? "text-emerald-600"
+                  : accuracyStats.avgAccuracy > 0  ? "text-blue-600"
+                  : "text-red-500"
+                )}>
+                  {accuracyStats.avgAccuracy >= 0 ? "+" : ""}{accuracyStats.avgAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-neutral-400 ml-0.5">%</span>
+                </p>
+                <p className="text-[9px] text-neutral-300 mt-1">목표 대비 진행도</p>
+              </>
+            ) : (
+              <p className="text-[20px] font-black leading-none text-neutral-200">—</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── 필터 + 정렬 바 ─────────────────────────────────────────────── */}
       {list.length > 0 && (
@@ -515,6 +598,23 @@ export default function History() {
               const cur = q?.price ?? null;
               const reanalysisLevel = getReanalysisLevel(a.createdAt, a.startPrice ?? a.entryPrice, cur);
 
+              // ── 방향 배지 (카드 헤더에 표시) ────────────────────────────
+              const directionBadge = (() => {
+                const tgt = a.targetPrice;
+                const entry = a.startPrice ?? a.entryPrice;
+                if (!cur || !tgt) return null;
+                const isBuy  = (a.investmentVerdict ?? "").toLowerCase().includes("buy");
+                const isSell = (a.investmentVerdict ?? "").toLowerCase().includes("sell");
+                const exceeded = isBuy ? cur >= tgt : isSell ? cur <= tgt : false;
+                if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-50 text-emerald-600 border-emerald-200" };
+                const distNow  = Math.abs(cur - tgt);
+                const distThen = entry != null ? Math.abs(entry - tgt) : null;
+                if (distThen == null) return null;
+                if (distNow < distThen) return { label: "▲ 목표 접근", cls: "bg-blue-50 text-blue-600 border-blue-200" };
+                if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "bg-red-50 text-red-500 border-red-200" };
+                return { label: "— 보합", cls: "bg-neutral-50 text-neutral-400 border-neutral-200" };
+              })();
+
               return (
                 <motion.div
                   key={a.id}
@@ -543,6 +643,15 @@ export default function History() {
                       <span className="text-[15px] font-semibold text-neutral-900 truncate">{a.companyName}</span>
                       <span className="text-[12px] text-neutral-400 font-mono">{a.ticker}</span>
                       {verdictBadge(a.investmentVerdict)}
+                      {/* ── 방향 배지 ──────────────────────────────────── */}
+                      {directionBadge && (
+                        <span className={cn(
+                          "inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border",
+                          directionBadge.cls
+                        )}>
+                          {directionBadge.label}
+                        </span>
+                      )}
                       {/* ── 재분석 추천 배지 ─────────────────────────── */}
                       {reanalysisLevel === "urgent" && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
