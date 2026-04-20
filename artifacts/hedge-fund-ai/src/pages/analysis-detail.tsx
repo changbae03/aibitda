@@ -1548,50 +1548,181 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               );
             })()}
 
-            {/* ── ④.5 핵심 밸류에이션 가정 (눈에 띄게) ── */}
+            {/* ── ④.5 핵심 밸류에이션 가정 — KB증권 스타일 투명 공개 ── */}
             {json.key_assumptions && typeof json.key_assumptions === "object" && (() => {
-              const KA = json.key_assumptions as Record<string, unknown>;
-              const rows = [
-                { label: "WACC",        key: "wacc",               icon: "%" },
-                { label: "영구성장률",   key: "terminal_growth",    icon: "%" },
-                { label: "단기 CAGR",   key: "revenue_cagr_short", icon: "" },
-                { label: "장기 CAGR",   key: "revenue_cagr_long",  icon: "" },
-                { label: "밸류에이션",  key: "valuation_model",    icon: "" },
-                { label: "절대↔피어 괴리", key: "divergence_pct",  icon: "%" },
-                { label: "조율 방법",   key: "weight_method",      icon: "" },
-              ].filter(({ key }) => {
-                const v = KA[key];
+              const KA = json.key_assumptions as Record<string, string | number | null | undefined>;
+              const isValid = (v: unknown) => {
                 if (v === null || v === undefined || v === "") return false;
                 const s = String(v);
-                return !s.includes("예:") && !s.includes("인용") && !s.includes("__");
-              });
-              if (rows.length === 0) return null;
+                return !s.includes("예:") && !s.includes("인용") && !s.includes("__") && !s.includes("없으면") && !s.includes("생략");
+              };
+              const v = (key: string) => isValid(KA[key]) ? String(KA[key]) : null;
+
+              const hasWacc = isValid(KA.wacc);
+              const hasWaccBreakdown = isValid(KA.wacc_rf) || isValid(KA.wacc_coe) || isValid(KA.wacc_beta);
+              const hasGrowth = isValid(KA.terminal_growth) || isValid(KA.revenue_cagr_short);
+              const hasRecon = isValid(KA.abs_value) || isValid(KA.peer_value);
+              if (!hasWacc && !hasGrowth && !hasRecon && !isValid(KA.valuation_model)) return null;
+
               return (
-                <div className="mx-4 sm:mx-6 my-2 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-blue-50/60 overflow-hidden">
+                <div className="mx-4 sm:mx-6 my-2 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/80 to-blue-50/40 dark:from-indigo-950/40 dark:to-blue-950/20 overflow-hidden">
                   {/* 헤더 */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-indigo-100/70 bg-indigo-50/80">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-indigo-100 dark:border-indigo-900/50">
                     <div className="w-5 h-5 rounded-md bg-indigo-500 flex items-center justify-center shrink-0">
-                      <span className="text-white text-[9px] font-bold">AI</span>
+                      <span className="text-white text-[9px] font-bold">DCF</span>
                     </div>
-                    <p className="text-[11px] font-bold text-indigo-700 tracking-wide">핵심 밸류에이션 가정</p>
-                    <span className="ml-auto text-[9px] text-indigo-400 font-medium">DCF 모델 핵심 드라이버</span>
+                    <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 tracking-wide">
+                      밸류에이션 가정 — 완전 공개
+                    </p>
+                    {v("valuation_model") && (
+                      <span className="ml-auto text-[10px] font-semibold text-indigo-500 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded-full">
+                        {v("valuation_model")}
+                      </span>
+                    )}
                   </div>
-                  {/* 가정값 그리드 */}
-                  <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-                    {rows.map(({ label, key }) => {
-                      const val = String(KA[key]);
-                      return (
-                        <div key={key} className="flex flex-col gap-0.5">
-                          <span className="text-[9px] font-semibold text-indigo-400 uppercase tracking-wider">{label}</span>
-                          <span className="text-[14px] font-bold text-indigo-900 font-mono leading-tight">{val}</span>
+
+                  <div className="px-4 py-3 space-y-4">
+                    {/* ① WACC 분해 공식 */}
+                    {hasWacc && (
+                      <div>
+                        <p className="text-[9px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-widest mb-2">
+                          할인율 (WACC / CoE) 산출
+                        </p>
+                        {hasWaccBreakdown ? (
+                          <div className="bg-white/60 dark:bg-black/20 rounded-xl border border-indigo-100 dark:border-indigo-900/40 p-3">
+                            {/* 공식 표시 */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono mb-3">
+                              {v("wacc_rf") && (
+                                <>
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[8px] text-muted-foreground mb-0.5">Rf</span>
+                                    <span className="font-bold text-foreground bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{v("wacc_rf")}</span>
+                                  </div>
+                                  <span className="text-muted-foreground">+</span>
+                                </>
+                              )}
+                              {v("wacc_beta") && (
+                                <>
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[8px] text-muted-foreground mb-0.5">β</span>
+                                    <span className="font-bold text-foreground bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{v("wacc_beta")}</span>
+                                  </div>
+                                  <span className="text-muted-foreground">×</span>
+                                </>
+                              )}
+                              {v("wacc_erp") && (
+                                <>
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[8px] text-muted-foreground mb-0.5">ERP</span>
+                                    <span className="font-bold text-foreground bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{v("wacc_erp")}</span>
+                                  </div>
+                                  <span className="text-muted-foreground">=</span>
+                                </>
+                              )}
+                              {v("wacc_coe") && (
+                                <div className="flex flex-col items-center">
+                                  <span className="text-[8px] text-muted-foreground mb-0.5">CoE</span>
+                                  <span className="font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded">{v("wacc_coe")}</span>
+                                </div>
+                              )}
+                            </div>
+                            {/* CoD & D/E → WACC */}
+                            <div className="flex flex-wrap gap-4 pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+                              {v("wacc_cod") && v("wacc_cod") !== "N/A" && (
+                                <div className="flex flex-col">
+                                  <span className="text-[8px] text-muted-foreground">CoD (세후)</span>
+                                  <span className="text-[12px] font-bold font-mono text-foreground">{v("wacc_cod")}</span>
+                                </div>
+                              )}
+                              {v("wacc_de_ratio") && (
+                                <div className="flex flex-col">
+                                  <span className="text-[8px] text-muted-foreground">D/E 비율</span>
+                                  <span className="text-[12px] font-bold font-mono text-foreground">{v("wacc_de_ratio")}</span>
+                                </div>
+                              )}
+                              <div className="flex flex-col ml-auto">
+                                <span className="text-[8px] font-bold text-indigo-500 uppercase">→ WACC</span>
+                                <span className="text-[18px] font-bold font-mono text-indigo-700 dark:text-indigo-300">{v("wacc")}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col">
+                              <span className="text-[8px] text-muted-foreground uppercase tracking-wider">WACC</span>
+                              <span className="text-[22px] font-bold font-mono text-indigo-700 dark:text-indigo-300">{v("wacc")}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ② DCF 성장 가정 */}
+                    {(isValid(KA.terminal_growth) || isValid(KA.revenue_cagr_short) || isValid(KA.forecast_years) || isValid(KA.terminal_roic)) && (
+                      <div>
+                        <p className="text-[9px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-widest mb-2">
+                          성장 가정
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            { label: "예측 기간", key: "forecast_years" },
+                            { label: "단기 CAGR (1~3y)", key: "revenue_cagr_short" },
+                            { label: "장기 CAGR (4~10y)", key: "revenue_cagr_long" },
+                            { label: "영구성장률 (g)", key: "terminal_growth" },
+                            { label: "Terminal ROIC", key: "terminal_roic" },
+                          ].filter(({ key }) => isValid(KA[key])).map(({ label, key }) => (
+                            <div key={key} className="bg-white/60 dark:bg-black/20 rounded-lg border border-indigo-100 dark:border-indigo-900/40 px-3 py-2">
+                              <span className="text-[8px] text-muted-foreground block mb-0.5">{label}</span>
+                              <span className="text-[14px] font-bold font-mono text-foreground">{v(key)}</span>
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
+
+                    {/* ③ 절대가치 vs 피어 조율 */}
+                    {hasRecon && (
+                      <div>
+                        <p className="text-[9px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-widest mb-2">
+                          절대가치 ↔ 피어가치 조율
+                        </p>
+                        <div className="bg-white/60 dark:bg-black/20 rounded-xl border border-indigo-100 dark:border-indigo-900/40 p-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {v("abs_value") && (
+                              <div className="flex flex-col flex-1 min-w-[80px]">
+                                <span className="text-[8px] text-muted-foreground">절대가치 (DCF/rNPV)</span>
+                                <span className="text-[15px] font-bold font-mono text-foreground">{Number(v("abs_value")).toLocaleString("ko-KR")}원</span>
+                              </div>
+                            )}
+                            {v("peer_value") && (
+                              <>
+                                <span className="text-muted-foreground text-lg">↔</span>
+                                <div className="flex flex-col flex-1 min-w-[80px]">
+                                  <span className="text-[8px] text-muted-foreground">피어 상대가치</span>
+                                  <span className="text-[15px] font-bold font-mono text-foreground">{Number(v("peer_value")).toLocaleString("ko-KR")}원</span>
+                                </div>
+                              </>
+                            )}
+                            {v("divergence_pct") && (
+                              <div className="flex flex-col">
+                                <span className="text-[8px] text-muted-foreground">괴리율</span>
+                                <span className="text-[15px] font-bold font-mono text-amber-600">{v("divergence_pct")}%</span>
+                              </div>
+                            )}
+                          </div>
+                          {v("weight_method") && (
+                            <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+                              → {v("weight_method")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {/* 안내 문구 */}
-                  <div className="px-4 pb-2.5">
-                    <p className="text-[10px] text-indigo-400 leading-relaxed">
-                      위 가정값이 적정주가 산출의 핵심 변수입니다. 실제 수치가 달라지면 목표가도 변동됩니다.
+
+                  <div className="px-4 pb-3">
+                    <p className="text-[10px] text-indigo-400 dark:text-indigo-500 leading-relaxed">
+                      위 가정값이 적정주가 산출의 핵심 변수입니다. WACC·성장률 가정이 달라지면 목표가도 민감하게 변동됩니다.
                     </p>
                   </div>
                 </div>
