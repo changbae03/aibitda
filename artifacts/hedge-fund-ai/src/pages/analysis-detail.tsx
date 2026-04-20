@@ -348,65 +348,82 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     if (exporting) return;
     setExporting(true);
     try {
-      const [{ default: html2canvas }, { default: jsPDF }, { default: ReportPDFTemplate }, { createRoot }] =
-        await Promise.all([
-          import("html2canvas"),
-          import("jspdf"),
-          import("@/components/ReportPDFTemplate"),
-          import("react-dom/client"),
-        ]);
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
 
-      // 오프스크린 컨테이너 생성
-      const container = document.createElement("div");
-      container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;z-index:-1;";
-      document.body.appendChild(container);
+      const target = document.getElementById("analysis-report-content");
+      if (!target) throw new Error("report element not found");
 
-      // React 컴포넌트 렌더링
-      const root = createRoot(container);
-      const { createElement } = await import("react");
-      root.render(createElement(ReportPDFTemplate, { analysis }));
+      // print:hidden 요소 임시 숨김
+      const hiddenEls = Array.from(
+        target.querySelectorAll<HTMLElement>(".print\\:hidden, [data-pdf-hide]")
+      );
+      const memoEls = Array.from(
+        document.querySelectorAll<HTMLElement>(".print\\:hidden")
+      );
+      const allHide = [...new Set([...hiddenEls, ...memoEls])];
+      const origDisplay: string[] = allHide.map((el) => el.style.display);
+      allHide.forEach((el) => { el.style.display = "none"; });
 
-      // 폰트/이미지 로드 대기
-      await new Promise<void>((r) => setTimeout(r, 800));
+      // print:block 요소 표시 (인쇄 전용 헤더)
+      const printOnly = Array.from(
+        target.querySelectorAll<HTMLElement>(".hidden.print\\:block")
+      );
+      const origPrint: string[] = printOnly.map((el) => el.style.display);
+      printOnly.forEach((el) => { el.style.display = "block"; });
 
-      const canvas = await html2canvas(container.firstChild as HTMLElement, {
-        scale: 2.5,
+      await new Promise<void>((r) => setTimeout(r, 100));
+
+      const canvas = await html2canvas(target, {
+        scale: 2,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        windowWidth: 794,
+        scrollY: -window.scrollY,
       });
 
-      root.unmount();
-      document.body.removeChild(container);
+      // 복원
+      allHide.forEach((el, i) => { el.style.display = origDisplay[i]; });
+      printOnly.forEach((el, i) => { el.style.display = origPrint[i]; });
 
-      // jsPDF A4 멀티페이지 생성
-      const A4_W = 210; // mm
-      const A4_H = 297; // mm
-      const px_per_mm = canvas.width / A4_W;
-      const pageHeightPx = A4_H * px_per_mm;
-      const totalPages = Math.ceil(canvas.height / pageHeightPx);
+      // A4 멀티페이지 PDF 생성
+      const A4_W_MM = 210;
+      const A4_H_MM = 297;
+      const MARGIN_MM = 14;
+      const contentW_mm = A4_W_MM - MARGIN_MM * 2;
+      const scale = contentW_mm / (canvas.width / (96 / 25.4)); // px → mm
+      const contentH_mm = (canvas.height / (96 / 25.4)) * scale;
+      const pageContentH_mm = A4_H_MM - MARGIN_MM * 2;
+      const totalPages = Math.ceil(contentH_mm / pageContentH_mm);
+
+      const contentW_px = canvas.width;
+      const pageH_px = Math.round((pageContentH_mm / contentH_mm) * canvas.height);
 
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
       for (let page = 0; page < totalPages; page++) {
         if (page > 0) pdf.addPage();
-        const srcY = page * pageHeightPx;
-        const srcH = Math.min(pageHeightPx, canvas.height - srcY);
+        const srcY = page * pageH_px;
+        const srcH = Math.min(pageH_px, canvas.height - srcY);
 
-        const pageCanvas = document.createElement("canvas");
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = srcH;
-        const ctx = pageCanvas.getContext("2d")!;
-        ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+        const slice = document.createElement("canvas");
+        slice.width = contentW_px;
+        slice.height = pageH_px;
+        const ctx = slice.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, srcY, contentW_px, srcH, 0, 0, contentW_px, srcH);
 
-        const imgData = pageCanvas.toDataURL("image/jpeg", 0.95);
-        const renderedH = (srcH / canvas.width) * A4_W;
-        pdf.addImage(imgData, "JPEG", 0, 0, A4_W, renderedH);
+        const imgData = slice.toDataURL("image/jpeg", 0.92);
+        const renderedH = (srcH / canvas.height) * contentH_mm;
+        pdf.addImage(imgData, "JPEG", MARGIN_MM, MARGIN_MM, contentW_mm, renderedH);
       }
 
       const filename = `애빛다_${analysis.ticker}_${analysis.companyName ?? ""}_리포트.pdf`;
       pdf.save(filename);
+      onClose();
     } catch (e) {
       console.error("PDF 생성 실패:", e);
     } finally {
@@ -999,7 +1016,7 @@ export default function AnalysisDetail() {
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div id="analysis-report-content" className="space-y-6 pb-20">
       {/* 인쇄 전용 헤더 — 화면에서는 숨김, 인쇄 시에만 표시 */}
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
