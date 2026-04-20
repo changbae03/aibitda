@@ -245,8 +245,18 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
     };
   });
 
-  const priceMin = chartData.length ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99 : 0;
-  const priceMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) * 1.01 : 100;
+  const priceMin = chartData.length ? Math.min(
+    ...chartData.map((d) => d.low ?? d.close),
+    ...(chartLevels?.stopLoss ? [chartLevels.stopLoss] : [])
+  ) * 0.99 : 0;
+  // 목표주가가 차트 가격보다 높으면 Y축을 그 이상까지 확장
+  const dataMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) : 100;
+  const levelMax = Math.max(
+    dataMax,
+    chartLevels?.target1 ?? 0,
+    chartLevels?.target2 ?? 0,
+  );
+  const priceMax = levelMax * 1.03;
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
   const volumeDomainMax = maxVolume * 5;
 
