@@ -52,6 +52,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const adminItems = [
     { href: "/admin/ticker-notes", label: "종목 보정 메모" },
     { href: "/admin/peers", label: "피어 멀티플" },
+    { href: "/admin/feedback", label: "유저 피드백" },
     { href: "/admin/users", label: "관리자 관리" },
   ];
 
