@@ -747,7 +747,7 @@ export default function History() {
                           >
                             <button
                               onClick={(e) => handleDelete(a.id, e)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-50"
+                              className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-50 transition-colors"
                               title="삭제"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
