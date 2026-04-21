@@ -17,11 +17,11 @@ function isUSTicker(ticker: string) {
 
 function verdictStyle(verdict: string | null) {
   switch (verdict) {
-    case "Strong Buy": return { label: "강력 매수", color: "text-emerald-400", bg: "bg-emerald-400/15 border-emerald-400/30" };
-    case "Buy": return { label: "매수", color: "text-green-400", bg: "bg-green-400/15 border-green-400/30" };
-    case "Hold": return { label: "보유", color: "text-amber-400", bg: "bg-amber-400/15 border-amber-400/30" };
-    case "Sell": return { label: "매도", color: "text-red-400", bg: "bg-red-400/15 border-red-400/30" };
-    case "Strong Sell": return { label: "강력 매도", color: "text-rose-400", bg: "bg-rose-400/15 border-rose-400/30" };
+    case "Strong Buy": return { label: "높은 상승여력", color: "text-emerald-400", bg: "bg-emerald-400/15 border-emerald-400/30" };
+    case "Buy": return { label: "상승여력", color: "text-green-400", bg: "bg-green-400/15 border-green-400/30" };
+    case "Hold": return { label: "적정 수준", color: "text-amber-400", bg: "bg-amber-400/15 border-amber-400/30" };
+    case "Sell": return { label: "하락여지", color: "text-red-400", bg: "bg-red-400/15 border-red-400/30" };
+    case "Strong Sell": return { label: "높은 하락여지", color: "text-rose-400", bg: "bg-rose-400/15 border-rose-400/30" };
     default: return { label: verdict ?? "—", color: "text-slate-400", bg: "bg-slate-400/15 border-slate-400/30" };
   }
 }
@@ -75,11 +75,11 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
   const isSell = verdictStr.includes("sell");
 
   const verdictLabel = () => {
-    if (verdictStr.includes("strong buy")) return { label: "강력 매수", color: "text-emerald-400" };
-    if (verdictStr.includes("buy")) return { label: "매수", color: "text-emerald-400" };
-    if (verdictStr.includes("strong sell")) return { label: "강력 매도", color: "text-red-400" };
-    if (verdictStr.includes("sell")) return { label: "매도", color: "text-red-400" };
-    return { label: "보유", color: "text-amber-400" };
+    if (verdictStr.includes("strong buy")) return { label: "높은 상승여력", color: "text-emerald-400" };
+    if (verdictStr.includes("buy")) return { label: "상승여력", color: "text-emerald-400" };
+    if (verdictStr.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-400" };
+    if (verdictStr.includes("sell")) return { label: "하락여지", color: "text-red-400" };
+    return { label: "적정 수준", color: "text-amber-400" };
   };
   const vm = verdictLabel();
 
