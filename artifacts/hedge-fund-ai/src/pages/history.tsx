@@ -213,89 +213,94 @@ function PriceTrack({
     return `${gapPct >= 0 ? "+" : ""}${gapPct.toFixed(1)}%`;
   })();
 
+  // 레이블 클램핑: 화면 밖으로 나가지 않도록
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
+  const dotColor = exceeded ? "bg-emerald-500" : isPositive ? "bg-red-400" : "bg-blue-500";
+  const fillColor = exceeded ? "bg-emerald-300" : isPositive ? "bg-red-200" : "bg-blue-200";
+  const curLabelColor = exceeded ? "text-emerald-600" : isPositive ? "text-red-500" : "text-blue-600";
+
   return (
-    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-      {/* 3 key prices — compact */}
-      <div className="flex justify-between items-end px-0.5 mb-2.5">
-        <div>
-          <p className="text-[9px] text-muted-foreground mb-0.5">분석 당시</p>
-          <p className="font-mono text-[11px] font-semibold text-muted-foreground">{formatCurrency(entry, currency)}</p>
+    <div className="mt-3 select-none" onClick={(e) => e.stopPropagation()}>
+      {/* 트랙 + 플로팅 레이블 통합 컨테이너 */}
+      <div className="relative" style={{ height: 64 }}>
+
+        {/* ── 분석 당시 레이블 (중앙 고정, 위쪽) ── */}
+        <div
+          className="absolute -translate-x-1/2 text-center pointer-events-none"
+          style={{ left: "50%", top: 0 }}
+        >
+          <p className="text-[8px] text-muted-foreground/60 leading-none mb-0.5">분석 당시</p>
+          <p className="font-mono text-[10px] font-semibold text-muted-foreground leading-none">
+            {formatCurrency(entry, currency)}
+          </p>
         </div>
-        <div className="text-center">
-          <p className={cn("text-[9px] mb-0.5", returnPct >= 0 ? "text-blue-400" : "text-red-400")}>
+
+        {/* ── 현재가 레이블 (dot 위치 추종, 위쪽) ── */}
+        <motion.div
+          className="absolute text-center pointer-events-none"
+          style={{ top: 0, transform: "translateX(-50%)" }}
+          initial={{ left: "50%" }}
+          animate={{ left: `${clamp(curX, 8, 92)}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          <p className={cn("text-[8px] leading-none mb-0.5", returnPct >= 0 ? "text-red-400" : "text-blue-400")}>
             {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
           </p>
-          <p className={cn("font-mono text-[13px] font-bold",
-            exceeded ? (isDownside ? "text-emerald-600" : "text-emerald-600")
-            : isPositive ? (isDownside ? "text-red-500" : "text-blue-600")
-            : (isDownside ? "text-blue-500" : "text-red-500")
-          )}>
+          <p className={cn("font-mono text-[11px] font-bold leading-none", curLabelColor)}>
             {formatCurrency(cur, currency)}
           </p>
-        </div>
-        <div className="text-right">
-          <p className={cn("text-[9px] mb-0.5",
-            exceeded ? "text-emerald-500"
-            : isDownside ? "text-red-400"
-            : "text-muted-foreground"
-          )}>
-            적정주가 {tgtLabel}
-          </p>
-          <p className={cn("font-mono text-[11px] font-semibold", exceeded ? "text-emerald-600" : "text-muted-foreground")}>
-            {formatCurrency(tgt, currency)}
-          </p>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* Track */}
-      <div className="relative h-7">
-        {/* Rail */}
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-muted" />
-
-        {/* Colored fill: entry → current. 오른쪽(+) = 빨강, 왼쪽(-) = 파랑 */}
-        {(() => {
-          return (
-            <motion.div
-              className={cn(
-                "absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full",
-                exceeded ? "bg-emerald-300" : isPositive ? "bg-red-200" : "bg-blue-200"
-              )}
-              initial={{ left: "50%", width: 0 }}
-              animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            />
-          );
-        })()}
-
-        {/* Target marker */}
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
-          <div className={cn("w-px h-5 rounded-full", exceeded ? "bg-emerald-500" : "bg-emerald-400")} />
+        {/* ── 적정주가 레이블 (target 위치, 위쪽) ── */}
+        <div
+          className="absolute text-center pointer-events-none"
+          style={{ left: `${clamp(tgtX, 8, 92)}%`, top: 0 }}
+        >
+          <div className="-translate-x-1/2">
+            <p className={cn("text-[8px] leading-none mb-0.5", exceeded ? "text-emerald-500" : "text-muted-foreground/60")}>
+              적정주가 {tgtLabel}
+            </p>
+            <p className={cn("font-mono text-[10px] font-semibold leading-none", exceeded ? "text-emerald-600" : "text-muted-foreground")}>
+              {formatCurrency(tgt, currency)}
+            </p>
+          </div>
         </div>
 
-        {/* Entry / center marker */}
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: "50%" }}>
-          <div className="w-px h-4 bg-muted-foreground/40 rounded-full" />
+        {/* ── Rail + markers (하단) ── */}
+        <div className="absolute inset-x-0 bottom-0" style={{ height: 24 }}>
+          {/* Rail */}
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-muted" />
+
+          {/* Colored fill */}
+          <motion.div
+            className={cn("absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full", fillColor)}
+            initial={{ left: "50%", width: 0 }}
+            animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
+
+          {/* Target marker */}
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
+            <div className={cn("w-px h-5 rounded-full", exceeded ? "bg-emerald-500" : "bg-emerald-400")} />
+          </div>
+
+          {/* Entry / center marker */}
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: "50%" }}>
+            <div className="w-px h-4 bg-muted-foreground/30 rounded-full" />
+          </div>
+
+          {/* Current price dot */}
+          <motion.div
+            className={cn(
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
+              dotColor
+            )}
+            initial={{ left: "50%" }}
+            animate={{ left: `${curX}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
         </div>
-
-        {/* Current price dot */}
-        {(() => {
-          return (
-            <motion.div
-              className={cn(
-                "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
-                exceeded ? "bg-emerald-500" : isPositive ? "bg-red-400" : "bg-blue-500"
-              )}
-              initial={{ left: "50%" }}
-              animate={{ left: `${curX}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            />
-          );
-        })()}
-      </div>
-
-      {/* Under-track labels — 분석 당시 중심만 표시 */}
-      <div className="relative h-4 mt-0.5 select-none">
-        <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground">분석 당시</span>
       </div>
     </div>
   );
