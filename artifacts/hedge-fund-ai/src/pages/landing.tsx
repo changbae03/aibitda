@@ -1,6 +1,7 @@
 import { useSignIn, useUser } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
+import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { motion } from "framer-motion";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -113,6 +114,7 @@ export default function Landing() {
   const { isSignedIn, isLoaded } = useUser();
   const { signIn } = useSignIn();
   const [, setLocation] = useLocation();
+  const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -122,14 +124,19 @@ export default function Landing() {
     }
   }, []);
 
+  // Clerk 로그인(구글 등) 또는 카카오 JWT 로그인 — 둘 중 하나라도 있으면 앱으로 이동
   useEffect(() => {
     if (isLoaded && isSignedIn) {
       setLocation("/analysis/new");
+      return;
     }
-  }, [isLoaded, isSignedIn, setLocation]);
+    if (!kakaoLoading && kakaoAuth?.user) {
+      setLocation("/analysis/new");
+    }
+  }, [isLoaded, isSignedIn, kakaoLoading, kakaoAuth, setLocation]);
 
   const handleKakaoLogin = () => {
-    window.location.href = "/api/auth/kakao";
+    window.location.href = getKakaoLoginUrl();
   };
 
   const handleGoogleLogin = async () => {

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
+import { useAuth as useKakaoAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
@@ -666,7 +667,9 @@ export default function AnalysisDetail() {
   const id = params?.id ? parseInt(params.id, 10) : 0;
   
   const queryClient = useQueryClient();
-  const { isSignedIn, isLoaded: isAuthLoaded } = useUser();
+  const { isSignedIn: isClerkSignedIn, isLoaded: isAuthLoaded } = useUser();
+  const { data: kakaoAuth } = useKakaoAuth();
+  const isSignedIn = isClerkSignedIn || !!kakaoAuth?.user;
   const { data: analysis, isLoading, error } = useGetAnalysis(id, {
     query: {
       refetchInterval: (query) => query.state.data?.status === 'in_progress' ? 3000 : false
