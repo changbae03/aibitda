@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { useLocation } from "wouter";
+
 import {
   BarChart3, TrendingUp, TrendingDown, Target,
-  CheckCircle2, XCircle, Clock, Loader2, AlertCircle,
+  Clock, Loader2, AlertCircle,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -62,25 +62,9 @@ function usePublicStats() {
   });
 }
 
-function verdictLabel(v: string) {
-  const map: Record<string, string> = {
-    strong_buy: "강력 매수", buy: "매수", hold: "보유", sell: "매도", strong_sell: "강력 매도",
-  };
-  return map[v] ?? v;
-}
-
-function verdictColor(v: string) {
-  if (v === "strong_buy") return "text-emerald-600 bg-emerald-50 border-emerald-200";
-  if (v === "buy") return "text-blue-600 bg-blue-50 border-blue-200";
-  if (v === "hold") return "text-amber-600 bg-amber-50 border-amber-200";
-  if (v === "sell" || v === "strong_sell") return "text-red-600 bg-red-50 border-red-200";
-  return "text-muted-foreground bg-muted border-border";
-}
-
 export default function Popular() {
   const { data: popular, isLoading: loadingPop } = usePopular();
   const { data: stats, isLoading: loadingSt } = usePublicStats();
-  const [, setLocation] = useLocation();
 
   const isLoading = loadingPop || loadingSt;
 
@@ -247,67 +231,6 @@ export default function Popular() {
                         <span className="text-[9px] font-normal text-muted-foreground ml-1">평균</span>
                       </p>
                     )}
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── 최근 결과 사례 ── */}
-          {stats?.recentCases && stats.recentCases.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="rounded-xl border border-border bg-background p-5"
-            >
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">최근 결과 사례</p>
-              <div className="space-y-2">
-                {stats.recentCases.map((c, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.28 + i * 0.04 }}
-                    onClick={() => c.analysisId && setLocation(`/analysis/${c.analysisId}`)}
-                    className={cn(
-                      "flex items-center justify-between gap-3 p-3 rounded-lg border border-border transition-colors",
-                      c.analysisId ? "cursor-pointer hover:bg-muted/50" : ""
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {c.outcome === "hit_target"
-                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                        : <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                      }
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[13px] font-semibold text-foreground truncate">{c.companyName}</span>
-                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{c.ticker}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-full border", verdictColor(c.verdict ?? ""))}>
-                            {verdictLabel(c.verdict ?? "")}
-                          </span>
-                          {c.daysElapsed != null && (
-                            <span className="text-[9px] text-muted-foreground">{c.daysElapsed}일 경과</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      {c.priceReturn != null && (
-                        <p className={cn(
-                          "text-[15px] font-bold tabular-nums",
-                          c.priceReturn >= 0 ? "text-red-500" : "text-blue-500"
-                        )}>
-                          {c.priceReturn >= 0 ? "+" : ""}{c.priceReturn.toFixed(1)}%
-                        </p>
-                      )}
-                      <p className="text-[10px] text-muted-foreground">
-                        {c.outcome === "hit_target" ? "목표 도달" : "손절 도달"}
-                      </p>
-                    </div>
                   </motion.div>
                 ))}
               </div>
