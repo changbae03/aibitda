@@ -9,6 +9,7 @@ import {
   Check, Link2, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
+import StockChart, { type ChartLevels, type ChartEvent } from "@/components/StockChart";
 
 function isUSTicker(ticker: string) {
   if (!ticker) return false;
@@ -104,6 +105,16 @@ function ShareChartLevels({ content, currency }: { content: string; currency: "K
       </div>
     </div>
   );
+}
+
+function parseChartEvents(content: string): ChartEvent[] {
+  const match = content.match(/EVENTS_DATA:(\[[^\n]*\])/);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[1]) as ChartEvent[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(e => e.date && e.label && /^\d{4}-\d{2}$/.test(e.date)).slice(0, 6);
+  } catch { return []; }
 }
 
 function MarkdownBody({ content }: { content: string }) {
@@ -562,6 +573,16 @@ export default function SharePage() {
                           currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
                         />
                         <MarkdownBody content={step.content} />
+                        <div className="mt-5 pt-4 border-t border-slate-700/60">
+                          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-3">주가 차트</p>
+                          <StockChart
+                            ticker={analysis.ticker}
+                            companyName={analysis.companyName ?? undefined}
+                            chartLevels={parseChartLevels(step.content) ?? undefined}
+                            events={parseChartEvents(step.content)}
+                            currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
+                          />
+                        </div>
                       </>
                     ) : (
                       <MarkdownBody content={step.content} />
