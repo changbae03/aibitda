@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
-  Loader2, Inbox, ArrowRight, CheckCircle2, Clock, Trash2,
+  Loader2, Inbox, Share2, CheckCircle2, Clock, Trash2,
   Pencil, Check, X, RefreshCw,
   ChevronDown, AlertTriangle, SlidersHorizontal,
 } from "lucide-react";
@@ -325,6 +325,7 @@ export default function History() {
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<string | number | null>(null);
   const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
   const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklineResult>>({});
@@ -751,7 +752,23 @@ export default function History() {
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                            <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+                                const url = `${window.location.origin}${base}/analysis/${a.id}`;
+                                try { await navigator.clipboard.writeText(url); } catch {}
+                                setCopiedId(a.id);
+                                setTimeout(() => setCopiedId((prev) => prev === a.id ? null : prev), 1800);
+                              }}
+                              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-all"
+                              title="링크 복사"
+                            >
+                              {copiedId === a.id
+                                ? <Check className="w-4 h-4 text-emerald-500" />
+                                : <Share2 className="w-4 h-4" />
+                              }
+                            </button>
                           </motion.div>
                         )}
                       </AnimatePresence>
