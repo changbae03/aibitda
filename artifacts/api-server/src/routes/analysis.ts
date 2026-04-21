@@ -1482,10 +1482,14 @@ router.post("/", async (req, res) => {
 
   const userId = getUserId(req);
   if (userId) {
-    const credit = await checkAndDeductCredit(userId);
-    if (!credit.ok) {
-      res.status(402).json({ error: credit.reason });
-      return;
+    const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [userId]);
+    const isUserAdmin = (adminCheck.rowCount ?? 0) > 0;
+    if (!isUserAdmin) {
+      const credit = await checkAndDeductCredit(userId);
+      if (!credit.ok) {
+        res.status(402).json({ error: credit.reason });
+        return;
+      }
     }
   }
 

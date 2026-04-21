@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Settings, LogIn } from "lucide-react";
+import { Menu, X, Settings, LogIn, LogOut } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -8,15 +8,33 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
-const bottomItems = [
-  { href: "/settings", label: "설정", icon: Settings },
-  { href: "/login", label: "로그인", icon: LogIn },
-];
+interface AuthUser {
+  id: string;
+  nickname: string;
+  profileImage: string | null;
+}
+
+function useAuth() {
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
+  useEffect(() => {
+    fetch(getApiUrl("/api/auth/me"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setUser(d?.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+  return user;
+}
+
+async function logout() {
+  await fetch(getApiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
+  window.location.href = "/";
+}
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const user = useAuth();
 
   useEffect(() => {
     fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
@@ -61,25 +79,45 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const BottomNav = ({ onSelect }: { onSelect?: () => void }) => (
     <div className="px-2 py-3 space-y-0.5 border-t border-border">
-      {bottomItems.map((item) => {
-        const isActive = location === item.href;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onSelect}
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
-              isActive
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent"
-            )}
-          >
-            <item.icon className="w-3.5 h-3.5 shrink-0" />
-            {item.label}
-          </Link>
-        );
-      })}
+      {/* 설정 */}
+      <Link
+        href="/settings"
+        onClick={onSelect}
+        className={cn(
+          "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+          location === "/settings"
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+        )}
+      >
+        <Settings className="w-3.5 h-3.5 shrink-0" />
+        설정
+      </Link>
+
+      {/* 로그인 / 로그아웃 */}
+      {user ? (
+        <button
+          onClick={() => { onSelect?.(); logout(); }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150 text-muted-foreground hover:text-foreground hover:bg-accent"
+        >
+          <LogOut className="w-3.5 h-3.5 shrink-0" />
+          로그아웃
+        </button>
+      ) : user === null ? (
+        <Link
+          href="/login"
+          onClick={onSelect}
+          className={cn(
+            "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+            location === "/login"
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          )}
+        >
+          <LogIn className="w-3.5 h-3.5 shrink-0" />
+          로그인
+        </Link>
+      ) : null}
     </div>
   );
 
