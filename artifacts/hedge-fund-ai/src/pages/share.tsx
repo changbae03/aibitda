@@ -40,7 +40,7 @@ export default function SharePage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetch(getApiUrl(`/api/analysis/${id}`))
+    fetch(getApiUrl(`/api/analysis/share/${id}`))
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((d) => { setAnalysis(d); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });

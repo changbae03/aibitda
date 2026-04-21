@@ -1850,6 +1850,30 @@ router.get("/tracker", async (_req, res) => {
   }
 });
 
+// ─── 공유 전용 공개 엔드포인트 (인증 불필요, is_public=true인 경우만) ────────
+router.get("/share/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  try {
+    const aRows = await rawQuery(
+      `SELECT * FROM analyses WHERE id = $1 AND is_public = 'true' LIMIT 1`,
+      [id]
+    );
+    if (!aRows[0]) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
+    res.json(formatAnalysis(mapAnalysisRow(aRows[0]), stepsRows.map(mapStepRow)));
+  } catch (err: any) {
+    console.error("[GET /analysis/share/:id] error:", err?.message, err?.cause?.message);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
@@ -1863,6 +1887,15 @@ router.get("/:id", async (req, res) => {
       res.status(404).json({ error: "Not found" });
       return;
     }
+
+    const analysisUserId = aRows[0].user_id ?? null;
+    const requestUserId = getUserId(req);
+
+    if (analysisUserId && analysisUserId !== requestUserId) {
+      res.status(403).json({ error: "권한이 없습니다" });
+      return;
+    }
+
     const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
     res.json(formatAnalysis(mapAnalysisRow(aRows[0]), stepsRows.map(mapStepRow)));
   } catch (err: any) {
