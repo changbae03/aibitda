@@ -622,44 +622,6 @@ export default function History() {
             </AnimatePresence>
           </div>
 
-          {/* 업종 드롭다운 */}
-          {industries.length > 1 && (
-            <div className="relative">
-              <button
-                onClick={() => { setShowIndustryMenu(!showIndustryMenu); setShowSortMenu(false); }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-background text-muted-foreground border border-border hover:border-foreground/40 hover:text-foreground transition-colors"
-              >
-                {industryFilter === "all" ? "업종 전체" : industryFilter} <ChevronDown className="w-3 h-3" />
-              </button>
-              <AnimatePresence>
-                {showIndustryMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.1 }}
-                    className="absolute top-full mt-1 left-0 z-20 bg-background border border-border rounded-xl shadow-lg py-1 min-w-[150px] max-h-52 overflow-y-auto"
-                  >
-                    <button
-                      onClick={() => { setIndustryFilter("all"); setShowIndustryMenu(false); }}
-                      className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-muted/50", industryFilter === "all" ? "font-semibold text-foreground" : "text-muted-foreground")}
-                    >
-                      전체 업종
-                    </button>
-                    {industries.map((ind) => (
-                      <button
-                        key={ind}
-                        onClick={() => { setIndustryFilter(ind); setShowIndustryMenu(false); }}
-                        className={cn("w-full text-left px-3 py-1.5 text-[12px] hover:bg-muted/50 transition-colors", industryFilter === ind ? "font-semibold text-foreground" : "text-muted-foreground")}
-                      >
-                        {ind}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
 
           {/* 결과 카운트 */}
           {(verdictFilter !== "all" || industryFilter !== "all") && (
