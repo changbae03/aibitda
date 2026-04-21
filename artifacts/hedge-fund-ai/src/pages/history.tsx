@@ -521,10 +521,11 @@ export default function History() {
           <button
             onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
             disabled={quotesLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted transition-colors text-xs font-medium text-muted-foreground disabled:opacity-50"
+            className="flex items-center gap-1 text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-30"
+            title="현재가 새로고침"
           >
             <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
-            현재가 새로고침
+            <span>새로고침</span>
           </button>
         )}
       </div>
