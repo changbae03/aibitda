@@ -67,13 +67,6 @@ export default function Popular() {
 
   const isLoading = loadingPop || loadingSt;
 
-  const topIndustries = stats
-    ? Object.entries(stats.byIndustry)
-        .filter(([, v]) => v.total >= 2)
-        .sort((a, b) => b[1].total - a[1].total)
-        .slice(0, 6)
-    : [];
-
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-10">
       {/* 헤더 */}
@@ -179,41 +172,6 @@ export default function Popular() {
                     </motion.div>
                   );
                 })}
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── 업종별 분석 현황 ── */}
-          {topIndustries.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="rounded-xl border border-border bg-background p-5"
-            >
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">업종별 분석 현황</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {topIndustries.map(([industry, v], i) => (
-                  <motion.div
-                    key={industry}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.22 + i * 0.04 }}
-                    className="rounded-lg border border-border bg-muted/30 p-3"
-                  >
-                    <p className="text-[11px] font-semibold text-foreground truncate mb-1">{industry}</p>
-                    <p className="text-[10px] text-muted-foreground mb-2">{v.total}건 분석</p>
-                    {v.avgReturn != null && (
-                      <p className={cn(
-                        "text-[12px] font-bold tabular-nums",
-                        v.avgReturn >= 0 ? "text-red-500" : "text-blue-500"
-                      )}>
-                        {v.avgReturn >= 0 ? "+" : ""}{v.avgReturn.toFixed(1)}%
-                        <span className="text-[9px] font-normal text-muted-foreground ml-1">평균</span>
-                      </p>
-                    )}
-                  </motion.div>
-                ))}
               </div>
             </motion.div>
           )}
