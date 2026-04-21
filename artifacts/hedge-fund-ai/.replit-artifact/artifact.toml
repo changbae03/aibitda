@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "AI 헤지펀드 리서치"
+title = "애빛다"
 version = "1.0.0"
 id = "artifacts/hedge-fund-ai"
 router = "path"
