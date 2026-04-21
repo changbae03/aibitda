@@ -43,10 +43,98 @@ const STEP_META: Record<string, { name: string; role: string; Icon: React.Elemen
 
 function stripInternalData(content: string): string {
   return content
+    .replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "")
+    .replace(/\nCHART_DATA:\{[^\n]+\}\s*(\nEVENTS_DATA:\[[^\n]*\])?\s*$/m, "")
+    .replace(/\nEVENTS_DATA:\[[^\n]*\]\s*$/m, "")
+    .replace(/\nVALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/^FINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
     .trim();
+}
+
+function parseChartLevels(content: string): {
+  support?: number; resistance?: number;
+  entryMin?: number; entryMax?: number;
+  stopLoss?: number; target1?: number; target2?: number;
+} | null {
+  const match = content.match(/CHART_DATA:(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const d = JSON.parse(match[1].replace(/,\s*([}\]])/g, "$1"));
+    return d;
+  } catch { return null; }
+}
+
+function ShareChartLevels({ content, currency }: { content: string; currency: "KRW" | "USD" }) {
+  const levels = parseChartLevels(content);
+  if (!levels) return null;
+
+  const rows = [
+    levels.target2 != null && { label: "2차 목표가", value: levels.target2, color: "text-emerald-300", dot: "bg-emerald-400" },
+    levels.target1 != null && { label: "1차 목표가", value: levels.target1, color: "text-emerald-400", dot: "bg-emerald-500" },
+    levels.resistance != null && { label: "저항선", value: levels.resistance, color: "text-amber-400", dot: "bg-amber-400" },
+    levels.entryMax != null && levels.entryMin != null && {
+      label: "진입 구간",
+      value: `${formatCurrency(levels.entryMin, currency)} ~ ${formatCurrency(levels.entryMax, currency)}`,
+      isRange: true,
+      color: "text-blue-300", dot: "bg-blue-400"
+    },
+    levels.support != null && { label: "지지선", value: levels.support, color: "text-slate-300", dot: "bg-slate-400" },
+    levels.stopLoss != null && { label: "손절 기준", value: levels.stopLoss, color: "text-red-400", dot: "bg-red-400" },
+  ].filter(Boolean) as { label: string; value: number | string; isRange?: boolean; color: string; dot: string }[];
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-3.5 mb-4">
+      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-3">주요 가격 레벨</p>
+      <div className="space-y-2">
+        {rows.map((row, i) => (
+          <div key={i} className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${row.dot}`} />
+              <span className="text-[11px] text-slate-400">{row.label}</span>
+            </div>
+            <span className={`text-[13px] font-bold font-mono tabular-nums ${row.color}`}>
+              {row.isRange ? row.value : formatCurrency(row.value as number, currency)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MarkdownBody({ content }: { content: string }) {
+  return (
+    <div className="
+      text-[13px] leading-relaxed text-slate-300
+      [&_h1]:text-[16px] [&_h1]:font-bold [&_h1]:text-slate-200 [&_h1]:mt-4 [&_h1]:mb-2
+      [&_h2]:text-[15px] [&_h2]:font-bold [&_h2]:text-slate-200 [&_h2]:mt-4 [&_h2]:mb-2
+      [&_h3]:text-[14px] [&_h3]:font-bold [&_h3]:text-slate-200 [&_h3]:mt-3 [&_h3]:mb-1.5
+      [&_h4]:text-[13px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-3 [&_h4]:mb-1
+      [&_p]:text-slate-300 [&_p]:leading-relaxed [&_p]:my-2
+      [&_strong]:text-slate-100 [&_strong]:font-semibold
+      [&_em]:text-slate-400 [&_em]:not-italic
+      [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:text-slate-300
+      [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_ol]:text-slate-300
+      [&_li]:my-0.5 [&_li]:text-slate-300
+      [&_table]:w-full [&_table]:text-[12px] [&_table]:border-collapse [&_table]:my-3
+      [&_th]:text-slate-200 [&_th]:font-semibold [&_th]:border [&_th]:border-slate-700 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:bg-slate-800/60
+      [&_td]:text-slate-300 [&_td]:border [&_td]:border-slate-800 [&_td]:px-2 [&_td]:py-1.5
+      [&_tr:hover]:bg-slate-800/30
+      [&_hr]:border-slate-700 [&_hr]:my-4
+      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-3 [&_blockquote]:text-slate-400 [&_blockquote]:my-3
+      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1 [&_code]:rounded [&_code]:text-[12px]
+      [&_pre]:bg-slate-800 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3
+      [&_a]:text-blue-400 [&_a]:underline [&_a:hover]:text-blue-300
+    ">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {stripInternalData(content)}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 function extractJson(raw: string): any | null {
@@ -467,33 +555,16 @@ export default function SharePage() {
                         content={step.content}
                         currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
                       />
+                    ) : step.stepKey === "market_analysis" ? (
+                      <>
+                        <ShareChartLevels
+                          content={step.content}
+                          currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
+                        />
+                        <MarkdownBody content={step.content} />
+                      </>
                     ) : (
-                    <div className="
-                      text-[13px] leading-relaxed text-slate-300
-                      [&_h1]:text-[16px] [&_h1]:font-bold [&_h1]:text-slate-200 [&_h1]:mt-4 [&_h1]:mb-2
-                      [&_h2]:text-[15px] [&_h2]:font-bold [&_h2]:text-slate-200 [&_h2]:mt-4 [&_h2]:mb-2
-                      [&_h3]:text-[14px] [&_h3]:font-bold [&_h3]:text-slate-200 [&_h3]:mt-3 [&_h3]:mb-1.5
-                      [&_h4]:text-[13px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-3 [&_h4]:mb-1
-                      [&_p]:text-slate-300 [&_p]:leading-relaxed [&_p]:my-2
-                      [&_strong]:text-slate-100 [&_strong]:font-semibold
-                      [&_em]:text-slate-400 [&_em]:not-italic
-                      [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:text-slate-300
-                      [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_ol]:text-slate-300
-                      [&_li]:my-0.5 [&_li]:text-slate-300
-                      [&_table]:w-full [&_table]:text-[12px] [&_table]:border-collapse [&_table]:my-3
-                      [&_th]:text-slate-200 [&_th]:font-semibold [&_th]:border [&_th]:border-slate-700 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:bg-slate-800/60
-                      [&_td]:text-slate-300 [&_td]:border [&_td]:border-slate-800 [&_td]:px-2 [&_td]:py-1.5
-                      [&_tr:hover]:bg-slate-800/30
-                      [&_hr]:border-slate-700 [&_hr]:my-4
-                      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-3 [&_blockquote]:text-slate-400 [&_blockquote]:my-3
-                      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1 [&_code]:rounded [&_code]:text-[12px]
-                      [&_pre]:bg-slate-800 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3
-                      [&_a]:text-blue-400 [&_a]:underline [&_a:hover]:text-blue-300
-                    ">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {stripInternalData(step.content)}
-                      </ReactMarkdown>
-                    </div>
+                      <MarkdownBody content={step.content} />
                     )}
                   </motion.div>
                 );
