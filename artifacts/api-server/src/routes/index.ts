@@ -11,6 +11,7 @@ import creditsRouter from "./credits.js";
 import peersRouter from "./peers.js";
 import tickerNotesRouter from "./ticker-notes.js";
 import adminRouter from "./admin.js";
+import feedbackRouter from "./feedback.js";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/market-data", stockInsightsRouter);
 router.use("/model-insights", modelInsightsRouter);
 router.use("/feed", feedRouter);
 router.use(newsRouter);
+router.use(feedbackRouter);
 
 export default router;

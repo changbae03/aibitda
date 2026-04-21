@@ -1622,6 +1622,32 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.delete("/mine", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "로그인이 필요합니다." });
+    return;
+  }
+  try {
+    const ids = await rawQuery(
+      `SELECT id FROM analyses WHERE user_id = $1`,
+      [userId]
+    );
+    if (ids.length > 0) {
+      const idList = ids.map((r: any) => r.id);
+      await rawQuery(
+        `DELETE FROM analysis_steps WHERE analysis_id = ANY($1::int[])`,
+        [idList]
+      );
+      await rawQuery(`DELETE FROM analyses WHERE user_id = $1`, [userId]);
+    }
+    res.json({ success: true, deleted: ids.length });
+  } catch (err: any) {
+    console.error("[DELETE /analysis/mine] error:", err?.message);
+    res.status(500).json({ error: "삭제 중 오류가 발생했습니다." });
+  }
+});
+
 router.delete("/", async (_req, res) => {
   await rawQuery(`DELETE FROM analysis_steps`);
   await rawQuery(`DELETE FROM analyses`);

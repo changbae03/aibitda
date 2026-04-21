@@ -1,9 +1,9 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 const themes = [
   {
@@ -37,6 +37,14 @@ const themes = [
     },
   },
 ] as const;
+
+const FEEDBACK_CATEGORIES = [
+  { value: "분석 품질", label: "분석 품질" },
+  { value: "UI/UX", label: "UI/UX" },
+  { value: "기능 오류", label: "기능 오류" },
+  { value: "기능 제안", label: "기능 제안" },
+  { value: "기타", label: "기타" },
+];
 
 interface AuthUser {
   id: string;
@@ -80,6 +88,13 @@ export default function SettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const [fbCategory, setFbCategory] = useState("기타");
+  const [fbContent, setFbContent] = useState("");
+  const [fbSubmitting, setFbSubmitting] = useState(false);
+  const [fbDone, setFbDone] = useState(false);
+  const [fbError, setFbError] = useState("");
+  const [showCatMenu, setShowCatMenu] = useState(false);
+
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
@@ -106,6 +121,35 @@ export default function SettingsPage() {
       window.location.href = "/";
     } finally {
       setLoggingOut(false);
+    }
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (fbSubmitting || fbDone) return;
+    if (fbContent.trim().length < 5) {
+      setFbError("5자 이상 입력해주세요.");
+      return;
+    }
+    setFbError("");
+    setFbSubmitting(true);
+    try {
+      const r = await fetch(getApiUrl("/api/feedback"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: fbCategory, content: fbContent.trim() }),
+      });
+      if (r.ok) {
+        setFbDone(true);
+        setFbContent("");
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setFbError(d.error ?? "전송에 실패했습니다. 다시 시도해주세요.");
+      }
+    } catch {
+      setFbError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setFbSubmitting(false);
     }
   };
 
@@ -230,7 +274,6 @@ export default function SettingsPage() {
                       : "border-border bg-card hover:border-primary/40 hover:bg-accent/50"
                   )}
                 >
-                  {/* 미니 미리보기 */}
                   <div className="w-full h-12 rounded-lg overflow-hidden border border-border/50 flex">
                     <div className={cn("w-5 h-full", t.preview.sidebar)} />
                     <div className={cn("flex-1 p-1.5 flex flex-col gap-1", t.preview.bg)}>
@@ -238,14 +281,12 @@ export default function SettingsPage() {
                       <div className={cn("h-1 w-1/2 rounded-full", t.preview.line)} />
                     </div>
                   </div>
-
                   <div className="flex items-center gap-1.5">
                     <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-primary" : "text-muted-foreground")} />
                     <span className={cn("text-[12px] font-semibold", isSelected ? "text-foreground" : "text-muted-foreground")}>
                       {t.label}
                     </span>
                   </div>
-
                   {isSelected && (
                     <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                       <Check className="w-2.5 h-2.5 text-primary-foreground" />
@@ -262,6 +303,125 @@ export default function SettingsPage() {
               ? "다크 모드가 활성화되어 있습니다."
               : "라이트 모드가 활성화되어 있습니다."}
           </p>
+        </div>
+      </Section>
+
+      {/* ── 피드백 보내기 ── */}
+      <Section title="피드백">
+        <div className="px-4 py-4 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <MessageSquare className="w-4 h-4 text-primary" />
+            <p className="text-[13px] font-medium text-foreground">의견 보내기</p>
+          </div>
+          <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
+            분석 품질, 불편한 점, 기능 제안 등 무엇이든 알려주세요. 서비스 개선에 반영됩니다.
+          </p>
+
+          <AnimatePresence mode="wait">
+            {fbDone ? (
+              <motion.div
+                key="done"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center gap-2 py-6"
+              >
+                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                  <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <p className="text-[13px] font-semibold text-foreground">의견을 전달했습니다</p>
+                <p className="text-[12px] text-muted-foreground">소중한 피드백 감사합니다.</p>
+                <button
+                  onClick={() => setFbDone(false)}
+                  className="mt-1 text-[12px] text-primary hover:underline"
+                >
+                  다시 보내기
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2.5">
+                {/* 카테고리 선택 */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowCatMenu((v) => !v)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-border bg-background text-[13px] text-foreground hover:border-primary/50 transition-colors"
+                  >
+                    <span>{fbCategory}</span>
+                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", showCatMenu && "rotate-180")} />
+                  </button>
+                  <AnimatePresence>
+                    {showCatMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute z-10 top-full mt-1 left-0 right-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden"
+                      >
+                        {FEEDBACK_CATEGORIES.map((c) => (
+                          <button
+                            key={c.value}
+                            type="button"
+                            onClick={() => { setFbCategory(c.value); setShowCatMenu(false); }}
+                            className={cn(
+                              "w-full text-left px-3 py-2.5 text-[13px] hover:bg-accent transition-colors",
+                              fbCategory === c.value ? "font-semibold text-primary" : "text-foreground"
+                            )}
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* 내용 입력 */}
+                <textarea
+                  value={fbContent}
+                  onChange={(e) => { setFbContent(e.target.value); if (fbError) setFbError(""); }}
+                  placeholder="불편한 점, 개선 아이디어, 칭찬 등 자유롭게 작성해주세요..."
+                  rows={4}
+                  maxLength={2000}
+                  className="w-full text-[13px] text-foreground placeholder:text-muted-foreground/50 bg-background border border-border rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all leading-relaxed"
+                />
+
+                {fbError && (
+                  <p className="text-[12px] text-red-500">{fbError}</p>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground/50">{fbContent.length} / 2000</span>
+                  <button
+                    onClick={handleFeedbackSubmit}
+                    disabled={fbSubmitting || fbContent.trim().length < 5}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all",
+                      fbContent.trim().length >= 5 && !fbSubmitting
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                    )}
+                  >
+                    {fbSubmitting ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                          className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full"
+                        />
+                        전송 중
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        보내기
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </Section>
 

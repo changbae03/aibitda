@@ -332,6 +332,8 @@ export default function History() {
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
   const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklineResult>>({});
@@ -407,6 +409,23 @@ export default function History() {
     }
   };
   const cancelConfirm = (e: React.MouseEvent) => { e.stopPropagation(); setConfirmId(null); };
+
+  const handleDeleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      const r = await fetch(getApiUrl("/api/analysis/mine"), {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (r.ok) {
+        localStorage.removeItem("avitda-recent-analyses");
+        setLocalItems([]);
+        setConfirmDeleteAll(false);
+        queryClient.invalidateQueries({ queryKey: getListAnalysesQueryKey() });
+      }
+    } catch {}
+    setDeletingAll(false);
+  };
 
   // ── 필터 + 정렬 (모든 useMemo는 early return 전에 위치해야 함) ────────────
   const filteredAndSorted = useMemo(() => {
@@ -524,15 +543,63 @@ export default function History() {
           })()}
         </div>
         {list.length > 0 && (
-          <button
-            onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
-            disabled={quotesLoading}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-30"
-            title="현재가 새로고침"
-          >
-            <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
-            <span>새로고침</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
+              disabled={quotesLoading}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-30"
+              title="현재가 새로고침"
+            >
+              <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
+              <span>새로고침</span>
+            </button>
+
+            <AnimatePresence mode="wait">
+              {confirmDeleteAll ? (
+                <motion.div
+                  key="confirm"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center gap-1.5"
+                >
+                  <span className="text-[11px] text-red-500 font-medium">전체 삭제?</span>
+                  <button
+                    onClick={handleDeleteAll}
+                    disabled={deletingAll}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors disabled:opacity-60"
+                  >
+                    {deletingAll ? (
+                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }} className="w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                    ) : (
+                      <Trash2 className="w-3 h-3" />
+                    )}
+                    확인
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteAll(false)}
+                    className="px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:bg-muted transition-colors"
+                  >
+                    취소
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="delete-all"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setConfirmDeleteAll(true)}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground/40 hover:text-red-400 transition-colors"
+                  title="전체 삭제"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>전체 삭제</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
         )}
       </div>
 
