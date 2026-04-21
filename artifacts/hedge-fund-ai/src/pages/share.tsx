@@ -49,6 +49,175 @@ function stripInternalData(content: string): string {
     .trim();
 }
 
+function extractJson(raw: string): any | null {
+  if (!raw) return null;
+  let s = raw.trim();
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) s = s.slice(start, end + 1);
+  try { return JSON.parse(s); } catch { /* */ }
+  try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { /* */ }
+  try { return JSON.parse(s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")); } catch { return null; }
+}
+
+function fmtPrice(v: any, currency: "KRW" | "USD"): string {
+  const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, ""));
+  if (isNaN(n) || n === 0) return "—";
+  return formatCurrency(n, currency);
+}
+
+function ShareInvestmentCard({ content, currency }: { content: string; currency: "KRW" | "USD" }) {
+  const json = extractJson(content);
+  if (!json) return null;
+
+  const verdictStr = String(json.verdict ?? "").toLowerCase();
+  const isSell = verdictStr.includes("sell");
+
+  const verdictLabel = () => {
+    if (verdictStr.includes("strong buy")) return { label: "강력 매수", color: "text-emerald-400" };
+    if (verdictStr.includes("buy")) return { label: "매수", color: "text-emerald-400" };
+    if (verdictStr.includes("strong sell")) return { label: "강력 매도", color: "text-red-400" };
+    if (verdictStr.includes("sell")) return { label: "매도", color: "text-red-400" };
+    return { label: "보유", color: "text-amber-400" };
+  };
+  const vm = verdictLabel();
+
+  const tp = parseFloat(String(json.target_price ?? "").replace(/[^0-9.]/g, "")) || null;
+  const cp = parseFloat(String(json.current_price ?? "").replace(/[^0-9.]/g, "")) || null;
+  const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, "")) || null;
+  const sl = parseFloat(String(json.stop_loss ?? "").replace(/[^0-9.]/g, "")) || null;
+
+  const baseScenario = json.scenarios?.find((s: any) => s.case === "Base");
+  const upsideNum = parseFloat(String(baseScenario?.upside ?? ""));
+  const upsideFromCurrent = !isNaN(upsideNum) ? upsideNum : (cp && tp && cp > 0) ? (tp - cp) / cp * 100 : null;
+
+  const entryVsCurrent = cp && ep && cp > 0 ? ((ep - cp) / cp * 100).toFixed(1) : null;
+  const slPct = !isSell && ep && sl && ep > 0
+    ? Math.abs((sl - ep) / ep * 100).toFixed(1)
+    : cp && sl && cp > 0 ? Math.abs((sl - cp) / cp * 100).toFixed(1) : null;
+
+  return (
+    <div className="space-y-4">
+      {/* 판정 + 메타 */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className={cn("text-[24px] font-black leading-none", vm.color)}>{vm.label}</span>
+        {json.confidence && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            신뢰도 {json.confidence}
+          </span>
+        )}
+        {json.investment_period && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            {json.investment_period}
+          </span>
+        )}
+        {json.risk_reward && (
+          <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            R/R {json.risk_reward}
+          </span>
+        )}
+      </div>
+
+      {/* 핵심 이슈 */}
+      {json.key_issue && (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
+          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1">핵심 이슈</p>
+          <p className="text-[13px] text-slate-200 leading-relaxed font-medium">{json.key_issue}</p>
+        </div>
+      )}
+
+      {/* 투자 논거 요약 */}
+      {json.summary && (
+        <p className="text-[13px] text-slate-300 leading-relaxed">{json.summary}</p>
+      )}
+
+      {/* 가격 3박스 */}
+      {(ep || tp || sl) && (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3">
+            <p className="text-[10px] text-slate-500 mb-1.5">{isSell ? "재관심 기준가" : "진입가"}</p>
+            <p className="text-[14px] font-bold text-slate-200 font-mono leading-none">{fmtPrice(json.entry_price, currency)}</p>
+            {entryVsCurrent !== null && (
+              <p className={cn("text-[10px] font-bold mt-1", parseFloat(entryVsCurrent) < 0 ? "text-rose-400" : "text-emerald-400")}>
+                {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
+              </p>
+            )}
+          </div>
+          <div className={cn(
+            "rounded-xl border p-3",
+            upsideFromCurrent !== null && upsideFromCurrent < 0
+              ? "border-red-500/30 bg-red-500/10"
+              : "border-emerald-500/30 bg-emerald-500/10"
+          )}>
+            <p className={cn("text-[10px] mb-1.5", upsideFromCurrent !== null && upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
+              적정주가
+            </p>
+            <p className={cn("text-[14px] font-bold font-mono leading-none", upsideFromCurrent !== null && upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
+              {fmtPrice(json.target_price, currency)}
+            </p>
+            {upsideFromCurrent !== null && (
+              <p className={cn("text-[10px] font-bold mt-1", upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
+                {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
+              </p>
+            )}
+          </div>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+            <p className="text-[10px] text-red-400 mb-1.5">{isSell ? "청산 우선 구간" : "손절가"}</p>
+            <p className="text-[14px] font-bold text-red-400 font-mono leading-none">{fmtPrice(json.stop_loss, currency)}</p>
+            {slPct !== null && (
+              <p className="text-[10px] font-bold text-red-400 mt-1">-{slPct}%</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 시나리오 */}
+      {json.scenarios?.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2">시나리오 분석</p>
+          <div className="space-y-2">
+            {json.scenarios.map((s: any, i: number) => {
+              const isBear = s.case === "Bear";
+              const isBull = s.case === "Bull";
+              const uStr = String(s.upside ?? "");
+              const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
+              const uDisplay = !isNaN(uNum) ? (uNum >= 0 ? "+" : "") + uNum.toFixed(1) + "%" : uStr;
+              const pNum = parseFloat(String(s.probability ?? "").replace(/[^0-9.]/g, ""));
+              return (
+                <div key={i} className={cn(
+                  "rounded-xl border p-3 flex items-center gap-3",
+                  isBear ? "border-red-500/25 bg-red-500/8" : isBull ? "border-emerald-500/25 bg-emerald-500/8" : "border-slate-700 bg-slate-800/40"
+                )}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={cn("text-[11px] font-bold", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-slate-300")}>
+                        {s.case === "Bear" ? "약세" : s.case === "Bull" ? "강세" : "기본"}
+                      </span>
+                      <span className={cn("text-[12px] font-bold font-mono", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-slate-200")}>
+                        {uDisplay}
+                      </span>
+                    </div>
+                    {s.description && (
+                      <p className="text-[11px] text-slate-400 truncate">{s.description}</p>
+                    )}
+                  </div>
+                  {!isNaN(pNum) && (
+                    <div className="shrink-0 text-right">
+                      <p className="text-[10px] text-slate-500 mb-0.5">확률</p>
+                      <p className="text-[14px] font-bold text-slate-300 font-mono">{pNum}%</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STEP_ORDER = [
   "company_intro",
   "industry_analysis",
@@ -278,6 +447,12 @@ export default function SharePage() {
                       </div>
                     </div>
 
+                    {step.stepKey === "investment_strategy" ? (
+                      <ShareInvestmentCard
+                        content={step.content}
+                        currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
+                      />
+                    ) : (
                     <div className="
                       text-[13px] leading-relaxed text-slate-300
                       [&_h1]:text-[16px] [&_h1]:font-bold [&_h1]:text-slate-200 [&_h1]:mt-4 [&_h1]:mb-2
@@ -304,6 +479,7 @@ export default function SharePage() {
                         {stripInternalData(step.content)}
                       </ReactMarkdown>
                     </div>
+                    )}
                   </motion.div>
                 );
               })}
