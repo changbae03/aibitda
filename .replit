@@ -32,3 +32,4 @@ channel = "stable-25_05"
 
 [userenv.production]
 NEON_DATABASE_URL = "postgresql://neondb_owner:npg_OwiMEx2KWb3T@ep-withered-cloud-antfmhk1-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+KAKAO_REDIRECT_URI = "https://ai-bitda.replit.app/api/auth/kakao/callback"
