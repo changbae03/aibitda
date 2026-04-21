@@ -1791,7 +1791,34 @@ router.get("/popular", async (_req, res) => {
       ...(insightMap[r.id] ?? { currentPrice: null, priceReturn: null, outcome: null, daysElapsed: null }),
     }));
 
-    res.json({ items: enriched, tickerStats });
+    const allForStats = await rawQuery(
+      `SELECT ticker, investment_verdict FROM analyses WHERE status = 'completed' AND is_public = 'true' AND investment_verdict IS NOT NULL`
+    );
+
+    const verdictMap: Record<string, number> = {};
+    let krCount = 0, usCount = 0;
+    for (const r of allForStats) {
+      const v = (r.investment_verdict as string).trim();
+      verdictMap[v] = (verdictMap[v] ?? 0) + 1;
+      const t = r.ticker as string;
+      if (/^\d/.test(t) || t.endsWith(".KQ") || t.endsWith(".KS") || t.endsWith(".KO")) {
+        krCount++;
+      } else {
+        usCount++;
+      }
+    }
+
+    const VERDICT_ORDER = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"];
+    const verdictStats = VERDICT_ORDER
+      .filter((v) => verdictMap[v] != null)
+      .map((v) => ({ verdict: v, count: verdictMap[v] }));
+
+    const marketStats = [
+      { market: "한국", count: krCount },
+      { market: "미국", count: usCount },
+    ].filter((m) => m.count > 0);
+
+    res.json({ items: enriched, tickerStats, verdictStats, marketStats });
   } catch (err: any) {
     console.error("[GET /analysis/popular]", err?.message, err?.cause?.message);
     res.status(500).json({ error: "DB error", detail: err?.message });
