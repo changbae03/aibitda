@@ -105,7 +105,7 @@ export async function checkAndDeductCredit(userId: string): Promise<{ ok: boolea
       );
       return { ok: true };
     } else {
-      return { ok: false, reason: "오늘 분석 횟수를 모두 사용했습니다. 친구에게 공유하면 추가 1회를 받을 수 있어요!" };
+      return { ok: false, reason: "오늘 분석 횟수(3회)를 모두 사용했습니다. 내일 다시 이용해 주세요." };
     }
   } finally {
     client.release();

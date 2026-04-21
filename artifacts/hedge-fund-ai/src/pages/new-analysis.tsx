@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Share2, Check, Zap, Flame } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl } from "@/lib/utils";
@@ -28,28 +28,6 @@ function useCredits() {
 }
 
 function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
-  const [copied, setCopied] = useState(false);
-  const [sharing, setSharing] = useState(false);
-
-  const handleShare = async () => {
-    if (sharing) return;
-    setSharing(true);
-    try {
-      const res = await fetch("/api/credits/referral/code", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const { code } = await res.json();
-      const url = `${window.location.origin}/?ref=${code}`;
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } finally {
-      setSharing(false);
-    }
-  };
-
   if (!credits) return null;
 
   const dailyRemaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
@@ -65,24 +43,7 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
       }`}>
         <Zap className="w-3 h-3" />
         오늘 {dailyRemaining}회 남음
-        {credits.bonusCredits > 0 && (
-          <span className="ml-0.5 opacity-70">+{credits.bonusCredits} 보너스</span>
-        )}
       </div>
-
-      <button
-        onClick={handleShare}
-        disabled={sharing}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-[#FF8A7A] hover:text-[#FF8A7A] transition-colors"
-      >
-        {copied ? (
-          <><Check className="w-3 h-3 text-emerald-500" /><span className="text-emerald-500">링크 복사됨!</span></>
-        ) : sharing ? (
-          <Loader2 className="w-3 h-3 animate-spin" />
-        ) : (
-          <><Share2 className="w-3 h-3" />친구 초대 +1회</>
-        )}
-      </button>
     </div>
   );
 }
