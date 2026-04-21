@@ -41,6 +41,14 @@ const STEP_META: Record<string, { name: string; role: string; Icon: React.Elemen
   investment_strategy: { name: "최종 결론", role: "Lead Portfolio Strategist", Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
 };
 
+function stripInternalData(content: string): string {
+  return content
+    .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
+    .replace(/^FINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
+    .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
+    .trim();
+}
+
 const STEP_ORDER = [
   "company_intro",
   "industry_analysis",
@@ -293,7 +301,7 @@ export default function SharePage() {
                       [&_a]:text-blue-400 [&_a]:underline [&_a:hover]:text-blue-300
                     ">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {step.content}
+                        {stripInternalData(step.content)}
                       </ReactMarkdown>
                     </div>
                   </motion.div>
