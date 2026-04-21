@@ -94,7 +94,7 @@ router.get("/auth/kakao/callback", async (req, res) => {
       profileImage: userData.kakao_account?.profile?.profile_image_url || null,
     };
 
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "30d" });
 
     const proto = req.headers["x-forwarded-proto"] || req.protocol;
     const host = req.headers["x-forwarded-host"] || req.get("host");
@@ -104,7 +104,7 @@ router.get("/auth/kakao/callback", async (req, res) => {
       httpOnly: true,
       secure: proto === "https",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 30,
       path: "/",
     }));
 
