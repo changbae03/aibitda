@@ -535,8 +535,8 @@ export default function History() {
         <div className="mb-4">
           <div className="rounded-xl border border-border bg-background px-5 py-3 flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">방향 정확도</p>
-              <p className="text-[11px] text-muted-foreground/50">AI가 방향을 맞춘 비율</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">주가 방향 정확도</p>
+              <p className="text-[11px] text-muted-foreground/50">상승·하락 방향 예측 기준</p>
             </div>
             <div className="text-right">
               <p className={cn(
