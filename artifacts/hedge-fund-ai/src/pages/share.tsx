@@ -184,28 +184,43 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
               const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
               const uDisplay = !isNaN(uNum) ? (uNum >= 0 ? "+" : "") + uNum.toFixed(1) + "%" : uStr;
               const pNum = parseFloat(String(s.probability ?? "").replace(/[^0-9.]/g, ""));
+              const tpStr = fmtPrice(s.target_price, currency);
               return (
                 <div key={i} className={cn(
-                  "rounded-xl border p-3 flex items-center gap-3",
-                  isBear ? "border-red-500/25 bg-red-500/8" : isBull ? "border-emerald-500/25 bg-emerald-500/8" : "border-slate-700 bg-slate-800/40"
+                  "rounded-xl border p-3.5 flex items-center gap-3",
+                  isBear ? "border-red-500/25 bg-red-500/8" : isBull ? "border-emerald-500/25 bg-emerald-500/8" : "border-blue-500/20 bg-blue-500/5"
                 )}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className={cn("text-[11px] font-bold", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-slate-300")}>
-                        {s.case === "Bear" ? "약세" : s.case === "Bull" ? "강세" : "기본"}
-                      </span>
-                      <span className={cn("text-[12px] font-bold font-mono", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-slate-200")}>
-                        {uDisplay}
-                      </span>
-                    </div>
-                    {s.description && (
-                      <p className="text-[11px] text-slate-400 truncate">{s.description}</p>
-                    )}
+                  {/* 케이스 이름 */}
+                  <div className="w-16 shrink-0">
+                    <p className={cn("text-[12px] font-bold", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-blue-400")}>
+                      {isBear ? "▼ 약세" : isBull ? "▲ 강세" : "— 기본"}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {isBear ? "비관 전망" : isBull ? "낙관 전망" : "기본 전망"}
+                    </p>
                   </div>
+
+                  {/* 적정주가 + 상승여력 */}
+                  <div className="flex-1 min-w-0">
+                    {tpStr !== "—" && (
+                      <p className={cn("text-[15px] font-bold font-mono leading-none mb-0.5",
+                        isBear ? "text-red-300" : isBull ? "text-emerald-300" : "text-slate-200"
+                      )}>
+                        {tpStr}
+                      </p>
+                    )}
+                    <p className={cn("text-[12px] font-semibold",
+                      uNum > 0 ? "text-emerald-400" : uNum < 0 ? "text-red-400" : "text-slate-400"
+                    )}>
+                      {uDisplay}
+                    </p>
+                  </div>
+
+                  {/* 확률 */}
                   {!isNaN(pNum) && (
                     <div className="shrink-0 text-right">
                       <p className="text-[10px] text-slate-500 mb-0.5">확률</p>
-                      <p className="text-[14px] font-bold text-slate-300 font-mono">{pNum}%</p>
+                      <p className="text-[15px] font-bold text-slate-200 font-mono">{pNum}%</p>
                     </div>
                   )}
                 </div>
