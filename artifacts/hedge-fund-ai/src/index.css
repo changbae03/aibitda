@@ -268,6 +268,9 @@
 .markdown-body td { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid #f3f4f6; white-space: normal; word-break: keep-all; vertical-align: top; }
 .markdown-body td:first-child { white-space: nowrap; font-weight: 500; color: #374151; }
 .markdown-body tr:last-child td { border-bottom: none; }
+.markdown-body tr.sub-metric-row td { background: transparent; border-bottom: 1px dashed #e5e7eb; }
+.markdown-body tr.sub-metric-row td:first-child { color: #9ca3af; font-size: 0.75rem; font-weight: 400; padding-left: 1.25rem; }
+.markdown-body tr.sub-metric-row td:not(:first-child) { color: #6b7280; font-size: 0.78rem; }
 @media (max-width: 640px) {
   .markdown-body .table-wrap { margin: 0.75rem 0; }
   .markdown-body table { font-size: 0.75rem; min-width: 420px; }

@@ -161,7 +161,16 @@ const MD_TABLE_COMPONENTS = {
   ),
   thead: ({ children }: any) => <thead>{children}</thead>,
   tbody: ({ children }: any) => <tbody>{children}</tbody>,
-  tr: ({ children }: any) => <tr>{children}</tr>,
+  tr: ({ children, ...props }: any) => {
+    const firstCell = Array.isArray(children) ? children[0] : children;
+    const cellText = firstCell?.props?.children ?? "";
+    const isSubRow = typeof cellText === "string" && cellText.startsWith("↳");
+    return (
+      <tr className={isSubRow ? "sub-metric-row" : ""} {...props}>
+        {children}
+      </tr>
+    );
+  },
   th: ({ children }: any) => <th>{children}</th>,
   td: ({ children }: any) => <td>{children}</td>,
 };
