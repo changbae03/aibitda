@@ -252,16 +252,13 @@ function PriceTrack({
         {/* Rail */}
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-muted" />
 
-        {/* Colored fill: entry → current */}
-        {/* 하락목표: cur가 entry 아래로 가야 좋음 → 왼쪽이동=파랑, 오른쪽=빨강 */}
-        {/* 상승목표: cur가 entry 위로 가야 좋음 → 오른쪽이동=파랑, 왼쪽=빨강 */}
+        {/* Colored fill: entry → current. 오른쪽(+) = 빨강, 왼쪽(-) = 파랑 */}
         {(() => {
-          const movingCorrect = isDownside ? !isPositive : isPositive;
           return (
             <motion.div
               className={cn(
                 "absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full",
-                exceeded ? "bg-emerald-300" : movingCorrect ? "bg-blue-200" : "bg-red-200"
+                exceeded ? "bg-emerald-300" : isPositive ? "bg-red-200" : "bg-blue-200"
               )}
               initial={{ left: "50%", width: 0 }}
               animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
@@ -282,12 +279,11 @@ function PriceTrack({
 
         {/* Current price dot */}
         {(() => {
-          const movingCorrect = isDownside ? !isPositive : isPositive;
           return (
             <motion.div
               className={cn(
                 "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
-                exceeded ? "bg-emerald-500" : movingCorrect ? "bg-blue-500" : "bg-red-400"
+                exceeded ? "bg-emerald-500" : isPositive ? "bg-red-400" : "bg-blue-500"
               )}
               initial={{ left: "50%" }}
               animate={{ left: `${curX}%` }}
@@ -297,17 +293,9 @@ function PriceTrack({
         })()}
       </div>
 
-      {/* Under-track labels */}
+      {/* Under-track labels — 분석 당시 중심만 표시 */}
       <div className="relative h-4 mt-0.5 select-none">
-        <span className="absolute left-0 text-[9px] text-muted-foreground/50">◀ 하락</span>
         <span className="absolute left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground">분석 당시</span>
-        <span
-          className={cn("absolute text-[9px] font-medium -translate-x-1/2 whitespace-nowrap", exceeded ? "text-emerald-600" : "text-emerald-500")}
-          style={{ left: `${Math.max(Math.min(tgtX, 90), 15)}%` }}
-        >
-          적정주가
-        </span>
-        <span className="absolute right-0 text-[9px] text-muted-foreground/50">상승 ▶</span>
       </div>
     </div>
   );
@@ -781,15 +769,6 @@ export default function History() {
                       <span className="text-[15px] font-semibold text-foreground truncate">{a.companyName}</span>
                       <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
                       {verdictBadge(a.investmentVerdict)}
-                      {/* ── 방향 배지 ──────────────────────────────────── */}
-                      {directionBadge && (
-                        <span className={cn(
-                          "inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border",
-                          directionBadge.cls
-                        )}>
-                          {directionBadge.label}
-                        </span>
-                      )}
                       {/* ── 재분석 추천 배지 ─────────────────────────── */}
                       {reanalysisLevel === "urgent" && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
@@ -805,8 +784,6 @@ export default function History() {
 
                     {/* 메타 라인 */}
                     <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground flex-wrap">
-                      <span>{a.industry || "—"}</span>
-                      <span className="text-muted-foreground/30">|</span>
                       <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
                     </div>
 
@@ -860,19 +837,8 @@ export default function History() {
                     <MemoInline id={a.id} />
                   </div>
 
-                  {/* Right side: sparkline + delete/arrow */}
+                  {/* Right side: delete/arrow */}
                   <div className="shrink-0 flex flex-col items-end gap-2 self-start pt-0.5">
-                    {/* ── 스파크라인 ───────────────────────────────────── */}
-                    {sparkData && sparkData.closes.length >= 2 && (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <Sparkline closes={sparkData.closes} />
-                        {sparkData.change3m != null && (
-                          <span className={cn("text-[9px] font-semibold tabular-nums", sparkData.change3m >= 0 ? "text-emerald-500" : "text-red-400")}>
-                            3M {sparkData.change3m >= 0 ? "+" : ""}{sparkData.change3m.toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
-                    )}
 
                     <AnimatePresence mode="wait">
                       {isConfirming ? (
