@@ -689,133 +689,132 @@ export default function History() {
                   animate={{ opacity: isThisDeleting ? 0.4 : 1, y: 0 }}
                   exit={{ opacity: 0, x: -24, transition: { duration: 0.22 } }}
                   transition={{ duration: 0.18 }}
-                  className="group relative flex gap-4 px-5 py-4 rounded-xl border border-border hover:border-border hover:bg-muted/50 transition-all cursor-pointer"
+                  className="group relative flex flex-col px-5 py-4 rounded-xl border border-border hover:border-border hover:bg-muted/50 transition-all cursor-pointer"
                   onClick={() => !isConfirming && !isThisDeleting && setLocation(`/analysis/${a.id}`)}
                 >
-                  {/* Status icon */}
-                  <div className="shrink-0 pt-0.5">
-                    {isThisDeleting ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
-                    ) : a.status === "completed" ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Clock className="w-4 h-4 text-amber-400" />
-                    )}
-                  </div>
-
-                  {/* Main info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[15px] font-semibold text-foreground truncate">{a.companyName}</span>
-                      <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
-                      {verdictBadge(a.investmentVerdict)}
-                      {/* ── 재분석 추천 배지 ─────────────────────────── */}
-                      {reanalysisLevel === "urgent" && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
-                          <AlertTriangle className="w-2.5 h-2.5" /> 긴급 재분석
-                        </span>
-                      )}
-                      {reanalysisLevel === "recommend" && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200">
-                          <RefreshCw className="w-2.5 h-2.5" /> 재분석 추천
-                        </span>
-                      )}
-                    </div>
-
-                    {/* 메타 라인 */}
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground flex-wrap">
-                      <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
-                    </div>
-
-                    {/* 적정주가 달성 현황 — PriceTrack */}
-                    {(() => {
-                      const tgt = a.targetPrice;
-                      const entry = a.startPrice ?? a.entryPrice;
-                      const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
-                      const dayChange = q?.change ?? null;
-
-                      if (!cur || !tgt) {
-                        if (tgt) return (
-                          <div className="mt-3 flex items-stretch rounded-xl overflow-hidden border border-border text-center">
-                            <div className="flex-1 px-2.5 py-2 bg-muted/50 border-r border-border">
-                              <p className="text-[9px] text-muted-foreground mb-0.5">분석 당시</p>
-                              <p className="text-[12px] font-bold text-foreground/70 tabular-nums">
-                                {entry != null ? formatCurrency(entry, currency) : <span className="text-muted-foreground/50">—</span>}
-                              </p>
-                            </div>
-                            <div className="flex-1 px-2.5 py-2 bg-background border-r border-border">
-                              <p className="text-[9px] text-muted-foreground mb-0.5">현재가</p>
-                              <p className="text-[12px] font-bold text-muted-foreground/50">—</p>
-                            </div>
-                            <div className="flex-1 px-2.5 py-2 bg-background">
-                              <p className="text-[9px] text-muted-foreground mb-0.5">적정주가</p>
-                              <p className="text-[12px] font-bold text-foreground/80 tabular-nums">{formatCurrency(tgt, currency)}</p>
-                            </div>
-                          </div>
-                        );
-                        return null;
-                      }
-
-                      return (
-                        <>
-                          <PriceTrack
-                            entry={entry ?? cur}
-                            tgt={tgt}
-                            cur={cur}
-                            currency={currency}
-                          />
-                          {dayChange != null && (
-                            <p className={cn("text-[13px] font-bold text-right mt-2 tabular-nums", dayChange >= 0 ? "text-red-500" : "text-blue-500")}>
-                              오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
-                            </p>
-                          )}
-                        </>
-                      );
-                    })()}
-
-                    {/* Memo */}
-                    <MemoInline id={a.id} />
-                  </div>
-
-                  {/* Right side: delete/arrow */}
-                  <div className="shrink-0 flex flex-col items-end gap-2 self-start pt-0.5">
-
-                    <AnimatePresence mode="wait">
-                      {isConfirming ? (
-                        <motion.div
-                          key="confirm"
-                          initial={{ opacity: 0, scale: 0.92 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.92 }}
-                          transition={{ duration: 0.12 }}
-                          className="flex items-center gap-1.5"
-                          onClick={cancelConfirm}
-                        >
-                          <span className="text-[12px] text-muted-foreground mr-0.5">삭제할까요?</span>
-                          <button onClick={(e) => confirmDelete(a.id, isLocalOnly, e)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
-                          <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-muted text-foreground/70 text-[11px] font-semibold hover:bg-muted transition-colors">취소</button>
-                        </motion.div>
+                  {/* ── 상단 행: 아이콘 + 종목정보 + 버튼 ── */}
+                  <div className="flex items-start gap-3">
+                    {/* Status icon */}
+                    <div className="shrink-0 pt-0.5">
+                      {isThisDeleting ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
+                      ) : a.status === "completed" ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
                       ) : (
-                        <motion.div
-                          key="default"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.1 }}
-                          className="flex items-center gap-2"
-                        >
-                          <button
-                            onClick={(e) => handleDelete(a.id, e)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-50"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-                        </motion.div>
+                        <Clock className="w-4 h-4 text-amber-400" />
                       )}
-                    </AnimatePresence>
+                    </div>
+
+                    {/* 종목명 + 배지 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[15px] font-semibold text-foreground truncate">{a.companyName}</span>
+                        <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
+                        {verdictBadge(a.investmentVerdict)}
+                        {reanalysisLevel === "urgent" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
+                            <AlertTriangle className="w-2.5 h-2.5" /> 긴급 재분석
+                          </span>
+                        )}
+                        {reanalysisLevel === "recommend" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200">
+                            <RefreshCw className="w-2.5 h-2.5" /> 재분석 추천
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                        <span>{format(new Date(a.createdAt), "yyyy.MM.dd", { locale: ko })}</span>
+                      </div>
+                    </div>
+
+                    {/* 삭제/이동 버튼 */}
+                    <div className="shrink-0">
+                      <AnimatePresence mode="wait">
+                        {isConfirming ? (
+                          <motion.div
+                            key="confirm"
+                            initial={{ opacity: 0, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.92 }}
+                            transition={{ duration: 0.12 }}
+                            className="flex items-center gap-1.5"
+                            onClick={cancelConfirm}
+                          >
+                            <span className="text-[12px] text-muted-foreground mr-0.5">삭제할까요?</span>
+                            <button onClick={(e) => confirmDelete(a.id, isLocalOnly, e)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
+                            <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-muted text-foreground/70 text-[11px] font-semibold hover:bg-muted transition-colors">취소</button>
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="default"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.1 }}
+                            className="flex items-center gap-2"
+                          >
+                            <button
+                              onClick={(e) => handleDelete(a.id, e)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-50"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <ArrowRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
+
+                  {/* ── 하단: 풀너비 PriceTrack ── */}
+                  {(() => {
+                    const tgt = a.targetPrice;
+                    const entry = a.startPrice ?? a.entryPrice;
+                    const currency = q?.currency ?? (isUSTicker(a.ticker) ? "USD" : "KRW");
+                    const dayChange = q?.change ?? null;
+
+                    if (!cur || !tgt) {
+                      if (tgt) return (
+                        <div className="mt-3 flex items-stretch rounded-xl overflow-hidden border border-border text-center">
+                          <div className="flex-1 px-2.5 py-2 bg-muted/50 border-r border-border">
+                            <p className="text-[9px] text-muted-foreground mb-0.5">분석 당시</p>
+                            <p className="text-[12px] font-bold text-foreground/70 tabular-nums">
+                              {entry != null ? formatCurrency(entry, currency) : <span className="text-muted-foreground/50">—</span>}
+                            </p>
+                          </div>
+                          <div className="flex-1 px-2.5 py-2 bg-background border-r border-border">
+                            <p className="text-[9px] text-muted-foreground mb-0.5">현재가</p>
+                            <p className="text-[12px] font-bold text-muted-foreground/50">—</p>
+                          </div>
+                          <div className="flex-1 px-2.5 py-2 bg-background">
+                            <p className="text-[9px] text-muted-foreground mb-0.5">적정주가</p>
+                            <p className="text-[12px] font-bold text-foreground/80 tabular-nums">{formatCurrency(tgt, currency)}</p>
+                          </div>
+                        </div>
+                      );
+                      return null;
+                    }
+
+                    return (
+                      <>
+                        <PriceTrack
+                          entry={entry ?? cur}
+                          tgt={tgt}
+                          cur={cur}
+                          currency={currency}
+                        />
+                        {dayChange != null && (
+                          <p className={cn("text-[13px] font-bold text-right tabular-nums", dayChange >= 0 ? "text-red-500" : "text-blue-500")}>
+                            오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
+
+                  {/* Memo */}
+                  <MemoInline id={a.id} />
                 </motion.div>
               );
             })}
