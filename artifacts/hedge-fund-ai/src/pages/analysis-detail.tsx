@@ -975,20 +975,26 @@ export default function AnalysisDetail() {
           {isComplete && analysis.investmentVerdict && (
             <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
               <div className="text-xl font-bold text-foreground mb-3">{toKoreanVerdict(analysis.investmentVerdict)}</div>
-              <div className="space-y-1.5 font-mono text-xs">
-                <div className="flex justify-between items-center border-b border-border pb-1.5">
-                  <span className="text-muted-foreground">적정주가 <span className="text-xs opacity-60">(12개월)</span></span>
-                  <span className="text-success font-bold">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
-                </div>
-                <div className="flex justify-between items-center border-b border-border pb-1.5">
-                  <span className="text-muted-foreground">진입가</span>
-                  <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
-                </div>
-                <div className="flex justify-between items-center pt-0.5">
-                  <span className="text-muted-foreground">손절가</span>
-                  <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
-                </div>
-              </div>
+              {(() => {
+                const isSellVerdict = ["sell", "strong sell"].includes((analysis.investmentVerdict ?? "").toLowerCase());
+                const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+                return (
+                  <div className="space-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between items-center border-b border-border pb-1.5">
+                      <span className="text-muted-foreground">적정주가 <span className="text-xs opacity-60">(12개월)</span></span>
+                      <span className="text-success font-bold">{formatCurrency(analysis.targetPrice, currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-border pb-1.5">
+                      <span className="text-muted-foreground">{isSellVerdict ? "재관심 기준가" : "진입가"}</span>
+                      <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice, currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-0.5">
+                      <span className="text-muted-foreground">{isSellVerdict ? "청산 우선 구간" : "손절가"}</span>
+                      <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 인라인 공유 버튼 */}
               <button
@@ -1485,24 +1491,36 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 ? { border: "border-rose-200 dark:border-rose-800", bg: "bg-rose-50 dark:bg-rose-950/40", dotColor: "bg-rose-400", labelColor: "text-rose-600 dark:text-rose-400", valColor: "text-rose-700 dark:text-rose-400", pctColor: "text-rose-600 dark:text-rose-400" }
                 : { border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50 dark:bg-emerald-950/40", dotColor: "bg-emerald-500", labelColor: "text-emerald-700 dark:text-emerald-400", valColor: "text-emerald-700 dark:text-emerald-400", pctColor: "text-emerald-600 dark:text-emerald-400" };
 
+              // 매도 시나리오 여부
+              const verdictStr = String(json.verdict ?? "").toLowerCase();
+              const isSell = verdictStr.includes("sell");
+
               // 진입가 vs 현재가 거리
               const entryVsCurrent = (cp && ep && cp > 0)
                 ? ((ep - cp) / cp * 100).toFixed(1)
                 : null;
 
-              // 손절: 진입가 기준
-              const slPct = (ep && sl && ep > 0)
+              // 손절: 매수 시 진입가 기준 / 매도 시 현재가 기준
+              const slPct = !isSell && ep && sl && ep > 0
                 ? Math.abs((sl - ep) / ep * 100).toFixed(1)
-                : null;
+                : cp && sl && cp > 0 && Math.abs((sl - cp) / cp * 100) > 0.1
+                  ? Math.abs((sl - cp) / cp * 100).toFixed(1)
+                  : null;
+
+              // 레이블 — 매도 시 의미에 맞는 용어로
+              const entryLabel = isSell ? "재관심 기준가" : "진입가";
+              const stopLabel = isSell ? "청산 우선 구간" : "손절가";
+              const entrySubLabel = isSell ? "매도 후 재진입 고려 구간" : "진입 목표 가격";
+              const stopSubLabel = isSell ? "단계적 차익실현 구간" : "손절 기준선";
 
               return (
                 <div className="px-4 sm:px-6 py-4">
                   <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                    {/* 진입가 */}
+                    {/* 진입가 / 재관심 기준가 */}
                     <div className="rounded-xl border border-border bg-background p-3 sm:p-4">
                       <div className="flex items-center gap-1 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground">진입가</p>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground">{entryLabel}</p>
                       </div>
                       <p className="text-[13px] sm:text-[17px] font-bold text-foreground font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency)}</p>
                       {entryVsCurrent !== null ? (
@@ -1510,7 +1528,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                           {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
                         </p>
                       ) : (
-                        <p className="text-[10px] text-muted-foreground mt-1 hidden sm:block">진입 목표 가격</p>
+                        <p className="text-[10px] text-muted-foreground mt-1 hidden sm:block">{entrySubLabel}</p>
                       )}
                     </div>
 
@@ -1530,17 +1548,17 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                       )}
                     </div>
 
-                    {/* 손절가 — 진입가 기준 */}
+                    {/* 손절가 / 청산 우선 구간 */}
                     <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 sm:p-4">
                       <div className="flex items-center gap-1 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-red-500 dark:text-red-400">손절가</p>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-red-500 dark:text-red-400">{stopLabel}</p>
                       </div>
                       <p className="text-[13px] sm:text-[17px] font-bold text-red-600 dark:text-red-400 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency)}</p>
                       {slPct !== null ? (
                         <p className="text-[10px] sm:text-[11px] font-bold text-red-500 dark:text-red-400 mt-1">-{slPct}%</p>
                       ) : (
-                        <p className="text-[10px] text-red-500 dark:text-red-400 mt-1 hidden sm:block">손절 기준선</p>
+                        <p className="text-[10px] text-red-500 dark:text-red-400 mt-1 hidden sm:block">{stopSubLabel}</p>
                       )}
                     </div>
                   </div>

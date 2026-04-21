@@ -104,6 +104,7 @@ export default function SharePage() {
 
   const isPositive = analysis.investmentVerdict === "Strong Buy" || analysis.investmentVerdict === "Buy";
   const isNegative = analysis.investmentVerdict === "Strong Sell" || analysis.investmentVerdict === "Sell";
+  const isSellVerdict = isNegative;
 
   const sortedSteps = [...(analysis.steps ?? [])].sort(
     (a: any, b: any) => STEP_ORDER.indexOf(a.stepKey) - STEP_ORDER.indexOf(b.stepKey)
@@ -199,14 +200,14 @@ export default function SharePage() {
                 <div className="flex gap-4 pt-5">
                   {entryStr && (
                     <div>
-                      <p className="text-slate-500 text-[10px] mb-0.5">진입가</p>
+                      <p className="text-slate-500 text-[10px] mb-0.5">{isSellVerdict ? "재관심 기준가" : "진입가"}</p>
                       <p className="text-slate-200 text-[14px] font-bold tabular-nums">{entryStr}</p>
                     </div>
                   )}
                   {stopStr && (
                     <div>
                       <p className="text-slate-500 text-[10px] mb-0.5 flex items-center gap-1">
-                        <ShieldAlert className="w-2.5 h-2.5" />손절가
+                        <ShieldAlert className="w-2.5 h-2.5" />{isSellVerdict ? "청산 우선 구간" : "손절가"}
                       </p>
                       <p className="text-red-400 text-[14px] font-bold tabular-nums">{stopStr}</p>
                     </div>
