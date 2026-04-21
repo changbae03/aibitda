@@ -222,7 +222,7 @@ function PriceTrack({
   const entryOnLeft = !isDownside;
 
   return (
-    <div className="mt-3 select-none" onClick={(e) => e.stopPropagation()}>
+    <div className="mt-3 select-none">
 
       {/* ── 위: 현재가만 (dot 위치 추종, 혼자라 겹칠 상대 없음) ── */}
       <div className="relative h-9">
