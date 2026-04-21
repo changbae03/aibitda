@@ -5,6 +5,7 @@ import cookie from "cookie";
 const router = Router();
 
 const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY ?? "";
+const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET ?? "";
 const JWT_SECRET = process.env.JWT_SECRET || "cbst-ai-research-secret-2024";
 
 // ── 서버 시작 시 환경변수 로드 확인 ──────────────────────────────────────────
@@ -12,6 +13,7 @@ console.log("[Kakao] module loaded");
 console.log("[Kakao] KAKAO_REST_API_KEY set:", !!KAKAO_REST_API_KEY);
 console.log("[Kakao] KAKAO_REST_API_KEY length:", KAKAO_REST_API_KEY.length);
 console.log("[Kakao] KAKAO_REST_API_KEY prefix:", KAKAO_REST_API_KEY.slice(0, 6) || "(empty)");
+console.log("[Kakao] KAKAO_CLIENT_SECRET set:", !!KAKAO_CLIENT_SECRET);
 console.log("[Kakao] KAKAO_REDIRECT_URI:", process.env.KAKAO_REDIRECT_URI ?? "(not set, will auto-detect)");
 
 // 환경변수로 redirect_uri 고정 (프록시 헤더 불일치 방지)
@@ -56,6 +58,7 @@ router.get("/auth/kakao/callback", async (req, res) => {
       client_id: KAKAO_REST_API_KEY,
       redirect_uri: redirectUri,
       code: code as string,
+      ...(KAKAO_CLIENT_SECRET ? { client_secret: KAKAO_CLIENT_SECRET } : {}),
     });
 
     console.log("[Kakao] token request params:", {
@@ -63,6 +66,7 @@ router.get("/auth/kakao/callback", async (req, res) => {
       client_id: KAKAO_REST_API_KEY?.slice(0, 6) + "...",
       redirect_uri: redirectUri,
       code: (code as string).slice(0, 8) + "...",
+      client_secret: KAKAO_CLIENT_SECRET ? "[set]" : "[not set]",
     });
 
     const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
