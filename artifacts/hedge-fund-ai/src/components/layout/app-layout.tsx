@@ -23,6 +23,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     { href: "/popular", label: "애빛다 통계" },
   ];
 
+  const adminItems = [
+    { href: "/admin/ticker-notes", label: "종목 보정 메모" },
+    { href: "/admin/peers", label: "피어 멀티플" },
+  ];
+
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
     navItems.map((item) => {
       const isActive =
@@ -86,8 +91,28 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 space-y-0.5">
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
           <NavLinks />
+          <div className="pt-4">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
+            {adminItems.map(item => {
+              const isActive = location === item.href || location.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+                    isActive
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Bottom Nav */}
@@ -136,8 +161,29 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <nav className="flex-1 px-2 py-4 space-y-0.5">
+              <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
                 <NavLinks onSelect={() => setMenuOpen(false)} />
+                <div className="pt-4">
+                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
+                  {adminItems.map(item => {
+                    const isActive = location === item.href || location.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMenuOpen(false)}
+                        className={cn(
+                          "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+                          isActive
+                            ? "bg-accent text-foreground"
+                            : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               </nav>
               <BottomNav onSelect={() => setMenuOpen(false)} />
             </motion.aside>

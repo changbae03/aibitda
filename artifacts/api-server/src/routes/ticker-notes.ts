@@ -3,6 +3,25 @@ import { pool } from "@workspace/db";
 
 const router = Router();
 
+// GET /api/ticker-notes — 메모가 있는 전체 종목 목록
+router.get("/", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ticker, memo, auto_learning, updated_at
+       FROM ticker_notes
+       ORDER BY updated_at DESC NULLS LAST`
+    );
+    res.json(result.rows.map(r => ({
+      ticker: r.ticker,
+      memo: r.memo ?? "",
+      autoLearning: r.auto_learning ?? "",
+      updatedAt: r.updated_at ?? null,
+    })));
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
 // GET /api/ticker-notes/:ticker — 종목별 관리자 메모 조회
 router.get("/:ticker", async (req, res) => {
   const ticker = (req.params.ticker ?? "").toUpperCase();
