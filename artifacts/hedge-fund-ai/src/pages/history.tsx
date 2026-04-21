@@ -532,56 +532,30 @@ export default function History() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted transition-colors text-xs font-medium text-muted-foreground disabled:opacity-50"
           >
             <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
-            갱신
+            현재가 새로고침
           </button>
         )}
       </div>
 
-      {/* ── 정확도 통계 패널 ─────────────────────────────────────────────── */}
+      {/* ── 방향 정확도 패널 ─────────────────────────────────────────────── */}
       {accuracyStats && (
-        <div className="mb-4 grid grid-cols-3 gap-2">
-          {/* 방향 정확도 */}
-          <div className="rounded-xl border border-border bg-background px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">방향 정확도</p>
-            <p className={cn(
-              "text-[20px] font-black leading-none tabular-nums",
-              accuracyStats.dirAccuracy >= 60 ? "text-blue-600" : accuracyStats.dirAccuracy >= 40 ? "text-amber-500" : "text-red-500"
-            )}>
-              {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-muted-foreground ml-0.5">%</span>
-            </p>
-            <p className="text-[9px] text-muted-foreground/50 mt-1">접근+달성 / 전체</p>
-          </div>
-
-          {/* 목표가 달성률 */}
-          <div className="rounded-xl border border-border bg-background px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">적정주가 달성률</p>
-            <p className={cn(
-              "text-[20px] font-black leading-none tabular-nums",
-              accuracyStats.achievementRate >= 40 ? "text-emerald-600" : accuracyStats.achievementRate >= 20 ? "text-amber-500" : "text-muted-foreground"
-            )}>
-              {accuracyStats.achievementRate.toFixed(0)}<span className="text-[11px] font-semibold text-muted-foreground ml-0.5">%</span>
-            </p>
-            <p className="text-[9px] text-muted-foreground/50 mt-1">{accuracyStats.exceededCount} / {accuracyStats.total}건</p>
-          </div>
-
-          {/* 평균 달성도 */}
-          <div className="rounded-xl border border-border bg-background px-3 py-2.5 text-center">
-            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">평균 달성도</p>
-            {accuracyStats.avgAccuracy != null ? (
-              <>
-                <p className={cn(
-                  "text-[20px] font-black leading-none tabular-nums",
-                  accuracyStats.avgAccuracy >= 100 ? "text-emerald-600"
-                  : accuracyStats.avgAccuracy > 0  ? "text-blue-600"
-                  : "text-red-500"
-                )}>
-                  {accuracyStats.avgAccuracy >= 0 ? "+" : ""}{accuracyStats.avgAccuracy.toFixed(0)}<span className="text-[11px] font-semibold text-muted-foreground ml-0.5">%</span>
-                </p>
-                <p className="text-[9px] text-muted-foreground/50 mt-1">목표 대비 진행도</p>
-              </>
-            ) : (
-              <p className="text-[20px] font-black leading-none text-muted-foreground/30">—</p>
-            )}
+        <div className="mb-4">
+          <div className="rounded-xl border border-border bg-background px-5 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">방향 정확도</p>
+              <p className="text-[11px] text-muted-foreground/50">AI가 방향을 맞춘 비율</p>
+            </div>
+            <div className="text-right">
+              <p className={cn(
+                "text-[32px] font-black leading-none tabular-nums",
+                accuracyStats.dirAccuracy >= 60 ? "text-blue-600"
+                : accuracyStats.dirAccuracy >= 40 ? "text-amber-500"
+                : "text-red-500"
+              )}>
+                {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[14px] font-semibold text-muted-foreground ml-0.5">%</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground/40 mt-0.5">{accuracyStats.total}건 기준</p>
+            </div>
           </div>
         </div>
       )}
