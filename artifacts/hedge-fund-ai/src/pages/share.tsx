@@ -270,21 +270,27 @@ export default function SharePage() {
                       </div>
                     </div>
 
-                    <div className="prose prose-sm prose-invert max-w-none
-                      prose-headings:text-slate-200 prose-headings:font-bold
-                      prose-h1:text-[16px] prose-h2:text-[15px] prose-h3:text-[14px]
-                      prose-p:text-slate-300 prose-p:leading-relaxed prose-p:text-[13px]
-                      prose-strong:text-slate-100 prose-strong:font-semibold
-                      prose-em:text-slate-400
-                      prose-ul:text-slate-300 prose-ul:text-[13px]
-                      prose-ol:text-slate-300 prose-ol:text-[13px]
-                      prose-li:my-0.5
-                      prose-table:text-[12px] prose-table:text-slate-300
-                      prose-th:text-slate-200 prose-th:font-semibold prose-th:border-slate-700
-                      prose-td:border-slate-800
-                      prose-hr:border-slate-700
-                      prose-blockquote:border-l-slate-600 prose-blockquote:text-slate-400
-                      prose-code:text-slate-300 prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded
+                    <div className="
+                      text-[13px] leading-relaxed text-slate-300
+                      [&_h1]:text-[16px] [&_h1]:font-bold [&_h1]:text-slate-200 [&_h1]:mt-4 [&_h1]:mb-2
+                      [&_h2]:text-[15px] [&_h2]:font-bold [&_h2]:text-slate-200 [&_h2]:mt-4 [&_h2]:mb-2
+                      [&_h3]:text-[14px] [&_h3]:font-bold [&_h3]:text-slate-200 [&_h3]:mt-3 [&_h3]:mb-1.5
+                      [&_h4]:text-[13px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-3 [&_h4]:mb-1
+                      [&_p]:text-slate-300 [&_p]:leading-relaxed [&_p]:my-2
+                      [&_strong]:text-slate-100 [&_strong]:font-semibold
+                      [&_em]:text-slate-400 [&_em]:not-italic
+                      [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:text-slate-300
+                      [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_ol]:text-slate-300
+                      [&_li]:my-0.5 [&_li]:text-slate-300
+                      [&_table]:w-full [&_table]:text-[12px] [&_table]:border-collapse [&_table]:my-3
+                      [&_th]:text-slate-200 [&_th]:font-semibold [&_th]:border [&_th]:border-slate-700 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:bg-slate-800/60
+                      [&_td]:text-slate-300 [&_td]:border [&_td]:border-slate-800 [&_td]:px-2 [&_td]:py-1.5
+                      [&_tr:hover]:bg-slate-800/30
+                      [&_hr]:border-slate-700 [&_hr]:my-4
+                      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-3 [&_blockquote]:text-slate-400 [&_blockquote]:my-3
+                      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1 [&_code]:rounded [&_code]:text-[12px]
+                      [&_pre]:bg-slate-800 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3
+                      [&_a]:text-blue-400 [&_a]:underline [&_a:hover]:text-blue-300
                     ">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {step.content}
