@@ -1177,13 +1177,13 @@ export default function AnalysisDetail() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-[13px] font-bold leading-tight">이 분석이 마음에 드셨나요?</p>
-                    <p className="text-white/50 text-[11px] mt-0.5">무료로 가입하고 직접 AI 분석을 시작해 보세요</p>
+                    <p className="text-white/50 text-[11px] mt-0.5">가입하고 직접 AI 분석을 시작해 보세요</p>
                   </div>
                   <a
                     href="/sign-in"
                     className="flex-shrink-0 px-4 py-2 rounded-xl bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors whitespace-nowrap"
                   >
-                    무료로 시작 →
+                    분석 시작하기 →
                   </a>
                 </motion.div>
               </div>
