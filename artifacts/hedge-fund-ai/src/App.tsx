@@ -22,6 +22,7 @@ import Stats from "@/pages/stats";
 import Tracker from "@/pages/tracker";
 import Popular from "@/pages/popular";
 import SettingsPage from "@/pages/settings";
+import SharePage from "@/pages/share";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,6 +79,7 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Landing} />
       <Route path="/sign-in/*?" component={SignInPage} />
+      <Route path="/share/:id" component={SharePage} />
 
       {/* 사이드바 있는 앱 페이지 */}
       <Route>

@@ -312,7 +312,8 @@ function loadKakaoSDK(): Promise<void> {
 
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const url = window.location.href;
+  const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
+  const url = analysis?.id ? `${base}/share/${analysis.id}` : window.location.href;
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
   const vs = verdictStyle(analysis?.verdict);
   const targetPriceStr = analysis?.targetPrice
