@@ -106,7 +106,7 @@ export default function Popular() {
                   bg: "bg-primary/10",
                 },
                 {
-                  label: "주가 방향 적중률",
+                  label: "주가 방향 정확도",
                   value: stats.winRate != null ? `${stats.winRate.toFixed(1)}%` : "—",
                   sub: `${stats.reviewedCount}건 검증 기준`,
                   icon: Target,
