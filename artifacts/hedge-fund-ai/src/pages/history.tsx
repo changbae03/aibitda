@@ -217,9 +217,18 @@ function PriceTrack({
   const fillColor = exceeded ? "bg-emerald-300" : isPositive ? "bg-red-200" : "bg-blue-200";
   const curLabelColor = exceeded ? "text-emerald-600" : isPositive ? "text-red-500" : "text-blue-600";
 
-  // 업사이드: target이 오른쪽(tgtX>50) → 분석당시=왼쪽, 적정주가=오른쪽
-  // 다운사이드: target이 왼쪽(tgtX<50) → 적정주가=왼쪽, 분석당시=오른쪽
-  const entryOnLeft = !isDownside;
+  // 레이블 위치: 각 마커 바로 아래 절대좌표
+  // 겹침 방지: 두 마커가 너무 가까우면 벌려줌
+  const GAP = 18; // 최소 % 간격
+  let entryPos = 50;
+  let tgtPos = Math.min(Math.max(tgtX, 5), 95);
+  if (Math.abs(tgtPos - entryPos) < GAP) {
+    const mid = (entryPos + tgtPos) / 2;
+    entryPos = isDownside ? mid + GAP / 2 : mid - GAP / 2;
+    tgtPos   = isDownside ? mid - GAP / 2 : mid + GAP / 2;
+  }
+  entryPos = Math.min(Math.max(entryPos, 5), 85);
+  tgtPos   = Math.min(Math.max(tgtPos, 15), 95);
 
   return (
     <div className="mt-3 select-none">
@@ -265,32 +274,29 @@ function PriceTrack({
         />
       </div>
 
-      {/* ── 아래: 분석당시·적정주가 항상 반대편에 배치 (절대 안 겹침) ── */}
-      {/* 업사이드: [분석당시=좌] [적정주가=우] | 다운사이드: [적정주가=좌] [분석당시=우] */}
-      <div className="flex justify-between mt-1">
-        {entryOnLeft ? (
-          <>
-            <div>
-              <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5">분석 당시</p>
-              <p className="font-mono text-[9px] font-semibold text-muted-foreground/60 tabular-nums">{formatCurrency(entry, currency)}</p>
-            </div>
-            <div className="text-right">
-              <p className={cn("text-[8px] leading-none mb-0.5", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>적정주가 {tgtLabel}</p>
-              <p className={cn("font-mono text-[9px] font-semibold tabular-nums", exceeded ? "text-emerald-600" : "text-muted-foreground/60")}>{formatCurrency(tgt, currency)}</p>
-            </div>
-          </>
-        ) : (
-          <>
-            <div>
-              <p className={cn("text-[8px] leading-none mb-0.5", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>적정주가 {tgtLabel}</p>
-              <p className={cn("font-mono text-[9px] font-semibold tabular-nums", exceeded ? "text-emerald-600" : "text-muted-foreground/60")}>{formatCurrency(tgt, currency)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5">분석 당시</p>
-              <p className="font-mono text-[9px] font-semibold text-muted-foreground/60 tabular-nums">{formatCurrency(entry, currency)}</p>
-            </div>
-          </>
-        )}
+      {/* ── 아래: 각 마커 바로 밑에 절대좌표로 배치 ── */}
+      <div className="relative mt-1" style={{ height: 30 }}>
+        {/* 분석 당시 — 중앙 마커(50%) 바로 밑 */}
+        <div
+          className="absolute text-center"
+          style={{ left: `${entryPos}%`, transform: "translateX(-50%)" }}
+        >
+          <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5 whitespace-nowrap">분석 당시</p>
+          <p className="font-mono text-[9px] font-semibold text-muted-foreground/60 tabular-nums whitespace-nowrap">{formatCurrency(entry, currency)}</p>
+        </div>
+
+        {/* 적정주가 — 초록 마커(tgtX%) 바로 밑 */}
+        <div
+          className="absolute text-center"
+          style={{ left: `${tgtPos}%`, transform: "translateX(-50%)" }}
+        >
+          <p className={cn("text-[8px] leading-none mb-0.5 whitespace-nowrap", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>
+            적정주가 {tgtLabel}
+          </p>
+          <p className={cn("font-mono text-[9px] font-semibold tabular-nums whitespace-nowrap", exceeded ? "text-emerald-600" : "text-muted-foreground/60")}>
+            {formatCurrency(tgt, currency)}
+          </p>
+        </div>
       </div>
     </div>
   );
