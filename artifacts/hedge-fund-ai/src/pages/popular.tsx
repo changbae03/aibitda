@@ -1,28 +1,11 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import {
-  Flame, Loader2, ChevronRight,
-  TrendingUp, TrendingDown, Target, Minus,
-  BarChart2, CheckCircle2, AlertTriangle, ArrowUpRight,
+  BarChart3, TrendingUp, TrendingDown, Target,
+  CheckCircle2, XCircle, Clock, Loader2, AlertCircle,
 } from "lucide-react";
-import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
-import { motion } from "framer-motion";
-
-interface PopularItem {
-  id: number;
-  ticker: string;
-  companyName: string;
-  industry: string;
-  investmentVerdict: string | null;
-  targetPrice: number | null;
-  entryPrice: number | null;
-  stopLoss: number | null;
-  createdAt: string;
-  currentPrice: number | null;
-  priceReturn: number | null;
-  outcome: string | null;
-  daysElapsed: number | null;
-}
+import { cn, getApiUrl } from "@/lib/utils";
 
 interface TickerStat {
   ticker: string;
@@ -30,298 +13,314 @@ interface TickerStat {
   count: number;
 }
 
-const INDUSTRY_KO: Record<string, string> = {
-  "Semiconductors": "반도체", "Software—Application": "소프트웨어", "Biotechnology": "바이오",
-  "Drug Manufacturers—Specialty & Generic": "제약", "Consumer Electronics": "가전·전자",
-  "Auto Manufacturers": "자동차", "Banks—Regional": "지방은행", "Banks—Diversified": "종합은행",
-  "Internet Content & Information": "인터넷", "Electric Vehicles": "전기차",
-  "Capital Markets": "자본시장", "Insurance—Life": "생명보험", "Aerospace & Defense": "항공우주·방산",
-  "Specialty Chemicals": "정밀화학", "Electronic Components": "전자부품",
-  "Scientific & Technical Instruments": "계측기기", "Medical Devices": "의료기기",
-  "Oil & Gas E&P": "석유·가스", "Solar": "태양광", "Telecom Services": "통신",
-};
-
-function toKoIndustry(s: string) {
-  return INDUSTRY_KO[s] ?? s;
+interface PopularData {
+  items: any[];
+  tickerStats: TickerStat[];
 }
 
-function isUSTicker(t: string) {
-  return !/^\d{5,6}/.test(t.split(".")[0]);
+interface PublicStats {
+  totalAnalyses: number;
+  reviewedCount: number;
+  hitTargetCount: number;
+  hitStopCount: number;
+  ongoingCount: number;
+  winRate: number | null;
+  avgReturn: number | null;
+  byIndustry: Record<string, { total: number; hitTarget: number; avgReturn: number | null }>;
+  recentCases: {
+    ticker: string;
+    companyName: string;
+    verdict: string;
+    priceReturn: number | null;
+    daysElapsed: number | null;
+    outcome: string;
+    analysisId: number | null;
+  }[];
 }
 
-function verdictStyle(verdict: string | null) {
-  if (!verdict) return { label: "—", cls: "bg-muted text-muted-foreground" };
-  const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "높은 상승여력", cls: "bg-emerald-100 text-emerald-700" };
-  if (s.includes("buy"))         return { label: "상승여력",     cls: "bg-green-100 text-green-700" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", cls: "bg-red-100 text-red-700" };
-  if (s.includes("sell"))        return { label: "하락여지",     cls: "bg-red-100 text-red-600" };
-  return { label: "보유", cls: "bg-amber-100 text-amber-700" };
+function usePopular() {
+  return useQuery<PopularData>({
+    queryKey: ["popular-stats"],
+    queryFn: async () => {
+      const res = await fetch(getApiUrl("/api/analysis/popular"));
+      if (!res.ok) throw new Error("failed");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 }
 
-function relativeTime(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const h = diff / 3_600_000;
-  if (h < 1)  return `${Math.round(diff / 60_000)}분 전`;
-  if (h < 24) return `${Math.floor(h)}시간 전`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}일 전`;
-  return new Date(iso).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+function usePublicStats() {
+  return useQuery<PublicStats>({
+    queryKey: ["public-model-stats"],
+    queryFn: async () => {
+      const res = await fetch(getApiUrl("/api/model-insights/public-stats"));
+      if (!res.ok) throw new Error("failed");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 }
 
-function calcUpsideFromCurrent(target: number | null, current: number | null) {
-  if (!target || !current || current === 0) return null;
-  return ((target - current) / current) * 100;
+function verdictLabel(v: string) {
+  const map: Record<string, string> = {
+    strong_buy: "강력 매수", buy: "매수", hold: "보유", sell: "매도", strong_sell: "강력 매도",
+  };
+  return map[v] ?? v;
 }
 
-function calcUpsideFromEntry(target: number | null, entry: number | null) {
-  if (!target || !entry || entry === 0) return null;
-  return ((target - entry) / entry) * 100;
-}
-
-function priceStatus(item: PopularItem): { label: string; cls: string; icon: React.ReactNode } {
-  const { currentPrice, targetPrice, entryPrice, stopLoss, outcome } = item;
-
-  if (outcome === "hit_target") {
-    return { label: "목표가 도달", cls: "bg-emerald-100 text-emerald-700", icon: <CheckCircle2 className="w-3 h-3" /> };
-  }
-  if (outcome === "hit_stoploss") {
-    return { label: "손절선 도달", cls: "bg-red-100 text-red-600", icon: <AlertTriangle className="w-3 h-3" /> };
-  }
-
-  if (!currentPrice || !targetPrice) return { label: "추적 전", cls: "bg-muted text-muted-foreground", icon: <Minus className="w-3 h-3" /> };
-
-  const upsideCurrent = calcUpsideFromCurrent(targetPrice, currentPrice);
-  const upsideEntry = calcUpsideFromEntry(targetPrice, entryPrice);
-
-  // stopLoss 접근
-  if (stopLoss && currentPrice <= stopLoss * 1.05) {
-    return { label: "손절선 근접", cls: "bg-orange-100 text-orange-600", icon: <AlertTriangle className="w-3 h-3" /> };
-  }
-
-  // 이미 목표가의 97% 이상
-  if (upsideCurrent !== null && upsideCurrent <= 3) {
-    return { label: "목표가 임박", cls: "bg-emerald-100 text-emerald-700", icon: <Target className="w-3 h-3" /> };
-  }
-
-  // 진입가 기준으로 절반 이상 왔는지
-  if (upsideCurrent !== null && upsideEntry !== null) {
-    const progress = upsideEntry > 0 ? (upsideEntry - upsideCurrent) / upsideEntry : 0;
-    if (progress >= 0.5) {
-      return { label: "목표 향해 전진 중", cls: "bg-blue-100 text-blue-700", icon: <ArrowUpRight className="w-3 h-3" /> };
-    }
-  }
-
-  // 현재가가 진입가보다 낮을 때
-  if (entryPrice && currentPrice < entryPrice * 0.95) {
-    return { label: "업사이드 확대 중", cls: "bg-amber-100 text-amber-700", icon: <TrendingDown className="w-3 h-3" /> };
-  }
-
-  return { label: "진행 중", cls: "bg-muted text-muted-foreground", icon: <Minus className="w-3 h-3" /> };
+function verdictColor(v: string) {
+  if (v === "strong_buy") return "text-emerald-600 bg-emerald-50 border-emerald-200";
+  if (v === "buy") return "text-blue-600 bg-blue-50 border-blue-200";
+  if (v === "hold") return "text-amber-600 bg-amber-50 border-amber-200";
+  if (v === "sell" || v === "strong_sell") return "text-red-600 bg-red-50 border-red-200";
+  return "text-muted-foreground bg-muted border-border";
 }
 
 export default function Popular() {
+  const { data: popular, isLoading: loadingPop } = usePopular();
+  const { data: stats, isLoading: loadingSt } = usePublicStats();
   const [, setLocation] = useLocation();
-  const [items, setItems] = useState<PopularItem[]>([]);
-  const [tickerStats, setTickerStats] = useState<TickerStat[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch(getApiUrl("/api/analysis/popular"), { credentials: "include" });
-        if (r.ok) {
-          const data = await r.json();
-          if (Array.isArray(data)) {
-            setItems(data);
-          } else {
-            setItems(data.items ?? []);
-            setTickerStats(data.tickerStats ?? []);
-          }
-        }
-      } catch {}
-      setLoading(false);
-    })();
-  }, []);
+  const isLoading = loadingPop || loadingSt;
+
+  const topIndustries = stats
+    ? Object.entries(stats.byIndustry)
+        .filter(([, v]) => v.total >= 2)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 6)
+    : [];
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Flame className="w-4 h-4 text-primary" />
+    <div className="max-w-3xl mx-auto space-y-6 pb-10">
+      {/* 헤더 */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+          <BarChart3 className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-foreground/90">최신 분석 피드</h1>
-          <p className="text-sm text-muted-foreground">애빛다 AI가 완료한 최신 기업 분석 리포트</p>
+          <h1 className="text-lg font-bold text-foreground">AI 통계</h1>
+          <p className="text-[12px] text-muted-foreground">애빛다 AI 분석 누적 데이터 · 전체 공개</p>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm text-muted-foreground">불러오는 중…</p>
+      {isLoading && (
+        <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span className="text-sm">통계를 불러오는 중...</span>
         </div>
-      ) : items.length === 0 ? (
-        <div className="text-center py-20">
-          <Flame className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">아직 공개된 분석이 없습니다.</p>
-        </div>
-      ) : (
+      )}
+
+      {!isLoading && (
         <>
-          {/* ── 종목별 분석 건수 집계 ── */}
-          {tickerStats.length > 0 && (
+          {/* ── 핵심 지표 4개 ── */}
+          {stats && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-background border border-border rounded-2xl shadow-sm p-4"
+              className="grid grid-cols-2 sm:grid-cols-4 gap-3"
             >
-              <div className="flex items-center gap-2 mb-3">
-                <BarChart2 className="w-4 h-4 text-muted-foreground" />
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">많이 분석된 종목</p>
+              {[
+                {
+                  label: "누적 분석",
+                  value: `${stats.totalAnalyses}건`,
+                  sub: "전체 기업 분석 수",
+                  icon: BarChart3,
+                  color: "text-primary",
+                  bg: "bg-primary/10",
+                },
+                {
+                  label: "주가 방향 적중률",
+                  value: stats.winRate != null ? `${stats.winRate.toFixed(1)}%` : "—",
+                  sub: `${stats.reviewedCount}건 검증 기준`,
+                  icon: Target,
+                  color: stats.winRate != null && stats.winRate >= 60 ? "text-emerald-600" : "text-amber-500",
+                  bg: stats.winRate != null && stats.winRate >= 60 ? "bg-emerald-50" : "bg-amber-50",
+                },
+                {
+                  label: "평균 수익률",
+                  value: stats.avgReturn != null
+                    ? `${stats.avgReturn >= 0 ? "+" : ""}${stats.avgReturn.toFixed(1)}%`
+                    : "—",
+                  sub: "목표 도달 기준",
+                  icon: stats.avgReturn != null && stats.avgReturn >= 0 ? TrendingUp : TrendingDown,
+                  color: stats.avgReturn != null && stats.avgReturn >= 0 ? "text-red-500" : "text-blue-500",
+                  bg: stats.avgReturn != null && stats.avgReturn >= 0 ? "bg-red-50" : "bg-blue-50",
+                },
+                {
+                  label: "진행 중",
+                  value: `${stats.ongoingCount}건`,
+                  sub: "적정주가 추적 중",
+                  icon: Clock,
+                  color: "text-muted-foreground",
+                  bg: "bg-muted/60",
+                },
+              ].map((m, i) => (
+                <motion.div
+                  key={m.label}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  className="rounded-xl border border-border bg-background p-4"
+                >
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-3", m.bg)}>
+                    <m.icon className={cn("w-4 h-4", m.color)} />
+                  </div>
+                  <p className={cn("text-[22px] font-black leading-none tabular-nums mb-1", m.color)}>{m.value}</p>
+                  <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">{m.label}</p>
+                  <p className="text-[10px] text-muted-foreground/60">{m.sub}</p>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+
+          {/* ── 많이 분석된 종목 ── */}
+          {popular?.tickerStats && popular.tickerStats.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="rounded-xl border border-border bg-background p-5"
+            >
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">많이 분석된 종목</p>
+              <div className="space-y-2.5">
+                {popular.tickerStats.map((t, i) => {
+                  const maxCount = popular.tickerStats[0].count;
+                  const pct = (t.count / maxCount) * 100;
+                  return (
+                    <motion.div
+                      key={t.ticker}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.15 + i * 0.05 }}
+                      className="flex items-center gap-3"
+                    >
+                      <span className="w-5 text-[11px] font-bold text-muted-foreground/40 text-right shrink-0">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[13px] font-semibold text-foreground truncate">{t.companyName}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{t.ticker}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full bg-primary/60"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ delay: 0.2 + i * 0.05, duration: 0.5, ease: "easeOut" }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-[12px] font-bold tabular-nums text-muted-foreground shrink-0">{t.count}건</span>
+                    </motion.div>
+                  );
+                })}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {tickerStats.map((ts) => (
-                  <button
-                    key={ts.ticker}
-                    onClick={() => {
-                      const found = items.find((i) => i.ticker === ts.ticker);
-                      if (found) setLocation(`/analysis/${found.id}`);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted/50 hover:bg-primary/5 border border-border rounded-full transition-colors group"
+            </motion.div>
+          )}
+
+          {/* ── 업종별 분석 현황 ── */}
+          {topIndustries.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="rounded-xl border border-border bg-background p-5"
+            >
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">업종별 분석 현황</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {topIndustries.map(([industry, v], i) => (
+                  <motion.div
+                    key={industry}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.22 + i * 0.04 }}
+                    className="rounded-lg border border-border bg-muted/30 p-3"
                   >
-                    <span className="text-[10px] font-mono text-muted-foreground">{ts.ticker}</span>
-                    <span className="text-[11px] font-semibold text-foreground/80">{ts.companyName}</span>
-                    <span className="text-[10px] font-bold text-white bg-primary rounded-full px-1.5 py-0.5 leading-none">
-                      {ts.count}
-                    </span>
-                  </button>
+                    <p className="text-[11px] font-semibold text-foreground truncate mb-1">{industry}</p>
+                    <p className="text-[10px] text-muted-foreground mb-2">{v.total}건 분석</p>
+                    {v.avgReturn != null && (
+                      <p className={cn(
+                        "text-[12px] font-bold tabular-nums",
+                        v.avgReturn >= 0 ? "text-red-500" : "text-blue-500"
+                      )}>
+                        {v.avgReturn >= 0 ? "+" : ""}{v.avgReturn.toFixed(1)}%
+                        <span className="text-[9px] font-normal text-muted-foreground ml-1">평균</span>
+                      </p>
+                    )}
+                  </motion.div>
                 ))}
               </div>
             </motion.div>
           )}
 
-          {/* ── 피드 카드 목록 ── */}
-          <div className="space-y-3">
-            {items.map((item, i) => {
-              const badge = verdictStyle(item.investmentVerdict);
-              const currency = isUSTicker(item.ticker) ? "USD" : "KRW";
-              const status = priceStatus(item);
-              const upsideCurrent = calcUpsideFromCurrent(item.targetPrice, item.currentPrice);
-              const upsideEntry = calcUpsideFromEntry(item.targetPrice, item.entryPrice);
-
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="bg-background border border-border rounded-2xl shadow-sm p-4 cursor-pointer hover:border-border hover:shadow-md transition-all group"
-                  onClick={() => setLocation(`/analysis/${item.id}`)}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* AI badge */}
-                    <div className="shrink-0 w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center">
-                      <span className="text-primary text-[11px] font-bold">AI</span>
+          {/* ── 최근 결과 사례 ── */}
+          {stats?.recentCases && stats.recentCases.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="rounded-xl border border-border bg-background p-5"
+            >
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">최근 결과 사례</p>
+              <div className="space-y-2">
+                {stats.recentCases.map((c, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.28 + i * 0.04 }}
+                    onClick={() => c.analysisId && setLocation(`/analysis/${c.analysisId}`)}
+                    className={cn(
+                      "flex items-center justify-between gap-3 p-3 rounded-lg border border-border transition-colors",
+                      c.analysisId ? "cursor-pointer hover:bg-muted/50" : ""
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {c.outcome === "hit_target"
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        : <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                      }
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13px] font-semibold text-foreground truncate">{c.companyName}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{c.ticker}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-full border", verdictColor(c.verdict ?? ""))}>
+                            {verdictLabel(c.verdict ?? "")}
+                          </span>
+                          {c.daysElapsed != null && (
+                            <span className="text-[9px] text-muted-foreground">{c.daysElapsed}일 경과</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="flex-1 min-w-0">
-                      {/* Top row */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] font-semibold text-muted-foreground font-mono uppercase tracking-wide">
-                          {item.ticker}
-                        </span>
-                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", badge.cls)}>
-                          {badge.label}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/50">{toKoIndustry(item.industry)}</span>
-                      </div>
-
-                      {/* Company name */}
-                      <p className="text-[15px] font-semibold text-foreground/90 mt-0.5 leading-snug">
-                        {item.companyName}
-                      </p>
-
-                      {/* Price row */}
-                      <div className="mt-2 grid grid-cols-3 gap-2">
-                        {/* 현재가 */}
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">현재가</span>
-                          <span className="text-[12px] font-semibold text-foreground/80 font-mono">
-                            {item.currentPrice != null
-                              ? formatCurrency(item.currentPrice, currency)
-                              : <span className="text-muted-foreground/50">—</span>
-                            }
-                          </span>
-                          {item.daysElapsed != null && (
-                            <span className="text-[9px] text-muted-foreground/50">{item.daysElapsed}일 전 기준</span>
-                          )}
-                        </div>
-
-                        {/* 적정주가 */}
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">적정주가</span>
-                          <span className="text-[12px] font-semibold text-foreground/80 font-mono">
-                            {item.targetPrice != null
-                              ? formatCurrency(item.targetPrice, currency)
-                              : <span className="text-muted-foreground/50">—</span>
-                            }
-                          </span>
-                          {upsideEntry != null && (
-                            <span className="text-[9px] text-muted-foreground/50">분석 시 +{upsideEntry.toFixed(1)}%</span>
-                          )}
-                        </div>
-
-                        {/* 현재 업사이드 */}
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">현재 업사이드</span>
-                          {upsideCurrent != null ? (
-                            <span className={cn(
-                              "text-[13px] font-bold font-mono flex items-center gap-0.5",
-                              upsideCurrent >= 0 ? "text-emerald-600" : "text-red-500"
-                            )}>
-                              {upsideCurrent >= 0
-                                ? <TrendingUp className="w-3 h-3" />
-                                : <TrendingDown className="w-3 h-3" />
-                              }
-                              {upsideCurrent >= 0 ? "+" : ""}{upsideCurrent.toFixed(1)}%
-                            </span>
-                          ) : (
-                            <span className="text-[12px] text-muted-foreground/50 font-mono">—</span>
-                          )}
-                          {item.priceReturn != null && (
-                            <span className={cn(
-                              "text-[9px] font-medium",
-                              item.priceReturn >= 0 ? "text-emerald-500" : "text-red-400"
-                            )}>
-                              진입 후 {item.priceReturn >= 0 ? "+" : ""}{item.priceReturn.toFixed(1)}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Status badge */}
-                      <div className="mt-2">
-                        <span className={cn(
-                          "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                          status.cls
+                    <div className="text-right shrink-0">
+                      {c.priceReturn != null && (
+                        <p className={cn(
+                          "text-[15px] font-bold tabular-nums",
+                          c.priceReturn >= 0 ? "text-red-500" : "text-blue-500"
                         )}>
-                          {status.icon}
-                          {status.label}
-                        </span>
-                      </div>
+                          {c.priceReturn >= 0 ? "+" : ""}{c.priceReturn.toFixed(1)}%
+                        </p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground">
+                        {c.outcome === "hit_target" ? "목표 도달" : "손절 도달"}
+                      </p>
                     </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
-                    {/* Right: time + arrow */}
-                    <div className="shrink-0 flex flex-col items-end gap-2 ml-1">
-                      <span className="text-[10px] text-muted-foreground">{relativeTime(item.createdAt)}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+          {/* 데이터 없을 때 */}
+          {stats && stats.totalAnalyses === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
+              <AlertCircle className="w-8 h-8 opacity-30" />
+              <p className="text-sm">아직 누적된 분석 데이터가 없습니다.</p>
+            </div>
+          )}
         </>
       )}
     </div>
