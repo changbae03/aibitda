@@ -347,11 +347,6 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     window.open(tgUrl, "_blank", "noopener,noreferrer");
   };
 
-  const handleTwitter = () => {
-    const twUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`;
-    window.open(twUrl, "_blank", "noopener,noreferrer");
-  };
-
   const handleCopy = async () => {
     try { await navigator.clipboard.writeText(url); } catch {}
     setCopied(true);
@@ -455,7 +450,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           {/* ── 소셜 공유 ── */}
           <div className="px-5 mb-4">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">소셜 공유</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {/* KakaoTalk */}
               <button
                 onClick={handleKakao}
@@ -476,17 +471,6 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8.02c-.12.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.52.26l.18-2.65 4.74-4.28c.21-.18-.04-.28-.31-.1L7.5 14.97 4.96 14.2c-.56-.17-.57-.56.12-.83l8.9-3.44c.47-.17.88.11.72.87z"/>
                 </svg>
                 <span className="text-[11px] font-bold text-white">텔레그램</span>
-              </button>
-
-              {/* X (Twitter) */}
-              <button
-                onClick={handleTwitter}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground hover:bg-foreground/80 transition-colors"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="white">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-                <span className="text-[11px] font-bold text-white">X (트위터)</span>
               </button>
             </div>
           </div>
