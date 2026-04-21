@@ -213,31 +213,39 @@ function PriceTrack({
     return `${gapPct >= 0 ? "+" : ""}${gapPct.toFixed(1)}%`;
   })();
 
-  // 레이블 클램핑: 화면 밖으로 나가지 않도록
-  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
-
   const dotColor = exceeded ? "bg-emerald-500" : isPositive ? "bg-red-400" : "bg-blue-500";
   const fillColor = exceeded ? "bg-emerald-300" : isPositive ? "bg-red-200" : "bg-blue-200";
   const curLabelColor = exceeded ? "text-emerald-600" : isPositive ? "text-red-500" : "text-blue-600";
 
   return (
     <div className="mt-3 select-none" onClick={(e) => e.stopPropagation()}>
-      {/* ── 위쪽: 현재가 레이블 (dot 위치 추종) ── */}
-      <div className="relative h-8 mb-0.5">
-        <motion.div
-          className="absolute text-center pointer-events-none"
-          style={{ bottom: 0, transform: "translateX(-50%)" }}
-          initial={{ left: "50%" }}
-          animate={{ left: `${clamp(curX, 8, 92)}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        >
+      {/* ── 고정 3열 레이블 (절대 안 겹침) ── */}
+      <div className="grid grid-cols-3 gap-1 mb-2">
+        {/* 왼쪽: 분석 당시 */}
+        <div>
+          <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5">분석 당시</p>
+          <p className="font-mono text-[10px] font-semibold text-muted-foreground/70 leading-none tabular-nums">
+            {formatCurrency(entry, currency)}
+          </p>
+        </div>
+        {/* 중앙: 현재가 */}
+        <div className="text-center">
           <p className={cn("text-[8px] leading-none mb-0.5 tabular-nums", returnPct >= 0 ? "text-red-400" : "text-blue-400")}>
             {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
           </p>
           <p className={cn("font-mono text-[11px] font-bold leading-none tabular-nums", curLabelColor)}>
             {formatCurrency(cur, currency)}
           </p>
-        </motion.div>
+        </div>
+        {/* 오른쪽: 적정주가 */}
+        <div className="text-right">
+          <p className={cn("text-[8px] leading-none mb-0.5", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>
+            {tgtLabel}
+          </p>
+          <p className={cn("font-mono text-[10px] font-semibold leading-none tabular-nums", exceeded ? "text-emerald-600" : "text-muted-foreground/70")}>
+            {formatCurrency(tgt, currency)}
+          </p>
+        </div>
       </div>
 
       {/* ── 트랙 ── */}
@@ -275,31 +283,10 @@ function PriceTrack({
         />
       </div>
 
-      {/* ── 아래쪽: 분석 당시(중앙) + 적정주가(target 위치) ── */}
-      <div className="relative h-8 mt-0.5">
-        {/* 분석 당시 — 중앙 고정 */}
-        <div
-          className="absolute -translate-x-1/2 text-center pointer-events-none"
-          style={{ left: "50%", top: 0 }}
-        >
-          <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5">분석 당시</p>
-          <p className="font-mono text-[10px] font-semibold text-muted-foreground/70 leading-none tabular-nums">
-            {formatCurrency(entry, currency)}
-          </p>
-        </div>
-
-        {/* 적정주가 — target 위치 */}
-        <div
-          className="absolute text-center pointer-events-none"
-          style={{ left: `${clamp(tgtX, 10, 90)}%`, top: 0, transform: "translateX(-50%)" }}
-        >
-          <p className={cn("text-[8px] leading-none mb-0.5 whitespace-nowrap", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>
-            적정주가 {tgtLabel}
-          </p>
-          <p className={cn("font-mono text-[10px] font-semibold leading-none tabular-nums", exceeded ? "text-emerald-600" : "text-muted-foreground/70")}>
-            {formatCurrency(tgt, currency)}
-          </p>
-        </div>
+      {/* ── 아래 레이블: 분석당시(좌) | 적정주가(우) ── */}
+      <div className="flex justify-between mt-0.5">
+        <span className="text-[8px] text-muted-foreground/40">분석 당시</span>
+        <span className={cn("text-[8px]", exceeded ? "text-emerald-500/60" : "text-muted-foreground/40")}>적정주가</span>
       </div>
     </div>
   );
