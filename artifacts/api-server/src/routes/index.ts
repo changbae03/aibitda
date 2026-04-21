@@ -10,11 +10,13 @@ import stockInsightsRouter from "./stock-insights.js";
 import creditsRouter from "./credits.js";
 import peersRouter from "./peers.js";
 import tickerNotesRouter from "./ticker-notes.js";
+import adminRouter from "./admin.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use("/admin", adminRouter);
 router.use(creditsRouter);
 router.use("/peers", peersRouter);
 router.use("/ticker-notes", tickerNotesRouter);

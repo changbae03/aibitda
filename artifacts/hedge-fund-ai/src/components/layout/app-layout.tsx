@@ -1,7 +1,7 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu, X, Settings, LogIn } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface AppLayoutProps {
@@ -16,6 +16,14 @@ const bottomItems = [
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.isAdmin) setIsAdmin(true); })
+      .catch(() => {});
+  }, []);
 
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석" },
@@ -26,6 +34,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const adminItems = [
     { href: "/admin/ticker-notes", label: "종목 보정 메모" },
     { href: "/admin/peers", label: "피어 멀티플" },
+    { href: "/admin/users", label: "관리자 관리" },
   ];
 
   const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
@@ -93,26 +102,28 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
           <NavLinks />
-          <div className="pt-4">
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
-            {adminItems.map(item => {
-              const isActive = location === item.href || location.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
-                    isActive
-                      ? "bg-accent text-foreground"
-                      : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
+          {isAdmin && (
+            <div className="pt-4">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
+              {adminItems.map(item => {
+                const isActive = location === item.href || location.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+                      isActive
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         {/* Bottom Nav */}
@@ -163,27 +174,29 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
               <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
                 <NavLinks onSelect={() => setMenuOpen(false)} />
-                <div className="pt-4">
-                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
-                  {adminItems.map(item => {
-                    const isActive = location === item.href || location.startsWith(item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMenuOpen(false)}
-                        className={cn(
-                          "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
-                          isActive
-                            ? "bg-accent text-foreground"
-                            : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
-                        )}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
+                {isAdmin && (
+                  <div className="pt-4">
+                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
+                    {adminItems.map(item => {
+                      const isActive = location === item.href || location.startsWith(item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMenuOpen(false)}
+                          className={cn(
+                            "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+                            isActive
+                              ? "bg-accent text-foreground"
+                              : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
+                          )}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </nav>
               <BottomNav onSelect={() => setMenuOpen(false)} />
             </motion.aside>

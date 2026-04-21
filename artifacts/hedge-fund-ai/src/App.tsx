@@ -19,6 +19,7 @@ import News from "@/pages/news";
 import Reports from "@/pages/reports";
 import AdminPeers from "@/pages/admin-peers";
 import AdminTickerNotes from "@/pages/admin-ticker-notes";
+import AdminUsers from "@/pages/admin-users";
 import Stats from "@/pages/stats";
 import Tracker from "@/pages/tracker";
 import Popular from "@/pages/popular";
@@ -97,6 +98,7 @@ function Router() {
             <Route path="/popular" component={Popular} />
             <Route path="/admin/peers" component={AdminPeers} />
             <Route path="/admin/ticker-notes" component={AdminTickerNotes} />
+            <Route path="/admin/users" component={AdminUsers} />
             <Route path="/settings" component={SettingsPage} />
             <Route component={NotFound} />
           </Switch>

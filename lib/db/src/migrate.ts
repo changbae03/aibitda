@@ -127,6 +127,17 @@ export async function runMigrations() {
         memo TEXT NOT NULL DEFAULT '',
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
+      ALTER TABLE ticker_notes ADD COLUMN IF NOT EXISTS auto_learning TEXT NOT NULL DEFAULT '';
+    `);
+
+    // 관리자 테이블
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admins (
+        user_id TEXT PRIMARY KEY,
+        display_name TEXT,
+        added_by TEXT,
+        added_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
     `);
 
     console.log("Database migrations completed successfully");
