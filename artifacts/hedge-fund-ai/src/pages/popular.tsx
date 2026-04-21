@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 
 import {
-  BarChart3, TrendingUp, TrendingDown, Target,
-  Clock, Loader2, AlertCircle,
+  BarChart3, Target, Loader2, AlertCircle,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -102,7 +101,7 @@ export default function Popular() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+              className="grid grid-cols-2 gap-3"
             >
               {[
                 {
@@ -120,24 +119,6 @@ export default function Popular() {
                   icon: Target,
                   color: stats.winRate != null && stats.winRate >= 60 ? "text-emerald-600" : "text-amber-500",
                   bg: stats.winRate != null && stats.winRate >= 60 ? "bg-emerald-50" : "bg-amber-50",
-                },
-                {
-                  label: "평균 수익률",
-                  value: stats.avgReturn != null
-                    ? `${stats.avgReturn >= 0 ? "+" : ""}${stats.avgReturn.toFixed(1)}%`
-                    : "—",
-                  sub: "목표 도달 기준",
-                  icon: stats.avgReturn != null && stats.avgReturn >= 0 ? TrendingUp : TrendingDown,
-                  color: stats.avgReturn != null && stats.avgReturn >= 0 ? "text-red-500" : "text-blue-500",
-                  bg: stats.avgReturn != null && stats.avgReturn >= 0 ? "bg-red-50" : "bg-blue-50",
-                },
-                {
-                  label: "진행 중",
-                  value: `${stats.ongoingCount}건`,
-                  sub: "적정주가 추적 중",
-                  icon: Clock,
-                  color: "text-muted-foreground",
-                  bg: "bg-muted/60",
                 },
               ].map((m, i) => (
                 <motion.div
