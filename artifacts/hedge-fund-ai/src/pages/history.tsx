@@ -829,7 +829,7 @@ export default function History() {
                             currency={currency}
                           />
                           {dayChange != null && (
-                            <p className={cn("text-[10px] font-medium text-right mt-1", dayChange >= 0 ? "text-green-500" : "text-red-400")}>
+                            <p className={cn("text-[13px] font-bold text-right mt-2 tabular-nums", dayChange >= 0 ? "text-red-500" : "text-blue-500")}>
                               오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
                             </p>
                           )}
