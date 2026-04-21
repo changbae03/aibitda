@@ -185,22 +185,7 @@ export default function Landing() {
             카카오로 시작하기
           </button>
 
-          <button
-            onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] border border-border bg-background text-foreground/90 hover:bg-muted/50 active:scale-[0.98] transition-all"
-          >
-            <GoogleIcon />
-            구글로 시작하기
-          </button>
         </div>
-
-        {/* 둘러보기 */}
-        <button
-          onClick={() => setLocation("/analysis/new")}
-          className="w-full text-center text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
-        >
-          로그인 없이 둘러보기 →
-        </button>
 
         {/* 특징 3가지 */}
         <div className="grid grid-cols-3 gap-3 mb-8">
