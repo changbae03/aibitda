@@ -222,84 +222,83 @@ function PriceTrack({
 
   return (
     <div className="mt-3 select-none" onClick={(e) => e.stopPropagation()}>
-      {/* 트랙 + 플로팅 레이블 통합 컨테이너 */}
-      <div className="relative" style={{ height: 64 }}>
-
-        {/* ── 분석 당시 레이블 (중앙 고정, 위쪽) ── */}
-        <div
-          className="absolute -translate-x-1/2 text-center pointer-events-none"
-          style={{ left: "50%", top: 0 }}
-        >
-          <p className="text-[8px] text-muted-foreground/60 leading-none mb-0.5">분석 당시</p>
-          <p className="font-mono text-[10px] font-semibold text-muted-foreground leading-none">
-            {formatCurrency(entry, currency)}
-          </p>
-        </div>
-
-        {/* ── 현재가 레이블 (dot 위치 추종, 위쪽) ── */}
+      {/* ── 위쪽: 현재가 레이블 (dot 위치 추종) ── */}
+      <div className="relative h-8 mb-0.5">
         <motion.div
           className="absolute text-center pointer-events-none"
-          style={{ top: 0, transform: "translateX(-50%)" }}
+          style={{ bottom: 0, transform: "translateX(-50%)" }}
           initial={{ left: "50%" }}
           animate={{ left: `${clamp(curX, 8, 92)}%` }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
-          <p className={cn("text-[8px] leading-none mb-0.5", returnPct >= 0 ? "text-red-400" : "text-blue-400")}>
+          <p className={cn("text-[8px] leading-none mb-0.5 tabular-nums", returnPct >= 0 ? "text-red-400" : "text-blue-400")}>
             {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
           </p>
-          <p className={cn("font-mono text-[11px] font-bold leading-none", curLabelColor)}>
+          <p className={cn("font-mono text-[11px] font-bold leading-none tabular-nums", curLabelColor)}>
             {formatCurrency(cur, currency)}
           </p>
         </motion.div>
+      </div>
 
-        {/* ── 적정주가 레이블 (target 위치, 위쪽) ── */}
-        <div
-          className="absolute text-center pointer-events-none"
-          style={{ left: `${clamp(tgtX, 8, 92)}%`, top: 0 }}
-        >
-          <div className="-translate-x-1/2">
-            <p className={cn("text-[8px] leading-none mb-0.5", exceeded ? "text-emerald-500" : "text-muted-foreground/60")}>
-              적정주가 {tgtLabel}
-            </p>
-            <p className={cn("font-mono text-[10px] font-semibold leading-none", exceeded ? "text-emerald-600" : "text-muted-foreground")}>
-              {formatCurrency(tgt, currency)}
-            </p>
-          </div>
+      {/* ── 트랙 ── */}
+      <div className="relative h-6">
+        {/* Rail */}
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-muted" />
+
+        {/* Colored fill */}
+        <motion.div
+          className={cn("absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full", fillColor)}
+          initial={{ left: "50%", width: 0 }}
+          animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        />
+
+        {/* Target marker */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
+          <div className={cn("w-px h-5 rounded-full", exceeded ? "bg-emerald-500" : "bg-emerald-400")} />
         </div>
 
-        {/* ── Rail + markers (하단) ── */}
-        <div className="absolute inset-x-0 bottom-0" style={{ height: 24 }}>
-          {/* Rail */}
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-muted" />
+        {/* Entry / center marker */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: "50%" }}>
+          <div className="w-px h-4 bg-muted-foreground/30 rounded-full" />
+        </div>
 
-          {/* Colored fill */}
-          <motion.div
-            className={cn("absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full", fillColor)}
-            initial={{ left: "50%", width: 0 }}
-            animate={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          />
+        {/* Current price dot */}
+        <motion.div
+          className={cn(
+            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
+            dotColor
+          )}
+          initial={{ left: "50%" }}
+          animate={{ left: `${curX}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        />
+      </div>
 
-          {/* Target marker */}
-          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${tgtX}%` }}>
-            <div className={cn("w-px h-5 rounded-full", exceeded ? "bg-emerald-500" : "bg-emerald-400")} />
-          </div>
+      {/* ── 아래쪽: 분석 당시(중앙) + 적정주가(target 위치) ── */}
+      <div className="relative h-8 mt-0.5">
+        {/* 분석 당시 — 중앙 고정 */}
+        <div
+          className="absolute -translate-x-1/2 text-center pointer-events-none"
+          style={{ left: "50%", top: 0 }}
+        >
+          <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5">분석 당시</p>
+          <p className="font-mono text-[10px] font-semibold text-muted-foreground/70 leading-none tabular-nums">
+            {formatCurrency(entry, currency)}
+          </p>
+        </div>
 
-          {/* Entry / center marker */}
-          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: "50%" }}>
-            <div className="w-px h-4 bg-muted-foreground/30 rounded-full" />
-          </div>
-
-          {/* Current price dot */}
-          <motion.div
-            className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md",
-              dotColor
-            )}
-            initial={{ left: "50%" }}
-            animate={{ left: `${curX}%` }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          />
+        {/* 적정주가 — target 위치 */}
+        <div
+          className="absolute text-center pointer-events-none"
+          style={{ left: `${clamp(tgtX, 10, 90)}%`, top: 0, transform: "translateX(-50%)" }}
+        >
+          <p className={cn("text-[8px] leading-none mb-0.5 whitespace-nowrap", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>
+            적정주가 {tgtLabel}
+          </p>
+          <p className={cn("font-mono text-[10px] font-semibold leading-none tabular-nums", exceeded ? "text-emerald-600" : "text-muted-foreground/70")}>
+            {formatCurrency(tgt, currency)}
+          </p>
         </div>
       </div>
     </div>
