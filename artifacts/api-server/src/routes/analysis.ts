@@ -1894,8 +1894,9 @@ router.get("/:id", async (req, res) => {
 
     const analysisUserId = aRows[0].user_id ?? null;
     const requestUserId = getUserId(req);
+    const isPublic = aRows[0].is_public === 'true' || aRows[0].is_public === true;
 
-    if (analysisUserId && analysisUserId !== requestUserId) {
+    if (analysisUserId && analysisUserId !== requestUserId && !isPublic) {
       res.status(403).json({ error: "권한이 없습니다" });
       return;
     }
