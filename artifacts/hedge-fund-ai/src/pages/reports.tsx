@@ -103,7 +103,7 @@ export default function Reports() {
           <BarChart3 className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-foreground">AI 통계</h1>
+          <h1 className="text-lg font-bold text-foreground">애빛다 통계</h1>
           <p className="text-[12px] text-muted-foreground">애빛다 AI 분석 누적 데이터 · 전체 공개</p>
         </div>
       </div>
