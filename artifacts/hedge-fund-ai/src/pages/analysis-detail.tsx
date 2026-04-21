@@ -1408,10 +1408,10 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="rounded-2xl overflow-hidden border border-border bg-background shadow-sm"
+      className="rounded-2xl border border-border bg-background shadow-sm"
     >
       {/* ── 상단 헤더 ── */}
-      <div className="bg-foreground px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+      <div className="bg-foreground px-4 sm:px-6 py-4 flex items-center justify-between gap-3 rounded-t-2xl">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-background/10 flex items-center justify-center">
             <agent.icon className="w-4 h-4 text-white" />
@@ -1833,10 +1833,10 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      className="bg-card border border-border rounded-xl overflow-hidden border-l-4"
+      className="bg-card border border-border rounded-xl border-l-4"
       style={{ borderLeftColor: color }}
     >
-      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border">
+      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
           <agent.icon className="w-4.5 h-4.5" style={{ color }} />
         </div>
@@ -2007,10 +2007,10 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="bg-card border border-border rounded-xl overflow-hidden border-l-4"
+      className="bg-card border border-border rounded-xl border-l-4"
       style={{ borderLeftColor: color }}
     >
-      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border">
+      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
           <agent.icon className="w-4.5 h-4.5" style={{ color }} />
         </div>
