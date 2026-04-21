@@ -4,8 +4,15 @@ import cookie from "cookie";
 
 const router = Router();
 
-const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY!;
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY ?? "";
 const JWT_SECRET = process.env.JWT_SECRET || "cbst-ai-research-secret-2024";
+
+// ── 서버 시작 시 환경변수 로드 확인 ──────────────────────────────────────────
+console.log("[Kakao] module loaded");
+console.log("[Kakao] KAKAO_REST_API_KEY set:", !!KAKAO_REST_API_KEY);
+console.log("[Kakao] KAKAO_REST_API_KEY length:", KAKAO_REST_API_KEY.length);
+console.log("[Kakao] KAKAO_REST_API_KEY prefix:", KAKAO_REST_API_KEY.slice(0, 6) || "(empty)");
+console.log("[Kakao] KAKAO_REDIRECT_URI:", process.env.KAKAO_REDIRECT_URI ?? "(not set, will auto-detect)");
 
 // 환경변수로 redirect_uri 고정 (프록시 헤더 불일치 방지)
 function getRedirectUri(req: any): string {
