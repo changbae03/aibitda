@@ -134,7 +134,7 @@ export default function Reports() {
                   bg: "bg-primary/8",
                 },
                 {
-                  label: "주가 방향 적중률",
+                  label: "주가 방향 일치율",
                   value: stats.winRate != null ? `${stats.winRate.toFixed(1)}%` : "—",
                   sub: `${stats.reviewedCount}건 검증 기준`,
                   icon: Target,

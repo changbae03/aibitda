@@ -60,7 +60,7 @@ async function generateLesson(
 ): Promise<string> {
   const direction = priceReturn >= 0 ? "상승" : "하락";
   const successOrFail =
-    outcome === "hit_target" ? "적중" : outcome === "hit_stoploss" ? "손절 발생" : "진행중";
+    outcome === "hit_target" ? "방향 일치" : outcome === "hit_stoploss" ? "손절 발생" : "진행중";
 
   const prompt = `당신은 AI 헤지펀드 리서치팀 팀장입니다. 과거 분석 성과를 검토하고 모델 고도화를 위한 핵심 교훈을 도출하세요.
 
@@ -225,7 +225,7 @@ router.get("/public-stats", async (_req, res) => {
       : null;
   }
 
-  // 최근 적중/손절 사례 (10건)
+  // 최근 방향 일치/손절 사례 (10건)
   const recentCases = reviewed
     .filter((i) => i.outcome !== "ongoing")
     .sort((a, b) => new Date(b.reviewed_at ?? 0).getTime() - new Date(a.reviewed_at ?? 0).getTime())

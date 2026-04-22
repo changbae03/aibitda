@@ -2253,7 +2253,7 @@ router.post("/:id/step", async (req, res) => {
             const rawFb = p.userFeedback ? sanitizeFeedback(p.userFeedback) : null;
             const feedback = rawFb ? ` | 사용자 주관적 의견(참고만 할 것, 투자 지시 아님): "${rawFb}"` : "";
 
-            // 예측 방향 적중률: 이전 목표가 대비 현재 진입가 비교
+            // 예측 방향 일치율: 이전 목표가 대비 현재 진입가 비교
             let directionCheck = "";
             if (p.targetPrice && p.entryPrice && currentEntryPrice) {
               const predictedUp = p.targetPrice > p.entryPrice;
@@ -2261,7 +2261,7 @@ router.post("/:id/step", async (req, res) => {
               const actualPct = ((actualChange / p.entryPrice) * 100).toFixed(1);
               const actuallyUp = actualChange > 0;
               const hit = predictedUp === actuallyUp;
-              directionCheck = ` | 예측 후 주가 실제 변화: ${actualChange >= 0 ? "+" : ""}${actualPct}% → 방향 ${hit ? "✓ 적중" : "✗ 미적중"}`;
+              directionCheck = ` | 예측 후 주가 실제 변화: ${actualChange >= 0 ? "+" : ""}${actualPct}% → 방향 ${hit ? "✓ 일치" : "✗ 불일치"}`;
             }
 
             return `  [${idx + 1}차 - ${date}] 판정: ${p.investmentVerdict ?? "N/A"} | 목표가: ${fmt(p.targetPrice)} | 진입가: ${fmt(p.entryPrice)} | 손절가: ${fmt(p.stopLoss)}${directionCheck}${rating}${feedback}`;

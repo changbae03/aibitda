@@ -63,7 +63,7 @@ export default function ModelInsights() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="분석 리뷰" value={reviewed.length.toString()} sub="총 성과 추적" color="text-primary" />
-        <StatCard title="AI 적중률" value={`${winRate}%`} sub="목표가 달성" color="text-emerald-600" />
+        <StatCard title="방향 일치율" value={`${winRate}%`} sub="예측 방향 일치" color="text-emerald-600" />
         <StatCard title="평균 수익률" value={avgReturn ? `${avgReturn}%` : "—"} sub="진입가 대비" color={Number(avgReturn) >= 0 ? "text-emerald-600" : "text-red-500"} />
         <StatCard title="교훈 추출" value={insights?.filter((i) => i.lesson).length.toString() ?? "0"} sub="모델 학습 완료" color="text-indigo-600" />
       </div>
