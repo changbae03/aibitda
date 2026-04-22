@@ -1070,15 +1070,26 @@ export default function AnalysisDetail() {
               const isDone = idx < currentStepCount;
               const isCurrent = idx === currentStepCount;
               const agent = AGENTS[stepKey];
+              const isDebateStep = stepKey === "company_analysis" || stepKey === "relative_valuation";
               return (
                 <div key={stepKey} className="flex flex-col items-center gap-1.5">
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
-                    isDone ? "bg-primary border-primary text-primary-foreground" : 
-                    isCurrent ? "bg-card border-primary text-primary animate-pulse" : 
-                    "bg-card border-border text-muted-foreground"
-                  )}>
-                    {isDone ? <CheckCircle2 className="w-4 h-4" /> : <agent.icon className="w-3.5 h-3.5" />}
+                  <div className="relative">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
+                      isDone ? "bg-primary border-primary text-primary-foreground" : 
+                      isCurrent ? "bg-card border-primary text-primary animate-pulse" : 
+                      "bg-card border-border text-muted-foreground"
+                    )}>
+                      {isDone ? <CheckCircle2 className="w-4 h-4" /> : <agent.icon className="w-3.5 h-3.5" />}
+                    </div>
+                    {isDebateStep && (
+                      <div className={cn(
+                        "absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center border",
+                        isCurrent ? "bg-violet-500 border-violet-600 animate-pulse" : isDone ? "bg-violet-500 border-violet-600" : "bg-muted border-border"
+                      )}>
+                        <Swords className={cn("w-2 h-2", isDone || isCurrent ? "text-white" : "text-muted-foreground/50")} />
+                      </div>
+                    )}
                   </div>
                   <span className={cn(
                     "text-[10px] font-medium leading-tight text-center max-w-[64px] break-keep",
@@ -2083,10 +2094,16 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
         <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
           <agent.icon className="w-4.5 h-4.5" style={{ color }} />
         </div>
-        <div>
+        <div className="flex-1">
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
           <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
         </div>
+        {(step.stepKey === "company_analysis" || step.stepKey === "relative_valuation") && (
+          <div className="flex items-center gap-1 text-[10px] text-violet-600 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">
+            <Swords className="w-3 h-3" />
+            <span>논쟁 검증</span>
+          </div>
+        )}
       </div>
 
       <div className="p-4 sm:p-5">
