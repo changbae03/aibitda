@@ -1904,6 +1904,52 @@ router.get("/share/:id", async (req, res) => {
   }
 });
 
+router.get("/public-stats", async (_req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(analysesTable)
+      .where(eq(analysesTable.status, "completed"));
+
+    const total = rows.length;
+
+    const verdictMap: Record<string, number> = {};
+    for (const r of rows) {
+      const v = r.investmentVerdict ?? "미분류";
+      verdictMap[v] = (verdictMap[v] ?? 0) + 1;
+    }
+
+    let krCount = 0;
+    let usCount = 0;
+    for (const r of rows) {
+      if (/^\d{6}$/.test(r.ticker)) krCount++;
+      else usCount++;
+    }
+
+    const tickerCount: Record<string, { count: number; companyName: string; latestVerdict: string | null; latestId: number }> = {};
+    for (const r of rows) {
+      if (!tickerCount[r.ticker]) {
+        tickerCount[r.ticker] = { count: 0, companyName: r.companyName, latestVerdict: null, latestId: r.id };
+      }
+      tickerCount[r.ticker].count++;
+      if (r.id > tickerCount[r.ticker].latestId) {
+        tickerCount[r.ticker].latestId = r.id;
+        tickerCount[r.ticker].latestVerdict = r.investmentVerdict ?? null;
+        tickerCount[r.ticker].companyName = r.companyName;
+      }
+    }
+    const topTickers = Object.entries(tickerCount)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 10)
+      .map(([ticker, d]) => ({ ticker, companyName: d.companyName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
+
+    res.json({ total, verdictMap, krCount, usCount, topTickers });
+  } catch (err) {
+    console.error("[GET /analysis/public-stats]", err);
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
