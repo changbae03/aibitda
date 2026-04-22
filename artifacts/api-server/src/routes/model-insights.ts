@@ -46,6 +46,23 @@ function resolveOutcome(
   return "ongoing";
 }
 
+/**
+ * 예측 방향 일치 여부:
+ * - 목표가 > 진입가 (상승 예측) → 현재가 > 진입가 이면 일치
+ * - 목표가 < 진입가 (하락 예측) → 현재가 < 진입가 이면 일치
+ */
+function computeDirectionMatch(
+  entryPrice: number | null,
+  targetPrice: number | null,
+  currentPrice: number | null
+): boolean | null {
+  if (!entryPrice || !targetPrice || !currentPrice) return null;
+  if (targetPrice === entryPrice) return null;
+  const predictedUp = targetPrice > entryPrice;
+  const actuallyUp = currentPrice > entryPrice;
+  return predictedUp === actuallyUp;
+}
+
 async function generateLesson(
   ticker: string,
   companyName: string,
@@ -156,6 +173,13 @@ export async function triggerModelReview(): Promise<void> {
         currentPrice
       );
 
+      // 방향성 일치 여부: 예측 방향(상승/하락)과 실제 주가 변화 방향이 일치하는지
+      const directionMatch = computeDirectionMatch(
+        analysis.entryPrice,
+        analysis.targetPrice,
+        currentPrice
+      );
+
       let lesson: string | null = null;
       if (daysElapsed >= 1) {
         lesson = await generateLesson(
@@ -174,18 +198,20 @@ export async function triggerModelReview(): Promise<void> {
 
       if (existing.length > 0) {
         await rawQuery(
-          `UPDATE model_insights SET price_at_review=$1, price_return=$2, days_elapsed=$3, outcome=$4, lesson=$5, reviewed_at=NOW() WHERE id=$6`,
-          [currentPrice, priceReturn, daysElapsed, outcome, lesson, existing[0].id]
+          `UPDATE model_insights SET price_at_review=$1, price_return=$2, days_elapsed=$3, outcome=$4, lesson=$5, direction_match=$6, reviewed_at=NOW() WHERE id=$7`,
+          [currentPrice, priceReturn, daysElapsed, outcome, lesson, directionMatch, existing[0].id]
         );
       } else {
         await rawQuery(
-          `INSERT INTO model_insights (analysis_id, ticker, company_name, industry, verdict, entry_price, target_price, stop_loss, price_at_review, price_return, days_elapsed, outcome, lesson, analysis_date, reviewed_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())`,
+          `INSERT INTO model_insights (analysis_id, ticker, company_name, industry, verdict, entry_price, target_price, stop_loss, price_at_review, price_return, days_elapsed, outcome, lesson, direction_match, analysis_date, reviewed_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())`,
           [analysis.id, ticker, analysis.companyName, analysis.industry, analysis.investmentVerdict,
            analysis.entryPrice, analysis.targetPrice, analysis.stopLoss,
-           currentPrice, priceReturn, daysElapsed, outcome, lesson, analysis.createdAt]
+           currentPrice, priceReturn, daysElapsed, outcome, lesson, directionMatch, analysis.createdAt]
         );
       }
+
+      console.log(`[direction-check] ${analysis.companyName}(${ticker}) ${daysElapsed}일 경과 | 수익률 ${priceReturn.toFixed(1)}% | 방향 ${directionMatch === true ? "✓ 일치" : directionMatch === false ? "✗ 불일치" : "정보 없음"}`);
     }
   } catch (err) {
     console.error("[model-review] error:", err);

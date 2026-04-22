@@ -84,6 +84,11 @@ export async function runMigrations() {
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS start_price REAL;
     `);
 
+    // model_insights: 방향성 일치 여부 컬럼
+    await client.query(`
+      ALTER TABLE model_insights ADD COLUMN IF NOT EXISTS direction_match BOOLEAN;
+    `);
+
     // analysis_steps UNIQUE 제약 (캐시 ON CONFLICT DO NOTHING 사용)
     await client.query(`
       DO $$ BEGIN
