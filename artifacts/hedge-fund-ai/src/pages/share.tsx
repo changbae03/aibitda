@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowRight, TrendingUp, TrendingDown,
-  Target, ShieldAlert, Building2, Loader2, AlertCircle,
+  Target, Building2, Loader2, AlertCircle,
   Check, Link2, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
@@ -408,9 +408,8 @@ export default function SharePage() {
   const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
   const vs = verdictStyle(analysis.investmentVerdict);
   const targetStr = analysis.targetPrice ? formatCurrency(analysis.targetPrice, currency) : null;
-  const entryStr = analysis.entryPrice ? formatCurrency(analysis.entryPrice, currency) : null;
-  const stopStr = analysis.stopLoss ? formatCurrency(analysis.stopLoss, currency) : null;
-  const up = upside(analysis.targetPrice, analysis.entryPrice);
+  const startPriceStr = analysis.startPrice ? formatCurrency(analysis.startPrice, currency) : null;
+  const up = upside(analysis.targetPrice, analysis.startPrice ?? analysis.entryPrice);
   const createdAt = analysis.createdAt
     ? new Date(analysis.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
     : null;
@@ -510,22 +509,12 @@ export default function SharePage() {
                 </div>
               )}
 
-              {(entryStr || stopStr) && (
+              {startPriceStr && (
                 <div className="flex gap-4 pt-4">
-                  {entryStr && (
-                    <div>
-                      <p className="text-slate-500 text-[10px] mb-0.5">{isSellVerdict ? "재관심 기준가" : "진입가"}</p>
-                      <p className="text-slate-200 text-[14px] font-bold tabular-nums">{entryStr}</p>
-                    </div>
-                  )}
-                  {stopStr && (
-                    <div>
-                      <p className="text-slate-500 text-[10px] mb-0.5 flex items-center gap-1">
-                        <ShieldAlert className="w-2.5 h-2.5" />{isSellVerdict ? "청산 우선 구간" : "손절가"}
-                      </p>
-                      <p className="text-red-400 text-[14px] font-bold tabular-nums">{stopStr}</p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-slate-500 text-[10px] mb-0.5">분석 당시 현재가</p>
+                    <p className="text-slate-200 text-[14px] font-bold tabular-nums">{startPriceStr}</p>
+                  </div>
                 </div>
               )}
             </div>
