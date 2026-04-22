@@ -2301,6 +2301,49 @@ router.post("/:id/step", async (req, res) => {
         // ─────────────────────────────────────────────────────────────────
       }
 
+      // ── 투자 판정 일관성 앵커 (investment_strategy 전용) ────────────────────
+      // 7일 이내: 동일 판정 유지 강제 / 8~30일: 변경 시 근거 요구
+      if (stepKey === "investment_strategy") {
+        const recentRow = await rawQuery(
+          `SELECT investment_verdict, target_price, entry_price, created_at
+           FROM analyses
+           WHERE ticker = $1 AND status = 'completed' AND id != $2
+             AND investment_verdict IS NOT NULL
+           ORDER BY created_at DESC LIMIT 1`,
+          [analysis.ticker, analysis.id]
+        );
+        if (recentRow[0]) {
+          const rec = recentRow[0];
+          const daysAgo = Math.floor(
+            (Date.now() - new Date(rec.created_at).getTime()) / (1000 * 3600 * 24)
+          );
+          const fmt = (n: number | null) => n == null ? "N/A" : n.toLocaleString();
+
+          if (daysAgo <= 7) {
+            // 7일 이내: 강한 앵커 — 동일 판정 유지 의무
+            const anchorBlock = `\n\n[🔒 투자 판정 일관성 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
+              + `⛔ 중요: ${daysAgo}일 전 이 종목 분석에서 아래 판정이 내려졌습니다.\n`
+              + `  판정: ${rec.investment_verdict} | 목표가: ${fmt(rec.target_price)}원 | 진입가: ${fmt(rec.entry_price)}원\n`
+              + `📌 지시 사항:\n`
+              + `- 명백한 시장 변화(어닝 서프라이즈, 급락/급등, 업황 전환 등)가 없는 한 동일 판정(${rec.investment_verdict})을 유지하세요.\n`
+              + `- 목표가는 직전 분석 대비 ±15% 이내로 제한하세요.\n`
+              + `- 판정을 바꿀 경우 반드시 "판정 변경 근거:" 항목을 별도 문단으로 명시하세요.\n`
+              + `- 위 지시를 무시하고 임의로 반대 판정을 내리는 것은 금지됩니다.`;
+            enrichedContext = enrichedContext ? enrichedContext + anchorBlock : anchorBlock;
+            console.log(`[verdict-anchor] 강한 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
+          } else if (daysAgo <= 30) {
+            // 8~30일: 소프트 앵커 — 판정 변경 시 설명 요구
+            const softBlock = `\n\n[📌 투자 판정 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
+              + `  판정: ${rec.investment_verdict} | 목표가: ${fmt(rec.target_price)}원 | 진입가: ${fmt(rec.entry_price)}원\n`
+              + `- 위 판정과 다른 결론을 낼 경우 판정 섹션에 변경 이유를 반드시 명시하세요.\n`
+              + `- 목표가는 직전 분석 대비 ±20% 이내가 되도록 노력하세요.`;
+            enrichedContext = enrichedContext ? enrichedContext + softBlock : softBlock;
+            console.log(`[verdict-anchor] 소프트 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
       const allInsightRows = await rawQuery(
         `SELECT * FROM model_insights WHERE outcome != 'pending'`
