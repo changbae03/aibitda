@@ -321,7 +321,10 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     ? formatCurrency(analysis.targetPrice, currency)
     : null;
 
-  const shareText = `${analysis?.ticker ?? ""} ${analysis?.companyName ?? ""} — ${vs.label}${targetPriceStr ? ` | 적정주가 ${targetPriceStr}` : ""}\nAI 7단계 파이프라인 분석 리포트 · 애빛다`;
+  const shareDateStr = analysis?.createdAt
+    ? new Date(analysis.createdAt).toISOString().slice(0, 10).replace(/-/g, ".")
+    : new Date().toISOString().slice(0, 10).replace(/-/g, ".");
+  const shareText = `${shareDateStr} ${analysis?.companyName ?? ""} 리포트 by 애빛다`;
 
   const handleKakao = async () => {
     const key = import.meta.env.VITE_KAKAO_JS_KEY;
@@ -333,8 +336,8 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       window.Kakao.Share.sendDefault({
         objectType: "feed",
         content: {
-          title: `${analysis?.ticker ?? ""} ${analysis?.companyName ?? ""} — 애빛다`,
-          description: `${vs.label}${targetPriceStr ? ` · 적정주가 ${targetPriceStr}` : ""} | AI 분석 리포트`,
+          title: `${shareDateStr} ${analysis?.companyName ?? ""} 리포트 by 애빛다`,
+          description: `AI 7단계 파이프라인 분석`,
           imageUrl,
           link: { mobileWebUrl: url, webUrl: url },
         },
@@ -767,15 +770,11 @@ export default function AnalysisDetail() {
   // 동적 OG 태그 & 페이지 타이틀 업데이트 (공유 미리보기 개선)
   useEffect(() => {
     if (!analysis) return;
-    const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-    const verdict = analysis.investmentVerdict ? toKoreanVerdict(analysis.investmentVerdict) : "";
-    const targetStr = analysis.targetPrice ? formatCurrency(analysis.targetPrice, currency) : "";
-    const title = verdict && targetStr
-      ? `${analysis.ticker} ${analysis.companyName} — ${verdict} · 적정주가 ${targetStr} | 애빛다`
-      : `${analysis.ticker} ${analysis.companyName} | 애빛다`;
-    const desc = verdict && targetStr
-      ? `${analysis.companyName} AI 분석 리포트 · ${verdict} · 적정주가 ${targetStr}. DCF·rNPV 기반 7단계 파이프라인 분석.`
-      : `${analysis.companyName} AI 7단계 분석 리포트 · 산업·실적·밸류에이션·기술적 분석 | 애빛다`;
+    const ogDateStr = analysis.createdAt
+      ? new Date(analysis.createdAt).toISOString().slice(0, 10).replace(/-/g, ".")
+      : new Date().toISOString().slice(0, 10).replace(/-/g, ".");
+    const title = `${ogDateStr} ${analysis.companyName} 리포트 by 애빛다`;
+    const desc = `AI 7단계 파이프라인 분석`;
 
     document.title = title;
     const setMeta = (prop: string, content: string) => {
@@ -798,7 +797,7 @@ export default function AnalysisDetail() {
       setMeta("og:title", "애빛다 — AI로 기업가치를 밝히다");
       setMeta("og:description", "AI 7단계 파이프라인이 코스피·코스닥·미국 주식을 분석합니다. DCF·rNPV 기반 적정주가 산출.");
     };
-  }, [analysis?.investmentVerdict, analysis?.targetPrice, analysis?.ticker, analysis?.companyName]);
+  }, [analysis?.ticker, analysis?.companyName, analysis?.createdAt]);
 
   type QCStatus = "checking" | "approved" | "revising" | "revised";
   type DebateStatus = "challenging" | "synthesizing";
