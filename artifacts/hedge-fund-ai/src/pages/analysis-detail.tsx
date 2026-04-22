@@ -25,6 +25,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   MessageSquare,
+  Swords,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -800,12 +801,14 @@ export default function AnalysisDetail() {
   }, [analysis?.investmentVerdict, analysis?.targetPrice, analysis?.ticker, analysis?.companyName]);
 
   type QCStatus = "checking" | "approved" | "revising" | "revised";
+  type DebateStatus = "challenging" | "synthesizing";
   interface StreamingStepState {
     key: string;
     content: string;
     qcStatus?: QCStatus;
     qcScore?: number;
     qcFeedback?: string;
+    debateStatus?: DebateStatus;
   }
   const [streamingStep, setStreamingStep] = useState<StreamingStepState | null>(null);
   const isStreaming = streamingStep !== null;
@@ -841,8 +844,12 @@ export default function AnalysisDetail() {
           if (!line.startsWith("data: ")) continue;
           try {
             const msg = JSON.parse(line.slice(6));
-            if (msg.qc === "checking") {
-              setStreamingStep(prev => prev ? { ...prev, content: "", qcStatus: "checking" } : null);
+            if (msg.debate === "challenging") {
+              setStreamingStep(prev => prev ? { ...prev, debateStatus: "challenging" } : null);
+            } else if (msg.debate === "synthesizing") {
+              setStreamingStep(prev => prev ? { ...prev, debateStatus: "synthesizing", content: "" } : null);
+            } else if (msg.qc === "checking") {
+              setStreamingStep(prev => prev ? { ...prev, content: "", debateStatus: undefined, qcStatus: "checking" } : null);
             } else if (msg.qc === "approved") {
               setStreamingStep(prev => prev ? { ...prev, qcStatus: "approved", qcScore: msg.score } : null);
             } else if (msg.qc === "revising") {
@@ -1088,6 +1095,7 @@ export default function AnalysisDetail() {
                 qcStatus={streamingStep.qcStatus}
                 qcScore={streamingStep.qcScore}
                 qcFeedback={streamingStep.qcFeedback}
+                debateStatus={streamingStep.debateStatus}
               />
             )}
           </AnimatePresence>
@@ -1798,21 +1806,35 @@ const AGENT_COLORS: Record<string, string> = {
   investment_strategy: BRAND_BLUE,
 };
 
-function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
+function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debateStatus }: {
   stepKey: string;
   content: string;
   qcStatus?: "checking" | "approved" | "revising" | "revised";
   qcScore?: number;
   qcFeedback?: string;
+  debateStatus?: "challenging" | "synthesizing";
 }) {
   const agent = AGENTS[stepKey];
   const color = AGENT_COLORS[stepKey] ?? "hsl(218, 67%, 44%)";
   if (!agent) return null;
 
+  const isDebatePhase = debateStatus === "challenging" || debateStatus === "synthesizing";
   const isQCPhase = qcStatus === "checking" || qcStatus === "approved" || qcStatus === "revising" || qcStatus === "revised";
-  const showCursor = !isQCPhase || qcStatus === "revising";
+  const showCursor = (!isQCPhase && !isDebatePhase) || qcStatus === "revising" || debateStatus === "synthesizing";
 
   const statusBadge = () => {
+    if (debateStatus === "challenging") return (
+      <div className="flex items-center gap-1.5 text-xs text-violet-500 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 rounded-full">
+        <Swords className="w-3.5 h-3.5 animate-pulse" />
+        <span>반론 검토 중...</span>
+      </div>
+    );
+    if (debateStatus === "synthesizing") return (
+      <div className="flex items-center gap-1.5 text-xs text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-full">
+        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+        <span>논쟁 반영 재작성 중...</span>
+      </div>
+    );
     if (qcStatus === "checking") return (
       <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
         <ShieldCheck className="w-3.5 h-3.5 animate-pulse" />
@@ -1859,13 +1881,29 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
         {statusBadge()}
       </div>
 
-      {qcStatus === "checking" ? (
+      {debateStatus === "challenging" ? (
+        <div className="p-5 flex flex-col items-center justify-center gap-2 py-10">
+          <div className="flex items-center gap-3 text-sm text-violet-600">
+            <Swords className="w-5 h-5 animate-pulse" />
+            <span className="font-medium">Devil's Advocate 반론 생성 중...</span>
+          </div>
+          <p className="text-[12px] text-muted-foreground/60 text-center mt-1">
+            초안의 핵심 가정을 3가지 각도로 검증합니다
+          </p>
+        </div>
+      ) : qcStatus === "checking" ? (
         <div className="p-5 flex items-center justify-center gap-3 text-sm text-muted-foreground py-8">
           <ShieldCheck className="w-5 h-5 text-amber-500 animate-pulse" />
           <span>Lead Portfolio Strategist가 분석 품질을 검토하고 있습니다...</span>
         </div>
       ) : (
         <div className="p-5">
+          {debateStatus === "synthesizing" && !content && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-blue-500/8 border border-blue-500/20 text-xs text-blue-700 flex items-start gap-2">
+              <Swords className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span><span className="font-semibold">논쟁 반영:</span> 반론을 수용·반박하여 최종본을 재작성합니다...</span>
+            </div>
+          )}
           {qcStatus === "revising" && qcFeedback && (
             <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/20 text-xs text-amber-700 flex items-start gap-2">
               <RefreshCw className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
@@ -1873,7 +1911,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback }: {
             </div>
           )}
           <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.85" }}>
-            {!content && !isQCPhase ? (
+            {!content && !isQCPhase && !isDebatePhase ? (
               <span className="flex items-center gap-2 text-muted-foreground/50 select-none py-1">
                 <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
                 <RotatingAnalysisMessage stepKey={stepKey} />

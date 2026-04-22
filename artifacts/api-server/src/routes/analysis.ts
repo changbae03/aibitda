@@ -199,6 +199,72 @@ ${excerpt}
   return { approved: true, score: 8, feedback: "" };
 }
 
+// ─── Devil's Advocate Debate (company_analysis & relative_valuation) ─────────
+
+const DEBATE_STEPS = new Set<AgentKey>(["company_analysis", "relative_valuation"]);
+
+async function runDebateChallenge(
+  stepKey: "company_analysis" | "relative_valuation",
+  draft: string,
+  companyName: string,
+  ticker: string
+): Promise<string> {
+  const isFundamental = stepKey === "company_analysis";
+  const excerpt = draft.slice(0, 10000);
+
+  const challengerPrompt = isFundamental
+    ? `당신은 AI 헤지펀드 리서치 팀의 Devil's Advocate(반론 전문가)입니다.
+아래는 ${companyName}(${ticker})의 실적 전망 초안입니다. 이 보고서의 핵심 가정에 대해 정확히 3가지 각도로 치열하게 반론하세요.
+
+[반론 원칙]
+- "틀렸다"가 아니라 "이 가정이 성립하려면 X 조건이 필요한데 그 증거가 부족하다"는 형식으로 작성
+- 각 반론은 반드시 구체적 수치나 로직 근거 포함
+- 낙관적 편향과 비관적 편향 모두 지적 가능
+
+[반론 3가지]
+1. 매출·성장률 가정 반론: 가장 낙관적으로 보이는 성장 가정의 약점 지적 (2-3문장)
+2. 이익률·비용 가정 반론: 마진 추정의 취약한 논리 지적 (2-3문장)
+3. 핵심 리스크 누락 반론: 실적 추정을 뒤엎을 수 있는 가장 중요한 하방 리스크 1개 제시 (2-3문장)
+
+[초안]
+${excerpt}
+
+JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총 400-700자).`
+    : `당신은 AI 헤지펀드 리서치 팀의 Valuation Skeptic(밸류에이션 검증 전문가)입니다.
+아래는 ${companyName}(${ticker})의 적정주가 산출 초안입니다. 밸류에이션의 핵심 가정을 정확히 3가지 각도로 치열하게 반론하세요.
+
+[반론 원칙]
+- "틀렸다"가 아니라 "이 가정이 성립하려면 X 조건이 필요한데 그 근거가 불충분하다"는 형식
+- 각 반론은 반드시 구체적 수치·비교 근거 포함
+
+[반론 3가지]
+1. 할인율·WACC 가정 반론: WACC 또는 할인율 설정이 너무 낮거나 높은 이유 (2-3문장)
+2. 성장률·멀티플 가정 반론: 터미널 성장률 또는 피어 배수 적용의 취약한 논리 (2-3문장)
+3. 목표가 도출 반론: 최종 적정주가·밴드 산출 과정에서 가장 약한 논리적 연결고리 (2-3문장)
+
+[초안]
+${excerpt}
+
+JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총 400-700자).`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
+      config: {
+        maxOutputTokens: 1024,
+        temperature: 0.6,
+        topP: 0.9,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    return response.text ?? "";
+  } catch (err) {
+    console.error(`[debate] challenger error (${stepKey}):`, err);
+    return "";
+  }
+}
+
 const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!;
 const ai = new GoogleGenAI({
   apiKey: geminiApiKey,
@@ -2435,6 +2501,63 @@ router.post("/:id/step", async (req, res) => {
       content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
       res.write(`data: ${JSON.stringify({ error: content })}\n\n`);
     }
+
+    // ── Devil's Advocate Debate (Round 2 → Round 3) ───────────────────────────
+    if (DEBATE_STEPS.has(stepKey as AgentKey) && content && !content.startsWith("분석 오류")) {
+      try {
+        // Round 2: Challenger 반론 생성 (내부 처리 — 스트리밍 없음)
+        res.write(`data: ${JSON.stringify({ debate: "challenging" })}\n\n`);
+        const challengerFeedback = await runDebateChallenge(
+          stepKey as "company_analysis" | "relative_valuation",
+          content,
+          analysis.companyName,
+          analysis.ticker
+        );
+
+        if (challengerFeedback.trim()) {
+          console.log(`[debate] ${stepKey} challenger feedback length: ${challengerFeedback.length}`);
+
+          // Round 3: 애널리스트가 반론 수용·반박 후 최종본 확정 (스트리밍)
+          res.write(`data: ${JSON.stringify({ debate: "synthesizing" })}\n\n`);
+
+          const synthesisInstruction = stepKey === "company_analysis"
+            ? `\n\n---\n[내부 검토 — Devil's Advocate 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 기존 보고서 형식·구조를 그대로 유지하면서 최종 완성본을 다시 작성하세요. 반론 항목을 별도 섹션으로 노출하지 마세요.`
+            : `\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)을 그대로 유지하면서 최종 완성본을 다시 작성하세요.`;
+
+          const synthesisUserPrompt = userPrompt + synthesisInstruction;
+          const synthesisMaxTokens = stepKey === "company_analysis" ? 16384 : 16384;
+
+          const synthesisStream = await ai.models.generateContentStream({
+            model: "gemini-2.5-flash",
+            contents: [{ role: "user", parts: [{ text: synthesisUserPrompt }] }],
+            config: {
+              systemInstruction: systemPrompt,
+              maxOutputTokens: synthesisMaxTokens,
+              temperature: 0.25,
+              topP: 0.88,
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          });
+
+          let synthesizedContent = "";
+          for await (const chunk of synthesisStream) {
+            const text = chunk.text ?? "";
+            if (text) {
+              synthesizedContent += text;
+              res.write(`data: ${JSON.stringify({ t: text, debateSynthesis: true })}\n\n`);
+            }
+          }
+          if (synthesizedContent) {
+            content = synthesizedContent;
+            console.log(`[debate] ${stepKey} synthesis complete, length: ${content.length}`);
+          }
+        }
+      } catch (debateErr) {
+        console.error(`[debate] error (${stepKey}):`, debateErr);
+        // 에러 시 Round 1 초안 그대로 사용
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // ── Lead Portfolio Strategist QC ──────────────────────────────────────────
     let finalContent = content;
