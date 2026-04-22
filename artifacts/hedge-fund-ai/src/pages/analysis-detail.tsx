@@ -1779,6 +1779,54 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
   ],
 };
 
+const DEBATE_MESSAGES: Record<string, string[]> = {
+  challenging: [
+    "모든 팀원들이 모여 치열한 토론을 벌이고 있습니다 ⚡",
+    "Devil's Advocate가 초안의 허점을 정면으로 찌르고 있어요 🗡️",
+    "\"이 가정, 정말 맞아요?\" 날카로운 반문이 이어지고 있어요",
+    "회의실 긴장감이 고조되고 있습니다... 좋은 신호예요 🔥",
+    "리드 애널리스트, 지금 반박 논리 준비 중이에요 💭",
+    "반론 세 가지가 테이블 위에 올라왔습니다 📋",
+  ],
+  checking: [
+    "팀장이 보고서를 처음부터 다시 읽고 있어요 👀",
+    "숫자 하나하나 직접 검산 중이에요 🔢",
+    "\"근거가 충분한가?\" 꼼꼼히 따지는 중이에요",
+    "논리 흐름에 빈틈이 없는지 확인하고 있어요 🔍",
+    "팀장 승인 직전입니다... 거의 다 됐어요!",
+  ],
+};
+
+function RotatingDebateMessage({ phase }: { phase: "challenging" | "checking" }) {
+  const messages = DEBATE_MESSAGES[phase];
+  const [idx, setIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIdx(prev => {
+        if (prev >= messages.length - 1) {
+          clearInterval(interval);
+          return prev;
+        }
+        setVisible(false);
+        setTimeout(() => setVisible(true), 350);
+        return prev + 1;
+      });
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [messages]);
+
+  return (
+    <p
+      className="text-[12px] text-muted-foreground/70 text-center italic max-w-xs"
+      style={{ transition: "opacity 0.35s ease", opacity: visible ? 1 : 0 }}
+    >
+      {messages[idx]}
+    </p>
+  );
+}
+
 function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
   const messages = SLOW_STEP_MESSAGES[stepKey];
   const [idx, setIdx] = useState(0);
@@ -1901,19 +1949,20 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       </div>
 
       {debateStatus === "challenging" ? (
-        <div className="p-5 flex flex-col items-center justify-center gap-2 py-10">
+        <div className="p-5 flex flex-col items-center justify-center gap-3 py-10">
           <div className="flex items-center gap-3 text-sm text-violet-600">
             <Swords className="w-5 h-5 animate-pulse" />
-            <span className="font-medium">Devil's Advocate 반론 생성 중...</span>
+            <span className="font-medium">Devil's Advocate 반론 제기 중...</span>
           </div>
-          <p className="text-[12px] text-muted-foreground/60 text-center mt-1">
-            초안의 핵심 가정을 3가지 각도로 검증합니다
-          </p>
+          <RotatingDebateMessage phase="challenging" />
         </div>
       ) : qcStatus === "checking" ? (
-        <div className="p-5 flex items-center justify-center gap-3 text-sm text-muted-foreground py-8">
-          <ShieldCheck className="w-5 h-5 text-amber-500 animate-pulse" />
-          <span>Lead Portfolio Strategist가 분석 품질을 검토하고 있습니다...</span>
+        <div className="p-5 flex flex-col items-center justify-center gap-3 py-10">
+          <div className="flex items-center gap-3 text-sm text-amber-600">
+            <ShieldCheck className="w-5 h-5 animate-pulse" />
+            <span className="font-medium">Lead Portfolio Strategist 검토 중...</span>
+          </div>
+          <RotatingDebateMessage phase="checking" />
         </div>
       ) : (
         <div className="p-5">
