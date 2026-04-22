@@ -15,6 +15,7 @@ interface UserRow {
   recentAnalyses: number;
   tier: string;
   adminMemo: string;
+  displayName: string | null;
   createdAt: string | null;
 }
 
@@ -303,7 +304,10 @@ export default function AdminUserManagement() {
                     )}
                   >
                     <td className="px-4 py-2.5">
-                      <span className="font-mono text-[12px] text-foreground/80">{shortId(u.userId)}</span>
+                      {u.displayName && (
+                        <p className="text-[12px] font-semibold text-foreground">{u.displayName}</p>
+                      )}
+                      <span className="font-mono text-[11px] text-muted-foreground">{shortId(u.userId)}</span>
                       {u.adminMemo && <span className="ml-1.5 text-[10px] text-amber-500" title={u.adminMemo}>📝</span>}
                     </td>
                     <td className="px-3 py-2.5">
@@ -359,7 +363,12 @@ export default function AdminUserManagement() {
                 <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
                   <User className="w-3.5 h-3.5 text-primary" />
                 </div>
-                <p className="text-xs font-mono text-muted-foreground truncate">{selected.userId}</p>
+                <div className="min-w-0">
+                  {selected.displayName && (
+                    <p className="text-sm font-semibold text-foreground">{selected.displayName}</p>
+                  )}
+                  <p className="text-xs font-mono text-muted-foreground truncate">{selected.userId}</p>
+                </div>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                 <span>가입 {fmt(selected.createdAt)}</span>

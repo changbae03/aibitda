@@ -50,6 +50,7 @@ interface AuthUser {
   id: string;
   nickname: string;
   profileImage: string | null;
+  displayName: string | null;
 }
 
 interface CreditStatus {
@@ -88,6 +89,10 @@ export default function SettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [nicknameSaving, setNicknameSaving] = useState(false);
+  const [nicknameMsg, setNicknameMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
   const [fbCategory, setFbCategory] = useState("기타");
   const [fbContent, setFbContent] = useState("");
   const [fbSubmitting, setFbSubmitting] = useState(false);
@@ -100,7 +105,11 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch(getApiUrl("/api/auth/me"), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then(d => setUser(d?.user ?? null))
+      .then(d => {
+        const u = d?.user ?? null;
+        setUser(u);
+        if (u?.displayName) setNicknameInput(u.displayName);
+      })
       .catch(() => setUser(null));
 
     fetch(getApiUrl("/api/credits"), { credentials: "include" })
@@ -121,6 +130,31 @@ export default function SettingsPage() {
       window.location.href = "/";
     } finally {
       setLoggingOut(false);
+    }
+  };
+
+  const saveNickname = async () => {
+    if (nicknameSaving) return;
+    setNicknameSaving(true);
+    try {
+      const r = await fetch(getApiUrl("/api/profile"), {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: nicknameInput }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setUser(prev => prev ? { ...prev, displayName: d.displayName } : prev);
+        setNicknameMsg({ type: "ok", text: "닉네임이 저장됐습니다" });
+      } else {
+        setNicknameMsg({ type: "err", text: d.error ?? "저장에 실패했습니다" });
+      }
+    } catch {
+      setNicknameMsg({ type: "err", text: "네트워크 오류가 발생했습니다" });
+    } finally {
+      setNicknameSaving(false);
+      setTimeout(() => setNicknameMsg(null), 3000);
     }
   };
 
@@ -181,9 +215,16 @@ export default function SettingsPage() {
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-semibold text-foreground truncate">{user.nickname}</p>
+                <p className="text-[14px] font-semibold text-foreground truncate">
+                  {user.displayName ?? user.nickname}
+                </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[11px] text-muted-foreground">카카오 로그인</span>
+                  {user.displayName && (
+                    <span className="text-[11px] text-muted-foreground">카카오: {user.nickname}</span>
+                  )}
+                  {!user.displayName && (
+                    <span className="text-[11px] text-muted-foreground">카카오 로그인</span>
+                  )}
                   {isAdmin && (
                     <span className="flex items-center gap-0.5 text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                       <Shield className="w-2.5 h-2.5" />관리자
@@ -192,6 +233,40 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* 닉네임 설정 */}
+            <div className="px-4 py-3.5 space-y-2.5 border-t border-border">
+              <p className="text-[12px] font-medium text-foreground/70">닉네임 설정</p>
+              <p className="text-[11px] text-muted-foreground/60">카카오 이름 대신 서비스 내에서 사용할 이름을 설정합니다. 최대 20자.</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={nicknameInput}
+                  onChange={e => setNicknameInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && saveNickname()}
+                  placeholder={user.nickname}
+                  maxLength={20}
+                  className="flex-1 px-3 py-2 text-[13px] bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  onClick={saveNickname}
+                  disabled={nicknameSaving}
+                  className="px-3 py-2 rounded-lg bg-primary text-white text-[13px] font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center gap-1.5 shrink-0"
+                >
+                  {nicknameSaving ? (
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                      className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />
+                  ) : <Check className="w-3.5 h-3.5" />}
+                  저장
+                </button>
+              </div>
+              {nicknameMsg && (
+                <p className={cn("text-[12px]", nicknameMsg.type === "ok" ? "text-emerald-600" : "text-red-500")}>
+                  {nicknameMsg.text}
+                </p>
+              )}
+            </div>
+
             <Row>
               <button
                 onClick={handleLogout}

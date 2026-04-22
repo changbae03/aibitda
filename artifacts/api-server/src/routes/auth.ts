@@ -1,6 +1,7 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import cookie from "cookie";
+import { pool } from "@workspace/db";
 
 const router = Router();
 
@@ -116,15 +117,20 @@ router.get("/auth/kakao/callback", async (req, res) => {
   }
 });
 
-router.get("/auth/me", (req, res) => {
+router.get("/auth/me", async (req, res) => {
   const cookies = cookie.parse(req.headers.cookie || "");
   const token = cookies.auth_token;
   if (!token) {
     return res.json({ user: null });
   }
   try {
-    const user = jwt.verify(token, JWT_SECRET);
-    res.json({ user });
+    const user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
+    const { rows } = await pool.query(
+      `SELECT display_name FROM user_credits WHERE user_id = $1`,
+      [user.id]
+    ).catch(() => ({ rows: [] }));
+    const displayName = rows[0]?.display_name ?? null;
+    res.json({ user: { ...user, displayName } });
   } catch {
     res.json({ user: null });
   }

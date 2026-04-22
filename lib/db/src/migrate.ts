@@ -125,10 +125,11 @@ export async function runMigrations() {
       );
     `);
 
-    // user_credits 확장: 유저 등급 + 관리자 메모
+    // user_credits 확장: 유저 등급 + 관리자 메모 + 닉네임
     await client.query(`
       ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS tier VARCHAR NOT NULL DEFAULT 'free';
       ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS admin_memo TEXT NOT NULL DEFAULT '';
+      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS display_name TEXT;
     `);
 
     // 시스템 설정 테이블 (공지 배너 등 key-value)
