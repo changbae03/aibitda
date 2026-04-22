@@ -20,6 +20,7 @@ interface PublicStats {
   verdictMap: Record<string, number>;
   krCount: number;
   usCount: number;
+  uniqueTickerCount: number;
   topTickers: { ticker: string; companyName: string; count: number; latestVerdict: string | null; latestId: number }[];
 }
 
@@ -102,7 +103,7 @@ export default function Popular() {
           },
           {
             label: "종목 커버리지",
-            value: `${Object.keys(stats?.verdictMap ?? {}).length > 0 || topTickers.length > 0 ? topTickers.length : 0}종목`,
+            value: `${stats?.uniqueTickerCount ?? 0}종목`,
             sub: `한국 ${krCount}건 · 미국 ${usCount}건`,
             icon: Target,
             color: "text-amber-500",

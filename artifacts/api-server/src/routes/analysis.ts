@@ -2004,12 +2004,13 @@ router.get("/public-stats", async (_req, res) => {
         tickerCount[r.ticker].companyName = r.companyName;
       }
     }
+    const uniqueTickerCount = Object.keys(tickerCount).length;
     const topTickers = Object.entries(tickerCount)
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 10)
       .map(([ticker, d]) => ({ ticker, companyName: d.companyName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
 
-    res.json({ total, verdictMap, krCount, usCount, topTickers });
+    res.json({ total, verdictMap, krCount, usCount, topTickers, uniqueTickerCount });
   } catch (err) {
     console.error("[GET /analysis/public-stats]", err);
     res.status(500).json({ error: "Failed to fetch stats" });
