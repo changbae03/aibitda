@@ -467,6 +467,41 @@ router.get("/search/:query", async (req, res) => {
 });
 
 // ─── 배치 현재가 조회 (트래커용) ─────────────────────────────────────────────
+// 단일 티커 현재가 조회 (KQ/KS 자동 판별)
+async function resolveQuote(raw: string): Promise<{ price: number | null; currency: string; change: number | null }> {
+  const ticker = raw.trim();
+  const isKoreanSix = /^\d{6}$/.test(ticker.split(".")[0]) && !ticker.includes(".");
+
+  if (isKoreanSix) {
+    // KQ(코스닥)와 KS(코스피) 동시 조회 후 유효한 값 선택
+    const [kqRes, ksRes] = await Promise.allSettled([
+      yahooFinance.quote(`${ticker}.KQ`, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] }),
+      yahooFinance.quote(`${ticker}.KS`, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] }),
+    ]);
+    const kqPrice = kqRes.status === "fulfilled" ? (kqRes.value?.regularMarketPrice ?? null) : null;
+    const ksPrice = ksRes.status === "fulfilled" ? (ksRes.value?.regularMarketPrice ?? null) : null;
+
+    // 유효한 가격이 있는 쪽 우선 (둘 다 있으면 KQ 우선)
+    const winner = kqPrice != null ? kqRes : ksPrice != null ? ksRes : null;
+    if (!winner || winner.status !== "fulfilled" || !winner.value?.regularMarketPrice) {
+      return { price: null, currency: "KRW", change: null };
+    }
+    return {
+      price: winner.value.regularMarketPrice,
+      currency: winner.value.currency ?? "KRW",
+      change: winner.value.regularMarketChangePercent ?? null,
+    };
+  }
+
+  // 미국주식 or 이미 suffix 포함 (.KS/.KQ)
+  const quote = await yahooFinance.quote(ticker, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] });
+  return {
+    price: quote?.regularMarketPrice ?? null,
+    currency: quote?.currency ?? "USD",
+    change: quote?.regularMarketChangePercent ?? null,
+  };
+}
+
 router.post("/batch-quotes", async (req, res) => {
   const { tickers } = req.body as { tickers: string[] };
   if (!Array.isArray(tickers) || tickers.length === 0) {
@@ -481,18 +516,7 @@ router.post("/batch-quotes", async (req, res) => {
       const ticker = raw.trim();
       if (!ticker) return;
       try {
-        // 한국 종목: 6자리 숫자 → KRX suffix
-        const isKorean = /^\d{5,6}$/.test(ticker.split(".")[0]);
-        const resolved = isKorean && !ticker.includes(".")
-          ? ticker.length === 6 ? `${ticker}.KS` : ticker
-          : ticker;
-
-        const quote = await yahooFinance.quote(resolved, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] });
-        results[ticker] = {
-          price: quote?.regularMarketPrice ?? null,
-          currency: quote?.currency ?? (isKorean ? "KRW" : "USD"),
-          change: quote?.regularMarketChangePercent ?? null,
-        };
+        results[ticker] = await resolveQuote(ticker);
       } catch {
         results[ticker] = { price: null, currency: "KRW", change: null };
       }
@@ -524,15 +548,27 @@ router.post("/batch-sparklines", async (req, res) => {
       const ticker = raw.trim();
       if (!ticker) return;
       try {
-        const isKorean = /^\d{5,6}$/.test(ticker.split(".")[0]);
-        const resolved = isKorean && !ticker.includes(".")
-          ? `${ticker}.KS` : ticker;
-        const chart = await yahooFinance.chart(resolved, {
-          period1: p1, period2: p2, interval: "1d",
-        });
-        const closes = (chart?.quotes ?? [])
-          .filter((d: any) => d.close != null && d.close > 0)
-          .map((d: any) => d.close as number);
+        const isKoreanSix = /^\d{6}$/.test(ticker.split(".")[0]) && !ticker.includes(".");
+        let closes: number[] = [];
+
+        if (isKoreanSix) {
+          // KQ/KS 둘 다 시도, 종가가 있는 쪽 선택 (KQ 우선)
+          const [kqChart, ksChart] = await Promise.allSettled([
+            yahooFinance.chart(`${ticker}.KQ`, { period1: p1, period2: p2, interval: "1d" }),
+            yahooFinance.chart(`${ticker}.KS`, { period1: p1, period2: p2, interval: "1d" }),
+          ]);
+          const kqCloses = kqChart.status === "fulfilled"
+            ? (kqChart.value?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number)
+            : [];
+          const ksCloses = ksChart.status === "fulfilled"
+            ? (ksChart.value?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number)
+            : [];
+          closes = kqCloses.length > 0 ? kqCloses : ksCloses;
+        } else {
+          const chart = await yahooFinance.chart(ticker, { period1: p1, period2: p2, interval: "1d" });
+          closes = (chart?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number);
+        }
+
         const change3m = closes.length >= 2
           ? ((closes[closes.length - 1] - closes[0]) / closes[0]) * 100
           : null;
