@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus, CalendarDays } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 
@@ -125,6 +125,19 @@ export default function Popular() {
             <p className="text-[10px] text-muted-foreground/60">{m.sub}</p>
           </motion.div>
         ))}
+      </motion.div>
+
+      {/* 데이터 시작일 */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="flex items-center gap-1.5 px-1"
+      >
+        <CalendarDays className="w-3.5 h-3.5 text-muted-foreground/50" />
+        <p className="text-[11px] text-muted-foreground/60">
+          데이터 시작일 <span className="font-semibold text-muted-foreground/80">2026.04.23</span> ~
+        </p>
       </motion.div>
 
       {/* 투자 의견 분포 */}
