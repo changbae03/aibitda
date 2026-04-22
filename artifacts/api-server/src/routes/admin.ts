@@ -96,4 +96,159 @@ router.delete("/users/:userId", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── 유저 관리 ────────────────────────────────────────────────────────────────
+
+// GET /api/admin/user-list — 유저 목록 (크레딧 + 분석 통계)
+router.get("/user-list", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const search = (req.query.search as string | undefined)?.trim() ?? "";
+  const page = Math.max(1, parseInt((req.query.page as string) ?? "1", 10));
+  const limit = 50;
+  const offset = (page - 1) * limit;
+
+  const whereClause = search
+    ? `WHERE uc.user_id ILIKE $3`
+    : "";
+
+  const params: any[] = search
+    ? [limit, offset, `%${search}%`]
+    : [limit, offset];
+
+  const { rows } = await pool.query(
+    `SELECT
+       uc.user_id,
+       uc.daily_used,
+       uc.daily_limit,
+       uc.bonus_credits,
+       uc.total_analyses,
+       uc.created_at,
+       COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses
+     FROM user_credits uc
+     LEFT JOIN analyses a ON a.user_id = uc.user_id
+     ${whereClause}
+     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.created_at
+     ORDER BY uc.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    params
+  );
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM user_credits uc ${search ? `WHERE uc.user_id ILIKE $1` : ""}`,
+    search ? [`%${search}%`] : []
+  );
+
+  res.json({
+    users: rows.map(r => ({
+      userId: r.user_id,
+      dailyUsed: r.daily_used,
+      dailyLimit: r.daily_limit,
+      bonusCredits: r.bonus_credits,
+      totalAnalyses: r.total_analyses,
+      recentAnalyses: parseInt(r.recent_analyses, 10),
+      createdAt: r.created_at,
+    })),
+    total: parseInt(countResult.rows[0].count, 10),
+    page,
+    limit,
+  });
+});
+
+// GET /api/admin/user-list/:userId/analyses — 특정 유저의 분석 이력
+router.get("/user-list/:userId/analyses", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const { userId } = req.params;
+  const page = Math.max(1, parseInt((req.query.page as string) ?? "1", 10));
+  const limit = 20;
+  const offset = (page - 1) * limit;
+
+  const { rows } = await pool.query(
+    `SELECT id, ticker, company_name, status, investment_verdict, target_price, start_price, created_at
+     FROM analyses
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [userId, limit, offset]
+  );
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM analyses WHERE user_id = $1`,
+    [userId]
+  );
+
+  res.json({
+    analyses: rows.map(r => ({
+      id: r.id,
+      ticker: r.ticker,
+      companyName: r.company_name,
+      status: r.status,
+      verdict: r.investment_verdict,
+      targetPrice: r.target_price,
+      startPrice: r.start_price,
+      createdAt: r.created_at,
+    })),
+    total: parseInt(countResult.rows[0].count, 10),
+  });
+});
+
+// POST /api/admin/user-list/:userId/credits — 보너스 크레딧 조정
+router.post("/user-list/:userId/credits", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const { userId } = req.params;
+  const { delta, reason } = req.body as { delta: number; reason?: string };
+
+  if (typeof delta !== "number" || !Number.isInteger(delta) || delta === 0) {
+    res.status(400).json({ error: "delta는 0이 아닌 정수여야 합니다" });
+    return;
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE user_credits
+     SET bonus_credits = GREATEST(0, bonus_credits + $1)
+     WHERE user_id = $2
+     RETURNING bonus_credits`,
+    [delta, userId]
+  );
+
+  if (rows.length === 0) {
+    res.status(404).json({ error: "유저를 찾을 수 없습니다" });
+    return;
+  }
+
+  console.log(`[ADMIN] ${requesterId} → ${userId} bonus_credits ${delta > 0 ? "+" : ""}${delta} (${reason ?? "사유 없음"})`);
+  res.json({ ok: true, newBonusCredits: rows[0].bonus_credits });
+});
+
+// POST /api/admin/user-list/:userId/daily-reset — 일일 크레딧 초기화
+router.post("/user-list/:userId/daily-reset", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const { userId } = req.params;
+
+  await pool.query(
+    `UPDATE user_credits SET daily_used = 0 WHERE user_id = $1`,
+    [userId]
+  );
+
+  res.json({ ok: true });
+});
+
 export default router;

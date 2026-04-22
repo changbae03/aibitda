@@ -1,0 +1,469 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Loader2, Search, ChevronRight, ChevronDown, X,
+  Zap, TrendingUp, RotateCcw, Plus, Minus, History,
+  ArrowLeft, ArrowRight, User,
+} from "lucide-react";
+import { cn, getApiUrl } from "@/lib/utils";
+
+interface UserRow {
+  userId: string;
+  dailyUsed: number;
+  dailyLimit: number;
+  bonusCredits: number;
+  totalAnalyses: number;
+  recentAnalyses: number;
+  createdAt: string | null;
+}
+
+interface AnalysisRow {
+  id: number;
+  ticker: string;
+  companyName: string | null;
+  status: string;
+  verdict: string | null;
+  targetPrice: number | null;
+  startPrice: number | null;
+  createdAt: string;
+}
+
+const VERDICT_LABEL: Record<string, { label: string; color: string }> = {
+  "Strong Buy": { label: "높은 상승여력", color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  "Buy":        { label: "상승여력",      color: "text-green-600 bg-green-50 border-green-200" },
+  "Hold":       { label: "적정 수준",     color: "text-amber-600 bg-amber-50 border-amber-200" },
+  "Sell":       { label: "하락여지",      color: "text-orange-600 bg-orange-50 border-orange-200" },
+  "Strong Sell":{ label: "높은 하락여지", color: "text-red-600 bg-red-50 border-red-200" },
+};
+
+function fmt(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function shortId(id: string) {
+  if (id.length <= 20) return id;
+  return id.slice(0, 10) + "…" + id.slice(-6);
+}
+
+function CreditBar({ used, limit }: { used: number; limit: number }) {
+  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all", pct >= 100 ? "bg-red-400" : pct >= 66 ? "bg-amber-400" : "bg-emerald-400")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className={cn("text-xs font-mono tabular-nums", pct >= 100 ? "text-red-500" : "text-muted-foreground")}>
+        {used}/{limit}
+      </span>
+    </div>
+  );
+}
+
+export default function AdminUserManagement() {
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<UserRow | null>(null);
+
+  const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
+  const [analysesTotal, setAnalysesTotal] = useState(0);
+  const [analysesPage, setAnalysesPage] = useState(1);
+  const [analysesLoading, setAnalysesLoading] = useState(false);
+
+  const [creditDelta, setCreditDelta] = useState("");
+  const [creditReason, setCreditReason] = useState("");
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const limit = 50;
+  const totalPages = Math.ceil(total / limit);
+
+  const loadUsers = useCallback(async (p: number, s: string) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(p), ...(s ? { search: s } : {}) });
+      const r = await fetch(getApiUrl(`/api/admin/user-list?${params}`), { credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        setUsers(d.users);
+        setTotal(d.total);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadAnalyses = useCallback(async (userId: string, p: number) => {
+    setAnalysesLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/user-list/${encodeURIComponent(userId)}/analyses?page=${p}`), { credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        setAnalyses(d.analyses);
+        setAnalysesTotal(d.total);
+      }
+    } finally {
+      setAnalysesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadUsers(page, search); }, [page, search, loadUsers]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setAnalysesPage(1);
+    loadAnalyses(selected.userId, 1);
+  }, [selected, loadAnalyses]);
+
+  useEffect(() => {
+    if (!selected) return;
+    loadAnalyses(selected.userId, analysesPage);
+  }, [analysesPage, selected, loadAnalyses]);
+
+  const handleSearchChange = (v: string) => {
+    setSearchInput(v);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearch(v);
+      setPage(1);
+    }, 400);
+  };
+
+  const showMsg = (type: "ok" | "err", text: string) => {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 3000);
+  };
+
+  const adjustCredits = async () => {
+    if (!selected || !creditDelta.trim()) return;
+    const delta = parseInt(creditDelta, 10);
+    if (isNaN(delta) || delta === 0) return;
+    setCreditLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/user-list/${encodeURIComponent(selected.userId)}/credits`), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta, reason: creditReason }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        showMsg("ok", `보너스 크레딧 조정 완료 → ${d.newBonusCredits}개`);
+        setSelected(prev => prev ? { ...prev, bonusCredits: d.newBonusCredits } : prev);
+        setUsers(prev => prev.map(u => u.userId === selected.userId ? { ...u, bonusCredits: d.newBonusCredits } : u));
+        setCreditDelta("");
+        setCreditReason("");
+      } else {
+        showMsg("err", d.error ?? "조정 실패");
+      }
+    } finally {
+      setCreditLoading(false);
+    }
+  };
+
+  const resetDaily = async () => {
+    if (!selected) return;
+    setResetLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/user-list/${encodeURIComponent(selected.userId)}/daily-reset`), {
+        method: "POST",
+        credentials: "include",
+      });
+      if (r.ok) {
+        showMsg("ok", "일일 크레딧 초기화 완료");
+        setSelected(prev => prev ? { ...prev, dailyUsed: 0 } : prev);
+        setUsers(prev => prev.map(u => u.userId === selected.userId ? { ...u, dailyUsed: 0 } : u));
+      } else {
+        showMsg("err", "초기화 실패");
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex h-full min-h-[calc(100vh-4rem)]">
+      {/* ── 왼쪽: 유저 목록 ── */}
+      <div className={cn("flex flex-col border-r border-border transition-all", selected ? "w-[55%] min-w-0" : "w-full")}>
+        <div className="px-5 py-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h1 className="text-lg font-bold text-foreground">유저 관리</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">총 {total.toLocaleString()}명의 유저</p>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => handleSearchChange(e.target.value)}
+              placeholder="유저 ID 검색..."
+              className="w-full pl-8 pr-3 py-2 text-sm bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-auto flex-1">
+          {loading ? (
+            <div className="flex items-center justify-center h-40 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" /> 불러오는 중…
+            </div>
+          ) : users.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">유저가 없습니다</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저 ID</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">가입일</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총 분석</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">7일</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">오늘</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">보너스</th>
+                  <th className="w-6" />
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr
+                    key={u.userId}
+                    onClick={() => setSelected(prev => prev?.userId === u.userId ? null : u)}
+                    className={cn(
+                      "border-b border-border/50 cursor-pointer transition-colors",
+                      selected?.userId === u.userId
+                        ? "bg-primary/5 border-l-2 border-l-primary"
+                        : "hover:bg-muted/40"
+                    )}
+                  >
+                    <td className="px-4 py-2.5">
+                      <span className="font-mono text-[12px] text-foreground/80">{shortId(u.userId)}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{fmt(u.createdAt)}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      <span className="text-sm font-semibold text-foreground tabular-nums">{u.totalAnalyses}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <span className={cn("text-xs tabular-nums", u.recentAnalyses > 0 ? "text-blue-600 font-medium" : "text-muted-foreground")}>
+                        {u.recentAnalyses}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <CreditBar used={u.dailyUsed} limit={u.dailyLimit} />
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {u.bonusCredits > 0 ? (
+                        <span className="text-xs font-medium text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-1.5 py-0.5 tabular-nums">
+                          +{u.bonusCredits}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/40">—</span>
+                      )}
+                    </td>
+                    <td className="pr-3">
+                      <ChevronRight className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", selected?.userId === u.userId && "rotate-90")} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-xs text-muted-foreground">
+            <span>{page} / {totalPages} 페이지</span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30">
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30">
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── 오른쪽: 유저 상세 ── */}
+      {selected && (
+        <div className="flex-1 flex flex-col overflow-hidden bg-background">
+          {/* 헤더 */}
+          <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <p className="text-xs font-mono text-muted-foreground truncate">{selected.userId}</p>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                <span>가입 {fmt(selected.createdAt)}</span>
+                <span>총 분석 <strong className="text-foreground">{selected.totalAnalyses}</strong>회</span>
+                <span>7일 <strong className="text-foreground">{selected.recentAnalyses}</strong>회</span>
+              </div>
+            </div>
+            <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-muted flex-shrink-0">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+
+          <div className="overflow-auto flex-1 px-5 py-4 space-y-5">
+            {/* 피드백 */}
+            {msg && (
+              <div className={cn("text-sm rounded-xl px-4 py-2.5 border", msg.type === "ok"
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-red-50 text-red-600 border-red-200"
+              )}>{msg.text}</div>
+            )}
+
+            {/* 크레딧 현황 */}
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5" /> 크레딧 현황
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "오늘 사용", value: `${selected.dailyUsed} / ${selected.dailyLimit}`, highlight: selected.dailyUsed >= selected.dailyLimit },
+                  { label: "보너스", value: String(selected.bonusCredits), highlight: false },
+                  { label: "총 잔여", value: String(Math.max(0, selected.dailyLimit - selected.dailyUsed) + selected.bonusCredits), highlight: false },
+                ].map(({ label, value, highlight }) => (
+                  <div key={label} className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2 text-center">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                    <p className={cn("text-lg font-bold tabular-nums", highlight ? "text-red-500" : "text-foreground")}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* 일일 초기화 */}
+              <button
+                onClick={resetDaily}
+                disabled={resetLoading || selected.dailyUsed === 0}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-40"
+              >
+                {resetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                오늘 사용량 초기화
+              </button>
+            </div>
+
+            {/* 보너스 크레딧 조정 */}
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5" /> 보너스 크레딧 조정
+              </p>
+              <div className="flex gap-2">
+                <div className="flex items-center gap-1 rounded-lg border border-border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setCreditDelta(v => v.startsWith("-") ? v.slice(1) : v ? "-" + v : "-1")}
+                    className="px-2.5 py-2 hover:bg-muted text-muted-foreground text-xs"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <input
+                    type="number"
+                    value={creditDelta}
+                    onChange={e => setCreditDelta(e.target.value)}
+                    placeholder="0"
+                    className="w-16 text-center text-sm font-mono bg-transparent border-none outline-none py-2 tabular-nums"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCreditDelta(v => v.startsWith("-") ? v.slice(1) : v)}
+                    className="px-2.5 py-2 hover:bg-muted text-muted-foreground text-xs"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={creditReason}
+                  onChange={e => setCreditReason(e.target.value)}
+                  placeholder="사유 (선택)"
+                  className="flex-1 px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  onClick={adjustCredits}
+                  disabled={creditLoading || !creditDelta.trim() || creditDelta === "0"}
+                  className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center gap-1.5"
+                >
+                  {creditLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  적용
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">양수: 지급, 음수: 차감. 0 미만으로 내려가지 않습니다.</p>
+            </div>
+
+            {/* 분석 이력 */}
+            <div className="rounded-xl border border-border overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5" /> 분석 이력 ({analysesTotal}건)
+                </p>
+                {Math.ceil(analysesTotal / 20) > 1 && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <button onClick={() => setAnalysesPage(p => Math.max(1, p - 1))} disabled={analysesPage <= 1} className="p-1 rounded hover:bg-muted disabled:opacity-30">
+                      <ArrowLeft className="w-3 h-3" />
+                    </button>
+                    <span>{analysesPage} / {Math.ceil(analysesTotal / 20)}</span>
+                    <button onClick={() => setAnalysesPage(p => p + 1)} disabled={analysesPage >= Math.ceil(analysesTotal / 20)} className="p-1 rounded hover:bg-muted disabled:opacity-30">
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {analysesLoading ? (
+                <div className="flex items-center justify-center h-24 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> 불러오는 중…
+                </div>
+              ) : analyses.length === 0 ? (
+                <div className="flex items-center justify-center h-24 text-sm text-muted-foreground">분석 이력 없음</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50 bg-muted/10">
+                      <th className="text-left px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase">종목</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">판정</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">일시</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyses.map(a => {
+                      const v = a.verdict ? VERDICT_LABEL[a.verdict] : null;
+                      return (
+                        <tr key={a.id} className="border-b border-border/30 last:border-0 hover:bg-muted/20">
+                          <td className="px-4 py-2.5">
+                            <span className="font-mono text-[12px] font-semibold text-foreground">{a.ticker}</span>
+                            {a.companyName && <span className="ml-1.5 text-xs text-muted-foreground">{a.companyName}</span>}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {v ? (
+                              <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", v.color)}>{v.label}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/50">{a.status}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[11px] text-muted-foreground whitespace-nowrap">{fmt(a.createdAt)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
