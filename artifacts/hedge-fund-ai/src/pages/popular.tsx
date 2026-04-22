@@ -94,9 +94,9 @@ export default function Popular() {
       >
         {[
           {
-            label: "누적 분석",
+            label: "누적 분석 리포트",
             value: `${total.toLocaleString()}건`,
-            sub: "전체 기업 분석 수",
+            sub: "AI 7단계 파이프라인으로 완료된 전체 분석 건수",
             icon: BarChart3,
             color: "text-primary",
             bg: "bg-primary/10",
@@ -104,7 +104,7 @@ export default function Popular() {
           {
             label: "종목 커버리지",
             value: `${stats?.uniqueTickerCount ?? 0}종목`,
-            sub: `한국 ${krCount}건 · 미국 ${usCount}건`,
+            sub: `분석된 고유 종목 수 · 한국 ${krCount}건 · 미국 ${usCount}건`,
             icon: Target,
             color: "text-amber-500",
             bg: "bg-amber-50",
