@@ -203,6 +203,98 @@ const KOREAN_COMPANY_MAP: Array<{ name: string; keywords: string[]; symbol: stri
   { name: "코스모화학", keywords: ["코스모화학"], symbol: "005420.KQ", exchange: "KOSDAQ" },
 ];
 
+// ── 미국/글로벌 주요 종목 한글명 매핑 ──────────────────────────────────────
+const US_KOREAN_MAP: { symbol: string; name: string; exchange: string; keywords: string[] }[] = [
+  // 반도체·AI
+  { symbol: "NVDA",  name: "NVIDIA",               exchange: "NASDAQ", keywords: ["엔비디아", "엔비디"] },
+  { symbol: "AMD",   name: "AMD",                  exchange: "NASDAQ", keywords: ["AMD", "어드밴스드마이크로", "에이엠디"] },
+  { symbol: "INTC",  name: "Intel",                exchange: "NASDAQ", keywords: ["인텔"] },
+  { symbol: "QCOM",  name: "Qualcomm",             exchange: "NASDAQ", keywords: ["퀄컴"] },
+  { symbol: "AVGO",  name: "Broadcom",             exchange: "NASDAQ", keywords: ["브로드컴"] },
+  { symbol: "ARM",   name: "Arm Holdings",         exchange: "NASDAQ", keywords: ["암홀딩스", "ARM홀딩스"] },
+  { symbol: "TSM",   name: "TSMC",                 exchange: "NYSE",   keywords: ["TSMC", "티에스엠씨", "타이완반도체"] },
+  { symbol: "MU",    name: "Micron Technology",    exchange: "NASDAQ", keywords: ["마이크론"] },
+  { symbol: "AMAT",  name: "Applied Materials",    exchange: "NASDAQ", keywords: ["어플라이드머티리얼즈", "어플라이드"] },
+  { symbol: "LRCX",  name: "Lam Research",         exchange: "NASDAQ", keywords: ["램리서치"] },
+  { symbol: "KLAC",  name: "KLA Corporation",      exchange: "NASDAQ", keywords: ["KLA", "케이엘에이"] },
+  { symbol: "ASML",  name: "ASML",                 exchange: "NASDAQ", keywords: ["ASML", "에이에스엠엘"] },
+  { symbol: "SMCI",  name: "Super Micro Computer", exchange: "NASDAQ", keywords: ["슈퍼마이크로", "슈퍼마이크로컴퓨터"] },
+  { symbol: "MRVL",  name: "Marvell Technology",   exchange: "NASDAQ", keywords: ["마벨", "마블테크놀로지"] },
+  // 빅테크
+  { symbol: "AAPL",  name: "Apple",                exchange: "NASDAQ", keywords: ["애플", "아이폰", "아이패드", "맥북"] },
+  { symbol: "MSFT",  name: "Microsoft",            exchange: "NASDAQ", keywords: ["마이크로소프트", "마소"] },
+  { symbol: "GOOGL", name: "Alphabet (Google)",    exchange: "NASDAQ", keywords: ["구글", "알파벳", "알파벳구글"] },
+  { symbol: "GOOG",  name: "Alphabet Class C",     exchange: "NASDAQ", keywords: ["구글C", "알파벳C"] },
+  { symbol: "AMZN",  name: "Amazon",               exchange: "NASDAQ", keywords: ["아마존"] },
+  { symbol: "META",  name: "Meta Platforms",       exchange: "NASDAQ", keywords: ["메타", "페이스북", "인스타그램"] },
+  { symbol: "NFLX",  name: "Netflix",              exchange: "NASDAQ", keywords: ["넷플릭스"] },
+  { symbol: "TSLA",  name: "Tesla",                exchange: "NASDAQ", keywords: ["테슬라"] },
+  { symbol: "ORCL",  name: "Oracle",               exchange: "NYSE",   keywords: ["오라클"] },
+  { symbol: "CRM",   name: "Salesforce",           exchange: "NYSE",   keywords: ["세일즈포스"] },
+  { symbol: "NOW",   name: "ServiceNow",           exchange: "NYSE",   keywords: ["서비스나우"] },
+  { symbol: "ADBE",  name: "Adobe",                exchange: "NASDAQ", keywords: ["어도비"] },
+  // AI 특화
+  { symbol: "PLTR",  name: "Palantir",             exchange: "NYSE",   keywords: ["팔란티어"] },
+  { symbol: "SNOW",  name: "Snowflake",            exchange: "NYSE",   keywords: ["스노우플레이크"] },
+  { symbol: "AI",    name: "C3.ai",                exchange: "NYSE",   keywords: ["씨쓰리에이아이", "C3AI"] },
+  // 전기차
+  { symbol: "RIVN",  name: "Rivian",               exchange: "NASDAQ", keywords: ["리비안"] },
+  { symbol: "LCID",  name: "Lucid Motors",         exchange: "NASDAQ", keywords: ["루시드", "루시드모터스"] },
+  { symbol: "NIO",   name: "NIO",                  exchange: "NYSE",   keywords: ["니오"] },
+  { symbol: "XPEV",  name: "XPeng",                exchange: "NYSE",   keywords: ["샤오펑", "엑스펑"] },
+  { symbol: "LI",    name: "Li Auto",              exchange: "NASDAQ", keywords: ["리오토", "리샹"] },
+  // 바이오·헬스케어
+  { symbol: "LLY",   name: "Eli Lilly",            exchange: "NYSE",   keywords: ["일라이릴리", "릴리"] },
+  { symbol: "NVO",   name: "Novo Nordisk",         exchange: "NYSE",   keywords: ["노보노디스크", "노보"] },
+  { symbol: "MRNA",  name: "Moderna",              exchange: "NASDAQ", keywords: ["모더나"] },
+  { symbol: "BNTX",  name: "BioNTech",             exchange: "NASDAQ", keywords: ["바이오엔텍", "비온텍"] },
+  { symbol: "PFE",   name: "Pfizer",               exchange: "NYSE",   keywords: ["화이자"] },
+  { symbol: "JNJ",   name: "Johnson & Johnson",    exchange: "NYSE",   keywords: ["존슨앤존슨", "존슨앤드존슨"] },
+  { symbol: "UNH",   name: "UnitedHealth",         exchange: "NYSE",   keywords: ["유나이티드헬스", "유나이티드헬스케어"] },
+  { symbol: "ABBV",  name: "AbbVie",               exchange: "NYSE",   keywords: ["애브비"] },
+  // 금융
+  { symbol: "JPM",   name: "JPMorgan Chase",       exchange: "NYSE",   keywords: ["JP모건", "제이피모건"] },
+  { symbol: "GS",    name: "Goldman Sachs",        exchange: "NYSE",   keywords: ["골드만삭스"] },
+  { symbol: "BAC",   name: "Bank of America",      exchange: "NYSE",   keywords: ["뱅크오브아메리카", "BOA"] },
+  { symbol: "V",     name: "Visa",                 exchange: "NYSE",   keywords: ["비자"] },
+  { symbol: "MA",    name: "Mastercard",           exchange: "NYSE",   keywords: ["마스터카드"] },
+  { symbol: "BRK-B", name: "Berkshire Hathaway",   exchange: "NYSE",   keywords: ["버크셔해서웨이", "버크셔", "워렌버핏"] },
+  { symbol: "COIN",  name: "Coinbase",             exchange: "NASDAQ", keywords: ["코인베이스"] },
+  // 소비재·리테일
+  { symbol: "AMZN",  name: "Amazon",               exchange: "NASDAQ", keywords: ["아마존"] },
+  { symbol: "WMT",   name: "Walmart",              exchange: "NYSE",   keywords: ["월마트"] },
+  { symbol: "COST",  name: "Costco",               exchange: "NASDAQ", keywords: ["코스트코"] },
+  { symbol: "TGT",   name: "Target",               exchange: "NYSE",   keywords: ["타겟"] },
+  { symbol: "NKE",   name: "Nike",                 exchange: "NYSE",   keywords: ["나이키"] },
+  { symbol: "SBUX",  name: "Starbucks",            exchange: "NYSE",   keywords: ["스타벅스"] },
+  { symbol: "MCD",   name: "McDonald's",           exchange: "NYSE",   keywords: ["맥도날드"] },
+  { symbol: "KO",    name: "Coca-Cola",            exchange: "NYSE",   keywords: ["코카콜라"] },
+  // 에너지
+  { symbol: "XOM",   name: "ExxonMobil",           exchange: "NYSE",   keywords: ["엑슨모빌", "엑손모빌"] },
+  { symbol: "CVX",   name: "Chevron",              exchange: "NYSE",   keywords: ["셰브론"] },
+  // 중국
+  { symbol: "BABA",  name: "Alibaba",              exchange: "NYSE",   keywords: ["알리바바"] },
+  { symbol: "BIDU",  name: "Baidu",                exchange: "NASDAQ", keywords: ["바이두"] },
+  { symbol: "PDD",   name: "PDD Holdings (Temu)",  exchange: "NASDAQ", keywords: ["PDD", "테무", "핀둬둬"] },
+  { symbol: "JD",    name: "JD.com",               exchange: "NASDAQ", keywords: ["징둥", "JD닷컴"] },
+  // 기타
+  { symbol: "SPOT",  name: "Spotify",              exchange: "NYSE",   keywords: ["스포티파이"] },
+  { symbol: "ZM",    name: "Zoom",                 exchange: "NASDAQ", keywords: ["줌"] },
+  { symbol: "UBER",  name: "Uber",                 exchange: "NYSE",   keywords: ["우버"] },
+  { symbol: "LYFT",  name: "Lyft",                 exchange: "NASDAQ", keywords: ["리프트"] },
+  { symbol: "ABNB",  name: "Airbnb",               exchange: "NASDAQ", keywords: ["에어비앤비"] },
+  { symbol: "SHOP",  name: "Shopify",              exchange: "NYSE",   keywords: ["쇼피파이"] },
+  { symbol: "SQ",    name: "Block (Square)",       exchange: "NYSE",   keywords: ["블록", "스퀘어"] },
+  { symbol: "PYPL",  name: "PayPal",               exchange: "NASDAQ", keywords: ["페이팔"] },
+];
+
+function searchUSKorean(query: string): { symbol: string; shortname: string; exchange: string; quoteType: string }[] {
+  const q = query.toLowerCase().replace(/\s/g, "");
+  return US_KOREAN_MAP.filter(e =>
+    e.keywords.some(k => k.toLowerCase().replace(/\s/g, "").includes(q) || q.includes(k.toLowerCase().replace(/\s/g, "")))
+  ).slice(0, 5).map(e => ({ symbol: e.symbol, shortname: `${e.name} (${e.symbol})`, exchange: e.exchange, quoteType: "EQUITY" }));
+}
+
 function toResult(e: StockEntry) {
   return { symbol: e.symbol, shortname: e.name, exchange: e.exchange, quoteType: "EQUITY" };
 }
@@ -220,11 +312,13 @@ function searchKorean(query: string): ReturnType<typeof toResult>[] {
   const q = query.toLowerCase().replace(/\s/g, "");
   const krxCache = getKRXCache();
 
-  if (krxCache.length > 0) {
-    // KRX 법인명 검색 + KOREAN_COMPANY_MAP 키워드 확장 검색 병합
-    const seen = new Set<string>();
-    const results: ReturnType<typeof toResult>[] = [];
+  // 미국 주식 한글명 먼저 매칭 (정확도 우선)
+  const usResults = searchUSKorean(query);
 
+  const krResults: ReturnType<typeof toResult>[] = [];
+
+  if (krxCache.length > 0) {
+    const seen = new Set<string>();
     for (const e of krxCache) {
       const krxName = e.name.toLowerCase().replace(/\s/g, "");
       const keywords = KEYWORD_MAP.get(e.symbol) ?? [];
@@ -235,18 +329,25 @@ function searchKorean(query: string): ReturnType<typeof toResult>[] {
       });
       if ((matchName || matchKeyword) && !seen.has(e.symbol)) {
         seen.add(e.symbol);
-        // KOREAN_COMPANY_MAP에 정확한 표시명이 있으면 우선 사용
         const displayName = DISPLAY_NAME_OVERRIDE.get(e.symbol) ?? e.name;
-        results.push({ symbol: e.symbol, shortname: displayName, exchange: e.exchange, quoteType: "EQUITY" });
+        krResults.push({ symbol: e.symbol, shortname: displayName, exchange: e.exchange, quoteType: "EQUITY" });
       }
-      if (results.length >= 8) break;
+      if (krResults.length >= 6) break;
     }
-    return results;
+  } else {
+    const fallback = KOREAN_COMPANY_MAP.filter(c =>
+      c.keywords.some(k => k.includes(q) || q.includes(k))
+    ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
+    krResults.push(...fallback.slice(0, 6));
   }
 
-  return KOREAN_COMPANY_MAP.filter(c =>
-    c.keywords.some(k => k.includes(q) || q.includes(k))
-  ).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
+  // US 결과가 있으면 상단에, KR 결과는 하단에
+  const seenAll = new Set<string>();
+  const merged: ReturnType<typeof toResult>[] = [];
+  for (const r of [...usResults, ...krResults]) {
+    if (!seenAll.has(r.symbol)) { seenAll.add(r.symbol); merged.push(r); }
+  }
+  return merged.slice(0, 8);
 }
 
 function searchEnglishLocal(query: string): ReturnType<typeof toResult>[] {
