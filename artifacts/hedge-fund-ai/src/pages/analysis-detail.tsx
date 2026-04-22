@@ -1885,49 +1885,26 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
   const color = AGENT_COLORS[stepKey] ?? "hsl(218, 67%, 44%)";
   if (!agent) return null;
 
-  const isDebatePhase = debateStatus === "challenging" || debateStatus === "synthesizing";
-  const isQCPhase = qcStatus === "checking" || qcStatus === "approved" || qcStatus === "revising" || qcStatus === "revised";
-  const showCursor = (!isQCPhase && !isDebatePhase) || qcStatus === "revising" || debateStatus === "synthesizing";
+  const phase = (() => {
+    if (debateStatus === "challenging") return "challenging";
+    if (debateStatus === "synthesizing") return "synthesizing";
+    if (qcStatus === "checking") return "checking";
+    if (qcStatus === "revising") return "revising";
+    if (qcStatus === "approved" || qcStatus === "revised") return "done";
+    return "writing";
+  })();
 
-  const statusBadge = () => {
-    if (debateStatus === "challenging") return (
-      <div className="flex items-center gap-1.5 text-xs text-violet-500 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 rounded-full">
-        <Swords className="w-3.5 h-3.5 animate-pulse" />
-        <span>반론 검토 중...</span>
-      </div>
-    );
-    if (debateStatus === "synthesizing") return (
-      <div className="flex items-center gap-1.5 text-xs text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-full">
-        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-        <span>논쟁 반영 재작성 중...</span>
-      </div>
-    );
-    if (qcStatus === "checking") return (
-      <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-        <ShieldCheck className="w-3.5 h-3.5 animate-pulse" />
-        <span>팀장 검토 중...</span>
-      </div>
-    );
-    if (qcStatus === "approved") return (
-      <div className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
-        <CheckCircle2 className="w-3.5 h-3.5" />
-        <span>검토 통과 {qcScore}/10</span>
-      </div>
-    );
-    if (qcStatus === "revising") return (
-      <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-        <span>재분석 중... ({qcScore}/10)</span>
-      </div>
-    );
-    if (qcStatus === "revised") return (
-      <div className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
-        <CheckCircle2 className="w-3.5 h-3.5" />
-        <span>재분석 완료 {qcScore}/10</span>
-      </div>
-    );
-    return null;
-  };
+  const phaseConfig = {
+    writing:      { icon: Loader2,      spin: true,  pulse: false, color: "text-muted-foreground",  label: "분석 초안 작성 중..." },
+    challenging:  { icon: Swords,       spin: false, pulse: true,  color: "text-violet-600",         label: "Devil's Advocate 반론 검토 중..." },
+    synthesizing: { icon: RefreshCw,    spin: true,  pulse: false, color: "text-blue-600",           label: "반론 반영하여 재작성 중..." },
+    checking:     { icon: ShieldCheck,  spin: false, pulse: true,  color: "text-amber-600",          label: "Lead Portfolio Strategist 검토 중..." },
+    revising:     { icon: RefreshCw,    spin: true,  pulse: false, color: "text-amber-600",          label: "팀장 피드백 반영 재작성 중..." },
+    done:         { icon: CheckCircle2, spin: false, pulse: false, color: "text-emerald-600",        label: "검토 완료, 저장 중..." },
+  } as const;
+
+  const cfg = phaseConfig[phase];
+  const PhaseIcon = cfg.icon;
 
   return (
     <motion.div
@@ -1937,6 +1914,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       className="bg-card border border-border rounded-xl border-l-4"
       style={{ borderLeftColor: color }}
     >
+      {/* 헤더 */}
       <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
           <agent.icon className="w-4.5 h-4.5" style={{ color }} />
@@ -1945,58 +1923,20 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
           <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
         </div>
-        {statusBadge()}
       </div>
 
-      {debateStatus === "challenging" ? (
-        <div className="p-5 flex flex-col items-center justify-center gap-3 py-10">
-          <div className="flex items-center gap-3 text-sm text-violet-600">
-            <Swords className="w-5 h-5 animate-pulse" />
-            <span className="font-medium">Devil's Advocate 반론 제기 중...</span>
-          </div>
-          <RotatingDebateMessage phase="challenging" />
+      {/* 로딩 바디 — 콘텐츠 없음, 단계 상태만 표시 */}
+      <div className="flex flex-col items-center justify-center gap-3 py-10 px-5">
+        <div className={cn("flex items-center gap-2.5 text-sm font-medium", cfg.color)}>
+          <PhaseIcon
+            className={cn("w-5 h-5", cfg.spin && "animate-spin", cfg.pulse && "animate-pulse")}
+          />
+          <span>{cfg.label}</span>
         </div>
-      ) : qcStatus === "checking" ? (
-        <div className="p-5 flex flex-col items-center justify-center gap-3 py-10">
-          <div className="flex items-center gap-3 text-sm text-amber-600">
-            <ShieldCheck className="w-5 h-5 animate-pulse" />
-            <span className="font-medium">Lead Portfolio Strategist 검토 중...</span>
-          </div>
-          <RotatingDebateMessage phase="checking" />
-        </div>
-      ) : (
-        <div className="p-5">
-          {debateStatus === "synthesizing" && !content && (
-            <div className="mb-3 px-3 py-2 rounded-lg bg-blue-500/8 border border-blue-500/20 text-xs text-blue-700 flex items-start gap-2">
-              <Swords className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              <span><span className="font-semibold">논쟁 반영:</span> 반론을 수용·반박하여 최종본을 재작성합니다...</span>
-            </div>
-          )}
-          {qcStatus === "revising" && qcFeedback && (
-            <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/20 text-xs text-amber-700 flex items-start gap-2">
-              <RefreshCw className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              <span><span className="font-semibold">팀장 피드백:</span> {qcFeedback}</span>
-            </div>
-          )}
-          <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.85" }}>
-            {!content && !isQCPhase && !isDebatePhase ? (
-              <span className="flex items-center gap-2 text-muted-foreground/50 select-none py-1">
-                <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-                <RotatingAnalysisMessage stepKey={stepKey} />
-              </span>
-            ) : (
-              <>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_TABLE_COMPONENTS}>
-                  {prepareMarkdown(content)}
-                </ReactMarkdown>
-                {showCursor && (
-                  <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 animate-[pulse_0.8s_ease-in-out_infinite] align-middle" />
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
+        {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} />}
+        {phase === "challenging" && <RotatingDebateMessage phase="challenging" />}
+        {phase === "checking" && <RotatingDebateMessage phase="checking" />}
+      </div>
     </motion.div>
   );
 }
