@@ -6,14 +6,14 @@ import { useLocation } from "wouter";
 
 const VERDICT_ORDER = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"];
 const VERDICT_LABELS: Record<string, string> = {
-  "Strong Buy":  "강력 매수",
-  "Buy":         "매수",
-  "Hold":        "보유",
-  "Sell":        "매도",
-  "Strong Sell": "강력 매도",
+  "Strong Buy":  "높은 상승여력",
+  "Buy":         "상승여력",
+  "Hold":        "적정 수준",
+  "Sell":        "하락여지",
+  "Strong Sell": "높은 하락여지",
 };
-const VERDICT_COLOR = ["bg-red-500", "bg-red-300", "bg-amber-400", "bg-blue-300", "bg-blue-500"];
-const VERDICT_TEXT  = ["text-red-600", "text-red-400", "text-amber-500", "text-blue-400", "text-blue-600"];
+const VERDICT_COLOR = ["bg-emerald-500", "bg-green-400", "bg-amber-400", "bg-red-300", "bg-red-500"];
+const VERDICT_TEXT  = ["text-emerald-700", "text-green-700", "text-amber-700", "text-red-600", "text-red-700"];
 
 interface PublicStats {
   total: number;
@@ -150,7 +150,7 @@ export default function Popular() {
                 className="flex items-center gap-2.5"
               >
                 <div className={cn("w-2.5 h-2.5 rounded-sm shrink-0", VERDICT_COLOR[i])} />
-                <span className={cn("text-[12px] font-semibold w-16 shrink-0", VERDICT_TEXT[i])}>
+                <span className={cn("text-[12px] font-semibold w-24 shrink-0", VERDICT_TEXT[i])}>
                   {VERDICT_LABELS[key]}
                 </span>
                 <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
@@ -241,7 +241,7 @@ export default function Popular() {
               const verdictLabel = t.latestVerdict ? VERDICT_LABELS[t.latestVerdict] : null;
               const verdictColor = verdictIdx >= 0 ? VERDICT_TEXT[verdictIdx] : "text-muted-foreground";
               const verdictBg = verdictIdx >= 0
-                ? ["bg-red-50 border-red-200", "bg-red-50 border-red-100", "bg-amber-50 border-amber-200", "bg-blue-50 border-blue-100", "bg-blue-50 border-blue-200"][verdictIdx]
+                ? ["bg-emerald-50 border-emerald-200", "bg-green-50 border-green-200", "bg-amber-50 border-amber-200", "bg-red-50 border-red-100", "bg-red-50 border-red-200"][verdictIdx]
                 : "bg-muted border-border";
 
               return (
