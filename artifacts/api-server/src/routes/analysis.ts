@@ -1950,6 +1950,77 @@ router.get("/public-stats", async (_req, res) => {
   }
 });
 
+router.get("/period-stats", async (_req, res) => {
+  try {
+    // 완료된 분석 + model_insights 조인
+    const rows = await rawQuery<{
+      analysis_id: number;
+      created_at: string;
+      investment_verdict: string | null;
+      outcome: string | null;
+      price_return: number | null;
+      days_elapsed: number | null;
+    }>(`
+      SELECT
+        a.id               AS analysis_id,
+        a.created_at,
+        a.investment_verdict,
+        mi.outcome,
+        mi.price_return,
+        mi.days_elapsed
+      FROM analyses a
+      LEFT JOIN model_insights mi ON mi.analysis_id = a.id
+      WHERE a.status = 'completed'
+      ORDER BY a.created_at
+    `);
+
+    const now = Date.now();
+
+    // 기간 버킷 정의 (작성일 기준 X일 이상 경과한 분석)
+    const BUCKETS = [
+      { key: "1mo",  label: "1개월+", minDays: 30  },
+      { key: "3mo",  label: "3개월+", minDays: 90  },
+      { key: "6mo",  label: "6개월+", minDays: 180 },
+      { key: "12mo", label: "1년+",   minDays: 365 },
+    ];
+
+    const result = BUCKETS.map(({ key, label, minDays }) => {
+      const eligible = rows.filter(r => {
+        const ageDays = (now - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        return ageDays >= minDays;
+      });
+
+      const total        = eligible.length;
+      const reviewed     = eligible.filter(r => r.outcome && r.outcome !== "pending");
+      const hitTarget    = reviewed.filter(r => r.outcome === "hit_target");
+      const hitStop      = reviewed.filter(r => r.outcome === "hit_stoploss");
+      const ongoing      = reviewed.filter(r => r.outcome === "ongoing");
+      const withReturn   = reviewed.filter(r => r.price_return != null);
+      const avgReturn    = withReturn.length
+        ? withReturn.reduce((s, r) => s + (r.price_return ?? 0), 0) / withReturn.length
+        : null;
+      const winRate      = reviewed.length > 0
+        ? (hitTarget.length / reviewed.length) * 100
+        : null;
+
+      return {
+        key, label, minDays, total,
+        reviewedCount: reviewed.length,
+        hitTargetCount: hitTarget.length,
+        hitStopCount: hitStop.length,
+        ongoingCount: ongoing.length,
+        winRate,
+        avgReturn,
+      };
+    });
+
+    res.json({ periods: result });
+  } catch (err) {
+    console.error("[GET /analysis/period-stats]", err);
+    res.status(500).json({ error: "Failed to fetch period stats" });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {

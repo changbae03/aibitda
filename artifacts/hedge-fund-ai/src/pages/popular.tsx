@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Target, Globe, Loader2 } from "lucide-react";
+import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 
@@ -23,16 +23,34 @@ interface PublicStats {
   topTickers: { ticker: string; companyName: string; count: number; latestVerdict: string | null; latestId: number }[];
 }
 
+interface PeriodBucket {
+  key: string;
+  label: string;
+  minDays: number;
+  total: number;
+  reviewedCount: number;
+  hitTargetCount: number;
+  hitStopCount: number;
+  ongoingCount: number;
+  winRate: number | null;
+  avgReturn: number | null;
+}
+
 export default function Popular() {
   const [, setLocation] = useLocation();
   const [stats, setStats] = useState<PublicStats | null>(null);
+  const [periods, setPeriods] = useState<PeriodBucket[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(getApiUrl("api/analysis/public-stats"))
-      .then(r => r.json())
-      .then(d => { setStats(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    Promise.all([
+      fetch(getApiUrl("api/analysis/public-stats")).then(r => r.json()),
+      fetch(getApiUrl("api/analysis/period-stats")).then(r => r.json()),
+    ]).then(([s, p]) => {
+      setStats(s);
+      setPeriods(p.periods ?? []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -273,6 +291,143 @@ export default function Popular() {
             })}
           </div>
         )}
+      </motion.div>
+
+      {/* 기간별 성과 */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.26 }}
+        className="rounded-xl border border-border bg-background overflow-hidden"
+      >
+        <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border bg-muted/20">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">기간별 성과 트래킹</p>
+        </div>
+
+        {periods.every(p => p.total === 0) ? (
+          <div className="px-5 py-8 text-center">
+            <p className="text-[13px] text-muted-foreground/50">아직 기간별 성과를 집계할 데이터가 없습니다.</p>
+            <p className="text-[11px] text-muted-foreground/30 mt-1">분석 후 1개월 이상 경과한 보고서가 생기면 표시됩니다.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {periods.map((p, i) => {
+              const hasData = p.total > 0;
+              const hasReview = p.reviewedCount > 0;
+              const winRateColor = p.winRate != null
+                ? p.winRate >= 60 ? "text-emerald-600" : p.winRate >= 40 ? "text-amber-600" : "text-red-500"
+                : "text-muted-foreground/40";
+              const returnColor = p.avgReturn != null
+                ? p.avgReturn > 0 ? "text-emerald-600" : p.avgReturn < 0 ? "text-red-500" : "text-muted-foreground"
+                : "text-muted-foreground/40";
+              const ReturnIcon = p.avgReturn != null
+                ? p.avgReturn > 0 ? TrendingUp : p.avgReturn < 0 ? TrendingDown : Minus
+                : Minus;
+
+              return (
+                <motion.div
+                  key={p.key}
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + i * 0.05 }}
+                  className={cn("px-5 py-4", !hasData && "opacity-40")}
+                >
+                  {/* 기간 라벨 + 총 분석 수 */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-bold text-foreground">{p.label}</span>
+                      <span className="text-[11px] text-muted-foreground">경과 보고서</span>
+                    </div>
+                    <span className={cn("text-[12px] font-semibold tabular-nums", hasData ? "text-foreground" : "text-muted-foreground/40")}>
+                      {p.total}건
+                    </span>
+                  </div>
+
+                  {hasData && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* 목표가 달성률 */}
+                      <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
+                        <p className="text-[10px] text-muted-foreground mb-1">목표가 달성률</p>
+                        <p className={cn("text-[18px] font-black tabular-nums leading-none", winRateColor)}>
+                          {hasReview && p.winRate != null ? `${p.winRate.toFixed(0)}%` : "—"}
+                        </p>
+                        {hasReview && (
+                          <p className="text-[9px] text-muted-foreground/50 mt-1">
+                            {p.hitTargetCount}/{p.reviewedCount}건 달성
+                          </p>
+                        )}
+                      </div>
+
+                      {/* 평균 수익률 */}
+                      <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
+                        <p className="text-[10px] text-muted-foreground mb-1">평균 수익률</p>
+                        <div className={cn("flex items-center gap-0.5", returnColor)}>
+                          <ReturnIcon className="w-3.5 h-3.5 shrink-0" />
+                          <p className="text-[18px] font-black tabular-nums leading-none">
+                            {p.avgReturn != null
+                              ? `${p.avgReturn >= 0 ? "+" : ""}${p.avgReturn.toFixed(1)}%`
+                              : "—"}
+                          </p>
+                        </div>
+                        <p className="text-[9px] text-muted-foreground/50 mt-1">진입가 기준</p>
+                      </div>
+
+                      {/* 검증 현황 */}
+                      <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
+                        <p className="text-[10px] text-muted-foreground mb-1">검증 현황</p>
+                        <p className="text-[18px] font-black tabular-nums leading-none text-foreground">
+                          {p.reviewedCount}<span className="text-[11px] font-normal text-muted-foreground ml-0.5">/{p.total}</span>
+                        </p>
+                        <div className="flex gap-1.5 mt-1">
+                          {p.hitTargetCount > 0 && (
+                            <span className="text-[9px] text-emerald-600 font-medium">▲{p.hitTargetCount}</span>
+                          )}
+                          {p.hitStopCount > 0 && (
+                            <span className="text-[9px] text-red-500 font-medium">▼{p.hitStopCount}</span>
+                          )}
+                          {p.ongoingCount > 0 && (
+                            <span className="text-[9px] text-blue-500 font-medium">→{p.ongoingCount}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 달성/손절/추적 바 */}
+                  {hasReview && (
+                    <div className="mt-3 flex h-1.5 rounded-full overflow-hidden gap-px bg-muted">
+                      {p.hitTargetCount > 0 && (
+                        <div
+                          className="h-full bg-emerald-500 rounded-full"
+                          style={{ width: `${(p.hitTargetCount / p.reviewedCount) * 100}%` }}
+                        />
+                      )}
+                      {p.ongoingCount > 0 && (
+                        <div
+                          className="h-full bg-blue-400"
+                          style={{ width: `${(p.ongoingCount / p.reviewedCount) * 100}%` }}
+                        />
+                      )}
+                      {p.hitStopCount > 0 && (
+                        <div
+                          className="h-full bg-red-400 rounded-full"
+                          style={{ width: `${(p.hitStopCount / p.reviewedCount) * 100}%` }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="px-5 py-3 bg-muted/10 border-t border-border">
+          <p className="text-[10px] text-muted-foreground/50">
+            ※ 목표가 달성·손절가 도달 시 자동 기록됩니다. 검증되지 않은 보고서는 집계에서 제외됩니다.
+          </p>
+        </div>
       </motion.div>
     </div>
   );
