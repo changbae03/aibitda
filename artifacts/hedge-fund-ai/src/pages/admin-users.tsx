@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, UserPlus, Trash2, Copy, Check, ShieldCheck, Info } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Copy, Check, ShieldCheck, Info, AlertTriangle } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
 interface AdminUser {
@@ -31,6 +31,8 @@ export default function AdminUsers() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   const loadMe = useCallback(async () => {
     const r = await fetch(getApiUrl("/api/admin/me"), { credentials: "include" });
@@ -225,6 +227,62 @@ export default function AdminUsers() {
               {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
               관리자 추가
             </button>
+          </div>
+
+          {/* ── 위험 영역: 데이터 초기화 ── */}
+          <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400">위험 — 분석 데이터 전체 초기화</p>
+            </div>
+            <p className="text-xs text-red-600 dark:text-red-400">
+              모든 분석 리포트, 분석 단계, 모델 성과 기록이 영구 삭제됩니다. 되돌릴 수 없습니다.
+            </p>
+            {!resetConfirm ? (
+              <button
+                onClick={() => setResetConfirm(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors border border-red-200 dark:border-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+                데이터 초기화
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    setResetting(true);
+                    try {
+                      const r = await fetch(getApiUrl("/api/admin/reset-analysis-data"), {
+                        method: "POST",
+                        credentials: "include",
+                      });
+                      if (r.ok) {
+                        setSuccess("분석 데이터가 모두 삭제됐습니다.");
+                      } else {
+                        const e = await r.json();
+                        setError(e.error ?? "초기화 실패");
+                      }
+                    } catch {
+                      setError("네트워크 오류");
+                    } finally {
+                      setResetting(false);
+                      setResetConfirm(false);
+                    }
+                  }}
+                  disabled={resetting}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                >
+                  {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  정말 삭제
+                </button>
+                <button
+                  onClick={() => setResetConfirm(false)}
+                  className="px-4 py-2 rounded-xl bg-muted text-muted-foreground text-sm hover:bg-muted/80 transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 관리자 목록 */}

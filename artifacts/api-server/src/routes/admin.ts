@@ -251,4 +251,20 @@ router.post("/user-list/:userId/daily-reset", async (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/admin/reset-analysis-data — 분석 데이터 초기화 (관리자 전용)
+router.post("/reset-analysis-data", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  await pool.query(`DELETE FROM model_insights`);
+  await pool.query(`DELETE FROM analysis_steps`);
+  await pool.query(`DELETE FROM analyses`);
+
+  console.log(`[ADMIN] ${requesterId} — reset-analysis-data 실행`);
+  res.json({ ok: true, message: "분석 데이터가 초기화됐습니다" });
+});
+
 export default router;
