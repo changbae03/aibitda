@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -100,6 +100,12 @@ export default function SettingsPage() {
   const [fbError, setFbError] = useState("");
   const [showCatMenu, setShowCatMenu] = useState(false);
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const deleteInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
@@ -155,6 +161,35 @@ export default function SettingsPage() {
     } finally {
       setNicknameSaving(false);
       setTimeout(() => setNicknameMsg(null), 3000);
+    }
+  };
+
+  const openDeleteModal = () => {
+    setDeleteInput("");
+    setDeleteError("");
+    setShowDeleteModal(true);
+    setTimeout(() => deleteInputRef.current?.focus(), 100);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteInput !== "탈퇴" || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const r = await fetch(getApiUrl("/api/profile/account"), {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (r.ok) {
+        window.location.href = "/";
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setDeleteError(d.error ?? "탈퇴 처리 중 오류가 발생했습니다.");
+      }
+    } catch {
+      setDeleteError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -527,6 +562,116 @@ export default function SettingsPage() {
           <a href="#" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">투자 유의사항</a>
         </Row>
       </Section>
+
+      {/* ── 계정 탈퇴 ── */}
+      {user && (
+        <Section title="위험 구역">
+          <div className="px-4 py-4 space-y-2">
+            <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
+              탈퇴하면 모든 분석 내역과 계정 정보가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <button
+              onClick={openDeleteModal}
+              className="flex items-center gap-2 text-[13px] font-medium text-red-500 hover:text-red-600 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              계정 탈퇴
+            </button>
+          </div>
+        </Section>
+      )}
+
+      {/* ── 탈퇴 확인 모달 ── */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <motion.div
+            key="delete-modal-bg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteModal(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-5 space-y-4">
+                {/* 경고 아이콘 */}
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center shrink-0">
+                    <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-bold text-foreground">정말 탈퇴하시겠습니까?</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">이 작업은 되돌릴 수 없습니다</p>
+                  </div>
+                </div>
+
+                {/* 안내 */}
+                <ul className="text-[12px] text-muted-foreground space-y-1 list-disc list-inside bg-muted/50 rounded-lg px-3 py-2.5">
+                  <li>모든 분석 리포트 및 내역 삭제</li>
+                  <li>계정 정보 및 크레딧 삭제</li>
+                  <li>추천인 코드 및 보너스 삭제</li>
+                </ul>
+
+                {/* 확인 입력 */}
+                <div className="space-y-1.5">
+                  <p className="text-[12px] text-foreground/70">
+                    확인을 위해 <span className="font-bold text-red-500">탈퇴</span>를 입력하세요
+                  </p>
+                  <input
+                    ref={deleteInputRef}
+                    type="text"
+                    value={deleteInput}
+                    onChange={e => { setDeleteInput(e.target.value); setDeleteError(""); }}
+                    onKeyDown={e => e.key === "Enter" && handleDeleteAccount()}
+                    placeholder="탈퇴"
+                    className="w-full px-3 py-2 text-[13px] bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                  />
+                  {deleteError && (
+                    <p className="text-[12px] text-red-500">{deleteError}</p>
+                  )}
+                </div>
+
+                {/* 버튼 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl border border-border text-foreground hover:bg-accent transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleteInput !== "탈퇴" || deleting}
+                    className={cn(
+                      "flex-1 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5",
+                      deleteInput === "탈퇴" && !deleting
+                        ? "bg-red-500 text-white hover:bg-red-600"
+                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                    )}
+                  >
+                    {deleting ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                        className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full"
+                      />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    {deleting ? "처리 중..." : "탈퇴하기"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

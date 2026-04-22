@@ -1,4 +1,5 @@
 import { Router } from "express";
+import cookie from "cookie";
 import {
   getUserId,
   getCreditStatus,
@@ -65,6 +66,50 @@ router.patch("/profile", async (req, res) => {
     [trimmed || null, userId]
   );
   res.json({ ok: true, displayName: trimmed || null });
+});
+
+// DELETE /api/profile/account — 계정 탈퇴
+router.delete("/profile/account", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 분석 관련 데이터 삭제
+    const { rows: analyses } = await client.query(
+      `SELECT id FROM analyses WHERE user_id = $1`,
+      [userId]
+    );
+    for (const row of analyses) {
+      await client.query(`DELETE FROM analysis_steps WHERE analysis_id = $1`, [row.id]);
+      await client.query(`DELETE FROM model_insights WHERE analysis_id = $1`, [row.id]);
+    }
+    await client.query(`DELETE FROM analyses WHERE user_id = $1`, [userId]);
+
+    // 추천인 기록 삭제
+    await client.query(`DELETE FROM referral_uses WHERE referrer_id = $1 OR referred_id = $1`, [userId]);
+    await client.query(`DELETE FROM referral_codes WHERE user_id = $1`, [userId]);
+
+    // 크레딧 / 유저 정보 삭제
+    await client.query(`DELETE FROM user_credits WHERE user_id = $1`, [userId]);
+
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  // 쿠키 삭제 (로그아웃)
+  res.setHeader("Set-Cookie", cookie.serialize("auth_token", "", {
+    httpOnly: true,
+    maxAge: 0,
+    path: "/",
+  }));
+  res.json({ ok: true });
 });
 
 export default router;
