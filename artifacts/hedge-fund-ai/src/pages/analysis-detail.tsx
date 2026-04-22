@@ -813,6 +813,8 @@ export default function AnalysisDetail() {
   const [streamingStep, setStreamingStep] = useState<StreamingStepState | null>(null);
   const isStreaming = streamingStep !== null;
   const triggeredSteps = useRef<Set<string>>(new Set());
+  const runStreamingStepRef = useRef<((stepKey: string) => void) | null>(null);
+  const hasInitiatedRef = useRef(false);
 
   const handleDelete = () => {
     if (!confirm("이 분석을 삭제하시겠습니까?")) return;
@@ -821,6 +823,7 @@ export default function AnalysisDetail() {
 
   const runStreamingStep = useCallback(async (stepKey: string) => {
     setStreamingStep({ key: stepKey, content: "" });
+    let completedSuccessfully = false;
     try {
       const res = await fetch(`/api/analysis/${id}/step`, {
         method: "POST",
@@ -861,33 +864,50 @@ export default function AnalysisDetail() {
             }
             if (msg.done) {
               queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
+              completedSuccessfully = true;
             }
           } catch { /* ignore parse errors */ }
         }
       }
     } catch {
       setStreamingStep(null);
+      return;
+    }
+
+    // Clear streaming card now that the step is saved
+    setStreamingStep(null);
+
+    // Auto-chain: immediately trigger the next step without relying on effects
+    if (completedSuccessfully) {
+      const nextIndex = ANALYSIS_STEPS_ORDER.indexOf(stepKey) + 1;
+      if (nextIndex < ANALYSIS_STEPS_ORDER.length) {
+        const nextKey = ANALYSIS_STEPS_ORDER[nextIndex];
+        if (!triggeredSteps.current.has(nextKey)) {
+          triggeredSteps.current.add(nextKey);
+          // Slight delay to let React flush state before starting next step
+          setTimeout(() => {
+            runStreamingStepRef.current?.(nextKey);
+          }, 200);
+        }
+      }
     }
   }, [id, queryClient]);
 
-  // Clear streaming card once the step appears in the DB-fetched list
-  useEffect(() => {
-    if (!streamingStep) return;
-    if (analysis?.steps.some(s => s.stepKey === streamingStep.key)) {
-      setStreamingStep(null);
-    }
-  }, [analysis?.steps, streamingStep]);
+  // Keep ref up-to-date so the setTimeout inside can always call the latest version
+  runStreamingStepRef.current = runStreamingStep;
 
-  // Auto-trigger next step sequentially
+  // On mount / resume: start from the first pending step if analysis is already in_progress
   useEffect(() => {
-    if (!analysis || analysis.status !== "in_progress" || isStreaming) return;
+    if (hasInitiatedRef.current) return;
+    if (!analysis || analysis.status !== "in_progress") return;
     const nextIndex = analysis.steps.length;
     if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
     if (triggeredSteps.current.has(nextStepKey)) return;
+    hasInitiatedRef.current = true;
     triggeredSteps.current.add(nextStepKey);
     runStreamingStep(nextStepKey);
-  }, [analysis?.steps.length, analysis?.status, isStreaming, runStreamingStep]);
+  }, [analysis?.status, analysis?.steps.length, runStreamingStep]);
 
   if (isLoading) return (
     <div className="p-20 text-center">
