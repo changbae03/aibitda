@@ -44,6 +44,7 @@ const STEP_META: Record<string, { name: string; role: string; Icon: React.Elemen
 
 function stripInternalData(content: string): string {
   return content
+    // 내부 데이터 블록 제거
     .replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "")
     .replace(/\nCHART_DATA:\{[^\n]+\}\s*(\nEVENTS_DATA:\[[^\n]*\])?\s*$/m, "")
     .replace(/\nEVENTS_DATA:\[[^\n]*\]\s*$/m, "")
@@ -51,6 +52,18 @@ function stripInternalData(content: string): string {
     .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/^FINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
+    // AI 프롬프트 지시문 제거 (공유 페이지에 노출되면 안 되는 내부 지침)
+    .replace(/^\[STEP \d+\][^\n]*/gm, "")
+    .replace(/^아래 수치를 이전 단계에서[^\n]*/gm, "")
+    .replace(/^아래 기준에 따라 전략 유형을[^\n]*/gm, "")
+    .replace(/^선택하지 않은 섹션은[^\n]*/gm, "")
+    .replace(/^현재 종목의 Base upside[^\n]*/gm, "")
+    .replace(/^따라서 \[.+\] 전략을[^\n]*/gm, "")
+    // JSON 블록 제거 (investment_strategy 전용)
+    .replace(/```json[\s\S]*?```/g, "")
+    .replace(/\{[\s\S]*"verdict"[\s\S]*\}/g, "")
+    // 연속된 빈 줄 정리
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -143,18 +156,18 @@ function MarkdownBody({ content }: { content: string }) {
         components={{
           table: ({ children }) => (
             <div className="overflow-x-auto -mx-1 my-3">
-              <table className="w-full text-[12px] border-collapse min-w-[400px]">
+              <table className="w-full text-[12px] border-collapse">
                 {children}
               </table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="text-slate-200 font-semibold border border-slate-700 px-2 py-1.5 text-left bg-slate-800/60 whitespace-nowrap text-[11px]">
+            <th className="text-slate-200 font-semibold border border-slate-700 px-3 py-2 text-left bg-slate-800/60 text-[11px] break-keep leading-snug">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="text-slate-300 border border-slate-800 px-2 py-1.5 text-[12px]">
+            <td className="text-slate-300 border border-slate-800 px-3 py-2 text-[12px] break-keep leading-relaxed">
               {children}
             </td>
           ),
@@ -570,10 +583,11 @@ export default function SharePage() {
                     {/* 스텝 본문 */}
                     <div className="px-4 py-4">
                       {step.stepKey === "investment_strategy" ? (
-                        <ShareInvestmentCard
-                          content={step.content}
-                          currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"}
-                        />
+                        (() => {
+                          const card = <ShareInvestmentCard content={step.content} currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"} />;
+                          if (card.props.content && extractJson(step.content)) return card;
+                          return <MarkdownBody content={step.content} />;
+                        })()
                       ) : step.stepKey === "market_analysis" ? (
                         <>
                           <ShareChartLevels
