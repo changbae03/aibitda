@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Settings, LogIn, LogOut } from "lucide-react";
+import { Menu, X, Settings, LogIn, LogOut, Bell } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -30,11 +30,46 @@ async function logout() {
   window.location.href = "/";
 }
 
+interface NoticeSettings { notice_enabled?: string; notice_text?: string; notice_type?: string }
+
+function useNotice(): NoticeSettings {
+  const [settings, setSettings] = useState<NoticeSettings>({});
+  useEffect(() => {
+    fetch(getApiUrl("/api/admin/settings/public"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : {})
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+  return settings;
+}
+
+function NoticeBanner({ settings }: { settings: NoticeSettings }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed || settings.notice_enabled !== "true" || !settings.notice_text) return null;
+  const type = settings.notice_type ?? "info";
+  const colors = {
+    info:    "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300",
+    warning: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300",
+    error:   "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300",
+  }[type] ?? "bg-blue-50 border-blue-200 text-blue-700";
+
+  return (
+    <div className={cn("flex items-center gap-2 px-4 py-2 border-b text-sm print:hidden", colors)}>
+      <Bell className="w-3.5 h-3.5 shrink-0" />
+      <span className="flex-1">{settings.notice_text}</span>
+      <button onClick={() => setDismissed(true)} className="opacity-60 hover:opacity-100 transition-opacity">
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const user = useAuth();
+  const notice = useNotice();
 
   useEffect(() => {
     fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
@@ -50,10 +85,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const adminItems = [
+    { href: "/admin/dashboard", label: "대시보드" },
+    { href: "/admin/user-management", label: "유저 관리" },
     { href: "/admin/ticker-notes", label: "종목 보정 메모" },
     { href: "/admin/peers", label: "피어 멀티플" },
     { href: "/admin/feedback", label: "유저 피드백" },
-    { href: "/admin/user-management", label: "유저 관리" },
     { href: "/admin/users", label: "관리자 관리" },
   ];
 
@@ -261,6 +297,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Menu className="w-5 h-5" />
           </button>
         </header>
+
+        <NoticeBanner settings={notice} />
 
         <div id="print-scroll" className="flex-1 overflow-y-auto">
           <div className="container max-w-5xl mx-auto p-4 md:p-10 animate-fade-in">

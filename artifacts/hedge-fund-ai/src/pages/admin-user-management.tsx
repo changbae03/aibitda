@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Loader2, Search, ChevronRight, ChevronDown, X,
+  Loader2, Search, ChevronRight, X,
   Zap, TrendingUp, RotateCcw, Plus, Minus, History,
-  ArrowLeft, ArrowRight, User,
+  ArrowLeft, ArrowRight, User, Crown, FileText,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -13,8 +13,16 @@ interface UserRow {
   bonusCredits: number;
   totalAnalyses: number;
   recentAnalyses: number;
+  tier: string;
+  adminMemo: string;
   createdAt: string | null;
 }
+
+const TIER_CONFIG: Record<string, { label: string; color: string; limit: number }> = {
+  free:    { label: "무료",    color: "text-slate-600 bg-slate-100 border-slate-200", limit: 3 },
+  beta:    { label: "베타",    color: "text-blue-600 bg-blue-50 border-blue-200",     limit: 10 },
+  premium: { label: "프리미엄", color: "text-amber-600 bg-amber-50 border-amber-200", limit: 50 },
+};
 
 interface AnalysisRow {
   id: number;
@@ -80,6 +88,9 @@ export default function AdminUserManagement() {
   const [creditReason, setCreditReason] = useState("");
   const [creditLoading, setCreditLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [tierLoading, setTierLoading] = useState(false);
+  const [memoText, setMemoText] = useState("");
+  const [memoLoading, setMemoLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -122,6 +133,7 @@ export default function AdminUserManagement() {
     if (!selected) return;
     setAnalysesPage(1);
     loadAnalyses(selected.userId, 1);
+    setMemoText(selected.adminMemo ?? "");
   }, [selected, loadAnalyses]);
 
   useEffect(() => {
@@ -190,6 +202,51 @@ export default function AdminUserManagement() {
     }
   };
 
+  const changeTier = async (tier: string) => {
+    if (!selected) return;
+    setTierLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/user-list/${encodeURIComponent(selected.userId)}/tier`), {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        showMsg("ok", `등급 → ${tier} (한도 ${d.dailyLimit}회/일)`);
+        setSelected(prev => prev ? { ...prev, tier, dailyLimit: d.dailyLimit } : prev);
+        setUsers(prev => prev.map(u => u.userId === selected.userId ? { ...u, tier, dailyLimit: d.dailyLimit } : u));
+      } else {
+        showMsg("err", d.error ?? "변경 실패");
+      }
+    } finally {
+      setTierLoading(false);
+    }
+  };
+
+  const saveMemo = async () => {
+    if (!selected) return;
+    setMemoLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/user-list/${encodeURIComponent(selected.userId)}/memo`), {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo: memoText }),
+      });
+      if (r.ok) {
+        showMsg("ok", "메모 저장 완료");
+        setSelected(prev => prev ? { ...prev, adminMemo: memoText } : prev);
+        setUsers(prev => prev.map(u => u.userId === selected.userId ? { ...u, adminMemo: memoText } : u));
+      } else {
+        showMsg("err", "저장 실패");
+      }
+    } finally {
+      setMemoLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-[calc(100vh-4rem)]">
       {/* ── 왼쪽: 유저 목록 ── */}
@@ -225,11 +282,11 @@ export default function AdminUserManagement() {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저 ID</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">등급</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">가입일</th>
                   <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총 분석</th>
                   <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">7일</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">오늘</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">보너스</th>
                   <th className="w-6" />
                 </tr>
               </thead>
@@ -247,6 +304,13 @@ export default function AdminUserManagement() {
                   >
                     <td className="px-4 py-2.5">
                       <span className="font-mono text-[12px] text-foreground/80">{shortId(u.userId)}</span>
+                      {u.adminMemo && <span className="ml-1.5 text-[10px] text-amber-500" title={u.adminMemo}>📝</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {(() => {
+                        const t = TIER_CONFIG[u.tier ?? "free"] ?? TIER_CONFIG.free;
+                        return <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", t.color)}>{t.label}</span>;
+                      })()}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{fmt(u.createdAt)}</td>
                     <td className="px-3 py-2.5 text-right">
@@ -259,15 +323,6 @@ export default function AdminUserManagement() {
                     </td>
                     <td className="px-3 py-2.5">
                       <CreditBar used={u.dailyUsed} limit={u.dailyLimit} />
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      {u.bonusCredits > 0 ? (
-                        <span className="text-xs font-medium text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-1.5 py-0.5 tabular-nums">
-                          +{u.bonusCredits}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/40">—</span>
-                      )}
                     </td>
                     <td className="pr-3">
                       <ChevronRight className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", selected?.userId === u.userId && "rotate-90")} />
@@ -401,6 +456,56 @@ export default function AdminUserManagement() {
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">양수: 지급, 음수: 차감. 0 미만으로 내려가지 않습니다.</p>
+            </div>
+
+            {/* 유저 등급 */}
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5" /> 유저 등급
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(["free", "beta", "premium"] as const).map(t => {
+                  const cfg = TIER_CONFIG[t];
+                  const isActive = (selected.tier ?? "free") === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => changeTier(t)}
+                      disabled={tierLoading || isActive}
+                      className={cn(
+                        "px-3 py-1.5 text-xs rounded-lg border transition-all flex items-center gap-1.5 disabled:cursor-default",
+                        isActive ? cfg.color + " font-semibold" : "border-border text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      {tierLoading && isActive && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {cfg.label}
+                      <span className="opacity-60">({cfg.limit}회/일)</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 관리자 메모 */}
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> 관리자 메모
+              </p>
+              <textarea
+                value={memoText}
+                onChange={e => setMemoText(e.target.value)}
+                placeholder="이 유저에 대한 내부 메모 (유저에게 보이지 않습니다)"
+                rows={3}
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+              />
+              <button
+                onClick={saveMemo}
+                disabled={memoLoading}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-primary text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
+              >
+                {memoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                메모 저장
+              </button>
             </div>
 
             {/* 분석 이력 */}

@@ -125,6 +125,21 @@ export async function runMigrations() {
       );
     `);
 
+    // user_credits 확장: 유저 등급 + 관리자 메모
+    await client.query(`
+      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS tier VARCHAR NOT NULL DEFAULT 'free';
+      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS admin_memo TEXT NOT NULL DEFAULT '';
+    `);
+
+    // 시스템 설정 테이블 (공지 배너 등 key-value)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
     // 종목별 관리자 보정 메모 테이블
     await client.query(`
       CREATE TABLE IF NOT EXISTS ticker_notes (

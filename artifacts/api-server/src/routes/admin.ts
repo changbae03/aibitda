@@ -96,6 +96,122 @@ router.delete("/users/:userId", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── 사용량 통계 ────────────────────────────────────────────────────────────────
+
+// GET /api/admin/stats — 일별/주별 분석 수 + 신규 가입자
+router.get("/stats", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const days = parseInt((req.query.days as string) ?? "30", 10);
+
+  const analysisRows = await pool.query(
+    `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
+     FROM analyses
+     WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+     GROUP BY day
+     ORDER BY day ASC`,
+    [days]
+  );
+
+  const userRows = await pool.query(
+    `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
+     FROM user_credits
+     WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+     GROUP BY day
+     ORDER BY day ASC`,
+    [days]
+  );
+
+  const totalUsers = await pool.query(`SELECT COUNT(*) FROM user_credits`);
+  const totalAnalyses = await pool.query(`SELECT COUNT(*) FROM analyses`);
+  const todayAnalyses = await pool.query(
+    `SELECT COUNT(*) FROM analyses WHERE created_at >= CURRENT_DATE`
+  );
+
+  const tierCounts = await pool.query(
+    `SELECT tier, COUNT(*) AS cnt FROM user_credits GROUP BY tier`
+  );
+
+  res.json({
+    analysisByDay: analysisRows.rows.map(r => ({ day: r.day, count: parseInt(r.cnt, 10) })),
+    usersByDay: userRows.rows.map(r => ({ day: r.day, count: parseInt(r.cnt, 10) })),
+    totals: {
+      users: parseInt(totalUsers.rows[0].count, 10),
+      analyses: parseInt(totalAnalyses.rows[0].count, 10),
+      todayAnalyses: parseInt(todayAnalyses.rows[0].count, 10),
+    },
+    tierCounts: Object.fromEntries(tierCounts.rows.map(r => [r.tier, parseInt(r.cnt, 10)])),
+  });
+});
+
+// ─── 시스템 설정 ────────────────────────────────────────────────────────────────
+
+// GET /api/admin/settings — 시스템 설정 조회
+router.get("/settings", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const { rows } = await pool.query(`SELECT key, value FROM system_settings`);
+  const settings: Record<string, string> = {};
+  for (const r of rows) settings[r.key] = r.value;
+  res.json(settings);
+});
+
+// POST /api/admin/settings — 시스템 설정 저장
+router.post("/settings", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const updates = req.body as Record<string, string>;
+  for (const [key, value] of Object.entries(updates)) {
+    await pool.query(
+      `INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [key, String(value)]
+    );
+  }
+  res.json({ ok: true });
+});
+
+// GET /api/admin/settings/public — 공개 설정 (로그인 불필요)
+router.get("/settings/public", async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT key, value FROM system_settings WHERE key IN ('notice_enabled', 'notice_text', 'notice_type')`
+  );
+  const settings: Record<string, string> = {};
+  for (const r of rows) settings[r.key] = r.value;
+  res.json(settings);
+});
+
+// POST /api/admin/global-limit — 전체 유저 일일 한도 변경
+router.post("/global-limit", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const { limit, tier } = req.body as { limit?: number; tier?: string };
+  if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 0) {
+    res.status(400).json({ error: "limit는 0 이상 정수여야 합니다" });
+    return;
+  }
+  if (tier) {
+    await pool.query(`UPDATE user_credits SET daily_limit = $1 WHERE tier = $2`, [limit, tier]);
+  } else {
+    await pool.query(`UPDATE user_credits SET daily_limit = $1`, [limit]);
+  }
+  console.log(`[ADMIN] ${userId} → global-limit ${limit} (tier=${tier ?? "all"})`);
+  res.json({ ok: true });
+});
+
 // ─── 유저 관리 ────────────────────────────────────────────────────────────────
 
 // GET /api/admin/user-list — 유저 목록 (크레딧 + 분석 통계)
@@ -126,12 +242,14 @@ router.get("/user-list", async (req, res) => {
        uc.daily_limit,
        uc.bonus_credits,
        uc.total_analyses,
+       uc.tier,
+       uc.admin_memo,
        uc.created_at,
        COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
      ${whereClause}
-     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.created_at
+     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.tier, uc.admin_memo, uc.created_at
      ORDER BY uc.created_at DESC
      LIMIT $1 OFFSET $2`,
     params
@@ -150,6 +268,8 @@ router.get("/user-list", async (req, res) => {
       bonusCredits: r.bonus_credits,
       totalAnalyses: r.total_analyses,
       recentAnalyses: parseInt(r.recent_analyses, 10),
+      tier: r.tier ?? "free",
+      adminMemo: r.admin_memo ?? "",
       createdAt: r.created_at,
     })),
     total: parseInt(countResult.rows[0].count, 10),
@@ -248,6 +368,51 @@ router.post("/user-list/:userId/daily-reset", async (req, res) => {
     [userId]
   );
 
+  res.json({ ok: true });
+});
+
+// PATCH /api/admin/user-list/:userId/tier — 유저 등급 변경 + 크레딧 자동 적용
+const TIER_LIMITS: Record<string, number> = { free: 3, beta: 10, premium: 50 };
+
+router.patch("/user-list/:userId/tier", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const { userId } = req.params;
+  const { tier } = req.body as { tier: string };
+  if (!["free", "beta", "premium"].includes(tier)) {
+    res.status(400).json({ error: "유효하지 않은 등급입니다" });
+    return;
+  }
+  const newLimit = TIER_LIMITS[tier];
+  const { rows } = await pool.query(
+    `UPDATE user_credits SET tier = $1, daily_limit = $2 WHERE user_id = $3
+     RETURNING tier, daily_limit`,
+    [tier, newLimit, userId]
+  );
+  if (rows.length === 0) {
+    res.status(404).json({ error: "유저를 찾을 수 없습니다" });
+    return;
+  }
+  console.log(`[ADMIN] ${requesterId} → ${userId} tier=${tier} limit=${newLimit}`);
+  res.json({ ok: true, tier: rows[0].tier, dailyLimit: rows[0].daily_limit });
+});
+
+// PATCH /api/admin/user-list/:userId/memo — 관리자 메모 저장
+router.patch("/user-list/:userId/memo", async (req, res) => {
+  const requesterId = getUserId(req);
+  if (!(await isAdmin(requesterId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const { userId } = req.params;
+  const { memo } = req.body as { memo: string };
+  await pool.query(
+    `UPDATE user_credits SET admin_memo = $1 WHERE user_id = $2`,
+    [String(memo ?? ""), userId]
+  );
   res.json({ ok: true });
 });
 

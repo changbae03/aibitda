@@ -22,6 +22,7 @@ import AdminTickerNotes from "@/pages/admin-ticker-notes";
 import AdminUsers from "@/pages/admin-users";
 import AdminFeedback from "@/pages/admin-feedback";
 import AdminUserManagement from "@/pages/admin-user-management";
+import AdminDashboard from "@/pages/admin-dashboard";
 import Stats from "@/pages/stats";
 import Tracker from "@/pages/tracker";
 import Popular from "@/pages/popular";
@@ -103,6 +104,7 @@ function Router() {
             <Route path="/admin/feedback" component={AdminFeedback} />
             <Route path="/admin/users" component={AdminUsers} />
             <Route path="/admin/user-management" component={AdminUserManagement} />
+            <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/settings" component={SettingsPage} />
             <Route component={NotFound} />
           </Switch>
