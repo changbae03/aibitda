@@ -324,7 +324,11 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
   const shareDateStr = analysis?.createdAt
     ? new Date(analysis.createdAt).toISOString().slice(0, 10).replace(/-/g, ".")
     : new Date().toISOString().slice(0, 10).replace(/-/g, ".");
-  const shareText = `${shareDateStr} ${analysis?.companyName ?? ""} 리포트 by 애빛다`;
+  const verdictRaw = analysis?.investmentVerdict ?? analysis?.verdict ?? null;
+  const verdictKo = verdictRaw ? toKoreanVerdict(verdictRaw) : null;
+  const shareText = verdictKo && verdictKo !== "—"
+    ? `${analysis?.companyName ?? ""} [${verdictKo}] · AI가 분석한 기업가치를 확인하세요 | 애빛다`
+    : `${analysis?.companyName ?? ""} · AI 기업가치 분석 리포트 | 애빛다`;
 
   const handleKakao = async () => {
     const key = import.meta.env.VITE_KAKAO_JS_KEY;
@@ -336,8 +340,8 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       window.Kakao.Share.sendDefault({
         objectType: "feed",
         content: {
-          title: `${shareDateStr} ${analysis?.companyName ?? ""} 리포트 by 애빛다`,
-          description: `AI 7단계 파이프라인 분석`,
+          title: shareText,
+          description: `${shareDateStr} · AI 7단계 파이프라인이 분석한 기업가치 리포트`,
           imageUrl,
           link: { mobileWebUrl: url, webUrl: url },
         },
@@ -773,8 +777,12 @@ export default function AnalysisDetail() {
     const ogDateStr = analysis.createdAt
       ? new Date(analysis.createdAt).toISOString().slice(0, 10).replace(/-/g, ".")
       : new Date().toISOString().slice(0, 10).replace(/-/g, ".");
-    const title = `${ogDateStr} ${analysis.companyName} 리포트 by 애빛다`;
-    const desc = `AI 7단계 파이프라인 분석`;
+    const ogVerdictRaw = (analysis as any).investmentVerdict ?? (analysis as any).verdict ?? null;
+    const ogVerdictKo = ogVerdictRaw ? toKoreanVerdict(ogVerdictRaw) : null;
+    const title = ogVerdictKo && ogVerdictKo !== "—"
+      ? `${analysis.companyName} [${ogVerdictKo}] · AI가 분석한 기업가치 | 애빛다`
+      : `${analysis.companyName} · AI 기업가치 분석 리포트 | 애빛다`;
+    const desc = `${ogDateStr} · AI 7단계 파이프라인이 분석한 ${analysis.companyName}의 기업가치 리포트`;
 
     document.title = title;
     const setMeta = (prop: string, content: string) => {
