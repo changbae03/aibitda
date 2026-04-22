@@ -1343,10 +1343,10 @@ export default function AnalysisDetail() {
             {/* Disclaimer */}
             <div className="mt-5 pt-6 border-t border-border print:mt-6">
               {/* AI 생성 명시 배너 (AI 기본법 투명성 의무) */}
-              <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/50 px-4 py-3">
-                <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
-                <p className="text-[11.5px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                  <span className="font-bold">AI 자동 생성 콘텐츠.</span> 본 리포트는 대형 언어모델(LLM) AI가 공개 데이터를 바탕으로 자동 생성한 분석 참고 자료입니다. 인간 전문가의 검토를 거치지 않았으며, 사실 오류·추론 오류가 포함될 수 있습니다. 투자 결정 전 반드시 공식 공시 자료 및 전문가 의견을 별도로 확인하십시오.
+              <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-card border border-border border-l-4 border-l-amber-400 px-4 py-3">
+                <span className="text-amber-500 text-base leading-none mt-0.5 shrink-0">⚠</span>
+                <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                  <span className="font-bold text-foreground/80">AI 자동 생성 콘텐츠.</span> 본 리포트는 대형 언어모델(LLM) AI가 공개 데이터를 바탕으로 자동 생성한 분석 참고 자료입니다. 인간 전문가의 검토를 거치지 않았으며, 사실 오류·추론 오류가 포함될 수 있습니다. 투자 결정 전 반드시 공식 공시 자료 및 전문가 의견을 별도로 확인하십시오.
                 </p>
               </div>
 
@@ -1515,8 +1515,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
               const isBearish = upsideFromCurrent !== null && upsideFromCurrent < 0;
               const targetCardStyle = isBearish
-                ? { border: "border-rose-200 dark:border-rose-800", bg: "bg-rose-50 dark:bg-rose-950/40", dotColor: "bg-rose-400", labelColor: "text-rose-600 dark:text-rose-400", valColor: "text-rose-700 dark:text-rose-400", pctColor: "text-rose-600 dark:text-rose-400" }
-                : { border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50 dark:bg-emerald-950/40", dotColor: "bg-emerald-500", labelColor: "text-emerald-700 dark:text-emerald-400", valColor: "text-emerald-700 dark:text-emerald-400", pctColor: "text-emerald-600 dark:text-emerald-400" };
+                ? { border: "border-rose-300 dark:border-rose-700", bg: "bg-card", dotColor: "bg-rose-400", labelColor: "text-rose-500 dark:text-rose-400", valColor: "text-rose-600 dark:text-rose-400", pctColor: "text-rose-500 dark:text-rose-400" }
+                : { border: "border-emerald-300 dark:border-emerald-700", bg: "bg-card", dotColor: "bg-emerald-500", labelColor: "text-emerald-600 dark:text-emerald-400", valColor: "text-emerald-700 dark:text-emerald-400", pctColor: "text-emerald-600 dark:text-emerald-400" };
 
               // 매도 시나리오 여부
               const verdictStr = String(json.verdict ?? "").toLowerCase();
@@ -1576,7 +1576,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     </div>
 
                     {/* 손절가 / 청산 우선 구간 */}
-                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 sm:p-4">
+                    <div className="rounded-xl border border-red-300 dark:border-red-700 bg-card p-3 sm:p-4">
                       <div className="flex items-center gap-1 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                         <p className="text-[10px] sm:text-[11px] font-semibold text-red-500 dark:text-red-400">{stopLabel}</p>
@@ -1614,10 +1614,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                       <div
                         key={i}
                         className={cn(
-                          "rounded-xl border p-3.5 flex items-center gap-4",
-                          isBear ? "border-red-100 dark:border-red-900 bg-red-50/50 dark:bg-red-950/30"
-                            : isBull ? "border-emerald-100 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30"
-                            : "border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/30"
+                          "rounded-xl border border-border bg-card p-3.5 flex items-center gap-4 border-l-4",
+                          isBear ? "border-l-red-400" : isBull ? "border-l-emerald-500" : "border-l-blue-500"
                         )}
                       >
                         {/* 시나리오 이름 */}
@@ -1628,17 +1626,14 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                           )}>
                             {isBear ? "▼ Bear" : isBull ? "▲ Bull" : "— Base"}
                           </span>
-                          {isBase && <p className="text-[10px] text-blue-400 mt-0.5">기본 전망</p>}
-                          {isBull && <p className="text-[10px] text-emerald-400 mt-0.5">낙관 전망</p>}
-                          {isBear && <p className="text-[10px] text-red-400 mt-0.5">비관 전망</p>}
+                          {isBase && <p className="text-[10px] text-muted-foreground mt-0.5">기본 전망</p>}
+                          {isBull && <p className="text-[10px] text-muted-foreground mt-0.5">낙관 전망</p>}
+                          {isBear && <p className="text-[10px] text-muted-foreground mt-0.5">비관 전망</p>}
                         </div>
 
                         {/* 적정주가 + 등락률 */}
                         <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            "text-sm font-bold font-mono",
-                            isBear ? "text-red-700" : isBull ? "text-emerald-700" : "text-foreground"
-                          )}>
+                          <p className="text-sm font-bold font-mono text-foreground">
                             {formatPrice(s.target_price, priceCurrency)}
                           </p>
                           <p className={cn(
