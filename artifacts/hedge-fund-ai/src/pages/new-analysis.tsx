@@ -202,7 +202,12 @@ export default function NewAnalysis() {
   }, []);
 
   const handleSubmit = async (tickerValue: string) => {
-    const value = tickerValue.trim().toUpperCase();
+    let value = tickerValue.trim().toUpperCase();
+    // 한국 종목: .KS/.KQ 없이 6자리 코드만 사용
+    if (/^\d{6}\.(KS|KQ)$/.test(value)) {
+      value = value.split(".")[0];
+      setTicker(value);
+    }
     if (!value) {
       setError("종목코드 또는 종목명을 입력해주세요");
       inputRef.current?.focus();
@@ -228,10 +233,12 @@ export default function NewAnalysis() {
   handleSubmitRef.current = handleSubmit;
 
   const handleSelectSuggestion = (sym: string) => {
-    setTicker(sym);
+    // 한국 종목 suffix 제거 후 표시
+    const normalized = /^\d{6}\.(KS|KQ)$/.test(sym.toUpperCase()) ? sym.split(".")[0] : sym;
+    setTicker(normalized);
     setSuggestions([]);
     setShowDropdown(false);
-    handleSubmit(sym);
+    handleSubmit(normalized);
   };
 
   const onSubmit = (e: React.FormEvent) => {

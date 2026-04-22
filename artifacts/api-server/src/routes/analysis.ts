@@ -1559,7 +1559,11 @@ router.post("/", async (req, res) => {
     }
   }
 
-  const upperTicker = ticker.toUpperCase();
+  const rawUpperTicker = ticker.toUpperCase();
+  // 한국 종목은 .KS/.KQ 없이 6자리 코드만 저장 (005930.KS → 005930)
+  const upperTicker = /^\d{6}\.(KS|KQ)$/.test(rawUpperTicker)
+    ? rawUpperTicker.split(".")[0]
+    : rawUpperTicker;
   let companyName = rawCompanyName?.trim();
   let englishName: string | null = null;
   let industry = rawIndustry?.trim();
