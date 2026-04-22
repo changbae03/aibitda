@@ -189,13 +189,14 @@ function detectPriceSwings(chartData: any[], minPct = 4, maxCount = 5): PriceSwi
 }
 
 // 백엔드 price-events 조회
-async function fetchPriceEvents(ticker: string, swings: PriceSwing[]): Promise<PriceEventNews[]> {
+async function fetchPriceEvents(ticker: string, companyName: string | undefined, swings: PriceSwing[]): Promise<PriceEventNews[]> {
   const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
   const res = await fetch(`${BASE}/api/market-data/price-events`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ticker,
+      companyName,
       events: swings.map(s => ({ date: s.date, changePercent: s.changePercent })),
     }),
   });
@@ -229,8 +230,8 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const nxtInfo = (data as any)?.nxtInfo as { price: number; changePercent: number; compareToPrev: string; at: string; sessionType: string; status: string } | null | undefined;
   const nxtIsUp = (nxtInfo?.changePercent ?? 0) >= 0;
 
-  // 기간이 2년/5년이면 연도를 포함한 전체 날짜를 dateLabel로 사용 (같은 MM-DD가 여러 해에 걸쳐 중복되는 문제 방지)
-  const useLongDate = period === "5y" || period === "2y";
+  // 1년 이상은 연도 포함 YYYY-MM-DD로 저장 (같은 MM-DD가 연도 경계에서 중복되면 ReferenceDot 오작동)
+  const useLongDate = period === "5y" || period === "2y" || period === "1y";
   const chartData = data?.candles?.map((c) => ({
     ...c,
     close: parseFloat(c.close.toFixed(2)),
@@ -281,7 +282,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
     setPriceEventNews([]);
     setNewsLoading(true);
     setNewsError(false);
-    fetchPriceEvents(ticker, swings)
+    fetchPriceEvents(ticker, companyName, swings)
       .then(setPriceEventNews)
       .catch(() => setNewsError(true))
       .finally(() => setNewsLoading(false));
@@ -418,7 +419,8 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   interval={Math.floor(chartData.length / 7)}
                   tickFormatter={(v: string) => {
                     if (!useLongDate) return v; // "MM-DD" 그대로
-                    // "YYYY-MM-DD" → "YY.MM" 형식으로 축약
+                    if (period === "1y") return v.slice(5, 10); // "YYYY-MM-DD" → "MM-DD"
+                    // "YYYY-MM-DD" → "YY.MM" 형식으로 축약 (2년/5년)
                     return v.slice(2, 7).replace("-", ".");
                   }}
                 />

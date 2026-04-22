@@ -908,8 +908,9 @@ router.get("/financials/:ticker", async (req, res) => {
 
 // ─── 주가 급변 이슈 분석 (Gemini + Google Search grounding) ─────────────────
 router.post("/price-events", async (req, res) => {
-  const { ticker, events } = req.body as {
+  const { ticker, companyName, events } = req.body as {
     ticker: string;
+    companyName?: string;
     events: { date: string; changePercent: number }[];
   };
   if (!ticker || !Array.isArray(events) || events.length === 0) {
@@ -921,17 +922,25 @@ router.post("/price-events", async (req, res) => {
 
   const genAI = new GoogleGenAI({ apiKey });
 
+  const stockId = companyName ? `${companyName}(${ticker})` : ticker;
   const eventList = events
     .map((e, i) => `${i + 1}. ${e.date.slice(0, 10)} (${e.changePercent > 0 ? "+" : ""}${e.changePercent.toFixed(1)}%)`)
     .join("\n");
 
-  const prompt = `주식 티커 "${ticker}"의 주가가 아래 날짜에 크게 변동했습니다. 각 날짜의 주요 뉴스/이슈를 조사해서 한국어로 간결하게 요약해주세요.
+  const prompt = `한국 주식 종목 "${stockId}"의 주가가 아래 날짜에 크게 변동했습니다.
+각 날짜에 이 종목(${companyName ?? ticker})에 직접 영향을 미친 실제 뉴스·공시·이벤트를 Google에서 검색하여 한국어로 간결하게 요약하세요.
 
 ${eventList}
 
+중요 규칙:
+- 반드시 "${companyName ?? ticker}" 기업 자체의 뉴스/공시/실적을 우선 조사하세요.
+- 방산주·반도체·바이오 섹터 전반의 시장 흐름 등 회사와 무관한 내용은 쓰지 마세요.
+- 해당 날짜 전후 3일 내 뉴스를 검색하세요.
+- 회사 관련 직접적인 이슈가 없을 때만 "특정 이슈 없음. 일반 시장 동향 영향 가능성."이라고 쓰세요.
+
 각 날짜마다 다음 JSON 배열 형식으로 답변하세요:
 [
-  {"date": "YYYY-MM-DD", "changePercent": 숫자, "summary": "이슈 요약 (50자 이내)"},
+  {"date": "YYYY-MM-DD", "changePercent": 숫자, "summary": "이슈 요약 (60자 이내)"},
   ...
 ]
 
