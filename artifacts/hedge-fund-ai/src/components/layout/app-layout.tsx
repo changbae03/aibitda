@@ -312,19 +312,15 @@ export function AppLayout({ children }: AppLayoutProps) {
           <footer className="border-t border-border mt-8 print:hidden">
             <div className="container max-w-5xl mx-auto px-6 md:px-10 py-6">
               <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-muted-foreground mb-4">
-                <a href="#" className="hover:text-foreground transition-colors">개인정보처리방침</a>
+                <Link href="/privacy" className="hover:text-foreground transition-colors">개인정보처리방침</Link>
                 <span className="text-border select-none">|</span>
-                <a href="#" className="hover:text-foreground transition-colors">이용약관</a>
+                <Link href="/terms" className="hover:text-foreground transition-colors">이용약관</Link>
                 <span className="text-border select-none">|</span>
-                <a href="#" className="hover:text-foreground transition-colors">공지사항</a>
+                <Link href="/notices" className="hover:text-foreground transition-colors">공지사항</Link>
                 <span className="text-border select-none">|</span>
-                <a href="#" className="hover:text-foreground transition-colors">자주 묻는 질문</a>
+                <Link href="/disclaimer" className="hover:text-foreground transition-colors">투자유의사항</Link>
                 <span className="text-border select-none">|</span>
-                <a href="#" className="hover:text-foreground transition-colors">투자 유의사항</a>
-                <span className="text-border select-none">|</span>
-                <a href="#" className="hover:text-foreground transition-colors">이용자권리 및 유의사항</a>
-                <span className="text-border select-none">|</span>
-                <a href="#" className="hover:text-foreground transition-colors">고객센터</a>
+                <Link href="/support" className="hover:text-foreground transition-colors">고객센터</Link>
               </nav>
               <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
                 애빛다의 모든 콘텐츠는 AI가 자동 생성한 참고용 정보이며, 특정 금융투자상품의 매수·매도·보유를 권유하거나 추천하지 않습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.

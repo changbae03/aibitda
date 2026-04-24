@@ -31,6 +31,11 @@ import SharePage from "@/pages/share";
 import CalendarPage from "@/pages/calendar";
 import AdminCohort from "@/pages/admin-cohort";
 import AdminPromoCodes from "@/pages/admin-promo-codes";
+import PrivacyPage from "@/pages/privacy";
+import TermsPage from "@/pages/terms";
+import DisclaimerPage from "@/pages/disclaimer";
+import SupportPage from "@/pages/support";
+import NoticesPage from "@/pages/notices";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -112,6 +117,11 @@ function Router() {
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/admin/cohort" component={AdminCohort} />
             <Route path="/admin/promo-codes" component={AdminPromoCodes} />
+            <Route path="/privacy" component={PrivacyPage} />
+            <Route path="/terms" component={TermsPage} />
+            <Route path="/disclaimer" component={DisclaimerPage} />
+            <Route path="/support" component={SupportPage} />
+            <Route path="/notices" component={NoticesPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>
