@@ -3,7 +3,7 @@ import { format, isToday, isTomorrow, parseISO, addDays, startOfDay } from "date
 import { ko } from "date-fns/locale";
 import {
   CalendarDays, RefreshCw, TrendingUp, DollarSign,
-  ChevronRight, Building2, AlertCircle, Search, X, Sparkles,
+  ChevronRight, Building2, AlertCircle, Sparkles,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -158,19 +158,16 @@ export default function CalendarPage() {
   const [entries, setEntries] = useState<EarningsEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [extraInput, setExtraInput] = useState("");
-  const [extraTickers, setExtraTickers] = useState<string[]>([]);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [pendingEntry, setPendingEntry] = useState<EarningsEntry | null>(null);
   const [, navigate] = useLocation();
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  const fetchCalendar = useCallback(async (r: Range, extra: string[], forceRefresh = false) => {
-    const cacheKey = `${r}-${[...extra].sort().join(",")}`;
+  const fetchCalendar = useCallback(async (r: Range, forceRefresh = false) => {
+    const cacheKey = r;
     const cached = _cache.get(cacheKey);
 
-    // 캐시 히트 (5분 이내 & 강제 새로고침 아닐 때): 즉시 표시
     if (!forceRefresh && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
       if (mountedRef.current) {
         setEntries(cached.data);
@@ -183,7 +180,6 @@ export default function CalendarPage() {
     setError(null);
     try {
       const params = new URLSearchParams({ range: r });
-      if (extra.length > 0) params.set("tickers", extra.join(","));
       const resp = await fetch(getApiUrl(`/api/market-data/earnings-calendar?${params}`), {
         credentials: "include",
       });
@@ -203,7 +199,7 @@ export default function CalendarPage() {
   }, []);
 
   useEffect(() => {
-    fetchCalendar(range, extraTickers);
+    fetchCalendar(range);
   }, [range, fetchCalendar]);
 
   // 날짜별 그룹화
@@ -214,21 +210,6 @@ export default function CalendarPage() {
   }, {});
 
   const sortedDates = Object.keys(grouped).sort();
-
-  const handleAddExtra = () => {
-    const tickers = extraInput.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean);
-    if (!tickers.length) return;
-    const merged = Array.from(new Set([...extraTickers, ...tickers]));
-    setExtraTickers(merged);
-    setExtraInput("");
-    fetchCalendar(range, merged, true);
-  };
-
-  const handleRemoveExtra = (t: string) => {
-    const next = extraTickers.filter(x => x !== t);
-    setExtraTickers(next);
-    fetchCalendar(range, next, true);
-  };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
@@ -260,44 +241,12 @@ export default function CalendarPage() {
           </button>
         ))}
         <button
-          onClick={() => fetchCalendar(range, extraTickers, true)}
+          onClick={() => fetchCalendar(range, true)}
           disabled={loading}
           className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
         </button>
-      </div>
-
-      {/* 종목 추가 */}
-      <div className="mb-4 p-3 rounded-xl border border-border bg-card">
-        <p className="text-xs font-medium text-muted-foreground mb-2">종목 직접 추가</p>
-        <div className="flex gap-2">
-          <input
-            value={extraInput}
-            onChange={e => setExtraInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleAddExtra()}
-            placeholder="예: 005935.KS, AAPL (쉼표 구분)"
-            className="flex-1 text-sm px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-          />
-          <button
-            onClick={handleAddExtra}
-            className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-        </div>
-        {extraTickers.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {extraTickers.map(t => (
-              <span key={t} className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-muted text-foreground">
-                {t}
-                <button onClick={() => handleRemoveExtra(t)} className="hover:text-destructive transition-colors">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 마지막 업데이트 */}
@@ -331,7 +280,7 @@ export default function CalendarPage() {
             <AlertCircle className="w-8 h-8 mb-3 text-destructive/60" />
             <p className="text-sm text-destructive">{error}</p>
             <button
-              onClick={() => fetchCalendar(range, extraTickers, true)}
+              onClick={() => fetchCalendar(range, true)}
               className="mt-3 text-xs text-primary underline underline-offset-2"
             >
               다시 시도
