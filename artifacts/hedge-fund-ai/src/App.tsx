@@ -29,7 +29,6 @@ import Popular from "@/pages/popular";
 import SettingsPage from "@/pages/settings";
 import SharePage from "@/pages/share";
 import CalendarPage from "@/pages/calendar";
-import ComparePage from "@/pages/compare";
 import AdminCohort from "@/pages/admin-cohort";
 import AdminPromoCodes from "@/pages/admin-promo-codes";
 
@@ -111,7 +110,6 @@ function Router() {
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/settings" component={SettingsPage} />
             <Route path="/calendar" component={CalendarPage} />
-            <Route path="/compare" component={ComparePage} />
             <Route path="/admin/cohort" component={AdminCohort} />
             <Route path="/admin/promo-codes" component={AdminPromoCodes} />
             <Route component={NotFound} />
