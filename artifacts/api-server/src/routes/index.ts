@@ -12,6 +12,7 @@ import peersRouter from "./peers.js";
 import tickerNotesRouter from "./ticker-notes.js";
 import adminRouter from "./admin.js";
 import feedbackRouter from "./feedback.js";
+import supportRouter from "./support.js";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use("/model-insights", modelInsightsRouter);
 router.use("/feed", feedRouter);
 router.use(newsRouter);
 router.use(feedbackRouter);
+router.use(supportRouter);
 
 export default router;
