@@ -675,8 +675,18 @@ router.get("/earnings-calendar", async (req, res) => {
   const range   = (req.query.range   as string) ?? "week";
   const extra   = (req.query.tickers as string) ?? "";
   const days    = range === "month" ? 30 : 7;
-  const now     = new Date();
-  const rangeEnd = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+  // ── KST(UTC+9) 기준 오늘 자정 ───────────────────────────────────────────
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const kstNowMs = Date.now() + KST_OFFSET_MS;
+  // KST 기준 자정 (UTC 타임스탬프로 변환)
+  const kstMidnightUtc = kstNowMs - (kstNowMs % (24 * 60 * 60 * 1000)) - KST_OFFSET_MS;
+  const now      = new Date(kstMidnightUtc);
+  const rangeEnd = new Date(kstMidnightUtc + (days + 1) * 24 * 60 * 60 * 1000);
+
+  /** Yahoo Finance 타임스탬프 → KST 날짜 문자열 (YYYY-MM-DD) */
+  const toKSTDateStr = (d: Date) =>
+    new Date(d.getTime() + KST_OFFSET_MS).toISOString().split("T")[0];
 
   // ── 1. DB에서 최근 90일 분석 이력 종목 수집 ────────────────────────────────
   let dbRows: Array<{ ticker: string; company_name: string }> = [];
@@ -778,7 +788,7 @@ router.get("/earnings-calendar", async (req, res) => {
         entries.push({
           ticker,
           companyName: name,
-          earningsDate: date.toISOString().split("T")[0],
+          earningsDate: toKSTDateStr(date),
           epsEstimate:      cal?.earnings?.earningsAverage     ?? null,
           epsLow:           cal?.earnings?.earningsLow         ?? null,
           epsHigh:          cal?.earnings?.earningsHigh        ?? null,
