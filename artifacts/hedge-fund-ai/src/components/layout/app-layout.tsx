@@ -83,7 +83,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     { href: "/history", label: "내가 본 자료" },
     { href: "/compare", label: "종목 비교" },
     { href: "/calendar", label: "실적 캘린더" },
-    { href: "/schedules", label: "재실행 스케줄" },
     { href: "/popular", label: "애빛다 통계" },
   ];
 
