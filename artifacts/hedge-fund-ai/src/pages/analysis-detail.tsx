@@ -2030,7 +2030,11 @@ function parseFinalValuationData(content: string): FinalValuationData | null {
 }
 
 function stripFinalValuationData(content: string): string {
-  return content.replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/, "").trim();
+  return content
+    .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
+    .replace(/^FINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
+    .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
+    .trim();
 }
 
 function stripEstimationLabels(content: string): string {
