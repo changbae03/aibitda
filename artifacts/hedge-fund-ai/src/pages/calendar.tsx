@@ -6,6 +6,7 @@ import {
   ChevronRight, Building2, AlertCircle, Search, X,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface EarningsEntry {
@@ -71,12 +72,18 @@ function EarningsCard({ entry }: { entry: EarningsEntry }) {
   const hasEps = entry.epsEstimate !== null;
   const hasRevenue = entry.revenueEstimate !== null;
   const shortTicker = entry.ticker.replace(/\.(KS|KQ)$/, "");
+  const [, navigate] = useLocation();
+
+  const handleClick = () => {
+    navigate(`/analysis/new?ticker=${encodeURIComponent(entry.ticker)}`);
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent/40 transition-colors"
+      onClick={handleClick}
+      className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent/40 active:scale-[0.99] transition-all cursor-pointer"
     >
       {/* 아이콘 */}
       <div className="mt-0.5 w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">

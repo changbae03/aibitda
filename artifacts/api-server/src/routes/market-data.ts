@@ -700,9 +700,22 @@ router.get("/earnings-calendar", async (req, res) => {
   const defaultTickers = [...DEFAULT_KR, ...DEFAULT_US];
   const extraTickers   = extra ? extra.split(",").map(t => t.trim()).filter(Boolean) : [];
 
-  // 종목 코드 → 회사명 맵 (DB 우선)
-  const nameMap: Record<string, string> = {};
-  for (const row of dbRows) nameMap[row.ticker] = row.company_name;
+  // 종목 코드 → 한국어 회사명 맵 (KOREAN_COMPANY_MAP 기반, 티커 접미사 정규화)
+  const KR_NAME_MAP: Record<string, string> = {};
+  for (const item of KOREAN_COMPANY_MAP) {
+    KR_NAME_MAP[item.symbol] = item.name;
+    // .KS 없이 숫자 코드만으로도 조회되는 경우 대비
+    const bare = item.symbol.replace(/\.(KS|KQ)$/, "");
+    KR_NAME_MAP[bare] = item.name;
+  }
+
+  // 종목 코드 → 회사명 맵 (DB 우선, 그다음 한국어 맵)
+  const nameMap: Record<string, string> = { ...KR_NAME_MAP };
+  for (const row of dbRows) {
+    // DB에 저장된 한국어 이름이 있으면 그걸 우선하되, 한국어 맵에 이미 있으면 그걸 씀
+    const krName = KR_NAME_MAP[row.ticker];
+    nameMap[row.ticker] = krName ?? row.company_name;
+  }
 
   // 합집합 (중복 제거)
   const allTickers = Array.from(new Set([
