@@ -553,7 +553,9 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const tsPeriod2 = Math.floor(Date.now() / 1000);
   const tsUrl = `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(resolvedSymbol)}?type=${tsTypes.join(",")}&period1=${tsPeriod1}&period2=${tsPeriod2}`;
 
-  const [summaryRes, tsRes] = await Promise.allSettled([
+  const koreanCodeEarly = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/i)?.[1] ?? null;
+
+  const [summaryRes, tsRes, naverBasicRes] = await Promise.allSettled([
     yahooFinance.quoteSummary(resolvedSymbol, {
       modules: [
         "financialData",
@@ -569,6 +571,10 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }),
     fetch(tsUrl, { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) })
       .then(r => r.ok ? r.json() : null),
+    koreanCodeEarly
+      ? fetch(`https://m.stock.naver.com/api/stock/${koreanCodeEarly}/basic`, { headers: NAVER_HEADERS, signal: AbortSignal.timeout(8000) })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   if (summaryRes.status === "rejected") {
@@ -576,6 +582,22 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     return "";
   }
   result = summaryRes.value;
+
+  // Override Yahoo Finance currentPrice with Naver KRX close price for Korean stocks
+  // Yahoo Finance often returns stale/incorrect currentPrice for KRX stocks (e.g. IPO price)
+  if (koreanCodeEarly && naverBasicRes.status === "fulfilled" && naverBasicRes.value) {
+    const naverBasicEarly = naverBasicRes.value as any;
+    const naverClose = naverBasicEarly.closePrice
+      ? Number(String(naverBasicEarly.closePrice).replace(/,/g, ""))
+      : null;
+    if (naverClose && naverClose > 0 && result?.financialData) {
+      const yahooPrice = result.financialData.currentPrice;
+      if (yahooPrice !== naverClose) {
+        console.log(`[financial-data] Overriding Yahoo currentPrice ${yahooPrice} → Naver KRX close ${naverClose} for ${resolvedSymbol}`);
+        result.financialData.currentPrice = naverClose;
+      }
+    }
+  }
 
   // Parse direct timeseries fetch: result is an array of items each with one type key
   let tsRows: any[] = [];
