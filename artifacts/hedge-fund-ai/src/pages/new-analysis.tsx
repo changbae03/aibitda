@@ -142,11 +142,11 @@ export default function NewAnalysis() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectHint, setSelectHint] = useState(false); // 드롭다운 선택 유도 힌트
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isComposing = useRef(false);
-  const pendingSubmit = useRef(false);
   const handleSubmitRef = useRef<(val: string) => Promise<void>>(async () => {});
 
   const fetchSuggestions = useCallback(async (query: string) => {
@@ -158,17 +158,8 @@ export default function NewAnalysis() {
       setSuggestions(data);
       setShowDropdown(data.length > 0);
       setSelectedIndex(-1);
-      if (pendingSubmit.current && data.length > 0) {
-        pendingSubmit.current = false;
-        setShowDropdown(false);
-        setSuggestions([]);
-        setTimeout(() => handleSubmitRef.current(data[0].symbol), 0);
-      } else {
-        pendingSubmit.current = false;
-      }
     } catch {
       setSuggestions([]);
-      pendingSubmit.current = false;
     } finally {
       setIsSearching(false);
     }
@@ -241,28 +232,49 @@ export default function NewAnalysis() {
     handleSubmit(normalized);
   };
 
+  // 6자리 숫자 코드 or 순수 영문 티커(1-5자)는 직접 입력 허용
+  const isDirectTicker = (val: string) =>
+    /^\d{6}$/.test(val) || /^[A-Za-z]{1,5}$/.test(val);
+
+  const showSelectHint = () => {
+    setSelectHint(true);
+    setShowDropdown(true);
+    if (suggestions.length > 0 && selectedIndex < 0) setSelectedIndex(0);
+    setTimeout(() => setSelectHint(false), 2000);
+  };
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isComposing.current) return;
+
+    // 이미 방향키로 선택한 항목 있으면 바로 실행
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
       handleSelectSuggestion(suggestions[selectedIndex].symbol);
       return;
     }
-    if (suggestions.length > 0) {
-      handleSelectSuggestion(suggestions[0].symbol);
+
+    // 6자리 코드 / 영문 티커면 직접 제출 허용
+    const val = ticker.trim();
+    if (isDirectTicker(val)) {
+      handleSubmit(val);
       return;
     }
-    if (isSearching) {
-      pendingSubmit.current = true;
+
+    // 검색 중이거나 제안 목록이 있으면 → 드롭다운 유도
+    if (isSearching || suggestions.length > 0) {
+      showSelectHint();
       return;
     }
-    handleSubmit(ticker);
+
+    // 아무 결과도 없으면 직접 제출 시도
+    handleSubmit(val);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (isComposing.current) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      setShowDropdown(true);
       setSelectedIndex((i) => Math.min(i + 1, suggestions.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -342,57 +354,112 @@ export default function NewAnalysis() {
             {showDropdown && suggestions.length > 0 && (
               <motion.div
                 ref={dropdownRef}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.1 }}
-                className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden"
+                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                animate={{
+                  opacity: 1, y: 0, scale: 1,
+                  boxShadow: selectHint
+                    ? "0 0 0 2px hsl(var(--primary)), 0 8px 24px rgba(0,0,0,0.12)"
+                    : "0 4px 16px rgba(0,0,0,0.08)",
+                }}
+                exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                transition={{ duration: 0.12 }}
+                className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-xl z-50 overflow-hidden"
               >
+                {/* 드롭다운 헤더 */}
+                <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    종목 선택
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60">
+                    ↑↓ 이동 · Enter 선택
+                  </span>
+                </div>
+
                 {suggestions.map((s, i) => {
                   const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
                   const code = isKrStock ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
                   const ex = s.exchange;
                   const badgeStyle =
-                    ex === "KOSPI" ? "bg-blue-50 text-blue-500" :
-                    ex === "KOSDAQ" ? "bg-emerald-50 text-emerald-600" :
-                    ex === "NASDAQ" ? "bg-violet-50 text-violet-600" :
-                    ex === "NYSE" ? "bg-orange-50 text-orange-600" :
+                    ex === "KOSPI" ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400" :
+                    ex === "KOSDAQ" ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" :
+                    ex === "NASDAQ" ? "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400" :
+                    ex === "NYSE" ? "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400" :
                     "bg-muted text-muted-foreground";
                   const badgeLabel =
                     ex === "KOSPI" ? "코스피" :
                     ex === "KOSDAQ" ? "코스닥" :
                     ex || "US";
+                  const isHighlighted = i === selectedIndex;
                   return (
-                    <button
+                    <motion.button
                       key={s.symbol}
                       type="button"
                       onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-border last:border-0 ${
-                        i === selectedIndex ? "bg-accent" : "hover:bg-accent"
-                      }`}
+                      onTouchEnd={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
+                      animate={isHighlighted ? { backgroundColor: "hsl(var(--accent))" } : { backgroundColor: "transparent" }}
+                      whileHover={{ backgroundColor: "hsl(var(--accent))" }}
+                      whileTap={{ scale: 0.99 }}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left border-b border-border/60 last:border-0 cursor-pointer"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        isHighlighted ? "bg-primary/10" : "bg-muted"
+                      }`}>
+                        <Building2 className={`w-4 h-4 transition-colors ${isHighlighted ? "text-primary" : "text-muted-foreground"}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-semibold text-foreground truncate">{s.shortname}</span>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[14px] font-semibold text-foreground truncate">{s.shortname}</span>
                           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badgeStyle}`}>
                             {badgeLabel}
                           </span>
                         </div>
                         <span className="font-mono text-xs text-muted-foreground">{code}</span>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
-                    </button>
+                      <div className={`flex items-center gap-1 shrink-0 transition-opacity ${isHighlighted ? "opacity-100" : "opacity-0"}`}>
+                        <span className="text-[10px] text-primary font-medium">선택</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      {!isHighlighted && (
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" />
+                      )}
+                    </motion.button>
                   );
                 })}
               </motion.div>
             )}
           </AnimatePresence>
 
+          {/* 검색 중 + 검색어가 이름인 경우 안내 */}
           <AnimatePresence>
-            {error && (
+            {isSearching && !isDirectTicker(ticker.trim()) && (
+              <motion.p
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5"
+              >
+                <Loader2 className="w-3 h-3 animate-spin" />
+                종목 검색 중...
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          {/* 드롭다운 선택 유도 힌트 */}
+          <AnimatePresence>
+            {selectHint && (
+              <motion.p
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mt-2 text-xs text-primary font-medium flex items-center gap-1"
+              >
+                ↑ 위 목록에서 종목을 클릭하거나 ↑↓ 방향키로 선택 후 Enter를 눌러주세요
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {error && !selectHint && (
               <motion.p
                 initial={{ opacity: 0, y: -2 }}
                 animate={{ opacity: 1, y: 0 }}
