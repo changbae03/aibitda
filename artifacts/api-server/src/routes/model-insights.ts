@@ -146,12 +146,14 @@ export async function triggerModelReview(): Promise<void> {
         ]);
         if (
           kq.status === "fulfilled" &&
-          kq.value.longName &&
+          kq.value?.longName &&
           !kq.value.longName.includes(",")
         ) {
           resolvedTicker = `${ticker}.KQ`;
-        } else if (ks.status === "fulfilled") {
+        } else if (ks.status === "fulfilled" && ks.value?.regularMarketPrice) {
           resolvedTicker = `${ticker}.KS`;
+        } else {
+          resolvedTicker = `${ticker}.KQ`; // 기본 fallback
         }
       }
 
