@@ -657,7 +657,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
   const koreanCodeEarly = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/i)?.[1] ?? null;
 
-  const [summaryRes, tsRes, naverBasicRes] = await Promise.allSettled([
+  const [summaryRes, tsRes, naverBasicRes, quoteRes] = await Promise.allSettled([
     yahooFinance.quoteSummary(resolvedSymbol, {
       modules: [
         "financialData",
@@ -674,8 +674,11 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     fetch(tsUrl, { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) })
       .then(r => r.ok ? r.json() : null),
     koreanCodeEarly
-      ? fetch(`https://m.stock.naver.com/api/stock/${koreanCodeEarly}/basic`, { headers: NAVER_HEADERS, signal: AbortSignal.timeout(8000) })
+      ? fetch(`https://m.stock.naver.com/api/stock/${koreanCodeEarly}/basic`, { headers: NAVER_HEADERS, signal: AbortSignal.timeout(12000) })
           .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null),
+    koreanCodeEarly
+      ? yahooFinance.quote(resolvedSymbol).catch(() => null)
       : Promise.resolve(null),
   ]);
 
@@ -685,18 +688,40 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   }
   result = summaryRes.value;
 
-  // Override Yahoo Finance currentPrice with Naver KRX close price for Korean stocks
-  // Yahoo Finance often returns stale/incorrect currentPrice for KRX stocks (e.g. IPO price)
-  if (koreanCodeEarly && naverBasicRes.status === "fulfilled" && naverBasicRes.value) {
-    const naverBasicEarly = naverBasicRes.value as any;
-    const naverClose = naverBasicEarly.closePrice
-      ? Number(String(naverBasicEarly.closePrice).replace(/,/g, ""))
-      : null;
-    if (naverClose && naverClose > 0 && result?.financialData) {
-      const yahooPrice = result.financialData.currentPrice;
-      if (yahooPrice !== naverClose) {
-        console.log(`[financial-data] Overriding Yahoo currentPrice ${yahooPrice} → Naver KRX close ${naverClose} for ${resolvedSymbol}`);
-        result.financialData.currentPrice = naverClose;
+  // Override Yahoo Finance currentPrice with correct KRX price for Korean stocks.
+  // Priority: 1) Naver closePrice  2) Yahoo quote.regularMarketPrice
+  // Yahoo Finance financialData.currentPrice often returns stale IPO price for KRX stocks.
+  if (koreanCodeEarly) {
+    // Determine correct price: Naver first, then Yahoo quote regularMarketPrice as fallback
+    let correctPrice: number | null = null;
+
+    if (naverBasicRes.status === "fulfilled" && naverBasicRes.value) {
+      const naverBasicEarly = naverBasicRes.value as any;
+      const naverClose = naverBasicEarly.closePrice
+        ? Number(String(naverBasicEarly.closePrice).replace(/,/g, ""))
+        : null;
+      if (naverClose && naverClose > 0) {
+        correctPrice = naverClose;
+      }
+    }
+
+    // Fallback: use Yahoo quote.regularMarketPrice (reliable real-time price)
+    if (!correctPrice && quoteRes.status === "fulfilled" && quoteRes.value) {
+      const qRegular = (quoteRes.value as any).regularMarketPrice;
+      if (qRegular && qRegular > 0) {
+        correctPrice = qRegular;
+        console.log(`[financial-data] Using Yahoo quote.regularMarketPrice ${qRegular} as price fallback for ${resolvedSymbol}`);
+      }
+    }
+
+    if (correctPrice && correctPrice > 0) {
+      // Ensure financialData exists so we can set currentPrice
+      if (!result) result = {} as any;
+      if (!result.financialData) (result as any).financialData = {};
+      const yahooPrice = result.financialData?.currentPrice;
+      if (yahooPrice !== correctPrice) {
+        console.log(`[financial-data] Overriding Yahoo currentPrice ${yahooPrice} → KRX correct price ${correctPrice} for ${resolvedSymbol}`);
+        (result as any).financialData.currentPrice = correctPrice;
       }
     }
   }
