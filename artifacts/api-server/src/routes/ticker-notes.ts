@@ -3,16 +3,23 @@ import { pool } from "@workspace/db";
 
 const router = Router();
 
-// GET /api/ticker-notes — 메모가 있는 전체 종목 목록
+// GET /api/ticker-notes — 메모가 있는 전체 종목 목록 (company_name 포함)
 router.get("/", async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT ticker, memo, auto_learning, updated_at
-       FROM ticker_notes
-       ORDER BY updated_at DESC NULLS LAST`
+      `SELECT tn.ticker, tn.memo, tn.auto_learning, tn.updated_at,
+              a.company_name
+       FROM ticker_notes tn
+       LEFT JOIN LATERAL (
+         SELECT company_name FROM analyses
+         WHERE ticker = tn.ticker AND company_name IS NOT NULL
+         ORDER BY created_at DESC LIMIT 1
+       ) a ON true
+       ORDER BY tn.updated_at DESC NULLS LAST`
     );
     res.json(result.rows.map(r => ({
       ticker: r.ticker,
+      companyName: r.company_name ?? null,
       memo: r.memo ?? "",
       autoLearning: r.auto_learning ?? "",
       updatedAt: r.updated_at ?? null,

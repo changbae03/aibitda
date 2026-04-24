@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Save, Trash2, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, CheckCircle } from "lucide-react";
+import { Search, Save, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, CheckCircle } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
 interface TickerNote {
   ticker: string;
+  companyName?: string | null;
   memo: string;
   autoLearning: string;
   updatedAt: string | null;
@@ -12,6 +13,23 @@ interface TickerNote {
 function formatDate(iso: string | null) {
   if (!iso) return "-";
   return new Date(iso).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** 6자리 숫자면 국내주식 → 회사명 표시, 아니면 티커 그대로 */
+function isKoreanTicker(ticker: string) {
+  return /^\d{6}$/.test(ticker);
+}
+
+function TickerLabel({ ticker, companyName }: { ticker: string; companyName?: string | null }) {
+  if (isKoreanTicker(ticker) && companyName) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <span className="font-bold text-sm text-foreground">{companyName}</span>
+        <span className="text-xs font-mono text-muted-foreground/60">{ticker}</span>
+      </span>
+    );
+  }
+  return <span className="font-mono font-bold text-sm text-foreground">{ticker}</span>;
 }
 
 export default function AdminTickerNotes() {
@@ -84,7 +102,7 @@ export default function AdminTickerNotes() {
         body: JSON.stringify({ memo: "" }),
       });
       if (r.ok) {
-        const newNote: TickerNote = { ticker: t, memo: "", autoLearning: "", updatedAt: new Date().toISOString() };
+        const newNote: TickerNote = { ticker: t, companyName: null, memo: "", autoLearning: "", updatedAt: new Date().toISOString() };
         setNotes(prev => [newNote, ...prev]);
         setEditing(prev => ({ ...prev, [t]: "" }));
         setExpanded(prev => ({ ...prev, [t]: true }));
@@ -95,8 +113,12 @@ export default function AdminTickerNotes() {
     }
   };
 
+  const q = search.toUpperCase();
   const filtered = notes.filter(n =>
-    !search || n.ticker.includes(search.toUpperCase()) || n.memo.toLowerCase().includes(search.toLowerCase())
+    !search ||
+    n.ticker.includes(q) ||
+    (n.companyName ?? "").toLowerCase().includes(search.toLowerCase()) ||
+    n.memo.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -146,7 +168,7 @@ export default function AdminTickerNotes() {
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="티커 또는 메모 내용으로 검색"
+          placeholder="종목명·티커·메모 내용으로 검색"
           className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
@@ -166,6 +188,9 @@ export default function AdminTickerNotes() {
             const isOpen = !!expanded[note.ticker];
             const memo = editing[note.ticker] ?? note.memo;
             const isDirty = memo !== note.memo;
+            const displayName = isKoreanTicker(note.ticker) && note.companyName
+              ? note.companyName
+              : note.ticker;
             return (
               <div key={note.ticker} className="rounded-xl border border-border bg-card overflow-hidden">
                 {/* 헤더 행 */}
@@ -173,10 +198,10 @@ export default function AdminTickerNotes() {
                   onClick={() => toggle(note.ticker)}
                   className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-sm text-foreground">{note.ticker}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <TickerLabel ticker={note.ticker} companyName={note.companyName} />
                     {note.memo ? (
-                      <span className="text-xs text-muted-foreground truncate max-w-[240px]">{note.memo}</span>
+                      <span className="text-xs text-muted-foreground truncate max-w-[220px]">{note.memo}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground/50 italic">메모 없음</span>
                     )}
@@ -198,7 +223,7 @@ export default function AdminTickerNotes() {
                         value={memo}
                         onChange={e => setEditing(prev => ({ ...prev, [note.ticker]: e.target.value }))}
                         rows={4}
-                        placeholder={`${note.ticker}에 대한 보정 정보를 입력하세요.\n예) 발행주식수: 5,969,782,550주 (KRX 기준)\n    최대주주: 삼성물산 19.01%`}
+                        placeholder={`${displayName}에 대한 보정 정보를 입력하세요.\n예) 발행주식수: 5,969,782,550주 (KRX 기준)\n    최대주주: 삼성물산 19.01%`}
                         className="w-full mt-1.5 px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/40"
                       />
                       <div className="flex items-center justify-between mt-2">
