@@ -673,7 +673,113 @@ router.post("/batch-performance", async (req, res) => {
 // ── Gemini 기반 한국 종목 실적발표일 조회 (12시간 캐시) ──────────────────────────
 const _krEarningsCache = new Map<string, { data: Map<string, string>; expiresAt: number }>();
 const _geminiInProgress = new Set<string>(); // 동시 중복 실행 방지
-const _yfCache = new Map<string, { data: any[]; expiresAt: number }>(); // Yahoo Finance 5분 캐시
+const _yfCache = new Map<string, { data: any[]; expiresAt: number }>(); // Yahoo Finance 24시간 캐시
+
+// ── 전역 상수 (워밍업 함수에서도 사용) ────────────────────────────────────────
+const DEFAULT_KR = ["005930.KS","000660.KS","035420.KS","005380.KS","051910.KS","035720.KS","012330.KS","000270.KS"];
+const DEFAULT_US = ["AAPL","MSFT","NVDA","META","GOOG","AMZN","TSLA","AVGO"];
+const CALENDAR_DEFAULT_TICKERS = [...DEFAULT_KR, ...DEFAULT_US];
+const CALENDAR_YF_TTL_MS  = 24 * 60 * 60 * 1000; // 24시간
+const CALENDAR_GEM_TTL_MS = 24 * 60 * 60 * 1000; // 24시간
+
+function buildKrNameMap(): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const item of KOREAN_COMPANY_MAP) {
+    m[item.symbol] = item.name;
+    m[item.symbol.replace(/\.(KS|KQ)$/, "")] = item.name;
+  }
+  return m;
+}
+
+/** 서버 시작 시 실적 캘린더 캐시 사전 로딩 */
+export async function warmupEarningsCache() {
+  console.log("[earnings-calendar] 캐시 워밍업 시작...");
+  for (const rangeDays of [7, 30]) {
+    const range = rangeDays === 7 ? "week" : "month";
+    try {
+      // DB에서 최근 분석 종목 조회
+      let dbRows: Array<{ ticker: string; company_name: string }> = [];
+      try {
+        const r = await pool.query<{ ticker: string; company_name: string }>(
+          `SELECT DISTINCT ON (ticker) ticker, company_name FROM analyses
+           WHERE created_at >= NOW() - INTERVAL '90 days' AND status = 'done'
+           ORDER BY ticker, created_at DESC LIMIT 60`
+        );
+        dbRows = r.rows;
+      } catch { /* DB 오류는 무시하고 기본 종목만 사용 */ }
+
+      const krNameMap = buildKrNameMap();
+      const nameMap: Record<string, string> = { ...krNameMap };
+      for (const row of dbRows) {
+        nameMap[row.ticker] = krNameMap[row.ticker] ?? row.company_name;
+      }
+      const allTickers = Array.from(new Set([
+        ...dbRows.map(r => r.ticker),
+        ...CALENDAR_DEFAULT_TICKERS,
+      ]));
+
+      const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+      const kstNowMs = Date.now() + KST_OFFSET_MS;
+      const kstMidnightUtc = kstNowMs - (kstNowMs % (24 * 60 * 60 * 1000)) - KST_OFFSET_MS;
+      const now      = new Date(kstMidnightUtc);
+      const rangeEnd = new Date(kstMidnightUtc + (rangeDays + 1) * 86400000);
+      const toKSTDateStr = (d: Date) =>
+        new Date(d.getTime() + KST_OFFSET_MS).toISOString().split("T")[0];
+
+      // YF 전체 병렬
+      const settled = await Promise.allSettled(
+        allTickers.map(async t => {
+          try {
+            const d = await yahooFinance.quoteSummary(t,
+              { modules: ["calendarEvents", "price"] }, { validateResult: false });
+            return { ticker: t, data: d as any };
+          } catch { return null; }
+        })
+      );
+
+      const raw: any[] = [];
+      for (const r of settled) {
+        if (r.status !== "fulfilled" || !r.value) continue;
+        const { ticker, data } = r.value;
+        const cal = data?.calendarEvents;
+        const pr  = data?.price;
+        const dates: any[] = cal?.earnings?.earningsDate ?? [];
+        if (!dates.length) continue;
+        for (const rawDate of dates) {
+          const ts = typeof rawDate === "number" ? rawDate * 1000
+            : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
+          const date = new Date(ts);
+          if (date < now || date > rangeEnd) continue;
+          const currency = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
+          const isKorean = currency === "KRW";
+          let displayDate = date;
+          if (isKorean && date.getUTCHours() >= 4 && date.getUTCHours() <= 8)
+            displayDate = new Date(date.getTime() + 86400000);
+          raw.push({
+            ticker, companyName: nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker,
+            earningsDate: toKSTDateStr(displayDate),
+            epsEstimate:     cal?.earnings?.earningsAverage ?? null,
+            epsLow:          cal?.earnings?.earningsLow     ?? null,
+            epsHigh:         cal?.earnings?.earningsHigh    ?? null,
+            revenueEstimate: cal?.earnings?.revenueAverage  ?? null,
+            currency, isKorean,
+          });
+          break;
+        }
+      }
+
+      const yfCacheKey = `${range}-${[...allTickers].sort().join(",")}`;
+      _yfCache.set(yfCacheKey, { data: raw, expiresAt: Date.now() + CALENDAR_YF_TTL_MS });
+      console.log(`[earnings-calendar] 워밍업 완료: ${range}, ${raw.length}개 종목`);
+
+      // Gemini 한국 종목도 백그라운드 실행
+      const krTickers = allTickers.filter(t => t.endsWith(".KS") || t.endsWith(".KQ") || /^\d{6}$/.test(t));
+      if (krTickers.length > 0) triggerGeminiBackground(krTickers, nameMap, rangeDays);
+    } catch (e: any) {
+      console.error(`[earnings-calendar] 워밍업 실패 (${range}):`, e?.message);
+    }
+  }
+}
 
 /** 캐시된 Gemini 날짜 즉시 반환 (API 호출 없음). 캐시 없으면 null. */
 function getCachedGeminiDates(tickers: string[], rangeDays: number): Map<string, string> | null {
@@ -754,7 +860,7 @@ JSON 배열만 출력. 코드블록·설명 불필요.`;
       }
     }
 
-    _krEarningsCache.set(cacheKey, { data: resultMap, expiresAt: Date.now() + 12 * 3600 * 1000 });
+    _krEarningsCache.set(cacheKey, { data: resultMap, expiresAt: Date.now() + CALENDAR_GEM_TTL_MS });
     console.log(`[earnings-calendar] Gemini KR dates: ${[...resultMap.entries()].map(([k,v])=>`${k}=${v}`).join(", ")}`);
     return resultMap;
   } catch (e: any) {
@@ -798,9 +904,7 @@ router.get("/earnings-calendar", async (req, res) => {
   }
 
   // ── 2. 기본 주요 한국/미국 종목 보완 ──────────────────────────────────────
-  const DEFAULT_KR = ["005930.KS","000660.KS","035420.KS","005380.KS","051910.KS","035720.KS","012330.KS","000270.KS"];
-  const DEFAULT_US = ["AAPL","MSFT","NVDA","META","GOOG","AMZN","TSLA","AVGO"];
-  const defaultTickers = [...DEFAULT_KR, ...DEFAULT_US];
+  const defaultTickers = CALENDAR_DEFAULT_TICKERS;
   const extraTickers   = extra ? extra.split(",").map(t => t.trim()).filter(Boolean) : [];
 
   // 종목 코드 → 한국어 회사명 맵 (KOREAN_COMPANY_MAP 기반, 티커 접미사 정규화)
@@ -894,7 +998,7 @@ router.get("/earnings-calendar", async (req, res) => {
       }
     }
     entries = raw;
-    _yfCache.set(yfCacheKey, { data: raw, expiresAt: yfNow + 5 * 60 * 1000 });
+    _yfCache.set(yfCacheKey, { data: raw, expiresAt: yfNow + CALENDAR_YF_TTL_MS });
   }
 
   // ── 4. Gemini 한국 날짜 오버라이드 (캐시만 사용, 블로킹 없음) ─────────────

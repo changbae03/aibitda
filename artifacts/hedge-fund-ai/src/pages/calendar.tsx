@@ -23,9 +23,9 @@ interface EarningsEntry {
 
 type Range = "week" | "month";
 
-// ── 모듈 레벨 클라이언트 캐시 (페이지 재방문 시 즉시 표시, 5분 TTL) ────────
+// ── 모듈 레벨 클라이언트 캐시 (페이지 재방문 시 즉시 표시, 24시간 TTL) ────────
 const _cache = new Map<string, { data: EarningsEntry[]; fetchedAt: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function fmtEps(val: number | null, currency: string): string {
   if (val == null) return "—";

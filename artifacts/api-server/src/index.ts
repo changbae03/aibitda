@@ -2,6 +2,7 @@ import app from "./app";
 import { runMigrations } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
+import { warmupEarningsCache } from "./routes/market-data.js";
 
 console.log("[STARTUP] API Server v2 - SSL fix + auto migration enabled");
 
@@ -19,7 +20,8 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const SIX_HOURS_MS  = 6 * 60 * 60 * 1000;
+const ONE_DAY_MS    = 24 * 60 * 60 * 1000;
 
 runMigrations()
   .then(() => {
@@ -48,6 +50,19 @@ runMigrations()
           console.error("[SCHEDULER] 정기 리뷰 실패:", e?.message ?? e)
         );
       }, SIX_HOURS_MS);
+
+      // 실적 캘린더 캐시 워밍업: 서버 시작 30초 후 첫 실행, 이후 24시간마다 갱신
+      setTimeout(() => {
+        warmupEarningsCache().catch((e) =>
+          console.error("[SCHEDULER] 실적 캘린더 워밍업 실패:", e?.message ?? e)
+        );
+      }, 30 * 1000);
+      setInterval(() => {
+        console.log("[SCHEDULER] 실적 캘린더 일일 갱신 시작");
+        warmupEarningsCache().catch((e) =>
+          console.error("[SCHEDULER] 실적 캘린더 일일 갱신 실패:", e?.message ?? e)
+        );
+      }, ONE_DAY_MS);
 
       // 30분마다 재실행 스케줄 확인
       const THIRTY_MIN_MS = 30 * 60 * 1000;
