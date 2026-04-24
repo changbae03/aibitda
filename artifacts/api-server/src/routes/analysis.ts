@@ -2149,57 +2149,20 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/:id/step", async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+// ─── 백그라운드 파이프라인 실행 인프라 ────────────────────────────────────────
+// 클라이언트 연결 여부와 무관하게 서버에서 단계를 완주하기 위한 구조
+const runningPipelineIds = new Set<number>();
 
-  const { stepKey } = req.body as { stepKey: AgentKey };
-  if (!stepKey || !AGENTS[stepKey]) {
-    res.status(400).json({ error: "Invalid stepKey" });
-    return;
-  }
-
-  const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
-  const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
-
-  if (!analysis) {
-    res.status(404).json({ error: "Analysis not found" });
-    return;
-  }
-
-  const stepsRaw = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
-  const rawSteps = stepsRaw.map(mapStepRow);
-
-  // STEP_ORDER 순서로 정렬하고, 현재 단계 이전 단계만 context로 전달
-  const existingSteps = [...rawSteps].sort(
-    (a, b) => STEP_ORDER.indexOf(a.stepKey as AgentKey) - STEP_ORDER.indexOf(b.stepKey as AgentKey)
-  );
-
-  const alreadyRun = existingSteps.some((s) => s.stepKey === stepKey);
-  if (alreadyRun) {
-    res.status(409).json({ error: "Step already completed" });
-    return;
-  }
-
-  const lockKey = `${id}-${stepKey}`;
-  if (runningStepsLock.get(lockKey)) {
-    res.status(409).json({ error: "Step already running" });
-    return;
-  }
-  runningStepsLock.set(lockKey, true);
-
-  // SSE streaming headers — send before anything else
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
-
+// executeStep: HTTP 응답과 분리된 단계 실행 핵심 함수
+// onEvent 콜백이 없으면 SSE 없이 DB에만 저장 (백그라운드 모드)
+async function executeStep(
+  id: number,
+  stepKey: AgentKey,
+  analysis: ReturnType<typeof mapAnalysisRow>,
+  existingSteps: ReturnType<typeof mapStepRow>[],
+  onEvent?: (data: object) => void
+): Promise<AgentKey | null> {
   const agent = AGENTS[stepKey];
-
   let enrichedContext = analysis.additionalContext ?? null;
 
   // ── 소프트 앵커: 동일 종목 직전 분석 결과를 가볍게 참고 (AI는 항상 새로 실행) ──
@@ -2446,7 +2409,7 @@ router.post("/:id/step", async (req, res) => {
     try {
       // prevContext를 5000자로 확장 — 기업 브리핑·산업 분석이 충분히 포함되도록
       const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 5000);
-      res.write(`data: ${JSON.stringify({ t: "" })}\n\n`); // keep connection alive
+      onEvent?.({ t: "" }); // keep connection alive
 
       let peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext);
       console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
@@ -2530,7 +2493,7 @@ router.post("/:id/step", async (req, res) => {
         if (attempt > 1) {
           const waitMs = (attempt - 1) * 3000; // 3s, 6s
           console.warn(`[${stepKey}] Retry ${attempt}/${MAX_ATTEMPTS} after ${waitMs}ms…`);
-          res.write(`data: ${JSON.stringify({ t: "" })}\n\n`); // keep-alive
+          onEvent?.({ t: "" }); // keep-alive
           await new Promise((r) => setTimeout(r, waitMs));
         }
 
@@ -2552,7 +2515,7 @@ router.post("/:id/step", async (req, res) => {
           const text = chunk.text ?? "";
           if (text) {
             content += text;
-            res.write(`data: ${JSON.stringify({ t: text })}\n\n`);
+            onEvent?.({ t: text });
           }
           const reason = chunk.candidates?.[0]?.finishReason;
           if (reason) lastFinishReason = reason;
@@ -2573,14 +2536,14 @@ router.post("/:id/step", async (req, res) => {
 
     if (lastErr) {
       content = `분석 오류: AI 서비스에 연결하지 못했습니다. (${stepKey})`;
-      res.write(`data: ${JSON.stringify({ error: content })}\n\n`);
+      onEvent?.({ error: content });
     }
 
     // ── Devil's Advocate Debate (Round 2 → Round 3) ───────────────────────────
     if (DEBATE_STEPS.has(stepKey as AgentKey) && content && !content.startsWith("분석 오류")) {
       try {
         // Round 2: Challenger 반론 생성 (내부 처리 — 스트리밍 없음)
-        res.write(`data: ${JSON.stringify({ debate: "challenging" })}\n\n`);
+        onEvent?.({ debate: "challenging" });
         const challengerFeedback = await runDebateChallenge(
           stepKey as "company_analysis" | "relative_valuation",
           content,
@@ -2592,7 +2555,7 @@ router.post("/:id/step", async (req, res) => {
           console.log(`[debate] ${stepKey} challenger feedback length: ${challengerFeedback.length}`);
 
           // Round 3: 애널리스트가 반론 수용·반박 후 최종본 확정 (스트리밍)
-          res.write(`data: ${JSON.stringify({ debate: "synthesizing" })}\n\n`);
+          onEvent?.({ debate: "synthesizing" });
 
           const synthesisInstruction = stepKey === "company_analysis"
             ? `\n\n---\n[내부 검토 — Devil's Advocate 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 기존 보고서 형식·구조를 그대로 유지하면서 최종 완성본을 다시 작성하세요. 반론 항목을 별도 섹션으로 노출하지 마세요.`
@@ -2618,7 +2581,7 @@ router.post("/:id/step", async (req, res) => {
             const text = chunk.text ?? "";
             if (text) {
               synthesizedContent += text;
-              res.write(`data: ${JSON.stringify({ t: text, debateSynthesis: true })}\n\n`);
+              onEvent?.({ t: text, debateSynthesis: true });
             }
           }
           if (synthesizedContent) {
@@ -2638,12 +2601,12 @@ router.post("/:id/step", async (req, res) => {
     let validationNotes: string | null = null;
 
     if (QC_STEPS.has(stepKey) && content && !content.startsWith("분석 오류")) {
-      res.write(`data: ${JSON.stringify({ qc: "checking" })}\n\n`);
+      onEvent?.({ qc: "checking" });
       const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker);
       console.log(`[QC] ${stepKey} score=${qcResult.score} approved=${qcResult.approved}`);
 
       if (!qcResult.approved) {
-        res.write(`data: ${JSON.stringify({ qc: "revising", score: qcResult.score, feedback: qcResult.feedback })}\n\n`);
+        onEvent?.({ qc: "revising", score: qcResult.score, feedback: qcResult.feedback });
         try {
           const revisedUserPrompt = userPrompt +
             `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
@@ -2664,20 +2627,20 @@ router.post("/:id/step", async (req, res) => {
             const text = chunk.text ?? "";
             if (text) {
               revisedContent += text;
-              res.write(`data: ${JSON.stringify({ t: text, revised: true })}\n\n`);
+              onEvent?.({ t: text, revised: true });
             }
           }
           if (revisedContent) finalContent = revisedContent;
           validationNotes = `팀장 재검토 완료 (초기 점수: ${qcResult.score}/10, 사유: ${qcResult.feedback})`;
-          res.write(`data: ${JSON.stringify({ qc: "revised", score: qcResult.score })}\n\n`);
+          onEvent?.({ qc: "revised", score: qcResult.score });
         } catch (err) {
           console.error("[QC] revision error:", err);
           validationNotes = `QC 완료 (점수: ${qcResult.score}/10)`;
-          res.write(`data: ${JSON.stringify({ qc: "approved", score: qcResult.score })}\n\n`);
+          onEvent?.({ qc: "approved", score: qcResult.score });
         }
       } else {
         validationNotes = `팀장 검토 통과 (점수: ${qcResult.score}/10)`;
-        res.write(`data: ${JSON.stringify({ qc: "approved", score: qcResult.score })}\n\n`);
+        onEvent?.({ qc: "approved", score: qcResult.score });
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -2783,11 +2746,130 @@ router.post("/:id/step", async (req, res) => {
       );
     }
 
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
+    // executeStep 반환값: 다음 단계 키 (또는 마지막 단계이면 null)
+    return nextStep as AgentKey | null;
+  } catch (err) {
+    console.error(`[executeStep] Error in step ${stepKey} for analysis ${id}:`, err);
+    return null;
+  }
+}
+
+// ─── 백그라운드 파이프라인 러너 ──────────────────────────────────────────────
+// 클라이언트 연결 없이 서버에서 모든 남은 단계를 순서대로 완주한다.
+async function runPipelineBackground(id: number): Promise<void> {
+  if (runningPipelineIds.has(id)) {
+    console.log(`[pipeline-bg] Already running for analysis ${id} — skip`);
+    return;
+  }
+  runningPipelineIds.add(id);
+  console.log(`[pipeline-bg] Starting background pipeline for analysis ${id}`);
+  try {
+    while (true) {
+      const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+      const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
+      if (!analysis || analysis.status !== "in_progress") break;
+
+      const stepsRaw = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
+      const existingSteps = [...stepsRaw.map(mapStepRow)].sort(
+        (a, b) => STEP_ORDER.indexOf(a.stepKey as AgentKey) - STEP_ORDER.indexOf(b.stepKey as AgentKey)
+      );
+      const completedKeys = new Set(existingSteps.map(s => s.stepKey));
+      const nextStepKey = STEP_ORDER.find(s => !completedKeys.has(s)) as AgentKey | undefined;
+      if (!nextStepKey) break;
+
+      const lockKey = `${id}-${nextStepKey}`;
+      if (runningStepsLock.get(lockKey)) {
+        // 이미 SSE 핸들러가 이 단계를 실행 중 — 잠시 기다린 후 재확인
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        continue;
+      }
+
+      runningStepsLock.set(lockKey, true);
+      try {
+        console.log(`[pipeline-bg] Running step ${nextStepKey} for analysis ${id}`);
+        await executeStep(id, nextStepKey, analysis, existingSteps);
+      } finally {
+        runningStepsLock.delete(lockKey);
+      }
+    }
+  } catch (err) {
+    console.error(`[pipeline-bg] Error for analysis ${id}:`, err);
+  } finally {
+    runningPipelineIds.delete(id);
+    console.log(`[pipeline-bg] Background pipeline complete for analysis ${id}`);
+  }
+}
+
+// ─── POST /analyses/:id/step ─────────────────────────────────────────────────
+// SSE 스트리밍 핸들러. executeStep()으로 단계를 실행하고, 클라이언트 연결이
+// 끊기면 runPipelineBackground()를 시작해 나머지 단계를 완주한다.
+router.post("/:id/step", async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { stepKey } = req.body as { stepKey: AgentKey };
+  if (!stepKey || !AGENTS[stepKey]) { res.status(400).json({ error: "Invalid stepKey" }); return; }
+
+  const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+  const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
+  if (!analysis) { res.status(404).json({ error: "Analysis not found" }); return; }
+
+  const stepsRaw = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);
+  const existingSteps = [...stepsRaw.map(mapStepRow)].sort(
+    (a, b) => STEP_ORDER.indexOf(a.stepKey as AgentKey) - STEP_ORDER.indexOf(b.stepKey as AgentKey)
+  );
+
+  const alreadyRun = existingSteps.some((s) => s.stepKey === stepKey);
+  if (alreadyRun) { res.status(409).json({ error: "Step already completed" }); return; }
+
+  const lockKey = `${id}-${stepKey}`;
+  if (runningStepsLock.get(lockKey)) { res.status(409).json({ error: "Step already running" }); return; }
+  runningStepsLock.set(lockKey, true);
+
+  // SSE 스트리밍 헤더
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  let clientGone = false;
+  req.on("close", () => { clientGone = true; });
+
+  const safeWrite = (data: object) => {
+    if (clientGone) return;
+    try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { clientGone = true; }
+  };
+
+  try {
+    const nextStep = await executeStep(id, stepKey, analysis, existingSteps, safeWrite);
+    safeWrite({ done: true });
+    if (!clientGone) res.end();
+
+    // 클라이언트가 이탈했으면 나머지 단계를 백그라운드에서 완주
+    if (clientGone && nextStep) {
+      console.log(`[pipeline-bg] Client gone after ${stepKey} — running remaining steps in background for analysis ${id}`);
+      runPipelineBackground(id).catch(console.error);
+    }
   } finally {
     runningStepsLock.delete(lockKey);
   }
+});
+
+// ─── POST /analyses/:id/run-pipeline ─────────────────────────────────────────
+// 백그라운드 파이프라인 시작 엔드포인트 (fire-and-forget).
+// 분석 페이지 진입/재진입 시 클라이언트가 호출하여 미완료 단계를 서버에서 완주한다.
+router.post("/:id/run-pipeline", async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+
+  const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+  const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
+  if (!analysis) return res.status(404).json({ error: "Analysis not found" });
+  if (analysis.status !== "in_progress") return res.json({ ok: true, status: analysis.status });
+
+  runPipelineBackground(id).catch(console.error);
+  res.json({ ok: true });
 });
 
 // ─── PATCH /analyses/:id/memo ────────────────────────────────────────────────

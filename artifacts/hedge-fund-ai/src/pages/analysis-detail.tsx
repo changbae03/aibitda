@@ -839,6 +839,8 @@ export default function AnalysisDetail() {
       });
       if (!res.ok || !res.body) {
         setStreamingStep(null);
+        // 409: 이미 백그라운드에서 실행 중 → 오류 없이 폴링에 맡김
+        if (res.status === 409) return;
         return;
       }
       const reader = res.body.getReader();
@@ -905,8 +907,13 @@ export default function AnalysisDetail() {
 
   // On mount / resume: start from the first pending step if analysis is already in_progress
   useEffect(() => {
-    if (hasInitiatedRef.current) return;
     if (!analysis || analysis.status !== "in_progress") return;
+
+    // 백그라운드 파이프라인이 실행 중인지 확인/보장 (클라이언트 이탈 후 재진입 시 안전망)
+    fetch(`/api/analysis/${id}/run-pipeline`, { method: "POST", headers: { "Content-Type": "application/json" } })
+      .catch(console.error);
+
+    if (hasInitiatedRef.current) return;
     const nextIndex = analysis.steps.length;
     if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
@@ -914,7 +921,7 @@ export default function AnalysisDetail() {
     hasInitiatedRef.current = true;
     triggeredSteps.current.add(nextStepKey);
     runStreamingStep(nextStepKey);
-  }, [analysis?.status, analysis?.steps.length, runStreamingStep]);
+  }, [analysis?.status, analysis?.steps.length, id, runStreamingStep]);
 
   if (isLoading) return (
     <div className="p-20 text-center">
