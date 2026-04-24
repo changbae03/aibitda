@@ -95,8 +95,8 @@ async function resolveKoreanTicker(
   const ksValid = ksChart.status === "fulfilled" && ksChart.value?.quotes?.some((q) => q.close && q.close > 0);
   const kqValid = kqChart.status === "fulfilled" && kqChart.value?.quotes?.some((q) => q.close && q.close > 0);
 
-  const ksName = ksQuote.status === "fulfilled" ? (ksQuote.value.longName ?? ksQuote.value.shortName ?? "") : "";
-  const kqName = kqQuote.status === "fulfilled" ? (kqQuote.value.longName ?? kqQuote.value.shortName ?? "") : "";
+  const ksName = ksQuote.status === "fulfilled" ? (ksQuote.value?.longName ?? ksQuote.value?.shortName ?? "") : "";
+  const kqName = kqQuote.status === "fulfilled" ? (kqQuote.value?.longName ?? kqQuote.value?.shortName ?? "") : "";
 
   const ksNameOk = isValidEquityName(ksName, `${ticker}.KS`);
   const kqNameOk = isValidEquityName(kqName, `${ticker}.KQ`);

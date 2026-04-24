@@ -2035,6 +2035,19 @@ function stripEstimationLabels(content: string): string {
     .replace(/\s*\(컨센서스\)/g, "");
 }
 
+function stripPromptInstructions(content: string): string {
+  return content
+    .split("\n")
+    .filter(line => {
+      const t = line.trim();
+      if (/^\*?\*?\[STEP\s*\d+\]/.test(t)) return false;
+      if (/^※\s*(다음\s*지시사항|지시사항\s*끝)/.test(t)) return false;
+      if (/^현재 종목의 Base upside:.*따라서.*전략을 작성합니다/.test(t)) return false;
+      return true;
+    })
+    .join("\n");
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -2058,7 +2071,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   const chartEvents = isMarket ? parseChartEvents(step.content ?? "") : [];
   const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
   const finalValuationData = isRelativeVal ? parseFinalValuationData(step.content ?? "") : null;
-  const displayContent = stripEstimationLabels(
+  const displayContent = stripPromptInstructions(stripEstimationLabels(
     isMarket
       ? stripChartData(step.content ?? "")
       : isFundamental
@@ -2066,7 +2079,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
         : isRelativeVal
           ? stripFinalValuationData(step.content ?? "")
           : (step.content ?? "")
-  );
+  ));
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
