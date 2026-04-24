@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
 import { GoogleGenAI } from "@google/genai";
+import { pool } from "@workspace/db";
 
 const yahooFinance = new YahooFinance();
 
@@ -665,6 +666,125 @@ router.post("/batch-performance", async (req, res) => {
   );
 
   res.json(results);
+});
+
+// ─── GET /api/market-data/earnings-calendar ───────────────────────────────────
+// range=week(7일) | month(30일)  |  tickers=추가종목(쉼표구분, 옵션)
+router.get("/earnings-calendar", async (req, res) => {
+  try {
+  const range   = (req.query.range   as string) ?? "week";
+  const extra   = (req.query.tickers as string) ?? "";
+  const days    = range === "month" ? 30 : 7;
+  const now     = new Date();
+  const rangeEnd = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+  // ── 1. DB에서 최근 90일 분석 이력 종목 수집 ────────────────────────────────
+  let dbRows: Array<{ ticker: string; company_name: string }> = [];
+  try {
+    const r = await pool.query<{ ticker: string; company_name: string }>(
+      `SELECT DISTINCT ON (ticker) ticker, company_name
+       FROM analyses
+       WHERE created_at >= NOW() - INTERVAL '90 days'
+         AND status = 'done'
+       ORDER BY ticker, created_at DESC
+       LIMIT 60`
+    );
+    dbRows = r.rows;
+  } catch (e) {
+    console.error("[earnings-calendar] DB error:", e);
+  }
+
+  // ── 2. 기본 주요 한국/미국 종목 보완 ──────────────────────────────────────
+  const DEFAULT_KR = ["005930.KS","000660.KS","035420.KS","005380.KS","051910.KS","035720.KS","012330.KS","000270.KS"];
+  const DEFAULT_US = ["AAPL","MSFT","NVDA","META","GOOG","AMZN","TSLA","AVGO"];
+  const defaultTickers = [...DEFAULT_KR, ...DEFAULT_US];
+  const extraTickers   = extra ? extra.split(",").map(t => t.trim()).filter(Boolean) : [];
+
+  // 종목 코드 → 회사명 맵 (DB 우선)
+  const nameMap: Record<string, string> = {};
+  for (const row of dbRows) nameMap[row.ticker] = row.company_name;
+
+  // 합집합 (중복 제거)
+  const allTickers = Array.from(new Set([
+    ...dbRows.map(r => r.ticker),
+    ...defaultTickers,
+    ...extraTickers,
+  ]));
+
+  // ── 3. Yahoo Finance calendarEvents 병렬 조회 ──────────────────────────────
+  interface EarningsEntry {
+    ticker: string;
+    companyName: string;
+    earningsDate: string;
+    epsEstimate: number | null;
+    epsLow: number | null;
+    epsHigh: number | null;
+    revenueEstimate: number | null;
+    currency: string;
+    isKorean: boolean;
+  }
+  const entries: EarningsEntry[] = [];
+
+  // 5개씩 배치 처리 (오류 격리)
+  const BATCH = 5;
+  for (let i = 0; i < allTickers.length; i += BATCH) {
+    const batch = allTickers.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(
+      batch.map(async t => {
+        try {
+          return await yahooFinance.quoteSummary(t, {
+            modules: ["calendarEvents", "price"],
+          }, { validateResult: false });
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (let j = 0; j < batch.length; j++) {
+      const ticker = batch[j];
+      const r = settled[j];
+      if (r.status !== "fulfilled" || !r.value) continue;
+      const data = r.value as any;
+
+      const cal   = data?.calendarEvents;
+      const pr    = data?.price;
+      const dates: any[] = cal?.earnings?.earningsDate ?? [];
+      if (!dates.length) continue;
+
+      // 범위 내 가장 가까운 날짜 선택
+      for (const raw of dates) {
+        const ts   = typeof raw === "number" ? raw * 1000 : (raw instanceof Date ? raw.getTime() : new Date(raw).getTime());
+        const date = new Date(ts);
+        if (date < now || date > rangeEnd) continue;
+
+        const currency  = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
+        const isKorean  = currency === "KRW";
+        const name      = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
+
+        entries.push({
+          ticker,
+          companyName: name,
+          earningsDate: date.toISOString().split("T")[0],
+          epsEstimate:      cal?.earnings?.earningsAverage     ?? null,
+          epsLow:           cal?.earnings?.earningsLow         ?? null,
+          epsHigh:          cal?.earnings?.earningsHigh        ?? null,
+          revenueEstimate:  cal?.earnings?.revenueAverage      ?? null,
+          currency,
+          isKorean,
+        });
+        break; // 첫 번째 유효 날짜만 사용
+      }
+    }
+  }
+
+  // ── 4. 날짜 정렬 후 응답 ─────────────────────────────────────────────────
+  entries.sort((a, b) => a.earningsDate.localeCompare(b.earningsDate));
+  res.json(entries);
+  } catch (err: any) {
+    console.error("[earnings-calendar] unhandled error:", err?.message);
+    res.status(500).json({ error: err?.message ?? "earnings-calendar error" });
+  }
 });
 
 router.get("/:ticker", async (req, res) => {
