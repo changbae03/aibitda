@@ -493,6 +493,89 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
     }
   }
 
+  // ── 6. FnGuide 컨센서스 (investment + consensus 엔드포인트) ──────────────────
+  const [invResult, cnsResult] = await Promise.allSettled([
+    fetch(`https://m.stock.naver.com/api/stock/${code}/investment`, {
+      headers: NAVER_HEADERS, signal: AbortSignal.timeout(6000),
+    }).then(r => r.ok ? r.json() : null),
+    fetch(`https://m.stock.naver.com/api/stock/${code}/consensus`, {
+      headers: NAVER_HEADERS, signal: AbortSignal.timeout(6000),
+    }).then(r => r.ok ? r.json() : null),
+  ]);
+  const inv: any = invResult.status === "fulfilled" ? invResult.value : null;
+  const cns: any = cnsResult.status === "fulfilled" ? cnsResult.value : null;
+
+  if (inv || cns) {
+    lines.push("\n=== 증권가 컨센서스 (FnGuide/Naver 기준) ===");
+  }
+
+  // 애널리스트 목표가 + 투자의견
+  if (inv) {
+    const tpCns = inv.targetPriceCns ?? inv.consensusTargetPrice ?? inv.targetPrice ?? null;
+    if (tpCns) {
+      const avg = naverFmt(tpCns.averageTargetPrice ?? tpCns.average ?? tpCns.avg);
+      const high = naverFmt(tpCns.highestTargetPrice ?? tpCns.highest ?? tpCns.high);
+      const low = naverFmt(tpCns.lowestTargetPrice ?? tpCns.lowest ?? tpCns.low);
+      if (avg) lines.push(`애널리스트 평균 목표가: ${avg.toLocaleString("ko-KR")}원`);
+      if (high && low) lines.push(`목표가 범위: ${low.toLocaleString("ko-KR")}원 – ${high.toLocaleString("ko-KR")}원`);
+    }
+    const opCns = inv.investmentOpinionCns ?? inv.opinionCns ?? inv.opinion ?? null;
+    if (opCns) {
+      const total = Number(opCns.totalCount ?? opCns.total ?? 0);
+      const buy   = Number(opCns.strongBuyCount ?? opCns.strongBuy ?? 0) + Number(opCns.buyCount ?? opCns.buy ?? 0);
+      const hold  = Number(opCns.holdCount ?? opCns.hold ?? 0);
+      const sell  = Number(opCns.underperformCount ?? 0) + Number(opCns.sellCount ?? opCns.sell ?? 0);
+      if (total > 0) lines.push(`투자의견 (총 ${total}개): 매수 ${buy}개 / 중립 ${hold}개 / 매도 ${sell}개`);
+    }
+  }
+
+  // 연간 실적 전망 (consensus 엔드포인트)
+  if (cns) {
+    const annual = cns.chartCnsEstimatedFinancial?.annual ?? cns.annual ?? null;
+    if (annual?.columns) {
+      const cols: string[][] = annual.columns;
+      const periods: string[] = cols[0]?.slice(1) ?? [];
+      const revenues  = cols.find((c: string[]) => /매출/.test(c[0] ?? ""))?.slice(1) ?? [];
+      const opIncomes = cols.find((c: string[]) => /영업이익/.test(c[0] ?? ""))?.slice(1) ?? [];
+      const netIncomes= cols.find((c: string[]) => /순이익|당기순/.test(c[0] ?? ""))?.slice(1) ?? [];
+      const epsCol    = cols.find((c: string[]) => c[0] === "EPS")?.slice(1) ?? [];
+      if (periods.length > 0) {
+        lines.push("\n[연간 실적 컨센서스 전망]");
+        periods.forEach((period: string, i: number) => {
+          const items: string[] = [];
+          if (revenues[i])   items.push(`매출 ${fmtNum(Number(revenues[i]) * 1e8, "KRW")}`);
+          if (opIncomes[i])  items.push(`영업이익 ${fmtNum(Number(opIncomes[i]) * 1e8, "KRW")}`);
+          if (netIncomes[i]) items.push(`순이익 ${fmtNum(Number(netIncomes[i]) * 1e8, "KRW")}`);
+          if (epsCol[i])     items.push(`EPS ${Number(epsCol[i]).toLocaleString("ko-KR")}원`);
+          if (items.length > 0) lines.push(`  ${period}: ${items.join(" | ")}`);
+        });
+      }
+    }
+    // EPS 컨센서스 (별도 테이블)
+    const epsData = cns.chartCnsEps?.annual ?? null;
+    if (epsData?.columns) {
+      const cols: string[][] = epsData.columns;
+      const periods: string[] = cols[0]?.slice(1) ?? [];
+      const epsVals = cols.find((c: string[]) => c[0] === "EPS")?.slice(1) ?? [];
+      const bpsVals = cols.find((c: string[]) => c[0] === "BPS")?.slice(1) ?? [];
+      const dpsVals = cols.find((c: string[]) => c[0] === "DPS")?.slice(1) ?? [];
+      if (periods.length > 0 && (epsVals.length > 0 || bpsVals.length > 0)) {
+        if (!lines.some(l => l.includes("연간 실적 컨센서스 전망"))) {
+          lines.push("\n[EPS/BPS/DPS 컨센서스 전망]");
+        } else {
+          lines.push("[EPS/BPS/DPS 컨센서스 추가]");
+        }
+        periods.forEach((p: string, i: number) => {
+          const eps = epsVals[i] ? `EPS ${naverFmt(epsVals[i])?.toLocaleString("ko-KR")}원` : null;
+          const bps = bpsVals[i] ? `BPS ${naverFmt(bpsVals[i])?.toLocaleString("ko-KR")}원` : null;
+          const dps = dpsVals[i] ? `DPS ${naverFmt(dpsVals[i])?.toLocaleString("ko-KR")}원` : null;
+          const items = [eps, bps, dps].filter(Boolean);
+          if (items.length > 0) lines.push(`  ${p}: ${items.join(" | ")}`);
+        });
+      }
+    }
+  }
+
   return { context: lines.join("\n"), naverSharesCalc };
 }
 
