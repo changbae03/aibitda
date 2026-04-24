@@ -672,14 +672,36 @@ router.post("/batch-performance", async (req, res) => {
 // range=week(7일) | month(30일)  |  tickers=추가종목(쉼표구분, 옵션)
 // ── Gemini 기반 한국 종목 실적발표일 조회 (12시간 캐시) ──────────────────────────
 const _krEarningsCache = new Map<string, { data: Map<string, string>; expiresAt: number }>();
+const _geminiInProgress = new Set<string>(); // 동시 중복 실행 방지
+const _yfCache = new Map<string, { data: any[]; expiresAt: number }>(); // Yahoo Finance 5분 캐시
+
+/** 캐시된 Gemini 날짜 즉시 반환 (API 호출 없음). 캐시 없으면 null. */
+function getCachedGeminiDates(tickers: string[], rangeDays: number): Map<string, string> | null {
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
+  const cacheKey = `${today}-${rangeDays}-${[...tickers].sort().join(",")}`;
+  const cached = _krEarningsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  return null;
+}
+
+/** 백그라운드에서 Gemini 호출 → 캐시 갱신 (절대 await 하지 말 것) */
+function triggerGeminiBackground(tickers: string[], nameMap: Record<string, string>, rangeDays: number) {
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
+  const cacheKey = `${today}-${rangeDays}-${[...tickers].sort().join(",")}`;
+  if (_geminiInProgress.has(cacheKey)) return; // 이미 실행 중
+  _geminiInProgress.add(cacheKey);
+  fetchKoreanEarningsDatesViaGemini(tickers, nameMap, rangeDays)
+    .catch(() => {})
+    .finally(() => _geminiInProgress.delete(cacheKey));
+}
 
 async function fetchKoreanEarningsDatesViaGemini(
-  tickers: string[], // e.g. ["005930.KS", "000660.KS", ...]
+  tickers: string[],
   nameMap: Record<string, string>,
   rangeDays: number,
 ): Promise<Map<string, string>> {
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
-  const cacheKey = `${today}-${rangeDays}-${tickers.sort().join(",")}`;
+  const cacheKey = `${today}-${rangeDays}-${[...tickers].sort().join(",")}`;
   const cached = _krEarningsCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
 
@@ -805,124 +827,107 @@ router.get("/earnings-calendar", async (req, res) => {
     ...extraTickers,
   ]));
 
-  // ── 3-A. 한국 종목만 Gemini 실시간 검색 (Yahoo Finance와 병렬) ─────────────
-  const koreanTickers = allTickers.filter(t => t.endsWith(".KS") || t.endsWith(".KQ") ||
-    /^\d{6}$/.test(t));
-  const geminiKrDatesPromise = koreanTickers.length > 0
-    ? fetchKoreanEarningsDatesViaGemini(koreanTickers, nameMap, days)
-    : Promise.resolve(new Map<string, string>());
-
-  // ── 3. Yahoo Finance calendarEvents 병렬 조회 ──────────────────────────────
+  // ── 3. Yahoo Finance 전체 병렬 조회 (배치 없이 한 번에) ─────────────────────
   interface EarningsEntry {
-    ticker: string;
-    companyName: string;
-    earningsDate: string;
-    epsEstimate: number | null;
-    epsLow: number | null;
-    epsHigh: number | null;
-    revenueEstimate: number | null;
-    currency: string;
-    isKorean: boolean;
+    ticker: string; companyName: string; earningsDate: string;
+    epsEstimate: number | null; epsLow: number | null; epsHigh: number | null;
+    revenueEstimate: number | null; currency: string; isKorean: boolean;
   }
-  const entries: EarningsEntry[] = [];
 
-  // 5개씩 배치 처리 (오류 격리)
-  const BATCH = 5;
-  for (let i = 0; i < allTickers.length; i += BATCH) {
-    const batch = allTickers.slice(i, i + BATCH);
+  // ── 3-A. Yahoo Finance 5분 캐시 ──────────────────────────────────────────
+  const yfCacheKey = `${range}-${allTickers.sort().join(",")}`;
+  const yfNow = Date.now();
+  const yfCached = _yfCache.get(yfCacheKey);
+  let entries: EarningsEntry[];
+
+  if (yfCached && yfCached.expiresAt > yfNow) {
+    entries = yfCached.data;
+    console.log("[earnings-calendar] YF cache HIT");
+  } else {
+    // 모든 종목 완전 병렬 실행 (순차 배치 제거)
     const settled = await Promise.allSettled(
-      batch.map(async t => {
+      allTickers.map(async t => {
         try {
-          return await yahooFinance.quoteSummary(t, {
-            modules: ["calendarEvents", "price"],
-          }, { validateResult: false });
-        } catch {
-          return null;
-        }
+          const d = await yahooFinance.quoteSummary(t,
+            { modules: ["calendarEvents", "price"] },
+            { validateResult: false }
+          );
+          return { ticker: t, data: d as any };
+        } catch { return null; }
       })
     );
 
-    for (let j = 0; j < batch.length; j++) {
-      const ticker = batch[j];
-      const r = settled[j];
+    const raw: EarningsEntry[] = [];
+    for (const r of settled) {
       if (r.status !== "fulfilled" || !r.value) continue;
-      const data = r.value as any;
-
+      const { ticker, data } = r.value;
       const cal   = data?.calendarEvents;
       const pr    = data?.price;
       const dates: any[] = cal?.earnings?.earningsDate ?? [];
       if (!dates.length) continue;
 
-      // 범위 내 가장 가까운 날짜 선택
-      for (const raw of dates) {
-        const ts   = typeof raw === "number" ? raw * 1000 : (raw instanceof Date ? raw.getTime() : new Date(raw).getTime());
+      for (const rawDate of dates) {
+        const ts   = typeof rawDate === "number" ? rawDate * 1000
+          : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
         const date = new Date(ts);
-
         if (date < now || date > rangeEnd) continue;
 
-        const currency  = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
-        const isKorean  = currency === "KRW";
-        const name      = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
+        const currency = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
+        const isKorean = currency === "KRW";
+        const name     = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
 
-        // ── 한국 종목 날짜 보정 ──────────────────────────────────────────────
-        // Yahoo Finance는 한국 잠정실적 공시 시각(장중/장마감, UTC 04-08시 = KST 13-17시)을
-        // earningsDate로 저장한다. 실제 컨퍼런스콜은 다음 날 오전에 열리므로 +1일 보정.
+        // 한국 종목 날짜 보정: UTC 04-08시 = KST 13-17시(잠정실적 공시) → 컨퍼런스콜은 +1일
         let displayDate = date;
-        if (isKorean) {
-          const utcHour = date.getUTCHours();
-          // UTC 04-08시 = KST 13-17시: 잠정실적 공시 윈도우 → 컨퍼런스콜은 다음 날
-          if (utcHour >= 4 && utcHour <= 8) {
-            displayDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
-          }
+        if (isKorean && date.getUTCHours() >= 4 && date.getUTCHours() <= 8) {
+          displayDate = new Date(date.getTime() + 86400000);
         }
 
-        entries.push({
-          ticker,
-          companyName: name,
-          earningsDate: toKSTDateStr(displayDate),
-          epsEstimate:      cal?.earnings?.earningsAverage     ?? null,
-          epsLow:           cal?.earnings?.earningsLow         ?? null,
-          epsHigh:          cal?.earnings?.earningsHigh        ?? null,
-          revenueEstimate:  cal?.earnings?.revenueAverage      ?? null,
-          currency,
-          isKorean,
+        raw.push({
+          ticker, companyName: name, earningsDate: toKSTDateStr(displayDate),
+          epsEstimate:     cal?.earnings?.earningsAverage ?? null,
+          epsLow:          cal?.earnings?.earningsLow     ?? null,
+          epsHigh:         cal?.earnings?.earningsHigh    ?? null,
+          revenueEstimate: cal?.earnings?.revenueAverage  ?? null,
+          currency, isKorean,
         });
-        break; // 첫 번째 유효 날짜만 사용
+        break;
       }
     }
+    entries = raw;
+    _yfCache.set(yfCacheKey, { data: raw, expiresAt: yfNow + 5 * 60 * 1000 });
   }
 
-  // ── 4. Gemini 한국 종목 날짜로 오버라이드 ─────────────────────────────────
-  const geminiKrDates = await geminiKrDatesPromise;
-  if (geminiKrDates.size > 0) {
-    // Gemini가 날짜를 찾은 경우 덮어씀. 범위 밖 날짜는 무시.
-    const nowStr  = toKSTDateStr(now);
-    const endStr  = toKSTDateStr(rangeEnd);
+  // ── 4. Gemini 한국 날짜 오버라이드 (캐시만 사용, 블로킹 없음) ─────────────
+  const koreanTickers = allTickers.filter(t => t.endsWith(".KS") || t.endsWith(".KQ") || /^\d{6}$/.test(t));
+  const geminiKrDates = getCachedGeminiDates(koreanTickers, days);
+
+  if (geminiKrDates && geminiKrDates.size > 0) {
+    const nowStr = toKSTDateStr(now);
+    const endStr = toKSTDateStr(rangeEnd);
     for (const entry of entries) {
       if (!entry.isKorean) continue;
       const gDate = geminiKrDates.get(entry.ticker);
-      if (gDate && gDate >= nowStr && gDate <= endStr) {
-        entry.earningsDate = gDate;
-      }
+      if (gDate && gDate >= nowStr && gDate <= endStr) entry.earningsDate = gDate;
     }
-    // Gemini가 Yahoo Finance에 없는 한국 종목을 찾은 경우 추가
     const existingKrTickers = new Set(entries.filter(e => e.isKorean).map(e => e.ticker));
     for (const [ticker, gDate] of geminiKrDates) {
       if (existingKrTickers.has(ticker)) continue;
       if (gDate < toKSTDateStr(now) || gDate > toKSTDateStr(rangeEnd)) continue;
       const bare = ticker.replace(/\.(KS|KQ)$/, "");
-      const name = nameMap[ticker] ?? nameMap[bare] ?? ticker;
       entries.push({
-        ticker, companyName: name, earningsDate: gDate,
+        ticker, companyName: nameMap[ticker] ?? nameMap[bare] ?? ticker, earningsDate: gDate,
         epsEstimate: null, epsLow: null, epsHigh: null, revenueEstimate: null,
         currency: "KRW", isKorean: true,
       });
     }
+  } else if (koreanTickers.length > 0) {
+    // 캐시 없으면 백그라운드에서 Gemini 갱신 (응답은 즉시 반환)
+    triggerGeminiBackground(koreanTickers, nameMap, days);
   }
 
   // ── 5. 날짜 정렬 후 응답 ─────────────────────────────────────────────────
-  entries.sort((a, b) => a.earningsDate.localeCompare(b.earningsDate));
-  res.json(entries);
+  const sorted = [...entries].sort((a, b) => a.earningsDate.localeCompare(b.earningsDate));
+  res.json(sorted);
   } catch (err: any) {
     console.error("[earnings-calendar] unhandled error:", err?.message);
     res.status(500).json({ error: err?.message ?? "earnings-calendar error" });
