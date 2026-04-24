@@ -779,16 +779,29 @@ router.get("/earnings-calendar", async (req, res) => {
       for (const raw of dates) {
         const ts   = typeof raw === "number" ? raw * 1000 : (raw instanceof Date ? raw.getTime() : new Date(raw).getTime());
         const date = new Date(ts);
+
         if (date < now || date > rangeEnd) continue;
 
         const currency  = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
         const isKorean  = currency === "KRW";
         const name      = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
 
+        // ── 한국 종목 날짜 보정 ──────────────────────────────────────────────
+        // Yahoo Finance는 한국 잠정실적 공시 시각(장중/장마감, UTC 04-08시 = KST 13-17시)을
+        // earningsDate로 저장한다. 실제 컨퍼런스콜은 다음 날 오전에 열리므로 +1일 보정.
+        let displayDate = date;
+        if (isKorean) {
+          const utcHour = date.getUTCHours();
+          // UTC 04-08시 = KST 13-17시: 잠정실적 공시 윈도우 → 컨퍼런스콜은 다음 날
+          if (utcHour >= 4 && utcHour <= 8) {
+            displayDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
+          }
+        }
+
         entries.push({
           ticker,
           companyName: name,
-          earningsDate: toKSTDateStr(date),
+          earningsDate: toKSTDateStr(displayDate),
           epsEstimate:      cal?.earnings?.earningsAverage     ?? null,
           epsLow:           cal?.earnings?.earningsLow         ?? null,
           epsHigh:          cal?.earnings?.earningsHigh        ?? null,
