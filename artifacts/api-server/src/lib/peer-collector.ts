@@ -3,6 +3,26 @@ import fs from "fs/promises";
 import YahooFinance from "yahoo-finance2";
 import { correctKoreanTicker } from "./krx-cache.js";
 
+const NAVER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  "Referer": "https://m.stock.naver.com/",
+};
+
+async function fetchNaverPBR(code: string): Promise<number | null> {
+  try {
+    const data = await fetch(
+      `https://m.stock.naver.com/api/stock/${code}/basic`,
+      { headers: NAVER_HEADERS, signal: AbortSignal.timeout(6000) }
+    ).then(r => r.ok ? r.json() : null);
+    const raw = data?.pbr;
+    if (raw == null) return null;
+    const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
+    return isNaN(n) || n <= 0 ? null : n;
+  } catch {
+    return null;
+  }
+}
+
 const yahooFinance = new YahooFinance();
 const DATA_DIR = path.join(process.cwd(), "data", "peers");
 
@@ -278,6 +298,8 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
   let dartName: string | null = null;
   let dartUsed = false;
 
+  // Naver Finance PBR (한국주 전용, Yahoo 미제공 시 폴백)
+  let naverPbr: number | null = null;
   if (isKorean(ticker)) {
     const corpCode = await fetchDartCorpCode(stockCode(ticker));
     if (corpCode) {
@@ -289,6 +311,11 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
       operating_income = dartData.operating_income;
       equity = dartData.equity;
       dartName = dartData.name;
+    }
+    // Yahoo Finance PBR이 없으면 Naver Finance에서 가져옴
+    if (yahooData.pbr == null) {
+      naverPbr = await fetchNaverPBR(stockCode(ticker));
+      if (naverPbr != null) console.log(`[peer-collector] Naver PBR for ${ticker}: ${naverPbr}`);
     }
   }
 
@@ -321,7 +348,7 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
     marketCap,
     totalDebt,
     totalCash,
-    pbr: yahooData.pbr ?? null,
+    pbr: yahooData.pbr ?? naverPbr ?? null,
     per_trailing: yahooData.per_trailing ?? null,
     per_fwd: null,
     ev_ebitda: yahooData.ev_ebitda ?? null,

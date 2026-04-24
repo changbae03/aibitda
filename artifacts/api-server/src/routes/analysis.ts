@@ -1439,8 +1439,24 @@ async function fetchPeerFinancials(
           trailPE = mcap / netIncome;
         }
 
-        // PBR: priceToBook (ks → quote) → market cap / 자본총계
+        // PBR: Yahoo Finance → Naver Finance (한국주) → market cap / 자본총계
         let pbr: number | null = ks.priceToBook ?? (quote as any).priceToBook ?? null;
+        if (pbr == null) {
+          const koreanMatch = peer.ticker.match(/^(\d{6})\.(KS|KQ)$/i);
+          if (koreanMatch) {
+            try {
+              const nb = await fetch(
+                `https://m.stock.naver.com/api/stock/${koreanMatch[1]}/basic`,
+                { headers: NAVER_HEADERS, signal: AbortSignal.timeout(5000) }
+              ).then(r => r.ok ? r.json() : null);
+              const raw = nb?.pbr;
+              if (raw != null) {
+                const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
+                if (!isNaN(n) && n > 0) { pbr = n; console.log(`[peer-data] Naver PBR for ${peer.ticker}: ${n}`); }
+              }
+            } catch { /* optional */ }
+          }
+        }
         if (pbr == null && mcap != null && totalEquity != null && totalEquity > 0) {
           pbr = mcap / totalEquity;
         }
