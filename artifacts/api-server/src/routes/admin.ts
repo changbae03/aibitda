@@ -434,4 +434,182 @@ router.post("/reset-analysis-data", async (req, res) => {
   res.json({ ok: true, message: "분석 데이터가 초기화됐습니다" });
 });
 
+// ─── GET /api/admin/user-detail/:userId ──────────────────────────────────────
+router.get("/user-detail/:userId", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const targetId = req.params.userId;
+  try {
+    const [creditRow, topTickers, recentAnalyses, activityByDay] = await Promise.all([
+      pool.query(
+        `SELECT user_id, daily_limit, daily_used, bonus_credits, total_analyses, tier, admin_memo, display_name, created_at
+         FROM user_credits WHERE user_id = $1`, [targetId]
+      ),
+      pool.query(
+        `SELECT ticker, company_name, COUNT(*) AS cnt,
+                MAX(investment_verdict) AS last_verdict,
+                MAX(created_at) AS last_at
+         FROM analyses WHERE user_id = $1 AND status = 'done'
+         GROUP BY ticker, company_name ORDER BY cnt DESC LIMIT 5`, [targetId]
+      ),
+      pool.query(
+        `SELECT id, ticker, company_name, investment_verdict, target_price, created_at
+         FROM analyses WHERE user_id = $1
+         ORDER BY created_at DESC LIMIT 8`, [targetId]
+      ),
+      pool.query(
+        `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
+         FROM analyses WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
+         GROUP BY day ORDER BY day ASC`, [targetId]
+      ),
+    ]);
+    if (!creditRow.rows[0]) return res.status(404).json({ error: "유저를 찾을 수 없습니다" });
+    res.json({
+      user: creditRow.rows[0],
+      topTickers: topTickers.rows,
+      recentAnalyses: recentAnalyses.rows,
+      activityByDay: activityByDay.rows,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "DB error" });
+  }
+});
+
+// ─── GET /api/admin/cohort ─────────────────────────────────────────────────
+router.get("/cohort", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  try {
+    const { rows } = await pool.query(`
+      WITH cohorts AS (
+        SELECT user_id,
+               DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Seoul')::DATE AS cohort_week
+        FROM user_credits
+        WHERE created_at >= NOW() - INTERVAL '12 weeks'
+      ),
+      activities AS (
+        SELECT DISTINCT user_id,
+               DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Seoul')::DATE AS activity_week
+        FROM analyses
+      ),
+      cohort_activity AS (
+        SELECT c.cohort_week,
+               c.user_id,
+               EXTRACT(EPOCH FROM (a.activity_week - c.cohort_week)) / (7*24*3600) AS week_offset
+        FROM cohorts c
+        JOIN activities a ON c.user_id = a.user_id
+      )
+      SELECT
+        cohort_week::TEXT,
+        COUNT(DISTINCT c2.user_id) AS cohort_size,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT('week', ca.week_offset, 'users', ca.retained)
+            ORDER BY ca.week_offset
+          ) FILTER (WHERE ca.week_offset IS NOT NULL),
+          '[]'
+        ) AS retention
+      FROM cohorts c2
+      LEFT JOIN (
+        SELECT cohort_week, week_offset, COUNT(DISTINCT user_id) AS retained
+        FROM cohort_activity
+        WHERE week_offset >= 0 AND week_offset <= 8
+        GROUP BY cohort_week, week_offset
+      ) ca ON c2.cohort_week = ca.cohort_week
+      GROUP BY c2.cohort_week
+      ORDER BY c2.cohort_week DESC
+      LIMIT 8
+    `);
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "DB error" });
+  }
+});
+
+// ─── 수익 지표 ─────────────────────────────────────────────────────────────
+router.get("/revenue-stats", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  try {
+    const [tierCounts, weeklySignups, tokenCosts, repeatUsers] = await Promise.all([
+      pool.query(`SELECT tier, COUNT(*) AS cnt FROM user_credits GROUP BY tier`),
+      pool.query(`
+        SELECT DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Seoul')::DATE AS week,
+               COUNT(*) AS signups
+        FROM user_credits WHERE created_at >= NOW() - INTERVAL '8 weeks'
+        GROUP BY week ORDER BY week ASC`),
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE token_count > 0) AS tracked_analyses,
+          SUM(token_count) AS total_tokens,
+          SUM(estimated_cost_usd) AS total_cost_usd,
+          AVG(estimated_cost_usd) FILTER (WHERE estimated_cost_usd > 0) AS avg_cost_usd
+        FROM analyses WHERE status = 'completed'`),
+      pool.query(`
+        SELECT COUNT(DISTINCT user_id) AS repeat_users
+        FROM analyses WHERE user_id IS NOT NULL
+        GROUP BY user_id HAVING COUNT(*) > 1`),
+    ]);
+    const tiers: Record<string, number> = {};
+    for (const r of tierCounts.rows) tiers[r.tier] = parseInt(r.cnt, 10);
+    const PRICING: Record<string, number> = { free: 0, beta: 9900, premium: 29900 };
+    const mrrKrw = Object.entries(tiers)
+      .reduce((sum, [t, n]) => sum + (PRICING[t] ?? 0) * n, 0);
+    res.json({
+      tierCounts: tiers,
+      mrrKrw,
+      weeklySignups: weeklySignups.rows,
+      tokenCosts: tokenCosts.rows[0],
+      repeatUserCount: repeatUsers.rowCount ?? 0,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "DB error" });
+  }
+});
+
+// ─── 프로모 코드 CRUD ──────────────────────────────────────────────────────
+router.get("/promo-codes", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { rows } = await pool.query(
+    `SELECT * FROM promo_codes ORDER BY created_at DESC`
+  );
+  res.json(rows);
+});
+
+router.post("/promo-codes", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { code, description, credit_amount, tier_upgrade, max_uses, expires_at } = req.body;
+  if (!code || typeof code !== "string") return res.status(400).json({ error: "code 필수" });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO promo_codes (code, description, credit_amount, tier_upgrade, max_uses, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [code.toUpperCase().trim(), description ?? null, credit_amount ?? 0, tier_upgrade ?? null, max_uses ?? null, expires_at ?? null]
+    );
+    res.json(rows[0]);
+  } catch (err: any) {
+    if (err.code === "23505") return res.status(409).json({ error: "이미 존재하는 코드입니다" });
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+router.patch("/promo-codes/:id/toggle", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { rows } = await pool.query(
+    `UPDATE promo_codes SET enabled = NOT enabled WHERE id = $1 RETURNING *`,
+    [req.params.id]
+  );
+  res.json(rows[0] ?? { error: "not found" });
+});
+
+router.delete("/promo-codes/:id", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  await pool.query(`DELETE FROM promo_codes WHERE id = $1`, [req.params.id]);
+  res.json({ ok: true });
+});
+
 export default router;

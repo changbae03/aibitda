@@ -56,9 +56,14 @@ Step 7: catalyst → Step 8: smart_money → Step 9: lead_validation (final verd
 
 ## Database Schema
 
-- `analyses` - 분석 세션 (ticker, company, status, verdict, prices)
+- `analyses` - 분석 세션 (ticker, company, status, verdict, prices, token_count, estimated_cost_usd)
 - `analysis_steps` - 각 에이전트 분석 결과
 - `hypotheses` - 투자 가설 추적 (outcome, accuracy scoring)
+- `user_credits` - 유저 크레딧·등급 관리 (tier: free/beta/premium)
+- `analysis_schedules` - 재실행 스케줄 (cron)
+- `ticker_notes` - 종목별 관리자 메모·자동학습 데이터
+- `promo_codes` - 프로모 코드 (credit_amount, tier_upgrade, max_uses)
+- `promo_code_uses` - 프로모 코드 사용 이력 (unique per user)
 
 ## API Routes
 

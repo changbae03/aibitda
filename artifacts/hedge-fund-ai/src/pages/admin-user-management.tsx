@@ -2,9 +2,154 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, Search, ChevronRight, X,
   Zap, TrendingUp, RotateCcw, Plus, Minus, History,
-  ArrowLeft, ArrowRight, User, Crown, FileText, ExternalLink,
+  ArrowLeft, ArrowRight, User, Crown, FileText, ExternalLink, BarChart2, Star,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+
+interface UserDetail {
+  user: {
+    user_id: string;
+    daily_limit: number;
+    daily_used: number;
+    bonus_credits: number;
+    total_analyses: number;
+    tier: string;
+    admin_memo: string;
+    display_name: string | null;
+    created_at: string | null;
+  };
+  topTickers: Array<{ ticker: string; company_name: string | null; cnt: number; last_verdict: string | null; last_at: string }>;
+  recentAnalyses: Array<{ id: number; ticker: string; company_name: string | null; investment_verdict: string | null; target_price: number | null; created_at: string }>;
+  activityByDay: Array<{ day: string; cnt: number }>;
+}
+
+function UserDetailModal({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const [data, setData] = useState<UserDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(getApiUrl(`/api/admin/user-detail/${encodeURIComponent(userId)}`), { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (!d.error) setData(d); })
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  const VERDICT_COLOR: Record<string, string> = {
+    "Strong Buy": "text-emerald-600", "Buy": "text-green-600",
+    "Hold": "text-amber-600", "Sell": "text-orange-500", "Strong Sell": "text-red-500",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-background border border-border rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-primary" />
+            <span className="font-bold text-sm">유저 상세 프로필</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-5 space-y-5 flex-1">
+          {loading ? (
+            <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
+            </div>
+          ) : !data ? (
+            <p className="text-sm text-muted-foreground text-center py-8">데이터를 불러오지 못했습니다</p>
+          ) : (
+            <>
+              {/* 기본 정보 */}
+              <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">기본 정보</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><p className="text-xs text-muted-foreground">닉네임</p><p className="font-semibold">{data.user.display_name ?? "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">등급</p><p className="font-semibold capitalize">{data.user.tier}</p></div>
+                  <div><p className="text-xs text-muted-foreground">전체 분석 수</p><p className="font-semibold tabular-nums">{Number(data.user.total_analyses).toLocaleString()}건</p></div>
+                  <div><p className="text-xs text-muted-foreground">가입일</p><p className="font-semibold">{data.user.created_at ? new Date(data.user.created_at).toLocaleDateString("ko-KR") : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">보너스 크레딧</p><p className="font-semibold tabular-nums">{data.user.bonus_credits}</p></div>
+                  <div><p className="text-xs text-muted-foreground">오늘 사용</p><p className="font-semibold tabular-nums">{data.user.daily_used} / {data.user.daily_limit}</p></div>
+                </div>
+              </div>
+
+              {/* 최다 분석 종목 */}
+              {data.topTickers.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <Star className="w-3.5 h-3.5" /> 자주 분석한 종목
+                  </div>
+                  <div className="space-y-1.5">
+                    {data.topTickers.map(t => (
+                      <div key={t.ticker} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 text-sm">
+                        <div>
+                          <span className="font-semibold">{t.company_name ?? t.ticker}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{t.ticker.replace(/\.(KS|KQ)$/,"")}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {t.last_verdict && (
+                            <span className={cn("text-xs font-semibold", VERDICT_COLOR[t.last_verdict] ?? "text-foreground")}>{t.last_verdict}</span>
+                          )}
+                          <span className="text-xs text-muted-foreground">{t.cnt}회</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 최근 분석 */}
+              {data.recentAnalyses.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <BarChart2 className="w-3.5 h-3.5" /> 최근 분석 리포트
+                  </div>
+                  <div className="space-y-1.5">
+                    {data.recentAnalyses.map(a => (
+                      <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 text-sm">
+                        <div>
+                          <span className="font-semibold">{a.company_name ?? a.ticker}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{new Date(a.created_at).toLocaleDateString("ko-KR")}</span>
+                        </div>
+                        {a.investment_verdict && (
+                          <span className={cn("text-xs font-semibold", VERDICT_COLOR[a.investment_verdict] ?? "text-foreground")}>{a.investment_verdict}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 30일 활동 */}
+              {data.activityByDay.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">최근 30일 활동</p>
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from({ length: 30 }, (_, i) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() - (29 - i));
+                      const key = d.toISOString().slice(0, 10);
+                      const found = data.activityByDay.find(a => String(a.day).slice(0, 10) === key);
+                      const n = found ? Number(found.cnt) : 0;
+                      return (
+                        <div
+                          key={key}
+                          title={`${key}: ${n}건`}
+                          className={cn("w-4 h-4 rounded-sm", n >= 5 ? "bg-emerald-500" : n >= 3 ? "bg-emerald-300" : n >= 1 ? "bg-emerald-100" : "bg-muted/50")}
+                        />
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">밝을수록 분석 많음</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface UserRow {
   userId: string;
@@ -93,6 +238,7 @@ export default function AdminUserManagement() {
   const [memoText, setMemoText] = useState("");
   const [memoLoading, setMemoLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -249,6 +395,7 @@ export default function AdminUserManagement() {
   };
 
   return (
+    <>
     <div className="flex h-full min-h-[calc(100vh-4rem)]">
       {/* ── 왼쪽: 유저 목록 ── */}
       <div className={cn("flex flex-col border-r border-border transition-all", selected ? "w-[55%] min-w-0" : "w-full")}>
@@ -376,9 +523,17 @@ export default function AdminUserManagement() {
                 <span>7일 <strong className="text-foreground">{selected.recentAnalyses}</strong>회</span>
               </div>
             </div>
-            <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-muted flex-shrink-0">
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                onClick={() => setShowDetailModal(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent transition-colors flex items-center gap-1"
+              >
+                <User className="w-3 h-3" /> 상세 프로필
+              </button>
+              <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-muted flex-shrink-0">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
           </div>
 
           <div className="overflow-auto flex-1 px-5 py-4 space-y-5">
@@ -592,6 +747,13 @@ export default function AdminUserManagement() {
           </div>
         </div>
       )}
+
     </div>
+
+    {/* 유저 상세 프로필 모달 */}
+    {showDetailModal && selected && (
+      <UserDetailModal userId={selected.userId} onClose={() => setShowDetailModal(false)} />
+    )}
+    </>
   );
 }

@@ -180,6 +180,35 @@ export async function runMigrations() {
       );
     `);
 
+    // 토큰 비용 트래킹
+    await client.query(`
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS token_count INTEGER DEFAULT 0;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS estimated_cost_usd REAL DEFAULT 0;
+    `);
+
+    // 프로모 코드
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promo_codes (
+        id SERIAL PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        description TEXT,
+        credit_amount INTEGER NOT NULL DEFAULT 0,
+        tier_upgrade TEXT,
+        max_uses INTEGER,
+        uses_count INTEGER NOT NULL DEFAULT 0,
+        expires_at TIMESTAMP,
+        enabled BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS promo_code_uses (
+        id SERIAL PRIMARY KEY,
+        code TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        used_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(code, user_id)
+      );
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl } from "@/lib/utils";
@@ -24,6 +24,38 @@ function useCredits() {
       return res.json();
     },
     staleTime: 30_000,
+  });
+}
+
+interface RecentAnalysis {
+  id: number;
+  ticker: string;
+  companyName: string | null;
+  investmentVerdict: string | null;
+  targetPrice: number | null;
+  startPrice: number | null;
+  createdAt: string;
+  status: string;
+}
+
+const VERDICT_MINI: Record<string, { icon: React.ReactNode; color: string }> = {
+  "Strong Buy":  { icon: <TrendingUp className="w-3 h-3" />,  color: "text-emerald-600" },
+  "Buy":         { icon: <TrendingUp className="w-3 h-3" />,  color: "text-green-600" },
+  "Hold":        { icon: <Minus className="w-3 h-3" />,        color: "text-amber-500" },
+  "Sell":        { icon: <TrendingDown className="w-3 h-3" />, color: "text-orange-500" },
+  "Strong Sell": { icon: <TrendingDown className="w-3 h-3" />, color: "text-red-500" },
+};
+
+function useRecentAnalyses() {
+  return useQuery<RecentAnalysis[]>({
+    queryKey: ["recent-analyses-home"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/api/analyses?limit=5"), { credentials: "include" });
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.data ?? d ?? [];
+    },
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -111,6 +143,7 @@ export default function NewAnalysis() {
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
   const trending = useTrendingTickers();
+  const { data: recentAnalyses } = useRecentAnalyses();
 
   useEffect(() => {
     const code = localStorage.getItem("pending_referral");
@@ -517,6 +550,64 @@ export default function NewAnalysis() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* 최근 분석 기록 (개인화) */}
+        {recentAnalyses && recentAnalyses.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className="flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-1.5 justify-between">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">최근 분석 기록</span>
+              </div>
+              <a href="/history" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
+                전체 보기 <ChevronRight className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {recentAnalyses.slice(0, 4).map(a => {
+                const vm = VERDICT_MINI[a.investmentVerdict ?? ""];
+                const shortTicker = a.ticker?.replace(/\.(KS|KQ)$/, "");
+                const upside = a.targetPrice && a.startPrice
+                  ? ((a.targetPrice - a.startPrice) / a.startPrice) * 100
+                  : null;
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => setLocation(`/analysis/${a.id}`)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors text-left group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-foreground truncate">{a.companyName ?? a.ticker}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground">{shortTicker}</p>
+                    </div>
+                    <div className="text-right shrink-0 space-y-0.5">
+                      {vm && (
+                        <p className={`text-xs font-semibold flex items-center gap-1 justify-end ${vm.color}`}>
+                          {vm.icon}
+                          {a.investmentVerdict}
+                        </p>
+                      )}
+                      {upside !== null && (
+                        <p className={`text-[10px] font-mono ${upside >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* Quick picks */}
         <div className="flex flex-col gap-2">

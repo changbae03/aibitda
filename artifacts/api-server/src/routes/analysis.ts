@@ -2258,6 +2258,26 @@ router.get("/period-stats", async (_req, res) => {
   }
 });
 
+// ─── GET /api/analysis/ticker-history/:ticker ────────────────────────────────
+// 같은 종목의 과거 분석 히스토리 (버전 타임라인용)
+router.get("/ticker-history/:ticker", async (req, res) => {
+  try {
+    const ticker = req.params.ticker.toUpperCase();
+    const { rows } = await pool.query(
+      `SELECT id, ticker, company_name, industry, status, investment_verdict, target_price,
+              start_price, created_at, token_count, estimated_cost_usd
+       FROM analyses
+       WHERE ticker = $1 AND status = 'done' AND is_public = 'true'
+       ORDER BY created_at DESC
+       LIMIT 12`,
+      [ticker]
+    );
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "DB error" });
+  }
+});
+
 // ─── GET /api/analysis/schedules ─────────────────────────────────────────────
 router.get("/schedules", async (req, res) => {
   const userId = getUserId(req);
@@ -2995,6 +3015,25 @@ async function executeStep(
          WHERE id=$6`,
         [investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, id]
       );
+
+      // ── 토큰 비용 추정 저장 ────────────────────────────────────────────────
+      try {
+        const stepRows = await rawQuery(
+          `SELECT content FROM analysis_steps WHERE analysis_id = $1`,
+          [id]
+        );
+        const totalChars = stepRows.reduce((sum: number, r: any) => sum + (r.content?.length ?? 0), 0);
+        // 1 토큰 ≈ 3.5 chars (한국어+영어 혼합)
+        const estimatedTokens = Math.round(totalChars / 3.5);
+        // Gemini 2.5 Flash: ~$0.15/1M tokens (입출력 평균)
+        const estimatedCostUsd = (estimatedTokens / 1_000_000) * 0.15;
+        await rawQuery(
+          `UPDATE analyses SET token_count=$1, estimated_cost_usd=$2 WHERE id=$3`,
+          [estimatedTokens, Math.round(estimatedCostUsd * 10000) / 10000, id]
+        );
+      } catch (e) {
+        console.error("[token-tracking] 오류:", e);
+      }
 
       triggerModelReview().catch(console.error);
 

@@ -2,8 +2,16 @@ import { useState, useEffect } from "react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
-import { Loader2, Users, BarChart2, Activity, Crown, RefreshCw, Bell, BellOff, Save } from "lucide-react";
+import { Loader2, Users, BarChart2, Activity, Crown, RefreshCw, Bell, BellOff, Save, DollarSign, Cpu } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+
+interface RevenueStats {
+  tierCounts: Record<string, number>;
+  mrrKrw: number;
+  weeklySignups: Array<{ week: string; signups: number }>;
+  tokenCosts: { tracked_analyses: number; total_tokens: number; total_cost_usd: number; avg_cost_usd: number };
+  repeatUserCount: number;
+}
 
 interface DayCount { day: string; count: number; }
 interface StatsData {
@@ -57,6 +65,8 @@ export default function AdminDashboard() {
   const [globalLimitTier, setGlobalLimitTier] = useState("all");
   const [globalLimitLoading, setGlobalLimitLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [revenue, setRevenue] = useState<RevenueStats | null>(null);
+  const [revenueLoading, setRevenueLoading] = useState(true);
 
   const showMsg = (type: "ok" | "err", text: string) => {
     setMsg({ type, text });
@@ -79,8 +89,16 @@ export default function AdminDashboard() {
     } finally { setSettingsLoading(false); }
   };
 
+  const loadRevenue = async () => {
+    setRevenueLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/revenue-stats"), { credentials: "include" });
+      if (r.ok) setRevenue(await r.json());
+    } finally { setRevenueLoading(false); }
+  };
+
   useEffect(() => { loadStats(); }, [days]);
-  useEffect(() => { loadSettings(); }, []);
+  useEffect(() => { loadSettings(); loadRevenue(); }, []);
 
   const saveSettings = async () => {
     setSettingsSaving(true);
@@ -183,6 +201,39 @@ export default function AdminDashboard() {
               })}
             </div>
           </div>
+
+          {/* ── 수익 지표 ── */}
+          {!revenueLoading && revenue && (
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">수익 & 비용 지표</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-[10px] text-muted-foreground mb-1">예상 MRR</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">₩{revenue.mrrKrw.toLocaleString("ko-KR")}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-[10px] text-muted-foreground mb-1">재방문 유저</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">{revenue.repeatUserCount.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" />총 AI 토큰</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    {revenue.tokenCosts?.total_tokens ? `${(Number(revenue.tokenCosts.total_tokens) / 1_000_000).toFixed(2)}M` : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-[10px] text-muted-foreground mb-1">총 API 비용 (추정)</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    ${revenue.tokenCosts?.total_cost_usd ? Number(revenue.tokenCosts.total_cost_usd).toFixed(4) : "0"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">건당 ${revenue.tokenCosts?.avg_cost_usd ? Number(revenue.tokenCosts.avg_cost_usd).toFixed(5) : "0"}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 차트 */}
           <div className="rounded-xl border border-border p-4">

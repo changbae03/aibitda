@@ -30,6 +30,9 @@ import SettingsPage from "@/pages/settings";
 import SharePage from "@/pages/share";
 import CalendarPage from "@/pages/calendar";
 import SchedulesPage from "@/pages/schedules";
+import ComparePage from "@/pages/compare";
+import AdminCohort from "@/pages/admin-cohort";
+import AdminPromoCodes from "@/pages/admin-promo-codes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,6 +113,9 @@ function Router() {
             <Route path="/settings" component={SettingsPage} />
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/schedules" component={SchedulesPage} />
+            <Route path="/compare" component={ComparePage} />
+            <Route path="/admin/cohort" component={AdminCohort} />
+            <Route path="/admin/promo-codes" component={AdminPromoCodes} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

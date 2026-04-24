@@ -112,4 +112,75 @@ router.delete("/profile/account", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── POST /credits/promo ─── 프로모 코드 적용 ─────────────────────────────
+router.post("/credits/promo", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+  const { code } = req.body as { code?: string };
+  if (!code?.trim()) return res.status(400).json({ error: "코드를 입력하세요" });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const normalized = code.trim().toUpperCase();
+    const { rows: pc } = await client.query(
+      `SELECT * FROM promo_codes WHERE code = $1 AND enabled = true`, [normalized]
+    );
+    if (!pc[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "유효하지 않거나 만료된 코드입니다" });
+    }
+    const promo = pc[0];
+    if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "기간이 만료된 코드입니다" });
+    }
+    if (promo.max_uses !== null && promo.uses_count >= promo.max_uses) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "사용 한도가 초과된 코드입니다" });
+    }
+    // 중복 사용 체크
+    const { rows: used } = await client.query(
+      `SELECT 1 FROM promo_code_uses WHERE code = $1 AND user_id = $2`, [normalized, userId]
+    );
+    if (used.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "이미 사용한 코드입니다" });
+    }
+    // 크레딧 지급
+    if (promo.credit_amount > 0) {
+      await client.query(
+        `UPDATE user_credits SET bonus_credits = bonus_credits + $1 WHERE user_id = $2`,
+        [promo.credit_amount, userId]
+      );
+    }
+    // 등급 업그레이드
+    if (promo.tier_upgrade) {
+      await client.query(
+        `UPDATE user_credits SET tier = $1, daily_limit = CASE $1 WHEN 'premium' THEN 50 WHEN 'beta' THEN 10 ELSE daily_limit END WHERE user_id = $2`,
+        [promo.tier_upgrade, userId]
+      );
+    }
+    // 사용 기록
+    await client.query(
+      `INSERT INTO promo_code_uses (code, user_id) VALUES ($1, $2)`, [normalized, userId]
+    );
+    await client.query(
+      `UPDATE promo_codes SET uses_count = uses_count + 1 WHERE code = $1`, [normalized]
+    );
+    await client.query("COMMIT");
+    res.json({
+      ok: true,
+      creditAmount: promo.credit_amount,
+      tierUpgrade: promo.tier_upgrade,
+      message: `코드가 적용됐습니다! ${promo.credit_amount > 0 ? `크레딧 ${promo.credit_amount}개 지급` : ""}${promo.tier_upgrade ? ` · ${promo.tier_upgrade} 등급으로 업그레이드` : ""}`.trim(),
+    });
+  } catch (err: any) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err?.message ?? "오류 발생" });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;

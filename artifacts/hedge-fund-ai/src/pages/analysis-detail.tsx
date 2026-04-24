@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Swords,
   CalendarClock,
+  History,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -487,6 +488,113 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ─── VersionTimelinePanel ─────────────────────────────────────────────────────
+interface VersionItem {
+  id: number;
+  ticker: string;
+  company_name: string;
+  investment_verdict: string | null;
+  target_price: number | null;
+  start_price: number | null;
+  created_at: string;
+}
+
+const VERDICT_SHORT: Record<string, { label: string; dot: string }> = {
+  "Strong Buy":  { label: "강매수", dot: "bg-emerald-500" },
+  "Buy":         { label: "매수",   dot: "bg-green-400" },
+  "Hold":        { label: "보유",   dot: "bg-amber-400" },
+  "Sell":        { label: "매도",   dot: "bg-orange-400" },
+  "Strong Sell": { label: "강매도", dot: "bg-red-500" },
+};
+
+function VersionTimelinePanel({ ticker, currentId }: { ticker: string; currentId: number }) {
+  const [versions, setVersions] = useState<VersionItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!ticker) return;
+    setLoading(true);
+    fetch(getApiUrl(`/api/analysis/ticker-history/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => r.json())
+      .then(setVersions)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
+  if (loading) return (
+    <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-2 text-muted-foreground text-sm">
+      <Loader2 className="w-4 h-4 animate-spin" /> 버전 히스토리 로딩 중…
+    </div>
+  );
+  if (versions.length <= 1) return null;
+
+  const isKR = !ticker.includes(".") || ticker.endsWith(".KS") || ticker.endsWith(".KQ");
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <History className="w-4 h-4 text-primary shrink-0" />
+        <h3 className="font-semibold text-sm text-foreground">분석 버전 타임라인</h3>
+        <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{versions.length}개 리포트</span>
+      </div>
+      <div className="relative">
+        <div className="absolute left-3.5 top-2 bottom-2 w-px bg-border" />
+        <div className="space-y-3">
+          {versions.map((v, i) => {
+            const vc = VERDICT_SHORT[v.investment_verdict ?? ""];
+            const isCurrent = v.id === currentId;
+            const upside = v.target_price && v.start_price
+              ? ((v.target_price - v.start_price) / v.start_price) * 100
+              : null;
+            return (
+              <button
+                key={v.id}
+                onClick={() => !isCurrent && navigate(`/analysis/${v.id}`)}
+                className={cn(
+                  "relative flex items-start gap-3 w-full text-left pl-7 pr-2 py-2 rounded-xl transition-colors",
+                  isCurrent ? "bg-primary/8 cursor-default" : "hover:bg-accent cursor-pointer"
+                )}
+              >
+                {/* Timeline dot */}
+                <div className={cn(
+                  "absolute left-2 top-3.5 w-3 h-3 rounded-full border-2 border-background",
+                  vc?.dot ?? "bg-muted-foreground",
+                  isCurrent ? "ring-2 ring-primary/30" : ""
+                )} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground font-mono">
+                      {new Date(v.created_at).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+                    </span>
+                    {isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">현재</span>}
+                    {i === 0 && !isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">최신</span>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {vc && (
+                      <span className="text-xs font-semibold text-foreground">{vc.label}</span>
+                    )}
+                    {v.target_price != null && (
+                      <span className="text-xs text-muted-foreground">
+                        목표가 {isKR ? `${Math.round(v.target_price).toLocaleString("ko-KR")}원` : `$${v.target_price.toFixed(1)}`}
+                      </span>
+                    )}
+                    {upside !== null && (
+                      <span className={cn("text-xs font-semibold", upside >= 0 ? "text-emerald-600" : "text-red-500")}>
+                        {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1272,6 +1380,9 @@ export default function AnalysisDetail() {
 
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} />
+
+      {/* Version Timeline */}
+      <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} />
 
       {/* Progress Track */}
       <div className="bg-card border border-border rounded-2xl p-5 print:hidden">
