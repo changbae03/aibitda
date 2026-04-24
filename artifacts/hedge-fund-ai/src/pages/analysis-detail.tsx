@@ -1247,7 +1247,8 @@ export default function AnalysisDetail() {
   const handleRunNextStep = () => {
     if (isComplete || isStreaming || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[currentStepCount];
-    if (triggeredSteps.current.has(nextStepKey)) return;
+    // 이전에 auto-chain이 실패했을 수 있으므로 triggeredSteps 체크를 제거하고 항상 재실행 허용
+    triggeredSteps.current.delete(nextStepKey);
     triggeredSteps.current.add(nextStepKey);
     runStreamingStep(nextStepKey);
   };
