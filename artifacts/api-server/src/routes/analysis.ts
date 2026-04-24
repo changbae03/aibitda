@@ -3,6 +3,7 @@ import { db, pool } from "@workspace/db";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
+import { cache, TTL } from "../lib/mem-cache.js";
 import { fetchDartSubjectBalance } from "../lib/peer-collector.js";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
@@ -332,6 +333,14 @@ function naverFmt(val: string | undefined | null): number | null {
 }
 
 async function fetchNaverFinanceData(code: string): Promise<{ context: string; naverSharesCalc: number | null }> {
+  const cacheKey = `naver:${code}`;
+  const cached = cache.get<{ context: string; naverSharesCalc: number | null }>(cacheKey);
+  if (cached) {
+    console.log(`[Cache HIT] ${cacheKey}`);
+    return cached;
+  }
+  console.log(`[Cache MISS] ${cacheKey} — fetching from Naver Finance`);
+
   const lines: string[] = [];
   let naverSharesCalc: number | null = null;
 
@@ -576,7 +585,9 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
     }
   }
 
-  return { context: lines.join("\n"), naverSharesCalc };
+  const result = { context: lines.join("\n"), naverSharesCalc };
+  cache.set(cacheKey, result, TTL.NAVER_PRICE);
+  return result;
 }
 
 // ─── Financial data fetching ──────────────────────────────────────────────────
@@ -610,6 +621,14 @@ function pct(val: number | undefined | null): string {
 }
 
 async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
+  const fcCacheKey = `financial:${resolvedSymbol}`;
+  const fcCached = cache.get<string>(fcCacheKey);
+  if (fcCached) {
+    console.log(`[Cache HIT] ${fcCacheKey}`);
+    return fcCached;
+  }
+  console.log(`[Cache MISS] ${fcCacheKey} — fetching from Yahoo Finance`);
+
   let result: any;
   let tsResult: any = null;
   let naverSharesCalc: number | null = null; // fetchNaverFinanceData에서 반환 받음
@@ -1137,12 +1156,19 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
   const text = lines.join("\n");
   console.log(`[financial-data] Fetched ${text.length} chars for ${resolvedSymbol}`);
+  cache.set(fcCacheKey, text, TTL.YAHOO_FINANCIAL);
   return text;
 }
 
 // ─── Company news fetching (Google News RSS) ─────────────────────────────────
 
 async function fetchCompanyNews(companyName: string): Promise<string> {
+  const newsCacheKey = `news:${companyName}`;
+  const newsCached = cache.get<string>(newsCacheKey);
+  if (newsCached) {
+    console.log(`[Cache HIT] ${newsCacheKey}`);
+    return newsCached;
+  }
   try {
     const query = encodeURIComponent(companyName);
     const rssUrl = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`;
@@ -1175,7 +1201,9 @@ async function fetchCompanyNews(companyName: string): Promise<string> {
     }
 
     console.log(`[news] Fetched ${items.length} news items for ${companyName}`);
-    return lines.join("\n");
+    const newsText = lines.join("\n");
+    cache.set(newsCacheKey, newsText, 10 * 60 * 1000); // 10분 캐시
+    return newsText;
   } catch (err) {
     console.error("[news] Failed:", err);
     return "";
@@ -1653,6 +1681,15 @@ function mapStepRow(row: any): typeof analysisStepsTable.$inferSelect {
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+
+router.get("/cache-stats", (_req, res) => {
+  res.json(cache.getStats());
+});
+
+router.delete("/cache", (_req, res) => {
+  cache.purgeExpired();
+  res.json({ ok: true, stats: cache.getStats() });
+});
 
 router.post("/", async (req, res) => {
   const { ticker, companyName: rawCompanyName, industry: rawIndustry, additionalContext } = req.body as {
