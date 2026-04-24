@@ -683,10 +683,11 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   ]);
 
   if (summaryRes.status === "rejected") {
-    console.error(`[financial-data] Failed for ${resolvedSymbol}:`, summaryRes.reason);
-    return "";
+    console.error(`[financial-data] quoteSummary failed for ${resolvedSymbol} — will build context from Naver/quote fallback:`, (summaryRes.reason as any)?.message?.slice(0, 120));
+    result = {} as any; // quoteSummary 실패 시 빈 객체로 계속 진행 (Naver + quote 데이터로 현재가 등 최소 컨텍스트 구성)
+  } else {
+    result = summaryRes.value;
   }
-  result = summaryRes.value;
 
   // Override Yahoo Finance currentPrice with correct KRX price for Korean stocks.
   // Priority: 1) Naver closePrice  2) Yahoo quote.regularMarketPrice

@@ -1437,7 +1437,7 @@ router.get("/debug-price/:ticker", async (req, res) => {
   } catch (e: any) { result.quote_error = e.message?.slice(0, 100); }
 
   try {
-    const s = await (yahooFinance as any).quoteSummary(ticker, { modules: ["financialData"], validateResult: false });
+    const s = await (yahooFinance as any).quoteSummary(ticker, { modules: ["financialData"] });
     result.financialData_currentPrice = s?.financialData?.currentPrice ?? null;
   } catch (e: any) { result.quoteSummary_error = e.message?.slice(0, 100); }
 
