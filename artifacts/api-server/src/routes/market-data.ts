@@ -1427,4 +1427,38 @@ JSON만 출력하세요. 코드블록 없이.`;
   }
 });
 
+// GET /api/market-data/debug-price/:ticker — 임시 진단용: Yahoo Finance + Naver 가격 비교
+router.get("/debug-price/:ticker", async (req, res) => {
+  const { ticker } = req.params;
+  const result: any = {};
+  try {
+    const q = await yahooFinance.quote(ticker);
+    result.quote_regularMarketPrice = q?.regularMarketPrice ?? null;
+  } catch (e: any) { result.quote_error = e.message?.slice(0, 100); }
+
+  try {
+    const s = await (yahooFinance as any).quoteSummary(ticker, { modules: ["financialData"], validateResult: false });
+    result.financialData_currentPrice = s?.financialData?.currentPrice ?? null;
+  } catch (e: any) { result.quoteSummary_error = e.message?.slice(0, 100); }
+
+  const koreanCode = ticker.match(/^(\d{6})\.(KS|KQ)$/i)?.[1];
+  if (koreanCode) {
+    try {
+      const nr = await fetch(`https://m.stock.naver.com/api/stock/${koreanCode}/basic`, {
+        headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", "Referer": "https://m.stock.naver.com/" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (nr.ok) {
+        const nd = await nr.json() as any;
+        result.naver_closePrice_raw = nd.closePrice;
+        result.naver_closePrice_num = nd.closePrice ? Number(String(nd.closePrice).replace(/,/g, "")) : null;
+      } else {
+        result.naver_status = nr.status;
+      }
+    } catch (e: any) { result.naver_error = e.message?.slice(0, 100); }
+  }
+
+  res.json(result);
+});
+
 export default router;
