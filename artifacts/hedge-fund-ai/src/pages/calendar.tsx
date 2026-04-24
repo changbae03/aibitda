@@ -3,7 +3,7 @@ import { format, isToday, isTomorrow, parseISO, addDays, startOfDay } from "date
 import { ko } from "date-fns/locale";
 import {
   CalendarDays, RefreshCw, TrendingUp, DollarSign,
-  ChevronRight, Building2, AlertCircle, Search, X,
+  ChevronRight, Building2, AlertCircle, Search, X, Sparkles,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -68,21 +68,16 @@ function ExchangeBadge({ ticker, isKorean }: { ticker: string; isKorean: boolean
   );
 }
 
-function EarningsCard({ entry }: { entry: EarningsEntry }) {
+function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e: EarningsEntry) => void }) {
   const hasEps = entry.epsEstimate !== null;
   const hasRevenue = entry.revenueEstimate !== null;
   const shortTicker = entry.ticker.replace(/\.(KS|KQ)$/, "");
-  const [, navigate] = useLocation();
-
-  const handleClick = () => {
-    navigate(`/analysis/new?ticker=${encodeURIComponent(entry.ticker)}`);
-  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      onClick={handleClick}
+      onClick={() => onSelect(entry)}
       className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent/40 active:scale-[0.99] transition-all cursor-pointer"
     >
       {/* 아이콘 */}
@@ -134,7 +129,7 @@ function EarningsCard({ entry }: { entry: EarningsEntry }) {
   );
 }
 
-function DateGroup({ date, entries }: { date: string; entries: EarningsEntry[] }) {
+function DateGroup({ date, entries, onSelect }: { date: string; entries: EarningsEntry[]; onSelect: (e: EarningsEntry) => void }) {
   const d = parseISO(date);
   const label = format(d, "M월 d일 (EEE)", { locale: ko });
 
@@ -147,7 +142,7 @@ function DateGroup({ date, entries }: { date: string; entries: EarningsEntry[] }
       </div>
       <div className="space-y-2">
         {entries.map(e => (
-          <EarningsCard key={e.ticker} entry={e} />
+          <EarningsCard key={e.ticker} entry={e} onSelect={onSelect} />
         ))}
       </div>
     </div>
@@ -162,6 +157,8 @@ export default function CalendarPage() {
   const [extraInput, setExtraInput] = useState("");
   const [extraTickers, setExtraTickers] = useState<string[]>([]);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const [pendingEntry, setPendingEntry] = useState<EarningsEntry | null>(null);
+  const [, navigate] = useLocation();
 
   const fetchCalendar = useCallback(async (r: Range, extra: string[]) => {
     setLoading(true);
@@ -344,8 +341,64 @@ export default function CalendarPage() {
 
             {/* 날짜별 그룹 */}
             {sortedDates.map(date => (
-              <DateGroup key={date} date={date} entries={grouped[date]} />
+              <DateGroup key={date} date={date} entries={grouped[date]} onSelect={setPendingEntry} />
             ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 분석 확인 배너 */}
+      <AnimatePresence>
+        {pendingEntry && (
+          <motion.div
+            key="confirm-banner"
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm mx-auto px-4"
+          >
+            <div className="flex items-center gap-3 bg-background border border-border rounded-2xl shadow-xl px-4 py-3.5">
+              {/* 아이콘 */}
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-primary" />
+              </div>
+
+              {/* 텍스트 */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {pendingEntry.companyName}
+                </p>
+                <p className="text-xs text-muted-foreground">AI 분석을 시작할까요?</p>
+              </div>
+
+              {/* 버튼 */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => setPendingEntry(null)}
+                  className="px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => {
+                    navigate(`/analysis/new?ticker=${encodeURIComponent(pendingEntry.ticker)}&autostart=true`);
+                    setPendingEntry(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  분석 시작
+                </button>
+              </div>
+
+              {/* 닫기 */}
+              <button
+                onClick={() => setPendingEntry(null)}
+                className="ml-0.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
