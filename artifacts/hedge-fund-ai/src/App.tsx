@@ -29,6 +29,7 @@ import Popular from "@/pages/popular";
 import SettingsPage from "@/pages/settings";
 import SharePage from "@/pages/share";
 import CalendarPage from "@/pages/calendar";
+import SchedulesPage from "@/pages/schedules";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -108,6 +109,7 @@ function Router() {
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/settings" component={SettingsPage} />
             <Route path="/calendar" component={CalendarPage} />
+            <Route path="/schedules" component={SchedulesPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

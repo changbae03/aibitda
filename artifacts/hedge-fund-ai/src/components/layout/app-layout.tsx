@@ -82,6 +82,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { href: "/analysis/new", label: "AI 기업분석" },
     { href: "/history", label: "내가 본 자료" },
     { href: "/calendar", label: "실적 캘린더" },
+    { href: "/schedules", label: "재실행 스케줄" },
     { href: "/popular", label: "애빛다 통계" },
   ];
 

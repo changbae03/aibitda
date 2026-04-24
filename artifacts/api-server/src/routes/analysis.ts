@@ -1704,8 +1704,16 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  const userId = getUserId(req);
-  if (userId) {
+  // 스케줄러 내부 호출 여부 확인 (크레딧 우회 — 이미 스케줄러에서 차감 완료)
+  const isSchedulerCall =
+    req.headers["x-scheduler-token"] === "internal-scheduler-cbst-2024";
+  const schedulerUserId = isSchedulerCall
+    ? (req.headers["x-scheduler-user-id"] as string | undefined) ?? null
+    : null;
+
+  const userId = schedulerUserId ?? getUserId(req);
+
+  if (!isSchedulerCall && userId) {
     const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [userId]);
     const isUserAdmin = (adminCheck.rowCount ?? 0) > 0;
     if (!isUserAdmin) {
@@ -2247,6 +2255,122 @@ router.get("/period-stats", async (_req, res) => {
   } catch (err) {
     console.error("[GET /analysis/period-stats]", err);
     res.status(500).json({ error: "Failed to fetch period stats" });
+  }
+});
+
+// ─── GET /api/analysis/schedules ─────────────────────────────────────────────
+router.get("/schedules", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+  try {
+    const r = await pool.query(
+      `SELECT * FROM analysis_schedules WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    );
+    res.json(r.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "DB error" });
+  }
+});
+
+// ─── POST /api/analysis/:id/schedule ─────────────────────────────────────────
+router.post("/:id/schedule", async (req, res) => {
+  const analysisId = parseInt(req.params.id);
+  if (isNaN(analysisId)) return res.status(400).json({ error: "Invalid id" });
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+
+  const { frequency } = req.body as { frequency?: string };
+  if (!["weekly", "biweekly", "monthly"].includes(frequency ?? ""))
+    return res.status(400).json({ error: "frequency는 weekly|biweekly|monthly 중 하나여야 합니다" });
+
+  // 분석 정보 조회
+  const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [analysisId]);
+  const analysis = aRows[0];
+  if (!analysis) return res.status(404).json({ error: "분석을 찾을 수 없습니다" });
+
+  // 최대 5개 제한
+  const countRes = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM analysis_schedules WHERE user_id = $1 AND enabled = true`,
+    [userId]
+  );
+  if (parseInt(countRes.rows[0].cnt) >= 5) {
+    return res.status(429).json({ error: "활성 스케줄은 최대 5개까지 등록할 수 있습니다" });
+  }
+
+  // 동일 종목 스케줄 중복 확인
+  const dup = await pool.query(
+    `SELECT id FROM analysis_schedules WHERE user_id = $1 AND ticker = $2 AND enabled = true`,
+    [userId, analysis.ticker]
+  );
+  if (dup.rows.length > 0) {
+    // 기존 스케줄 업데이트
+    const days = frequency === "weekly" ? 7 : frequency === "biweekly" ? 14 : 30;
+    const nextRun = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    const upd = await pool.query(
+      `UPDATE analysis_schedules
+       SET frequency = $1, next_run_at = $2, source_analysis_id = $3, enabled = true
+       WHERE id = $4 RETURNING *`,
+      [frequency, nextRun, analysisId, dup.rows[0].id]
+    );
+    return res.json(upd.rows[0]);
+  }
+
+  const days = frequency === "weekly" ? 7 : frequency === "biweekly" ? 14 : 30;
+  const nextRun = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+  const ins = await pool.query(
+    `INSERT INTO analysis_schedules
+       (user_id, ticker, company_name, industry, additional_context, frequency, next_run_at, source_analysis_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
+    [
+      userId,
+      analysis.ticker,
+      analysis.company_name,
+      analysis.industry ?? null,
+      analysis.additional_context ?? null,
+      frequency,
+      nextRun,
+      analysisId,
+    ]
+  );
+  res.json(ins.rows[0]);
+});
+
+// ─── DELETE /api/analysis/schedules/:scheduleId ───────────────────────────────
+router.delete("/schedules/:scheduleId", async (req, res) => {
+  const scheduleId = parseInt(req.params.scheduleId);
+  if (isNaN(scheduleId)) return res.status(400).json({ error: "Invalid scheduleId" });
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+  try {
+    const r = await pool.query(
+      `DELETE FROM analysis_schedules WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [scheduleId, userId]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: "스케줄을 찾을 수 없습니다" });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+// ─── PATCH /api/analysis/schedules/:scheduleId/toggle ─────────────────────────
+router.patch("/schedules/:scheduleId/toggle", async (req, res) => {
+  const scheduleId = parseInt(req.params.scheduleId);
+  if (isNaN(scheduleId)) return res.status(400).json({ error: "Invalid scheduleId" });
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+  try {
+    const r = await pool.query(
+      `UPDATE analysis_schedules SET enabled = NOT enabled WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [scheduleId, userId]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: "스케줄을 찾을 수 없습니다" });
+    res.json(r.rows[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
   }
 });
 

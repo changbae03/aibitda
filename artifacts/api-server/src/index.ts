@@ -1,6 +1,7 @@
 import app from "./app";
 import { runMigrations } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
+import { runDueSchedules } from "./lib/schedule-runner.js";
 
 console.log("[STARTUP] API Server v2 - SSL fix + auto migration enabled");
 
@@ -47,5 +48,19 @@ runMigrations()
           console.error("[SCHEDULER] 정기 리뷰 실패:", e?.message ?? e)
         );
       }, SIX_HOURS_MS);
+
+      // 30분마다 재실행 스케줄 확인
+      const THIRTY_MIN_MS = 30 * 60 * 1000;
+      setTimeout(() => {
+        runDueSchedules(port).catch((e) =>
+          console.error("[SCHEDULER] 재실행 스케줄 첫 실행 실패:", e?.message ?? e)
+        );
+      }, 2 * 60 * 1000); // 서버 시작 2분 후 첫 확인
+
+      setInterval(() => {
+        runDueSchedules(port).catch((e) =>
+          console.error("[SCHEDULER] 재실행 스케줄 실패:", e?.message ?? e)
+        );
+      }, THIRTY_MIN_MS);
     });
   });

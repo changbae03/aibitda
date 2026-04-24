@@ -161,6 +161,25 @@ export async function runMigrations() {
       );
     `);
 
+    // 재실행 스케줄 테이블
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analysis_schedules (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        ticker TEXT NOT NULL,
+        company_name TEXT NOT NULL,
+        industry TEXT,
+        additional_context TEXT,
+        frequency TEXT NOT NULL,
+        enabled BOOLEAN DEFAULT true,
+        next_run_at TIMESTAMP NOT NULL,
+        last_run_at TIMESTAMP,
+        last_analysis_id INTEGER,
+        source_analysis_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
