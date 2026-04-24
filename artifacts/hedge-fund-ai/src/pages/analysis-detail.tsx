@@ -1822,7 +1822,7 @@ function RotatingDebateMessage({ phase }: { phase: "challenging" | "checking" })
 
   return (
     <p
-      className="text-[12px] text-muted-foreground/70 text-center italic max-w-xs"
+      className="text-[12px] text-muted-foreground/70 text-center italic leading-relaxed break-keep w-full"
       style={{ transition: "opacity 0.35s ease", opacity: visible ? 1 : 0 }}
     >
       {messages[idx]}
@@ -1851,15 +1851,18 @@ function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
     return () => clearInterval(interval);
   }, [messages]);
 
-  if (!messages) return <span>분석 중...</span>;
+  if (!messages) return <p className="text-[12px] text-muted-foreground/70 text-center italic">분석 중...</p>;
 
   return (
-    <span
+    <p
       style={{ transition: "opacity 0.35s ease" }}
-      className={visible ? "opacity-100" : "opacity-0"}
+      className={cn(
+        "text-[12px] text-muted-foreground/70 text-center italic leading-relaxed break-keep w-full",
+        visible ? "opacity-100" : "opacity-0"
+      )}
     >
       {messages[idx]}
-    </span>
+    </p>
   );
 }
 
@@ -1929,16 +1932,20 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       </div>
 
       {/* 로딩 바디 — 콘텐츠 없음, 단계 상태만 표시 */}
-      <div className="flex flex-col items-center justify-center gap-3 py-10 px-5">
+      <div className="flex flex-col items-center justify-center py-10 px-5">
+        {/* 단계 상태 아이콘 + 라벨 */}
         <div className={cn("flex items-center gap-2.5 text-sm font-medium", cfg.color)}>
           <PhaseIcon
-            className={cn("w-5 h-5", cfg.spin && "animate-spin", cfg.pulse && "animate-pulse")}
+            className={cn("w-5 h-5 shrink-0", cfg.spin && "animate-spin", cfg.pulse && "animate-pulse")}
           />
-          <span>{cfg.label}</span>
+          <span className="text-center">{cfg.label}</span>
         </div>
-        {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} />}
-        {phase === "challenging" && <RotatingDebateMessage phase="challenging" />}
-        {phase === "checking" && <RotatingDebateMessage phase="checking" />}
+        {/* 세부 메시지 — 고정 높이 영역으로 레이아웃 안정화 */}
+        <div className="mt-4 min-h-[36px] flex items-center justify-center px-4 w-full">
+          {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} />}
+          {phase === "challenging" && <RotatingDebateMessage phase="challenging" />}
+          {phase === "checking" && <RotatingDebateMessage phase="checking" />}
+        </div>
       </div>
     </motion.div>
   );
