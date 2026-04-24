@@ -1791,12 +1791,12 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
 
 const DEBATE_MESSAGES: Record<string, string[]> = {
   challenging: [
-    "모든 팀원들이 모여 치열한 토론을 벌이고 있습니다 ⚡",
-    "Devil's Advocate가 초안의 허점을 정면으로 찌르고 있어요 🗡️",
-    "\"이 가정, 정말 맞아요?\" 날카로운 반문이 이어지고 있어요",
-    "회의실 긴장감이 고조되고 있습니다... 좋은 신호예요 🔥",
-    "리드 애널리스트, 지금 반박 논리 준비 중이에요 💭",
-    "반론 세 가지가 테이블 위에 올라왔습니다 📋",
+    "팀 전원이 초안을 처음부터 다시 뜯어보고 있어요 🔍",
+    "\"이 가정, 정말 맞아요?\" 팀원들의 날카로운 눈이 꽂히고 있어요",
+    "숨은 리스크를 찾아 팀 전원이 샅샅이 검토 중입니다 🔥",
+    "가정 하나하나를 치열하게 재검증하고 있어요 💡",
+    "\"실제 투자자가 납득할 수 있을까?\" 검토가 이어집니다",
+    "팀원들의 날카로운 의견이 쏟아지는 중입니다 ⚡",
   ],
   checking: [
     "팀장이 보고서를 처음부터 다시 읽고 있어요 👀",
@@ -1909,8 +1909,8 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
 
   const phaseConfig = {
     writing:      { icon: Loader2,      spin: true,  pulse: false, color: "text-muted-foreground",  label: "분석 초안 작성 중..." },
-    challenging:  { icon: Swords,       spin: false, pulse: true,  color: "text-violet-600",         label: "Devil's Advocate 반론 검토 중..." },
-    synthesizing: { icon: RefreshCw,    spin: true,  pulse: false, color: "text-blue-600",           label: "반론 반영하여 재작성 중..." },
+    challenging:  { icon: Swords,       spin: false, pulse: true,  color: "text-violet-600",         label: "팀 전원 심층 재검토 중..." },
+    synthesizing: { icon: RefreshCw,    spin: true,  pulse: false, color: "text-blue-600",           label: "재검토 의견 반영하여 재작성 중..." },
     checking:     { icon: ShieldCheck,  spin: false, pulse: true,  color: "text-amber-600",          label: "Lead Portfolio Strategist 검토 중..." },
     revising:     { icon: RefreshCw,    spin: true,  pulse: false, color: "text-amber-600",          label: "팀장 피드백 반영 재작성 중..." },
     done:         { icon: CheckCircle2, spin: false, pulse: false, color: "text-emerald-600",        label: "검토 완료, 저장 중..." },
