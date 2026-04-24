@@ -670,6 +670,77 @@ router.post("/batch-performance", async (req, res) => {
 
 // ─── GET /api/market-data/earnings-calendar ───────────────────────────────────
 // range=week(7일) | month(30일)  |  tickers=추가종목(쉼표구분, 옵션)
+// ── Gemini 기반 한국 종목 실적발표일 조회 (12시간 캐시) ──────────────────────────
+const _krEarningsCache = new Map<string, { data: Map<string, string>; expiresAt: number }>();
+
+async function fetchKoreanEarningsDatesViaGemini(
+  tickers: string[], // e.g. ["005930.KS", "000660.KS", ...]
+  nameMap: Record<string, string>,
+  rangeDays: number,
+): Promise<Map<string, string>> {
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
+  const cacheKey = `${today}-${rangeDays}-${tickers.sort().join(",")}`;
+  const cached = _krEarningsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return new Map();
+
+  const endDate = new Date(Date.now() + 9 * 3600 * 1000 + rangeDays * 86400000).toISOString().split("T")[0];
+
+  const tickerLines = tickers.map(t => {
+    const bare = t.replace(/\.(KS|KQ)$/, "");
+    const name = nameMap[t] ?? nameMap[bare] ?? t;
+    return `- ${name} (${bare})`;
+  }).join("\n");
+
+  const prompt = `오늘은 ${today}입니다. 아래 한국 상장사들의 ${today}~${endDate} 사이 실적발표일(컨퍼런스콜 포함)을 구글 검색으로 찾아주세요.
+
+${tickerLines}
+
+각 종목마다 가장 정확한 실적발표일(또는 잠정실적 공시일)을 찾아 아래 JSON 형식으로만 답하세요. 해당 기간 내 일정이 없으면 포함하지 마세요.
+형식: [{"name":"회사명","date":"YYYY-MM-DD","source":"출처 간략 설명"}]
+JSON 배열만 출력. 코드블록·설명 불필요.`;
+
+  try {
+    const genAI = new GoogleGenAI({ apiKey });
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { tools: [{ googleSearch: {} }], temperature: 0.0 },
+    });
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    const clean = text.replace(/```json|```/g, "").trim();
+    const parsed: Array<{ name: string; date: string }> = JSON.parse(clean);
+
+    // 회사명 → 티커 역매핑
+    const nameToTicker: Record<string, string> = {};
+    for (const t of tickers) {
+      const bare = t.replace(/\.(KS|KQ)$/, "");
+      const name = nameMap[t] ?? nameMap[bare];
+      if (name) nameToTicker[name] = t;
+      nameToTicker[bare] = t;
+    }
+
+    const resultMap = new Map<string, string>();
+    for (const item of parsed) {
+      // 이름 또는 코드로 티커 매칭
+      const matched = nameToTicker[item.name]
+        ?? tickers.find(t => item.name.includes(t.replace(/\.(KS|KQ)$/, "")));
+      if (matched && /^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
+        resultMap.set(matched, item.date);
+      }
+    }
+
+    _krEarningsCache.set(cacheKey, { data: resultMap, expiresAt: Date.now() + 12 * 3600 * 1000 });
+    console.log(`[earnings-calendar] Gemini KR dates: ${[...resultMap.entries()].map(([k,v])=>`${k}=${v}`).join(", ")}`);
+    return resultMap;
+  } catch (e: any) {
+    console.warn("[earnings-calendar] Gemini KR lookup failed:", e?.message);
+    return new Map();
+  }
+}
+
 router.get("/earnings-calendar", async (req, res) => {
   try {
   const range   = (req.query.range   as string) ?? "week";
@@ -733,6 +804,13 @@ router.get("/earnings-calendar", async (req, res) => {
     ...defaultTickers,
     ...extraTickers,
   ]));
+
+  // ── 3-A. 한국 종목만 Gemini 실시간 검색 (Yahoo Finance와 병렬) ─────────────
+  const koreanTickers = allTickers.filter(t => t.endsWith(".KS") || t.endsWith(".KQ") ||
+    /^\d{6}$/.test(t));
+  const geminiKrDatesPromise = koreanTickers.length > 0
+    ? fetchKoreanEarningsDatesViaGemini(koreanTickers, nameMap, days)
+    : Promise.resolve(new Map<string, string>());
 
   // ── 3. Yahoo Finance calendarEvents 병렬 조회 ──────────────────────────────
   interface EarningsEntry {
@@ -814,7 +892,35 @@ router.get("/earnings-calendar", async (req, res) => {
     }
   }
 
-  // ── 4. 날짜 정렬 후 응답 ─────────────────────────────────────────────────
+  // ── 4. Gemini 한국 종목 날짜로 오버라이드 ─────────────────────────────────
+  const geminiKrDates = await geminiKrDatesPromise;
+  if (geminiKrDates.size > 0) {
+    // Gemini가 날짜를 찾은 경우 덮어씀. 범위 밖 날짜는 무시.
+    const nowStr  = toKSTDateStr(now);
+    const endStr  = toKSTDateStr(rangeEnd);
+    for (const entry of entries) {
+      if (!entry.isKorean) continue;
+      const gDate = geminiKrDates.get(entry.ticker);
+      if (gDate && gDate >= nowStr && gDate <= endStr) {
+        entry.earningsDate = gDate;
+      }
+    }
+    // Gemini가 Yahoo Finance에 없는 한국 종목을 찾은 경우 추가
+    const existingKrTickers = new Set(entries.filter(e => e.isKorean).map(e => e.ticker));
+    for (const [ticker, gDate] of geminiKrDates) {
+      if (existingKrTickers.has(ticker)) continue;
+      if (gDate < toKSTDateStr(now) || gDate > toKSTDateStr(rangeEnd)) continue;
+      const bare = ticker.replace(/\.(KS|KQ)$/, "");
+      const name = nameMap[ticker] ?? nameMap[bare] ?? ticker;
+      entries.push({
+        ticker, companyName: name, earningsDate: gDate,
+        epsEstimate: null, epsLow: null, epsHigh: null, revenueEstimate: null,
+        currency: "KRW", isKorean: true,
+      });
+    }
+  }
+
+  // ── 5. 날짜 정렬 후 응답 ─────────────────────────────────────────────────
   entries.sort((a, b) => a.earningsDate.localeCompare(b.earningsDate));
   res.json(entries);
   } catch (err: any) {
