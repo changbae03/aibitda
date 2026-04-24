@@ -109,6 +109,17 @@ router.get("/auth/kakao/callback", async (req, res) => {
       path: "/",
     }));
 
+    // 카카오 닉네임 → user_credits.display_name 저장 (NULL인 경우에만, 수동 변경 유지)
+    try {
+      await pool.query(
+        `INSERT INTO user_credits (user_id, display_name)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE
+           SET display_name = COALESCE(user_credits.display_name, EXCLUDED.display_name)`,
+        [user.id, user.nickname || null]
+      );
+    } catch (_) {}
+
     console.log("[Kakao] login success, user:", user.id, user.nickname);
     res.redirect(`${baseUrl}/`);
   } catch (err) {

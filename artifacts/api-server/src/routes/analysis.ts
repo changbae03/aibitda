@@ -2111,8 +2111,12 @@ router.get("/:id", async (req, res) => {
     const isPublic = aRows[0].is_public === 'true' || aRows[0].is_public === true;
 
     if (analysisUserId && analysisUserId !== requestUserId && !isPublic) {
-      res.status(403).json({ error: "권한이 없습니다" });
-      return;
+      // 관리자는 모든 보고서 열람 가능
+      const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [requestUserId]);
+      if (!adminCheck.rowCount) {
+        res.status(403).json({ error: "권한이 없습니다" });
+        return;
+      }
     }
 
     const stepsRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [id]);

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, Search, ChevronRight, X,
   Zap, TrendingUp, RotateCcw, Plus, Minus, History,
-  ArrowLeft, ArrowRight, User, Crown, FileText,
+  ArrowLeft, ArrowRight, User, Crown, FileText, ExternalLink,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -549,6 +549,7 @@ export default function AdminUserManagement() {
                       <th className="text-left px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase">종목</th>
                       <th className="text-left px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">판정</th>
                       <th className="text-right px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">일시</th>
+                      <th className="w-8" />
                     </tr>
                   </thead>
                   <tbody>
@@ -568,6 +569,19 @@ export default function AdminUserManagement() {
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-right text-[11px] text-muted-foreground whitespace-nowrap">{fmt(a.createdAt)}</td>
+                          <td className="pr-3 py-2.5 text-right">
+                            <a
+                              href={getApiUrl(`/analysis/${a.id}`)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="보고서 보기"
+                              className="inline-flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary px-1.5 py-1 rounded hover:bg-primary/5 transition-colors"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              보기
+                            </a>
+                          </td>
                         </tr>
                       );
                     })}
