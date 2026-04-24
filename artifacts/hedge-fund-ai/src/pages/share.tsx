@@ -244,7 +244,7 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
         )}
         {json.risk_reward && (
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-            R/R {json.risk_reward}
+            손익비(R/R) {json.risk_reward}
           </span>
         )}
       </div>

@@ -1489,7 +1489,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 )}
                 {json.risk_reward && (
                   <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-muted text-foreground/70 border border-border">
-                    R/R {json.risk_reward}
+                    손익비(R/R) {json.risk_reward}
                   </span>
                 )}
               </div>
