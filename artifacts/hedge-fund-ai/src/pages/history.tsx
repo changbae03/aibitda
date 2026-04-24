@@ -7,7 +7,7 @@ import { ko } from "date-fns/locale";
 import {
   Loader2, Inbox, Share2, CheckCircle2, Clock, Trash2,
   Pencil, Check, X, RefreshCw,
-  ChevronDown, AlertTriangle, SlidersHorizontal,
+  ChevronDown, AlertTriangle, SlidersHorizontal, Timer,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -302,6 +302,73 @@ function PriceTrack({
   );
 }
 
+// ── PerformanceBadges ─────────────────────────────────────────────────────────
+interface PerfResult {
+  w1: number | null;
+  m1: number | null;
+  m3: number | null;
+  entryClose: number | null;
+}
+
+function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
+  label: string; pct: number | null; daysElapsed: number; requiredDays: number;
+}) {
+  const elapsed = daysElapsed >= requiredDays;
+
+  if (!elapsed) {
+    const remaining = requiredDays - daysElapsed;
+    return (
+      <div className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/60 min-w-[52px]">
+        <span className="text-[9px] font-medium text-muted-foreground/60 leading-none">{label}</span>
+        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/40 leading-none mt-0.5">
+          <Timer className="w-2.5 h-2.5" />{remaining}일
+        </span>
+      </div>
+    );
+  }
+
+  if (pct == null) {
+    return (
+      <div className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/40 min-w-[52px]">
+        <span className="text-[9px] font-medium text-muted-foreground/60 leading-none">{label}</span>
+        <span className="text-[10px] text-muted-foreground/30 leading-none mt-0.5">—</span>
+      </div>
+    );
+  }
+
+  const isPos = pct >= 0;
+  const colorCls = isPos
+    ? "bg-red-50 border-red-100 text-red-500"
+    : "bg-blue-50 border-blue-100 text-blue-500";
+
+  return (
+    <div className={cn("flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border min-w-[52px]", colorCls)}>
+      <span className="text-[9px] font-medium leading-none opacity-70">{label}</span>
+      <span className="text-[11px] font-bold leading-none tabular-nums mt-0.5">
+        {isPos ? "+" : ""}{pct.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+function PerformanceBadges({ analysisDate, perf }: {
+  analysisDate: string;
+  perf: PerfResult | undefined;
+}) {
+  const daysElapsed = Math.floor((Date.now() - new Date(analysisDate).getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysElapsed < 5) return null;
+
+  return (
+    <div className="mt-2.5 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+      <span className="text-[9px] font-semibold text-muted-foreground/40 uppercase tracking-wide mr-0.5 whitespace-nowrap">분석 후 성과</span>
+      <PerfBadge label="1주일" pct={perf?.w1 ?? null} daysElapsed={daysElapsed} requiredDays={7} />
+      <PerfBadge label="1개월" pct={perf?.m1 ?? null} daysElapsed={daysElapsed} requiredDays={30} />
+      <PerfBadge label="3개월" pct={perf?.m3 ?? null} daysElapsed={daysElapsed} requiredDays={90} />
+    </div>
+  );
+}
+
 // ── Re-analysis badge logic ───────────────────────────────────────────────────
 function getReanalysisLevel(
   createdAt: string,
@@ -337,6 +404,7 @@ export default function History() {
   const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
   const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklineResult>>({});
+  const [perf, setPerf] = useState<Record<number, PerfResult>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesUpdatedAt, setQuotesUpdatedAt] = useState<Date | null>(null);
 
@@ -391,8 +459,35 @@ export default function History() {
     } catch {}
   }, []);
 
+  const fetchPerformance = useCallback(async (items: any[]) => {
+    // 5일 이상 된 완료된 분석만 성과 조회
+    const eligible = items.filter((a) => {
+      if (a.status !== "completed") return false;
+      const days = (Date.now() - new Date(a.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      return days >= 5;
+    });
+    if (eligible.length === 0) return;
+    try {
+      const payload = eligible.map((a: any) => ({
+        id: a.id,
+        ticker: a.ticker,
+        analysisDate: a.createdAt,
+      }));
+      const r = await fetch(getApiUrl("/api/market-data/batch-performance"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (r.ok) setPerf(await r.json());
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (list.length > 0) { fetchQuotes(list); fetchSparklines(list); }
+    if (list.length > 0) {
+      fetchQuotes(list);
+      fetchSparklines(list);
+      fetchPerformance(list);
+    }
   }, [list.length]);
 
   const handleDelete = (id: number, e: React.MouseEvent) => { e.stopPropagation(); setConfirmId(id); };
@@ -894,6 +989,9 @@ export default function History() {
                       </>
                     );
                   })()}
+
+                  {/* 기간별 성과 트래킹 */}
+                  <PerformanceBadges analysisDate={a.createdAt} perf={perf[a.id]} />
 
                   {/* Memo */}
                   <MemoInline id={a.id} />

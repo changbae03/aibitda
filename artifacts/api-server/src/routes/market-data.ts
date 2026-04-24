@@ -582,6 +582,91 @@ router.post("/batch-sparklines", async (req, res) => {
   res.json(result);
 });
 
+// POST /api/market-data/batch-performance — 분석일 기준 기간별 수익률 계산
+router.post("/batch-performance", async (req, res) => {
+  const items = req.body as Array<{ id: number; ticker: string; analysisDate: string }>;
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ error: "items 배열이 필요합니다" });
+    return;
+  }
+
+  type PerfResult = { w1: number | null; m1: number | null; m3: number | null; entryClose: number | null };
+  const results: Record<number, PerfResult> = {};
+
+  // 특정 날짜 이후 첫 번째 거래일 종가를 찾는 헬퍼
+  function findClose(quotes: Array<{ date: Date; close: number | null }>, afterDate: Date, plusDays: number): number | null {
+    const target = new Date(afterDate);
+    target.setDate(target.getDate() + plusDays);
+    // target 이후 첫 번째 유효한 종가
+    const sorted = quotes.filter(q => q.close != null && q.close > 0 && new Date(q.date) >= target);
+    return sorted.length > 0 ? (sorted[0].close as number) : null;
+  }
+
+  async function fetchQuotes(ticker: string, from: Date): Promise<Array<{ date: Date; close: number | null }>> {
+    const p1 = from.toISOString().split("T")[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const p2 = tomorrow.toISOString().split("T")[0];
+
+    const isKoreanSix = /^\d{6}(\.(KS|KQ))?$/.test(ticker.split(".")[0]);
+    const rawCode = ticker.replace(/\.(KS|KQ)$/, "");
+    const isAlreadySuffixed = /\.(KS|KQ)$/i.test(ticker);
+
+    if (isKoreanSix && !isAlreadySuffixed) {
+      const [kqR, ksR] = await Promise.allSettled([
+        yahooFinance.chart(`${rawCode}.KQ`, { period1: p1, period2: p2, interval: "1d" }),
+        yahooFinance.chart(`${rawCode}.KS`, { period1: p1, period2: p2, interval: "1d" }),
+      ]);
+      const kqQ = kqR.status === "fulfilled" ? (kqR.value?.quotes ?? []) : [];
+      const ksQ = ksR.status === "fulfilled" ? (ksR.value?.quotes ?? []) : [];
+      const chosen = kqQ.length >= ksQ.length ? kqQ : ksQ;
+      return chosen.map((d: any) => ({ date: new Date(d.date), close: d.close ?? null }));
+    }
+
+    const chart = await yahooFinance.chart(ticker, { period1: p1, period2: p2, interval: "1d" });
+    return (chart?.quotes ?? []).map((d: any) => ({ date: new Date(d.date), close: d.close ?? null }));
+  }
+
+  await Promise.allSettled(
+    items.slice(0, 30).map(async ({ id, ticker, analysisDate }) => {
+      try {
+        const fromDate = new Date(analysisDate);
+        // 분석일 하루 전부터 조회 (한국 장 마감 후 분석한 경우 당일 종가 포함)
+        fromDate.setDate(fromDate.getDate() - 1);
+
+        const quotes = await fetchQuotes(ticker, fromDate);
+        if (quotes.length === 0) {
+          results[id] = { w1: null, m1: null, m3: null, entryClose: null };
+          return;
+        }
+
+        // 분석일 기준 첫 거래일 종가 = 기준가 (entry)
+        const analysisTs = new Date(analysisDate);
+        const entryQuote = quotes.find(q => q.close != null && q.close > 0 && new Date(q.date) >= new Date(analysisTs.toISOString().split("T")[0]));
+        const entryClose = entryQuote?.close ?? null;
+        if (!entryClose) {
+          results[id] = { w1: null, m1: null, m3: null, entryClose: null };
+          return;
+        }
+
+        const pct = (close: number | null) =>
+          close != null ? ((close - entryClose) / entryClose) * 100 : null;
+
+        results[id] = {
+          entryClose,
+          w1: pct(findClose(quotes, new Date(analysisDate), 7)),
+          m1: pct(findClose(quotes, new Date(analysisDate), 30)),
+          m3: pct(findClose(quotes, new Date(analysisDate), 90)),
+        };
+      } catch {
+        results[id] = { w1: null, m1: null, m3: null, entryClose: null };
+      }
+    })
+  );
+
+  res.json(results);
+});
+
 router.get("/:ticker", async (req, res) => {
   const { ticker } = req.params;
   const { period = "1y", interval = "1d" } = req.query as {
