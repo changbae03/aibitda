@@ -2165,8 +2165,9 @@ async function executeStep(
   const agent = AGENTS[stepKey];
   let enrichedContext = analysis.additionalContext ?? null;
 
-  // ── 소프트 앵커: 동일 종목 직전 분석 결과를 가볍게 참고 (AI는 항상 새로 실행) ──
-  // 일관성 유도 목적 — AI가 직전 결론과 크게 이탈하지 않도록 방향만 살짝 제시
+  // ── 소프트 앵커: 동일 종목 직전 분석 결과를 참고 ────────────────────────────
+  // 밸류에이션 단계는 더 긴 스니펫 + 더 강한 일관성 지시 사용
+  const isValuationStep = ["intrinsic_valuation", "relative_valuation"].includes(stepKey);
   try {
     const prevStepRef = await rawQuery(
       `SELECT s.content, a.created_at
@@ -2181,11 +2182,13 @@ async function executeStep(
     if (prevStepRef[0]?.content) {
       const prevContent = prevStepRef[0].content as string;
       const prevDate = new Date(prevStepRef[0].created_at).toISOString().slice(0, 10);
-      // 앞부분 400자만 발췌 — 방향성·결론 힌트 정도로만 활용
-      const snippet = prevContent.slice(0, 400).replace(/\n+/g, " ").trim();
-      const softAnchor = `\n\n[💡 ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 참고 — 구속력 없음]\n`
-        + `아래는 가장 최근 분석의 이 단계 요약입니다. 방향성 참고용으로만 활용하고, 새로운 데이터와 독자적 판단으로 분석하세요.\n`
-        + `"${snippet}…"`;
+      const snippetLen = isValuationStep ? 900 : 400;
+      const snippet = prevContent.slice(0, snippetLen).replace(/\n+/g, " ").trim();
+      const binding = isValuationStep
+        ? `⚠️ 밸류에이션 일관성 원칙: 아래 직전 분석 내용을 참고하여 동일한 모델 구조·할인율·핵심 가정을 유지하세요. 새로운 중요 정보(임상 결과, 대형 파트너십, 어닝 서프라이즈 등)가 없는 한, 이번 분석에서 도출되는 적정주가 Base 값은 직전 분석 대비 ±20% 이내를 목표로 하세요.`
+        : `아래는 가장 최근 분석의 이 단계 요약입니다. 방향성 참고 후 독자적 판단으로 분석하세요.`;
+      const softAnchor = `\n\n[💡 ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 참고]\n`
+        + binding + `\n"${snippet}…"`;
       enrichedContext = enrichedContext ? enrichedContext + softAnchor : softAnchor;
       console.log(`[soft-anchor] ${stepKey} for ${analysis.ticker} — injected ${softAnchor.length} chars snippet`);
     }
@@ -2329,6 +2332,39 @@ async function executeStep(
             enrichedContext = enrichedContext ? enrichedContext + softBlock : softBlock;
             console.log(`[verdict-anchor] 소프트 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
           }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      // ── 밸류에이션 단계 적정주가 범위 앵커 ───────────────────────────────────
+      // intrinsic_valuation / relative_valuation 단계에서 직전 분석의 목표가 기반
+      // 수치 범위를 강하게 제한 → 동일 종목 반복 분석 시 결과 편차를 최소화
+      if (isValuationStep) {
+        try {
+          const prevValRow = await rawQuery(
+            `SELECT target_price, created_at, investment_verdict
+             FROM analyses
+             WHERE ticker = $1 AND status = 'completed' AND id != $2
+               AND target_price IS NOT NULL
+             ORDER BY created_at DESC LIMIT 1`,
+            [analysis.ticker, id]
+          );
+          if (prevValRow[0]?.target_price) {
+            const prevTarget = Number(prevValRow[0].target_price);
+            const prevVerdict = prevValRow[0].investment_verdict ?? "N/A";
+            const prevDate = new Date(prevValRow[0].created_at).toISOString().slice(0, 10);
+            const lower = Math.round(prevTarget * 0.8).toLocaleString();
+            const upper = Math.round(prevTarget * 1.2).toLocaleString();
+            const valAnchorBlock = `\n\n[🔒 밸류에이션 일관성 앵커 — ${analysis.companyName}(${analysis.ticker}) ${prevDate} 기준]\n`
+              + `직전 분석 적정주가(Base): ${prevTarget.toLocaleString()}원 | 판정: ${prevVerdict}\n`
+              + `⛔ 핵심 지시: 이번 분석에서 도출하는 적정주가 Base는 반드시 ${lower}원 ~ ${upper}원 범위 이내에서 산정하세요.\n`
+              + `- 단, 임상 결과 발표·대형 파트너십·어닝 쇼크 등 명백한 펀더멘털 변화가 있으면 이 제한을 무시하고 그 이유를 명시하세요.\n`
+              + `- 할인율·성공확률·피크세일즈 등 핵심 가정은 직전 분석과 동일하게 유지하는 것을 기본 원칙으로 합니다.`;
+            enrichedContext = enrichedContext ? enrichedContext + valAnchorBlock : valAnchorBlock;
+            console.log(`[val-anchor] ${stepKey} for ${analysis.ticker} — target range ${lower}~${upper}`);
+          }
+        } catch {
+          // optional
         }
       }
       // ─────────────────────────────────────────────────────────────────────
@@ -2497,13 +2533,15 @@ async function executeStep(
           await new Promise((r) => setTimeout(r, waitMs));
         }
 
+        // 밸류에이션 단계는 수치 일관성을 위해 더 낮은 temperature 사용
+        const stepTemperature = isValuationStep ? 0.2 : 0.3;
         const stream = await ai.models.generateContentStream({
           model: "gemini-2.5-flash",
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
           config: {
             systemInstruction: systemPrompt,
             maxOutputTokens,
-            temperature: 0.3,
+            temperature: stepTemperature,
             topP: 0.9,
             // 토큰 절약: thinking 비활성화 — 재무 분석은 구조화 프롬프트로 충분
             // thinking 활성화 시 호출당 1만~2만 토큰 추가 소비됨
