@@ -13,6 +13,7 @@ import tickerNotesRouter from "./ticker-notes.js";
 import adminRouter from "./admin.js";
 import feedbackRouter from "./feedback.js";
 import supportRouter from "./support.js";
+import noticesRouter from "./notices.js";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use("/feed", feedRouter);
 router.use(newsRouter);
 router.use(feedbackRouter);
 router.use(supportRouter);
+router.use(noticesRouter);
 
 export default router;

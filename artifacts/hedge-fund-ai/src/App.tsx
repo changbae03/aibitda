@@ -32,6 +32,7 @@ import CalendarPage from "@/pages/calendar";
 import AdminCohort from "@/pages/admin-cohort";
 import AdminPromoCodes from "@/pages/admin-promo-codes";
 import AdminSupportPage from "@/pages/admin-support";
+import AdminNoticesPage from "@/pages/admin-notices";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
 import DisclaimerPage from "@/pages/disclaimer";
@@ -119,6 +120,7 @@ function Router() {
             <Route path="/admin/cohort" component={AdminCohort} />
             <Route path="/admin/promo-codes" component={AdminPromoCodes} />
             <Route path="/admin/support" component={AdminSupportPage} />
+            <Route path="/admin/notices" component={AdminNoticesPage} />
             <Route path="/privacy" component={PrivacyPage} />
             <Route path="/terms" component={TermsPage} />
             <Route path="/disclaimer" component={DisclaimerPage} />
