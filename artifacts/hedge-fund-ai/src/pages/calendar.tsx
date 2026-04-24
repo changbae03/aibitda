@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format, isToday, isTomorrow, parseISO, addDays, startOfDay } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
@@ -22,6 +22,10 @@ interface EarningsEntry {
 }
 
 type Range = "week" | "month";
+
+// ── 모듈 레벨 클라이언트 캐시 (페이지 재방문 시 즉시 표시, 5분 TTL) ────────
+const _cache = new Map<string, { data: EarningsEntry[]; fetchedAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function fmtEps(val: number | null, currency: string): string {
   if (val == null) return "—";
@@ -159,8 +163,22 @@ export default function CalendarPage() {
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [pendingEntry, setPendingEntry] = useState<EarningsEntry | null>(null);
   const [, navigate] = useLocation();
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  const fetchCalendar = useCallback(async (r: Range, extra: string[]) => {
+  const fetchCalendar = useCallback(async (r: Range, extra: string[], forceRefresh = false) => {
+    const cacheKey = `${r}-${[...extra].sort().join(",")}`;
+    const cached = _cache.get(cacheKey);
+
+    // 캐시 히트 (5분 이내 & 강제 새로고침 아닐 때): 즉시 표시
+    if (!forceRefresh && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+      if (mountedRef.current) {
+        setEntries(cached.data);
+        setLastFetched(new Date(cached.fetchedAt));
+      }
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -171,12 +189,16 @@ export default function CalendarPage() {
       });
       if (!resp.ok) throw new Error(`서버 오류: ${resp.status}`);
       const data: EarningsEntry[] = await resp.json();
-      setEntries(data);
-      setLastFetched(new Date());
+      const now = Date.now();
+      _cache.set(cacheKey, { data, fetchedAt: now });
+      if (mountedRef.current) {
+        setEntries(data);
+        setLastFetched(new Date(now));
+      }
     } catch (e: any) {
-      setError(e.message ?? "불러오기 실패");
+      if (mountedRef.current) setError(e.message ?? "불러오기 실패");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
@@ -199,13 +221,13 @@ export default function CalendarPage() {
     const merged = Array.from(new Set([...extraTickers, ...tickers]));
     setExtraTickers(merged);
     setExtraInput("");
-    fetchCalendar(range, merged);
+    fetchCalendar(range, merged, true);
   };
 
   const handleRemoveExtra = (t: string) => {
     const next = extraTickers.filter(x => x !== t);
     setExtraTickers(next);
-    fetchCalendar(range, next);
+    fetchCalendar(range, next, true);
   };
 
   return (
@@ -238,7 +260,7 @@ export default function CalendarPage() {
           </button>
         ))}
         <button
-          onClick={() => fetchCalendar(range, extraTickers)}
+          onClick={() => fetchCalendar(range, extraTickers, true)}
           disabled={loading}
           className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
@@ -309,7 +331,7 @@ export default function CalendarPage() {
             <AlertCircle className="w-8 h-8 mb-3 text-destructive/60" />
             <p className="text-sm text-destructive">{error}</p>
             <button
-              onClick={() => fetchCalendar(range, extraTickers)}
+              onClick={() => fetchCalendar(range, extraTickers, true)}
               className="mt-3 text-xs text-primary underline underline-offset-2"
             >
               다시 시도
