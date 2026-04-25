@@ -16,6 +16,7 @@ import {
   buildPrompt,
   type AgentKey,
 } from "../lib/ai-agents.js";
+import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 
 const router: IRouter = Router();
@@ -3129,13 +3130,18 @@ async function executeStep(
       content: s.content,
     }));
 
+  const tickerMarket: "KR" | "US" = /^\d{6}$/.test(analysis.ticker) ? "KR" : "US";
+  const sectorKey = classifySector(analysis.industry ?? "", tickerMarket);
+  const sectorCalibration = await getCalibrationContext(sectorKey);
+
   const { systemPrompt, userPrompt } = buildPrompt(
     stepKey,
     analysis.ticker,
     analysis.companyName,
     analysis.industry,
     enrichedContext,
-    previousStepsForContext
+    previousStepsForContext,
+    sectorCalibration
   );
 
   let content = "";

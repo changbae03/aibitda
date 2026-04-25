@@ -64,6 +64,17 @@ Step 7: catalyst → Step 8: smart_money → Step 9: lead_validation (final verd
 - `ticker_notes` - 종목별 관리자 메모·자동학습 데이터
 - `promo_codes` - 프로모 코드 (credit_amount, tier_upgrade, max_uses)
 - `promo_code_uses` - 프로모 코드 사용 이력 (unique per user)
+- `model_calibration` - 섹터별 AI 모델 성과 보정 데이터 (direction_accuracy, avg_price_deviation, sample_count)
+
+## AI Model Self-Calibration System
+
+30일 이상 된 완료 분석을 실제 주가와 비교하여 섹터별 편향을 측정하고, 이후 분석 프롬프트에 자동 주입하는 피드백 루프.
+
+- **보정 계산**: `POST /api/performance/recalculate` (관리자 전용) — Yahoo Finance 현재가 조회 → 방향 적중률 + 목표주가 편향 계산 → model_calibration 업데이트
+- **보정값 조회**: `GET /api/performance/calibration` — 전체 섹터 보정 데이터 조회
+- **자동 주입**: `buildPrompt()` 함수가 `relative_valuation`·`investment_strategy` 단계에서 해당 섹터 보정값을 시스템 프롬프트에 주입
+- **섹터 분류**: KR/US × 산업군(바이오, 반도체, 금융, 건설, 통신, 리츠 등) 조합으로 12개 섹터 분류
+- **최소 샘플 3건** 이상일 때만 보정값 활성화 (데이터 부족 시 기존 프롬프트 유지)
 
 ## API Routes
 

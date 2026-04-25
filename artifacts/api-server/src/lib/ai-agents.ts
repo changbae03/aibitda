@@ -1116,7 +1116,8 @@ export function buildPrompt(
   companyName: string,
   industry: string,
   additionalContext: string | null | undefined,
-  previousSteps: Array<{ stepKey: string; agentName: string; content: string }>
+  previousSteps: Array<{ stepKey: string; agentName: string; content: string }>,
+  calibrationContext?: string | null
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate    = getSectorTemplate(industry, companyName);
   const sotpFlag         = needsSOTP(industry, companyName, ticker);
@@ -4102,5 +4103,12 @@ thesis의 핵심 전제가 실현되는지 판단할 지표 2개를 불릿으로
     },
   };
 
-  return prompts[stepKey];
+  const result = prompts[stepKey];
+  if (calibrationContext && (stepKey === 'relative_valuation' || stepKey === 'investment_strategy')) {
+    return {
+      systemPrompt: result.systemPrompt + '\n\n' + calibrationContext,
+      userPrompt: result.userPrompt,
+    };
+  }
+  return result;
 }
