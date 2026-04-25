@@ -2583,12 +2583,27 @@ router.get("/period-stats", async (_req, res) => {
       const hitTarget    = reviewed.filter(r => r.outcome === "hit_target");
       const hitStop      = reviewed.filter(r => r.outcome === "hit_stoploss");
       const ongoing      = reviewed.filter(r => r.outcome === "ongoing");
-      const withReturn   = reviewed.filter(r => r.price_return != null);
+      const withReturn   = eligible.filter(r => r.price_return != null);
       const avgReturn    = withReturn.length
         ? withReturn.reduce((s, r) => s + (r.price_return ?? 0), 0) / withReturn.length
         : null;
-      const winRate      = reviewed.length > 0
-        ? (hitTarget.length / reviewed.length) * 100
+
+      // 방향 적중률 계산 (price_return 있는 분석 기준)
+      const isBullish = (v: string | null) => {
+        if (!v) return false;
+        return /매수|적극매수|Strong Buy|Buy/i.test(v);
+      };
+      const isBearish = (v: string | null) => {
+        if (!v) return false;
+        return /매도|적극매도|Strong Sell|Sell/i.test(v);
+      };
+      const directional = withReturn.filter(r => isBullish(r.investment_verdict) || isBearish(r.investment_verdict));
+      const directionCorrect = directional.filter(r =>
+        (isBullish(r.investment_verdict) && (r.price_return ?? 0) > 0) ||
+        (isBearish(r.investment_verdict) && (r.price_return ?? 0) < 0)
+      );
+      const directionAccuracy = directional.length > 0
+        ? (directionCorrect.length / directional.length) * 100
         : null;
 
       return {
@@ -2597,7 +2612,9 @@ router.get("/period-stats", async (_req, res) => {
         hitTargetCount: hitTarget.length,
         hitStopCount: hitStop.length,
         ongoingCount: ongoing.length,
-        winRate,
+        directionAccuracy,
+        directionCorrectCount: directionCorrect.length,
+        directionTotalCount: directional.length,
         avgReturn,
       };
     });

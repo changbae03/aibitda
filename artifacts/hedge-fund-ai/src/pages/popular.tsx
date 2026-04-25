@@ -33,7 +33,9 @@ interface PeriodBucket {
   hitTargetCount: number;
   hitStopCount: number;
   ongoingCount: number;
-  winRate: number | null;
+  directionAccuracy: number | null;
+  directionCorrectCount: number;
+  directionTotalCount: number;
   avgReturn: number | null;
 }
 
@@ -313,9 +315,9 @@ export default function Popular() {
           <div className="divide-y divide-border">
             {periods.map((p, i) => {
               const hasData = p.total > 0;
-              const hasReview = p.reviewedCount > 0;
-              const winRateColor = p.winRate != null
-                ? p.winRate >= 60 ? "text-emerald-600" : p.winRate >= 40 ? "text-amber-600" : "text-red-500"
+              const hasDirection = p.directionTotalCount > 0;
+              const dirColor = p.directionAccuracy != null
+                ? p.directionAccuracy >= 60 ? "text-emerald-600" : p.directionAccuracy >= 50 ? "text-amber-600" : "text-red-500"
                 : "text-muted-foreground/40";
               const returnColor = p.avgReturn != null
                 ? p.avgReturn > 0 ? "text-emerald-600" : p.avgReturn < 0 ? "text-red-500" : "text-muted-foreground"
@@ -345,15 +347,15 @@ export default function Popular() {
 
                   {hasData && (
                     <div className="grid grid-cols-3 gap-3">
-                      {/* 목표가 달성률 */}
+                      {/* 방향 정확도 */}
                       <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                        <p className="text-[10px] text-muted-foreground mb-1">목표가 달성률</p>
-                        <p className={cn("text-[18px] font-black tabular-nums leading-none", winRateColor)}>
-                          {hasReview && p.winRate != null ? `${p.winRate.toFixed(0)}%` : "—"}
+                        <p className="text-[10px] text-muted-foreground mb-1">방향 정확도</p>
+                        <p className={cn("text-[18px] font-black tabular-nums leading-none", dirColor)}>
+                          {hasDirection && p.directionAccuracy != null ? `${p.directionAccuracy.toFixed(0)}%` : "—"}
                         </p>
-                        {hasReview && (
+                        {hasDirection && (
                           <p className="text-[9px] text-muted-foreground/50 mt-1">
-                            {p.hitTargetCount}/{p.reviewedCount}건 달성
+                            {p.directionCorrectCount}/{p.directionTotalCount}건 정확
                           </p>
                         )}
                       </div>
@@ -372,48 +374,30 @@ export default function Popular() {
                         <p className="text-[9px] text-muted-foreground/50 mt-1">진입가 기준</p>
                       </div>
 
-                      {/* 검증 현황 */}
+                      {/* 분석 건수 */}
                       <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                        <p className="text-[10px] text-muted-foreground mb-1">검증 현황</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">분석 건수</p>
                         <p className="text-[18px] font-black tabular-nums leading-none text-foreground">
-                          {p.reviewedCount}<span className="text-[11px] font-normal text-muted-foreground ml-0.5">/{p.total}</span>
+                          {p.total}<span className="text-[11px] font-normal text-muted-foreground ml-0.5">건</span>
                         </p>
-                        <div className="flex gap-1.5 mt-1">
-                          {p.hitTargetCount > 0 && (
-                            <span className="text-[9px] text-emerald-600 font-medium">▲{p.hitTargetCount}</span>
-                          )}
-                          {p.hitStopCount > 0 && (
-                            <span className="text-[9px] text-red-500 font-medium">▼{p.hitStopCount}</span>
-                          )}
-                          {p.ongoingCount > 0 && (
-                            <span className="text-[9px] text-blue-500 font-medium">→{p.ongoingCount}</span>
-                          )}
-                        </div>
+                        <p className="text-[9px] text-muted-foreground/50 mt-1">
+                          매수·매도 판정 {p.directionTotalCount}건
+                        </p>
                       </div>
                     </div>
                   )}
 
-                  {/* 달성/손절/추적 바 */}
-                  {hasReview && (
+                  {/* 방향 정확/부정확 바 */}
+                  {hasDirection && (
                     <div className="mt-3 flex h-1.5 rounded-full overflow-hidden gap-px bg-muted">
-                      {p.hitTargetCount > 0 && (
-                        <div
-                          className="h-full bg-emerald-500 rounded-full"
-                          style={{ width: `${(p.hitTargetCount / p.reviewedCount) * 100}%` }}
-                        />
-                      )}
-                      {p.ongoingCount > 0 && (
-                        <div
-                          className="h-full bg-blue-400"
-                          style={{ width: `${(p.ongoingCount / p.reviewedCount) * 100}%` }}
-                        />
-                      )}
-                      {p.hitStopCount > 0 && (
-                        <div
-                          className="h-full bg-red-400 rounded-full"
-                          style={{ width: `${(p.hitStopCount / p.reviewedCount) * 100}%` }}
-                        />
-                      )}
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{ width: `${(p.directionCorrectCount / p.directionTotalCount) * 100}%` }}
+                      />
+                      <div
+                        className="h-full bg-red-400 rounded-full"
+                        style={{ width: `${((p.directionTotalCount - p.directionCorrectCount) / p.directionTotalCount) * 100}%` }}
+                      />
                     </div>
                   )}
                 </motion.div>
@@ -424,7 +408,7 @@ export default function Popular() {
 
         <div className="px-5 py-3 bg-muted/10 border-t border-border">
           <p className="text-[10px] text-muted-foreground/50">
-            ※ 목표가 달성·손절가 도달 시 자동 기록됩니다. 검증되지 않은 보고서는 집계에서 제외됩니다.
+            ※ 방향 정확도는 매수·매도 판정 보고서에서 실제 주가 방향(상승/하락)이 일치한 비율입니다. Hold 판정은 제외됩니다.
           </p>
         </div>
       </motion.div>
