@@ -497,19 +497,58 @@ router.get("/search/:query", async (req, res) => {
 // 단일 티커 현재가 조회 (KQ/KS 자동 판별)
 async function resolveQuote(raw: string): Promise<{ price: number | null; currency: string; change: number | null }> {
   const ticker = raw.trim();
-  const isKoreanSix = /^\d{6}$/.test(ticker.split(".")[0]) && !ticker.includes(".");
+  const sixDigit = ticker.split(".")[0];
+  const isKoreanSix = /^\d{6}$/.test(sixDigit) && !ticker.includes(".");
 
   if (isKoreanSix) {
-    // KQ(코스닥)와 KS(코스피) 동시 조회 후 유효한 값 선택
+    // ── 1순위: 네이버 금융 실시간가 (가장 정확) ─────────────────────────────
+    try {
+      const naverRes = await fetch(
+        `https://m.stock.naver.com/api/stock/${sixDigit}/basic`,
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Referer": "https://m.stock.naver.com/",
+          },
+          signal: AbortSignal.timeout(4000),
+        }
+      );
+      if (naverRes.ok) {
+        const nb = await naverRes.json() as any;
+        // closePrice = 당일 종가 or 현재가 (장 중에는 현재가)
+        const rawPrice = nb?.closePrice ?? nb?.stockItemTotalInfos?.find((x: any) => x.code === "closePrice")?.value;
+        const naverPrice = rawPrice ? Number(String(rawPrice).replace(/,/g, "")) : null;
+        const naverChange = nb?.compareToPreviousClosePrice != null && nb?.previousClosePrice > 0
+          ? (Number(String(nb.compareToPreviousClosePrice).replace(/,/g, "")) / Number(String(nb.previousClosePrice).replace(/,/g, ""))) * 100
+          : null;
+        if (naverPrice != null && naverPrice > 0) {
+          console.log(`[resolveQuote] Naver price for ${sixDigit}: ${naverPrice}`);
+          return { price: naverPrice, currency: "KRW", change: naverChange };
+        }
+      }
+    } catch (e) {
+      console.warn(`[resolveQuote] Naver fallback failed for ${sixDigit}:`, (e as Error).message?.slice(0, 60));
+    }
+
+    // ── 2순위: Yahoo Finance — KQ와 KS 동시 조회 후 네이버 검증 ───────────────
     const [kqRes, ksRes] = await Promise.allSettled([
-      yahooFinance.quote(`${ticker}.KQ`, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] }),
-      yahooFinance.quote(`${ticker}.KS`, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] }),
+      yahooFinance.quote(`${sixDigit}.KQ`, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency", "marketCap"] }),
+      yahooFinance.quote(`${sixDigit}.KS`, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency", "marketCap"] }),
     ]);
     const kqPrice = kqRes.status === "fulfilled" ? (kqRes.value?.regularMarketPrice ?? null) : null;
     const ksPrice = ksRes.status === "fulfilled" ? (ksRes.value?.regularMarketPrice ?? null) : null;
 
-    // 유효한 가격이 있는 쪽 우선 (둘 다 있으면 KQ 우선)
-    const winner = kqPrice != null ? kqRes : ksPrice != null ? ksRes : null;
+    // 둘 다 유효하면 시가총액이 더 큰 쪽 선택 (대형주가 정분석 대상일 가능성 높음)
+    // 시가총액 없으면 KS 우선 (코스피 대형주가 더 흔함)
+    let winner: PromiseSettledResult<any> | null = null;
+    if (kqPrice != null && ksPrice != null) {
+      const kqMcap = kqRes.status === "fulfilled" ? (kqRes.value?.marketCap ?? 0) : 0;
+      const ksMcap = ksRes.status === "fulfilled" ? (ksRes.value?.marketCap ?? 0) : 0;
+      winner = ksMcap >= kqMcap ? ksRes : kqRes; // KS 우선 (동점이면 KS)
+    } else {
+      winner = kqPrice != null ? kqRes : ksPrice != null ? ksRes : null;
+    }
+
     if (!winner || winner.status !== "fulfilled" || !winner.value?.regularMarketPrice) {
       return { price: null, currency: "KRW", change: null };
     }
@@ -520,7 +559,36 @@ async function resolveQuote(raw: string): Promise<{ price: number | null; curren
     };
   }
 
-  // 미국주식 or 이미 suffix 포함 (.KS/.KQ)
+  // ── 미국주식 or 이미 suffix 포함 (.KS/.KQ) ────────────────────────────────
+  // suffix가 있는 한국 종목은 네이버에서 직접 가격 우선 조회
+  if (ticker.endsWith(".KS") || ticker.endsWith(".KQ")) {
+    const code = ticker.split(".")[0];
+    try {
+      const naverRes = await fetch(
+        `https://m.stock.naver.com/api/stock/${code}/basic`,
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Referer": "https://m.stock.naver.com/",
+          },
+          signal: AbortSignal.timeout(4000),
+        }
+      );
+      if (naverRes.ok) {
+        const nb = await naverRes.json() as any;
+        const rawPrice = nb?.closePrice ?? nb?.stockItemTotalInfos?.find((x: any) => x.code === "closePrice")?.value;
+        const naverPrice = rawPrice ? Number(String(rawPrice).replace(/,/g, "")) : null;
+        const naverChange = nb?.compareToPreviousClosePrice != null && nb?.previousClosePrice > 0
+          ? (Number(String(nb.compareToPreviousClosePrice).replace(/,/g, "")) / Number(String(nb.previousClosePrice).replace(/,/g, ""))) * 100
+          : null;
+        if (naverPrice != null && naverPrice > 0) {
+          console.log(`[resolveQuote] Naver price for ${code} (.KS/.KQ): ${naverPrice}`);
+          return { price: naverPrice, currency: "KRW", change: naverChange };
+        }
+      }
+    } catch { /* fall through to Yahoo */ }
+  }
+
   const quote = await yahooFinance.quote(ticker, { fields: ["regularMarketPrice", "regularMarketChangePercent", "currency"] });
   return {
     price: quote?.regularMarketPrice ?? null,
