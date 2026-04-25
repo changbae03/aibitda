@@ -1065,6 +1065,65 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         waccLines.unshift(`시가총액(E): $${(waccMcap / 1e9).toFixed(2)}B`);
       }
     }
+    // ── 서버 WACC 추정값 계산 (Rf + Beta × ERP 방식) ─────────────────────────────
+    {
+      const beta = ks?.beta ?? null;
+      const mcap = waccMcap;
+      const latestDebt = latestWaccYear ? debtMap[latestWaccYear] : null;
+      const latestCash = latestWaccYear ? cashTsMap[latestWaccYear] : null;
+      const latestIntExp = latestWaccYear ? Math.abs(intExpMap[latestWaccYear] ?? 0) : null;
+
+      // Country-specific parameters
+      const isKRW = currency === "KRW";
+      const Rf   = isKRW ? 0.035 : 0.044;  // KRW: KTB10Y ~3.5%,  USD: UST10Y ~4.4%
+      const ERP  = isKRW ? 0.060 : 0.046;  // KRW: Damodaran Korea ~6.0%, USD: Implied ~4.6%
+      const taxRate = 0.25; // default corporate tax (25% KR, close enough for USD at 21%)
+
+      if (beta != null && mcap != null) {
+        const CoE = Rf + beta * ERP;
+
+        // D/E ratio for relevered beta
+        const D = latestDebt ?? 0;
+        const E = mcap;
+        const DoverEplusD = D / (D + E);
+        const EoverEplusD = E / (D + E);
+
+        // CoD: use server-computed value if available, else fallback
+        const latestIntExpVal = latestIntExp ?? fd?.interestExpense != null ? Math.abs(fd!.interestExpense!) : 0;
+        const codRawCalc = (latestDebt != null && latestDebt > 0)
+          ? latestIntExpVal / latestDebt
+          : null;
+        const codAfterTax = codRawCalc != null && codRawCalc > 0.005 && codRawCalc < 0.30
+          ? codRawCalc * (1 - taxRate)
+          : 0.05 * (1 - taxRate); // fallback: BBB spread 5%
+
+        const waccEst = CoE * EoverEplusD + codAfterTax * DoverEplusD;
+        const waccEstPct = parseFloat((waccEst * 100).toFixed(2));
+        const CoEPct     = parseFloat((CoE * 100).toFixed(2));
+
+        let waccTag = "";
+        if (waccEstPct < 8) {
+          waccTag = " ⚠️ [과소 가능성] AI는 최소 8%로 하향 조정 필요 여부 검토";
+        } else if (waccEstPct > 16) {
+          waccTag = " ⚠️ [과대 가능성] AI는 재검토 필요";
+        } else {
+          waccTag = " ✅ 정상 범위 — AI는 이 값을 WACC 출발점으로 사용 (가드레일 내 조정 허용)";
+        }
+        waccLines.push(
+          `\n[🧮 서버 계산 WACC 추정값 — 반드시 출발점으로 사용]` +
+          `\n  Beta(Yahoo): ${beta.toFixed(2)} | Rf: ${(Rf*100).toFixed(1)}% | ERP: ${(ERP*100).toFixed(1)}%` +
+          `\n  CoE = ${(Rf*100).toFixed(1)}% + ${beta.toFixed(2)}×${(ERP*100).toFixed(1)}% = ${CoEPct}%` +
+          `\n  D/(D+E) = ${(DoverEplusD*100).toFixed(1)}%  |  E/(D+E) = ${(EoverEplusD*100).toFixed(1)}%` +
+          `\n  CoD(after-tax) = ${(codAfterTax*100).toFixed(2)}%` +
+          `\n  ➡️ 서버 WACC 추정값: ${waccEstPct}%${waccTag}`
+        );
+      } else {
+        waccLines.push(
+          `\n[🧮 서버 계산 WACC 추정값] Beta 또는 시가총액 미확보 — AI가 가드레일 기준으로 직접 산출 필요`
+        );
+      }
+    }
+
     if (waccLines.length > 0) {
       lines.push("\n[⚡ WACC·EBITDA 계산 핵심 데이터 — 반드시 아래 수치를 사용할 것]");
       lines.push("※ CoD = 이자비용 ÷ 총부채, EBITDA = 영업이익 + D&A (추정 금지, 아래 수치 직접 사용)");
