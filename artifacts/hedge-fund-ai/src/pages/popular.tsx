@@ -391,13 +391,6 @@ export default function Popular() {
         ) : (
           <div className="space-y-2">
             {topTickers.map((t, i) => {
-              const verdictIdx = VERDICT_ORDER.indexOf(t.latestVerdict ?? "");
-              const verdictLabel = t.latestVerdict ? VERDICT_LABELS[t.latestVerdict] : null;
-              const verdictColor = verdictIdx >= 0 ? VERDICT_TEXT[verdictIdx] : "text-muted-foreground";
-              const verdictBg = verdictIdx >= 0
-                ? ["bg-emerald-50 border-emerald-200", "bg-green-50 border-green-200", "bg-amber-50 border-amber-200", "bg-red-50 border-red-100", "bg-red-50 border-red-200"][verdictIdx]
-                : "bg-muted border-border";
-
               return (
                 <motion.div
                   key={t.ticker}
@@ -413,14 +406,7 @@ export default function Popular() {
                       <span className="text-[11px] font-mono text-muted-foreground">{t.ticker}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {verdictLabel && (
-                      <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", verdictColor, verdictBg)}>
-                        {verdictLabel}
-                      </span>
-                    )}
-                    <span className="text-[12px] tabular-nums text-muted-foreground">{t.count}회</span>
-                  </div>
+                  <span className="text-[12px] tabular-nums text-muted-foreground shrink-0">{t.count}회</span>
                 </motion.div>
               );
             })}
