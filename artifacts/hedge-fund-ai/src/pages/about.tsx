@@ -139,6 +139,72 @@ const sectorGroups: SectorGroup[] = [
   },
 ];
 
+const differentiators = [
+  {
+    title: "자기검증 반론 에이전트",
+    badge: "Self-Adversarial Review",
+    badgeColor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+    desc: "재무 전망과 밸류에이션 단계 완료 후, AI가 스스로 핵심 가정에 대해 3가지 각도로 반론을 생성합니다. WACC 과소/과대 여부, 성장률 낙관성, 멀티플 정당성을 별도 에이전트가 비판적으로 검토합니다.",
+    icon: "⚔️",
+  },
+  {
+    title: "WACC 자동 가드레일",
+    badge: "Auto WACC Guardrail",
+    badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    desc: "한국 WACC 정상 범위 8~14%, 미국 7~12%를 코드에 하드코딩했습니다. WACC < 8% 감지 시 '과소 경고'와 함께 10%로 자동 상향, WACC > 15% 시 과대 경고 후 재검토를 강제합니다. 임의로 낮은 할인율을 써서 목표주가를 부풀리는 오류를 원천 차단합니다.",
+    icon: "🛡️",
+  },
+  {
+    title: "섹터별 지표 오용 차단",
+    badge: "Metric Prohibition System",
+    badgeColor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+    desc: "리츠에는 DCF·EV/EBITDA 단독 사용을 명시적으로 금지하고, 은행·금융주에는 EV/EBITDA를 금지합니다. MLP·BDC에는 EPS·PER을 완전 금지합니다. 섹터 특성을 무시한 잘못된 배수 적용이 불가능합니다.",
+    icon: "🚫",
+  },
+  {
+    title: "3단 데이터 우선순위 체계",
+    badge: "Multi-Source Priority Stack",
+    badgeColor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+    desc: "한국 기업의 재무상태표는 DART(1순위) → Yahoo Finance(2순위) → Naver(3순위)로 자동 폴백합니다. Yahoo Finance가 한국 주식 주가를 IPO 가격으로 반환하는 버그를 Naver 실시간 종가로 교정하고, KRX 기준 발행주식수를 재계산해 EPS 왜곡을 방지합니다.",
+    icon: "🗂️",
+  },
+  {
+    title: "롤링 컨텍스트 누적",
+    badge: "Rolling Context Pipeline",
+    badgeColor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+    desc: "7단계 파이프라인에서 각 에이전트는 이전 단계의 분석 결과 전체를 읽고 명시적으로 반영합니다. 팀장 브리핑 → 산업 분석 → 재무 분석 → 밸류에이션 → 최종 조율로 이어지는 누적 컨텍스트가 일관된 논리를 보장합니다.",
+    icon: "🔗",
+  },
+  {
+    title: "시점 인식 분석",
+    badge: "Temporal Awareness",
+    badgeColor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
+    desc: "프롬프트에 '2024~2025년 수치는 이미 확정된 과거 데이터, DCF 전망 기간은 2026년부터'를 명시합니다. 과거 실적에 '예상', '전망' 표현을 쓰거나, 이미 지난 연도를 미래처럼 다루는 오류를 원천 금지합니다.",
+    icon: "📅",
+  },
+  {
+    title: "FDA 지정별 PoS 자동 보정",
+    badge: "FDA Designation PoS Adjuster",
+    badgeColor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
+    desc: "미국 바이오 분석 시 FDA Breakthrough Therapy 지정(+5~10%p), Priority Review(+3~5%p), Fast Track(+2~3%p)에 따라 임상 성공 확률을 자동 상향합니다. PDUFA 날짜와 AdCom 반대 다수 시 CRL 리스크를 별도 시나리오로 강제 산출합니다.",
+    icon: "💊",
+  },
+  {
+    title: "이중계산 자동 감지",
+    badge: "Double-Count Prevention",
+    badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+    desc: "한국 주식 WACC 산출 시 '이미 Rf와 ERP에 한국 리스크가 내재되어 있으므로 별도 국가 할증을 추가하면 이중계산'임을 경고 조항으로 삽입합니다. 일부 리서치에서 흔히 발생하는 이중 디스카운트 오류를 구조적으로 방지합니다.",
+    icon: "🔍",
+  },
+];
+
+const stats = [
+  { value: "4,100+", label: "전문 프롬프트 줄 수" },
+  { value: "6개", label: "전문 에이전트 역할" },
+  { value: "17개", label: "섹터 전용 프레임" },
+  { value: "8개", label: "자동 오류 방지 조항" },
+];
+
 const assumptions = [
   {
     title: "WACC 무위험수익률 (Rf)",
@@ -257,6 +323,41 @@ export default function AboutPage() {
                   <span className="text-[11px] font-semibold text-muted-foreground">{src.role}</span>
                 </div>
                 <p className="text-[12px] text-muted-foreground/80 mt-1 leading-relaxed">{src.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 기술 차별화 */}
+      <section>
+        <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
+          왜 애빛다인가
+        </h2>
+
+        {/* 스탯 */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {stats.map((s) => (
+            <div key={s.label} className="rounded-xl border border-border bg-card px-3 py-3 text-center">
+              <p className="text-[18px] font-black text-foreground tabular-nums tracking-tight">{s.value}</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5 leading-tight">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 차별화 포인트 */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+          {differentiators.map((d) => (
+            <div key={d.title} className="px-4 py-4 flex gap-3.5">
+              <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">{d.icon}</div>
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13.5px] font-bold text-foreground">{d.title}</span>
+                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md font-mono", d.badgeColor)}>
+                    {d.badge}
+                  </span>
+                </div>
+                <p className="text-[12px] text-muted-foreground/75 leading-relaxed">{d.desc}</p>
               </div>
             </div>
           ))}
