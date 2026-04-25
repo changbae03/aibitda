@@ -119,18 +119,53 @@ OPM 왜곡 경고: 리츠 영업이익률은 구조적으로 의미 없음. 대�
 `;
   }
 
-  // ── 금융 / 보험 / 증권 ─────────────────────────────────────────────────────
-  if (/은행|보험|증권|금융|카드|캐피탈|저축|신용/.test(ind)) {
+  // ── 금융지주 / 은행 / 보험 / 증권 ────────────────────────────────────────
+  if (/은행|보험|증권|금융지주|금융그룹|카드|캐피탈|저축|신용금고|생명|손해보험/.test(ind) ||
+      /금융지주|은행지주|생명보험|손해보험|증권사|자산운용/.test(name)) {
     return `
-[섹터 특화 지침 — 금융/보험/증권]
-핵심 KPI: NIM(순이자마진), 대출성장률, NPL(부실여신)비율, 연체율, BIS/Tier1 자본비율, ROE, ROA, 결합비율(보험), 운용자산(AUM)
+[섹터 특화 지침 — 금융지주/은행/보험/증권]
+핵심 KPI: NIM(순이자마진), 대출성장률, NPL(부실여신)비율, 연체율, CET1(Tier1 자본비율), ROE, ROA, DuPont 분해, 결합비율(손해보험), AUM(자산운용)
 의무 분석 항목:
-- 금리 환경 변화가 NIM에 미치는 영향 (금리 1%p 변동 시 NIM 민감도 bp 단위)
-- 건전성 지표 추이: NPL비율, 대손충당금 적립률, 커버리지 비율
-- 자본 적정성: BIS비율 규제 기준 대비 여유 및 배당가능이익 산출
-- 비이자이익 다각화 수준 (수수료, 방카슈랑스, 자산관리 등)
-- 지주 구조라면 자회사별 ROE 및 시너지 효과
-밸류에이션: P/B-ROE 모델 필수 (DCF 비권장). 피어는 동종 금융주 Fwd P/B 비교
+- 금리 환경: 금리 1%p 변동 시 NIM 민감도(bp 단위), 대출-예금 금리 갭
+- 건전성: NPL비율 추이, 대손충당금 커버리지 비율, 연체율 YoY
+- 자본 적정성: CET1/BIS비율 규제 기준(바젤III) 대비 여유, 배당가능이익
+- 수익 다각화: 비이자이익(수수료·방카슈랑스·자산관리) 비중과 성장성
+- 지주 구조: 자회사별 ROE 기여도, 그룹 내 이익 포트폴리오 구성
+밸류에이션 (필수 방법론):
+- EV/EBITDA 금지: 이자비용이 영업비용이라 EBITDA 자체가 왜곡됨
+- Lead: P/B-ROE 스프레드 모델
+  · Justified P/B = (ROE − g) / (CoE − g)  [Gordon Growth 조정]
+  · 또는 단순 P/B = ROE / CoE
+  · CoE = rf(국고채 10년) + β × ERP (한국 ERP 5~6%)
+  · ROE > CoE → P/B > 1x 정당화, 스프레드가 넓을수록 프리미엄
+  · 목표주가 = 적정 P/B × 주당순자산(BPS)
+- 보조: Fwd P/E, 배당수익률 비교 (배당성향 + ROE → 지속 가능성 판단)
+피어: 동종 금융그룹/은행 P/B, ROE, NIM, NPL비율 비교표 작성
+OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE/ROA를 핵심 수익성 지표로 사용.
+`;
+  }
+
+  // ── 자원 / 광산 / 채굴 ──────────────────────────────────────────────────
+  if (/광산|채굴|자원개발|금속광물|원자재채굴|철광석|구리|금|아연|니켈|석탄채굴|리튬채굴/.test(ind) ||
+      /mining|miner|resource|광업/.test(ind)) {
+    return `
+[섹터 특화 지침 — 자원/광산/채굴]
+핵심 KPI: 매장량(Reserve·Resource), AISC(All-In Sustaining Cost), 생산량(톤/온스), 매장량 수명(Reserve Life), 원자재 스팟가 vs 장기계약가, CapEx 사이클
+의무 분석 항목:
+- 매장량 분류: Measured/Indicated/Inferred → P&P(Proven & Probable) 기준 NAV 산정
+- AISC 구분: 현금생산비 + 유지보수CapEx + G&A + 탐사비 (AISC < 스팟가 이면 생존 가능)
+- 원자재 가격 민감도: 주요 상품 $10/톤 또는 5% 변화 시 EBITDA·NAV 영향
+- 생산 계획: 향후 3~5년 연간 생산량 증감 로드맵 및 신규 광산 개발 일정
+- 지정학/규제 리스크: 소재국 정치 안정성, 광업세 변동, 환경 규제
+밸류에이션 (필수 방법론):
+- Lead: 자산 NAV (DCF of mine reserves at long-term/mid-cycle price)
+  · 장기 원자재 가격 가정 명시 (컨센서스 10년 선도가 또는 AISC + 적정 마진)
+  · 매장량별 NAV = Σ (연간 생산량 × (장기가격 − AISC) × PoP) / WACC
+  · PoP(개발 확률): 탐사→개발→생산 단계별 적용
+  · P/NAV 배수 (피어 대비 프리미엄/할인 이유 설명)
+- 보조: Mid-cycle EV/EBITDA (스팟가 아닌 장기 사이클 평균 가격으로 EBITDA 정상화)
+- 스팟가 기반 EV/EBITDA 사용 시 "현 사이클 위치 감안 __ 배 → 정상화 시 __ 배" 병기 필수
+피어: 동종 광물 생산사 P/NAV, EV/EBITDA, AISC 비교
 `;
   }
 
@@ -175,6 +210,55 @@ OPM 왜곡 경고: 리츠 영업이익률은 구조적으로 의미 없음. 대�
 - 글로벌 방위 예산 확대 트렌드 (NATO 2% 목표, 중동·아시아 국방비 증가) 와의 연계
 - 신규 수주 파이프라인 (ROI 높은 수출 계약 vs 마진 낮은 내수 물량 믹스)
 밸류에이션: EV/EBITDA 및 P/E (수주잔고 기반 실적 가시성이 높을수록 프리미엄)
+`;
+  }
+
+  // ── 조선 / 해운 / 항공운송 ──────────────────────────────────────────────
+  if (/조선|선박|해운|해양플랜트|lng선|항공운송|항공사|화물항공|물류해운/.test(ind) ||
+      /조선소|조선해양|현대중공업|삼성중공업|한화오션|흥아해운|팬오션|대한항공|아시아나|에어부산/.test(name)) {
+    return `
+[섹터 특화 지침 — 조선/해운/항공운송]
+핵심 KPI (조선): 수주잔고(Order Backlog), 수주잔고÷매출(Coverage Ratio), 신조선가 지수(Newbuild Price Index), Book-to-Bill, 공정 진행률, 도크 가동률
+핵심 KPI (해운): TCE 운임(Time Charter Equivalent), 선대 가동률, 발틱운임지수(BDI/SCFI), 선령 분포, 운항 비용
+핵심 KPI (항공): RPK(수익여객킬로), 탑승률(Load Factor), RASK(좌석킬로당 수익), CASK(좌석킬로당 비용), 기재 가동률
+의무 분석 항목:
+- 사이클 위치 판단: 현재 운임/신조선가가 역사적 분포의 어느 사분위에 위치하는지
+- 수주잔고 분해 (조선): 선종별(컨테이너/LNG/탱커/벌크) 비중, 납기 스케줄(연도별 인도 물량)
+- 고정비 레버리지: 운임 하락 시 손익분기 운임(Break-even TCE/CASK) 대비 여유
+- 원자재·연료비 민감도: 강재(조선), 벙커C유(해운), 항공유(항공) 가격 1% 변화 시 영업이익 영향
+- 신규 수주 파이프라인 or 노선 확장 계획의 수익성
+밸류에이션 (필수):
+- Lead: Mid-cycle EV/EBITDA (현재 사이클 스팟 배수를 그대로 쓰는 것 금지 — 반드시 정상화 EBITDA 사용)
+  · 정상화 EBITDA = 장기 평균 운임/선가 시나리오 적용한 EBITDA 추정
+- 보조: P/Book (자산기반 선사의 청산가치 하단 가이드)
+- 수주잔고 기반 실적 가시성이 높은 조선사는 수주잔고÷시가총액 비율을 프리미엄 근거로 사용
+- ⚠️ 현 사이클 피크 배수를 목표가 산정에 사용하는 것 금지 (사이클 전환 리스크)
+피어: 동종 섹터 Mid-cycle EV/EBITDA, P/Book, 운임 민감도 비교
+`;
+  }
+
+  // ── 지식재산권(IP) / 콘텐츠 / 엔터테인먼트 ──────────────────────────────
+  if (/엔터테인먼트|연예기획|음악레이블|콘텐츠제작|미디어|방송|드라마|영화|웹툰|manhwa|웹소설|ip라이선|k-pop/.test(ind) ||
+      /hybe|sm엔터|jyp|yg엔터|카카오엔터|cj enm|스튜디오드래곤|네이버웹툰|크래프톤/.test(name)) {
+    return `
+[섹터 특화 지침 — 지식재산권(IP)/콘텐츠/엔터테인먼트]
+핵심 KPI: IP 라이선스 수익, 아티스트/프랜차이즈별 매출 기여도, 콘텐츠 파이프라인, 스트리밍·굿즈·MD 등 2차 수익화율, 팬덤 규모(음원차트/팬클럽 유료 회원), 글로벌 확장 비중
+의무 분석 항목:
+- IP 포트폴리오 가치: 핵심 IP별(아티스트·게임·캐릭터·시리즈) 수명주기와 예상 잔존 수익
+- 수익 구조 분해: 라이선스/로열티·퍼포먼스·MD·플랫폼 구독의 마진 및 성장률 차이
+- 콘텐츠 파이프라인: 향후 2년 신규 IP 출시 일정, 예상 투자비, 흥행 리스크(성공률 가정 필수)
+- 라이선스 계약: 지역별 독점권, 계약 기간, 갱신 가능성, 수익배분율
+- 플랫폼/스트리밍 의존도: 넷플릭스·스포티파이·유튜브 등 플랫폼 협상력과 수익 분배율 추이
+- 아티스트·크리에이터 계약: 전속 기간, 재계약 리스크, 핵심 인재 이탈 시 IP 가치 영향
+밸류에이션 (필수):
+- Lead: DCF (IP의 경제적 수명 기반, 통상 10~15년 모델링)
+  · 신규 IP 성공확률 명시 (예: 신인 아티스트 글로벌 흥행 확률 30% 가정)
+  · 기존 IP 쇠퇴율 및 잔존 수익 기간 명시
+- 보조: EV/IP 라이선스 수익 멀티플 (피어 비교)
+  · 글로벌 유사 IP 기업(Universal Music, Warner Bros Discovery, EA 등)과 EV/Revenue, EV/EBITDA 비교
+- 플랫폼 구독 모델 병행 시: EV/MAU 또는 EV/Revenue 추가
+- EV/EBITDA 사용 시 콘텐츠 상각비(Content Amortization) 처리 방식 명시 (EBITDA에 포함/제외 여부)
+피어: 글로벌 IP·엔터 기업과 EV/Revenue, P/FCF, EV/EBITDA 비교
 `;
   }
 
@@ -236,6 +320,50 @@ OPM 왜곡 경고: 리츠 영업이익률은 구조적으로 의미 없음. 대�
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsFinancialSector(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
+
+  if (/은행|보험|증권|금융지주|금융그룹|카드|캐피탈|저축|신용금고|생명보험|손해보험/.test(ind)) return true;
+  if (/금융지주|은행지주|생명보험|손해보험|증권사|자산운용|bank|insurance|brokerage/.test(name)) return true;
+
+  const FINANCIAL_TICKERS = new Set([
+    "105560", // KB금융
+    "055550", // 신한지주
+    "086790", // 하나금융지주
+    "316140", // 우리금융지주
+    "138040", // 메리츠금융지주
+    "175330", // JB금융지주
+    "138930", // BNK금융지주
+    "000270", // 기아 (틀림, 제거용)
+    "024110", // 기업은행
+    "039490", // 키움증권
+    "071050", // 한국금융지주
+    "006800", // 대신증권
+    "032830", // 삼성생명
+    "000810", // 삼성화재
+    "001450", // 현대해상
+    "082640", // DB손해보험
+    "005830", // DB금융투자
+  ]);
+  if (bare && FINANCIAL_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
+function needsResourcesMining(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+
+  if (/광산|채굴|자원개발|금속광물|광업|철광석|구리|금광|아연|니켈|리튬채굴|석탄채굴/.test(ind)) return true;
+  if (/mining|miner|resource extraction|quarrying/.test(ind)) return true;
+  // 글로벌 자원 기업명 키워드
+  if (/고려아연|영풍|포스코퓨처엠|포스코홀딩스|광물자원공사/.test(name)) return true;
+
+  return false;
+}
+
 function needsREIT(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -313,12 +441,14 @@ export function buildPrompt(
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate = getSectorTemplate(industry, companyName);
-  const sotpFlag = needsSOTP(industry, companyName, ticker);
-  const reitFlag = needsREIT(industry, companyName, ticker);
+  const sotpFlag     = needsSOTP(industry, companyName, ticker);
+  const reitFlag     = needsREIT(industry, companyName, ticker);
+  const financialFlag = needsFinancialSector(industry, companyName, ticker);
+  const resourcesFlag = needsResourcesMining(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -2228,6 +2358,69 @@ Bull: Cap Rate −0.5%p 적용 NAV × (1 + 적정 P/NAV프리미엄) = __원
   - rel_base/rel_bear/rel_bull = P/FFO 방법론 Base/Bear/Bull
   - current = 현재 주가
   ❌ abs_base에 일반 DCF값 사용 금지 — NAV 기반값으로 통일
+
+**[P/B-ROE 모델 사용 시 — 금융지주/은행/보험/증권 전용]**
+
+⛔ EV/EBITDA 사용 금지 (이자비용이 영업비용 → EBITDA 개념 무의미).
+   P/B × BPS = 목표주가가 Lead입니다.
+
+[Justified P/B 산출]
+① rf = 국고채 10년물 수익률: __%
+② β (업종 평균): __  |  ERP (한국 5~6% 적용): __%
+③ CoE = rf + β × ERP = __%
+④ ROE (Forward 추정): __%  |  g (장기 성장률): __%
+⑤ Justified P/B = (ROE − g) / (CoE − g) = __x
+   (또는 단순 P/B = ROE / CoE = __x)
+⑥ 피어 P/B 중앙값: __x → 비교 후 할인/프리미엄 이유 명시
+
+[목표주가 산출 — 단위 변환 필수]
+- BPS(주당순자산): __원 (최신 분기 자본총계 ÷ 발행주식수)
+- 목표주가(Base) = Justified P/B × BPS = __x × __원 = **__원**
+Bear: (ROE 하락 시나리오 P/B __x) × BPS = __원
+Bull: (ROE 개선 시나리오 P/B __x) × BPS = __원
+
+[ROE-CoE 스프레드 해석]
+- 스프레드 양수(ROE > CoE): 초과수익 창출 → P/B > 1x 정당화
+- 스프레드 음수(ROE < CoE): 자본 훼손 → P/B < 1x 합리적
+- 스프레드 변화 방향이 멀티플 재평가의 핵심 트리거
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = P/B × BPS Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = P/B 방법론 Base/Bear/Bull (DCF 미적용)
+  - rel_base/rel_bear/rel_bull = 피어 P/B 비교 Base/Bear/Bull
+  - current = 현재 주가
+  ❌ abs_base에 일반 DCF값 사용 금지 — P/B × BPS값으로 통일
+
+**[자산 NAV + Mid-cycle EV/EBITDA 모델 사용 시 — 자원/광산 전용]**
+
+⛔ 스팟 원자재 가격 기반 단순 EV/EBITDA 사용 금지 (사이클 왜곡).
+   장기 평균 가격 기반 NAV가 Lead입니다.
+
+[자산 NAV 산출]
+① 핵심 가격 가정: [원자재명] 장기 균형가격 = $__/톤 (컨센서스 or AISC + 적정마진 근거)
+② AISC = $__/톤 (현금비용 + 유지CapEx + G&A + 탐사비 포함)
+③ 연간 생산량: __만톤 × 광산 수명 __년
+④ NAV = Σ (연간 (장기가격 − AISC) × 생산량) / WACC(__%)) − 개발비 − 순부채
+⑤ 주당 NAV(원) = NAV(억원) × 100,000,000 ÷ 발행주식수 = __원
+⑥ P/NAV 배수: __x (탐사 upside 프리미엄 근거 or 운영 리스크 할인 이유 1줄)
+⑦ NAV 기반 목표주가 = 주당NAV × 적용 P/NAV = __원
+
+[Mid-cycle EV/EBITDA 보조]
+① 정상화 EBITDA = 장기 균형가격 적용 시 예상 EBITDA (스팟가 EBITDA 아님)
+② 피어 Mid-cycle EV/EBITDA 배수: __x
+③ EV/EBITDA 기반 목표주가 = (정상화 EBITDA × 배수 − 순부채) ÷ 주식수 = __원
+
+[조율]
+- NAV 기반 목표주가: __원  |  Mid-cycle EV/EBITDA 목표주가: __원
+- 최종 목표주가(Base): NAV 70% + EV/EBITDA 30% = **__원**
+Bear: 장기가격 −20% 가정 NAV = __원
+Bull: 장기가격 +15% + P/NAV 프리미엄 확대 = __원
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = NAV+EV/EBITDA 조율 Base/Bear/Bull
+  - abs_base/abs_bear/abs_bull = NAV 방법론 Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = Mid-cycle EV/EBITDA Base/Bear/Bull
+  - current = 현재 주가
 
 ⚠️ 극단값 최종 점검:
 - 목표가 ÷ 현재가 = __ 배 → [정상범위 내 / 극단값 감지: 재조율 필요]
