@@ -78,6 +78,25 @@ function isValidEquityName(name: string | undefined, symbol: string): boolean {
   return true;
 }
 
+/** Yahoo Finance chart with auto-retry on schema validation failures */
+async function safeChart(symbol: string, opts: { period1: string; period2: string; interval: string }) {
+  try {
+    return await yahooFinance.chart(symbol, { period1: opts.period1, period2: opts.period2, interval: opts.interval as any });
+  } catch (e: any) {
+    const msg = e?.message ?? "";
+    // 스키마 검증 실패지만 데이터는 있을 수 있음 → validateResult: false 재시도
+    if (msg.includes("Schema") || msg.includes("validate") || msg.includes("Validation")) {
+      try {
+        return await (yahooFinance as any).chart(symbol,
+          { period1: opts.period1, period2: opts.period2, interval: opts.interval },
+          { validateResult: false }
+        );
+      } catch { return null; }
+    }
+    return null;
+  }
+}
+
 async function resolveKoreanTicker(
   ticker: string,
   period1: string,
@@ -86,32 +105,39 @@ async function resolveKoreanTicker(
 ) {
   if (!/^\d{6}$/.test(ticker)) return null;
 
+  const chartOpts = { period1, period2, interval };
   const [ksChart, kqChart, ksQuote, kqQuote] = await Promise.allSettled([
-    yahooFinance.chart(`${ticker}.KS`, { period1, period2, interval: interval as any }),
-    yahooFinance.chart(`${ticker}.KQ`, { period1, period2, interval: interval as any }),
-    yahooFinance.quote(`${ticker}.KS`),
-    yahooFinance.quote(`${ticker}.KQ`),
+    safeChart(`${ticker}.KS`, chartOpts),
+    safeChart(`${ticker}.KQ`, chartOpts),
+    yahooFinance.quote(`${ticker}.KS`).catch(() => null),
+    yahooFinance.quote(`${ticker}.KQ`).catch(() => null),
   ]);
 
-  const ksValid = ksChart.status === "fulfilled" && ksChart.value?.quotes?.some((q) => q.close && q.close > 0);
-  const kqValid = kqChart.status === "fulfilled" && kqChart.value?.quotes?.some((q) => q.close && q.close > 0);
+  const ksData = ksChart.status === "fulfilled" ? ksChart.value : null;
+  const kqData = kqChart.status === "fulfilled" ? kqChart.value : null;
 
-  const ksName = ksQuote.status === "fulfilled" ? (ksQuote.value?.longName ?? ksQuote.value?.shortName ?? "") : "";
-  const kqName = kqQuote.status === "fulfilled" ? (kqQuote.value?.longName ?? kqQuote.value?.shortName ?? "") : "";
+  const ksValid = !!ksData?.quotes?.some((q: any) => q.close && q.close > 0);
+  const kqValid = !!kqData?.quotes?.some((q: any) => q.close && q.close > 0);
+
+  const ksQuoteVal = ksQuote.status === "fulfilled" ? ksQuote.value : null;
+  const kqQuoteVal = kqQuote.status === "fulfilled" ? kqQuote.value : null;
+
+  const ksName = (ksQuoteVal as any)?.longName ?? (ksQuoteVal as any)?.shortName ?? "";
+  const kqName = (kqQuoteVal as any)?.longName ?? (kqQuoteVal as any)?.shortName ?? "";
 
   const ksNameOk = isValidEquityName(ksName, `${ticker}.KS`);
   const kqNameOk = isValidEquityName(kqName, `${ticker}.KQ`);
 
   // Prefer the exchange whose company name looks like a real stock
   if (kqValid && kqNameOk && !ksNameOk) {
-    return { symbol: `${ticker}.KQ`, result: kqChart.value! };
+    return { symbol: `${ticker}.KQ`, result: kqData! };
   }
   if (ksValid && ksNameOk && !kqNameOk) {
-    return { symbol: `${ticker}.KS`, result: ksChart.value! };
+    return { symbol: `${ticker}.KS`, result: ksData! };
   }
-  // Both valid or both invalid → prefer KQ (KOSDAQ has more individual stocks)
-  if (kqValid) return { symbol: `${ticker}.KQ`, result: kqChart.value! };
-  if (ksValid) return { symbol: `${ticker}.KS`, result: ksChart.value! };
+  // Both valid or both invalid — try KS first (most banks/large caps), then KQ
+  if (ksValid) return { symbol: `${ticker}.KS`, result: ksData! };
+  if (kqValid) return { symbol: `${ticker}.KQ`, result: kqData! };
   return null;
 }
 
