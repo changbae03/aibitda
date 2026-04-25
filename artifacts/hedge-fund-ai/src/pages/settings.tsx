@@ -1,9 +1,29 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2 } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, TrendingUp, Globe, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+
+interface MacroData {
+  ecos: {
+    baseRate: number | null;
+    cpiYoY: number | null;
+    usdKrw: number | null;
+    latestPeriods: { baseRate: string; cpi: string; usdKrw: string };
+  } | null;
+  fred: {
+    fedFundsRate: number | null;
+    t10y: number | null;
+    t2y: number | null;
+    yieldSpread: number | null;
+    cpiYoY: number | null;
+    gdpGrowth: number | null;
+    unemploymentRate: number | null;
+    latestDates: { fedFunds: string; treasury: string; cpi: string; gdp: string };
+  } | null;
+  fetchedAt: number;
+}
 
 const themes = [
   {
@@ -109,6 +129,13 @@ export default function SettingsPage() {
   const [promoCode, setPromoCode] = useState("");
   const [promoApplying, setPromoApplying] = useState(false);
   const [promoResult, setPromoResult] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const [macroData, setMacroData] = useState<MacroData | null>(null);
+  const [macroLoading, setMacroLoading] = useState(false);
+
+  const [defaultPublic, setDefaultPublic] = useState<boolean>(() => {
+    try { return localStorage.getItem("aivita_default_public") === "true"; } catch { return false; }
+  });
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -256,6 +283,23 @@ export default function SettingsPage() {
     } finally {
       setFbSubmitting(false);
     }
+  };
+
+  const fetchMacro = async () => {
+    setMacroLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/macro"), { credentials: "include" });
+      if (r.ok) setMacroData(await r.json());
+    } catch { /* silent */ } finally {
+      setMacroLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchMacro(); }, []);
+
+  const toggleDefaultPublic = (val: boolean) => {
+    setDefaultPublic(val);
+    try { localStorage.setItem("aivita_default_public", String(val)); } catch { /* silent */ }
   };
 
   const dailyUsed = credits?.dailyUsed ?? 0;
@@ -460,6 +504,44 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* ── 분석 기본 설정 ── */}
+      <Section title="분석 기본 설정">
+        <div className="px-4 py-4 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="text-[13.5px] font-medium text-foreground">새 분석 기본 공개 범위</p>
+              <p className="text-[11.5px] text-muted-foreground/60 leading-relaxed">분석 결과를 기본으로 공개할지 설정합니다. 분석 시 개별 변경도 가능합니다.</p>
+            </div>
+            <div className="flex gap-2 shrink-0 mt-0.5">
+              <button
+                onClick={() => toggleDefaultPublic(false)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
+                  !defaultPublic
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                )}
+              >
+                <EyeOff className="w-3 h-3" />
+                비공개
+              </button>
+              <button
+                onClick={() => toggleDefaultPublic(true)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
+                  defaultPublic
+                    ? "bg-primary text-white border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                )}
+              >
+                <Eye className="w-3 h-3" />
+                공개
+              </button>
+            </div>
+          </div>
+        </div>
+      </Section>
+
       {/* ── 테마 ── */}
       <Section title="테마">
         <div className="px-4 py-4">
@@ -645,17 +727,120 @@ export default function SettingsPage() {
         </Row>
       </Section>
 
-      {/* ── 법적 고지 ── */}
-      <Section title="법적 고지">
-        <Row>
-          <a href="#" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">개인정보처리방침</a>
-        </Row>
-        <Row>
-          <a href="#" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">이용약관</a>
-        </Row>
-        <Row>
-          <a href="#" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">투자 유의사항</a>
-        </Row>
+      {/* ── 거시경제 현황 ── */}
+      <Section title="거시경제 현황">
+        <div className="px-4 py-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] text-muted-foreground/70">AI 분석에 실시간으로 반영되는 거시경제 지표입니다.</p>
+            <button
+              onClick={fetchMacro}
+              disabled={macroLoading}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-primary transition-colors"
+            >
+              <RefreshCw className={cn("w-3 h-3", macroLoading && "animate-spin")} />
+              새로고침
+            </button>
+          </div>
+
+          {macroLoading && !macroData ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* 한국 - ECOS */}
+              <div className="rounded-xl bg-muted/40 border border-border/60 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/60">
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-wide">한국 (ECOS · 한국은행)</span>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border/40">
+                  {[
+                    {
+                      label: "기준금리",
+                      value: macroData?.ecos?.baseRate != null ? `${macroData.ecos.baseRate.toFixed(2)}%` : "—",
+                      sub: macroData?.ecos?.latestPeriods?.baseRate
+                        ? `${macroData.ecos.latestPeriods.baseRate.slice(0,4)}.${macroData.ecos.latestPeriods.baseRate.slice(4)}`
+                        : "",
+                    },
+                    {
+                      label: "CPI (YoY)",
+                      value: macroData?.ecos?.cpiYoY != null ? `+${macroData.ecos.cpiYoY.toFixed(2)}%` : "—",
+                      sub: macroData?.ecos?.latestPeriods?.cpi
+                        ? `${macroData.ecos.latestPeriods.cpi.slice(0,4)}.${macroData.ecos.latestPeriods.cpi.slice(4)}`
+                        : "",
+                    },
+                    {
+                      label: "원/달러",
+                      value: macroData?.ecos?.usdKrw != null ? `${macroData.ecos.usdKrw.toFixed(0)}원` : "—",
+                      sub: "매매기준율",
+                    },
+                  ].map((item) => (
+                    <div key={item.label} className="px-3 py-2.5 text-center">
+                      <p className="text-[10px] text-muted-foreground/50 mb-1">{item.label}</p>
+                      <p className="text-[14px] font-bold text-foreground tabular-nums">{item.value}</p>
+                      {item.sub && <p className="text-[10px] text-muted-foreground/40 mt-0.5">{item.sub}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 미국 - FRED */}
+              <div className="rounded-xl bg-muted/40 border border-border/60 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/60">
+                  <Globe className="w-3.5 h-3.5 text-red-500" />
+                  <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-wide">미국 (FRED · 연준)</span>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border/40">
+                  {[
+                    {
+                      label: "Fed 금리",
+                      value: macroData?.fred?.fedFundsRate != null ? `${macroData.fred.fedFundsRate.toFixed(2)}%` : "—",
+                      sub: macroData?.fred?.latestDates?.fedFunds ?? "",
+                    },
+                    {
+                      label: "10Y UST",
+                      value: macroData?.fred?.t10y != null ? `${macroData.fred.t10y.toFixed(2)}%` : "—",
+                      sub: macroData?.fred?.t2y != null
+                        ? `2Y: ${macroData.fred.t2y.toFixed(2)}%`
+                        : "",
+                    },
+                    {
+                      label: "CPI (YoY)",
+                      value: macroData?.fred?.cpiYoY != null ? `+${macroData.fred.cpiYoY.toFixed(2)}%` : "—",
+                      sub: "US CPI",
+                    },
+                  ].map((item) => (
+                    <div key={item.label} className="px-3 py-2.5 text-center">
+                      <p className="text-[10px] text-muted-foreground/50 mb-1">{item.label}</p>
+                      <p className="text-[14px] font-bold text-foreground tabular-nums">{item.value}</p>
+                      {item.sub && <p className="text-[10px] text-muted-foreground/40 mt-0.5">{item.sub}</p>}
+                    </div>
+                  ))}
+                </div>
+                {macroData?.fred && (
+                  <div className={cn(
+                    "px-3 py-2 border-t border-border/40 text-center text-[11px] font-medium",
+                    (macroData.fred.yieldSpread ?? 0) < 0
+                      ? "text-red-500 bg-red-50 dark:bg-red-950/20"
+                      : "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20"
+                  )}>
+                    장단기 금리차(10Y-2Y) {macroData.fred.yieldSpread != null
+                      ? `${macroData.fred.yieldSpread > 0 ? "+" : ""}${macroData.fred.yieldSpread.toFixed(2)}%p`
+                      : "—"
+                    } — {(macroData.fred.yieldSpread ?? 0) < 0 ? "수익률 곡선 역전 (경기침체 신호)" : "정상 우상향 (경기 회복 국면)"}
+                  </div>
+                )}
+              </div>
+
+              {macroData?.fetchedAt && (
+                <p className="text-[10px] text-muted-foreground/30 text-right">
+                  마지막 업데이트: {new Date(macroData.fetchedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* ── 계정 탈퇴 ── */}

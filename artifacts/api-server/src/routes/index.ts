@@ -14,6 +14,7 @@ import adminRouter from "./admin.js";
 import feedbackRouter from "./feedback.js";
 import supportRouter from "./support.js";
 import noticesRouter from "./notices.js";
+import macroRouter from "./macro.js";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(newsRouter);
 router.use(feedbackRouter);
 router.use(supportRouter);
 router.use(noticesRouter);
+router.use(macroRouter);
 
 export default router;
