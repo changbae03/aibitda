@@ -379,6 +379,125 @@ OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE
 `;
   }
 
+  // ── MLP (Master Limited Partnership) ────────────────────────────────────
+  if (/midstream|pipeline|mlp|master limited partnership|energy infrastructure|lng terminal/.test(ind) ||
+      /enterprise products|kinder morgan|mplx|energy transfer|williams companies|plains all american|western midstream|oneok/.test(name)) {
+    return `
+[섹터 특화 지침 — MLP (Master Limited Partnership)]
+핵심 KPI: Distributable Cash Flow(DCF) per Unit, Distribution Coverage Ratio(DCR=DCF/배분금), EBITDA, Distribution per Unit(DPU), Debt/EBITDA, Fee-based Revenue 비중
+구조 특이사항:
+- MLP는 법인세 미납 패스스루 구조 → EPS·순이익 기반 분석 완전 금지 (세금 없어 순이익이 왜곡됨)
+- 과세는 개별 유닛홀더에게 귀속 (K-1 세금계산서 발행)
+- 핵심 지표는 EPS가 아닌 DCF per Unit (=Distributable Cash Flow per Unit)
+의무 분석 항목:
+- DCF per Unit = EBITDA − 이자비용 − 유지보수CapEx − 기타 현금지출 (분기별 추이)
+- Distribution Coverage Ratio = DCF per Unit / DPU (1.0x 이상: 안정, 1.1x 미만: 주의)
+- Leverage: Debt / EBITDA (4.0x 이하: 안정, 5.0x 초과: 배당컷 리스크 경고 필수)
+- Fee-based Revenue 비중: 원자재 가격 연동 % vs 고정 수수료 % (높을수록 방어적)
+- Growth CapEx vs Maintenance CapEx 구분 (성장 투자가 미래 DCF 증가로 이어지는지 확인)
+밸류에이션 (필수 방법론):
+- PER/EPS 분석 완전 금지 (패스스루 구조 → 순이익 무의미)
+- Lead: EV/EBITDA (Midstream MLP 피어: 8~14x, 파이프라인 계약 안정성 높을수록 고배수)
+- 보조: Distribution Yield 역산 목표주가 = Forward DPU / 목표 배당수익률
+  · 목표 Distribution Yield = 동종 MLP 평균 or 국채10년 + 리스크 프리미엄
+- DCF per Unit × P/DCF 배수 참조 (안정형 MLP: P/DCF 10~15x)
+피어: 동종 Midstream MLP EV/EBITDA, Distribution Yield, Coverage Ratio, Debt/EBITDA 비교
+`;
+  }
+
+  // ── BDC (Business Development Company) ──────────────────────────────────
+  if (/business development company|bdc|middle market lending|direct lending|specialty finance/.test(ind) ||
+      /ares capital|blue owl|prospect capital|main street capital|golub|owl rock|hercules capital|gladstone|blackstone secured/.test(name)) {
+    return `
+[섹터 특화 지침 — BDC (Business Development Company)]
+핵심 KPI: NAV per Share, NII(Net Investment Income) per Share, Dividend Coverage Ratio(NII/배당), Non-accrual Rate(비발생이자율), 포트폴리오 가중평균수익률(WAY), Debt/Equity
+구조 특이사항:
+- 미국 1940년 투자회사법 기반: 순이익 90%+ 배당 의무 (세금 혜택 구조)
+- 주요 투자: 중소기업(Middle Market) 직접 대출 (Senior Secured, Unitranche, 2nd Lien)
+- 이자수익이 주수입 → 변동금리 대출 구조 → 금리 민감도 높음 (금리 상승 시 수혜)
+- NAV 대비 프리미엄/디스카운트 거래 (신용 주기에 따라 변동)
+의무 분석 항목:
+- NAV per Share 분기별 추이: 대출 손상 시 NAV 감소, 회수 시 회복
+- NII per Share vs 배당금 per Share → Coverage Ratio (1.0x 미만이면 배당컷 리스크)
+- 포트폴리오 건전성: Non-accrual 비율 (%) — 2% 초과 시 신용 악화 경고
+- 포트폴리오 구성: Senior Secured 비중(높을수록 안전), Equity/Warrants 비중
+- 금리 민감도: 금리 1%p 상승 시 NII 변화 (변동금리 대출 비중에 따라 +효과)
+밸류에이션 (필수 방법론):
+- EV/EBITDA 금지 (대출 포트폴리오 기업에 부적합)
+- Lead: P/NAV = 주가 / 주당NAV (우량 BDC는 1.0~1.4x, 부실 우려 시 0.7x 이하)
+- 보조: P/NII (PER의 BDC 대용), 배당수익률 절대 비교
+- 목표주가 = 적정 P/NAV × 주당NAV
+피어: 동종 BDC P/NAV, NII Coverage Ratio, Non-accrual 비율, 배당수익률, WAY 비교
+`;
+  }
+
+  // ── 로열티 / 스트리밍 컴퍼니 ──────────────────────────────────────────
+  if (/royalty company|streaming company|royalty stream|royalty trust|mineral rights/.test(ind) ||
+      /franco-nevada|wheaton precious|royalty pharma|triple flag|osisko royalties|sandstorm gold|royal gold/.test(name)) {
+    return `
+[섹터 특화 지침 — 로열티/스트리밍 컴퍼니]
+핵심 KPI: 로열티 수익, 스트림별 기여액, Adjusted EBITDA, EBITDA마진(통상 80~95%), GEO(금등가온스) 또는 동등 단위, 스트림 계약 잔여 기간
+구조 특이사항:
+- 광산·자원 직접 운영 없음: CAPEX·운영비 최소 → 영업 레버리지 극대화
+- 파트너 Operator 생산량 × 계약 요율(NSR/Stream)로 로열티 수취
+- 생산 차질 리스크는 Operator 귀속, 가격 리스크는 로열티사 귀속
+- EBITDA마진 80~95% (일반 광산사 30~50%와 근본적으로 다름)
+의무 분석 항목:
+- 스트림/로열티 자산 목록: 자산명 / 광종 / 계약유형(NSR%/Stream) / 현재생산량 / 잔여계약기간
+- Operator 리스크: 주요 자산별 Operator 재무건전성, 광산 수명(Mine Life)
+- 원자재 가격 민감도: 금/은/구리 $1/oz 변화 시 연간 수익 영향 (단위 명시)
+- 신규 로열티 취득 파이프라인: 투자 규모, 예상 IRR, 자금조달 방식
+밸류에이션 (필수 방법론):
+- Lead: 스트림별 NPV 합산 (Sum of Royalty Stream NPVs)
+  · 자산별 NPV = Σ(연간 로열티 수익 × 생산 확률) / WACC
+  · WACC: 일반 광산사 대비 1~2%p 낮게 적용 (운영 리스크 없음)
+  · P/NAV = 시가총액 / 로열티 스트림 NAV 합계 (통상 1.0~2.5x)
+- 보조: EV/EBITDA (로열티 피어: 20~35x — 일반 광산 8~12x보다 구조적으로 높음)
+  · ⚠️ 일반 광산사 EV/EBITDA 배수를 로열티사에 그대로 적용하는 것 금지
+- 보조: FCF Yield (마진 높아 FCF 창출력 우수 → FCF / 시가총액)
+피어: Franco-Nevada, Wheaton Precious Metals, Royal Gold, Royalty Pharma 등 글로벌 피어 P/NAV, EV/EBITDA, FCF Yield 비교
+`;
+  }
+
+  // ── 빅테크 / M7 (Mega-cap Tech) ─────────────────────────────────────────
+  if (/apple inc|alphabet inc|amazon\.com|meta platforms|microsoft corp|nvidia corp|netflix inc|tesla inc/.test(name) ||
+      /mega.?cap tech|bigtech|faang|m7|magnificent seven/.test(ind)) {
+    return `
+[섹터 특화 지침 — 빅테크/M7 (Mega-cap Tech)]
+구조 특이사항: 단일 사업이 아닌 이질적 복수 부문 보유 → Segment SOTP 의무 적용
+핵심 KPI: 부문별 매출·영업이익률, FCF(자유현금흐름), FCF Yield, 자사주 매입 규모·EPS Accretion
+의무 Segment 분리 기준:
+- Apple: 하드웨어(iPhone/Mac/iPad/Wearables) + 서비스(App Store/iCloud/Apple Music/AppleTV+)
+- Alphabet: Google Search/광고 + YouTube + Google Cloud(GCP) + Other Bets
+- Amazon: North America Retail + International + AWS + 광고(Advertising)
+- Meta: Family of Apps(FB/IG/WhatsApp) + Reality Labs(VR/AR)
+- Microsoft: Productivity&Business(M365/LinkedIn) + Intelligent Cloud(Azure) + More Personal Computing
+- Nvidia: Data Center(AI GPU) + Gaming + Professional Visualization + Auto
+- Netflix: 스트리밍(구독/광고요금제) [단일 사업에 가까우므로 DCF 허용]
+- Tesla: Automotive + Energy + Services (방산/항공우주가 아닌 경우 SOTP)
+의무 분석 항목:
+- Segment별 매출 YoY, 영업이익률 추이 (어느 부문이 성장 드라이버인지 명시)
+- FCF Yield = FCF / 시가총액 (PER보다 현실적 매력도 지표; 4~5%+ = 저평가 신호)
+- 자사주 매입 EPS Accretion 의무 계산:
+  · 연간 자사주 매입액 / 시가총액 = 매입률(%)
+  · EPS Accretion 효과 = 매입률 × 현재 EPS (주식수 감소 → EPS 부스트)
+  · 3~5년 누적 자사주 매입의 목표 EPS 기여 금액 및 % 명시
+- 주식보상비용(SBC): Non-GAAP 영업이익과 GAAP 영업이익 차이 명시 (SBC가 EBITDA를 과장함)
+밸류에이션 (필수 방법론):
+- Lead: Segment SOTP (부문별 다른 배수 적용)
+  · 광고/검색: EV/EBITDA 15~25x
+  · 클라우드: EV/Revenue 8~15x 또는 EV/EBITDA 20~35x
+  · AI Data Center: EV/Revenue 12~20x (AI 성장 프리미엄)
+  · 하드웨어/리테일: EV/EBITDA 8~15x
+  · 구독 서비스: DCF 또는 EV/Revenue 4~10x
+  · Other Bets / 초기사업: 소규모 옵션가치 or 0
+- 보조: FCF 기반 DCF + FCF Yield 크로스체크
+- ⚠️ GAAP PER 단독 사용 금지: SBC·상각으로 왜곡 → Non-GAAP FCF 병행 필수
+- ⚠️ 자사주 매입 연간 3% 이상이면 Forward EPS에 반드시 매입 효과 반영
+피어: M7 내 FCF Yield, P/FCF, Non-GAAP EV/EBITDA, 세그먼트별 배수 비교
+`;
+  }
+
   // 해당 섹터 없음
   return "";
 }
@@ -392,6 +511,58 @@ OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsMLP(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/midstream|pipeline|mlp|master limited partnership|energy infrastructure/.test(ind)) return true;
+  if (/enterprise products|kinder morgan|mplx|energy transfer|williams companies|plains all american|western midstream|oneok/.test(name)) return true;
+
+  const MLP_TICKERS = new Set(["EPD", "KMI", "MPLX", "ET", "WES", "PAA", "WMB", "OKE", "LNG"]);
+  if (bare && MLP_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsBDC(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/business development company|bdc|middle market lending|direct lending|specialty finance/.test(ind)) return true;
+  if (/ares capital|blue owl|prospect capital|main street capital|golub|hercules capital|gladstone|blackstone secured/.test(name)) return true;
+
+  const BDC_TICKERS = new Set(["ARCC", "OBDC", "MAIN", "PSEC", "GBDC", "BXSL", "HTGC", "CGBD"]);
+  if (bare && BDC_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsRoyaltyCompany(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/royalty company|streaming company|royalty stream|royalty trust|mineral rights/.test(ind)) return true;
+  if (/franco-nevada|wheaton precious|royalty pharma|triple flag|osisko royalties|sandstorm gold|royal gold/.test(name)) return true;
+
+  const ROYALTY_TICKERS = new Set(["FNV", "WPM", "RPRX", "RGLD", "TFPM", "SSL", "OR"]);
+  if (bare && ROYALTY_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsBigTech(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/mega.?cap tech|bigtech|faang|m7|magnificent seven/.test(ind)) return true;
+  if (/apple inc|alphabet inc|amazon\.com|meta platforms|microsoft corp|nvidia corp|netflix inc|tesla inc/.test(name)) return true;
+
+  const BIGTECH_TICKERS = new Set(["AAPL", "GOOGL", "GOOG", "AMZN", "META", "MSFT", "NVDA", "NFLX", "TSLA"]);
+  if (bare && BIGTECH_TICKERS.has(bare)) return true;
+  return false;
+}
+
 function needsTelecom(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -573,18 +744,22 @@ export function buildPrompt(
   additionalContext: string | null | undefined,
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>
 ): { systemPrompt: string; userPrompt: string } {
-  const sectorTemplate  = getSectorTemplate(industry, companyName);
-  const sotpFlag       = needsSOTP(industry, companyName, ticker);
-  const reitFlag       = needsREIT(industry, companyName, ticker);
-  const financialFlag  = needsFinancialSector(industry, companyName, ticker);
-  const resourcesFlag  = needsResourcesMining(industry, companyName, ticker);
-  const telecomFlag    = needsTelecom(industry, companyName, ticker);
+  const sectorTemplate    = getSectorTemplate(industry, companyName);
+  const sotpFlag         = needsSOTP(industry, companyName, ticker);
+  const reitFlag         = needsREIT(industry, companyName, ticker);
+  const financialFlag    = needsFinancialSector(industry, companyName, ticker);
+  const resourcesFlag    = needsResourcesMining(industry, companyName, ticker);
+  const telecomFlag      = needsTelecom(industry, companyName, ticker);
   const constructionFlag = needsConstruction(industry, companyName, ticker);
-  const utilityFlag    = needsUtility(industry, companyName, ticker);
+  const utilityFlag      = needsUtility(industry, companyName, ticker);
+  const mlpFlag          = needsMLP(industry, companyName, ticker);
+  const bdcFlag          = needsBDC(industry, companyName, ticker);
+  const royaltyFlag      = needsRoyaltyCompany(industry, companyName, ticker);
+  const bigTechFlag      = needsBigTech(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -2636,6 +2811,140 @@ Bull: 신사업 ARPU 기여 + CapEx 절감 = __원
   - base/bear/bull = 조율 Base/Bear/Bull 목표주가
   - abs_base/abs_bear/abs_bull = EV/EBITDA Base/Bear/Bull
   - rel_base/rel_bear/rel_bull = EV/OpFCF Base/Bear/Bull
+  - current = 현재 주가
+
+**[EV/EBITDA + DCF per Unit + Distribution Yield 모델 — MLP(Master Limited Partnership) 전용]**
+
+⛔ EPS/PER 기반 분석 완전 금지 (법인세 없는 패스스루, 순이익 왜곡).
+⛔ 단순 순이익 배당성향 계산 금지 (MLP 배분금은 DCF per Unit으로만 계산).
+
+[Coverage & Leverage 점검]
+① DCF per Unit = EBITDA − 이자비용 − 유지보수CapEx = __$/unit
+② Distribution per Unit(DPU) = __$/unit (연간)
+③ Distribution Coverage Ratio = DCF ÷ DPU = __x (1.0x 이상: 안정 / 1.1x+ 권장)
+④ Debt/EBITDA = __x (4.0x 이하: 안정 / 5.0x 초과: 배당컷 경고)
+⑤ Fee-based Revenue 비중 = __% (70%+ 방어적 구조)
+
+[목표주가 조율 — 3방법 가중]
+① EV/EBITDA 방법: 피어 배수 __x (Midstream MLP: 8~14x) → EV = __ → 순부채 차감 → 목표주가 = __$
+② Distribution Yield 역산: Forward DPU __$ ÷ 목표 Distribution Yield __% = __$
+   · 목표 Yield = 동종 MLP 평균 Yield or 국채10년 + 리스크 프리미엄
+③ P/DCF 방법: DCF per Unit __$ × P/DCF 배수 __x = __$
+④ 조율: EV/EBITDA 50% + Distribution Yield 역산 40% + P/DCF 10% = **__$**
+
+Bear: 원자재 하락 + Fee-based 비중 감소 + Coverage 1.0x 붕괴 시 = __$
+Bull: Fee-based 계약 확장 + EBITDA 성장 + Leverage 개선 시 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = EV/EBITDA Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = Distribution Yield 역산 Base/Bear/Bull
+  - current = 현재 주가
+
+**[P/NAV + NII Coverage 모델 — BDC(Business Development Company) 전용]**
+
+⛔ EV/EBITDA 적용 금지 (대출 포트폴리오 기업에 부적합).
+⛔ 순이익/PER 단독 사용 금지 (NII Coverage가 핵심 지속가능성 지표).
+
+[NAV & NII 점검]
+① NAV per Share = 총 포트폴리오 공정가치 − 부채 = __$/share (전분기 대비 ±__%)
+② NII per Share = 이자수익 − 이자비용 − 운용수수료 = __$/share (분기)
+③ 배당금 per Share = __$/share → Coverage Ratio = NII ÷ 배당 = __x (1.0x+ 유지 필수)
+④ Non-accrual Rate = __% (2% 초과 시 신용 악화 경고)
+⑤ Debt/Equity = __x (1.0~1.5x 레버리지가 일반적, 2.0x 초과 위험)
+⑥ 포트폴리오 구성: Senior Secured __%, 2nd Lien __%, Equity/Warrant __%
+
+[목표주가 조율]
+① P/NAV 방법: 적정 P/NAV __x (우량 BDC: 1.0~1.4x, 부실 우려: 0.7~0.9x) × NAV per Share __$ = __$
+② P/NII 방법: 적정 P/NII __x × NII per Share __$ = __$
+③ 배당수익률 역산: 연간 DPS __$ ÷ 목표 배당수익률 __% = __$
+④ 조율: P/NAV 60% + P/NII 30% + 배당역산 10% = **__$**
+
+Bear: Non-accrual 급등 + NAV 훼손 + Coverage < 1.0x = __$
+Bull: NAV 회복 + 금리 상승 수혜(변동금리) + 신규 대출 확장 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = P/NAV Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = P/NII Base/Bear/Bull
+  - current = 현재 주가
+
+**[스트림별 NPV 합산 + P/NAV 모델 — 로열티/스트리밍 컴퍼니 전용]**
+
+⛔ 일반 광산사 EV/EBITDA 배수 직접 적용 금지 (로열티 구조는 2~3배 프리미엄).
+⛔ CapEx·광산 운영비 가정 불필요 (Operator 귀속).
+
+[로열티 자산 점검]
+| 자산명 | 광종 | 계약유형(NSR/Stream) | 생산량/yr | 잔여기간 | Operator |
+|--------|------|---------------------|----------|---------|---------|
+| 자산1  | 금   | NSR X%              | __oz     | __년    | (Operator명) |
+| 자산2  | 은   | Stream X%           | __oz     | __년    | (Operator명) |
+(추가 자산 기입)
+
+[스트림별 NPV 산출]
+각 자산 NPV = Σ(연간 로열티 수익 × 생산 확률) / WACC
+- WACC = __%  (일반 광산사 대비 1~2%p 낮게 적용, 운영 리스크 없음)
+- 현물가 가정: 금 $__/oz, 은 $__/oz, 구리 $__/t (장기 컨센서스 사용)
+- 로열티 스트림 NAV 합계 = __억원(또는 $__)
+
+[목표주가 조율]
+① P/NAV 방법: 적정 P/NAV __x (로열티 피어: 1.2~2.0x) × NAV per Share = __$
+② EV/EBITDA 방법: 피어 배수 __x (로열티 피어: 20~35x) → 목표주가 = __$
+③ FCF Yield 역산: Forward FCF __$ × (1 ÷ 목표 FCF Yield __%) → 시총 → 주가 = __$
+④ 조율: P/NAV 50% + EV/EBITDA 35% + FCF Yield 15% = **__$**
+
+Bear: 주요 Operator 생산 차질 + 원자재 가격 약세 = __$
+Bull: 신규 로열티 자산 취득 + 원자재 가격 강세 + NAV 확장 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = P/NAV Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = EV/EBITDA Base/Bear/Bull
+  - current = 현재 주가
+
+**[Segment SOTP + FCF Yield + 자사주 EPS Accretion 모델 — 빅테크/M7 전용]**
+
+⛔ GAAP PER 단독 사용 금지 (주식보상비용(SBC)으로 왜곡됨).
+⛔ 단일 EV/EBITDA 배수 전체 적용 금지 (사업부별 구조가 완전히 다름).
+
+[SBC(주식보상비용) 조정]
+- GAAP 영업이익: __억원  |  SBC: __억원  |  Non-GAAP 영업이익: __억원
+- Non-GAAP FCF = GAAP FCF + SBC 세후 조정 = __억원
+
+[Segment SOTP 테이블]
+| 사업부 | 매출 | 영업이익률 | EBITDA/Revenue | 적용배수 | EV기여 |
+|--------|------|-----------|---------------|---------|-------|
+| (예: AWS)   | __억$ | __%  | EV/Revenue Xx | $__ |
+| (예: 광고) | __억$ | __%  | EV/EBITDA Xx  | $__ |
+| (예: 하드웨어) | __억$ | __% | EV/EBITDA Xx | $__ |
+| Other/초기   | —  | —  | 옵션가치 or 0    | $__ |
+| **SOTP 합계 EV** | — | — | — | **$__** |
+- 순현금(또는 순부채): ±$__  →  Equity Value = $__  →  주당 SOTP = $__
+
+[FCF Yield 분석]
+- Forward FCF = __억$  |  시가총액 = __억$
+- FCF Yield = __%  (M7 피어 중앙값 __%: 저평가/적정/고평가 판단)
+
+[자사주 매입 EPS Accretion]
+- 연간 자사주 매입액: $__억  |  시가총액: $__억
+- 매입률: __%  |  현재 EPS: $__
+- 연간 EPS Accretion: 매입률 × EPS = +$__/주 (__%↑)
+- 3년 누적 EPS Accretion: +$__/주 (복리 효과 포함)
+- ⚠️ Forward EPS 목표치에 자사주 매입 효과 반드시 반영
+
+[목표주가 조율]
+① Segment SOTP: 주당 SOTP = __$
+② FCF 기반 DCF: 5~10년 FCF 예측 + 터미널 = __$
+③ FCF Yield 역산: Forward FCF / 목표 FCF Yield __% → 목표 시총 → 주당 = __$
+④ 조율: SOTP 50% + DCF 35% + FCF Yield 15% = **__$**
+
+Bear: AI 수익화 지연 + 규제 압박 + 광고 경기 하락 = __$
+Bull: AI 신사업 개화 + 자사주 누적 효과 + 세그먼트 마진 확장 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = Segment SOTP Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = FCF Yield 역산 Base/Bear/Bull
   - current = 현재 주가
 
 ⚠️ 극단값 최종 점검:
