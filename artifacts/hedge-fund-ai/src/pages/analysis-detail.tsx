@@ -1231,6 +1231,26 @@ export default function AnalysisDetail() {
     runStreamingStep(nextStepKey);
   }, [analysis?.status, analysis?.steps.length, id, runStreamingStep]);
 
+  // Auto-advance: 스트리밍이 끝나고 다음 단계가 남아 있으면 자동으로 실행
+  // 체인이 끊겨 수동 버튼이 나타나는 현상 방지
+  useEffect(() => {
+    if (!analysis || analysis.status !== "in_progress") return;
+    if (isStreaming) return;
+    const nextIndex = analysis.steps.length;
+    if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
+    const nextStepKey = ANALYSIS_STEPS_ORDER[nextIndex];
+    if (triggeredSteps.current.has(nextStepKey)) return;
+
+    // 짧은 딜레이 후 자동 실행 (React state flush 대기)
+    const timer = setTimeout(() => {
+      if (triggeredSteps.current.has(nextStepKey)) return;
+      triggeredSteps.current.add(nextStepKey);
+      runStreamingStep(nextStepKey);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [analysis?.status, analysis?.steps.length, isStreaming, runStreamingStep]);
+
   if (isLoading) return (
     <div className="p-20 text-center">
       <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
@@ -1466,22 +1486,21 @@ export default function AnalysisDetail() {
             {currentStepCount < ANALYSIS_STEPS_ORDER.length ? (
               <>
                 <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                  {(() => {
-                    const NextIcon = AGENTS[ANALYSIS_STEPS_ORDER[currentStepCount]].icon;
-                    return <NextIcon className="w-7 h-7 text-primary/60" />;
-                  })()}
+                  <Loader2 className="w-7 h-7 text-primary/60 animate-spin" />
                 </div>
                 <div>
-                  <h4 className="text-base font-display font-semibold text-foreground mb-1">다음 분석 단계 대기 중</h4>
+                  <h4 className="text-base font-display font-semibold text-foreground mb-1">
+                    {currentStepCount + 1}단계 준비 중...
+                  </h4>
                   <p className="text-muted-foreground text-sm">
                     다음 에이전트: <span className="text-foreground font-medium">{AGENTS[ANALYSIS_STEPS_ORDER[currentStepCount]].role}</span>
                   </p>
                 </div>
                 <button
                   onClick={handleRunNextStep}
-                  className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all flex items-center gap-2 shadow-sm"
+                  className="px-4 py-1.5 rounded-lg border border-border text-muted-foreground text-xs hover:bg-muted transition-all flex items-center gap-1.5"
                 >
-                  <Play className="w-4 h-4 fill-current" /> {currentStepCount + 1}단계 실행
+                  <Play className="w-3 h-3 fill-current" /> 지금 바로 실행
                 </button>
               </>
             ) : (
