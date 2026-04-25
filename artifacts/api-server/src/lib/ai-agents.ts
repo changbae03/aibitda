@@ -208,14 +208,46 @@ function getSectorTemplate(industry: string, companyName: string): string {
 
 // ─── SOTP(Sum-of-the-Parts) 대상 감지 ────────────────────────────────────────
 
-function needsSOTP(industry: string, companyName: string): boolean {
+/**
+ * 복합기업·지주회사·투자회사 여부 판단 (SOTP 밸류에이션 필요)
+ * 세 가지 방법으로 감지:
+ *  1) 업종·회사명 키워드 패턴
+ *  2) 회사명 기반 그룹사 목록
+ *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
+ */
+function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
   const name = (companyName ?? "").toLowerCase();
   const ind  = (industry ?? "").toLowerCase();
-  // 지주회사·복합기업 패턴
-  if (/지주|持株|홀딩스|holdings|conglomerate/.test(ind + " " + name)) return true;
-  // 대표적 복합 대기업 그룹사
-  const groups = ["두산", "한화", "효성", "cj", "lotte", "롯데", "oci", "gs홀딩스", "sk이노베이션", "포스코홀딩스", "코오롱"];
-  return groups.some(g => name.includes(g));
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
+
+  // ① 업종명 또는 회사명 키워드
+  if (/지주|持株|홀딩스|holdings?|conglomerate|투자회사|holding company|다각화/.test(ind + " " + name)) return true;
+
+  // ② 회사명 기반 그룹사 목록 (이름에 해당 문자열 포함)
+  const NAME_GROUPS = [
+    "두산", "한화", "효성", "cj", "lotte", "롯데", "oci",
+    "gs홀딩스", "sk이노베이션", "포스코홀딩스", "코오롱",
+    "삼성물산", "sk스퀘어", "sk square",
+  ];
+  if (NAME_GROUPS.some(g => name.includes(g))) return true;
+
+  // ③ 티커 화이트리스트 — 이름만으로 감지하기 어려운 한국 지주·투자회사
+  const SOTP_TICKERS = new Set([
+    "402340", // SK스퀘어 (SK하이닉스 50.1% 등 투자지주)
+    "034730", // SK㈜ (SK그룹 최상위 지주)
+    "028260", // 삼성물산 (삼성그룹 사실상 지주)
+    "000800", // GS홀딩스
+    "001040", // CJ㈜
+    "003490", // 대한항공 (한진그룹 지주 역할)
+    "000120", // CJ대한통운 (CJ 그룹내 물류 복합)
+    "267250", // HD현대 (구 현대중공업지주)
+    "078930", // GS㈜
+    "005440", // 현대지에프홀딩스
+    "071050", // 한국금융지주
+  ]);
+  if (bare && SOTP_TICKERS.has(bare)) return true;
+
+  return false;
 }
 
 export function buildPrompt(
@@ -227,7 +259,7 @@ export function buildPrompt(
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate = getSectorTemplate(industry, companyName);
-  const sotpFlag = needsSOTP(industry, companyName);
+  const sotpFlag = needsSOTP(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
@@ -2055,6 +2087,13 @@ SOTP 작성 규칙:
 - 지주회사 할인(Holding Company Discount) 적용 필수: SOTP NAV 대비 20–40% 할인. 지배구조·배당 유입 가시성 따라 차등 적용. 할인율과 이유를 한 줄로 명시
 - SOTP 주당 가치를 위 DCF/피어 목표가와 비교하여 최종 조율에 반영 (3-way average 또는 Lead 방식)
 - 컨텍스트에 사업부별 재무 데이터가 없으면 "공시 미확인 — DART 사업보고서 기준 추정" 명시
+
+**[순수 투자지주(Pure HoldCo) 특화 규칙]** — SK스퀘어·삼성물산 등 보유지분이 가치 전체인 경우:
+- DCF는 적용 불가 (본체 영업현금흐름이 배당 수입뿐이라 DCF 신뢰도 극히 낮음)
+- Lead 방법론: SOTP NAV 기준. DCF/피어 멀티플은 보조 참고치로만 사용
+- 핵심 자회사 지분 가치가 시가총액 대비 괴리율(NAV Discount %)을 반드시 계산·명시
+- 자회사 배당금 유입 가시성이 낮으면 할인율 상단(35–40%), 높으면 하단(20–25%) 적용
+- 최종 목표주가 = SOTP NAV × (1 − 지주할인율) ÷ 발행주식수
 
 ` : ""}
 마지막 줄에 아래 형식의 JSON을 정확히 한 줄로 출력하세요. 다른 텍스트나 마크다운 없이 정확히 이 형식으로만 출력하세요. 모든 값은 순수 숫자(정수)만 — 쉼표, "원", "%" 등 단위 문자 절대 금지:
