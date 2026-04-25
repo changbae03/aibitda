@@ -1514,7 +1514,7 @@ export default function AnalysisDetail() {
                   <div className="flex flex-col items-center justify-center py-10 px-5">
                     <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
                       <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
-                      <span>분석 초안 작성 중...</span>
+                      <span>분석 리포트 작성 중...</span>
                     </div>
                     <div className="mt-4 min-h-[36px] flex items-center justify-center px-4 w-full">
                       <RotatingAnalysisMessage stepKey={nextKey} />
@@ -2283,7 +2283,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
   })();
 
   const phaseConfig = {
-    writing:      { icon: Loader2,      spin: true,  pulse: false, color: "text-muted-foreground",  label: "분석 초안 작성 중..." },
+    writing:      { icon: Loader2,      spin: true,  pulse: false, color: "text-muted-foreground",  label: "분석 리포트 작성 중..." },
     challenging:  { icon: Swords,       spin: false, pulse: true,  color: "text-violet-600",         label: "팀 전원 심층 재검토 중..." },
     synthesizing: { icon: RefreshCw,    spin: true,  pulse: false, color: "text-blue-600",           label: "재검토 의견 반영하여 재작성 중..." },
     checking:     { icon: ShieldCheck,  spin: false, pulse: true,  color: "text-amber-600",          label: "Lead Portfolio Strategist 검토 중..." },
