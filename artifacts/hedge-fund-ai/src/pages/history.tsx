@@ -560,8 +560,23 @@ export default function History() {
 
   // ── 정확도 통계 ────────────────────────────────────────────────────────
   const accuracyStats = useMemo(() => {
-    const tracked = list.filter((a) => quotes[a.ticker]?.price != null && a.targetPrice != null);
-    if (tracked.length === 0) return null;
+    // 현재가 + 목표가가 있는 전체 집합
+    const allTracked = list.filter((a) => quotes[a.ticker]?.price != null && a.targetPrice != null);
+    if (allTracked.length === 0) return null;
+
+    // 가격이 분석 시점 대비 0.5% 이상 움직인 종목만 정확도 평가 대상으로 포함
+    // → 분석 직후 미반영 종목(+0.0%)이 정확도를 왜곡하는 문제 방지
+    const MIN_MOVE = 0.005; // 0.5%
+    const tracked = allTracked.filter((a) => {
+      const cur   = quotes[a.ticker]!.price!;
+      const entry = a.startPrice ?? a.entryPrice;
+      if (entry == null || entry === 0) return false;
+      return Math.abs(cur - entry) / entry >= MIN_MOVE;
+    });
+    const pendingCount = allTracked.length - tracked.length;
+
+    if (tracked.length === 0) return { total: 0, pendingCount, exceededCount: 0, dirAccuracy: 0, achievementRate: 0, avgAccuracy: null };
+
     let exceededCount = 0, approachingCount = 0, divergingCount = 0;
     let accSum = 0, accCount = 0;
     tracked.forEach((a) => {
@@ -575,9 +590,9 @@ export default function History() {
       const distThen  = entry != null ? Math.abs(entry - tgt) : null;
       const approaching = !exceeded && distThen != null && distNow < distThen;
       const diverging   = !exceeded && distThen != null && distNow > distThen;
-      if (exceeded)   exceededCount++;
+      if (exceeded)    exceededCount++;
       if (approaching) approachingCount++;
-      if (diverging)  divergingCount++;
+      if (diverging)   divergingCount++;
       if (entry != null && tgt !== entry) {
         accSum += ((cur - entry) / (tgt - entry)) * 100;
         accCount++;
@@ -585,6 +600,7 @@ export default function History() {
     });
     return {
       total: tracked.length,
+      pendingCount,
       exceededCount,
       dirAccuracy: ((exceededCount + approachingCount) / tracked.length) * 100,
       achievementRate: (exceededCount / tracked.length) * 100,
@@ -705,17 +721,28 @@ export default function History() {
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">주가 방향 정확도</p>
               <p className="text-[11px] text-muted-foreground/50">상승·하락 방향 예측 기준</p>
+              {accuracyStats.pendingCount > 0 && (
+                <p className="text-[10px] text-muted-foreground/40 mt-0.5">
+                  {accuracyStats.pendingCount}건 미반영 제외 (±0.5% 미만)
+                </p>
+              )}
             </div>
             <div className="text-right">
-              <p className={cn(
-                "text-[32px] font-black leading-none tabular-nums",
-                accuracyStats.dirAccuracy >= 60 ? "text-blue-600"
-                : accuracyStats.dirAccuracy >= 40 ? "text-amber-500"
-                : "text-red-500"
-              )}>
-                {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[14px] font-semibold text-muted-foreground ml-0.5">%</span>
-              </p>
-              <p className="text-[10px] text-muted-foreground/40 mt-0.5">{accuracyStats.total}건 기준</p>
+              {accuracyStats.total === 0 ? (
+                <p className="text-[13px] font-semibold text-muted-foreground/40">평가 대기 중</p>
+              ) : (
+                <>
+                  <p className={cn(
+                    "text-[32px] font-black leading-none tabular-nums",
+                    accuracyStats.dirAccuracy >= 60 ? "text-blue-600"
+                    : accuracyStats.dirAccuracy >= 40 ? "text-amber-500"
+                    : "text-red-500"
+                  )}>
+                    {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[14px] font-semibold text-muted-foreground ml-0.5">%</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/40 mt-0.5">{accuracyStats.total}건 기준</p>
+                </>
+              )}
             </div>
           </div>
         </div>
