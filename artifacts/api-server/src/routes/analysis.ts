@@ -2492,7 +2492,32 @@ router.get("/public-stats", async (_req, res) => {
       .slice(0, 10)
       .map(([ticker, d]) => ({ ticker, companyName: d.companyName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
 
-    res.json({ total, verdictMap, krCount, usCount, topTickers, uniqueTickerCount });
+    // ── 최근 14일 일별 분석 추이 ──────────────────────────────────────────────
+    const recentTrend: { date: string; count: number }[] = [];
+    const today = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const count = rows.filter(r => r.createdAt && r.createdAt.toISOString().slice(0, 10) === dateStr).length;
+      recentTrend.push({ date: dateStr, count });
+    }
+
+    // ── 요일별 분석 분포 (0=일, 1=월, ..., 6=토) ──────────────────────────────
+    const weekdayDist = [0, 0, 0, 0, 0, 0, 0]; // sun~sat
+    for (const r of rows) {
+      if (r.createdAt) weekdayDist[new Date(r.createdAt).getDay()]++;
+    }
+
+    // ── 매수 신호 비율 (Strong Buy + Buy) ────────────────────────────────────
+    const bullCount = (verdictMap["Strong Buy"] ?? 0) + (verdictMap["Buy"] ?? 0);
+    const bullRate = total > 0 ? Math.round((bullCount / total) * 100) : null;
+
+    // ── 재분석률 (2회 이상 분석된 종목 비율) ────────────────────────────────────
+    const repeatTickerCount = Object.values(tickerCount).filter(d => d.count >= 2).length;
+    const repeatRate = uniqueTickerCount > 0 ? Math.round((repeatTickerCount / uniqueTickerCount) * 100) : null;
+
+    res.json({ total, verdictMap, krCount, usCount, topTickers, uniqueTickerCount, recentTrend, weekdayDist, bullRate, repeatRate, repeatTickerCount });
   } catch (err) {
     console.error("[GET /analysis/public-stats]", err);
     res.status(500).json({ error: "Failed to fetch stats" });
