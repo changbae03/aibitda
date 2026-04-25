@@ -1057,11 +1057,14 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const codRaw = (debt != null && debt > 0) ? (intExp / debt) : null;
         const codPct = codRaw != null ? parseFloat((codRaw * 100).toFixed(2)) : null;
 
+        // CoD 합리성 범위: 한국 IG 회사채 2~7%, US IG 3~8%.
+        // 10% 초과는 이자부 금융부채(분모)가 실제 총차입보다 과소 집계됐을 가능성 높음.
+        // 30% 초과는 분모가 총부채(무이자 부채 포함) 수준으로 오집계된 극단 케이스.
         let codTag = "";
         if (codPct == null) {
           codTag = "  ⚠️ [CoD 계산 불가] 이자부 금융부채 데이터 없음 → 신용등급 기준표 사용";
-        } else if (codPct > 30) {
-          codTag = `  ⚠️ [CoD 비정상 ↑] 서버 계산 CoD(세전) = ${codPct}% (30% 초과) → 신용등급 기준표 사용`;
+        } else if (codPct > 10) {
+          codTag = `  ⚠️ [CoD 비정상 ↑] 서버 계산 CoD(세전) = ${codPct}% (10% 초과 — 이자부 금융부채 과소집계 또는 리스 이자 혼입 가능) → 신용등급 기준표 사용`;
         } else if (codPct < 0.5) {
           codTag = `  ⚠️ [CoD 비정상 ↓] 서버 계산 CoD(세전) = ${codPct}% (0.5% 미만 — 금융자회사 부채 혼입 가능) → 신용등급 기준표 사용`;
         } else {
@@ -1135,9 +1138,9 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const codRawCalc = (latestDebt != null && latestDebt > 0)
           ? latestIntExpVal / latestDebt
           : null;
-        const codAfterTax = codRawCalc != null && codRawCalc > 0.005 && codRawCalc < 0.30
+        const codAfterTax = codRawCalc != null && codRawCalc > 0.005 && codRawCalc < 0.10
           ? codRawCalc * (1 - taxRate)
-          : 0.05 * (1 - taxRate); // fallback: BBB spread 5%
+          : 0.05 * (1 - taxRate); // fallback: BBB spread 5% (CoD 비정상 또는 미확인 시)
 
         const waccEst = CoE * EoverEplusD + codAfterTax * DoverEplusD;
         const waccEstPct = parseFloat((waccEst * 100).toFixed(2));
@@ -1168,7 +1171,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
     if (waccLines.length > 0) {
       lines.push("\n[⚡ WACC·EBITDA 계산 핵심 데이터 — 반드시 아래 수치를 사용할 것]");
-      lines.push("※ CoD = 이자비용 ÷ 총부채, EBITDA = 영업이익 + D&A (추정 금지, 아래 수치 직접 사용)");
+      lines.push("※ CoD = 이자비용 ÷ 이자부 금융부채(차입금+사채, 무이자 매입채무·미지급금 제외), EBITDA = 영업이익 + D&A (추정 금지, 아래 수치 직접 사용)");
       lines.push("※ 단위 주의: 1조 = 10,000억 (AI 변환 오류 빈번) — 아래 시가총액은 이미 억원으로 변환된 값임");
       lines.push(...waccLines);
     }
