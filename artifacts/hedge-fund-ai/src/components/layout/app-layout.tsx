@@ -95,6 +95,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { href: "/admin/notices", label: "공지사항 관리" },
     { href: "/admin/feedback", label: "유저 피드백" },
     { href: "/admin/support", label: "고객 문의" },
+    { href: "/admin/calibration", label: "모델 보정 현황" },
     { href: "/admin/users", label: "관리자 관리" },
   ];
 
