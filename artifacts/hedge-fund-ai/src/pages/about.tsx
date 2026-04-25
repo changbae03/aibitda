@@ -176,13 +176,6 @@ const differentiators = [
     icon: "🔗",
   },
   {
-    title: "시점 인식 분석",
-    badge: "Temporal Awareness",
-    badgeColor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
-    desc: "프롬프트에 '2024~2025년 수치는 이미 확정된 과거 데이터, DCF 전망 기간은 2026년부터'를 명시합니다. 과거 실적에 '예상', '전망' 표현을 쓰거나, 이미 지난 연도를 미래처럼 다루는 오류를 원천 금지합니다.",
-    icon: "📅",
-  },
-  {
     title: "FDA 지정별 PoS 자동 보정",
     badge: "FDA Designation PoS Adjuster",
     badgeColor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
