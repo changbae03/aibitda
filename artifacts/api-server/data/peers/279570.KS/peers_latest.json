@@ -1,0 +1,129 @@
+{
+  "subject": "279570.KS",
+  "subject_name": "케이뱅크",
+  "collected_at": "2026-04-25T02:15:33.667Z",
+  "peers": {
+    "JPM": {
+      "name": "JPMorgan Chase & Co.",
+      "marketCap": 826036256768,
+      "totalDebt": 1311809994752,
+      "totalCash": 1864180957184,
+      "pbr": 2.4013085,
+      "per_trailing": 14.750239,
+      "per_fwd": null,
+      "ev_ebitda": null,
+      "roe": 16.465001,
+      "operating_margin": 43.051997,
+      "revenue": 173559005184,
+      "operating_income": null,
+      "equity": null,
+      "net_debt": -552370962432,
+      "ev_sales": 1.58,
+      "_sources": {
+        "yahoo": true,
+        "dart": false,
+        "calculated": [
+          "net_debt",
+          "ev_sales"
+        ]
+      }
+    },
+    "BAC": {
+      "name": "Bank of America Corporation",
+      "marketCap": 371111723008,
+      "totalDebt": 780551979008,
+      "totalCash": 1045665021952,
+      "pbr": 1.3462135,
+      "per_trailing": 13.045113,
+      "per_fwd": null,
+      "ev_ebitda": null,
+      "roe": 10.644,
+      "operating_margin": 35.955999999999996,
+      "revenue": 109590003712,
+      "operating_income": null,
+      "equity": null,
+      "net_debt": -265113042944,
+      "ev_sales": 0.97,
+      "_sources": {
+        "yahoo": true,
+        "dart": false,
+        "calculated": [
+          "net_debt",
+          "ev_sales"
+        ]
+      }
+    },
+    "323410.KS": {
+      "name": "KakaoBank Corp.",
+      "marketCap": 12054389850112,
+      "totalDebt": 99000000,
+      "totalCash": 22798110031872,
+      "pbr": 1.79,
+      "per_trailing": null,
+      "per_fwd": null,
+      "ev_ebitda": null,
+      "roe": 7.228000499999999,
+      "operating_margin": 46.231997,
+      "revenue": 1662825005056,
+      "operating_income": null,
+      "equity": null,
+      "net_debt": -22798011031872,
+      "ev_sales": -6.46,
+      "_sources": {
+        "yahoo": true,
+        "dart": false,
+        "calculated": [
+          "net_debt",
+          "ev_sales"
+        ]
+      }
+    },
+    "279570.KS": {
+      "name": "Kbank",
+      "marketCap": 2641075372032,
+      "totalDebt": null,
+      "totalCash": null,
+      "pbr": 1.13,
+      "per_trailing": null,
+      "per_fwd": null,
+      "ev_ebitda": null,
+      "roe": null,
+      "operating_margin": null,
+      "revenue": null,
+      "operating_income": null,
+      "equity": null,
+      "net_debt": null,
+      "ev_sales": null,
+      "_sources": {
+        "yahoo": true,
+        "dart": false,
+        "calculated": []
+      }
+    },
+    "055550.KS": {
+      "name": "Shinhan Financial Group Co., Ltd.",
+      "marketCap": 47465436807168,
+      "totalDebt": 162575501230080,
+      "totalCash": 117823108022272,
+      "pbr": 0.82,
+      "per_trailing": null,
+      "per_fwd": null,
+      "ev_ebitda": null,
+      "roe": 8.531999599999999,
+      "operating_margin": 36.703,
+      "revenue": 15721434185728,
+      "operating_income": null,
+      "equity": null,
+      "net_debt": 44752393207808,
+      "ev_sales": 5.87,
+      "_sources": {
+        "yahoo": true,
+        "dart": false,
+        "calculated": [
+          "net_debt",
+          "ev_sales"
+        ]
+      }
+    }
+  }
+}

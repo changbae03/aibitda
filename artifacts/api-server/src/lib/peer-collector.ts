@@ -10,13 +10,20 @@ const NAVER_HEADERS = {
 
 async function fetchNaverPBR(code: string): Promise<number | null> {
   try {
+    // /integration API → totalInfos 배열에서 pbr code 항목 추출
     const data = await fetch(
-      `https://m.stock.naver.com/api/stock/${code}/basic`,
-      { headers: NAVER_HEADERS, signal: AbortSignal.timeout(6000) }
+      `https://m.stock.naver.com/api/stock/${code}/integration`,
+      { headers: NAVER_HEADERS, signal: AbortSignal.timeout(8000) }
     ).then(r => r.ok ? r.json() : null);
-    const raw = data?.pbr;
-    if (raw == null) return null;
-    const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
+    if (!data) return null;
+
+    const totalInfos: any[] = data?.totalInfos ?? [];
+    const pbrItem = totalInfos.find((i: any) => i?.code === "pbr");
+    if (!pbrItem?.value) return null;
+
+    // "1.13배" → 1.13
+    const raw = String(pbrItem.value).replace(/[배,\s]/g, "");
+    const n = parseFloat(raw);
     return isNaN(n) || n <= 0 ? null : n;
   } catch {
     return null;
@@ -75,8 +82,15 @@ function stockCode(ticker: string): string {
 
 // ─── Yahoo Finance ────────────────────────────────────────────────────────────
 
+interface YahooRawData extends Partial<PeerMultiples> {
+  ebitda?: number | null;
+  sharesOutstanding?: number | null;
+  regularMarketPrice?: number | null;
+  bookValue?: number | null;
+}
+
 async function fetchYahooData(ticker: string): Promise<{
-  data: Partial<PeerMultiples>;
+  data: YahooRawData;
   name: string | null;
 }> {
   try {
@@ -99,7 +113,7 @@ async function fetchYahooData(ticker: string): Promise<{
     const totalDebt: number | null = fd?.totalDebt ?? null;
     const totalCash: number | null = fd?.totalCash ?? null;
 
-    // PBR: quoteSummary → quote.priceToBook
+    // PBR: quoteSummary → quote.priceToBook → quote.bookValue 기반 계산
     const pbr: number | null = ks?.priceToBook ?? q?.priceToBook ?? null;
 
     // PER TTM: quoteSummary → quote.trailingPE → price/EPS 계산
@@ -109,6 +123,16 @@ async function fetchYahooData(ticker: string): Promise<{
       if (eps != null && eps > 0) per_trailing = q.regularMarketPrice / eps;
     }
 
+    // EV/EBITDA: Yahoo 직접 제공 값 우선, 없으면 ebitda 필드 보존해서 나중에 계산
+    const ev_ebitda_direct: number | null = ks?.enterpriseToEbitda ?? null;
+
+    // EBITDA 직접 값 (financialData에서 — 은행주는 Yahoo가 enterpriseToEbitda 미제공)
+    const ebitdaRaw: number | null = fd?.ebitda ?? null;
+
+    const sharesOutstanding: number | null = ks?.sharesOutstanding ?? pr?.sharesOutstanding ?? null;
+    const regularMarketPrice: number | null = q?.regularMarketPrice ?? pr?.regularMarketPrice ?? null;
+    const bookValue: number | null = q?.bookValue ?? null;
+
     return {
       name: pr?.longName ?? pr?.shortName ?? q?.longName ?? q?.shortName ?? null,
       data: {
@@ -117,11 +141,14 @@ async function fetchYahooData(ticker: string): Promise<{
         totalCash,
         pbr,
         per_trailing,
-        ev_ebitda: ks?.enterpriseToEbitda ?? null,
+        ev_ebitda: ev_ebitda_direct,
         roe: fd?.returnOnEquity != null ? fd.returnOnEquity * 100 : null,
         operating_margin: fd?.operatingMargins != null ? fd.operatingMargins * 100 : null,
-        // Yahoo revenue as fallback (if DART unavailable)
         revenue: fd?.totalRevenue ?? null,
+        ebitda: ebitdaRaw,
+        sharesOutstanding,
+        regularMarketPrice,
+        bookValue,
       },
     };
   } catch (err) {
@@ -194,11 +221,13 @@ async function fetchDartFinancials(corpCode: string): Promise<{
         return null;
       };
 
-      const revenue = find(["매출액"]);
+      // 일반기업: 매출액 / 은행·보험·금융: 이자수익, 영업수익, 순이자이익
+      const revenue = find(["매출액", "이자수익", "영업수익", "순이자이익", "보험료수익"]);
       const operating_income = find(["영업이익", "영업손실"]);
       const equity = findBS(["자본총계"]);
 
-      if (revenue !== null || operating_income !== null) {
+      // 매출 또는 영업이익 또는 자본총계 중 하나라도 있으면 반환
+      if (revenue !== null || operating_income !== null || equity !== null) {
         return { revenue, operating_income, equity, name: null };
       }
     } catch {
@@ -323,9 +352,51 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
   const marketCap = yahooData.marketCap ?? null;
   const totalDebt = yahooData.totalDebt ?? null;
   const totalCash = yahooData.totalCash ?? null;
+  const sharesOutstanding = yahooData.sharesOutstanding ?? null;
+  const regularMarketPrice = yahooData.regularMarketPrice ?? null;
 
   const net_debt =
     totalDebt !== null && totalCash !== null ? totalDebt - totalCash : null;
+
+  // EV (Enterprise Value)
+  const ev: number | null =
+    marketCap !== null
+      ? marketCap + (net_debt ?? (totalDebt ?? 0) - (totalCash ?? 0))
+      : null;
+
+  // ─── PBR 계산 폴백 ────────────────────────────────────────────────────────
+  let pbr: number | null = yahooData.pbr ?? naverPbr ?? null;
+  if (pbr == null) {
+    // 1) Yahoo bookValue 필드로 계산: PBR = price / bookValue
+    if (regularMarketPrice != null && yahooData.bookValue != null && yahooData.bookValue > 0) {
+      pbr = Math.round((regularMarketPrice / yahooData.bookValue) * 100) / 100;
+      console.log(`[peer-collector] Calculated PBR from bookValue for ${ticker}: ${pbr}`);
+    }
+    // 2) DART 자본 + Yahoo 발행주식수로 계산: PBR = price / (equity / shares)
+    if (pbr == null && equity != null && sharesOutstanding != null && sharesOutstanding > 0 && regularMarketPrice != null) {
+      const bvps = equity / sharesOutstanding;
+      if (bvps > 0) {
+        pbr = Math.round((regularMarketPrice / bvps) * 100) / 100;
+        console.log(`[peer-collector] Calculated PBR from DART equity for ${ticker}: ${pbr}`);
+      }
+    }
+  }
+
+  // ─── EV/EBITDA 계산 폴백 ─────────────────────────────────────────────────
+  let ev_ebitda: number | null = yahooData.ev_ebitda ?? null;
+  if (ev_ebitda == null && ev != null) {
+    // 1) Yahoo financialData.ebitda 직접 값
+    const ebitdaFromYahoo = yahooData.ebitda ?? null;
+    if (ebitdaFromYahoo != null && ebitdaFromYahoo > 0) {
+      ev_ebitda = Math.round((ev / ebitdaFromYahoo) * 10) / 10;
+      console.log(`[peer-collector] Calculated EV/EBITDA from Yahoo EBITDA for ${ticker}: ${ev_ebitda}`);
+    }
+    // 2) DART 영업이익으로 EBITDA 근사 (D&A 미포함이지만 폴백)
+    if (ev_ebitda == null && operating_income != null && operating_income > 0) {
+      ev_ebitda = Math.round((ev / operating_income) * 10) / 10;
+      console.log(`[peer-collector] Approximated EV/EBITDA from operating income for ${ticker}: ${ev_ebitda} (no D&A)`);
+    }
+  }
 
   // EV/Sales = (시총 + 순차입금) / 매출
   let ev_sales: number | null = null;
@@ -340,6 +411,8 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
   const calculated: string[] = [];
   if (net_debt !== null) calculated.push("net_debt");
   if (ev_sales !== null) calculated.push("ev_sales");
+  if (pbr !== null && (yahooData.pbr == null && naverPbr == null)) calculated.push("pbr");
+  if (ev_ebitda !== null && yahooData.ev_ebitda == null) calculated.push("ev_ebitda");
 
   const name = dartName ?? yahooName ?? ticker;
 
@@ -348,10 +421,10 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
     marketCap,
     totalDebt,
     totalCash,
-    pbr: yahooData.pbr ?? naverPbr ?? null,
+    pbr,
     per_trailing: yahooData.per_trailing ?? null,
     per_fwd: null,
-    ev_ebitda: yahooData.ev_ebitda ?? null,
+    ev_ebitda,
     roe: yahooData.roe ?? null,
     operating_margin: yahooData.operating_margin ?? null,
     revenue,
