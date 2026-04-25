@@ -264,6 +264,83 @@ export default function AboutPage() {
         </div>
       </div>
 
+      {/* 철학 — 왜 기업가치 분석인가 */}
+      <section className="space-y-4">
+        <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
+          투자 철학
+        </h2>
+
+        {/* 그레이엄 인용 */}
+        <blockquote className="rounded-xl border border-primary/20 bg-primary/5 px-5 py-4">
+          <p className="text-[13.5px] leading-relaxed text-foreground/85 italic">
+            "주식은 단기적으로는 투표 기계처럼 시장의 감정을 반영하지만,<br className="hidden sm:block" />
+            장기적으로는 체중계처럼 기업의 실제 가치를 측정한다."
+          </p>
+          <footer className="mt-2 text-[11px] text-muted-foreground font-semibold not-italic">
+            — 벤저민 그레이엄 (Benjamin Graham)
+          </footer>
+        </blockquote>
+
+        {/* 핵심 철학 3블록 */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+          <div className="px-4 py-4 flex gap-3.5">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">📉</div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <p className="text-[13.5px] font-bold text-foreground">한국 개인투자자의 구조적 불리함</p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                기관과 외국인은 블룸버그 터미널, 독점 리서치 리포트, 애널리스트 컨퍼런스콜로 무장합니다.
+                반면 개인투자자에게 주어진 도구는 차트·커뮤니티 루머·단편적인 뉴스가 전부입니다.
+                이 정보 비대칭은 수익률 격차로 직결됩니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 py-4 flex gap-3.5">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">🎯</div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <p className="text-[13.5px] font-bold text-foreground">기본적 분석이 중요한 이유</p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                테마와 모멘텀은 사라지지만 현금흐름과 이익은 남습니다.
+                버핏·린치·클라만이 증명했듯, 초과 수익의 원천은 결국 시장이 오판한 내재가치를 찾아내는 능력입니다.
+                주가와 기업가치의 괴리가 클수록 — 그 수렴 과정에서 수익이 발생합니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 py-4 flex gap-3.5">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">⚖️</div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <p className="text-[13.5px] font-bold text-foreground">애빛다의 존재 이유</p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                헤지펀드 리서치 팀이 수행하는 7단계 분석 — 재무 모델링, 섹터별 밸류에이션, 리스크 시나리오 — 을 AI를 통해 누구에게나 제공합니다.
+                DCF·P/B-ROE·rNPV·SOTP·NAV 등 업종에 맞는 방법론을 자동 선택해 "이 주식이 지금 비싼가, 싼가"를 수치로 답합니다.
+                분석의 민주화가 곧 투자 기회의 균등입니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 밸류에이션 방법론 철학 */}
+        <div className="rounded-xl border border-border bg-muted/20 px-4 py-4 space-y-2.5">
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">밸류에이션 방법론 원칙</p>
+          <div className="space-y-2 text-[12px] text-muted-foreground/80 leading-relaxed">
+            <p>
+              <span className="font-semibold text-foreground">① 업종에 맞는 모델을 씁니다.</span>{" "}
+              영업적자 바이오 기업에 DCF를 적용하면 현재 주가의 1/100 수준의 비현실적 값이 나옵니다.
+              금융주에 EV/EBITDA를 쓰면 이자비용이 왜곡됩니다. 애빛다는 업종을 감지하고 가장 신뢰할 수 있는 방법론을 자동 선택합니다.
+            </p>
+            <p>
+              <span className="font-semibold text-foreground">② 가정은 투명하게 명시합니다.</span>{" "}
+              WACC·성장률·터미널 밸류 등 핵심 가정을 숨기지 않습니다. 낮은 할인율로 목표주가를 부풀리는 행위를 원천 차단하는 가드레일을 코드에 직접 구현했습니다.
+            </p>
+            <p>
+              <span className="font-semibold text-foreground">③ 반론을 스스로 제기합니다.</span>{" "}
+              분석 후 AI가 자체적으로 핵심 가정에 반론을 제시합니다. 낙관론에 빠지지 않도록 비판적 시각을 파이프라인 안에 내재화했습니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* AI 파이프라인 */}
       <section>
         <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
