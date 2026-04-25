@@ -1,4 +1,26 @@
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { cn, getApiUrl } from "@/lib/utils";
+import { TrendingUp, Globe, RefreshCw, Loader2 } from "lucide-react";
+
+interface MacroData {
+  ecos: {
+    baseRate: number | null;
+    cpiYoY: number | null;
+    usdKrw: number | null;
+    latestPeriods: { baseRate: string; cpi: string; usdKrw: string };
+  } | null;
+  fred: {
+    fedFundsRate: number | null;
+    t10y: number | null;
+    t2y: number | null;
+    yieldSpread: number | null;
+    cpiYoY: number | null;
+    gdpGrowth: number | null;
+    unemploymentRate: number | null;
+    latestDates: { fedFunds: string; treasury: string; cpi: string; gdp: string };
+  } | null;
+  fetchedAt: number;
+}
 
 const pipeline = [
   { step: "01", title: "기업 개요", desc: "사업모델·경영진·주요제품·성장전략·지배구조 분석" },
@@ -104,6 +126,21 @@ const assumptions = [
 ];
 
 export default function AboutPage() {
+  const [macroData, setMacroData] = useState<MacroData | null>(null);
+  const [macroLoading, setMacroLoading] = useState(false);
+
+  const fetchMacro = async () => {
+    setMacroLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/macro"), { credentials: "include" });
+      if (r.ok) setMacroData(await r.json());
+    } catch { /* silent */ } finally {
+      setMacroLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchMacro(); }, []);
+
   return (
     <div className="max-w-2xl space-y-10 pb-20">
       {/* Hero */}
@@ -216,6 +253,121 @@ export default function AboutPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* 거시경제 현황 */}
+      <section>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+            실시간 거시경제 현황
+          </h2>
+          <button
+            onClick={fetchMacro}
+            disabled={macroLoading}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-primary transition-colors"
+          >
+            <RefreshCw className={cn("w-3 h-3", macroLoading && "animate-spin")} />
+            새로고침
+          </button>
+        </div>
+        <p className="text-[12px] text-muted-foreground/60 px-1 mb-3">AI 분석에 실시간으로 반영되는 거시경제 지표입니다.</p>
+
+        {macroLoading && !macroData ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* 한국 - ECOS */}
+            <div className="rounded-xl bg-muted/40 border border-border/60 overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/60">
+                <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-wide">한국 (ECOS · 한국은행)</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-border/40">
+                {[
+                  {
+                    label: "기준금리",
+                    value: macroData?.ecos?.baseRate != null ? `${macroData.ecos.baseRate.toFixed(2)}%` : "—",
+                    sub: macroData?.ecos?.latestPeriods?.baseRate
+                      ? `${macroData.ecos.latestPeriods.baseRate.slice(0,4)}.${macroData.ecos.latestPeriods.baseRate.slice(4)}`
+                      : "",
+                  },
+                  {
+                    label: "CPI (YoY)",
+                    value: macroData?.ecos?.cpiYoY != null ? `+${macroData.ecos.cpiYoY.toFixed(2)}%` : "—",
+                    sub: macroData?.ecos?.latestPeriods?.cpi
+                      ? `${macroData.ecos.latestPeriods.cpi.slice(0,4)}.${macroData.ecos.latestPeriods.cpi.slice(4)}`
+                      : "",
+                  },
+                  {
+                    label: "원/달러",
+                    value: macroData?.ecos?.usdKrw != null ? `${macroData.ecos.usdKrw.toFixed(0)}원` : "—",
+                    sub: "매매기준율",
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="px-3 py-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground/50 mb-1">{item.label}</p>
+                    <p className="text-[14px] font-bold text-foreground tabular-nums">{item.value}</p>
+                    {item.sub && <p className="text-[10px] text-muted-foreground/40 mt-0.5">{item.sub}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 미국 - FRED */}
+            <div className="rounded-xl bg-muted/40 border border-border/60 overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/60">
+                <Globe className="w-3.5 h-3.5 text-red-500" />
+                <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-wide">미국 (FRED · 연준)</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-border/40">
+                {[
+                  {
+                    label: "Fed 금리",
+                    value: macroData?.fred?.fedFundsRate != null ? `${macroData.fred.fedFundsRate.toFixed(2)}%` : "—",
+                    sub: macroData?.fred?.latestDates?.fedFunds ?? "",
+                  },
+                  {
+                    label: "10Y UST",
+                    value: macroData?.fred?.t10y != null ? `${macroData.fred.t10y.toFixed(2)}%` : "—",
+                    sub: macroData?.fred?.t2y != null ? `2Y: ${macroData.fred.t2y.toFixed(2)}%` : "",
+                  },
+                  {
+                    label: "CPI (YoY)",
+                    value: macroData?.fred?.cpiYoY != null ? `+${macroData.fred.cpiYoY.toFixed(2)}%` : "—",
+                    sub: "US CPI",
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="px-3 py-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground/50 mb-1">{item.label}</p>
+                    <p className="text-[14px] font-bold text-foreground tabular-nums">{item.value}</p>
+                    {item.sub && <p className="text-[10px] text-muted-foreground/40 mt-0.5">{item.sub}</p>}
+                  </div>
+                ))}
+              </div>
+              {macroData?.fred && (
+                <div className={cn(
+                  "px-3 py-2 border-t border-border/40 text-center text-[11px] font-medium",
+                  (macroData.fred.yieldSpread ?? 0) < 0
+                    ? "text-red-500 bg-red-50 dark:bg-red-950/20"
+                    : "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20"
+                )}>
+                  장단기 금리차(10Y-2Y) {macroData.fred.yieldSpread != null
+                    ? `${macroData.fred.yieldSpread > 0 ? "+" : ""}${macroData.fred.yieldSpread.toFixed(2)}%p`
+                    : "—"
+                  } — {(macroData.fred.yieldSpread ?? 0) < 0 ? "수익률 곡선 역전 (경기침체 신호)" : "정상 우상향 (경기 회복 국면)"}
+                </div>
+              )}
+            </div>
+
+            {macroData?.fetchedAt && (
+              <p className="text-[10px] text-muted-foreground/30 text-right">
+                마지막 업데이트: {new Date(macroData.fetchedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* 투자 유의사항 */}
