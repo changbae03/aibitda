@@ -59,6 +59,35 @@ function useRecentAnalyses() {
   });
 }
 
+// 회원 개인화 Quick Picks: 자주 분석한 종목 상위 6개
+function usePersonalizedPicks() {
+  return useQuery<{ ticker: string; companyName: string | null; count: number }[]>({
+    queryKey: ["personalized-picks"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/api/analyses?limit=50"), { credentials: "include" });
+      if (!r.ok) return [];
+      const d = await r.json();
+      const list: RecentAnalysis[] = d.data ?? d ?? [];
+      // 티커별 빈도 집계
+      const map = new Map<string, { companyName: string | null; count: number }>();
+      for (const a of list) {
+        const existing = map.get(a.ticker);
+        if (existing) {
+          existing.count++;
+          if (!existing.companyName && a.companyName) existing.companyName = a.companyName;
+        } else {
+          map.set(a.ticker, { companyName: a.companyName, count: 1 });
+        }
+      }
+      return [...map.entries()]
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 6)
+        .map(([ticker, v]) => ({ ticker, ...v }));
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
   if (!credits) return null;
 
@@ -144,6 +173,7 @@ export default function NewAnalysis() {
   const [error, setError] = useState("");
   const trending = useTrendingTickers();
   const { data: recentAnalyses } = useRecentAnalyses();
+  const { data: personalizedPicks } = usePersonalizedPicks();
 
   useEffect(() => {
     const code = localStorage.getItem("pending_referral");
@@ -609,41 +639,65 @@ export default function NewAnalysis() {
           </motion.div>
         )}
 
-        {/* Quick picks */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">국내</span>
+        {/* Quick picks — 개인화 (이력 있으면) or 기본값 */}
+        {personalizedPicks && personalizedPicks.length >= 2 ? (
+          // ── 개인화 모드: 자주 분석한 종목 ──────────────────────────────
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">자주 분석한 종목</span>
             <div className="flex flex-wrap gap-2">
-              {EXAMPLES_KR.map((ex) => (
+              {personalizedPicks.map((p) => (
                 <button
-                  key={ex.ticker}
-                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  key={p.ticker}
+                  onClick={() => { setTicker(p.ticker); handleSubmit(p.ticker); }}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40 group"
                 >
-                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
-                  <span>{ex.label}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground/40 group-hover:text-muted-foreground/70">{p.ticker}</span>
+                  <span>{p.companyName ?? p.ticker}</span>
+                  {p.count > 1 && (
+                    <span className="text-[9px] text-muted-foreground/30 font-medium">×{p.count}</span>
+                  )}
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">미국</span>
-            <div className="flex flex-wrap gap-2">
-              {EXAMPLES_US.map((ex) => (
-                <button
-                  key={ex.ticker}
-                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
-                  disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                >
-                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
-                  <span>{ex.label}</span>
-                </button>
-              ))}
+        ) : (
+          // ── 기본 모드: 처음 방문 / 이력 없는 경우 ──────────────────────
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">국내</span>
+              <div className="flex flex-wrap gap-2">
+                {EXAMPLES_KR.map((ex) => (
+                  <button
+                    key={ex.ticker}
+                    onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                    disabled={isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  >
+                    <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
+                    <span>{ex.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">미국</span>
+              <div className="flex flex-wrap gap-2">
+                {EXAMPLES_US.map((ex) => (
+                  <button
+                    key={ex.ticker}
+                    onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                    disabled={isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  >
+                    <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
+                    <span>{ex.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </motion.div>
     </div>
   );
