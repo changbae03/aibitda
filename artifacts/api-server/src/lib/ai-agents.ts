@@ -307,6 +307,78 @@ OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE
 `;
   }
 
+  // ── 통신 / 텔레콤 ──────────────────────────────────────────────────────────
+  if (/통신|텔레콤|이동통신|초고속인터넷|유선통신|무선통신|인터넷서비스|mvno|5g/.test(ind) ||
+      /sk텔레콤|kt|lg유플러스|sk브로드밴드|한국통신|kt파워텔/.test(name)) {
+    return `
+[섹터 특화 지침 — 통신(Telecom)]
+핵심 KPI: ARPU(가입자당 평균수익), 가입자 순증, 회선 해지율(Churn), 5G 전환율, CapEx/매출 비율, OpFCF(영업현금흐름 − CapEx), 배당수익률
+의무 분석 항목:
+- ARPU 추이: 5G 전환 → ARPU 상승 효과 vs 요금 인하 압박(정부 규제) 상충 분석
+- 가입자 믹스: MNO vs MVNO 비중, 이동전화·인터넷·IPTV 번들링 비율
+- CapEx 사이클: 5G 투자 정점 통과 여부, CapEx/매출 비율 YoY (통상 15~20%)
+- 비통신 신사업(AI, 클라우드, B2B 솔루션) 매출 비중 및 성장성
+- 배당 정책: FCF 대비 배당성향, DPS 성장률, 주주환원 지속성
+- 정부 규제 리스크: 요금 인하 명령, 주파수 경매 비용, 망중립성
+밸류에이션 (필수 방법론):
+- Lead: EV/EBITDA (통신은 높은 D&A로 순이익 왜곡 → EBITDA가 실질 수익 지표)
+  · 한국 통신 피어 EV/EBITDA 기준: 4~7x (성장성 낮고 규제 있어 낮은 편)
+- 보조: EV/OpFCF = EV / (EBITDA − CapEx) → 실질 자유현금 창출력 비교
+  · P/FCF = 시가총액 / (영업현금흐름 − CapEx) : 배당 지속성 판단
+- 배당수익률 절대 비교: 국고채 10년 수익률 대비 스프레드가 투자 매력 핵심
+- EPS/PER은 감가상각 규모 차이로 피어 비교가 부정확함 → 보조 사용만 허용
+피어: 동종 한국·아시아 통신사 EV/EBITDA, EV/OpFCF, 배당수익률 비교
+`;
+  }
+
+  // ── 건설 / 주택개발 ─────────────────────────────────────────────────────
+  if (/건설|주택|시행|시공|플랜트건설|토건|인프라건설|건축/.test(ind) ||
+      /현대건설|gs건설|dl이앤씨|대우건설|롯데건설|포스코건설|hdc현대산업|신세계건설|제일건설/.test(name)) {
+    return `
+[섹터 특화 지침 — 건설/주택개발]
+핵심 KPI: 수주잔고(Order Backlog), 신규수주(YoY 성장), 분양 물량·성적률, 미청구공사 잔액·비율, 준공후 미분양, 해외 현장 리스크, PF(프로젝트 파이낸싱) 보증 잔액
+의무 분석 항목:
+- 수주잔고 분해: 주택(분양) / 토목·인프라 / 해외 비중, 수주잔고 ÷ 매출(Coverage Ratio)
+- 미청구공사: 미청구공사 잔액 ÷ 매출(%) 추이 — 10% 초과 시 대손 리스크 경고
+- 주택사업 분양 현황: 분양 예정 물량(세대수), 분양가, 예상 분양 성적률, 입주 시점
+- PF 우발부채: 보증 잔액 규모, 만기 도래 일정, 책임 준공 리스크
+- 해외 현장: 저가수주 정산 진행 상황, 추가 손실 가능성
+밸류에이션 (필수 방법론):
+- Lead: P/BV 조정 (RNAV 반영)
+  · RNAV(주택자산재평가) = Σ (분양 예정 세대수 × 분양가 × 수익률 × 성적률) / (1+할인율)^t + 보유 토지 공정가치
+  · RNAV 기반 BPS 조정 → Adjusted P/BV = 주가 / (RNAV 반영 주당순자산)
+  · 시공 능력 프리미엄: 대형 건설사 0.8~1.5x, 중소 0.4~0.8x
+- 보조: EV/EBITDA (플랜트·토목 위주 건설사에 유효), P/E (분양 이익 정상화 시)
+- ⚠️ 주택사업 수익 인식은 분양 시점 아닌 준공(입주) 시점 → 실적 가시성은 수주잔고로 판단
+피어: 동종 건설사 P/BV, RNAV 기반 목표가, 미청구공사 비율, 수주잔고 Coverage 비교
+`;
+  }
+
+  // ── 유틸리티 / 공기업 ──────────────────────────────────────────────────
+  if (/전기|가스|수도|전력|유틸리티|공기업|에너지공급|발전|송배전/.test(ind) ||
+      /한국전력|한전|한국가스|가스공사|한국지역난방|지역난방|한국수력|kep|kepco/.test(name)) {
+    return `
+[섹터 특화 지침 — 유틸리티/공기업]
+핵심 KPI: 요금 단가(원/kWh 또는 원/MJ), 연료비 단가(유연탄·LNG·우라늄 등), 연료비 조정단가(원가 반영 시차), RAB(규제자산기반), ROE 규제 상한, 가동률(설비이용률)
+의무 분석 항목:
+- 요금 구조: 현재 판매단가 vs 원가 단가 갭 → 적자/흑자 구조 명시
+- 연료비 민감도: 주요 연료 가격 1% 변동 시 영업이익 영향 (LNG, 유연탄, 원자재)
+- 정책 리스크: 요금 인상 계획 및 정부 승인 여부, 탈원전·에너지 믹스 변화
+- 설비 계획: CapEx(신설·교체) 규모, 감가상각 부담, RAB 자산 성장
+- 재무 건전성: 부채비율(공기업 특성상 높음), 차입금 조달 비용, 국고채 연계
+밸류에이션 (필수 방법론):
+- Lead (이론): RAB(Regulated Asset Base) 모델
+  · RAB = 공인된 규제자산 규모 (정부 인가 장부가)
+  · 적정 가치 = RAB × 규제 허용 ROE / CoE (CoE 초과 시 할인, 미달 시 프리미엄)
+  · 실무 대체: EV/RAB 배수 비교 (피어 기준 0.8~1.2x)
+- 보조: EV/EBITDA (규제 구조 반영한 피어 배수, 통상 6~10x)
+- 배당수익률: 공기업 특성상 배당 안정성 높음 → 국고채 대비 스프레드로 매력 판단
+- DCF 사용 시: 성장률 g = 0~1.5%(규제 환경), WACC 낮게 설정 (국고채 + 낮은 ERP)
+- ⚠️ 단기 순이익·PER 기반 밸류에이션 금지: 연료비 급등 시 일시적 대규모 손실 발생 → 정상화 EBITDA 사용
+피어: 한국·아시아 유틸리티 EV/EBITDA, EV/RAB, 배당수익률 비교 (글로벌 피어 WACC 차이 주의)
+`;
+  }
+
   // 해당 섹터 없음
   return "";
 }
@@ -320,6 +392,67 @@ OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsTelecom(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
+
+  if (/통신|텔레콤|이동통신|초고속인터넷|유선통신|무선통신|mvno/.test(ind)) return true;
+  if (/sk텔레콤|kt|lg유플러스|sk브로드밴드|한국통신/.test(name)) return true;
+
+  const TELECOM_TICKERS = new Set([
+    "017670", // SK텔레콤
+    "030200", // KT
+    "032640", // LG유플러스
+    "033630", // SK브로드밴드 (비상장이지만 혹여 추가될 경우)
+  ]);
+  if (bare && TELECOM_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
+function needsConstruction(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
+
+  if (/건설|주택개발|시공|플랜트건설|토건|건축/.test(ind)) return true;
+
+  const CONSTRUCTION_TICKERS = new Set([
+    "000720", // 현대건설
+    "006360", // GS건설
+    "047040", // 대우건설
+    "375500", // DL이앤씨
+    "012630", // HDC현대산업개발
+    "000150", // 두산중공업
+    "294870", // HDC현대산업개발리츠 (시공사 관련)
+    "034300", // 신세계건설
+    "034000", // 롯데건설(롯데케미칼과 별개)
+  ]);
+  if (bare && CONSTRUCTION_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
+function needsUtility(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
+
+  if (/전기|가스공급|수도|전력|유틸리티|공기업|발전|송배전|열공급/.test(ind)) return true;
+  if (/한국전력|한전|가스공사|지역난방|한국수력|한국남부발전|한국동서발전|한국중부발전/.test(name)) return true;
+
+  const UTILITY_TICKERS = new Set([
+    "015760", // 한국전력
+    "036460", // 한국가스공사
+    "071320", // 한국지역난방공사
+    "088260", // 삼성물산 (에너지 부문 아님, 제거)
+  ]);
+  if (bare && UTILITY_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
 function needsFinancialSector(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -440,15 +573,18 @@ export function buildPrompt(
   additionalContext: string | null | undefined,
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>
 ): { systemPrompt: string; userPrompt: string } {
-  const sectorTemplate = getSectorTemplate(industry, companyName);
-  const sotpFlag     = needsSOTP(industry, companyName, ticker);
-  const reitFlag     = needsREIT(industry, companyName, ticker);
-  const financialFlag = needsFinancialSector(industry, companyName, ticker);
-  const resourcesFlag = needsResourcesMining(industry, companyName, ticker);
+  const sectorTemplate  = getSectorTemplate(industry, companyName);
+  const sotpFlag       = needsSOTP(industry, companyName, ticker);
+  const reitFlag       = needsREIT(industry, companyName, ticker);
+  const financialFlag  = needsFinancialSector(industry, companyName, ticker);
+  const resourcesFlag  = needsResourcesMining(industry, companyName, ticker);
+  const telecomFlag    = needsTelecom(industry, companyName, ticker);
+  const constructionFlag = needsConstruction(industry, companyName, ticker);
+  const utilityFlag    = needsUtility(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -2420,6 +2556,86 @@ Bull: 장기가격 +15% + P/NAV 프리미엄 확대 = __원
   - base/bear/bull = NAV+EV/EBITDA 조율 Base/Bear/Bull
   - abs_base/abs_bear/abs_bull = NAV 방법론 Base/Bear/Bull
   - rel_base/rel_bear/rel_bull = Mid-cycle EV/EBITDA Base/Bear/Bull
+  - current = 현재 주가
+
+**[RNAV 기반 P/BV 모델 사용 시 — 건설/주택개발 전용]**
+
+[RNAV(주택자산재평가) 산출 — 단위 변환 필수]
+① 분양 예정 사업 목록 (데이터가 공개된 주요 현장만 — 추정 불가 사업 제외):
+   | 현장명 | 세대수 | 분양가(3.3m²당) | 수익률 가정 | 성적률 가정 | 할인율 | PV 기여(억원) |
+② RNAV 합계(억원) = Σ 각 현장 PV 기여값
+③ 보유 토지 공정가치(억원) (장부가를 감정평가 배수로 조정 — 데이터 없으면 장부가 사용)
+④ 조정 NAV(억원) = RNAV + 토지 공정가치 − 순부채 − PF 보증 예상 손실 충당금
+⑤ 주당 RNAV(원) = 조정 NAV × 100,000,000 ÷ 발행주식수
+⑥ 적정 P/RNAV 배수: __x (대형 우량 건설사 0.8~1.3x, 중소 0.4~0.8x, 이유 1줄)
+⑦ RNAV 기반 목표주가 = 주당RNAV × P/RNAV 배수 = **__원**
+
+[수주잔고 점검]
+- 수주잔고 Coverage = 수주잔고 ÷ 연간매출 (2.0배 이상: 안정, 1.5배 이하: 수주 부진)
+- 미청구공사 ÷ 매출 = __% (10% 초과 시 대손 가능성 → RNAV 보정)
+
+Bear: 분양 성적률 −20%p 시나리오 RNAV = __원
+Bull: 분양 성적률 정상 + 토지가치 추가 상승 = __원
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = RNAV Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = RNAV 방법론 Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = 피어 P/BV 비교 Base/Bear/Bull
+  - current = 현재 주가
+
+**[EV/EBITDA + 배당수익률 + RAB 모델 사용 시 — 유틸리티/공기업 전용]**
+
+⛔ 단기 PER 사용 금지 (연료비 급등 시 일시 대규모 손실로 왜곡).
+
+[RAB(규제자산기반) 점검]
+① RAB = 정부 인가 규제자산 규모 (공기업 공시 또는 재무제표 유형자산 기준)
+② 규제 허용 ROE = __ % (정부 고시 허용 수익률)
+③ 요금 단가: __원/kWh(or MJ) vs 원가 단가: __원 → 갭 = __(원가초과/이익) 상황
+④ 연료비 민감도: LNG $10/MMBtu 변화 시 영업이익 ±__억원
+
+[목표주가 조율 — 3방법 가중]
+① EV/EBITDA 방법론 (정상화 EBITDA 사용, 연료비 급등 제거):
+   - 정상화 EBITDA = 연료비 정상화 적용 EBITDA = __억원
+   - 피어 EV/EBITDA 배수: __x (한국 유틸리티 6~10x)
+   - EV/EBITDA 목표주가 = __원
+② 배당수익률 역산 방법:
+   - 기대 DPS = __원 (배당성향·FCF 기반)
+   - 목표 배당수익률 = 국고채 10년(__%) + 유틸리티 리스크 프리미엄(__%) = __%
+   - 배당 역산 목표주가 = DPS ÷ 목표 배당수익률 = __원
+③ RAB 배수 방법 (보조):
+   - EV/RAB 피어 배수: __x → 목표주가 = __원
+④ 조율: EV/EBITDA 50% + 배당역산 40% + RAB 10% = **__원**
+Bear: 요금 동결 + 연료비 추가 상승 시나리오 = __원
+Bull: 요금 인상 승인 + 연료비 정상화 = __원
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = EV/EBITDA(정상화) Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = 배당수익률 역산 Base/Bear/Bull
+  - current = 현재 주가
+
+**[EV/EBITDA + EV/OpFCF 모델 사용 시 — 통신(Telecom) 전용]**
+
+[OpFCF(영업잉여현금) 산출]
+① EBITDA = 영업이익 + 감가상각(D&A) = __억원
+② CapEx = __억원 (5G 인프라 투자 포함)
+③ OpFCF = EBITDA − CapEx = __억원
+④ OpFCF 수익률(OpFCF Yield) = OpFCF ÷ EV × 100 = __%
+
+[목표주가 조율]
+① EV/EBITDA 방법: 피어 배수 __x → EV 추정 → 순부채 차감 → 주가 = __원
+② EV/OpFCF 방법: 피어 배수 __x (한국 통신 기준 8~14x) → 주가 = __원
+③ 배당수익률 역산: DPS __원 ÷ 목표 배당수익률 __% = __원
+④ 조율: EV/EBITDA 40% + EV/OpFCF 40% + 배당역산 20% = **__원**
+
+ARPU 추이: __원 (YoY ±__%)  |  해지율: __% (전년 __%대비 __bp 변동)
+Bear: ARPU 하락 + CapEx 증가 = __원
+Bull: 신사업 ARPU 기여 + CapEx 절감 = __원
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = EV/EBITDA Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = EV/OpFCF Base/Bear/Bull
   - current = 현재 주가
 
 ⚠️ 극단값 최종 점검:
