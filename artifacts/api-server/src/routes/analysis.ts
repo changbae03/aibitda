@@ -1587,8 +1587,22 @@ PEER SELECTION RULES (strictly enforce):
 - Business model match is MANDATORY. Do NOT mix these types in the same peer group:
   * Pure pipeline biotech (파이프라인 바이오텍) vs CDMO/CMO (위탁생산기업, e.g., 삼성바이오로직스, 에스티팜, 바이넥스). EV/Sales comparison between them is invalid.
   * Drug discovery/royalty model vs self-commercialization model — flag if you must include a mixed model peer.
+
+- SEMICONDUCTOR COMPANY RULES (apply when subject is a memory/DRAM/HBM company like SK하이닉스, Samsung Electronics, Micron):
+  * PRIORITY 1 — Korean domestic peers first: 삼성전자(005930.KS) is always a valid peer for Korean memory companies.
+  * PRIORITY 2 — Pure-play memory peers only: MU (Micron Technology) — only DRAM/NAND/HBM, no HDD/storage.
+  * PRIORITY 3 — TSMC (TSM) acceptable as leading-edge foundry peer for EV/EBITDA comparison.
+  * FORBIDDEN PEERS for pure DRAM/HBM companies — DO NOT SELECT:
+    - WDC (Western Digital): HDD + NAND mixed business → EV/EBITDA structurally distorted (HDD cyclicality inflates multiples). Not comparable to DRAM/HBM pure-play.
+    - STX (Seagate): HDD-only company → completely different business model.
+    - SMCI (Super Micro Computer): Server assembler/AI infrastructure, not memory manufacturer → EV/EBITDA not comparable.
+    - INTC (Intel): Diversified CPU/GPU/foundry → memory is minor segment.
+  * If fewer than 3 pure-play memory peers exist, supplement with: AMAT, KLAC (semiconductor equipment), or ASML — but flag as "supply chain peer, not direct competitor".
+
 - For pipeline-only biotechs (pre-revenue or minimal revenue), prefer peers that are also pre-revenue or early-commercial stage with similar therapeutic area and modality (RNA, cell therapy, small molecule, etc.)
 - If a strictly comparable peer set cannot be found in Korea, include 1-2 US-listed peers of similar stage and modality.
+
+- GLOBAL PEER → KOREAN STOCK NOTE: When any non-Korean (US/global) peer is selected for a Korean company, add to reason: "글로벌 피어 적용 시 코리아 디스카운트 10-15% 할인 필요".
 
 Return a JSON object with this exact schema:
 {"peers": [{"ticker": "005930.KS", "name": "삼성전자", "exchange": "KOSPI", "reason": "동일 메모리 반도체 시장 경쟁사, PER/EV/EBITDA 비교 유효"}, ...]}
@@ -1843,29 +1857,87 @@ async function fetchPeerFinancials(
         const netMargin  = fd.profitMargins
           ?? (netIncome != null && totalRevenue != null && totalRevenue > 0 ? netIncome / totalRevenue : null);
 
-        const line = [
-          `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
-          peer.reason ? `  선정 이유: ${peer.reason}` : null,
-          `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
-          `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
-          `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
-          `  매출(TTM): ${fmtAbs(totalRevenue, isKrw)} | 영업이익: ${fmtAbs(opIncome, isKrw)} | 순이익: ${fmtAbs(netIncome, isKrw)} | EBITDA: ${fmtAbs(ebitda, isKrw)}`,
-          `  자본총계: ${fmtAbs(totalEquity, isKrw)} | 총부채: ${fmtAbs(totalDebt, isKrw)} | 현금: ${fmtAbs(cash, isKrw)}`,
-        ].filter(Boolean).join("\n");
-        return line;
+        // 아웃라이어 감지를 위해 원시 배수도 반환
+        return {
+          line: [
+            `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
+            peer.reason ? `  선정 이유: ${peer.reason}` : null,
+            `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
+            `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
+            `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
+            `  매출(TTM): ${fmtAbs(totalRevenue, isKrw)} | 영업이익: ${fmtAbs(opIncome, isKrw)} | 순이익: ${fmtAbs(netIncome, isKrw)} | EBITDA: ${fmtAbs(ebitda, isKrw)}`,
+            `  자본총계: ${fmtAbs(totalEquity, isKrw)} | 총부채: ${fmtAbs(totalDebt, isKrw)} | 현금: ${fmtAbs(cash, isKrw)}`,
+          ].filter(Boolean).join("\n"),
+          ticker: peer.ticker,
+          name: peer.name,
+          ev_ebitda: evEbitda,
+          per_trailing: trailPE,
+          per_fwd: fwdPE,
+          ev_sales: evRev,
+          pbr,
+        };
       } catch (err) {
-        return `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 120)}`;
+        return {
+          line: `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 120)}`,
+          ticker: peer.ticker, name: peer.name,
+          ev_ebitda: null, per_trailing: null, per_fwd: null, ev_sales: null, pbr: null,
+        };
       }
     })
   );
 
+  // ── 서버 사이드 아웃라이어 감지 ──────────────────────────────────────────────
+  // 1차: 절대값 상한, 2차: 중간값 2.0배 기준 → AI에 미리 경고 전달
+  const OUTLIER_CAPS: Record<string, number> = {
+    ev_ebitda: 30, per_trailing: 60, per_fwd: 60, ev_sales: 15, pbr: 30,
+  };
+  type PeerRow = { ticker: string; name: string; ev_ebitda: number | null; per_trailing: number | null; per_fwd: number | null; ev_sales: number | null; pbr: number | null };
+  const peerRows: PeerRow[] = results
+    .filter(r => r.status === "fulfilled")
+    .map(r => (r as PromiseFulfilledResult<any>).value as PeerRow);
+
+  const outlierWarnings: string[] = [];
+  const keys = ["ev_ebitda", "per_trailing", "per_fwd", "ev_sales", "pbr"] as const;
+  for (const key of keys) {
+    // 절대 상한 통과한 유효값 수집
+    const valids: Array<{ ticker: string; name: string; v: number }> = [];
+    for (const p of peerRows) {
+      const v = p[key];
+      if (v == null || !isFinite(v) || v <= 0) continue;
+      if (v > OUTLIER_CAPS[key]) {
+        outlierWarnings.push(`⛔ ${p.name}(${p.ticker}) ${key.toUpperCase().replace("_", "/")} = ${v.toFixed(1)}x → 절대 상한(${OUTLIER_CAPS[key]}x) 초과 이상치 → 중간값 계산 및 적용 배수에서 제외`);
+      } else {
+        valids.push({ ticker: p.ticker, name: p.name, v });
+      }
+    }
+    if (valids.length < 2) continue;
+    const sorted = [...valids].sort((a, b) => a.v - b.v);
+    const mid = Math.floor(sorted.length / 2);
+    const med = sorted.length % 2 !== 0 ? sorted[mid].v : (sorted[mid - 1].v + sorted[mid].v) / 2;
+    for (const { ticker, name, v } of valids) {
+      if (v > med * 2.0) {
+        outlierWarnings.push(`⚠️ ${name}(${ticker}) ${key.toUpperCase().replace("_", "/")} = ${v.toFixed(1)}x → 피어 중간값(${med.toFixed(1)}x)의 2.0배 초과 이상치 → 중간값 계산에서 제외`);
+      }
+    }
+  }
+
+  if (outlierWarnings.length > 0) {
+    rows.push("⚠️ [서버 감지 피어 이상치 — AI는 아래 기업을 해당 배수의 평균/중간값 계산에서 반드시 제외하고 표에 \"(이상치 제외)\" 표기]");
+    for (const w of outlierWarnings) rows.push(`  ${w}`);
+    rows.push("");
+  }
+
   for (const r of results) {
-    rows.push(r.status === "fulfilled" ? r.value : `[데이터 오류] ${r.reason}`);
+    if (r.status === "fulfilled") {
+      rows.push(r.value.line);
+    } else {
+      rows.push(`[데이터 오류] ${(r as any).reason}`);
+    }
     rows.push("");
   }
 
   const text = rows.join("\n");
-  console.log(`[peer-data] Fetched ${peers.length} peers, ${text.length} chars`);
+  console.log(`[peer-data] Fetched ${peers.length} peers, ${outlierWarnings.length} outliers detected, ${text.length} chars`);
   return text;
 }
 

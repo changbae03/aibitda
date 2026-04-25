@@ -676,3 +676,75 @@ export function computePeerAverages(
     per_fwd: avg("per_fwd"),
   };
 }
+
+// ─── 절대값 상한 (피어 배수 아웃라이어 필터링) ─────────────────────────────────
+const PEER_ABSOLUTE_CAPS: Partial<Record<keyof PeerMultiples, number>> = {
+  ev_ebitda: 30,    // EV/EBITDA 30배 초과 → 이상치
+  per_trailing: 60, // PER 60배 초과 → 이상치
+  per_fwd: 60,
+  ev_sales: 15,     // EV/Sales 15배 초과 → 이상치 (매우 극단적 값)
+  pbr: 30,          // PBR 30배 초과 → 이상치
+};
+
+// Median 계산 (정렬 후 중간값)
+function median(nums: number[]): number {
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// 피어별 아웃라이어 태그 감지 및 중간값(median) 계산 반환
+export function computePeerMedianExcludingOutliers(
+  peers: Record<string, PeerMultiples>
+): {
+  medians: Partial<Record<keyof PeerMultiples, number | null>>;
+  outlierTags: Record<string, Partial<Record<keyof PeerMultiples, string>>>;
+} {
+  const keys: (keyof PeerMultiples)[] = [
+    "ev_ebitda", "per_trailing", "per_fwd", "ev_sales", "pbr",
+  ];
+  const outlierTags: Record<string, Partial<Record<keyof PeerMultiples, string>>> = {};
+  const medians: Partial<Record<keyof PeerMultiples, number | null>> = {};
+
+  for (const key of keys) {
+    // 1차: 절대 상한 필터
+    const validEntries: Array<[string, number]> = [];
+    for (const [ticker, peer] of Object.entries(peers)) {
+      const v = peer[key] as number | null;
+      if (v == null || !isFinite(v) || v <= 0) continue;
+      const cap = PEER_ABSOLUTE_CAPS[key];
+      if (cap != null && v > cap) {
+        if (!outlierTags[ticker]) outlierTags[ticker] = {};
+        outlierTags[ticker][key] = `절대값 상한(${cap}x) 초과 이상치`;
+        continue;
+      }
+      validEntries.push([ticker, v]);
+    }
+
+    if (validEntries.length === 0) {
+      medians[key] = null;
+      continue;
+    }
+
+    // 2차: 중간값 기준 상대 필터 (2.0배 초과 → 이상치)
+    const nums = validEntries.map(([, v]) => v);
+    const med1 = median(nums);
+    const finalValid: Array<[string, number]> = [];
+    for (const [ticker, v] of validEntries) {
+      if (v > med1 * 2.0) {
+        if (!outlierTags[ticker]) outlierTags[ticker] = {};
+        outlierTags[ticker][key] = `피어 중간값(${med1.toFixed(1)}x)의 2.0배 초과 이상치`;
+      } else if (v < med1 * 0.3) {
+        if (!outlierTags[ticker]) outlierTags[ticker] = {};
+        outlierTags[ticker][key] = `피어 중간값(${med1.toFixed(1)}x)의 0.3배 미만 이상치`;
+      } else {
+        finalValid.push([ticker, v]);
+      }
+    }
+
+    const finalNums = finalValid.map(([, v]) => v);
+    medians[key] = finalNums.length > 0 ? Math.round(median(finalNums) * 100) / 100 : null;
+  }
+
+  return { medians, outlierTags };
+}
