@@ -180,6 +180,22 @@ export async function runMigrations() {
       );
     `);
 
+    // 티커별 지표 캐시 (PBR 등 Yahoo/Naver 폴백 실패 시 재활용)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticker_metric_cache (
+        ticker TEXT PRIMARY KEY,
+        pbr REAL,
+        per_trailing REAL,
+        per_fwd REAL,
+        ev_ebitda REAL,
+        roe REAL,
+        operating_margin REAL,
+        market_cap REAL,
+        book_value REAL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
     // 토큰 비용 트래킹
     await client.query(`
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS token_count INTEGER DEFAULT 0;

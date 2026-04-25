@@ -2,13 +2,97 @@ import path from "path";
 import fs from "fs/promises";
 import YahooFinance from "yahoo-finance2";
 import { correctKoreanTicker } from "./krx-cache.js";
+import { pool } from "@workspace/db";
 
 const NAVER_HEADERS = {
   "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
   "Referer": "https://m.stock.naver.com/",
 };
 
-async function fetchNaverPBR(code: string): Promise<number | null> {
+// ─── Ticker Metric Cache (DB 영속 캐시) ───────────────────────────────────────
+// 성공적으로 가져온 PBR 등 지표를 저장, 다음 분석 시 폴백으로 재활용 (30일 유효)
+
+interface CachedMetrics {
+  pbr: number | null;
+  per_trailing: number | null;
+  ev_ebitda: number | null;
+  roe: number | null;
+  operating_margin: number | null;
+  market_cap: number | null;
+  book_value: number | null;
+}
+
+async function readMetricCache(ticker: string): Promise<CachedMetrics | null> {
+  try {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        `SELECT pbr, per_trailing, ev_ebitda, roe, operating_margin, market_cap, book_value, updated_at
+         FROM ticker_metric_cache WHERE ticker = $1`,
+        [ticker]
+      );
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0];
+      // 30일 이상 된 캐시는 무효화
+      const ageDays = (Date.now() - new Date(row.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (ageDays > 30) return null;
+      console.log(`[metric-cache] HIT for ${ticker} (${Math.round(ageDays)}d old)`);
+      return {
+        pbr: row.pbr ?? null,
+        per_trailing: row.per_trailing ?? null,
+        ev_ebitda: row.ev_ebitda ?? null,
+        roe: row.roe ?? null,
+        operating_margin: row.operating_margin ?? null,
+        market_cap: row.market_cap ?? null,
+        book_value: row.book_value ?? null,
+      };
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.warn(`[metric-cache] read error for ${ticker}:`, e);
+    return null;
+  }
+}
+
+export async function writeMetricCache(ticker: string, metrics: Partial<CachedMetrics>): Promise<void> {
+  try {
+    const client = await pool.connect();
+    try {
+      // null이 아닌 값만 업데이트 (기존 캐시의 non-null 값을 null로 덮어쓰지 않음)
+      await client.query(
+        `INSERT INTO ticker_metric_cache (ticker, pbr, per_trailing, ev_ebitda, roe, operating_margin, market_cap, book_value, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+         ON CONFLICT (ticker) DO UPDATE SET
+           pbr             = COALESCE($2, ticker_metric_cache.pbr),
+           per_trailing    = COALESCE($3, ticker_metric_cache.per_trailing),
+           ev_ebitda       = COALESCE($4, ticker_metric_cache.ev_ebitda),
+           roe             = COALESCE($5, ticker_metric_cache.roe),
+           operating_margin= COALESCE($6, ticker_metric_cache.operating_margin),
+           market_cap      = COALESCE($7, ticker_metric_cache.market_cap),
+           book_value      = COALESCE($8, ticker_metric_cache.book_value),
+           updated_at      = NOW()`,
+        [
+          ticker,
+          metrics.pbr ?? null,
+          metrics.per_trailing ?? null,
+          metrics.ev_ebitda ?? null,
+          metrics.roe ?? null,
+          metrics.operating_margin ?? null,
+          metrics.market_cap ?? null,
+          metrics.book_value ?? null,
+        ]
+      );
+      console.log(`[metric-cache] WRITE for ${ticker}: pbr=${metrics.pbr}`);
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.warn(`[metric-cache] write error for ${ticker}:`, e);
+  }
+}
+
+export async function fetchNaverPBR(code: string): Promise<number | null> {
   try {
     // /integration API → totalInfos 배열에서 pbr code 항목 추출
     const data = await fetch(
@@ -380,6 +464,14 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
         console.log(`[peer-collector] Calculated PBR from DART equity for ${ticker}: ${pbr}`);
       }
     }
+    // 3) DB 캐시에서 이전에 성공적으로 가져온 PBR 재활용
+    if (pbr == null) {
+      const cached = await readMetricCache(ticker);
+      if (cached?.pbr != null) {
+        pbr = cached.pbr;
+        console.log(`[peer-collector] PBR from DB cache for ${ticker}: ${pbr}`);
+      }
+    }
   }
 
   // ─── EV/EBITDA 계산 폴백 ─────────────────────────────────────────────────
@@ -415,6 +507,21 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
   if (ev_ebitda !== null && yahooData.ev_ebitda == null) calculated.push("ev_ebitda");
 
   const name = dartName ?? yahooName ?? ticker;
+  const per_trailing = yahooData.per_trailing ?? null;
+  const roe = yahooData.roe ?? null;
+  const operating_margin = yahooData.operating_margin ?? null;
+
+  // ─── DB 캐시 저장 (non-null 지표만 업서트) ──────────────────────────────────
+  // 이전 분석에서 가져온 값을 재활용할 수 있도록 성공한 지표를 저장
+  writeMetricCache(ticker, {
+    pbr,
+    per_trailing,
+    ev_ebitda,
+    roe,
+    operating_margin,
+    market_cap: marketCap,
+    book_value: yahooData.bookValue ?? null,
+  }).catch(() => {});  // 캐시 쓰기 실패해도 분석 계속
 
   return {
     name,
@@ -422,11 +529,11 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
     totalDebt,
     totalCash,
     pbr,
-    per_trailing: yahooData.per_trailing ?? null,
+    per_trailing,
     per_fwd: null,
     ev_ebitda,
-    roe: yahooData.roe ?? null,
-    operating_margin: yahooData.operating_margin ?? null,
+    roe,
+    operating_margin,
     revenue,
     operating_income,
     equity,

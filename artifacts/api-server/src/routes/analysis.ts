@@ -4,7 +4,7 @@ import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspac
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
 import { cache, TTL } from "../lib/mem-cache.js";
-import { fetchDartSubjectBalance } from "../lib/peer-collector.js";
+import { fetchDartSubjectBalance, fetchNaverPBR, writeMetricCache } from "../lib/peer-collector.js";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
@@ -799,7 +799,17 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.forwardEps != null)      lines.push(`EPS(Forward): ${ks.forwardEps.toFixed(2)} ${currency}`);
     if (ks.trailingPE != null)      lines.push(`P/E(TTM): ${ks.trailingPE.toFixed(1)}x`);
     if (ks.forwardPE != null)       lines.push(`P/E(Forward): ${ks.forwardPE.toFixed(1)}x`);
-    if (ks.priceToBook != null)     lines.push(`P/B: ${ks.priceToBook.toFixed(2)}x`);
+    // P/B: Yahoo 우선, 한국주는 Naver 폴백, 그 다음 DB 캐시
+    let pbMain: number | null = ks.priceToBook ?? null;
+    if (pbMain == null && koreanCodeEarly) {
+      pbMain = await fetchNaverPBR(koreanCodeEarly).catch(() => null);
+      if (pbMain != null) console.log(`[financial-data] Naver PBR for ${resolvedSymbol}: ${pbMain}`);
+    }
+    if (pbMain != null) {
+      lines.push(`P/B: ${pbMain.toFixed(2)}x`);
+      // 성공적으로 얻은 PBR을 캐시에 저장 (피어 분석 시 재활용)
+      writeMetricCache(resolvedSymbol, { pbr: pbMain }).catch(() => {});
+    }
     if (ks.enterpriseToRevenue != null) lines.push(`EV/매출: ${ks.enterpriseToRevenue.toFixed(2)}x`);
     if (ks.enterpriseToEbitda != null)  lines.push(`EV/EBITDA: ${ks.enterpriseToEbitda.toFixed(2)}x`);
     if (ks.pegRatio != null)        lines.push(`PEG: ${ks.pegRatio.toFixed(2)}`);
