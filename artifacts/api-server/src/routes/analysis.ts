@@ -1270,6 +1270,38 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       lines.push(`  [${period}] 매출 추정: ${revAvg} | 매출 성장률(YoY): ${revGrowthStr}`);
       lines.push(`         EPS 추정: ${epsAvg} (${epsLow}~${epsHigh}) | EPS 성장률(YoY): ${epsGrowth} ← DCF에 사용 금지`);
     }
+
+    // ── Year 1 매출 앵커: DCF Year 1 매출의 절대 상한값을 서버가 직접 계산 ──
+    // "+1y" 기간의 절대 매출 추정치와 직전 실제 매출을 이용해 실제 성장률 계산
+    const yr1Trend = annualTrends.find(t => t.period === "+1y");
+    const yr0Trend = annualTrends.find(t => t.period === "0y");
+    const yr1RevRaw = yr1Trend?.revenueEstimate?.avg ?? null;
+    const yr0RevRaw = yr0Trend?.revenueEstimate?.avg ?? null;
+
+    // Year 1 DCF 기준 매출: "+1y" 절대 추정치 우선, 없으면 "0y"
+    const dcfBaseRevRaw = yr1RevRaw ?? yr0RevRaw;
+    const dcfBaseRevPrior = yr1RevRaw != null ? (yr0RevRaw ?? priorActualRev) : priorActualRev;
+
+    if (dcfBaseRevRaw != null && dcfBaseRevPrior != null && dcfBaseRevPrior > 0) {
+      const actualGrowthPct = ((dcfBaseRevRaw - dcfBaseRevPrior) / dcfBaseRevPrior) * 100;
+      // 80% 초과 시 Yahoo 데이터 품질 문제 가능성 → 60%로 캡핑
+      const cappedGrowthPct = Math.min(actualGrowthPct, 60);
+      const cappedRevRaw    = dcfBaseRevPrior * (1 + cappedGrowthPct / 100);
+      const isCapped        = actualGrowthPct > 60;
+
+      lines.push(`\n[📌 Year 1 매출 서버 앵커 — DCF Year 1 절대 상한]`);
+      lines.push(`⛔ AI는 DCF Year 1 매출을 반드시 이 앵커값 이하로만 사용해야 합니다. 초과 금지.`);
+      lines.push(`  직전 실제 매출: ${fmtNum(dcfBaseRevPrior, currency)}`);
+      lines.push(`  Yahoo 컨센서스 Year 1 매출: ${fmtNum(dcfBaseRevRaw, currency)} (계산 성장률: ${actualGrowthPct.toFixed(1)}%)`);
+      if (isCapped) {
+        lines.push(`  ⚠️ 성장률 ${actualGrowthPct.toFixed(1)}%는 60% 상한 초과 → Yahoo 데이터 품질 문제 또는 기저효과 가능성`);
+        lines.push(`  ✅ 적용 상한: 성장률 60% → Year 1 매출 = ${fmtNum(cappedRevRaw, currency)}`);
+        lines.push(`  ⛔ DCF Year 1 매출이 ${fmtNum(cappedRevRaw, currency)} 초과하면 즉시 수정 필수`);
+      } else {
+        lines.push(`  ✅ Yahoo 컨센서스 매출 사용 가능 (성장률 ${actualGrowthPct.toFixed(1)}% ≤ 60%)`);
+        lines.push(`  ⛔ DCF Year 1 매출이 ${fmtNum(dcfBaseRevRaw, currency)} 초과하면 즉시 수정 필수`);
+      }
+    }
   }
 
   // Supplement with Naver Finance for Korean stocks
