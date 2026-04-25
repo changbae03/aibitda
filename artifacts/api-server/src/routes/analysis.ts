@@ -985,6 +985,38 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
   }
 
+  // ── DCF 재투자 앵커 (Maintenance Capex · D&A) ─────────────────────────────────
+  {
+    const latestCapexYear = Object.keys(capexMap).sort((a, b) => Number(b) - Number(a))[0];
+    const latestDnaYear   = Object.keys(dnaMap).sort((a, b) => Number(b) - Number(a))[0];
+    const capexVal = latestCapexYear ? capexMap[latestCapexYear] : null;
+    const dnaVal   = latestDnaYear   ? dnaMap[latestDnaYear]    : null;
+
+    if (capexVal != null || dnaVal != null) {
+      lines.push("\n[DCF 재투자 앵커 — 반드시 재투자 하한으로 사용]");
+      lines.push("⛔ 아래 수치를 DCF 재투자 계산의 기준점으로 사용하세요. 무시 금지.");
+
+      if (capexVal != null) {
+        const capexAbs = Math.abs(capexVal); // Yahoo sometimes stores as negative
+        lines.push(`  최근 실제 CAPEX (${latestCapexYear}): ${fmtNum(capexAbs, currency)}  ← Maintenance Capex 하한 앵커`);
+        if (dnaVal != null) {
+          const dnaAbs = Math.abs(dnaVal);
+          const maintenanceFloor = Math.max(capexAbs, dnaAbs * 1.2);
+          lines.push(`  D&A (${latestDnaYear}): ${fmtNum(dnaAbs, currency)}`);
+          lines.push(`  Maintenance Capex 하한 = MAX(실제CAPEX, D&A×1.2) = ${fmtNum(maintenanceFloor, currency)}  ← 어떤 연도에도 재투자가 이 값 미만이면 오류`);
+          lines.push(`  ⚠️ Growth Capex = MAX(0, 매출증분÷S-to-C − Maintenance Capex 하한)`);
+          lines.push(`  ⚠️ 총 재투자 = Maintenance Capex 하한 + Growth Capex`);
+        } else {
+          lines.push(`  ⚠️ 총 재투자 ≥ ${fmtNum(capexAbs, currency)} (최근 CAPEX 이상 유지 필수)`);
+        }
+      } else if (dnaVal != null) {
+        const dnaAbs = Math.abs(dnaVal);
+        lines.push(`  D&A (${latestDnaYear}): ${fmtNum(dnaAbs, currency)}`);
+        lines.push(`  Maintenance Capex 하한 (D&A×1.2) = ${fmtNum(dnaAbs * 1.2, currency)}  ← 재투자 최솟값`);
+      }
+    }
+  }
+
   // ── 재무상태표 ────────────────────────────────────────────────────────────────
   const balanceStmts: any[] = (result.balanceSheetHistory as any)?.balanceSheetStatements ?? [];
   if (balanceStmts.length > 0) {
