@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus, CalendarDays, Activity, RefreshCw, Zap } from "lucide-react";
+import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus, CalendarDays } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 
@@ -22,11 +22,6 @@ interface PublicStats {
   usCount: number;
   uniqueTickerCount: number;
   topTickers: { ticker: string; companyName: string; count: number; latestVerdict: string | null; latestId: number }[];
-  recentTrend: { date: string; count: number }[];
-  weekdayDist: number[];
-  bullRate: number | null;
-  repeatRate: number | null;
-  repeatTickerCount: number;
 }
 
 interface PeriodBucket {
@@ -73,11 +68,6 @@ export default function Popular() {
   const usCount = stats?.usCount ?? 0;
   const topTickers = stats?.topTickers ?? [];
   const marketTotal = krCount + usCount;
-  const recentTrend = stats?.recentTrend ?? [];
-  const weekdayDist = stats?.weekdayDist ?? [0, 0, 0, 0, 0, 0, 0];
-  const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
-  const weekdayMax = Math.max(...weekdayDist, 1);
-  const trendMax = Math.max(...recentTrend.map(d => d.count), 1);
 
   // 판정 분포용 수치
   const verdictCounts = VERDICT_ORDER.map(k => verdictMap[k] ?? 0);
@@ -264,118 +254,6 @@ export default function Popular() {
           ))}
         </div>
       </motion.div>
-
-      {/* 매수 신호 비율 + 재분석률 KPI */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.18 }}
-        className="grid grid-cols-2 gap-3"
-      >
-        <div className="rounded-xl border border-border bg-background p-4">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-emerald-50">
-            <Zap className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-[22px] font-black leading-none tabular-nums mb-1 text-emerald-600">
-            {stats?.bullRate != null ? `${stats.bullRate}%` : "—"}
-          </p>
-          <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">매수 신호 비율</p>
-          <p className="text-[10px] text-muted-foreground/60">상승여력 + 높은 상승여력 합산</p>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-4">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-blue-50">
-            <RefreshCw className="w-4 h-4 text-blue-500" />
-          </div>
-          <p className="text-[22px] font-black leading-none tabular-nums mb-1 text-blue-600">
-            {stats?.repeatTickerCount ?? 0}종목
-          </p>
-          <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">재분석 종목</p>
-          <p className="text-[10px] text-muted-foreground/60">2회 이상 분석된 종목 수</p>
-        </div>
-      </motion.div>
-
-      {/* 최근 14일 분석 추이 */}
-      {recentTrend.length > 0 && recentTrend.some(d => d.count > 0) && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.22 }}
-          className="rounded-xl border border-border bg-background p-5"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-3.5 h-3.5 text-muted-foreground" />
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">최근 14일 분석 추이</p>
-          </div>
-          <div className="flex items-end gap-1 h-20">
-            {recentTrend.map((d, i) => {
-              const heightPct = trendMax > 0 ? (d.count / trendMax) * 100 : 0;
-              const isToday = i === recentTrend.length - 1;
-              const label = d.date.slice(5); // "MM-DD"
-              return (
-                <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full flex flex-col justify-end" style={{ height: "60px" }}>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${Math.max(heightPct, d.count > 0 ? 8 : 0)}%` }}
-                      transition={{ duration: 0.5, delay: 0.25 + i * 0.03, ease: "easeOut" }}
-                      className={cn(
-                        "w-full rounded-sm",
-                        isToday ? "bg-primary" : "bg-primary/30"
-                      )}
-                      style={{ minHeight: d.count > 0 ? 4 : 0 }}
-                    />
-                  </div>
-                  {(i === 0 || i === 6 || i === 13 || d.date.endsWith("-01")) && (
-                    <span className="text-[8px] text-muted-foreground/50 tabular-nums">{label}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-muted-foreground/40 mt-2 text-right">
-            최근 14일 합계: {recentTrend.reduce((s, d) => s + d.count, 0)}건
-          </p>
-        </motion.div>
-      )}
-
-      {/* 요일별 분석 분포 */}
-      {weekdayDist.some(v => v > 0) && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.24 }}
-          className="rounded-xl border border-border bg-background p-5"
-        >
-          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">요일별 분석 분포</p>
-          <div className="flex items-end gap-2 h-16">
-            {WEEKDAY_LABELS.map((label, i) => {
-              const cnt = weekdayDist[i] ?? 0;
-              const heightPct = weekdayMax > 0 ? (cnt / weekdayMax) * 100 : 0;
-              const isWeekend = i === 0 || i === 6;
-              return (
-                <div key={label} className="flex-1 flex flex-col items-center gap-1.5">
-                  <div className="w-full flex flex-col justify-end" style={{ height: "44px" }}>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${Math.max(heightPct, cnt > 0 ? 10 : 0)}%` }}
-                      transition={{ duration: 0.5, delay: 0.28 + i * 0.05, ease: "easeOut" }}
-                      className={cn(
-                        "w-full rounded-sm",
-                        isWeekend ? "bg-amber-400/60" : "bg-primary/50"
-                      )}
-                      style={{ minHeight: cnt > 0 ? 4 : 0 }}
-                    />
-                  </div>
-                  <span className={cn("text-[10px] font-semibold", isWeekend ? "text-amber-500" : "text-muted-foreground")}>
-                    {label}
-                  </span>
-                  <span className="text-[9px] tabular-nums text-muted-foreground/50">{cnt}</span>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
 
       {/* 많이 분석된 종목 */}
       <motion.div
