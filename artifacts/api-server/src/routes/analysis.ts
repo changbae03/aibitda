@@ -1247,60 +1247,80 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
     // 0y / +1y 연간 전망만 추출 (분기 제외)
     const annualTrends = trends.filter(t => t.period === "0y" || t.period === "+1y");
-    let prevRevEst: number | null = null;
+    const yr0Trend = annualTrends.find(t => t.period === "0y");
+    const yr1Trend = annualTrends.find(t => t.period === "+1y");
+    const yr0RevRaw = yr0Trend?.revenueEstimate?.avg ?? null;
+    const yr1RevRaw = yr1Trend?.revenueEstimate?.avg ?? null;
 
-    for (const t of annualTrends) {
-      const period   = t.period ?? "?";
-      const epsAvg   = t.earningsEstimate?.avg?.toFixed(2) ?? "-";
-      const epsLow   = t.earningsEstimate?.low?.toFixed(2) ?? "-";
-      const epsHigh  = t.earningsEstimate?.high?.toFixed(2) ?? "-";
-      const epsGrowth = t.earningsEstimate?.growth != null ? pct(t.earningsEstimate.growth) : "-";
-      const revRaw   = t.revenueEstimate?.avg ?? null;
-      const revAvg   = revRaw ? fmtNum(revRaw, currency) : "-";
+    // ── 서버 주도 매출 성장률 계산 및 60% 캡 적용 ──────────────────────────────
+    // Yahoo Finance "earningsEstimate.growth"는 EPS 성장률이며 매출 성장률이 아님.
+    // 서버가 직접 절대치 기반으로 매출 성장률을 계산하고 60%로 상한을 강제함.
+    const MAX_REV_GROWTH = 0.60; // 60% 상한
 
-      // 매출 성장률: 직전 실제 매출 또는 직전 연도 추정치 대비 절대치로 직접 계산
-      let revGrowthStr = "-";
-      const base = period === "0y" ? priorActualRev : (prevRevEst ?? priorActualRev);
-      if (revRaw != null && base != null && base > 0) {
-        const revGrowthPct = ((revRaw - base) / base) * 100;
-        revGrowthStr = `${revGrowthPct.toFixed(1)}% (${fmtNum(base, currency)} → ${revAvg})`;
-      }
-      if (revRaw != null) prevRevEst = revRaw;
-
-      lines.push(`  [${period}] 매출 추정: ${revAvg} | 매출 성장률(YoY): ${revGrowthStr}`);
-      lines.push(`         EPS 추정: ${epsAvg} (${epsLow}~${epsHigh}) | EPS 성장률(YoY): ${epsGrowth} ← DCF에 사용 금지`);
+    // 0y 매출: priorActualRev 대비 계산
+    let yr0RevCapped: number | null = null;
+    let yr0GrowthActual: number | null = null;
+    let yr0WasCapped = false;
+    if (yr0RevRaw != null && priorActualRev != null && priorActualRev > 0) {
+      yr0GrowthActual = (yr0RevRaw - priorActualRev) / priorActualRev;
+      const yr0GrowthCapped = Math.min(yr0GrowthActual, MAX_REV_GROWTH);
+      yr0WasCapped = yr0GrowthActual > MAX_REV_GROWTH;
+      yr0RevCapped = yr0WasCapped ? priorActualRev * (1 + yr0GrowthCapped) : yr0RevRaw;
     }
 
-    // ── Year 1 매출 앵커: DCF Year 1 매출의 절대 상한값을 서버가 직접 계산 ──
-    // "+1y" 기간의 절대 매출 추정치와 직전 실제 매출을 이용해 실제 성장률 계산
-    const yr1Trend = annualTrends.find(t => t.period === "+1y");
-    const yr0Trend = annualTrends.find(t => t.period === "0y");
-    const yr1RevRaw = yr1Trend?.revenueEstimate?.avg ?? null;
-    const yr0RevRaw = yr0Trend?.revenueEstimate?.avg ?? null;
+    // +1y 매출: yr0(캡된 값) 또는 priorActualRev 대비 계산
+    let yr1RevCapped: number | null = null;
+    let yr1GrowthActual: number | null = null;
+    let yr1WasCapped = false;
+    const yr1Base = yr0RevCapped ?? priorActualRev;
+    if (yr1RevRaw != null && yr1Base != null && yr1Base > 0) {
+      yr1GrowthActual = (yr1RevRaw - yr1Base) / yr1Base;
+      const yr1GrowthCapped = Math.min(yr1GrowthActual, MAX_REV_GROWTH);
+      yr1WasCapped = yr1GrowthActual > MAX_REV_GROWTH;
+      yr1RevCapped = yr1WasCapped ? yr1Base * (1 + yr1GrowthCapped) : yr1RevRaw;
+    }
 
-    // Year 1 DCF 기준 매출: "+1y" 절대 추정치 우선, 없으면 "0y"
-    const dcfBaseRevRaw = yr1RevRaw ?? yr0RevRaw;
-    const dcfBaseRevPrior = yr1RevRaw != null ? (yr0RevRaw ?? priorActualRev) : priorActualRev;
+    // EPS 정보 (참고용)
+    for (const t of annualTrends) {
+      const period    = t.period ?? "?";
+      const epsAvg    = t.earningsEstimate?.avg?.toFixed(2) ?? "-";
+      const epsLow    = t.earningsEstimate?.low?.toFixed(2) ?? "-";
+      const epsHigh   = t.earningsEstimate?.high?.toFixed(2) ?? "-";
+      // EPS 성장률은 표시 안 함 (AI가 매출 성장률로 혼동하는 원인)
+      const revCapped = period === "0y" ? yr0RevCapped : yr1RevCapped;
+      const revActual = period === "0y" ? yr0RevRaw    : yr1RevRaw;
+      const growthActual = period === "0y" ? yr0GrowthActual : yr1GrowthActual;
+      const wasCapped    = period === "0y" ? yr0WasCapped    : yr1WasCapped;
 
-    if (dcfBaseRevRaw != null && dcfBaseRevPrior != null && dcfBaseRevPrior > 0) {
-      const actualGrowthPct = ((dcfBaseRevRaw - dcfBaseRevPrior) / dcfBaseRevPrior) * 100;
-      // 80% 초과 시 Yahoo 데이터 품질 문제 가능성 → 60%로 캡핑
-      const cappedGrowthPct = Math.min(actualGrowthPct, 60);
-      const cappedRevRaw    = dcfBaseRevPrior * (1 + cappedGrowthPct / 100);
-      const isCapped        = actualGrowthPct > 60;
+      const revDisplay = revCapped ? fmtNum(revCapped, currency) : (revActual ? fmtNum(revActual, currency) : "-");
+      // 캡 적용 시 원래 수치를 표시하지 않음 — AI가 인플레이션된 숫자에 앵커링되는 것을 방지
+      const growthDisplay = growthActual != null
+        ? (wasCapped
+            ? `60.0% (서버 상한 적용 — Yahoo 컨센서스 이상 감지로 원본 수치 비표시)`
+            : `${(growthActual * 100).toFixed(1)}%`)
+        : "-";
 
-      lines.push(`\n[📌 Year 1 매출 서버 앵커 — DCF Year 1 절대 상한]`);
-      lines.push(`⛔ AI는 DCF Year 1 매출을 반드시 이 앵커값 이하로만 사용해야 합니다. 초과 금지.`);
-      lines.push(`  직전 실제 매출: ${fmtNum(dcfBaseRevPrior, currency)}`);
-      lines.push(`  Yahoo 컨센서스 Year 1 매출: ${fmtNum(dcfBaseRevRaw, currency)} (계산 성장률: ${actualGrowthPct.toFixed(1)}%)`);
-      if (isCapped) {
-        lines.push(`  ⚠️ 성장률 ${actualGrowthPct.toFixed(1)}%는 60% 상한 초과 → Yahoo 데이터 품질 문제 또는 기저효과 가능성`);
-        lines.push(`  ✅ 적용 상한: 성장률 60% → Year 1 매출 = ${fmtNum(cappedRevRaw, currency)}`);
-        lines.push(`  ⛔ DCF Year 1 매출이 ${fmtNum(cappedRevRaw, currency)} 초과하면 즉시 수정 필수`);
-      } else {
-        lines.push(`  ✅ Yahoo 컨센서스 매출 사용 가능 (성장률 ${actualGrowthPct.toFixed(1)}% ≤ 60%)`);
-        lines.push(`  ⛔ DCF Year 1 매출이 ${fmtNum(dcfBaseRevRaw, currency)} 초과하면 즉시 수정 필수`);
+      lines.push(`  [${period}] 매출 추정: ${revDisplay} | 매출 성장률(YoY, 서버계산): ${growthDisplay}`);
+      lines.push(`         EPS 추정(참고용만): ${epsAvg} (${epsLow}~${epsHigh}) — EPS 수치는 DCF에 사용 불가`);
+    }
+
+    // ── 서버 계산 DCF 매출 출발점 (고정값) ──────────────────────────────────────
+    // Yahoo earningsTrend 매핑:
+    //   "0y" period  = 가장 최근 완료된 회계연도 (= DCF Base Year / Year 0)
+    //   "+1y" period = 내년 회계연도 추정 (= DCF Year 1)
+    // 따라서: DCF Year 0 = priorActualRev(실제값), DCF Year 1 = yr1RevCapped
+    if (priorActualRev != null) {
+      lines.push(`\n[🔒 서버 계산 DCF 매출 출발점 — 이 값을 그대로 사용, 변경 금지]`);
+      lines.push(`  DCF Year 0 (직전 실제 매출): ${fmtNum(priorActualRev, currency)}`);
+
+      // Year 1 = "+1y" Yahoo 컨센서스 (60% 상한 적용된 값)
+      if (yr1RevCapped != null) {
+        const g1 = Math.min(yr1GrowthActual ?? 0, MAX_REV_GROWTH);
+        lines.push(`  DCF Year 1 매출 (확정값): ${fmtNum(yr1RevCapped, currency)} | 성장률: ${(g1*100).toFixed(1)}%${yr1WasCapped ? " (서버 60% 상한 적용)" : ""}`);
+        lines.push(`  ⛔ DCF Year 1 매출이 ${fmtNum(yr1RevCapped, currency)}을 초과하면 즉시 수정 필수`);
       }
+      lines.push(`  ⛔ NOPAT = 영업이익(EBIT) × (1 - 유효세율). 세전 영업이익을 NOPAT으로 쓰는 것은 오류입니다.`);
+      lines.push(`  ⛔ 재투자 = 매출증분 ÷ S-to-C + Maintenance CAPEX. 임의 추정 금지.`);
     }
   }
 
