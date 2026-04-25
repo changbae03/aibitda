@@ -439,6 +439,62 @@ ${isInvestmentBank ? `
 `;
   }
 
+  // ── 미국 바이오/제약 (US Biotech & Pharma) ──────────────────────────────
+  if (/us biotech|american biotech|us pharma|american pharma|biopharmaceutical|clinical stage|fda approval/.test(ind) ||
+      /moderna|biontech|regeneron|vertex pharmaceuticals|alnylam|biomarin|ionis|neurocrine|arrowhead|blueprint medicine|relay therapeutics|recursion|kymera|merus|protagonist|praxis|argenx|sarepta|acceleron|agenus|alector|allogene|allovir|arcus|arctus|arvinas|athenex|athenex|atara|athenex|beam therapeutics|biohaven|bluebird|blueprint|calithera|cara|catalyst|cerevel|cg oncology|chinook|coherus|constellation|corvus|crinetics|day one|deciphera|denali|dna|editas|entrada|eidos|envision|epizyme|escient|exelixis|exelixis|forma|g1 therapeutics|gritstone|hcp|iovance|kala|karuna|keros|kymera|kyowa kirin|lexicon|limelight|lyell|macrogenics|merus|mirati|molecular data|morphic|myovant|nalu medical|neon|nextcure|nuix|olimmune|pandion|passage bio|prelude|praxis|protagonist|provectus|ptc|puma|reata|relay|repertoire|revolution|rigel|rocket|schema|seagen|silverback|spring bioscience|stoke|supernus|syndax|tenax|translate|turning point|tyra|unum|uniqure|vanda|viela|vigor|vista therapeutics|vivasor|vividion/.test(name)) {
+    return `
+[섹터 특화 지침 — 미국 바이오/제약 (US Biotech & Pharma)]
+한국 바이오와 rNPV 구조는 동일. 단, 미국 바이오에는 다음 세 가지 추가 분석이 필수:
+① FDA PDUFA date: 주가 트리거가 되는 구체적 날짜 → 이벤트 드리븐 분석 필수
+② FDA 특별 지정: Priority Review / Breakthrough Therapy / Fast Track / Accelerated Approval → PoS 보정
+③ 공개된 임상 데이터 정교화: 한국 바이오 대비 더 많은 데이터로 PoS 추정 정밀화 의무
+
+FDA 심사 일정(PDUFA) 분석 — 필수:
+- NDA/BLA 제출 상태 및 PDUFA 날짜 (구체적 날짜 명시, 불명 시 예상 분기 명시)
+- 심사 유형: Standard Review(10~12개월) vs Priority Review(6개월)
+- AdCom(자문위원회) 회의: 예정 여부 / 일정 / 결과 (찬성-반대-기권 표수 명시)
+  · AdCom 찬성 다수: 승인 확률 상승 but 최종 FDA 결정과 다를 수 있음
+  · AdCom 반대 다수: CRL(Complete Response Letter) 가능성 → PoS 하향 조정 필수
+- PDUFA date 이전 주가 이벤트 패턴: "PDUFA Creep"(기대감 선반영) vs 저평가 여부
+
+FDA 특별 지정 → PoS 보정 (필수):
+- Breakthrough Therapy Designation(BTD): FDA가 개발 초기부터 집중 관여 → 놀라운 CRL 가능성 낮음
+  · PoS 보정: +5~10%p 상향 (Phase 3 성공 전제)
+- Priority Review: 임상적 이점 명확 인정 → 심사 기간 단축, 승인 가능성 높음
+  · PoS 보정: +3~5%p 상향
+- Fast Track Designation: 잦은 FDA 면담 가능, Rolling Review 가능 → 개발 리스크 완화
+  · PoS 보정: +2~3%p (단독 시)
+- Accelerated Approval(AA): 대리지표(Surrogate Endpoint) 기반 조기승인 → 사후 Phase 3 확증 필요
+  · 구조 주의: AA 철회(Withdrawal) 리스크 반드시 명시 (확증 실패 시 시장 철수)
+  · PoS 보정: AA 확증 성공 여부 별도 시나리오 작성
+- Orphan Drug Designation(ODD): 7년 시장 독점권 + 세금 혜택 → TAM 소규모 but 프리미엄 가격
+- REMS(Risk Evaluation and Mitigation Strategy) 요구: 추가 안전관리 부담 → 상업화 마찰 요인
+
+임상 데이터 정교 분석 (한국 바이오 대비 고도화):
+- ORR(객관적 반응률), PFS(무진행 생존기간), OS(전체 생존기간), DoR(반응 지속 기간) 각각 명시
+- 95% 신뢰구간 명시 (CI 폭이 좁을수록 데이터 신뢰도 높음)
+- 하위그룹 분석(Subgroup Analysis): 특정 바이오마커 양성 vs 전체 집단 효과 차이
+- 비교군(Comparator Arm): 위약 대비 / SoC(Standard of Care) 대비 효과 크기
+- PK/PD(약동/약력학): 도즈-반응 관계, 최적 용량 결정 근거
+- 안전성 프로파일: 심각 이상반응(SAE) 비율, 투여 중단율 (경쟁 약물 대비)
+- 임상 데이터 공개 시점 캘린더 (주요 학회: ASCO, ASH, ESMO, AHA, ADA 발표 일정)
+
+경쟁 환경 분석:
+- 동일 적응증 기승인 약물 (SoC) vs 파이프라인 경쟁 약물 비교
+- 차별화 요인: 효능(Efficacy) / 안전성(Safety) / 편의성(Dosing) / 바이오마커 선택성
+- 특허 절벽: 특허 만료 시점, 바이오시밀러 출시 위협 (상업화 약물 보유사 필수)
+
+밸류에이션 (필수 방법론):
+- 한국 바이오와 동일: rNPV = Σ(Peak Sales × 로열티율 or 마진 × 시장침투율) × PoS / WACC 기반 DCF
+- 단, FDA 지정 반영한 PoS 사용 (위 보정 기준 적용)
+- PDUFA date 기반 시나리오:
+  · 승인 시나리오: 상업화 2026~ 반영
+  · CRL 시나리오: 재제출(Resubmission) 6~12개월 지연 + 추가 임상 요구 가능성
+  · 철회(Withdrawal)/임상중단: 해당 파이프라인 가치 0 처리
+- 플랫폼 가치: 동일 기전 차세대 파이프라인(Next-in-Class) 옵션가치
+`;
+  }
+
   // ── 미국 방산 (US Defense & Aerospace) ──────────────────────────────────
   if (/defense|aerospace defense|military contractor|government defense|defense electronics|defense systems|combat systems/.test(ind) ||
       /lockheed martin|raytheon|northrop grumman|general dynamics|l3harris|huntington ingalls|leidos|booz allen|saic|transdign|heico|bwxt|leonardo drs|curtiss-wright|moog|kaman/.test(name)) {
@@ -616,6 +672,35 @@ FCF 구조 분석:
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsUSBiotech(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  // 미국 바이오 전용 (한국 바이오와 겹치지 않도록 US 한정)
+  if (/us biotech|american biotech|us pharma|american pharma|biopharmaceutical|clinical.?stage biotech|fda approval/.test(ind)) return true;
+  if (/moderna|biontech|regeneron|vertex pharmaceuticals|alnylam|biomarin|ionis pharmaceuticals|neurocrine|argenx|sarepta|arvinas|beam therapeutics|karuna|kymera|relay therapeutics|revolution medicines|blueprint medicine|recursion|denali|iovance|crinetics|day one biopharmaceuticals|praxis precision|keros therapeutics/.test(name)) return true;
+
+  const US_BIOTECH_TICKERS = new Set([
+    // 대형 바이오파마 (상업화 + 파이프라인)
+    "AMGN", "GILD", "BIIB", "REGN", "VRTX",
+    // 중형 바이오텍 (파이프라인 중심)
+    "MRNA", "BNTX", "ALNY", "BMRN", "IONS", "NBIX", "SRRX",
+    "ARQT", "RVMD", "KYMR", "PTGX", "RARE",
+    "TMDX", "CLDX", "DNLI", "ARVN", "BEAM",
+    "KRYS", "TBIO", "RCKT", "STOK", "NRIX",
+    "PRAX", "CERE", "ITCI", "ACAD", "SAGE",
+    "KROS", "DAWN", "IMVT", "XNCR", "ARGX",
+    "SRPT", "FOLD", "BLFS", "MGTA",
+    "RCUS", "GRTS", "AGEN", "IDYA", "MRUS",
+    "PRTA", "ANAB", "CRSP", "EDIT", "NTLA",
+    "EXEL", "NVAX", "ATHA", "AGIO",
+    "HALO", "INVA", "PTCT", "ACMR",
+  ]);
+  if (bare && US_BIOTECH_TICKERS.has(bare)) return true;
+  return false;
+}
+
 function needsUSDefense(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -930,10 +1015,11 @@ export function buildPrompt(
   const bigTechFlag      = needsBigTech(industry, companyName, ticker);
   const usBankFlag       = needsUSBank(industry, companyName, ticker);
   const usDefenseFlag    = needsUSDefense(industry, companyName, ticker);
+  const usBiotechFlag    = needsUSBiotech(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -3221,6 +3307,89 @@ Bull: 예산 증액(지정학 리스크 상승) + Backlog 신기록 + EAC 정상
   - base/bear/bull = 조율 Base/Bear/Bull 목표주가
   - abs_base/abs_bear/abs_bull = EV/EBITDA(Adj.) Base/Bear/Bull
   - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
+  - current = 현재 주가
+
+**[rNPV + FDA 이벤트 드리븐 모델 — 미국 바이오(US Biotech) 전용]**
+
+rNPV 기본 구조는 한국 바이오와 동일. 미국 바이오 추가 의무 분석:
+
+[PDUFA 이벤트 캘린더]
+| 약물명(적응증) | 단계 | FDA 지정 | PDUFA/결과 날짜 | AdCom | 당사 PoS |
+|-------------|------|---------|--------------|-------|---------|
+| Drug A (질환명) | NDA제출 | BTD+PR | 2026.XX.XX | 완료(XX찬/XX반) | __%  |
+| Drug B (질환명) | BLA제출 | FastTrack | 2026.XX 예정 | 미예정 | __%  |
+| Drug C (질환명) | Ph3 진행 | ODD | 2027년 예상 | — | __%  |
+
+[FDA 지정별 PoS 보정 적용표]
+기준 PoS (문헌 기반 Phase별 역사적 성공률):
+- Ph1→승인: ~10% | Ph2→승인: ~15% | Ph3→승인: ~50% | NDA/BLA→승인: ~85%
+
+FDA 지정 보정 (누적 가능):
+| FDA 지정 | PoS 보정 | 적용 근거 |
+|---------|---------|---------|
+| Breakthrough Therapy(BTD) | +5~10%p | FDA 조기 관여, CRL 가능성 낮음 |
+| Priority Review | +3~5%p | 임상 우월성 인정 |
+| Fast Track | +2~3%p | Rolling Review, FDA 소통 강화 |
+| Accelerated Approval | 별도 시나리오 | 확증 Ph3 결과 별도 반영 필수 |
+| Orphan Drug(ODD) | +0~2%p | TAM 소규모 but 독점 기간 보호 |
+| REMS 요구 가능성 있음 | -3~5%p | 처방 제한 → 시장 침투율 하락 |
+
+각 자산 최종 적용 PoS: 기준 PoS ± 지정 보정 합산 = __%
+
+[AdCom 결과 반영]
+- AdCom 실시: [예/아니오]
+- AdCom 표결: 찬성 __표 / 반대 __표 / 기권 __표
+- AdCom 이후 PoS 재조정: (찬성 다수: +5~10%p / 반대 다수: -15~25%p)
+- ⚠️ AdCom 결과와 최종 FDA 결정이 다른 사례 존재 → 단독 근거 금지
+
+[임상 데이터 정교 분석]
+| 지표 | 결과값 | 95% CI | vs SoC(대조군) | 임상 의미 |
+|-----|-------|--------|--------------|---------|
+| ORR | __% | (__ ~ __%) | SoC __% | 절대차 +__%p |
+| PFS(중앙값) | __ mo | (__ ~ __ mo) | SoC __ mo | HR=__, p=__ |
+| OS(중앙값) | __ mo | (__ ~ __ mo) | SoC __ mo | HR=__, p=__ |
+| DoR(중앙값) | __ mo | (__ ~ __ mo) | — | — |
+| SAE 비율 | __% | — | SoC __% | 우열 판단 |
+| 투여 중단율 | __% | — | SoC __% | 내약성 |
+
+바이오마커 서브그룹: [양성군] ORR __% vs [전체군] ORR __%
+→ 바이오마커 선택 처방 전략 여부, 라벨 제한 가능성 명시
+
+[CRL 리스크 체크리스트]
+다음 항목 하나라도 해당 시 CRL 리스크 경고 표시:
+- [ ] 주요 2차 평가지표(Key Secondary Endpoint) 미달
+- [ ] 대조군 선택 FDA 이의 제기 이력
+- [ ] CMC(Chemistry, Manufacturing, Controls) 이슈 또는 제조시설 483 경고문
+- [ ] REMS 필요성 신호 (안전성 우려)
+- [ ] AdCom 반대표 다수
+- [ ] 경쟁 약물 이미 승인으로 차별화 근거 약화
+→ 해당 항목 수: __개 → CRL 리스크 [낮음/중간/높음]
+
+[승인 시나리오별 rNPV]
+① 승인 (PoS: __%):
+  · Peak Sales = $__억 (TAM $__억 × 침투율 __% × 가격 $__/년)
+  · rNPV 기여 = Peak Sales × 이익마진 __% / WACC × PoS = $__
+② CRL — 재제출 (PoS: __%):
+  · 지연 기간 6~12개월, 추가 임상 요구 가능성 __% 가정
+  · 재제출 후 승인 PoS: __% → rNPV 기여 = $__
+③ 철수/임상중단 (PoS: __%):
+  · 해당 파이프라인 가치 = $0
+
+[최종 목표주가 조율]
+rNPV 합계 = Σ(자산별 시나리오 가중 rNPV) + 현금 − 순부채 + 플랫폼 옵션가치
+주당 rNPV = rNPV 합계 / 발행주식수 = $__
+
+PDUFA 이벤트 전후 시나리오:
+- PDUFA 승인 시 주가: $__ (현재가 대비 +__%  upside)
+- CRL 발생 시 주가: $__ (현재가 대비 -__% downside)
+- 기대값(EV) 목표주가 = 승인 $ × PoS + CRL $ × (1-PoS) = **$__**
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base = 기대값(EV) 목표주가
+  - bull = 승인 시나리오 목표주가
+  - bear = CRL/임상중단 시나리오 목표주가
+  - abs_base/abs_bear/abs_bull = 각 시나리오 rNPV
+  - rel_base/rel_bear/rel_bull = 피어 P/Sales or EV/Revenue(상업화 약물 있는 경우)
   - current = 현재 주가
 
 ⚠️ 극단값 최종 점검:
