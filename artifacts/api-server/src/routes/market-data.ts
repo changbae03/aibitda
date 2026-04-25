@@ -1107,22 +1107,25 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
 - 중국: PMI(제조업/비제조업), CPI, GDP, 무역수지
 - 일본: BOJ 금리결정, CPI
 
-이미 확정된 공식 일정만 포함하세요. 불확실하면 제외하세요.
-
 각 이벤트를 아래 형식의 JSON으로 반환하세요:
 {
   "date": "YYYY-MM-DD",
-  "time": "HH:MM",
+  "time": "HH:MM KST",
   "title": "이벤트명(한국어)",
   "country": "US",
   "category": "금리결정",
   "importance": "high",
-  "forecast": "예상값",
-  "previous": "이전값",
-  "unit": "%"
+  "forecast": "시장 컨센서스 예상값 (숫자+단위, 예: 2.4%, 215K, 50.2). 모를 경우 null",
+  "previous": "직전 발표값 (숫자+단위, 예: 2.8%, 228K, 50.3). 반드시 실제 수치 기입",
+  "unit": "단위 (%, K, 억달러 등)"
 }
 
-JSON 배열만 반환하세요. 다른 텍스트는 절대 포함하지 마세요.`;
+중요 규칙:
+- "previous" 필드: 해당 지표의 가장 최근 발표된 실제 수치를 반드시 기입. "N/A" 절대 금지.
+- "forecast" 필드: 시장 컨센서스(블룸버그/로이터 기준 추정치)를 기입. 알 수 없으면 null.
+- "unit" 필드: 적절한 단위 기입 (금리→"%", 고용→"K", PMI→"pt" 등)
+- 날짜/시간은 KST(한국시간) 기준
+- JSON 배열만 반환. 다른 텍스트 절대 포함 금지.`;
 
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-flash",

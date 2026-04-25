@@ -149,6 +149,16 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
   );
 }
 
+function fmtIndicator(value: string | undefined | null, unit: string | undefined | null): string {
+  if (value == null || value === "") return "N/A";
+  const v = String(value).trim();
+  if (!unit) return v;
+  // 이미 단위가 포함된 경우 중복 추가 방지 (끝이 unit으로 끝나거나 숫자+단위 패턴)
+  const u = unit.trim();
+  if (v.endsWith(u) || v.toLowerCase().endsWith(u.toLowerCase())) return v;
+  return `${v}${u}`;
+}
+
 function EconomicCard({ event }: { event: EconomicEvent }) {
   const imp = IMPORTANCE_STYLE[event.importance] ?? IMPORTANCE_STYLE.low;
   const flag = COUNTRY_FLAG[event.country] ?? "🌐";
@@ -174,17 +184,23 @@ function EconomicCard({ event }: { event: EconomicEvent }) {
             {imp.label}
           </span>
           {event.time && (
-            <span className="text-[10px] text-muted-foreground ml-auto">{event.time} KST</span>
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {event.time.replace(/\s*KST\s*$/i, "")} KST
+            </span>
           )}
         </div>
 
         <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{event.category}</span>
-          {event.forecast !== undefined && (
-            <span>예상: <span className="text-foreground font-medium">{event.forecast}{event.unit ?? ""}</span></span>
+          {event.forecast != null && event.forecast !== "" && (
+            <span>예상: <span className="text-foreground font-medium">
+              {fmtIndicator(event.forecast, event.unit)}
+            </span></span>
           )}
-          {event.previous !== undefined && (
-            <span>이전: <span className="text-foreground/70">{event.previous}{event.unit ?? ""}</span></span>
+          {event.previous != null && event.previous !== "" && (
+            <span>이전: <span className="text-foreground/70">
+              {fmtIndicator(event.previous, event.unit)}
+            </span></span>
           )}
         </div>
       </div>
