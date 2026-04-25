@@ -198,13 +198,6 @@ const differentiators = [
   },
 ];
 
-const stats = [
-  { value: "4,100+", label: "전문 프롬프트 줄 수" },
-  { value: "6개", label: "전문 에이전트 역할" },
-  { value: "17개", label: "섹터 전용 프레임" },
-  { value: "8개", label: "자동 오류 방지 조항" },
-];
-
 const assumptions = [
   {
     title: "WACC 무위험수익률 (Rf)",
@@ -334,16 +327,6 @@ export default function AboutPage() {
         <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
           왜 애빛다인가
         </h2>
-
-        {/* 스탯 */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-border bg-card px-3 py-3 text-center">
-              <p className="text-[18px] font-black text-foreground tabular-nums tracking-tight">{s.value}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5 leading-tight">{s.label}</p>
-            </div>
-          ))}
-        </div>
 
         {/* 차별화 포인트 */}
         <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
