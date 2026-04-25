@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { format, isToday, isTomorrow, parseISO, addDays, startOfDay } from "date-fns";
+import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
   CalendarDays, RefreshCw, TrendingUp, DollarSign,
-  ChevronRight, Building2, AlertCircle, Sparkles,
+  ChevronRight, Building2, AlertCircle, Sparkles, Globe, X,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
+// ── 타입 ──────────────────────────────────────────────────────────────────────
 interface EarningsEntry {
   ticker: string;
   companyName: string;
@@ -21,12 +22,31 @@ interface EarningsEntry {
   isKorean: boolean;
 }
 
-type Range = "week" | "month";
+interface EconomicEvent {
+  date: string;
+  time?: string;
+  title: string;
+  country: string;
+  category: string;
+  importance: "high" | "medium" | "low";
+  forecast?: string;
+  previous?: string;
+  unit?: string;
+}
 
-// ── 모듈 레벨 클라이언트 캐시 (페이지 재방문 시 즉시 표시, 24시간 TTL) ────────
-const _cache = new Map<string, { data: EarningsEntry[]; fetchedAt: number }>();
+type CalendarItem =
+  | { kind: "earnings"; date: string; data: EarningsEntry }
+  | { kind: "economic"; date: string; data: EconomicEvent };
+
+type Range = "week" | "month";
+type Filter = "all" | "earnings" | "economic";
+
+// ── 클라이언트 캐시 ────────────────────────────────────────────────────────────
+const _earningsCache = new Map<string, { data: EarningsEntry[]; fetchedAt: number }>();
+const _economicCache = new Map<string, { data: EconomicEvent[]; fetchedAt: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+// ── 헬퍼 함수 ─────────────────────────────────────────────────────────────────
 function fmtEps(val: number | null, currency: string): string {
   if (val == null) return "—";
   if (currency === "KRW") return `${Math.round(val).toLocaleString("ko-KR")}원`;
@@ -37,7 +57,7 @@ function fmtRevenue(val: number | null, isKorean: boolean): string {
   if (val == null) return "—";
   if (isKorean) {
     if (val >= 1e12) return `${(val / 1e12).toFixed(1)}조원`;
-    if (val >= 1e8)  return `${(val / 1e8).toFixed(0)}억원`;
+    if (val >= 1e8) return `${(val / 1e8).toFixed(0)}억원`;
     return `${val.toLocaleString("ko-KR")}원`;
   }
   if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
@@ -48,14 +68,10 @@ function fmtRevenue(val: number | null, isKorean: boolean): string {
 function DateBadge({ dateStr }: { dateStr: string }) {
   const d = parseISO(dateStr);
   if (isToday(d)) return (
-    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ml-2">
-      오늘
-    </span>
+    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ml-2">오늘</span>
   );
   if (isTomorrow(d)) return (
-    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ml-2">
-      내일
-    </span>
+    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ml-2">내일</span>
   );
   return null;
 }
@@ -65,13 +81,26 @@ function ExchangeBadge({ ticker, isKorean }: { ticker: string; isKorean: boolean
   const cls = isKorean
     ? "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
     : "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
-  return (
-    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", cls)}>
-      {exchange}
-    </span>
-  );
+  return <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", cls)}>{exchange}</span>;
 }
 
+const COUNTRY_FLAG: Record<string, string> = {
+  US: "🇺🇸", KR: "🇰🇷", EU: "🇪🇺", EZ: "🇪🇺", CN: "🇨🇳", JP: "🇯🇵",
+  DE: "🇩🇪", GB: "🇬🇧", FR: "🇫🇷", AU: "🇦🇺", CA: "🇨🇦",
+};
+
+const IMPORTANCE_STYLE: Record<string, { dot: string; badge: string; label: string }> = {
+  high:   { dot: "bg-red-500",    badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",    label: "매우 중요" },
+  medium: { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", label: "중요" },
+  low:    { dot: "bg-slate-300",  badge: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "보통" },
+};
+
+const CATEGORY_ICON: Record<string, string> = {
+  금리결정: "🏦", 물가지표: "📊", 고용: "👷", 성장률: "📈",
+  무역: "🚢", 제조업: "🏭", 소비: "🛒", 기타: "📋",
+};
+
+// ── 서브 컴포넌트 ──────────────────────────────────────────────────────────────
 function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e: EarningsEntry) => void }) {
   const hasEps = entry.epsEstimate !== null;
   const hasRevenue = entry.revenueEstimate !== null;
@@ -79,83 +108,133 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={() => onSelect(entry)}
       className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent/40 active:scale-[0.99] transition-all cursor-pointer"
     >
-      {/* 아이콘 */}
       <div className="mt-0.5 w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
         <Building2 className="w-4 h-4 text-muted-foreground" />
       </div>
-
-      {/* 메인 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">{entry.companyName}</span>
           <ExchangeBadge ticker={entry.ticker} isKorean={entry.isKorean} />
           <span className="text-xs text-muted-foreground">{shortTicker}</span>
         </div>
-
-        {(hasEps || hasRevenue) && (
+        {(hasEps || hasRevenue) ? (
           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
             {hasEps && (
               <span className="flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />
-                EPS 예상: <span className="text-foreground font-medium ml-0.5">
-                  {fmtEps(entry.epsEstimate, entry.currency)}
-                </span>
+                EPS 예상: <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
                 {entry.epsLow !== null && entry.epsHigh !== null && (
-                  <span className="text-muted-foreground/70">
-                    ({fmtEps(entry.epsLow, entry.currency)} – {fmtEps(entry.epsHigh, entry.currency)})
-                  </span>
+                  <span className="text-muted-foreground/70">({fmtEps(entry.epsLow, entry.currency)} – {fmtEps(entry.epsHigh, entry.currency)})</span>
                 )}
               </span>
             )}
             {hasRevenue && (
               <span className="flex items-center gap-1">
                 <DollarSign className="w-3 h-3" />
-                매출 예상: <span className="text-foreground font-medium ml-0.5">
-                  {fmtRevenue(entry.revenueEstimate, entry.isKorean)}
-                </span>
+                매출 예상: <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
               </span>
             )}
           </div>
-        )}
-
-        {!hasEps && !hasRevenue && (
+        ) : (
           <p className="mt-1 text-xs text-muted-foreground/60">컨센서스 데이터 없음</p>
         )}
       </div>
-
       <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 mt-1" />
     </motion.div>
   );
 }
 
-function DateGroup({ date, entries, onSelect }: { date: string; entries: EarningsEntry[]; onSelect: (e: EarningsEntry) => void }) {
+function EconomicCard({ event }: { event: EconomicEvent }) {
+  const imp = IMPORTANCE_STYLE[event.importance] ?? IMPORTANCE_STYLE.low;
+  const flag = COUNTRY_FLAG[event.country] ?? "🌐";
+  const catIcon = CATEGORY_ICON[event.category] ?? "📋";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card"
+    >
+      {/* 중요도 점 + 아이콘 */}
+      <div className="mt-0.5 w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 relative">
+        <span className="text-base leading-none">{catIcon}</span>
+        <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-background", imp.dot)} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm font-semibold text-foreground leading-snug">{event.title}</span>
+          <span className="text-sm">{flag}</span>
+          <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", imp.badge)}>
+            {imp.label}
+          </span>
+          {event.time && (
+            <span className="text-[10px] text-muted-foreground ml-auto">{event.time} KST</span>
+          )}
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{event.category}</span>
+          {event.forecast !== undefined && (
+            <span>예상: <span className="text-foreground font-medium">{event.forecast}{event.unit ?? ""}</span></span>
+          )}
+          {event.previous !== undefined && (
+            <span>이전: <span className="text-foreground/70">{event.previous}{event.unit ?? ""}</span></span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function DateGroup({
+  date,
+  items,
+  onSelectEarnings,
+}: {
+  date: string;
+  items: CalendarItem[];
+  onSelectEarnings: (e: EarningsEntry) => void;
+}) {
   const d = parseISO(date);
   const label = format(d, "M월 d일 (EEE)", { locale: ko });
+  const earningsCount = items.filter(i => i.kind === "earnings").length;
+  const economicCount = items.filter(i => i.kind === "economic").length;
 
   return (
     <div className="mb-5">
       <div className="flex items-center gap-2 mb-2.5">
         <h3 className="text-sm font-semibold text-foreground">{label}</h3>
         <DateBadge dateStr={date} />
-        <span className="text-xs text-muted-foreground ml-auto">{entries.length}종목</span>
+        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          {earningsCount > 0 && <span>{earningsCount}종목 실적</span>}
+          {economicCount > 0 && <span>{economicCount}개 지표</span>}
+        </div>
       </div>
       <div className="space-y-2">
-        {entries.map(e => (
-          <EarningsCard key={e.ticker} entry={e} onSelect={onSelect} />
-        ))}
+        {items.map((item, idx) =>
+          item.kind === "earnings" ? (
+            <EarningsCard key={`e-${item.data.ticker}`} entry={item.data} onSelect={onSelectEarnings} />
+          ) : (
+            <EconomicCard key={`ec-${idx}`} event={item.data} />
+          )
+        )}
       </div>
     </div>
   );
 }
 
+// ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export default function CalendarPage() {
   const [range, setRange] = useState<Range>("week");
-  const [entries, setEntries] = useState<EarningsEntry[]>([]);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [earnings, setEarnings] = useState<EarningsEntry[]>([]);
+  const [economic, setEconomic] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -164,15 +243,16 @@ export default function CalendarPage() {
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  const fetchCalendar = useCallback(async (r: Range, forceRefresh = false) => {
-    const cacheKey = r;
-    const cached = _cache.get(cacheKey);
+  const fetchAll = useCallback(async (r: Range, forceRefresh = false) => {
+    const earCached = _earningsCache.get(r);
+    const ecoCached = _economicCache.get(r);
+    const earOk = !forceRefresh && earCached && Date.now() - earCached.fetchedAt < CACHE_TTL_MS;
+    const ecoOk = !forceRefresh && ecoCached && Date.now() - ecoCached.fetchedAt < CACHE_TTL_MS;
 
-    if (!forceRefresh && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-      if (mountedRef.current) {
-        setEntries(cached.data);
-        setLastFetched(new Date(cached.fetchedAt));
-      }
+    if (earOk && ecoOk) {
+      setEarnings(earCached!.data);
+      setEconomic(ecoCached!.data);
+      setLastFetched(new Date(Math.max(earCached!.fetchedAt, ecoCached!.fetchedAt)));
       return;
     }
 
@@ -180,15 +260,24 @@ export default function CalendarPage() {
     setError(null);
     try {
       const params = new URLSearchParams({ range: r });
-      const resp = await fetch(getApiUrl(`/api/market-data/earnings-calendar?${params}`), {
-        credentials: "include",
-      });
-      if (!resp.ok) throw new Error(`서버 오류: ${resp.status}`);
-      const data: EarningsEntry[] = await resp.json();
+      const [earRes, ecoRes] = await Promise.all([
+        earOk ? null : fetch(getApiUrl(`/api/market-data/earnings-calendar?${params}`), { credentials: "include" }),
+        ecoOk ? null : fetch(getApiUrl(`/api/market-data/economic-calendar?${params}`), { credentials: "include" }),
+      ]);
+
+      if (earRes && !earRes.ok) throw new Error(`실적 캘린더 오류: ${earRes.status}`);
+      if (ecoRes && !ecoRes.ok) throw new Error(`경제지표 캘린더 오류: ${ecoRes.status}`);
+
       const now = Date.now();
-      _cache.set(cacheKey, { data, fetchedAt: now });
+      const newEarnings: EarningsEntry[] = earRes ? await earRes.json() : earCached!.data;
+      const newEconomic: EconomicEvent[] = ecoRes ? await ecoRes.json() : ecoCached!.data;
+
+      _earningsCache.set(r, { data: newEarnings, fetchedAt: now });
+      _economicCache.set(r, { data: newEconomic, fetchedAt: now });
+
       if (mountedRef.current) {
-        setEntries(data);
+        setEarnings(newEarnings);
+        setEconomic(newEconomic);
         setLastFetched(new Date(now));
       }
     } catch (e: any) {
@@ -198,18 +287,32 @@ export default function CalendarPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchCalendar(range);
-  }, [range, fetchCalendar]);
+  useEffect(() => { fetchAll(range); }, [range, fetchAll]);
 
-  // 날짜별 그룹화
-  const grouped = entries.reduce<Record<string, EarningsEntry[]>>((acc, e) => {
-    if (!acc[e.earningsDate]) acc[e.earningsDate] = [];
-    acc[e.earningsDate].push(e);
+  // 필터링된 아이템 → 날짜별 그룹
+  const allItems: CalendarItem[] = [
+    ...(filter !== "economic" ? earnings.map(e => ({ kind: "earnings" as const, date: e.earningsDate, data: e })) : []),
+    ...(filter !== "earnings" ? economic.map(e => ({ kind: "economic" as const, date: e.date, data: e })) : []),
+  ];
+
+  // 중요도 HIGH → 먼저, 그 외 원래 순서
+  const grouped = allItems.reduce<Record<string, CalendarItem[]>>((acc, item) => {
+    if (!acc[item.date]) acc[item.date] = [];
+    acc[item.date].push(item);
     return acc;
   }, {});
-
+  for (const date of Object.keys(grouped)) {
+    grouped[date].sort((a, b) => {
+      const imp = { high: 0, medium: 1, low: 2 };
+      const ai = a.kind === "economic" ? imp[a.data.importance] : 3;
+      const bi = b.kind === "economic" ? imp[b.data.importance] : 3;
+      return ai - bi;
+    });
+  }
   const sortedDates = Object.keys(grouped).sort();
+
+  const totalEarnings = earnings.length;
+  const totalEconomic = economic.length;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
@@ -217,15 +320,15 @@ export default function CalendarPage() {
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-1">
           <CalendarDays className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-bold text-foreground">실적 발표 캘린더</h1>
+          <h1 className="text-xl font-bold text-foreground">마켓 캘린더</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          분석 이력 종목 + 주요 코스피/미국 대형주 실적 발표 일정
+          실적 발표 · 경제지표 · 금리결정 등 주요 시장 일정
         </p>
       </div>
 
-      {/* 필터 탭 */}
-      <div className="flex items-center gap-2 mb-4">
+      {/* 기간 탭 + 새로고침 */}
+      <div className="flex items-center gap-2 mb-3">
         {(["week", "month"] as Range[]).map(r => (
           <button
             key={r}
@@ -241,7 +344,7 @@ export default function CalendarPage() {
           </button>
         ))}
         <button
-          onClick={() => fetchCalendar(range, true)}
+          onClick={() => fetchAll(range, true)}
           disabled={loading}
           className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
@@ -249,7 +352,29 @@ export default function CalendarPage() {
         </button>
       </div>
 
-      {/* 마지막 업데이트 */}
+      {/* 필터 탭 */}
+      <div className="flex items-center gap-1.5 mb-4">
+        {([
+          { key: "all", label: "전체" },
+          { key: "earnings", label: "📢 실적 발표" },
+          { key: "economic", label: "📊 경제지표" },
+        ] as { key: Filter; label: string }[]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            className={cn(
+              "px-3 py-1 rounded-lg text-xs font-medium transition-colors",
+              filter === key
+                ? "bg-foreground/10 text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 업데이트 시각 */}
       {lastFetched && !loading && (
         <p className="text-xs text-muted-foreground mb-3">
           업데이트: {format(lastFetched, "HH:mm:ss")} 기준
@@ -259,60 +384,65 @@ export default function CalendarPage() {
       {/* 콘텐츠 */}
       <AnimatePresence mode="wait">
         {loading ? (
-          <motion.div
-            key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex flex-col items-center py-16 text-muted-foreground"
           >
             <RefreshCw className="w-8 h-8 animate-spin mb-3 text-primary/60" />
-            <p className="text-sm">실적 발표 일정을 불러오는 중…</p>
-            <p className="text-xs mt-1 text-muted-foreground/60">Yahoo Finance에서 조회 중 (수 초 소요)</p>
+            <p className="text-sm">캘린더 데이터를 불러오는 중…</p>
+            <p className="text-xs mt-1 text-muted-foreground/60">실적 + 경제지표 일정 조회 중 (수 초 소요)</p>
           </motion.div>
         ) : error ? (
-          <motion.div
-            key="error"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+          <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="flex flex-col items-center py-16 text-muted-foreground"
           >
             <AlertCircle className="w-8 h-8 mb-3 text-destructive/60" />
             <p className="text-sm text-destructive">{error}</p>
-            <button
-              onClick={() => fetchCalendar(range, true)}
-              className="mt-3 text-xs text-primary underline underline-offset-2"
-            >
+            <button onClick={() => fetchAll(range, true)} className="mt-3 text-xs text-primary underline underline-offset-2">
               다시 시도
             </button>
           </motion.div>
         ) : sortedDates.length === 0 ? (
-          <motion.div
-            key="empty"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+          <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="flex flex-col items-center py-16 text-muted-foreground"
           >
             <CalendarDays className="w-10 h-10 mb-3 text-muted-foreground/40" />
-            <p className="text-sm font-medium">해당 기간 실적 발표 일정 없음</p>
-            <p className="text-xs mt-1 text-muted-foreground/60">
-              기간을 변경하거나 종목을 직접 추가해 보세요
-            </p>
+            <p className="text-sm font-medium">해당 기간 일정 없음</p>
+            <p className="text-xs mt-1 text-muted-foreground/60">기간이나 필터를 변경해 보세요</p>
           </motion.div>
         ) : (
           <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {/* 요약 */}
-            <div className="mb-4 px-3 py-2.5 rounded-xl bg-muted/60 text-xs text-muted-foreground flex items-center gap-2">
+            {/* 요약 배너 */}
+            <div className="mb-4 px-3 py-2.5 rounded-xl bg-muted/60 text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
               <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                향후 {range === "week" ? "7일" : "30일"} 내{" "}
-                <span className="font-semibold text-foreground">{entries.length}개 종목</span> 실적 발표 예정
-              </span>
+              <span>향후 {range === "week" ? "7일" : "30일"}</span>
+              {filter !== "economic" && (
+                <span>
+                  <span className="font-semibold text-foreground">{totalEarnings}개 종목</span> 실적 발표
+                </span>
+              )}
+              {filter !== "earnings" && (
+                <span>
+                  <span className="font-semibold text-foreground">{totalEconomic}개</span> 경제지표
+                </span>
+              )}
             </div>
+
+            {/* 중요도 범례 */}
+            {filter !== "earnings" && (
+              <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/60">중요도:</span>
+                {(["high", "medium", "low"] as const).map(imp => (
+                  <span key={imp} className="flex items-center gap-1">
+                    <span className={cn("w-2 h-2 rounded-full", IMPORTANCE_STYLE[imp].dot)} />
+                    {IMPORTANCE_STYLE[imp].label}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* 날짜별 그룹 */}
             {sortedDates.map(date => (
-              <DateGroup key={date} date={date} entries={grouped[date]} onSelect={setPendingEntry} />
+              <DateGroup key={date} date={date} items={grouped[date]} onSelectEarnings={setPendingEntry} />
             ))}
           </motion.div>
         )}
@@ -330,25 +460,15 @@ export default function CalendarPage() {
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm mx-auto px-4"
           >
             <div className="flex items-center gap-3 bg-background border border-border rounded-2xl shadow-xl px-4 py-3.5">
-              {/* 아이콘 */}
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Sparkles className="w-4 h-4 text-primary" />
               </div>
-
-              {/* 텍스트 */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">
-                  {pendingEntry.companyName}
-                </p>
+                <p className="text-sm font-semibold text-foreground truncate">{pendingEntry.companyName}</p>
                 <p className="text-xs text-muted-foreground">AI 분석을 시작할까요?</p>
               </div>
-
-              {/* 버튼 */}
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => setPendingEntry(null)}
-                  className="px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors"
-                >
+                <button onClick={() => setPendingEntry(null)} className="px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors">
                   취소
                 </button>
                 <button
@@ -361,12 +481,7 @@ export default function CalendarPage() {
                   분석 시작
                 </button>
               </div>
-
-              {/* 닫기 */}
-              <button
-                onClick={() => setPendingEntry(null)}
-                className="ml-0.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-              >
+              <button onClick={() => setPendingEntry(null)} className="ml-0.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>

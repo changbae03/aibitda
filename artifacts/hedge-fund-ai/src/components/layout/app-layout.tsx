@@ -81,7 +81,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     { href: "/analysis/new", label: "AI 기업분석" },
     { href: "/history", label: "내가 본 자료" },
-    { href: "/calendar", label: "실적 캘린더" },
+    { href: "/calendar", label: "마켓 캘린더" },
     { href: "/popular", label: "애빛다 통계" },
   ];
 

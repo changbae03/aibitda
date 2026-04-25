@@ -675,6 +675,20 @@ const _krEarningsCache = new Map<string, { data: Map<string, string>; expiresAt:
 const _geminiInProgress = new Set<string>(); // 동시 중복 실행 방지
 const _yfCache = new Map<string, { data: any[]; expiresAt: number }>(); // Yahoo Finance 24시간 캐시
 
+interface EconomicEvent {
+  date: string;
+  time?: string;
+  title: string;
+  country: string;
+  category: string;
+  importance: "high" | "medium" | "low";
+  forecast?: string;
+  previous?: string;
+  unit?: string;
+}
+const _economicCalCache = new Map<string, { data: EconomicEvent[]; expiresAt: number }>();
+const ECONOMIC_CAL_TTL_MS = 24 * 60 * 60 * 1000;
+
 // ── 전역 상수 (워밍업 함수에서도 사용) ────────────────────────────────────────
 const DEFAULT_KR = ["005930.KS","000660.KS","035420.KS","005380.KS","051910.KS","035720.KS","012330.KS","000270.KS"];
 const DEFAULT_US = ["AAPL","MSFT","NVDA","META","GOOG","AMZN","TSLA","AVGO"];
@@ -1035,6 +1049,81 @@ router.get("/earnings-calendar", async (req, res) => {
   } catch (err: any) {
     console.error("[earnings-calendar] unhandled error:", err?.message);
     res.status(500).json({ error: err?.message ?? "earnings-calendar error" });
+  }
+});
+
+// ─── GET /api/market-data/economic-calendar ─────────────────────────────────
+router.get("/economic-calendar", async (req, res) => {
+  const range = (req.query.range === "month") ? "month" : "week";
+  const cacheKey = range;
+
+  const cached = _economicCalCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return res.json(cached.data);
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+    const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+    const kstNow = new Date(Date.now() + KST_OFFSET_MS);
+    const todayStr = kstNow.toISOString().split("T")[0];
+    const endDate = new Date(kstNow.getTime() + (range === "week" ? 7 : 30) * 86400000);
+    const endStr = endDate.toISOString().split("T")[0];
+
+    const prompt = `오늘은 ${todayStr}(KST)입니다.
+${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을 JSON 배열로 반환하세요.
+
+포함할 이벤트 유형:
+- 미국: FOMC 금리결정, CPI, PPI, PCE, GDP, 비농업 고용(NFP), 실업률, 소매판매, ISM 제조업/서비스업 PMI, 신규실업수당청구
+- 한국: 한국은행 기준금리 결정, 소비자물가지수(CPI), GDP 성장률, 무역수지, 산업생산
+- 유로존: ECB 금리결정, 유로존 CPI, GDP
+- 중국: PMI(제조업/비제조업), CPI, GDP, 무역수지
+- 일본: BOJ 금리결정, CPI
+
+이미 확정된 공식 일정만 포함하세요. 불확실하면 제외하세요.
+
+각 이벤트를 아래 형식의 JSON으로 반환하세요:
+{
+  "date": "YYYY-MM-DD",
+  "time": "HH:MM",
+  "title": "이벤트명(한국어)",
+  "country": "US",
+  "category": "금리결정",
+  "importance": "high",
+  "forecast": "예상값",
+  "previous": "이전값",
+  "unit": "%"
+}
+
+JSON 배열만 반환하세요. 다른 텍스트는 절대 포함하지 마세요.`;
+
+    const resp = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { temperature: 0.1 },
+    });
+
+    const raw = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    let events: EconomicEvent[] = [];
+    try {
+      events = JSON.parse(cleaned);
+      if (!Array.isArray(events)) events = [];
+    } catch {
+      console.error("[economic-calendar] JSON 파싱 실패:", cleaned.slice(0, 200));
+      events = [];
+    }
+
+    events = events.filter(e => e.date >= todayStr && e.date <= endStr);
+    events.sort((a, b) => a.date.localeCompare(b.date));
+
+    _economicCalCache.set(cacheKey, { data: events, expiresAt: Date.now() + ECONOMIC_CAL_TTL_MS });
+    console.log(`[economic-calendar] ${range}: ${events.length}개 이벤트 생성`);
+    return res.json(events);
+  } catch (err: any) {
+    console.error("[economic-calendar] error:", err?.message);
+    return res.status(500).json({ error: err?.message ?? "경제 캘린더 조회 실패" });
   }
 });
 
