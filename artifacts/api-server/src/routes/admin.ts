@@ -495,7 +495,7 @@ router.get("/cohort", async (req, res) => {
       cohort_activity AS (
         SELECT c.cohort_week,
                c.user_id,
-               EXTRACT(EPOCH FROM (a.activity_week - c.cohort_week)) / (7*24*3600) AS week_offset
+               (a.activity_week - c.cohort_week) / 7 AS week_offset
         FROM cohorts c
         JOIN activities a ON c.user_id = a.user_id
       )
