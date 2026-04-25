@@ -190,11 +190,11 @@ const differentiators = [
     icon: "💊",
   },
   {
-    title: "이중계산 자동 감지",
-    badge: "Double-Count Prevention",
-    badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
-    desc: "한국 주식 WACC 산출 시 '이미 Rf와 ERP에 한국 리스크가 내재되어 있으므로 별도 국가 할증을 추가하면 이중계산'임을 경고 조항으로 삽입합니다. 일부 리서치에서 흔히 발생하는 이중 디스카운트 오류를 구조적으로 방지합니다.",
-    icon: "🔍",
+    title: "실시간 뉴스·이벤트 반영",
+    badge: "News & Catalyst Integration",
+    badgeColor: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+    desc: "실적 서프라이즈·FDA 결정·M&A·규제 이슈·경영진 교체 등 주가에 직접 영향을 미칠 수 있는 뉴스와 카탈리스트를 분석에 반영합니다. 단순 재무 수치를 넘어 시장 이벤트 드리븐 관점까지 목표주가에 통합합니다.",
+    icon: "📰",
   },
 ];
 
