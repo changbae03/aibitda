@@ -2,23 +2,29 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame,
-  Clock, TrendingUp, TrendingDown, Minus, Sparkles, BarChart2,
-  Eye, AlertCircle,
-} from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface CreditStatus {
   dailyUsed: number;
   dailyLimit: number;
   bonusCredits: number;
   remaining: number;
   referralCode: string | null;
+}
+
+function useCredits() {
+  return useQuery<CreditStatus>({
+    queryKey: ["credits"],
+    queryFn: async () => {
+      const res = await fetch("/api/credits", { credentials: "include" });
+      if (!res.ok) return null as any;
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
 }
 
 interface RecentAnalysis {
@@ -32,22 +38,62 @@ interface RecentAnalysis {
   status: string;
 }
 
-interface IndexData {
-  key: string;
-  label: string;
-  currency: string;
-  price: number | null;
-  change: number | null;
-  changeAbs: number | null;
-  prevClose: number | null;
+const VERDICT_MINI: Record<string, { icon: React.ReactNode; color: string }> = {
+  "Strong Buy":  { icon: <TrendingUp className="w-3 h-3" />,  color: "text-emerald-600" },
+  "Buy":         { icon: <TrendingUp className="w-3 h-3" />,  color: "text-green-600" },
+  "Hold":        { icon: <Minus className="w-3 h-3" />,        color: "text-amber-500" },
+  "Sell":        { icon: <TrendingDown className="w-3 h-3" />, color: "text-orange-500" },
+  "Strong Sell": { icon: <TrendingDown className="w-3 h-3" />, color: "text-red-500" },
+};
+
+function useRecentAnalyses() {
+  return useQuery<RecentAnalysis[]>({
+    queryKey: ["recent-analyses-home"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/api/analyses?limit=5"), { credentials: "include" });
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.data ?? d ?? [];
+    },
+    staleTime: 1000 * 60 * 2,
+  });
 }
 
-interface AiBriefing {
-  headline: string;
-  summary: string;
-  keyThemes: { icon: string; title: string; desc: string }[];
-  signals: { type: "bullish" | "bearish" | "neutral"; text: string }[];
-  watchList: string[];
+function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
+  if (!credits) return null;
+
+  const dailyRemaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+        credits.remaining === 0
+          ? "bg-red-50 border-red-200 text-red-600"
+          : credits.remaining <= 1
+          ? "bg-amber-50 border-amber-200 text-amber-600"
+          : "bg-emerald-50 border-emerald-200 text-emerald-600"
+      }`}>
+        <Zap className="w-3 h-3" />
+        오늘 {dailyRemaining}회 남음
+      </div>
+    </div>
+  );
+}
+
+const EXAMPLES_KR = [
+  { ticker: "005930", label: "삼성전자" },
+  { ticker: "000660", label: "SK하이닉스" },
+  { ticker: "035420", label: "NAVER" },
+];
+
+const EXAMPLES_US = [
+  { ticker: "NVDA", label: "NVIDIA" },
+  { ticker: "AAPL", label: "Apple" },
+  { ticker: "TSLA", label: "Tesla" },
+];
+
+function isKorean(str: string) {
+  return /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(str);
 }
 
 interface SearchResult {
@@ -64,78 +110,6 @@ interface PopularTicker {
   investmentVerdict: string | null;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const VERDICT_MINI: Record<string, { icon: React.ReactNode; color: string }> = {
-  "Strong Buy":  { icon: <TrendingUp className="w-3 h-3" />,  color: "text-emerald-600" },
-  "Buy":         { icon: <TrendingUp className="w-3 h-3" />,  color: "text-green-600" },
-  "Hold":        { icon: <Minus className="w-3 h-3" />,        color: "text-amber-500" },
-  "Sell":        { icon: <TrendingDown className="w-3 h-3" />, color: "text-orange-500" },
-  "Strong Sell": { icon: <TrendingDown className="w-3 h-3" />, color: "text-red-500" },
-};
-
-const EXAMPLES_KR = [
-  { ticker: "005930", label: "삼성전자" },
-  { ticker: "000660", label: "SK하이닉스" },
-  { ticker: "035420", label: "NAVER" },
-];
-
-const EXAMPLES_US = [
-  { ticker: "NVDA", label: "NVIDIA" },
-  { ticker: "AAPL", label: "Apple" },
-  { ticker: "TSLA", label: "Tesla" },
-];
-
-// ── Hooks ─────────────────────────────────────────────────────────────────────
-function useCredits() {
-  return useQuery<CreditStatus>({
-    queryKey: ["credits"],
-    queryFn: async () => {
-      const res = await fetch("/api/credits", { credentials: "include" });
-      if (!res.ok) return null as any;
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
-}
-
-function useRecentAnalyses() {
-  return useQuery<RecentAnalysis[]>({
-    queryKey: ["recent-analyses-home"],
-    queryFn: async () => {
-      const r = await fetch(getApiUrl("/api/analyses?limit=5"), { credentials: "include" });
-      if (!r.ok) return [];
-      const d = await r.json();
-      return d.data ?? d ?? [];
-    },
-    staleTime: 1000 * 60 * 2,
-  });
-}
-
-function useIndices() {
-  return useQuery<IndexData[]>({
-    queryKey: ["market-indices"],
-    queryFn: async () => {
-      const r = await fetch(getApiUrl("/api/market-data/indices"));
-      if (!r.ok) return [];
-      return r.json();
-    },
-    staleTime: 1000 * 60 * 5,
-    refetchInterval: 1000 * 60 * 5,
-  });
-}
-
-function useAiBriefing() {
-  return useQuery<AiBriefing>({
-    queryKey: ["ai-briefing"],
-    queryFn: async () => {
-      const r = await fetch(getApiUrl("/api/market-data/ai-briefing"));
-      if (!r.ok) throw new Error("briefing failed");
-      return r.json();
-    },
-    staleTime: 1000 * 60 * 60 * 3,
-  });
-}
-
 function useTrendingTickers(): PopularTicker[] {
   const [trending, setTrending] = useState<PopularTicker[]>([]);
   useEffect(() => {
@@ -144,6 +118,7 @@ function useTrendingTickers(): PopularTicker[] {
         const r = await fetch(getApiUrl("/api/analysis/popular"));
         if (!r.ok) return;
         const data: { ticker: string; companyName: string; investmentVerdict: string | null }[] = await r.json();
+        // Count by ticker
         const map = new Map<string, { companyName: string; count: number; investmentVerdict: string | null }>();
         for (const d of data) {
           const existing = map.get(d.ticker);
@@ -160,127 +135,6 @@ function useTrendingTickers(): PopularTicker[] {
   return trending;
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
-function IndexChip({ idx }: { idx: IndexData }) {
-  const up = (idx.change ?? 0) >= 0;
-  const isRate = idx.key === "USDKRW";
-
-  const fmt = (v: number) => {
-    if (isRate) return v.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
-    if (idx.currency === "KRW") return v.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
-    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 rounded-lg bg-muted/40 border border-border/50 min-w-[90px]">
-      <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">{idx.label}</span>
-      {idx.price != null ? (
-        <>
-          <span className="text-[13px] font-bold text-foreground leading-none">{fmt(idx.price)}</span>
-          <span className={cn("text-[10px] font-medium", up ? "text-emerald-600" : "text-red-500")}>
-            {up ? "▲" : "▼"} {Math.abs(idx.change ?? 0).toFixed(2)}%
-          </span>
-        </>
-      ) : (
-        <span className="text-[11px] text-muted-foreground/40">—</span>
-      )}
-    </div>
-  );
-}
-
-function AiBriefingCard({ briefing }: { briefing: AiBriefing }) {
-  const signalColor = (type: string) =>
-    type === "bullish" ? "text-emerald-600 bg-emerald-50 border-emerald-200"
-    : type === "bearish" ? "text-red-500 bg-red-50 border-red-200"
-    : "text-amber-600 bg-amber-50 border-amber-200";
-
-  const signalIcon = (type: string) =>
-    type === "bullish" ? <TrendingUp className="w-3 h-3" />
-    : type === "bearish" ? <TrendingDown className="w-3 h-3" />
-    : <Minus className="w-3 h-3" />;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="rounded-xl border border-border bg-gradient-to-br from-background to-muted/20 p-4 flex flex-col gap-3"
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 text-primary">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-primary/70">AI 마켓 브리핑</span>
-        </div>
-        <span className="ml-auto text-[10px] text-muted-foreground/50">
-          {new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} 기준
-        </span>
-      </div>
-
-      {/* Headline */}
-      <p className="text-sm font-semibold text-foreground leading-snug">{briefing.headline}</p>
-
-      {/* Summary */}
-      <p className="text-[12px] text-muted-foreground leading-relaxed">{briefing.summary}</p>
-
-      {/* Key Themes */}
-      <div className="flex flex-wrap gap-2">
-        {briefing.keyThemes.map((t, i) => (
-          <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted border border-border text-xs">
-            <span>{t.icon}</span>
-            <span className="font-medium text-foreground/80">{t.title}</span>
-            <span className="text-muted-foreground/60">{t.desc}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Signals + WatchList */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">시그널</span>
-          {briefing.signals.map((s, i) => (
-            <div key={i} className={cn("flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium w-fit", signalColor(s.type))}>
-              {signalIcon(s.type)}
-              {s.text}
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">주목 섹터</span>
-          {briefing.watchList.map((w, i) => (
-            <div key={i} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Eye className="w-2.5 h-2.5 text-primary/50" />
-              {w}
-            </div>
-          ))}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
-  if (!credits) return null;
-  const dailyRemaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
-  return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-      credits.remaining === 0
-        ? "bg-red-50 border-red-200 text-red-600"
-        : credits.remaining <= 1
-        ? "bg-amber-50 border-amber-200 text-amber-600"
-        : "bg-emerald-50 border-emerald-200 text-emerald-600"
-    }`}>
-      <Zap className="w-3 h-3" />
-      오늘 {dailyRemaining}회 남음
-    </div>
-  );
-}
-
-function isKorean(str: string) {
-  return /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(str);
-}
-
-// ── Main Component ─────────────────────────────────────────────────────────────
 export default function NewAnalysis() {
   const [, setLocation] = useLocation();
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
@@ -290,8 +144,6 @@ export default function NewAnalysis() {
   const [error, setError] = useState("");
   const trending = useTrendingTickers();
   const { data: recentAnalyses } = useRecentAnalyses();
-  const { data: indices } = useIndices();
-  const { data: briefing, isLoading: briefingLoading } = useAiBriefing();
 
   useEffect(() => {
     const code = localStorage.getItem("pending_referral");
@@ -307,6 +159,7 @@ export default function NewAnalysis() {
     }).catch(() => {});
   }, [queryClient]);
 
+  // ── 이탈 종목 재분석: ?ticker= 쿼리 파라미터로 자동 pre-fill + 제출 ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const prefill = params.get("ticker");
@@ -318,12 +171,11 @@ export default function NewAnalysis() {
     }, 350);
     return () => clearTimeout(t);
   }, []);
-
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectHint, setSelectHint] = useState(false);
+  const [selectHint, setSelectHint] = useState(false); // 드롭다운 선택 유도 힌트
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -375,6 +227,7 @@ export default function NewAnalysis() {
 
   const handleSubmit = async (tickerValue: string) => {
     let value = tickerValue.trim().toUpperCase();
+    // 한국 종목: .KS/.KQ 없이 6자리 코드만 사용
     if (/^\d{6}\.(KS|KQ)$/.test(value)) {
       value = value.split(".")[0];
       setTicker(value);
@@ -384,6 +237,7 @@ export default function NewAnalysis() {
       inputRef.current?.focus();
       return;
     }
+
     setError("");
     setShowDropdown(false);
     try {
@@ -403,6 +257,7 @@ export default function NewAnalysis() {
   handleSubmitRef.current = handleSubmit;
 
   const handleSelectSuggestion = (sym: string) => {
+    // 한국 종목 suffix 제거 후 표시
     const normalized = /^\d{6}\.(KS|KQ)$/.test(sym.toUpperCase()) ? sym.split(".")[0] : sym;
     setTicker(normalized);
     setSuggestions([]);
@@ -410,6 +265,7 @@ export default function NewAnalysis() {
     handleSubmit(normalized);
   };
 
+  // 6자리 숫자 코드 or 순수 영문 티커(1-5자)는 직접 입력 허용
   const isDirectTicker = (val: string) =>
     /^\d{6}$/.test(val) || /^[A-Za-z]{1,5}$/.test(val);
 
@@ -423,19 +279,27 @@ export default function NewAnalysis() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isComposing.current) return;
+
+    // 이미 방향키로 선택한 항목 있으면 바로 실행
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
       handleSelectSuggestion(suggestions[selectedIndex].symbol);
       return;
     }
+
+    // 6자리 코드 / 영문 티커면 직접 제출 허용
     const val = ticker.trim();
     if (isDirectTicker(val)) {
       handleSubmit(val);
       return;
     }
+
+    // 검색 중이거나 제안 목록이 있으면 → 드롭다운 유도
     if (isSearching || suggestions.length > 0) {
       showSelectHint();
       return;
     }
+
+    // 아무 결과도 없으면 직접 제출 시도
     handleSubmit(val);
   };
 
@@ -455,59 +319,37 @@ export default function NewAnalysis() {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 py-6">
-
-      {/* ── 주요 지수 바 ── */}
-      {indices && indices.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="flex items-stretch gap-2 overflow-x-auto pb-1 scrollbar-none"
-        >
-          {indices.map((idx) => (
-            <IndexChip key={idx.key} idx={idx} />
-          ))}
-        </motion.div>
-      )}
-
-      {/* ── AI 브리핑 ── */}
-      {briefingLoading ? (
-        <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center gap-2.5">
-          <Loader2 className="w-4 h-4 animate-spin text-primary/50" />
-          <span className="text-sm text-muted-foreground">AI가 오늘의 마켓 브리핑을 준비하고 있습니다...</span>
-        </div>
-      ) : briefing ? (
-        <AiBriefingCard briefing={briefing} />
-      ) : null}
-
-      {/* ── 검색 섹션 ── */}
+    <div className="min-h-[75vh] flex flex-col items-center justify-center">
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut", delay: 0.1 }}
-        className="flex flex-col gap-3"
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="w-full max-w-xl flex flex-col gap-10"
       >
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              어떤 종목을 분석할까요?
-            </h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">
-              코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색
-            </p>
-          </div>
+        {/* Headline */}
+        <div className="space-y-3">
+          <h1
+            className="text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.1]"
+            style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
+          >
+            어떤 종목을<br />분석할까요?
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed break-keep">
+            코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{" "}
+            <br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
+          </p>
           <CreditsBadge credits={credits} />
         </div>
 
-        {/* Search bar */}
+        {/* Search */}
         <form onSubmit={onSubmit} className="w-full relative">
-          <div className={cn(
-            "flex items-center gap-3 bg-background border rounded-xl px-4 py-3 transition-all duration-150",
-            error
-              ? "border-red-400 ring-2 ring-red-100"
-              : "border-border focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/10"
-          )}>
+          <div
+            className={`flex items-center gap-3 bg-background border rounded-xl px-4 py-3 transition-all duration-150 ${
+              error
+                ? "border-red-400 ring-2 ring-red-100"
+                : "border-border focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/10"
+            }`}
+          >
             <Search className="w-4 h-4 text-muted-foreground/50 shrink-0" />
             <input
               ref={inputRef}
@@ -540,7 +382,7 @@ export default function NewAnalysis() {
             </button>
           </div>
 
-          {/* Autocomplete */}
+          {/* Autocomplete Dropdown */}
           <AnimatePresence>
             {showDropdown && suggestions.length > 0 && (
               <motion.div
@@ -556,10 +398,16 @@ export default function NewAnalysis() {
                 transition={{ duration: 0.12 }}
                 className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-xl z-50 overflow-hidden"
               >
+                {/* 드롭다운 헤더 */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">종목 선택</span>
-                  <span className="text-[10px] text-muted-foreground/60">↑↓ 이동 · Enter 선택</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    종목 선택
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60">
+                    ↑↓ 이동 · Enter 선택
+                  </span>
                 </div>
+
                 {suggestions.map((s, i) => {
                   const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
                   const code = isKrStock ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
@@ -586,21 +434,21 @@ export default function NewAnalysis() {
                       whileTap={{ scale: 0.99 }}
                       className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left border-b border-border/60 last:border-0 cursor-pointer"
                     >
-                      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                         isHighlighted ? "bg-primary/10" : "bg-muted"
-                      )}>
-                        <Building2 className={cn("w-4 h-4 transition-colors", isHighlighted ? "text-primary" : "text-muted-foreground")} />
+                      }`}>
+                        <Building2 className={`w-4 h-4 transition-colors ${isHighlighted ? "text-primary" : "text-muted-foreground"}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-[14px] font-semibold text-foreground truncate">{s.shortname}</span>
-                          <span className={cn("shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full", badgeStyle)}>
+                          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badgeStyle}`}>
                             {badgeLabel}
                           </span>
                         </div>
                         <span className="font-mono text-xs text-muted-foreground">{code}</span>
                       </div>
-                      <div className={cn("flex items-center gap-1 shrink-0 transition-opacity", isHighlighted ? "opacity-100" : "opacity-0")}>
+                      <div className={`flex items-center gap-1 shrink-0 transition-opacity ${isHighlighted ? "opacity-100" : "opacity-0"}`}>
                         <span className="text-[10px] text-primary font-medium">선택</span>
                         <ChevronRight className="w-3.5 h-3.5 text-primary" />
                       </div>
@@ -614,6 +462,7 @@ export default function NewAnalysis() {
             )}
           </AnimatePresence>
 
+          {/* 검색 중 + 검색어가 이름인 경우 안내 */}
           <AnimatePresence>
             {isSearching && !isDirectTicker(ticker.trim()) && (
               <motion.p
@@ -622,10 +471,13 @@ export default function NewAnalysis() {
                 exit={{ opacity: 0 }}
                 className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5"
               >
-                <Loader2 className="w-3 h-3 animate-spin" /> 종목 검색 중...
+                <Loader2 className="w-3 h-3 animate-spin" />
+                종목 검색 중...
               </motion.p>
             )}
           </AnimatePresence>
+
+          {/* 드롭다운 선택 유도 힌트 */}
           <AnimatePresence>
             {selectHint && (
               <motion.p
@@ -638,18 +490,20 @@ export default function NewAnalysis() {
               </motion.p>
             )}
           </AnimatePresence>
+
           <AnimatePresence>
             {error && !selectHint && (
               <motion.p
                 initial={{ opacity: 0, y: -2 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="mt-2 text-xs text-red-500 flex items-center gap-1"
+                className="mt-2 text-xs text-red-500"
               >
-                <AlertCircle className="w-3 h-3" /> {error}
+                {error}
               </motion.p>
             )}
           </AnimatePresence>
+
           {isPending && (
             <motion.p
               initial={{ opacity: 0 }}
@@ -661,41 +515,22 @@ export default function NewAnalysis() {
           )}
         </form>
 
-        {/* 빠른 선택 예시 */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground/50 mr-0.5">예시</span>
-          {[...EXAMPLES_KR, ...EXAMPLES_US].map((ex) => (
-            <button
-              key={ex.ticker}
-              type="button"
-              onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
-              disabled={isPending}
-              className="text-[11px] px-2.5 py-1 rounded-full border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-all disabled:opacity-40"
+        {/* 인기 종목 */}
+        <AnimatePresence>
+          {trending.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col gap-2"
             >
-              {ex.label}
-            </button>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* ── 많이 찾은 기업 ── */}
-      <AnimatePresence>
-        {trending.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-            className="flex flex-col gap-2"
-          >
-            <div className="flex items-center gap-1.5">
-              <Flame className="w-3 h-3 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">많이 찾은 기업</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {trending.map((t) => {
-                const vm = t.investmentVerdict ? VERDICT_MINI[t.investmentVerdict] : null;
-                return (
+              <div className="flex items-center gap-1.5">
+                <Flame className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">많이 찾은 기업</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {trending.map((t) => (
                   <motion.button
                     key={t.ticker}
                     whileHover={{ scale: 1.02 }}
@@ -706,80 +541,110 @@ export default function NewAnalysis() {
                   >
                     <span className="font-mono text-[10px] text-muted-foreground/50 group-hover:text-primary/60 transition-colors">{t.ticker}</span>
                     <span className="text-[12.5px] text-foreground/80 font-medium">{t.companyName}</span>
-                    {vm && <span className={cn("text-[10px] font-medium", vm.color)}>{vm.icon}</span>}
-                    {t.count > 1 && <span className="text-[9px] text-muted-foreground/50">×{t.count}</span>}
+                    {t.count > 1 && (
+                      <span className="text-[9px] text-muted-foreground/50 font-medium">×{t.count}</span>
+                    )}
                   </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 최근 분석 기록 (개인화) */}
+        {recentAnalyses && recentAnalyses.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className="flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-1.5 justify-between">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">최근 분석 기록</span>
+              </div>
+              <a href="/history" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
+                전체 보기 <ChevronRight className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {recentAnalyses.slice(0, 4).map(a => {
+                const vm = VERDICT_MINI[a.investmentVerdict ?? ""];
+                const shortTicker = a.ticker?.replace(/\.(KS|KQ)$/, "");
+                const upside = a.targetPrice && a.startPrice
+                  ? ((a.targetPrice - a.startPrice) / a.startPrice) * 100
+                  : null;
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => setLocation(`/analysis/${a.id}`)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors text-left group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-foreground truncate">{a.companyName ?? a.ticker}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground">{shortTicker}</p>
+                    </div>
+                    <div className="text-right shrink-0 space-y-0.5">
+                      {vm && (
+                        <p className={`text-xs font-semibold flex items-center gap-1 justify-end ${vm.color}`}>
+                          {vm.icon}
+                          {a.investmentVerdict}
+                        </p>
+                      )}
+                      {upside !== null && (
+                        <p className={`text-[10px] font-mono ${upside >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+                  </button>
                 );
               })}
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* ── 최근 분석 기록 ── */}
-      {recentAnalyses && recentAnalyses.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-          className="flex flex-col gap-2"
-        >
-          <div className="flex items-center gap-1.5 justify-between">
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3 h-3 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">최근 분석 기록</span>
-            </div>
-            <button
-              onClick={() => setLocation("/history")}
-              className="text-[10px] text-muted-foreground/60 hover:text-primary transition-colors flex items-center gap-0.5"
-            >
-              전체 보기 <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {recentAnalyses.slice(0, 5).map((a) => {
-              const vm = a.investmentVerdict ? VERDICT_MINI[a.investmentVerdict] : null;
-              const upside = (a.targetPrice && a.startPrice && a.startPrice > 0)
-                ? ((a.targetPrice - a.startPrice) / a.startPrice * 100)
-                : null;
-              return (
-                <motion.button
-                  key={a.id}
-                  whileHover={{ x: 2 }}
-                  onClick={() => setLocation(`/analysis/${a.id}`)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/40 border border-border/60 hover:border-primary/30 hover:bg-primary/3 transition-all text-left group"
+        {/* Quick picks */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">국내</span>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES_KR.map((ex) => (
+                <button
+                  key={ex.ticker}
+                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
                 >
-                  <div className="w-8 h-8 rounded-md bg-background border border-border flex items-center justify-center shrink-0">
-                    <BarChart2 className="w-3.5 h-3.5 text-muted-foreground/60 group-hover:text-primary/60 transition-colors" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold text-foreground truncate">{a.companyName ?? a.ticker}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground/50">{a.ticker}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {vm && (
-                        <span className={cn("flex items-center gap-0.5 text-[10px] font-medium", vm.color)}>
-                          {vm.icon} {a.investmentVerdict}
-                        </span>
-                      )}
-                      {upside != null && (
-                        <span className={cn("text-[10px]", upside >= 0 ? "text-emerald-600" : "text-red-500")}>
-                          {upside >= 0 ? "▲" : "▼"} {Math.abs(upside).toFixed(1)}%
-                        </span>
-                      )}
-                      <span className="text-[10px] text-muted-foreground/40">
-                        {new Date(a.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-primary/50 transition-colors shrink-0" />
-                </motion.button>
-              );
-            })}
+                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
+                  <span>{ex.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </motion.div>
-      )}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">미국</span>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES_US.map((ex) => (
+                <button
+                  key={ex.ticker}
+                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                >
+                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
+                  <span>{ex.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
