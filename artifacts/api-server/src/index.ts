@@ -2,7 +2,7 @@ import app from "./app";
 import { runMigrations } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
-import { warmupEarningsCache } from "./routes/market-data.js";
+import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 
 console.log("[STARTUP] API Server v2 - SSL fix + auto migration enabled");
 
@@ -26,9 +26,13 @@ const ONE_DAY_MS    = 24 * 60 * 60 * 1000;
 runMigrations()
   .then(() => {
     console.log("[MIGRATION] 완료");
+    return initCalendarCache();
+  })
+  .then(() => {
+    console.log("[CACHE] system_cache 테이블 준비 완료");
   })
   .catch((err) => {
-    console.error("[MIGRATION] 실패:", err?.message ?? err);
+    console.error("[MIGRATION/CACHE] 실패:", err?.message ?? err);
     if (err?.cause) console.error("[MIGRATION] 원인:", err.cause);
   })
   .finally(() => {

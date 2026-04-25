@@ -767,7 +767,7 @@ router.post("/batch-performance", async (req, res) => {
 // ── Gemini 기반 한국 종목 실적발표일 조회 (12시간 캐시) ──────────────────────────
 const _krEarningsCache = new Map<string, { data: Map<string, string>; expiresAt: number }>();
 const _geminiInProgress = new Set<string>(); // 동시 중복 실행 방지
-const _yfCache = new Map<string, { data: any[]; expiresAt: number }>(); // Yahoo Finance 24시간 캐시
+const _yfCache = new Map<string, { data: any[]; expiresAt: number }>(); // Yahoo Finance 인메모리 캐시 (2차)
 
 interface EconomicEvent {
   date: string;
@@ -782,6 +782,42 @@ interface EconomicEvent {
 }
 const _economicCalCache = new Map<string, { data: EconomicEvent[]; expiresAt: number }>();
 const ECONOMIC_CAL_TTL_MS = 24 * 60 * 60 * 1000;
+
+// ─── DB 영구 캐시 (서버 재시작에도 유지) ─────────────────────────────────────────
+/** system_cache 테이블 초기화 (없으면 생성) */
+export async function initCalendarCache() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS system_cache (
+      key        TEXT PRIMARY KEY,
+      data       JSONB NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+}
+
+async function getFromDBCache<T>(key: string): Promise<T | null> {
+  try {
+    const r = await pool.query<{ data: T }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [key]
+    );
+    return r.rows[0]?.data ?? null;
+  } catch { return null; }
+}
+
+async function saveToDBCache(key: string, data: unknown, ttlMs: number) {
+  try {
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [key, JSON.stringify(data), expiresAt]
+    );
+  } catch (e: any) {
+    console.error("[system_cache] save error:", e?.message);
+  }
+}
 
 // ── 전역 상수 (워밍업 함수에서도 사용) ────────────────────────────────────────
 const DEFAULT_KR = ["005930.KS","000660.KS","035420.KS","005380.KS","051910.KS","035720.KS","012330.KS","000270.KS"];
@@ -810,7 +846,7 @@ export async function warmupEarningsCache() {
       try {
         const r = await pool.query<{ ticker: string; company_name: string }>(
           `SELECT DISTINCT ON (ticker) ticker, company_name FROM analyses
-           WHERE created_at >= NOW() - INTERVAL '90 days' AND status = 'done'
+           WHERE created_at >= NOW() - INTERVAL '90 days' AND status = 'completed'
            ORDER BY ticker, created_at DESC LIMIT 60`
         );
         dbRows = r.rows;
@@ -876,8 +912,10 @@ export async function warmupEarningsCache() {
         }
       }
 
-      const yfCacheKey = `${range}-${[...allTickers].sort().join(",")}`;
+      const yfCacheKey = `cal-earnings-${range}`;
       _yfCache.set(yfCacheKey, { data: raw, expiresAt: Date.now() + CALENDAR_YF_TTL_MS });
+      // DB에도 저장 (재시작 후 즉시 사용)
+      await saveToDBCache(yfCacheKey, raw, CALENDAR_YF_TTL_MS);
       console.log(`[earnings-calendar] 워밍업 완료: ${range}, ${raw.length}개 종목`);
 
       // Gemini 한국 종목도 백그라운드 실행
@@ -885,6 +923,17 @@ export async function warmupEarningsCache() {
       if (krTickers.length > 0) triggerGeminiBackground(krTickers, nameMap, rangeDays);
     } catch (e: any) {
       console.error(`[earnings-calendar] 워밍업 실패 (${range}):`, e?.message);
+    }
+  }
+
+  // ── 경제 캘린더도 백그라운드 사전 로딩 ──────────────────────────────────────
+  for (const range of ["week", "month"] as const) {
+    const dbCached = await getFromDBCache<EconomicEvent[]>(`cal-economic-${range}`);
+    if (dbCached) {
+      _economicCalCache.set(range, { data: dbCached, expiresAt: Date.now() + ECONOMIC_CAL_TTL_MS });
+      console.log(`[economic-calendar] DB 캐시 로드: ${range} (${dbCached.length}건)`);
+    } else {
+      console.log(`[economic-calendar] ${range} 캐시 없음 — 첫 요청 시 생성됩니다`);
     }
   }
 }
@@ -1002,7 +1051,7 @@ router.get("/earnings-calendar", async (req, res) => {
       `SELECT DISTINCT ON (ticker) ticker, company_name
        FROM analyses
        WHERE created_at >= NOW() - INTERVAL '90 days'
-         AND status = 'done'
+         AND status = 'completed'
        ORDER BY ticker, created_at DESC
        LIMIT 60`
     );
@@ -1046,67 +1095,77 @@ router.get("/earnings-calendar", async (req, res) => {
     revenueEstimate: number | null; currency: string; isKorean: boolean;
   }
 
-  // ── 3-A. Yahoo Finance 5분 캐시 ──────────────────────────────────────────
-  const yfCacheKey = `${range}-${allTickers.sort().join(",")}`;
+  // ── 3-A. 캐시 계층: 인메모리 → DB → Yahoo Finance 실시간 ──────────────────
+  const yfCacheKey = `cal-earnings-${range}`;
   const yfNow = Date.now();
   const yfCached = _yfCache.get(yfCacheKey);
   let entries: EarningsEntry[];
 
   if (yfCached && yfCached.expiresAt > yfNow) {
     entries = yfCached.data;
-    console.log("[earnings-calendar] YF cache HIT");
+    console.log("[earnings-calendar] 인메모리 캐시 HIT");
   } else {
-    // 모든 종목 완전 병렬 실행 (순차 배치 제거)
-    const settled = await Promise.allSettled(
-      allTickers.map(async t => {
-        try {
-          const d = await yahooFinance.quoteSummary(t,
-            { modules: ["calendarEvents", "price"] },
-            { validateResult: false }
-          );
-          return { ticker: t, data: d as any };
-        } catch { return null; }
-      })
-    );
+    // DB 캐시 확인 (서버 재시작 후에도 유효)
+    const dbCached = await getFromDBCache<EarningsEntry[]>(yfCacheKey);
+    if (dbCached) {
+      entries = dbCached;
+      _yfCache.set(yfCacheKey, { data: dbCached, expiresAt: yfNow + CALENDAR_YF_TTL_MS });
+      console.log("[earnings-calendar] DB 캐시 HIT");
+    } else {
+      // DB에도 없음 → Yahoo Finance 실시간 조회
+      console.log("[earnings-calendar] 캐시 없음 — Yahoo Finance 실시간 조회 시작");
+      const settled = await Promise.allSettled(
+        allTickers.map(async t => {
+          try {
+            const d = await yahooFinance.quoteSummary(t,
+              { modules: ["calendarEvents", "price"] },
+              { validateResult: false }
+            );
+            return { ticker: t, data: d as any };
+          } catch { return null; }
+        })
+      );
 
-    const raw: EarningsEntry[] = [];
-    for (const r of settled) {
-      if (r.status !== "fulfilled" || !r.value) continue;
-      const { ticker, data } = r.value;
-      const cal   = data?.calendarEvents;
-      const pr    = data?.price;
-      const dates: any[] = cal?.earnings?.earningsDate ?? [];
-      if (!dates.length) continue;
+      const raw: EarningsEntry[] = [];
+      for (const r of settled) {
+        if (r.status !== "fulfilled" || !r.value) continue;
+        const { ticker, data } = r.value;
+        const cal   = data?.calendarEvents;
+        const pr    = data?.price;
+        const dates: any[] = cal?.earnings?.earningsDate ?? [];
+        if (!dates.length) continue;
 
-      for (const rawDate of dates) {
-        const ts   = typeof rawDate === "number" ? rawDate * 1000
-          : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
-        const date = new Date(ts);
-        if (date < now || date > rangeEnd) continue;
+        for (const rawDate of dates) {
+          const ts   = typeof rawDate === "number" ? rawDate * 1000
+            : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
+          const date = new Date(ts);
+          if (date < now || date > rangeEnd) continue;
 
-        const currency = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
-        const isKorean = currency === "KRW";
-        const name     = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
+          const currency = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
+          const isKorean = currency === "KRW";
+          const name     = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
 
-        // 한국 종목 날짜 보정: UTC 04-08시 = KST 13-17시(잠정실적 공시) → 컨퍼런스콜은 +1일
-        let displayDate = date;
-        if (isKorean && date.getUTCHours() >= 4 && date.getUTCHours() <= 8) {
-          displayDate = new Date(date.getTime() + 86400000);
+          let displayDate = date;
+          if (isKorean && date.getUTCHours() >= 4 && date.getUTCHours() <= 8) {
+            displayDate = new Date(date.getTime() + 86400000);
+          }
+
+          raw.push({
+            ticker, companyName: name, earningsDate: toKSTDateStr(displayDate),
+            epsEstimate:     cal?.earnings?.earningsAverage ?? null,
+            epsLow:          cal?.earnings?.earningsLow     ?? null,
+            epsHigh:         cal?.earnings?.earningsHigh    ?? null,
+            revenueEstimate: cal?.earnings?.revenueAverage  ?? null,
+            currency, isKorean,
+          });
+          break;
         }
-
-        raw.push({
-          ticker, companyName: name, earningsDate: toKSTDateStr(displayDate),
-          epsEstimate:     cal?.earnings?.earningsAverage ?? null,
-          epsLow:          cal?.earnings?.earningsLow     ?? null,
-          epsHigh:         cal?.earnings?.earningsHigh    ?? null,
-          revenueEstimate: cal?.earnings?.revenueAverage  ?? null,
-          currency, isKorean,
-        });
-        break;
       }
+      entries = raw;
+      _yfCache.set(yfCacheKey, { data: raw, expiresAt: yfNow + CALENDAR_YF_TTL_MS });
+      // DB에도 저장 (다음 재시작 시 즉시 사용)
+      saveToDBCache(yfCacheKey, raw, CALENDAR_YF_TTL_MS);
     }
-    entries = raw;
-    _yfCache.set(yfCacheKey, { data: raw, expiresAt: yfNow + CALENDAR_YF_TTL_MS });
   }
 
   // ── 4. Gemini 한국 날짜 오버라이드 (캐시만 사용, 블로킹 없음) ─────────────
@@ -1154,6 +1213,14 @@ router.get("/economic-calendar", async (req, res) => {
   const cached = _economicCalCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return res.json(cached.data);
+  }
+
+  // DB 캐시 확인 (서버 재시작 후에도 유효)
+  const dbEcoCached = await getFromDBCache<EconomicEvent[]>(`cal-economic-${range}`);
+  if (dbEcoCached) {
+    _economicCalCache.set(cacheKey, { data: dbEcoCached, expiresAt: Date.now() + ECONOMIC_CAL_TTL_MS });
+    console.log(`[economic-calendar] DB 캐시 HIT: ${range}`);
+    return res.json(dbEcoCached);
   }
 
   try {
@@ -1216,6 +1283,8 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
     events.sort((a, b) => a.date.localeCompare(b.date));
 
     _economicCalCache.set(cacheKey, { data: events, expiresAt: Date.now() + ECONOMIC_CAL_TTL_MS });
+    // DB에도 저장 (재시작 후 즉시 사용)
+    saveToDBCache(`cal-economic-${range}`, events, ECONOMIC_CAL_TTL_MS);
     console.log(`[economic-calendar] ${range}: ${events.length}개 이벤트 생성`);
     return res.json(events);
   } catch (err: any) {
