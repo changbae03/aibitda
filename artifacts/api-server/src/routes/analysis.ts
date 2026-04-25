@@ -3333,6 +3333,33 @@ async function executeStep(
         entryPrice = parsePrice(json.entry_price);
         stopLoss = parsePrice(json.stop_loss);
 
+        // ── 진입가·손절가 이상값 가드 ───────────────────────────────────────
+        // 분석 시작 시 저장된 현재가(startPrice)를 기준으로
+        // entry/stop이 3배 이상 이탈하면 데이터 오류로 간주하고 null 처리
+        const startPriceRow = await rawQuery(
+          `SELECT start_price FROM analyses WHERE id=$1`,
+          [id]
+        );
+        const savedStartPrice: number | null = startPriceRow[0]?.start_price ?? null;
+        if (savedStartPrice && savedStartPrice > 0) {
+          const MAX_RATIO = 3.0;
+          const MIN_RATIO = 1 / MAX_RATIO;
+          if (entryPrice) {
+            const ratio = entryPrice / savedStartPrice;
+            if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
+              console.warn(`[analysis ${id}] entry_price ${entryPrice} is ${ratio.toFixed(2)}x startPrice ${savedStartPrice} — nullified`);
+              entryPrice = null;
+            }
+          }
+          if (stopLoss) {
+            const ratio = stopLoss / savedStartPrice;
+            if (ratio > MAX_RATIO || ratio < MIN_RATIO) {
+              console.warn(`[analysis ${id}] stop_loss ${stopLoss} is ${ratio.toFixed(2)}x startPrice ${savedStartPrice} — nullified`);
+              stopLoss = null;
+            }
+          }
+        }
+
         if (targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss) {
           riskRewardRatio = Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss));
         }

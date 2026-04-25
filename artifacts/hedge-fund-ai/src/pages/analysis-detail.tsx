@@ -1343,25 +1343,64 @@ export default function AnalysisDetail() {
           {/* Verdict Card */}
           {isComplete && analysis.investmentVerdict && (
             <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
-              <div className="text-xl font-bold text-foreground mb-3">{toKoreanVerdict(analysis.investmentVerdict)}</div>
               {(() => {
                 const isSellVerdict = ["sell", "strong sell"].includes((analysis.investmentVerdict ?? "").toLowerCase());
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+
+                // 현재가(분석 시작 시 저장된 startPrice) 기준 upside 계산
+                const sp = (analysis as any).startPrice as number | null ?? null;
+                const tp = analysis.targetPrice ?? null;
+                const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
+                const isActualUpside = upsidePct !== null ? upsidePct >= 0 : null;
+
+                // 의견과 실제 방향 불일치 감지
+                const verdictIsPositive = !isSellVerdict;
+                const contradictory = isActualUpside !== null && verdictIsPositive !== isActualUpside;
+
+                const targetColor = isActualUpside === false
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-success";
+
                 return (
-                  <div className="space-y-1.5 font-mono text-xs">
-                    <div className="flex justify-between items-center border-b border-border pb-1.5">
-                      <span className="text-muted-foreground">적정주가 <span className="text-xs opacity-60">(12개월)</span></span>
-                      <span className="text-success font-bold">{formatCurrency(analysis.targetPrice, currency)}</span>
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xl font-bold text-foreground">
+                        {upsidePct !== null
+                          ? (upsidePct >= 0 ? "상승여력" : "하락여지")
+                          : toKoreanVerdict(analysis.investmentVerdict)}
+                      </div>
+                      {upsidePct !== null && (
+                        <span className={`text-sm font-black tabular-nums ${upsidePct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                          {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
+                        </span>
+                      )}
                     </div>
-                    <div className="flex justify-between items-center border-b border-border pb-1.5">
-                      <span className="text-muted-foreground">{isSellVerdict ? "재관심 기준가" : "진입가"}</span>
-                      <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice, currency)}</span>
+                    {contradictory && (
+                      <div className="mb-2 px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-[10px] text-amber-700 dark:text-amber-400">
+                        ⚠️ 가격 데이터 불일치 — 재분석을 권장합니다
+                      </div>
+                    )}
+                    <div className="space-y-1.5 font-mono text-xs">
+                      <div className="flex justify-between items-center border-b border-border pb-1.5">
+                        <span className="text-muted-foreground">적정주가 <span className="text-xs opacity-60">(12개월)</span></span>
+                        <span className={`font-bold ${targetColor}`}>{formatCurrency(analysis.targetPrice, currency)}</span>
+                      </div>
+                      {sp && (
+                        <div className="flex justify-between items-center border-b border-border pb-1.5">
+                          <span className="text-muted-foreground">분석 시작가</span>
+                          <span className="text-foreground/70 font-medium">{formatCurrency(sp, currency)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center border-b border-border pb-1.5">
+                        <span className="text-muted-foreground">{isSellVerdict ? "재관심 기준가" : "진입가"}</span>
+                        <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice, currency)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-0.5">
+                        <span className="text-muted-foreground">{isSellVerdict ? "청산 우선 구간" : "손절가"}</span>
+                        <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center pt-0.5">
-                      <span className="text-muted-foreground">{isSellVerdict ? "청산 우선 구간" : "손절가"}</span>
-                      <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency)}</span>
-                    </div>
-                  </div>
+                  </>
                 );
               })()}
 
