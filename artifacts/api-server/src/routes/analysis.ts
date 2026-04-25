@@ -1232,14 +1232,43 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const trends: any[] = (result.earningsTrend as any)?.trend ?? [];
   if (trends.length > 0) {
     lines.push("\n[EPS 및 매출 전망 (애널리스트 컨센서스)]");
-    for (const t of trends.slice(0, 4)) {
-      const period  = t.period ?? "?";
-      const epsAvg  = t.earningsEstimate?.avg?.toFixed(2) ?? "-";
-      const epsLow  = t.earningsEstimate?.low?.toFixed(2) ?? "-";
-      const epsHigh = t.earningsEstimate?.high?.toFixed(2) ?? "-";
-      const revAvg  = t.revenueEstimate?.avg ? fmtNum(t.revenueEstimate.avg, currency) : "-";
-      const growth  = t.earningsEstimate?.growth != null ? pct(t.earningsEstimate.growth) : "-";
-      lines.push(`  ${period}: EPS ${epsAvg} (${epsLow}~${epsHigh}), 매출 ${revAvg}, 성장률 ${growth}`);
+    lines.push("  ⚠️ 주의: 아래 '매출 성장률(YoY)'은 직전 연도 실제 매출 대비 계산값임. 'EPS 성장률'과 완전히 다른 수치. DCF에는 매출 성장률만 사용할 것.");
+
+    // 직전 실제 연간 매출 (timeseries annualTotalRevenue 우선, 없으면 income statement)
+    const tsRevArr: any[] = tsResult?.annualTotalRevenue ?? [];
+    const isArr: any[] = (result as any)?.incomeStatementHistory?.incomeStatementHistory ?? [];
+    let priorActualRev: number | null = null;
+    if (tsRevArr.length > 0) {
+      const sorted = [...tsRevArr].sort((a, b) => new Date(b.asOfDate ?? 0).getTime() - new Date(a.asOfDate ?? 0).getTime());
+      priorActualRev = sorted[0]?.reportedValue?.raw ?? sorted[0]?.reportedValue ?? null;
+    } else if (isArr.length > 0) {
+      priorActualRev = isArr[0]?.totalRevenue?.raw ?? isArr[0]?.totalRevenue ?? null;
+    }
+
+    // 0y / +1y 연간 전망만 추출 (분기 제외)
+    const annualTrends = trends.filter(t => t.period === "0y" || t.period === "+1y");
+    let prevRevEst: number | null = null;
+
+    for (const t of annualTrends) {
+      const period   = t.period ?? "?";
+      const epsAvg   = t.earningsEstimate?.avg?.toFixed(2) ?? "-";
+      const epsLow   = t.earningsEstimate?.low?.toFixed(2) ?? "-";
+      const epsHigh  = t.earningsEstimate?.high?.toFixed(2) ?? "-";
+      const epsGrowth = t.earningsEstimate?.growth != null ? pct(t.earningsEstimate.growth) : "-";
+      const revRaw   = t.revenueEstimate?.avg ?? null;
+      const revAvg   = revRaw ? fmtNum(revRaw, currency) : "-";
+
+      // 매출 성장률: 직전 실제 매출 또는 직전 연도 추정치 대비 절대치로 직접 계산
+      let revGrowthStr = "-";
+      const base = period === "0y" ? priorActualRev : (prevRevEst ?? priorActualRev);
+      if (revRaw != null && base != null && base > 0) {
+        const revGrowthPct = ((revRaw - base) / base) * 100;
+        revGrowthStr = `${revGrowthPct.toFixed(1)}% (${fmtNum(base, currency)} → ${revAvg})`;
+      }
+      if (revRaw != null) prevRevEst = revRaw;
+
+      lines.push(`  [${period}] 매출 추정: ${revAvg} | 매출 성장률(YoY): ${revGrowthStr}`);
+      lines.push(`         EPS 추정: ${epsAvg} (${epsLow}~${epsHigh}) | EPS 성장률(YoY): ${epsGrowth} ← DCF에 사용 금지`);
     }
   }
 
