@@ -1359,6 +1359,38 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
   }
 
+  // ── 서버 계산 주가 현실성 검증 ────────────────────────────────────────────────
+  // 현재 주가 대비 상대적 허용 범위를 AI에 제공해 DCF 극단값 방지
+  {
+    const sharesForSanity: number | null = naverSharesCalc ?? (ks?.sharesOutstanding ?? null);
+    const currentPrice: number | null = sd?.regularMarketPrice ?? null;
+    const marketCap = sd?.marketCap ?? ks?.marketCap ?? null;
+    const latestEqYear2 = Object.keys(eqMap).sort((a, b) => Number(b) - Number(a))[0];
+    const latestEq2 = latestEqYear2 ? eqMap[latestEqYear2] : null;
+
+    if (sharesForSanity != null && currentPrice != null && sharesForSanity > 0 && currentPrice > 0) {
+      const priceFloor = currentPrice * 0.3;   // 현재가 대비 -70% 하단
+      const priceCeil  = currentPrice * 3.5;   // 현재가 대비 +250% 상단
+
+      lines.push(`\n[🔍 서버 계산 주가 현실성 검증 — DCF 결과 비교용]`);
+      lines.push(`  현재 주가: ${fmtNum(currentPrice, currency)} | 시가총액: ${marketCap ? fmtNum(marketCap, currency) : "-"}`);
+      if (latestEq2 != null && latestEq2 > 0) {
+        const bpsNow = latestEq2 / sharesForSanity;
+        const impliedPbNow = currentPrice / bpsNow;
+        lines.push(`  현재 Implied P/B: ${impliedPbNow.toFixed(2)}x (BPS: ${fmtNum(bpsNow, currency)})`);
+      }
+      lines.push(`  ──────────────────────────────────────────────────────`);
+      lines.push(`  DCF 허용 목표가 범위: ${fmtNum(priceFloor, currency)} ~ ${fmtNum(priceCeil, currency)}`);
+      lines.push(`    (현재가 대비 −70% ~ +250% 범위 — 성숙 대형주 기준)`);
+      lines.push(`  ⛔ DCF 결과가 위 허용 범위를 초과하면 반드시 다음을 재검토:`);
+      lines.push(`    1. WACC ≥ 10% (성숙 대형주 기준) 인지 확인`);
+      lines.push(`    2. OPM이 업종 역대 최고값을 초과하지 않는지 확인`);
+      lines.push(`    3. FCFF Margin이 반도체 상한(Year1~5: 15%, Year6~10: 12%) 이내인지 확인`);
+      lines.push(`    4. Year 2 성장률이 Year 1 성장률의 30~50% 수준으로 감소했는지 확인`);
+      lines.push(`    5. 재투자 앵커 하한값(Maintenance Capex) 이상으로 재투자가 반영됐는지 확인`);
+    }
+  }
+
   // 섹터 벤치마크 멀티플 (밸류에이션 단계에서 피어 비교 시 사용)
   lines.push(KOREAN_SECTOR_MULTIPLES);
 
