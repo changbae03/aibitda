@@ -439,6 +439,91 @@ ${isInvestmentBank ? `
 `;
   }
 
+  // ── 미국 리츠 (US REIT) ─────────────────────────────────────────────────
+  if (/us reit|american reit|data center reit|cell tower reit|healthcare reit|industrial reit|logistics reit|residential reit|retail reit|office reit|self.storage reit/.test(ind) ||
+      /equinix|digital realty|prologis|american tower|crown castle|sba communications|welltower|ventas|healthpeak|simon property|realty income|vici properties|avalonbay|equity residential|essex property|boston properties|public storage|extra space|iron mountain|rexford|eastgroup|camden property|mid-america apartment|udr|national retail|agree realty|nnn|stag industrial/.test(name)) {
+
+    // 서브섹터 자동 감지 → 전용 분석 지침 활성화
+    const isDataCenter   = /equinix|digital realty|cyrusone|coresite|switch inc|qts realty|iron mountain|data center/.test(name) || /data center reit/.test(ind);
+    const isCellTower    = /american tower|crown castle|sba communications|cell tower/.test(name) || /cell tower reit|tower reit/.test(ind);
+    const isHealthcare   = /welltower|ventas|healthpeak|omega healthcare|sabra health|caremerge|healthcare reit/.test(name) || /healthcare reit/.test(ind);
+    const isIndustrial   = /prologis|rexford|eastgroup|stag industrial|first industrial|duke realty|terreno|logistics reit|industrial reit/.test(name) || /industrial reit|logistics reit/.test(ind);
+    const isResidential  = /avalonbay|equity residential|essex property|camden|mid-america|udr|nex|residential reit/.test(name) || /residential reit|apartment reit/.test(ind);
+
+    return `
+[섹터 특화 지침 — 미국 리츠 (US REIT)]
+한국 리츠와 rNPV 구조는 달리 NAV + AFFO 복합이 Lead. 핵심 차이:
+① AFFO(Adjusted FFO): 한국은 FFO 사용, 미국은 반드시 AFFO 기준 (유지보수CapEx·직선임대료 조정 포함)
+② 서브섹터별 Cap Rate 차등: 데이터센터 4~5.5% / 셀타워 3~5% / 산업/물류 4~6% / 헬스케어 5~6.5% / 주거 4~5.5% / 오피스 5~8%(현재 위기)
+③ 지역별 Cap Rate 차등: 코스탈/게이트웨이(NYC·SF·LA) 3~5% vs 선벨트/세컨더리 5~7%
+
+핵심 KPI:
+- FFO(Funds from Operations) = 순이익 + D&A − 자산 매각 이익 (기본)
+- AFFO = FFO − 유지보수CapEx − 직선임대료(Straight-line rent) 조정 − 기타 비현금 항목 (배당 지급 능력의 진짜 지표)
+- AFFO Payout Ratio = 주당 배당 / 주당 AFFO (85% 이하: 지속 가능)
+- NOI(Net Operating Income) = 임대수익 − 운영비 (재무비용 전)
+- Cap Rate = NOI / 부동산 가치 (낮을수록 프리미엄 자산)
+- Same-Store NOI 성장률 (기존 포트폴리오 유기적 성장, 인수 효과 제거)
+- 순부채/EBITDA (미국 리츠 안전 기준: 5.5x 이하 권고)
+- 점유율(Occupancy Rate): 서브섹터별 기준 상이${isDataCenter ? `
+
+[데이터센터 리츠 전용 KPI]
+- MW(메가와트) 총 설치 용량 + 가동률(Power Utilization %)
+- MRR(Monthly Recurring Revenue) / ARR: 장기 계약 기반 반복 수익
+- 임차인 Mix: 하이퍼스케일(AWS/Azure/GCP) vs 코로케이션(엔터프라이즈) 비중
+  · 하이퍼스케일: 대형 단일 계약, 낮은 마진 but 대규모 볼륨
+  · 코로케이션: 높은 마진, 분산 위험, 고객 lock-in 강함
+- CapEx 사이클: 신규 MW 증설 투자 + 임대 전환 시점(Lease-up Timeline)
+- 전력 비용: PPA(전력구매계약) 체결 여부, 재생에너지 비중 (ESG 프리미엄)
+- Cap Rate 가이드: 코로케이션 4~5.5% / 하이퍼스케일 4.5~6%` : ""}${isCellTower ? `
+
+[셀타워 리츠 전용 KPI]
+- 타워 수(Tower Count) + 타워당 임차인 수(Tenancy Ratio: 통상 2.0~2.5x)
+- 임대 에스컬레이터: 연 CPI+2~3% 자동 인상 (인플레 헤지 내재)
+- 5G 덴시피케이션 수혜: Small Cell + Macro Tower 투자 증가 추이
+- 사전 임대 계약(Master Lease Agreement): AT&T/Verizon/T-Mobile 계약 잔여기간
+- 국제 포트폴리오 비중 (AMT: 신흥국 타워 보유, 환율 리스크)
+- Cap Rate 가이드: 미국 타워 3~5% / 신흥국 타워 6~8% (리스크 프리미엄)` : ""}${isHealthcare ? `
+
+[헬스케어 리츠 전용 KPI]
+- 계약유형: Triple-Net Lease(NNN) vs RIDEA 구조
+  · NNN: 운영사(Operator)가 모든 비용 부담 → REIT은 고정 임대료 (안정적)
+  · RIDEA: REIT이 운영 지분 참여 → 운영 성과에 따른 수익 공유 (수익성 높으나 리스크)
+- EBITDARM Coverage = 시설 EBITDA / 임대료 (1.5x 이상: 안전, 1.2x 이하: 운영사 부도 위험)
+- Operator 건전성: 상위 임차인 EBITDARM Coverage Ratio 및 재무건전성
+- 시설 유형: SNF(요양원) / ALF(생활보조시설) / MOB(메디컬 오피스) / 병원 / 시니어주거
+- Medicare/Medicaid 환급률 변화 → 운영사 임대 지불 능력 영향
+- Cap Rate 가이드: MOB 5~6% / SNF 6~7.5% / ALF 5.5~7%` : ""}${isIndustrial ? `
+
+[산업/물류 리츠 전용 KPI]
+- Lease Mark-to-Market(임차료 차이): 기존 계약 임대료 vs 현재 시장 임대료 갭 (%)
+  · 양의 값: 신규 계약 시 임대료 인상 가능 (임베디드 성장 잠재력)
+  · 예: +25% = 기존 임차인 계약 만료 시 25% 인상 가능
+- e-커머스 수혜: 물류 창고 수요 드라이버 (침투율 % + Last-Mile 입지 프리미엄)
+- 입지 유형: Last-Mile(도심 근접) vs Bulk Distribution(고속도로 허브) 비중
+- 임대 기간: 평균 잔여 임대기간(WALT: Weighted Average Lease Term)
+- Cap Rate 가이드: LA/NY 근교 Last-Mile 3.5~5% / 내륙 Bulk 4.5~6%` : ""}${isResidential ? `
+
+[주거(Apartment) 리츠 전용 KPI]
+- Same-Store Revenue Growth: 기존 아파트 임대수익 YoY 성장률
+- Blended Rent Growth = 신규 임대(New Lease) 성장률 × 비중 + 갱신(Renewal) 성장률 × 비중
+- 입주율(Occupancy): 93~96% 정상 범위, 93% 미만 → 임대 수요 약화 경고
+- 지역 포트폴리오: 코스탈 고임대시장(NYC/SF/LA) vs 선벨트 성장시장(Austin/Dallas/Phoenix) 비중
+- 공급 압박(Supply Pipeline): 신규 아파트 공급량 vs 흡수율 비교 (선벨트 공급과잉 위험)
+- Cap Rate 가이드: NYC/SF/LA 4~5% / 선벨트 5~6.5%` : ""}
+
+밸류에이션 (필수 방법론):
+- Lead ①: NAV(순자산가치) = Σ(서브섹터별 NOI / 적정 Cap Rate) − 순부채
+  · 서브섹터·지역별 다른 Cap Rate 반드시 차등 적용
+  · P/NAV = 주가 / 주당NAV (프리미엄 자산은 1.0~1.3x, 오피스 등 압박 섹터는 0.6~0.9x)
+- Lead ②: P/AFFO = 주가 / 주당AFFO (FFO가 아닌 AFFO 기준 필수)
+  · 데이터센터/셀타워: P/AFFO 25~40x | 산업: 20~30x | 주거: 20~28x | 리테일/오피스: 12~18x
+- 보조: 배당수익률 (AFFO Payout Ratio가 85% 이하인지 반드시 확인 후 지속가능성 명시)
+- EV/EBITDA 또는 EPS 기반 분석 금지 (D&A 왜곡, 부동산 구조에 부적합)
+피어: 동종 서브섹터 미국 리츠 NAV 대비 프리미엄/디스카운트, AFFO 성장률, 배당수익률, AFFO Payout Ratio 비교
+`;
+  }
+
   // ── 미국 바이오/제약 (US Biotech & Pharma) ──────────────────────────────
   if (/us biotech|american biotech|us pharma|american pharma|biopharmaceutical|clinical stage|fda approval/.test(ind) ||
       /moderna|biontech|regeneron|vertex pharmaceuticals|alnylam|biomarin|ionis|neurocrine|arrowhead|blueprint medicine|relay therapeutics|recursion|kymera|merus|protagonist|praxis|argenx|sarepta|acceleron|agenus|alector|allogene|allovir|arcus|arctus|arvinas|athenex|athenex|atara|athenex|beam therapeutics|biohaven|bluebird|blueprint|calithera|cara|catalyst|cerevel|cg oncology|chinook|coherus|constellation|corvus|crinetics|day one|deciphera|denali|dna|editas|entrada|eidos|envision|epizyme|escient|exelixis|exelixis|forma|g1 therapeutics|gritstone|hcp|iovance|kala|karuna|keros|kymera|kyowa kirin|lexicon|limelight|lyell|macrogenics|merus|mirati|molecular data|morphic|myovant|nalu medical|neon|nextcure|nuix|olimmune|pandion|passage bio|prelude|praxis|protagonist|provectus|ptc|puma|reata|relay|repertoire|revolution|rigel|rocket|schema|seagen|silverback|spring bioscience|stoke|supernus|syndax|tenax|translate|turning point|tyra|unum|uniqure|vanda|viela|vigor|vista therapeutics|vivasor|vividion/.test(name)) {
@@ -672,6 +757,38 @@ FCF 구조 분석:
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsUSREIT(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/us reit|american reit|data center reit|cell tower reit|healthcare reit|industrial reit|logistics reit|residential reit|retail reit|office reit|self.?storage reit/.test(ind)) return true;
+  if (/equinix|digital realty|prologis|american tower|crown castle|sba communications|welltower|ventas|healthpeak|simon property|realty income|vici properties|avalonbay|equity residential|essex property|boston properties|public storage|extra space|iron mountain|rexford|eastgroup|camden property|mid-america apartment|stag industrial|agree realty|national retail/.test(name)) return true;
+
+  const US_REIT_TICKERS = new Set([
+    // Data Center
+    "EQIX", "DLR", "IRM", "COR", "CONE",
+    // Cell Tower
+    "AMT", "CCI", "SBAC",
+    // Industrial/Logistics
+    "PLD", "EGP", "REXR", "FR", "STAG", "LPT", "TRNO",
+    // Healthcare
+    "WELL", "VTR", "DOC", "OHI", "SBRA", "NHI",
+    // Retail
+    "SPG", "O", "VICI", "NNN", "ROIC", "ADC", "EPRT",
+    // Residential
+    "AVB", "EQR", "ESS", "MAA", "CPT", "UDR", "NMD",
+    // Office
+    "BXP", "VNO", "SLG", "HIW", "PDM",
+    // Self-Storage
+    "PSA", "EXR", "CUBE", "LSI", "NSA",
+    // Diversified
+    "WPC", "LAND", "IIPR",
+  ]);
+  if (bare && US_REIT_TICKERS.has(bare)) return true;
+  return false;
+}
+
 function needsUSBiotech(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -1016,10 +1133,11 @@ export function buildPrompt(
   const usBankFlag       = needsUSBank(industry, companyName, ticker);
   const usDefenseFlag    = needsUSDefense(industry, companyName, ticker);
   const usBiotechFlag    = needsUSBiotech(industry, companyName, ticker);
+  const usReitFlag       = needsUSREIT(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -3307,6 +3425,64 @@ Bull: 예산 증액(지정학 리스크 상승) + Backlog 신기록 + EAC 정상
   - base/bear/bull = 조율 Base/Bear/Bull 목표주가
   - abs_base/abs_bear/abs_bull = EV/EBITDA(Adj.) Base/Bear/Bull
   - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
+  - current = 현재 주가
+
+**[NAV(서브섹터별 Cap Rate 차등) + P/AFFO 모델 — 미국 리츠(US REIT) 전용]**
+
+⛔ EPS/EV/EBITDA 기반 분석 금지 (D&A로 왜곡).
+⛔ FFO 단독 사용 금지 — 반드시 AFFO(Adjusted FFO) 기준으로 산출.
+⛔ 서브섹터 구분 없이 단일 Cap Rate 적용 금지 — 반드시 서브섹터·지역별 차등.
+
+[AFFO 산출 (FFO → AFFO 조정)]
+① FFO = 순이익 + D&A − 자산 매각 이익 = $__/share
+② 유지보수CapEx(Recurring CapEx) = $__/share (FFO에서 차감)
+③ 직선임대료(Straight-line rent) 조정 = $__/share (비현금 수익 제거)
+④ 기타 비현금 조정 = $__/share
+⑤ AFFO = FFO − ② − ③ − ④ = $__/share
+
+AFFO Payout Ratio = 주당 배당 $__ / AFFO $__ = __%
+→ 85% 이하: 배당 지속 가능 / 90% 초과: 배당컷 리스크 경고
+
+[서브섹터별 NAV 산출 — Cap Rate 차등 적용표]
+| 서브섹터 | NOI($억) | 적용 Cap Rate | 자산가치($억) | 지역 |
+|--------|---------|------------|-----------|-----|
+| 데이터센터 | $__ | 4.5~5.5% → __% | $__ | (지역명) |
+| 셀타워 | $__ | 3.5~5% → __% | $__ | (미국/해외 구분) |
+| 산업/물류 | $__ | 4~6% → __% | $__ | (코스탈/내륙) |
+| 헬스케어 | $__ | 5~6.5% → __% | $__ | (시설유형별) |
+| 주거 | $__ | 4~5.5% → __% | $__ | (코스탈/선벨트) |
+| 리테일 | $__ | 5.5~7% → __% | $__ | (클래스A/B 구분) |
+| 오피스 | $__ | 6~9% → __% | $__ | ⚠️위기 섹터 주의 |
+| 기타 | $__ | __% | $__ | — |
+| **합계 자산가치** | — | — | **$__** | — |
+
+NAV = 합계 자산가치 $__ − 총 부채 $__ − 우선주 $__ = $__
+주당 NAV = NAV / 발행주식수 __ = $__
+
+[서브섹터 전용 추가 분석]
+(데이터센터 해당 시) MW 가동률 __% / 하이퍼스케일 비중 __% / MRR $__억 / 신규 MW 파이프라인 __MW
+(셀타워 해당 시) 타워 수 __개 / Tenancy Ratio __x / 에스컬레이터 __% / 5G 전환율 __%
+(헬스케어 해당 시) EBITDARM Coverage __x / NNN vs RIDEA 비중 __% / 상위임차인 Coverage __x
+(산업물류 해당 시) Lease Mark-to-Market +__% / Same-Store NOI 성장 __% / e커머스 비중 __%
+(주거 해당 시) Blended Rent Growth __% / 점유율 __% / 선벨트 신규 공급 압박 [있음/없음]
+
+[목표주가 조율 — 2방법 가중]
+① P/NAV 방법: 적정 P/NAV __x × 주당 NAV $__ = __$
+   · 프리미엄 서브섹터(DC/셀타워/산업): 1.0~1.3x 프리미엄 정당화 가능
+   · 오피스/압박 섹터: 0.6~0.9x 디스카운트 적용
+② P/AFFO 방법: 서브섹터 피어 P/AFFO __x × AFFO $__/share = __$
+   · 데이터센터 25~40x / 셀타워 20~30x / 산업 20~28x / 주거 18~25x / 리테일 12~18x
+③ 배당수익률 역산: 연간 DPS $__ / 목표 배당수익률 __% = __$
+   (AFFO Payout Ratio 85% 이하 전제, 초과 시 배당컷 가능성 명시)
+④ 조율: P/NAV 50% + P/AFFO 40% + 배당수익률 역산 10% = **__$**
+
+Bear: 금리 상승 → Cap Rate 확대 → NAV 하락 + AFFO 성장 둔화 = __$
+Bull: 금리 인하 + 서브섹터 수요 호조(AI 데이터센터 수요 등) + NAV 확장 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = P/NAV Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = P/AFFO Base/Bear/Bull
   - current = 현재 주가
 
 **[rNPV + FDA 이벤트 드리븐 모델 — 미국 바이오(US Biotech) 전용]**
