@@ -36,3 +36,4 @@ KAKAO_REDIRECT_URI = "https://ai-bitda.replit.app/api/auth/kakao/callback"
 
 [userenv.shared]
 ECOS_API_KEY = "LMUYBHPGF1GS0YQQOEJW"
+FRED_API_KEY = "5f7576987d19115c8ef0c7bfe050f991"

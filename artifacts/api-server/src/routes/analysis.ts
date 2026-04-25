@@ -6,6 +6,7 @@ import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-c
 import { cache, TTL } from "../lib/mem-cache.js";
 import { fetchDartSubjectBalance, fetchNaverPBR, writeMetricCache } from "../lib/peer-collector.js";
 import { fetchECOSMacro, buildECOSContext } from "../lib/ecos-client.js";
+import { fetchFREDMacro, buildFREDContext } from "../lib/fred-client.js";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
@@ -2062,12 +2063,13 @@ router.post("/", async (req, res) => {
   const krxCode = upperTicker.split(".")[0];
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
-  // Fetch financial data, news, DART balance sheet, ECOS macro, start price in parallel
-  const [financialData, newsData, dartBalance, ecosMacro, startQuote] = await Promise.all([
+  // Fetch financial data, news, DART balance sheet, macro data, start price in parallel
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
-    fetchECOSMacro(),
+    isKoreanTicker ? fetchECOSMacro() : Promise.resolve(null),
+    !isKoreanTicker ? fetchFREDMacro() : Promise.resolve(null),
     yahooFinance.quote(resolvedSymbol).catch(() => null),
   ]);
   const startPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
@@ -2106,12 +2108,15 @@ router.post("/", async (req, res) => {
   }
 
   const userContext = additionalContext ?? null;
-  const ecosContext = buildECOSContext(ecosMacro);
+  // 한국 종목 → ECOS(한국은행), 미국/글로벌 종목 → FRED(연준) 거시지표 주입
+  const macroContext = isKoreanTicker
+    ? buildECOSContext(ecosMacro)
+    : buildFREDContext(fredMacro);
 
   const fullContext = [
     financialData,
     dartBalanceContext,
-    ecosContext,
+    macroContext,
     newsData,
     userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
   ]
