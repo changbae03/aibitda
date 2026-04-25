@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Settings, LogIn, LogOut, Bell } from "lucide-react";
+import { Menu, X, Settings, LogIn, LogOut, Bell, Info } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -122,6 +122,21 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const BottomNav = ({ onSelect }: { onSelect?: () => void }) => (
     <div className="px-2 py-3 space-y-0.5 border-t border-border">
+      {/* 애빛다 소개 */}
+      <Link
+        href="/about"
+        onClick={onSelect}
+        className={cn(
+          "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+          location === "/about"
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+        )}
+      >
+        <Info className="w-3.5 h-3.5 shrink-0" />
+        애빛다 소개
+      </Link>
+
       {/* 설정 */}
       <Link
         href="/settings"

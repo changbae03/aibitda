@@ -27,6 +27,7 @@ import Stats from "@/pages/stats";
 import Tracker from "@/pages/tracker";
 import Popular from "@/pages/popular";
 import SettingsPage from "@/pages/settings";
+import AboutPage from "@/pages/about";
 import SharePage from "@/pages/share";
 import CalendarPage from "@/pages/calendar";
 import AdminCohort from "@/pages/admin-cohort";
@@ -116,6 +117,7 @@ function Router() {
             <Route path="/admin/user-management" component={AdminUserManagement} />
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/settings" component={SettingsPage} />
+            <Route path="/about" component={AboutPage} />
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/admin/cohort" component={AdminCohort} />
             <Route path="/admin/promo-codes" component={AdminPromoCodes} />
