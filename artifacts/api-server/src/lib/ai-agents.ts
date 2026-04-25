@@ -379,6 +379,66 @@ OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE
 `;
   }
 
+  // ── 미국 은행 (US Commercial/Investment Bank) ────────────────────────────
+  if (/commercial banking|investment banking|retail banking|us bank|american bank|regional bank|money center bank/.test(ind) ||
+      /jpmorgan|bank of america|wells fargo|citigroup|goldman sachs|morgan stanley|us bancorp|truist|pnc financial|keycorp|regions financial|citizens financial|huntington|fifth third|m&t bank/.test(name)) {
+    const isInvestmentBank = /goldman sachs|morgan stanley/.test(name) || /investment bank|capital markets/.test(ind);
+    return `
+[섹터 특화 지침 — 미국 은행 (US Bank)]
+구조 특이사항: 한국 금융지주와 근본적으로 다른 세 가지 특징
+① CCAR(Comprehensive Capital Analysis and Review) — 연준 스트레스 테스트가 배당·자사주 매입을 승인/거부
+② NIM + Credit Loss Provision 사이클 — 금리 사이클과 신용 사이클의 복합이 실적 드라이버
+③ P/TBVPS(Tangible Book Value per Share) — 무형자산·굿윌 제거 후 유형 장부가 기준 밸류에이션
+
+핵심 KPI:
+- NIM(Net Interest Margin) = 이자수익 / 평균 운용자산
+- NII(Net Interest Income) = NIM × 평균 운용자산 (금리 민감도 핵심)
+- PCL(Provision for Credit Losses): 대손 충당금 적립 (CECL 방식: 예상 손실 선반영)
+- NCO Rate(Net Charge-off Rate): 실질 대손 비율 (vs 적립 비율 갭 확인)
+- CET1 Ratio(Common Equity Tier 1): 최소 4.5%, 실질 운용은 규제 최소 + SCB 이상
+- SCB(Stress Capital Buffer): 연준 CCAR에서 연간 부과하는 은행별 추가 자본 버퍼
+- ROTCE(Return on Tangible Common Equity): ROE보다 현실적 수익성 지표${isInvestmentBank ? "\n- FICC/Equities/IB Fees: 사업부별 매출 분해 필수 (시장 사이클 민감)" : ""}
+- Efficiency Ratio = 비이자비용 / (NII + 비이자수익) [낮을수록 우수, 50~60%대 양호]
+
+CCAR 자본 배분 분석 (필수):
+- CET1 Ratio 현재: __% → 규제 최소(4.5%) + SCB(__%) = 총 요구 __%
+- 초과 자본(Excess Capital) = 현재 CET1 — 운용 목표 CET1 = __ bp
+- CCAR 통과 여부: [통과/조건부] → 승인된 자사주 매입 한도 + 배당 한도
+- ⚠️ CCAR 미통과 또는 SCB 상향 시 → 배당 동결·자사주 중단 리스크 경고 의무
+
+NIM + 금리 민감도 분석 (필수):
+- 현재 NIM: __% (전년 __%대비 ±__bp 변동)
+- 금리 민감도: 연준 25bp 인상/인하 시 NII 연간 영향 = ±$__억
+- 자산 재가격(Asset Repricing) vs 부채 재가격(Liability Repricing) 갭
+- Deposit Beta: 연준 인상분 중 예금금리에 전가된 비율 (높을수록 NIM 압박)
+- Fixed-rate vs Variable-rate 대출 비중 (고정비중 높으면 금리 인상 수혜 지연)
+
+신용 사이클 분석 (필수):
+- 대출 포트폴리오: C&I(__%), 소비자(__%), CRE(상업용부동산)(__%) — CRE Office 비중 경고
+- NCO Rate: __%  |  PCL: $__ → Coverage Ratio = 대손충당금 / NPL = __x
+- NPL(부실대출) 비율: __% (1.0% 초과 시 경고)
+- CECL 적립 충분성: 현재 충당금 / 예상 손실 = __x (시나리오 기반 적정성 평가)
+${isInvestmentBank ? `
+투자은행 사업부 분해 (IB/Capital Markets 특화):
+- IB Fees: M&A Advisory + ECM + DCM 수수료 (딜 파이프라인 선행 지표)
+- FICC: Fixed Income, Currencies, Commodities 트레이딩 (VIX/금리변동성 민감)
+- Equities: 주식 트레이딩 + Prime Brokerage (거래량 민감)
+- Asset/Wealth Management: AUM 기반 안정적 수수료 수입 (경기 방어적)
+- VIX 민감도: VIX 10pt 상승 시 트레이딩 수익 ±$__억 (변동성 양방향)
+` : ""}
+밸류에이션 (필수 방법론):
+- Lead: P/TBVPS (P/TBV) = 주가 / 주당 유형장부가
+  · TBVPS = (총자본 − 굿윌 − 무형자산) / 발행주식수
+  · 미국 우량은행 P/TBVPS 피어: 1.2~2.5x (ROTCE 높을수록 고배수)
+  · Justified P/TBVPS = (ROTCE − g) / (CoE − g) [Gordon Growth 유도]
+  · ROTCE 15%+ → P/TBVPS 1.5x 이상 프리미엄 정당화 가능
+- 보조: EPS 기반 P/E (단, 충당금 사이클 정상화 가정 필수 — 비정상적 충당금 제거)
+- 보조: 배당수익률 + 자사주 매입 포함 Total Shareholder Yield (CCAR 승인 범위 내)
+- EV/EBITDA 금지 (이자비용이 영업비용이라 EV 개념 부적합)
+피어: 동종 US 은행 P/TBVPS, ROTCE, NIM, CET1, Efficiency Ratio, PCL Ratio 비교
+`;
+  }
+
   // ── MLP (Master Limited Partnership) ────────────────────────────────────
   if (/midstream|pipeline|mlp|master limited partnership|energy infrastructure|lng terminal/.test(ind) ||
       /enterprise products|kinder morgan|mplx|energy transfer|williams companies|plains all american|western midstream|oneok/.test(name)) {
@@ -511,6 +571,40 @@ OPM 왜곡 주의: 금융사 영업이익률은 타 업종과 다른 구조. ROE
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsUSBank(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/commercial banking|investment banking|retail banking|us bank|american bank|regional bank|money center bank/.test(ind)) return true;
+  if (/jpmorgan|bank of america|wells fargo|citigroup|goldman sachs|morgan stanley|us bancorp|truist|pnc financial|keycorp|regions financial|citizens financial|huntington|fifth third|m&t bank/.test(name)) return true;
+
+  const US_BANK_TICKERS = new Set([
+    "JPM",  // JPMorgan Chase
+    "BAC",  // Bank of America
+    "WFC",  // Wells Fargo
+    "C",    // Citigroup
+    "GS",   // Goldman Sachs
+    "MS",   // Morgan Stanley
+    "USB",  // US Bancorp
+    "TFC",  // Truist Financial
+    "PNC",  // PNC Financial
+    "KEY",  // KeyCorp
+    "RF",   // Regions Financial
+    "CFG",  // Citizens Financial
+    "HBAN", // Huntington Bancshares
+    "FITB", // Fifth Third Bancorp
+    "MTB",  // M&T Bank
+    "NTRS", // Northern Trust
+    "STT",  // State Street
+    "BK",   // Bank of New York Mellon
+    "SIVB", // Silicon Valley Bank (legacy)
+    "ZION", // Zions Bancorporation
+  ]);
+  if (bare && US_BANK_TICKERS.has(bare)) return true;
+  return false;
+}
+
 function needsMLP(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -756,10 +850,11 @@ export function buildPrompt(
   const bdcFlag          = needsBDC(industry, companyName, ticker);
   const royaltyFlag      = needsRoyaltyCompany(industry, companyName, ticker);
   const bigTechFlag      = needsBigTech(industry, companyName, ticker);
+  const usBankFlag       = needsUSBank(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -2945,6 +3040,57 @@ Bull: AI 신사업 개화 + 자사주 누적 효과 + 세그먼트 마진 확장
   - base/bear/bull = 조율 Base/Bear/Bull 목표주가
   - abs_base/abs_bear/abs_bull = Segment SOTP Base/Bear/Bull
   - rel_base/rel_bear/rel_bull = FCF Yield 역산 Base/Bear/Bull
+  - current = 현재 주가
+
+**[P/TBVPS + ROTCE + NIM 사이클 모델 — 미국 은행(US Bank) 전용]**
+
+⛔ EV/EBITDA 금지 (이자비용이 영업비용 → EV 개념 부적합).
+⛔ P/B(총장부가) 단독 사용 금지 → 굿윌·무형자산 제거 후 P/TBVPS 사용.
+⛔ 충당금 정상화 없이 PER 직접 사용 금지 (사이클 왜곡).
+
+[CCAR 자본 배분 점검 — 필수]
+① CET1 Ratio: __% | SCB(연준 부과 버퍼): __% | 총 요구 자본: __%
+② 초과 자본(Excess CET1) = 현재 CET1 − 운용 목표(__%) = __ bp
+③ CCAR 통과 여부: [통과 / 조건부 / 미통과]
+④ 승인된 자본 환원: 자사주 매입 $__억 + 배당 $__억 = Total Shareholder Return $__억
+⑤ ⚠️ SCB 상향 or CCAR 미통과 시 → 배당 동결·자사주 중단 리스크 명시 필수
+
+[NIM + 금리 민감도 점검]
+① 현재 NIM: __% (전분기 대비 ±__bp / YoY ±__bp)
+② 금리 민감도: 연준 25bp 인하 시 NII 연간 영향 = −$__억 (Asset-sensitive / Liability-sensitive 구분)
+③ Deposit Beta: 연준 인하분 중 예금금리 인하 전가율 = __% (낮을수록 NIM 방어)
+④ 재가격 일정: Fixed-rate 대출 만기 도래 → NIM 영향 시점 (__%가 __분기 내 재가격)
+
+[신용 사이클 점검]
+① NCO Rate: __% (전년 __% vs 피어 중앙값 __%: 우열 판단)
+② PCL/Average Loans: __% → Coverage Ratio = 대손충당금 / NPL = __x
+③ NPL Ratio: __% (1.0% 초과 시 경고, 피어 대비 +/-__bp)
+④ CRE Office 비중: __% (오피스 공실률 상승 → 대손 리스크 경고)
+⑤ CECL 충분성: 현재 충당금 스택 $__ / 예상 손실 $__ = __x
+
+[TBVPS 산출]
+TBVPS = (총자본 $__ − 굿윌 $__ − 무형자산 $__) / 발행주식수 __ = $__
+
+[Justified P/TBVPS 산출]
+Justified P/TBVPS = (ROTCE − g) / (CoE − g)
+- ROTCE: __% | CoE(CAPM): __% | g(장기성장률): __%
+- Justified P/TBVPS = (__% − __%)/(__% − __%) = __x
+- 피어 P/TBVPS 범위: [JPM 2.0~2.5x / 대형 상업은행 1.2~1.8x / 지역은행 0.8~1.2x]
+
+[목표주가 조율 — 3방법 가중]
+① P/TBVPS: 적정 P/TBVPS __x × TBVPS $__ = __$
+② 정상화 P/E: 충당금 정상화 EPS $__ × 적정 PER __x = __$
+   · 정상화 EPS = GAAP EPS ± (실제 PCL − Mid-cycle PCL) 세후
+③ Total Shareholder Yield 역산: (DPS + 자사주환원 per share) / 목표 TSY __% = __$
+④ 조율: P/TBVPS 55% + 정상화 P/E 35% + TSY 역산 10% = **__$**
+
+Bear: CCAR SCB 상향 + NIM 압축(연준 인하 가속) + PCL 사이클 악화 = __$
+Bull: CCAR 초과자본 활용 대규모 자사주 + NIM 회복 + PCL 사이클 완화 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = P/TBVPS Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
   - current = 현재 주가
 
 ⚠️ 극단값 최종 점검:
