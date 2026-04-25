@@ -282,8 +282,7 @@ export default function Popular() {
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.25 + i * 0.04 }}
-                  onClick={() => setLocation(`/analysis/${t.latestId}`)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border hover:bg-muted/40 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border transition-colors"
                 >
                   <span className="text-[12px] font-bold text-muted-foreground/40 w-5 tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
