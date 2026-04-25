@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, TrendingUp, Globe, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, TrendingUp, Globe, RefreshCw } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -132,10 +132,6 @@ export default function SettingsPage() {
 
   const [macroData, setMacroData] = useState<MacroData | null>(null);
   const [macroLoading, setMacroLoading] = useState(false);
-
-  const [defaultPublic, setDefaultPublic] = useState<boolean>(() => {
-    try { return localStorage.getItem("aivita_default_public") === "true"; } catch { return false; }
-  });
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -296,11 +292,6 @@ export default function SettingsPage() {
   };
 
   useEffect(() => { fetchMacro(); }, []);
-
-  const toggleDefaultPublic = (val: boolean) => {
-    setDefaultPublic(val);
-    try { localStorage.setItem("aivita_default_public", String(val)); } catch { /* silent */ }
-  };
 
   const dailyUsed = credits?.dailyUsed ?? 0;
   const dailyLimit = credits?.dailyLimit ?? 3;
@@ -503,44 +494,6 @@ export default function SettingsPage() {
           </div>
         </Section>
       )}
-
-      {/* ── 분석 기본 설정 ── */}
-      <Section title="분석 기본 설정">
-        <div className="px-4 py-4 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <p className="text-[13.5px] font-medium text-foreground">새 분석 기본 공개 범위</p>
-              <p className="text-[11.5px] text-muted-foreground/60 leading-relaxed">분석 결과를 기본으로 공개할지 설정합니다. 분석 시 개별 변경도 가능합니다.</p>
-            </div>
-            <div className="flex gap-2 shrink-0 mt-0.5">
-              <button
-                onClick={() => toggleDefaultPublic(false)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
-                  !defaultPublic
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
-                )}
-              >
-                <EyeOff className="w-3 h-3" />
-                비공개
-              </button>
-              <button
-                onClick={() => toggleDefaultPublic(true)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
-                  defaultPublic
-                    ? "bg-primary text-white border-primary"
-                    : "bg-background text-muted-foreground border-border hover:border-primary/40"
-                )}
-              >
-                <Eye className="w-3 h-3" />
-                공개
-              </button>
-            </div>
-          </div>
-        </div>
-      </Section>
 
       {/* ── 테마 ── */}
       <Section title="테마">
