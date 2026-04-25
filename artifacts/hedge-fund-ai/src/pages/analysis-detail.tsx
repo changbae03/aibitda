@@ -1789,7 +1789,20 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { /* 계속 */ }
   // 시도 3: 제어 문자 제거
   try { return JSON.parse(s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")); } catch { /* 계속 */ }
-  // 시도 4: 단일 따옴표 → 이중 따옴표 변환 후 재시도
+  // 시도 4: 따옴표 없는 % 숫자 값 → 문자열로 변환
+  //   AI가 "upside": 275.6%  로 출력하면 JSON 파싱 실패 → "275.6%"로 래핑
+  try {
+    const fixedPct = s.replace(/:\s*([+-]?\d+\.?\d*)%/g, (_, n) => `: "${n}%"`);
+    return JSON.parse(fixedPct);
+  } catch { /* 계속 */ }
+  // 시도 5: trailing comma + % 복합 수정
+  try {
+    const fixedBoth = s
+      .replace(/:\s*([+-]?\d+\.?\d*)%/g, (_, n) => `: "${n}%"`)
+      .replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixedBoth);
+  } catch { /* 계속 */ }
+  // 시도 6: 단일 따옴표 → 이중 따옴표 변환 후 재시도
   try { return JSON.parse(s.replace(/'/g, '"')); } catch { return null; }
 }
 

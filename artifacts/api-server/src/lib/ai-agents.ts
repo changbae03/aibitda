@@ -2248,7 +2248,8 @@ thesis의 핵심 전제가 실현되는지 판단할 지표 2개를 불릿으로
 - scenarios[].target_price: STEP A에서 추출한 수치를 그대로 입력. 확률 합계 반드시 100%.
   - Bear case = ③ 하단 밴드, Base case = ① 최종 적정주가, Bull case = ② 상단 밴드
 - scenarios[].upside: STEP A ④ 현재가로 계산. (target_price - 현재가) / 현재가 × 100%.
-  - ⚠️ Sell의 경우 upside는 음수(–%)로 표기
+  - ⛔ **JSON 필수 규칙**: upside는 반드시 따옴표로 감싼 문자열로 출력 — 예: "+342.2%" (따옴표 없이 342.2% 로 출력하면 JSON 파싱 오류 발생)
+  - ⚠️ Sell의 경우 upside는 음수 문자열로 표기 (예: "-20.5%")
 - target_price (최상위): STEP A ① 수치와 반드시 동일. Base 시나리오와 일치해야 함.
 - entry_price:
   - Buy/Strong Buy: Market & Technical Analyst의 저가 매수 구간 하단 참고
@@ -2271,21 +2272,21 @@ thesis의 핵심 전제가 실현되는지 판단할 지표 2개를 불릿으로
   "scenarios": [
     {
       "case": "Bear",
-      "target_price": "목표가 산출 단계 하단 밴드 숫자만 (예: 150000)",
-      "upside": "컨텍스트 현재가 기준 등락률 (예: -20%)",
-      "probability": "확률 (예: 30%)"
+      "target_price": 150000,
+      "upside": "-20%",
+      "probability": "30%"
     },
     {
       "case": "Base",
-      "target_price": "목표가 산출 단계 최종 적정주가 숫자만 (예: 210000)",
-      "upside": "컨텍스트 현재가 기준 등락률 (예: +15%)",
-      "probability": "확률 (예: 50%)"
+      "target_price": 210000,
+      "upside": "+15%",
+      "probability": "50%"
     },
     {
       "case": "Bull",
-      "target_price": "목표가 산출 단계 상단 밴드 숫자만 (예: 280000)",
-      "upside": "컨텍스트 현재가 기준 등락률 (예: +53%)",
-      "probability": "확률 (예: 20%)"
+      "target_price": 280000,
+      "upside": "+53%",
+      "probability": "20%"
     }
   ],
   "current_price": "컨텍스트의 현재 주가 숫자만 (KRW 예: 485500, USD 예: 134.25)",
