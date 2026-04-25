@@ -1475,15 +1475,54 @@ export default function AnalysisDetail() {
           </AnimatePresence>
         </div>
 
-        {/* Pipeline running indicator — minimal, non-blocking */}
+        {/* Pipeline running indicator */}
         {!isComplete && (
-          <div className="flex items-center gap-2 px-3 py-2 print:hidden">
-            <Loader2 className="w-3.5 h-3.5 text-primary/50 animate-spin shrink-0" />
-            <span className="text-xs text-muted-foreground">
-              {isStreaming
-                ? `${currentStepCount}/${ANALYSIS_STEPS_ORDER.length} 분석 중...`
-                : `${currentStepCount + 1}/${ANALYSIS_STEPS_ORDER.length} 단계 준비 중...`}
-            </span>
+          <div className="print:hidden">
+            {/* 스트리밍 중: 단계 번호 인라인 표시 */}
+            {isStreaming && (
+              <div className="flex items-center gap-2 px-3 py-2">
+                <Loader2 className="w-3.5 h-3.5 text-primary/50 animate-spin shrink-0" />
+                <span className="text-xs text-muted-foreground">
+                  {currentStepCount}/{ANALYSIS_STEPS_ORDER.length} 분석 중...
+                </span>
+              </div>
+            )}
+            {/* 단계 사이 대기 중: 다음 단계의 재치 있는 멘트 표시 */}
+            {!isStreaming && currentStepCount < ANALYSIS_STEPS_ORDER.length && (() => {
+              const nextKey = ANALYSIS_STEPS_ORDER[currentStepCount];
+              const agent = AGENTS[nextKey];
+              const color = AGENT_COLORS[nextKey] ?? "hsl(218, 67%, 44%)";
+              if (!agent) return null;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="bg-card border border-border rounded-xl border-l-4"
+                  style={{ borderLeftColor: color }}
+                >
+                  <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+                      <agent.icon className="w-4.5 h-4.5" style={{ color }} />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
+                      <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/50 font-mono">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-10 px-5">
+                    <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
+                      <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
+                      <span>분석 초안 작성 중...</span>
+                    </div>
+                    <div className="mt-4 min-h-[36px] flex items-center justify-center px-4 w-full">
+                      <RotatingAnalysisMessage stepKey={nextKey} />
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
           </div>
         )}
       </div>
