@@ -8,7 +8,6 @@ import { ko } from "date-fns/locale";
 import { 
   CheckCircle2, 
   Clock, 
-  Play, 
   Loader2, 
   Briefcase,
   BrainCircuit,
@@ -1476,40 +1475,16 @@ export default function AnalysisDetail() {
           </AnimatePresence>
         </div>
 
-        {/* Next Action — only shown when not streaming and not complete */}
-        {!isComplete && !isStreaming && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="p-8 rounded-xl border border-dashed border-border bg-muted/30 flex flex-col items-center justify-center text-center gap-4 print:hidden"
-          >
-            {currentStepCount < ANALYSIS_STEPS_ORDER.length ? (
-              <>
-                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Loader2 className="w-7 h-7 text-primary/60 animate-spin" />
-                </div>
-                <div>
-                  <h4 className="text-base font-display font-semibold text-foreground mb-1">
-                    {currentStepCount + 1}단계 준비 중...
-                  </h4>
-                  <p className="text-muted-foreground text-sm">
-                    다음 에이전트: <span className="text-foreground font-medium">{AGENTS[ANALYSIS_STEPS_ORDER[currentStepCount]].role}</span>
-                  </p>
-                </div>
-                <button
-                  onClick={handleRunNextStep}
-                  className="px-4 py-1.5 rounded-lg border border-border text-muted-foreground text-xs hover:bg-muted transition-all flex items-center gap-1.5"
-                >
-                  <Play className="w-3 h-3 fill-current" /> 지금 바로 실행
-                </button>
-              </>
-            ) : (
-              <div className="text-center">
-                <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">최종 보고서 작성 중...</p>
-              </div>
-            )}
-          </motion.div>
+        {/* Pipeline running indicator — minimal, non-blocking */}
+        {!isComplete && (
+          <div className="flex items-center gap-2 px-3 py-2 print:hidden">
+            <Loader2 className="w-3.5 h-3.5 text-primary/50 animate-spin shrink-0" />
+            <span className="text-xs text-muted-foreground">
+              {isStreaming
+                ? `${currentStepCount}/${ANALYSIS_STEPS_ORDER.length} 분석 중...`
+                : `${currentStepCount + 1}/${ANALYSIS_STEPS_ORDER.length} 단계 준비 중...`}
+            </span>
+          </div>
         )}
       </div>
 
