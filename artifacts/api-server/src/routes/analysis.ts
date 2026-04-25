@@ -5,6 +5,7 @@ import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
 import { cache, TTL } from "../lib/mem-cache.js";
 import { fetchDartSubjectBalance, fetchNaverPBR, writeMetricCache } from "../lib/peer-collector.js";
+import { fetchECOSMacro, buildECOSContext } from "../lib/ecos-client.js";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
@@ -2061,11 +2062,12 @@ router.post("/", async (req, res) => {
   const krxCode = upperTicker.split(".")[0];
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
-  // Fetch financial data, news, DART balance sheet, start price in parallel
-  const [financialData, newsData, dartBalance, startQuote] = await Promise.all([
+  // Fetch financial data, news, DART balance sheet, ECOS macro, start price in parallel
+  const [financialData, newsData, dartBalance, ecosMacro, startQuote] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
+    fetchECOSMacro(),
     yahooFinance.quote(resolvedSymbol).catch(() => null),
   ]);
   const startPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
@@ -2104,9 +2106,12 @@ router.post("/", async (req, res) => {
   }
 
   const userContext = additionalContext ?? null;
+  const ecosContext = buildECOSContext(ecosMacro);
+
   const fullContext = [
     financialData,
     dartBalanceContext,
+    ecosContext,
     newsData,
     userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
   ]
