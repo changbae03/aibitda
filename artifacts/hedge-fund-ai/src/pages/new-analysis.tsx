@@ -310,27 +310,45 @@ export default function NewAnalysis() {
     e.preventDefault();
     if (isComposing.current) return;
 
-    // 이미 방향키로 선택한 항목 있으면 바로 실행
+    // 방향키로 선택한 항목 있으면 바로 실행
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
       handleSelectSuggestion(suggestions[selectedIndex].symbol);
       return;
     }
 
-    // 6자리 코드 / 영문 티커면 직접 제출 허용
     const val = ticker.trim();
+
+    // 6자리 숫자 코드 또는 영문 1~5자 티커 → 직접 제출 허용
     if (isDirectTicker(val)) {
       handleSubmit(val);
       return;
     }
 
-    // 검색 중이거나 제안 목록이 있으면 → 드롭다운 유도
-    if (isSearching || suggestions.length > 0) {
+    // ── 이하는 회사명(한글/영문 full name) 입력 케이스 ──
+    // 반드시 드롭다운 목록에서 선택해야 분석 시작 가능
+
+    // 이미 결과 있으면 드롭다운 선택 유도
+    if (suggestions.length > 0) {
       showSelectHint();
       return;
     }
 
-    // 아무 결과도 없으면 직접 제출 시도
-    handleSubmit(val);
+    // 검색 중이면 대기 안내
+    if (isSearching) {
+      setError("종목 검색 중입니다. 목록이 나타나면 선택해 주세요");
+      setShowDropdown(true);
+      return;
+    }
+
+    // 빠른 Enter로 디바운스 타이머가 아직 미발동 → 즉시 검색 트리거 후 블로킹
+    if (val) {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      fetchSuggestions(val);
+      setError("목록에서 종목을 선택한 후 분석을 시작해 주세요");
+      return;
+    }
+
+    setError("종목코드 또는 종목명을 입력해주세요");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
