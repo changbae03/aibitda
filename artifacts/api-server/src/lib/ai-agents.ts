@@ -67,6 +67,27 @@ function getSectorTemplate(industry: string, companyName: string): string {
   const ind = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
 
+  // ── 리츠 / 부동산 ──────────────────────────────────────────────────────────
+  if (/reit|real estate investment trust|리츠|부동산투자신탁|임대부동산/.test(ind + " " + name)) {
+    return `
+[섹터 특화 지침 — 리츠(REITs)]
+핵심 KPI: FFO(운영자금), AFFO(조정운영자금), P/FFO배수, P/NAV, 배당수익률, Cap Rate, LTV(부채/총자산), DSCR(부채상환커버리지)
+의무 분석 항목:
+- FFO = 순이익 + 감가상각(D&A) + 부동산 처분손실 − 부동산 처분이익
+- AFFO = FFO − 유지보수 CapEx (배당 지속성의 실질 지표)
+- FFO Payout Ratio = 주당배당 / 주당FFO (90% 이하 안정, 100% 초과 시 배당 지속 위험)
+- NOI = 임대수익 − 운영비(공실·관리비 등) [이자·세금 제외]
+- NOI마진 = NOI / 총임대수익 (영업이익률 대신 사용 — 리츠에서 OPM은 의미 없음)
+- Cap Rate = NOI / 부동산 공정가치 (섹터 기준: 물류 3~5%, 오피스 4~6%, 리테일 5~8%, 주거 3~5%)
+- NAV = 보유 부동산 공정가치(NOI / Cap Rate) − 총부채 + 현금
+- P/NAV = 현재주가 / 주당NAV (프리미엄 / 할인 % 명시)
+- LTV = 총차입금 / 총자산 (50% 초과 시 레버리지 리스크 경고 필수)
+밸류에이션: 일반 DCF·EV/EBITDA 단독 사용 금지 (감가상각이 비현금 → 순이익·EBITDA 왜곡). NAV + P/FFO 복합 방식이 Lead.
+피어 배수: 동종 섹터 리츠(물류/오피스/리테일/주거) P/FFO 배수, 배당수익률 비교.
+OPM 왜곡 경고: 리츠 영업이익률은 구조적으로 의미 없음. 대신 NOI마진, FFO마진, AFFO마진을 사용.
+`;
+  }
+
   // ── 바이오 / 제약 ──────────────────────────────────────────────────────────
   if (/바이오|생명과학|제약|헬스케어|유전체|신약|의료기기/.test(ind)) {
     return `
@@ -215,6 +236,39 @@ function getSectorTemplate(industry: string, companyName: string): string {
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsREIT(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
+
+  if (/reit|real estate investment trust|리츠|부동산투자신탁|임대부동산/.test(ind + " " + name)) return true;
+
+  const REIT_NAMES = [
+    "리츠", "맥쿼리인프라", "케이리츠", "이지스레지던스", "마스턴프리미어",
+    "신한알파리츠", "코람코라이프", "롯데리츠", "sk리츠", "제이알글로벌",
+    "nh올원리츠", "디앤디플랫폼리츠", "미래에셋글로벌리츠",
+  ];
+  if (REIT_NAMES.some(n => name.includes(n))) return true;
+
+  // 한국 주요 리츠 티커
+  const REIT_TICKERS = new Set([
+    "088980", // 맥쿼리인프라
+    "395400", // SK리츠
+    "432320", // 코람코라이프인프라리츠
+    "427980", // 미래에셋글로벌리츠
+    "348950", // 제이알글로벌리츠
+    "241770", // 이지스레지던스리츠
+    "404990", // 신한알파리츠
+    "417310", // 롯데리츠
+    "365550", // ESR켄달스퀘어리츠
+    "350520", // NH프라임리츠
+    "451800", // 마스턴프리미어리츠
+  ]);
+  if (bare && REIT_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
 function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
   const name = (companyName ?? "").toLowerCase();
   const ind  = (industry ?? "").toLowerCase();
@@ -260,10 +314,11 @@ export function buildPrompt(
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate = getSectorTemplate(industry, companyName);
   const sotpFlag = needsSOTP(industry, companyName, ticker);
+  const reitFlag = needsREIT(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -2135,6 +2190,44 @@ Bull: SOTP NAV × (1 − 할인율 하단) ÷ 발행주식수 = __(현지통화)
   - rel_base/rel_bear/rel_bull = SOTP 목표주가 (피어도 보조이므로 SOTP값으로 채움)
   - current = 현재 주가
   ❌ abs_base·rel_base에 DCF/피어 값을 넣는 것을 금지 — SOTP값으로 통일
+
+**[NAV + FFO 모델 사용 시 — 리츠(REIT) 전용]**
+
+⛔ 리츠는 일반 DCF 단독 목표주가 사용 금지 (D&A가 비현금 → 순이익·EBITDA 왜곡).
+   NAV + P/FFO 복합 방식이 Lead입니다.
+
+[NAV 방법론 — 단위 변환 필수]
+① NOI(억원) = 임대수익 − 운영비 (이자·세금 제외)
+② 부동산 공정가치(억원) = NOI ÷ 적용 Cap Rate
+   Cap Rate 기준: 물류 3~5%, 오피스 4~6%, 리테일 5~8%, 주거 3~5%
+③ NAV(억원) = 부동산 공정가치 합계 − 총차입금 + 현금
+④ 주당 NAV(원) = NAV(억원) × 100,000,000 ÷ 발행주식수
+⑤ P/NAV = 현재주가 / 주당NAV (할인/프리미엄 % 명시)
+
+[P/FFO 방법론 — 단위 변환 필수]
+① FFO(억원) = 순이익 + 감가상각 + 부동산 처분손실 − 부동산 처분이익
+② AFFO(억원) = FFO − 유지보수 CapEx
+③ 주당 FFO(원) = FFO(억원) × 100,000,000 ÷ 발행주식수
+④ 적용 P/FFO 배수: __x (한국 리츠 피어 중앙값 8~12x, 이유 1줄)
+⑤ P/FFO 기반 목표주가(원) = 주당FFO × 적용배수
+
+[배당 지속성 검증]
+- FFO Payout Ratio = 주당배당 / 주당FFO × 100 (%)
+  90% 이하: 배당 지속 안정 | 91~100%: 주의 | 100% 초과: 지급 불가 리스크 경고
+
+[조율]
+- NAV 기반 목표주가: __원 | P/FFO 기반 목표주가: __원
+- 최종 목표주가(Base): NAV 60% + P/FFO 40% = __ × 0.6 + __ × 0.4 = **__원**
+  (괴리 20% 초과 시 이유 설명 후 NAV Lead)
+Bear: Cap Rate +1%p 적용 NAV × (1 − 보수적 P/NAV할인) = __원
+Bull: Cap Rate −0.5%p 적용 NAV × (1 + 적정 P/NAV프리미엄) = __원
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = NAV+FFO 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = NAV 방법론 Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = P/FFO 방법론 Base/Bear/Bull
+  - current = 현재 주가
+  ❌ abs_base에 일반 DCF값 사용 금지 — NAV 기반값으로 통일
 
 ⚠️ 극단값 최종 점검:
 - 목표가 ÷ 현재가 = __ 배 → [정상범위 내 / 극단값 감지: 재조율 필요]
