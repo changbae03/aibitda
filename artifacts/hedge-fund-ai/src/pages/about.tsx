@@ -70,24 +70,73 @@ const dataSources = [
   },
 ];
 
-const sectors = [
-  { label: "한국 일반기업", method: "DCF + EV/EBITDA" },
-  { label: "한국 지주·복합기업", method: "SOTP (사업부별 합산)" },
-  { label: "한국 리츠", method: "FFO 배당수익률 + NAV" },
-  { label: "한국 바이오·신약", method: "rNPV (임상 PoS 보정)" },
-  { label: "한국 은행·금융", method: "P/BV + ROE-CoE 잔여이익" },
-  { label: "한국 자원·에너지", method: "EV/Reserve + NAV" },
-  { label: "한국 통신·인프라", method: "EV/EBITDA + 배당수익률" },
-  { label: "한국 건설·디벨로퍼", method: "수주잔고 + 분양률 NAV" },
-  { label: "한국 유틸리티·전력", method: "RAB Valuation + EV/EBITDA" },
-  { label: "미국 리츠 (US REIT)", method: "P/AFFO + 서브섹터 Cap Rate NAV" },
-  { label: "미국 바이오 (Biotech)", method: "rNPV + PDUFA 이벤트 드리븐" },
-  { label: "미국 방산 (Defense)", method: "Backlog + Book-to-Bill + EAC FCF" },
-  { label: "미국 은행 (Bank)", method: "P/TBVPS + Justified P/TBVPS" },
-  { label: "MLP (마스터합자회사)", method: "DCF 분배 + EV/EBITDA" },
-  { label: "BDC (사업개발회사)", method: "포트폴리오 NAV + NII 배당" },
-  { label: "로열티 스트림", method: "로열티 수익 DCF" },
-  { label: "빅테크·플랫폼", method: "Rule of 40 + FCF Yield + SOTP" },
+type MethodTag = {
+  label: string;
+  color: string;
+};
+
+type SectorItem = {
+  name: string;
+  tags: MethodTag[];
+};
+
+type SectorGroup = {
+  market: string;
+  subtitle: string;
+  headerCls: string;
+  borderCls: string;
+  items: SectorItem[];
+};
+
+const METHOD_COLORS: Record<string, string> = {
+  DCF:        "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  EV:         "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  SOTP:       "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+  NAV:        "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
+  FFO:        "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
+  rNPV:       "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
+  PBV:        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  Backlog:    "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  RAB:        "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  Rule40:     "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300",
+  Royalty:    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  NII:        "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300",
+};
+
+const sectorGroups: SectorGroup[] = [
+  {
+    market: "한국",
+    subtitle: "KOSPI · KOSDAQ",
+    headerCls: "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800",
+    borderCls: "border-l-blue-400",
+    items: [
+      { name: "일반기업",    tags: [{ label: "DCF",          color: METHOD_COLORS.DCF   }, { label: "EV/EBITDA",   color: METHOD_COLORS.EV    }] },
+      { name: "지주·복합기업", tags: [{ label: "SOTP",         color: METHOD_COLORS.SOTP  }] },
+      { name: "리츠",        tags: [{ label: "FFO/AFFO",     color: METHOD_COLORS.FFO   }, { label: "NAV",         color: METHOD_COLORS.NAV   }] },
+      { name: "바이오·신약",  tags: [{ label: "rNPV (PoS)",   color: METHOD_COLORS.rNPV  }] },
+      { name: "은행·금융",   tags: [{ label: "P/BV",         color: METHOD_COLORS.PBV   }, { label: "ROE-CoE",     color: METHOD_COLORS.PBV   }] },
+      { name: "자원·에너지", tags: [{ label: "EV/Reserve",   color: METHOD_COLORS.EV    }, { label: "NAV",         color: METHOD_COLORS.NAV   }] },
+      { name: "통신·인프라", tags: [{ label: "EV/EBITDA",    color: METHOD_COLORS.EV    }, { label: "배당수익률",   color: METHOD_COLORS.FFO   }] },
+      { name: "건설·디벨로퍼", tags: [{ label: "수주잔고",    color: METHOD_COLORS.Backlog}, { label: "분양률 NAV",  color: METHOD_COLORS.NAV   }] },
+      { name: "유틸리티·전력", tags: [{ label: "RAB",         color: METHOD_COLORS.RAB   }, { label: "EV/EBITDA",  color: METHOD_COLORS.EV    }] },
+    ],
+  },
+  {
+    market: "미국 · 글로벌",
+    subtitle: "NYSE · NASDAQ",
+    headerCls: "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
+    borderCls: "border-l-red-400",
+    items: [
+      { name: "리츠 (REIT)",      tags: [{ label: "P/AFFO",      color: METHOD_COLORS.FFO   }, { label: "Cap Rate NAV",  color: METHOD_COLORS.NAV   }] },
+      { name: "바이오 (Biotech)", tags: [{ label: "rNPV",         color: METHOD_COLORS.rNPV  }, { label: "PDUFA 드리븐",  color: METHOD_COLORS.rNPV  }] },
+      { name: "방산 (Defense)",   tags: [{ label: "Backlog",      color: METHOD_COLORS.Backlog}, { label: "EAC FCF",      color: METHOD_COLORS.DCF   }] },
+      { name: "은행 (Bank)",      tags: [{ label: "P/TBVPS",      color: METHOD_COLORS.PBV   }, { label: "Justified",    color: METHOD_COLORS.PBV   }] },
+      { name: "MLP",              tags: [{ label: "DCF 분배",      color: METHOD_COLORS.DCF   }, { label: "EV/EBITDA",    color: METHOD_COLORS.EV    }] },
+      { name: "BDC",              tags: [{ label: "포트폴리오 NAV", color: METHOD_COLORS.NAV  }, { label: "NII 배당",      color: METHOD_COLORS.NII   }] },
+      { name: "로열티 스트림",    tags: [{ label: "로열티 DCF",    color: METHOD_COLORS.Royalty}] },
+      { name: "빅테크·플랫폼",   tags: [{ label: "Rule of 40",   color: METHOD_COLORS.Rule40}, { label: "FCF Yield",     color: METHOD_COLORS.DCF   }, { label: "SOTP", color: METHOD_COLORS.SOTP }] },
+    ],
+  },
 ];
 
 const assumptions = [
@@ -217,18 +266,49 @@ export default function AboutPage() {
       {/* 섹터별 밸류에이션 */}
       <section>
         <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
-          섹터별 전문 밸류에이션 방법론 ({sectors.length}개)
+          섹터별 전문 밸류에이션 방법론 (17개)
         </h2>
-        <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
-          {sectors.map((s) => (
-            <div key={s.label} className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="text-[13px] font-medium text-foreground">{s.label}</span>
-              <span className="text-[11.5px] text-muted-foreground/70 shrink-0 text-right">{s.method}</span>
+
+        <div className="space-y-4">
+          {sectorGroups.map((group) => (
+            <div key={group.market} className={cn("rounded-xl border overflow-hidden", group.headerCls)}>
+              {/* 그룹 헤더 */}
+              <div className={cn("px-4 py-2.5 border-b flex items-center justify-between", group.headerCls)}>
+                <span className="text-[13px] font-black tracking-tight text-foreground/80">{group.market}</span>
+                <span className="text-[10.5px] font-semibold text-muted-foreground/60 font-mono">{group.subtitle}</span>
+              </div>
+
+              {/* 섹터 카드 그리드 */}
+              <div className="bg-card grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x-0">
+                {group.items.map((item, i) => (
+                  <div
+                    key={item.name}
+                    className={cn(
+                      "flex flex-col gap-1.5 px-3.5 py-3 border-l-[3px] border-b border-border/50",
+                      group.borderCls,
+                      i % 2 === 0 ? "" : ""
+                    )}
+                  >
+                    <span className="text-[12.5px] font-semibold text-foreground">{item.name}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {item.tags.map((tag) => (
+                        <span
+                          key={tag.label}
+                          className={cn("text-[10.5px] font-bold px-2 py-0.5 rounded-md", tag.color)}
+                        >
+                          {tag.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground/50 px-1 mt-2 leading-relaxed">
-          AI가 종목 이름과 산업을 자동 감지해 해당 섹터의 전용 밸류에이션 프레임을 적용합니다.
+
+        <p className="text-[11px] text-muted-foreground/50 px-1 mt-2.5 leading-relaxed">
+          AI가 종목명·산업을 자동 감지해 해당 섹터 전용 밸류에이션 프레임을 적용합니다.
           일반 DCF와 별도로 섹터 고유 지표(AFFO·Backlog·rNPV 등)를 의무 산출합니다.
         </p>
       </section>
