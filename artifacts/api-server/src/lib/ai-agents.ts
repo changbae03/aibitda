@@ -439,6 +439,51 @@ ${isInvestmentBank ? `
 `;
   }
 
+  // ── 미국 방산 (US Defense & Aerospace) ──────────────────────────────────
+  if (/defense|aerospace defense|military contractor|government defense|defense electronics|defense systems|combat systems/.test(ind) ||
+      /lockheed martin|raytheon|northrop grumman|general dynamics|l3harris|huntington ingalls|leidos|booz allen|saic|transdign|heico|bwxt|leonardo drs|curtiss-wright|moog|kaman/.test(name)) {
+    const isServiceOnly = /booz allen|saic|leidos|caci international/.test(name) || /it services|government it|consulting/.test(ind);
+    return `
+[섹터 특화 지침 — 미국 방산 (US Defense & Aerospace)]
+핵심 KPI: Backlog(수주잔고), Book-to-Bill Ratio, Backlog/Revenue(가시성 배수), 계약유형 Mix(FFP/CPFF/CPIF), EAC 조정(원가초과 손실), FCF Conversion(FCF/Net Income), EBITDA 마진, 펜타곤 예산 의존도
+구조 특이사항:
+- 미국 국방부(DoD) 예산 의존: 단일 고객(미 정부) 리스크 vs 정치적 보호 효과
+- 장기 계약 기반 → 매출 가시성 높음, 단 계약 수주-매출 인식 간 시차 발생
+- CR(Continuing Resolution) 리스크: 의회 예산 미통과 시 신규 프로그램 지연
+- 분류 프로그램(Classified): 공시 불가하나 마진 높고 가치 보수적 추정 필요
+
+수주잔고(Backlog) 분석 — 필수:
+- Funded Backlog: 의회가 예산을 이미 배정한 수주 (즉시 집행 가능, 높은 확실성)
+- Unfunded Backlog: 계약 수주됐으나 아직 예산 미배정 (우선순위에 따라 집행 여부 결정)
+- Total Backlog / TTM Revenue = 가시성 배수 (방산 대형 프라임: 통상 3~5x, 4x 이상 우수)
+- Book-to-Bill Ratio = 분기 신규수주 / 분기 매출 (1.0x 이상: 성장, 1.0x 미만: 수주 소진 경고)
+- Book-to-Bill 3분기 연속 < 1.0x 시 → 수주 모멘텀 약화 경고 의무
+
+계약유형 Mix & 원가초과 리스크 — 필수:
+- FFP(Firm Fixed Price): 계약 금액 고정 → 원가초과(Cost Overrun) 시 전액 수주사 부담 (고마진 잠재, 고리스크)
+- CPFF/CPIF(Cost Plus): 원가 + 수수료 구조 → 원가초과 리스크 정부 부담 (안정적 마진, 낮은 리스크)
+- T&M(Time & Materials): 중간 구조
+- ⚠️ 대형 FFP 개발 계약(Development FFP) 존재 시 EAC 손실 리스크 경고 필수
+  · EAC(Estimate at Completion): 완료 예상 원가가 계약금액 초과 시 당기 일괄 손실 계상
+  · 점검: 현재 진행 중인 FFP 개발 계약 규모 + 현재 완료율 + EAC 조정 이력
+- 계약 Mix: FFP __% / CPFF+CPIF __% / T&M __% (FFP 50% 초과 시 원가초과 리스크 상승)
+
+FCF 구조 분석:
+- 방산사 특징: 선급금(Advance Payments) 수취 → FCF Conversion 높음(Net Income 대비 100%+ 가능)
+- FCF Conversion = FCF / Net Income (우량 방산사: 100~120%)
+- 자본 배분: 자사주 매입 vs 배당 vs M&A (Bolt-on 위주인지 변혁적 M&A인지 구분)
+- IRAD(Internal R&D) + B&P(Bid and Proposal) 비용: 미래 수주 파이프라인 투자 강도${isServiceOnly ? "\n정부 IT/서비스 특화:\n- TAT(Task Order Awards): IDIQ 계약 하 개별 과업 수주 모니터링\n- 인력 가동률(Utilization Rate): 청구 가능 인력 비율 (85%+ 우수)\n- 계약 유형: IDIQ/CPFF 위주로 원가초과 리스크 낮음\n- 마진: 8~12% EBITDA (하드웨어 대비 낮음, 안정적)" : ""}
+밸류에이션 (필수 방법론):
+- Lead: EV/EBITDA (미국 대형 방산 피어: 13~18x, 서비스/IT 방산: 10~14x)
+  · Backlog 가시성 높을수록 프리미엄 정당화 (Backlog/Revenue 5x+ → 피어 상단)
+- 보조: P/E (방산 대형 프라임: 18~25x, 안정적 이익 가시성 반영)
+- 보조: FCF Yield (FCF / 시가총액, 방산 특유의 높은 FCF Conversion 반영)
+- ⚠️ 원가초과 EAC 손실이 있는 분기의 EPS/EBITDA는 정상화 필수 (일회성 손실 제거 후 Adj. EBITDA 사용)
+- ⚠️ 방산사 P/Book 의미 없음 (경쟁우위는 자산이 아닌 기술·계약 인력·분류프로그램)
+피어: LMT, RTX, NOC, GD, LHX 등 대형 프라임 EV/EBITDA, P/E, FCF Yield, Book-to-Bill, Backlog/Revenue 비교
+`;
+  }
+
   // ── MLP (Master Limited Partnership) ────────────────────────────────────
   if (/midstream|pipeline|mlp|master limited partnership|energy infrastructure|lng terminal/.test(ind) ||
       /enterprise products|kinder morgan|mplx|energy transfer|williams companies|plains all american|western midstream|oneok/.test(name)) {
@@ -571,6 +616,39 @@ ${isInvestmentBank ? `
  *  2) 회사명 기반 그룹사 목록
  *  3) 티커 기반 화이트리스트 (이름만으로 감지 어려운 순수지주·투자회사)
  */
+function needsUSDefense(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/defense|aerospace defense|military contractor|government defense|defense electronics|defense systems|combat systems/.test(ind)) return true;
+  if (/lockheed martin|raytheon|northrop grumman|general dynamics|l3harris|huntington ingalls|leidos|booz allen|saic|transdigm|heico|bwxt|leonardo drs|curtiss-wright/.test(name)) return true;
+
+  const US_DEFENSE_TICKERS = new Set([
+    "LMT",   // Lockheed Martin
+    "RTX",   // Raytheon Technologies
+    "NOC",   // Northrop Grumman
+    "GD",    // General Dynamics
+    "LHX",   // L3Harris
+    "HII",   // Huntington Ingalls
+    "LDOS",  // Leidos
+    "BAH",   // Booz Allen Hamilton
+    "SAIC",  // Science Applications International
+    "TDG",   // TransDigm
+    "HEI",   // HEICO
+    "BWXT",  // BWX Technologies
+    "CW",    // Curtiss-Wright
+    "MOG.A", // Moog
+    "CACI",  // CACI International
+    "MRCY",  // Mercury Systems
+    "DRS",   // Leonardo DRS
+    "KTOS",  // Kratos Defense
+    "AXON",  // Axon Enterprise (defense tech)
+  ]);
+  if (bare && US_DEFENSE_TICKERS.has(bare)) return true;
+  return false;
+}
+
 function needsUSBank(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -851,10 +929,11 @@ export function buildPrompt(
   const royaltyFlag      = needsRoyaltyCompany(industry, companyName, ticker);
   const bigTechFlag      = needsBigTech(industry, companyName, ticker);
   const usBankFlag       = needsUSBank(industry, companyName, ticker);
+  const usDefenseFlag    = needsUSDefense(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -3090,6 +3169,57 @@ Bull: CCAR 초과자본 활용 대규모 자사주 + NIM 회복 + PCL 사이클 
 ⚠️ FINAL_VALUATION_DATA JSON 작성 시:
   - base/bear/bull = 조율 Base/Bear/Bull 목표주가
   - abs_base/abs_bear/abs_bull = P/TBVPS Base/Bear/Bull
+  - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
+  - current = 현재 주가
+
+**[EV/EBITDA + P/E(정상화) + FCF Yield 모델 — 미국 방산(US Defense) 전용]**
+
+⛔ P/Book 의미 없음 (경쟁우위는 자산이 아닌 기술·인력·분류프로그램).
+⛔ EAC 손실이 포함된 분기 EBITDA/EPS 그대로 배수 적용 금지 → 정상화 필수.
+
+[Backlog 가시성 점검 — 필수]
+| 구분 | 금액($억) | Backlog/Revenue 배수 |
+|------|---------|-------------------|
+| Funded Backlog | $__ | __x |
+| Unfunded Backlog | $__ | __x |
+| Total Backlog | $__ | __x (목표: 4x 이상 = 우수) |
+
+[Book-to-Bill 추이]
+| Q | 신규수주($억) | 매출($억) | Book-to-Bill |
+|---|------------|---------|------------|
+| Q1 | $__ | $__ | __x |
+| Q2 | $__ | $__ | __x |
+| Q3 | $__ | $__ | __x |
+| Q4(최근) | $__ | $__ | __x |
+3분기 연속 < 1.0x이면 수주 모멘텀 약화 경고 명시.
+
+[계약유형 Mix & EAC 리스크]
+계약 Mix: FFP __% / CPFF+CPIF __% / T&M __%
+진행 중인 대형 FFP 개발 계약:
+① [프로그램명]: 계약금액 $__ / 완료율 __% / 최근 EAC 조정 이력 [있음/없음]
+② 원가초과 누적 EAC 조정액: $__ (당기 일괄 손실 계상분)
+Adj. EBITDA = GAAP EBITDA + EAC 손실 일회성 제거 = $__억
+Adj. EPS = GAAP EPS + EAC 세후 정상화 = $__
+
+[FCF Conversion]
+FCF: $__억  |  Net Income: $__억
+FCF Conversion = FCF / Net Income = __% (100~120%: 우수 / 80% 미만: 운전자본 이슈)
+선급금(Advance Payments) 잔액: $__ (매출 선인식 여부 확인)
+
+[목표주가 조율 — 3방법 가중]
+① EV/EBITDA (Adj.): 피어 배수 __x (대형 프라임 13~18x / IT방산 10~14x)
+   · Adj. EBITDA $__억 × __x → EV $__ → 순부채 차감 → 목표주가 = __$
+② 정상화 P/E: Adj. EPS $__ × 적정 PER __x = __$
+   · 적정 PER = 피어 중앙값 (방산 대형 18~25x) / Backlog 가시성 조정
+③ FCF Yield 역산: Forward FCF $__ / 목표 FCF Yield __% → 시총 → 주당 = __$
+④ 조율: EV/EBITDA 50% + 정상화 P/E 35% + FCF Yield 15% = **__$**
+
+Bear: 국방예산 CR 연장 + 대형 FFP EAC 손실 발생 + Book-to-Bill 악화 = __$
+Bull: 예산 증액(지정학 리스크 상승) + Backlog 신기록 + EAC 정상화 = __$
+
+⚠️ FINAL_VALUATION_DATA JSON 작성 시:
+  - base/bear/bull = 조율 Base/Bear/Bull 목표주가
+  - abs_base/abs_bear/abs_bull = EV/EBITDA(Adj.) Base/Bear/Bull
   - rel_base/rel_bear/rel_bull = 정상화 P/E Base/Bear/Bull
   - current = 현재 주가
 
