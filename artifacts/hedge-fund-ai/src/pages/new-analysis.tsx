@@ -613,13 +613,22 @@ export default function NewAnalysis() {
             )}
           </AnimatePresence>
 
-          {isPending && (
+          {isPending ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-3 flex flex-col items-center gap-1"
+            >
+              <p className="text-xs text-muted-foreground text-center">분석 파이프라인 초기화 중...</p>
+              <p className="text-[11px] text-primary/70 font-medium text-center">⏱ 완성까지 평균 3분 소요됩니다</p>
+            </motion.div>
+          ) : (
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mt-3 text-xs text-muted-foreground text-center"
+              className="mt-2 text-[11px] text-muted-foreground/50 text-center"
             >
-              기업 정보 조회 중...
+              ⏱ 평균 3분 만에 리포트 완성
             </motion.p>
           )}
         </form>

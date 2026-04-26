@@ -172,6 +172,10 @@ export default function Landing() {
             산업 분석부터 기술적 분석, 적정주가 산출까지<br />
             7단계에 걸쳐 분석합니다.
           </p>
+          <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5">
+            <span className="text-[11px] font-bold text-primary">⏱ 평균 3분</span>
+            <span className="text-[11px] text-muted-foreground">만에 완성되는 리포트</span>
+          </div>
         </div>
 
         {/* 로그인 버튼 */}
@@ -191,12 +195,12 @@ export default function Landing() {
         <div className="grid grid-cols-3 gap-3 mb-8">
           {[
             { icon: "🏢", label: "미국·한국", desc: "주식 분석 지원" },
-            { icon: "🤖", label: "7단계", desc: "AI 분석 파이프라인" },
+            { icon: "⏱️", label: "평균 3분", desc: "완성되는 리포트", highlight: true },
             { icon: "📊", label: "실시간", desc: "주가·재무 데이터" },
           ].map(f => (
-            <div key={f.label} className="bg-muted/50 rounded-xl p-3 text-center border border-border">
+            <div key={f.label} className={`rounded-xl p-3 text-center border ${(f as { highlight?: boolean }).highlight ? "border-primary/40 bg-primary/5" : "bg-muted/50 border-border"}`}>
               <div className="text-base mb-1">{f.icon}</div>
-              <div className="text-xs font-bold text-foreground/90">{f.label}</div>
+              <div className={`text-xs font-bold ${(f as { highlight?: boolean }).highlight ? "text-primary" : "text-foreground/90"}`}>{f.label}</div>
               <div className="text-[10px] text-muted-foreground mt-0.5">{f.desc}</div>
             </div>
           ))}
