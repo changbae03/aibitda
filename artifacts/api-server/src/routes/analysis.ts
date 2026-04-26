@@ -1840,8 +1840,18 @@ async function fetchPeerFinancials(
 ): Promise<string> {
   if (peers.length === 0) return "";
 
+  // ── KIS 실시간 선조회: 한국 피어 종목 코드 추출 후 일괄 요청 ──────────────
+  const koreanPeerMap = new Map<string, string>(); // ticker → 6-digit code
+  for (const p of peers) {
+    const m = p.ticker.match(/^(\d{6})\.(KS|KQ)$/i);
+    if (m) koreanPeerMap.set(p.ticker, m[1]);
+  }
+  const kisQuotes = koreanPeerMap.size > 0
+    ? await fetchKISStockQuotes([...koreanPeerMap.values()]).catch(() => new Map())
+    : new Map();
+
   const rows: string[] = [];
-  rows.push("\n=== 피어 그룹 실시간 재무 데이터 (Yahoo Finance) ===");
+  rows.push("\n=== 피어 그룹 실시간 재무 데이터 (Yahoo Finance + KIS 실시간) ===");
   rows.push("※ 아래 피어 기업들의 실제 수치를 Part B 상대가치 분석 표에 그대로 인용하세요. 피어 이름을 'Peer A/B/C/D' 등 플레이스홀더로 쓰지 말고 실제 회사명을 사용하세요.\n");
 
   const results = await Promise.allSettled(
@@ -1886,11 +1896,17 @@ async function fetchPeerFinancials(
           return `${(v / 1e9).toFixed(1)}B`;
         };
 
+        // ── KIS 실시간 데이터 (한국 피어 전용) ───────────────────────────────
+        const kisCode = koreanPeerMap.get(peer.ticker);
+        const kis = kisCode ? kisQuotes.get(kisCode) : null;
+
         // 시가총액 & 가격
         const currency = quote.currency ?? pr.currency ?? "USD";
         const isKrw = currency === "KRW";
-        const price = quote.regularMarketPrice ?? pr.regularMarketPrice ?? null;
-        const mcap = quote.marketCap ?? pr.marketCap ?? sd.marketCap ?? null;
+        const price = kis?.price ?? quote.regularMarketPrice ?? pr.regularMarketPrice ?? null;
+        // KIS 시가총액(억원) → 원화 변환
+        const kisMcap = kis?.mcap != null ? kis.mcap * 1e8 : null;
+        const mcap = kisMcap ?? quote.marketCap ?? pr.marketCap ?? sd.marketCap ?? null;
         const mcapStr = mcap
           ? isKrw
             ? `${(mcap / 1e12).toFixed(2)}조원`
@@ -1921,18 +1937,30 @@ async function fetchPeerFinancials(
           if (fwdEps != null && fwdEps > 0) fwdPE = price / fwdEps;
         }
 
-        // PER TTM: 직접 제공 → price / TTM EPS (quote) → mcap / 순이익 계산
-        let trailPE: number | null = sd.trailingPE ?? ks.trailingPE ?? (quote as any).trailingPE ?? null;
-        if (trailPE == null && price != null) {
-          const eps = (quote as any).epsTrailingTwelveMonths ?? null;
-          if (eps != null && eps > 0) trailPE = price / eps;
-        }
-        if (trailPE == null && mcap != null && netIncome != null && netIncome > 0) {
-          trailPE = mcap / netIncome;
+        // PER TTM: KIS(한국) → Yahoo → price/EPS → mcap/순이익
+        let trailPE: number | null = null;
+        if (kis?.per != null && kis.per > 0 && kis.per < 500) {
+          trailPE = kis.per;
+          console.log(`[peer-data] KIS PER for ${peer.ticker}: ${trailPE}`);
+        } else {
+          trailPE = sd.trailingPE ?? ks.trailingPE ?? (quote as any).trailingPE ?? null;
+          if (trailPE == null && price != null) {
+            const eps = (quote as any).epsTrailingTwelveMonths ?? null;
+            if (eps != null && eps > 0) trailPE = price / eps;
+          }
+          if (trailPE == null && mcap != null && netIncome != null && netIncome > 0) {
+            trailPE = mcap / netIncome;
+          }
         }
 
-        // PBR: Yahoo Finance → Naver Finance (한국주) → market cap / 자본총계
-        let pbr: number | null = ks.priceToBook ?? (quote as any).priceToBook ?? null;
+        // PBR: KIS(한국) → Yahoo Finance → Naver Finance → market cap / 자본총계
+        let pbr: number | null = null;
+        if (kis?.pbr != null && kis.pbr > 0) {
+          pbr = kis.pbr;
+          console.log(`[peer-data] KIS PBR for ${peer.ticker}: ${pbr}`);
+        } else {
+          pbr = ks.priceToBook ?? (quote as any).priceToBook ?? null;
+        }
         if (pbr == null) {
           const koreanMatch = peer.ticker.match(/^(\d{6})\.(KS|KQ)$/i);
           if (koreanMatch) {
@@ -1975,7 +2003,10 @@ async function fetchPeerFinancials(
         }
 
         // ── 수익성 ────────────────────────────────────────────────────────
+        // KIS ROE는 % 단위(예: 15.3) → 소수(0.153) 변환, Yahoo는 이미 소수 형태
+        const kisRoe = kis?.roe != null && !isNaN(kis.roe) ? kis.roe / 100 : null;
         const roe = fd.returnOnEquity
+          ?? kisRoe
           ?? (netIncome != null && totalEquity != null && totalEquity > 0 ? netIncome / totalEquity : null);
         const opMargin = fd.operatingMargins
           ?? (opIncome != null && totalRevenue != null && totalRevenue > 0 ? opIncome / totalRevenue : null);
