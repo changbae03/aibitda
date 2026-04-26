@@ -698,10 +698,10 @@ export default function SharePage() {
                   whileTap={{ scale: 0.97 }}
                   className="w-full flex items-center justify-center gap-2 bg-white text-blue-700 font-black text-[15px] py-3.5 rounded-xl hover:bg-blue-50 transition-colors shadow-lg"
                 >
-                  지금 무료로 시작하기
+                  지금 시작하기
                   <ArrowRight className="w-4.5 h-4.5" />
                 </motion.button>
-                <p className="text-[10px] text-blue-300/80 text-center mt-2">하루 3회 무료 · 카카오 로그인</p>
+                <p className="text-[10px] text-blue-300/80 text-center mt-2">하루 3회 · 카카오 로그인</p>
               </div>
             </motion.div>
 
