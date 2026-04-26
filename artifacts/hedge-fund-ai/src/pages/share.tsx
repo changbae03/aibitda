@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import {
   ArrowRight, TrendingUp, TrendingDown,
   Target, Building2, Loader2, AlertCircle,
-  Check, Link2, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText,
+  Check, Link2, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import StockChart, { type ChartLevels, type ChartEvent } from "@/components/StockChart";
@@ -171,6 +171,7 @@ function MarkdownBody({ content }: { content: string }) {
               {children}
             </td>
           ),
+          del: () => null,
         }}
       >
         {stripInternalData(content)}
@@ -371,7 +372,6 @@ export default function SharePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [copiedMd, setCopiedMd] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -388,16 +388,6 @@ export default function SharePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCopyMarkdown = async () => {
-    try {
-      const res = await fetch(getApiUrl(`/api/analysis/share/${id}/text`));
-      if (!res.ok) return;
-      const text = await res.text();
-      await navigator.clipboard.writeText(text);
-      setCopiedMd(true);
-      setTimeout(() => setCopiedMd(false), 2500);
-    } catch { /* silent */ }
-  };
 
   if (loading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -451,20 +441,6 @@ export default function SharePage() {
           <span className="hidden sm:inline text-slate-500 text-[11px] font-medium">AI 기업 가치 분석</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopyMarkdown}
-            className={cn(
-              "flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg border transition-all",
-              copiedMd
-                ? "border-violet-500/40 text-violet-400 bg-violet-500/10"
-                : "border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500"
-            )}
-          >
-            {copiedMd
-              ? <><Check className="w-3.5 h-3.5" />복사됨</>
-              : <><FileText className="w-3.5 h-3.5" />AI 검수용 복사</>
-            }
-          </button>
           <button
             onClick={handleCopy}
             className={cn(
