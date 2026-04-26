@@ -9,6 +9,7 @@
  *   CPIAUCSL        — CPI 지수 (월, 계절조정, 1982-84=100)
  *   A191RL1Q225SBEA — 실질GDP 성장률 (분기, 전기대비 연율 %)
  *   UNRATE          — 실업률 (월, %)
+ *   DCOILWTICO      — WTI 원유 가격 (일, USD/배럴)
  */
 
 const BASE_URL = "https://api.stlouisfed.org/fred/series/observations";
@@ -23,12 +24,14 @@ export interface FredMacro {
   cpiYoY: number | null;         // CPI 전년동월비 (%)
   gdpGrowth: number | null;      // 실질GDP 성장률 전기대비 연율 (%)
   unemploymentRate: number | null; // 실업률 (%)
+  wtiOil: number | null;         // WTI 원유 가격 (USD/배럴)
   fetchedAt: number;
   latestDates: {
     fedFunds: string;
     treasury: string;
     cpi: string;
     gdp: string;
+    wti: string;
   };
 }
 
@@ -84,6 +87,7 @@ export async function fetchFREDMacro(): Promise<FredMacro | null> {
       cpiObs,
       gdpObs,
       unrateObs,
+      wtiObs,
     ] = await Promise.all([
       fredFetch("FEDFUNDS", 2),
       fredFetch("DGS10", 5),
@@ -91,6 +95,7 @@ export async function fetchFREDMacro(): Promise<FredMacro | null> {
       fredFetch("CPIAUCSL", 14, "desc"),  // 현재 + 13개월치 (YoY 계산)
       fredFetch("A191RL1Q225SBEA", 3),
       fredFetch("UNRATE", 2),
+      fredFetch("DCOILWTICO", 5),         // WTI 원유 가격 (주간)
     ]);
 
     const fedResult    = latestVal(fedFundsObs);
@@ -98,6 +103,7 @@ export async function fetchFREDMacro(): Promise<FredMacro | null> {
     const t2yResult    = latestVal(t2yObs);
     const gdpResult    = latestVal(gdpObs);
     const unrateResult = latestVal(unrateObs);
+    const wtiResult    = latestVal(wtiObs);
 
     // CPI YoY 계산
     const cpiCurrent = latestVal(cpiObs);
@@ -124,12 +130,14 @@ export async function fetchFREDMacro(): Promise<FredMacro | null> {
       cpiYoY,
       gdpGrowth:        gdpResult.val,
       unemploymentRate: unrateResult.val,
+      wtiOil:           wtiResult.val,
       fetchedAt:        Date.now(),
       latestDates: {
         fedFunds:  fedResult.date,
         treasury:  t10yResult.date,
         cpi:       cpiCurrent.date,
         gdp:       gdpResult.date,
+        wti:       wtiResult.date,
       },
     };
 
@@ -141,6 +149,7 @@ export async function fetchFREDMacro(): Promise<FredMacro | null> {
       CPI_YoY: macroCache.cpiYoY?.toFixed(2),
       GDP: macroCache.gdpGrowth,
       실업률: macroCache.unemploymentRate,
+      WTI: macroCache.wtiOil,
     }));
 
     return macroCache;
@@ -196,6 +205,13 @@ export function buildFREDContext(macro: FredMacro | null): string {
 
   const rf = macro.t10y ?? macro.fedFundsRate;
 
+  // WTI 유가 국면
+  const oilPhase = macro.wtiOil !== null
+    ? macro.wtiOil >= 90 ? "⚠️ 고유가 (원가 압박·물가 상승 우려)"
+    : macro.wtiOil >= 70 ? "중립 (정상 범위)"
+    : "✅ 저유가 (원가 완화 유리)"
+    : "";
+
   return `\n[🇺🇸 FRED 실시간 미국 거시경제 지표]
 ⚠️ 아래는 FRED API로 실시간 조회한 데이터입니다. AI 학습 데이터 대신 이 값을 최우선으로 사용하세요.
 
@@ -205,11 +221,13 @@ export function buildFREDContext(macro: FredMacro | null): string {
   미국 CPI: ${fmt0(macro.cpiIndex)} (${macro.latestDates.cpi}) / 전년동월비: ${fmt(macro.cpiYoY, 2, "%")} ${cpiPhase}
   실질GDP 성장률(전기대비 연율): ${fmt(macro.gdpGrowth, 1, "%")} (${macro.latestDates.gdp})
   실업률(UNRATE): ${fmt(macro.unemploymentRate, 1, "%")}
+  WTI 원유: ${fmt(macro.wtiOil, 1, " USD/bbl")} (${macro.latestDates.wti ?? ""}) ${oilPhase}
 
 → WACC 무위험수익률(Rf): 10Y UST ${fmt(macro.t10y, 2, "%")} 기준으로 설정${rf !== macro.t10y ? ` (또는 Fed Funds ${fmt(macro.fedFundsRate, 2, "%")})` : ""}
 → DCF 할인율 조정: 현재 금리 사이클 "${rateCycle}" 반영
 → 수익률 곡선 ${curveSignal ? `(${curveSignal})` : ""} — 섹터별 상대 밸류에이션에 반영
-→ ERP(Equity Risk Premium) 추정 시 현재 10Y UST ${fmt(macro.t10y, 2, "%")} 기준`;
+→ ERP(Equity Risk Premium) 추정 시 현재 10Y UST ${fmt(macro.t10y, 2, "%")} 기준
+→ WTI ${fmt(macro.wtiOil, 1, " USD/bbl")} — 에너지·화학·물류 섹터 원가 분석에 반영`;
 }
 
 // 서버 시작 시 프리로드

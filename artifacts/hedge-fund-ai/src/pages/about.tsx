@@ -7,7 +7,11 @@ interface MacroData {
     baseRate: number | null;
     cpiYoY: number | null;
     usdKrw: number | null;
-    latestPeriods: { baseRate: string; cpi: string; usdKrw: string };
+    gdpQoQ: number | null;
+    gdpYoY: number | null;
+    bondYield3Y: number | null;
+    bondYield10Y: number | null;
+    latestPeriods: { baseRate: string; cpi: string; usdKrw: string; gdp: string; bond: string };
   } | null;
   fred: {
     fedFundsRate: number | null;
@@ -17,7 +21,8 @@ interface MacroData {
     cpiYoY: number | null;
     gdpGrowth: number | null;
     unemploymentRate: number | null;
-    latestDates: { fedFunds: string; treasury: string; cpi: string; gdp: string };
+    wtiOil: number | null;
+    latestDates: { fedFunds: string; treasury: string; cpi: string; gdp: string; wti: string };
   } | null;
   fetchedAt: number;
 }
@@ -525,7 +530,8 @@ export default function AboutPage() {
                 <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
                 <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-wide">한국 (ECOS · 한국은행)</span>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-border/40">
+              {/* Row 1 */}
+              <div className="grid grid-cols-3 divide-x divide-border/40 border-b border-border/30">
                 {[
                   {
                     label: "기준금리",
@@ -536,7 +542,9 @@ export default function AboutPage() {
                   },
                   {
                     label: "CPI (YoY)",
-                    value: macroData?.ecos?.cpiYoY != null ? `+${macroData.ecos.cpiYoY.toFixed(2)}%` : "—",
+                    value: macroData?.ecos?.cpiYoY != null
+                      ? `${macroData.ecos.cpiYoY >= 0 ? "+" : ""}${macroData.ecos.cpiYoY.toFixed(2)}%`
+                      : "—",
                     sub: macroData?.ecos?.latestPeriods?.cpi
                       ? `${macroData.ecos.latestPeriods.cpi.slice(0,4)}.${macroData.ecos.latestPeriods.cpi.slice(4)}`
                       : "",
@@ -554,6 +562,36 @@ export default function AboutPage() {
                   </div>
                 ))}
               </div>
+              {/* Row 2 */}
+              <div className="grid grid-cols-3 divide-x divide-border/40">
+                {[
+                  {
+                    label: "국고채 3Y",
+                    value: macroData?.ecos?.bondYield3Y != null ? `${macroData.ecos.bondYield3Y.toFixed(2)}%` : "—",
+                    sub: macroData?.ecos?.latestPeriods?.bond
+                      ? `${macroData.ecos.latestPeriods.bond.slice(0,4)}.${macroData.ecos.latestPeriods.bond.slice(4,6)}.${macroData.ecos.latestPeriods.bond.slice(6)}`
+                      : "",
+                  },
+                  {
+                    label: "국고채 10Y",
+                    value: macroData?.ecos?.bondYield10Y != null ? `${macroData.ecos.bondYield10Y.toFixed(2)}%` : "—",
+                    sub: "Rf (WACC 기준)",
+                  },
+                  {
+                    label: "GDP (QoQ)",
+                    value: macroData?.ecos?.gdpQoQ != null
+                      ? `${macroData.ecos.gdpQoQ >= 0 ? "+" : ""}${macroData.ecos.gdpQoQ.toFixed(1)}%`
+                      : "—",
+                    sub: macroData?.ecos?.latestPeriods?.gdp ?? "",
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="px-3 py-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground/50 mb-1">{item.label}</p>
+                    <p className="text-[14px] font-bold text-foreground tabular-nums">{item.value}</p>
+                    {item.sub && <p className="text-[10px] text-muted-foreground/40 mt-0.5">{item.sub}</p>}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* 미국 - FRED */}
@@ -562,7 +600,8 @@ export default function AboutPage() {
                 <Globe className="w-3.5 h-3.5 text-red-500" />
                 <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-wide">미국 (FRED · 연준)</span>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-border/40">
+              {/* Row 1 */}
+              <div className="grid grid-cols-3 divide-x divide-border/40 border-b border-border/30">
                 {[
                   {
                     label: "Fed 금리",
@@ -576,8 +615,38 @@ export default function AboutPage() {
                   },
                   {
                     label: "CPI (YoY)",
-                    value: macroData?.fred?.cpiYoY != null ? `+${macroData.fred.cpiYoY.toFixed(2)}%` : "—",
+                    value: macroData?.fred?.cpiYoY != null
+                      ? `${macroData.fred.cpiYoY >= 0 ? "+" : ""}${macroData.fred.cpiYoY.toFixed(2)}%`
+                      : "—",
                     sub: "US CPI",
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="px-3 py-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground/50 mb-1">{item.label}</p>
+                    <p className="text-[14px] font-bold text-foreground tabular-nums">{item.value}</p>
+                    {item.sub && <p className="text-[10px] text-muted-foreground/40 mt-0.5">{item.sub}</p>}
+                  </div>
+                ))}
+              </div>
+              {/* Row 2 */}
+              <div className="grid grid-cols-3 divide-x divide-border/40">
+                {[
+                  {
+                    label: "GDP 성장률",
+                    value: macroData?.fred?.gdpGrowth != null
+                      ? `${macroData.fred.gdpGrowth >= 0 ? "+" : ""}${macroData.fred.gdpGrowth.toFixed(1)}%`
+                      : "—",
+                    sub: macroData?.fred?.latestDates?.gdp ?? "전기대비 연율",
+                  },
+                  {
+                    label: "실업률",
+                    value: macroData?.fred?.unemploymentRate != null ? `${macroData.fred.unemploymentRate.toFixed(1)}%` : "—",
+                    sub: "UNRATE",
+                  },
+                  {
+                    label: "WTI 유가",
+                    value: macroData?.fred?.wtiOil != null ? `$${macroData.fred.wtiOil.toFixed(1)}` : "—",
+                    sub: "USD/배럴",
                   },
                 ].map((item) => (
                   <div key={item.label} className="px-3 py-2.5 text-center">

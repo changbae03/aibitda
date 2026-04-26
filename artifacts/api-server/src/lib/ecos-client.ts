@@ -7,6 +7,8 @@
  *   901Y009 / 0        — 소비자물가지수 CPI (월)
  *   731Y001 / 0000001  — 원/달러 매매기준율 (일)
  *   111Y002 / C        — 실질GDP 성장률 (분기, 전기대비)
+ *   817Y002 / 010202000 — 국고채 3년 (일)
+ *   817Y002 / 010203000 — 국고채 10년 (일)
  */
 
 const BASE_URL = "https://ecos.bok.or.kr/api/StatisticSearch";
@@ -19,12 +21,15 @@ interface EcosMacro {
   usdKrw: number | null;            // 원/달러 환율
   gdpQoQ: number | null;            // 실질GDP 전기대비 성장률 (%)
   gdpYoY: number | null;            // 실질GDP 전년동기비 성장률 (%)
+  bondYield3Y: number | null;       // 국고채 3년 금리 (%)
+  bondYield10Y: number | null;      // 국고채 10년 금리 (%)
   fetchedAt: number;
   latestPeriods: {
     baseRate: string;
     cpi: string;
     usdKrw: string;
     gdp: string;
+    bond: string;
   };
 }
 
@@ -100,7 +105,7 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
   }
 
   try {
-    const [baseRateRows, cpiRows, cpiPrevRows, usdKrwRows, gdpRows] = await Promise.all([
+    const [baseRateRows, cpiRows, cpiPrevRows, usdKrwRows, gdpRows, bond3YRows, bond10YRows] = await Promise.all([
       // 기준금리 — 최근 3개월
       ecosFetch("722Y001", "M", yyyymm(-3), yyyymm(0), "0101000", 5),
       // CPI 현재 — 최근 2개월
@@ -109,8 +114,12 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
       ecosFetch("901Y009", "M", yyyymm(-14), yyyymm(-12), "0", 3),
       // 원달러 환율 — 최근 10거래일
       ecosFetch("731Y001", "D", yyyymmdd(-15), yyyymmdd(0), "0000001", 10),
-      // 실질GDP 전기대비 — 최근 4분기
-      ecosFetch("111Y002", "Q", yyyyq(-5), yyyyq(0), "C", 6),
+      // 실질GDP 전기대비 — 최근 8분기 (발표 지연 감안해 범위 확장)
+      ecosFetch("111Y002", "Q", yyyyq(-8), yyyyq(0), "C", 8),
+      // 국고채 3년 — 최근 3개월 (월별, 데이터 안정성 위해)
+      ecosFetch("817Y002", "M", yyyymm(-3), yyyymm(0), "010203000", 5),
+      // 국고채 10년 — 최근 3개월 (월별)
+      ecosFetch("817Y002", "M", yyyymm(-3), yyyymm(0), "010205000", 5),
     ]);
 
     const baseRateResult  = latestValue(baseRateRows);
@@ -118,6 +127,8 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
     const cpiPrevResult   = latestValue(cpiPrevRows);
     const usdKrwResult    = latestValue(usdKrwRows);
     const gdpResult       = latestValue(gdpRows);
+    const bond3YResult    = latestValue(bond3YRows);
+    const bond10YResult   = latestValue(bond10YRows);
 
     // CPI YoY 계산
     let cpiYoY: number | null = null;
@@ -130,18 +141,21 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
     const gdpYoYResult = latestValue(gdpYoYRows);
 
     macroCache = {
-      baseRate:   baseRateResult.val,
-      cpiIndex:   cpiResult.val,
+      baseRate:     baseRateResult.val,
+      cpiIndex:     cpiResult.val,
       cpiYoY,
-      usdKrw:     usdKrwResult.val,
-      gdpQoQ:     gdpResult.val,
-      gdpYoY:     gdpYoYResult.val,
-      fetchedAt:  Date.now(),
+      usdKrw:       usdKrwResult.val,
+      gdpQoQ:       gdpResult.val,
+      gdpYoY:       gdpYoYResult.val,
+      bondYield3Y:  bond3YResult.val,
+      bondYield10Y: bond10YResult.val,
+      fetchedAt:    Date.now(),
       latestPeriods: {
         baseRate: baseRateResult.time,
         cpi:      cpiResult.time,
         usdKrw:   usdKrwResult.time,
         gdp:      gdpResult.time,
+        bond:     bond3YResult.time || bond10YResult.time,
       },
     };
 
@@ -151,6 +165,8 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
       원달러: macroCache.usdKrw,
       GDP_QoQ: macroCache.gdpQoQ,
       GDP_YoY: macroCache.gdpYoY,
+      국고채3Y: macroCache.bondYield3Y,
+      국고채10Y: macroCache.bondYield10Y,
     }));
 
     return macroCache;
@@ -185,6 +201,18 @@ export function buildECOSContext(macro: EcosMacro | null): string {
     ? (macro.baseRate >= 3.5 ? "고금리 긴축 국면" : macro.baseRate >= 2.5 ? "금리 인하 사이클 진입" : "완화적 통화정책")
     : "";
 
+  // 국고채 스프레드 해석 (기준금리 대비 10년)
+  const bondSpread = macro.bondYield10Y !== null && macro.baseRate !== null
+    ? macro.bondYield10Y - macro.baseRate
+    : null;
+  const bondSignal = bondSpread !== null
+    ? bondSpread > 1.5 ? "✅ 장기 금리 프리미엄 정상"
+    : bondSpread > 0 ? "완만한 우상향"
+    : "⚠️ 장단기 역전 — 경기 불확실성"
+    : "";
+
+  const rfForWacc = macro.bondYield10Y ?? macro.baseRate;
+
   return `\n[🏦 한국은행 ECOS 실시간 거시경제 지표]
 ⚠️ 아래는 ECOS API로 실시간 조회한 데이터입니다. AI 학습 데이터 대신 이 값을 최우선으로 사용하세요.
 
@@ -192,8 +220,9 @@ export function buildECOSContext(macro: EcosMacro | null): string {
   소비자물가(CPI): ${fmt(macro.cpiIndex, 2)} (2020=100, ${period(macro.latestPeriods.cpi)}) / 전년동월비: ${fmt(macro.cpiYoY, 2, "%")} ${cpiTrend}
   원/달러 환율: ${fmt(macro.usdKrw, 0, "원")} (${period(macro.latestPeriods.usdKrw)})
   실질GDP 성장률: 전기대비 ${fmt(macro.gdpQoQ, 1, "%")} / 전년동기비 ${fmt(macro.gdpYoY, 1, "%")} (${period(macro.latestPeriods.gdp)})
+  국고채 금리: 3년 ${fmt(macro.bondYield3Y, 2, "%")} / 10년 ${fmt(macro.bondYield10Y, 2, "%")} (${period(macro.latestPeriods.bond)}) ${bondSignal}
 
-→ WACC 산출 기준: 무위험수익률(Rf) = 기준금리 ${fmt(macro.baseRate, 2, "%")} 기반으로 추정 (국고채 3년/10년 스프레드 고려)
+→ WACC 무위험수익률(Rf): 국고채 10년 ${fmt(macro.bondYield10Y, 2, "%")} 기준으로 설정${rfForWacc !== macro.bondYield10Y ? ` (또는 기준금리 ${fmt(macro.baseRate, 2, "%")})` : ""}
 → 환율 ${fmt(macro.usdKrw, 0, "원")} 기준으로 달러 표시 수익/비용 환산
 → 금리 사이클 "${rateCycle}" 반영하여 할인율 및 밸류에이션 배수 조정`;
 }
