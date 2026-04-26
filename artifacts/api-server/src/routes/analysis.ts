@@ -2217,7 +2217,7 @@ router.post("/", async (req, res) => {
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
   // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisContext] = await Promise.all([
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -2226,7 +2226,17 @@ router.post("/", async (req, res) => {
     yahooFinance.quote(resolvedSymbol).catch(() => null),
     isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
   ]);
-  const startPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
+
+  // KIS 결과 분리 — 한국 종목은 KIS 현재가 우선, 없으면 Yahoo fallback
+  const kisContext = kisResult?.context ?? null;
+  const kisQuote = kisResult?.quote ?? null;
+  const yahooPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
+  const startPrice: number | null = isKoreanTicker
+    ? (kisQuote?.price ?? yahooPrice)
+    : yahooPrice;
+  if (isKoreanTicker && kisQuote?.price) {
+    console.log(`[analysis] startPrice KIS 우선: ${kisQuote.price}원 (Yahoo: ${yahooPrice})`);
+  }
 
   // DART 재무상태표 컨텍스트 구성
   let dartBalanceContext = "";
@@ -2268,9 +2278,9 @@ router.post("/", async (req, res) => {
     : buildFREDContext(fredMacro);
 
   const fullContext = [
+    kisContext,          // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS) — 최우선 오버라이드
     financialData,
     dartBalanceContext,
-    kisContext,
     macroContext,
     newsData,
     userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",

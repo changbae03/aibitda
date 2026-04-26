@@ -50,16 +50,21 @@ async function getAccessToken(): Promise<string> {
 export interface KISStockQuote {
   code: string;
   name?: string;
-  price: number;         // 현재가
-  per: number | null;    // PER (배)
-  pbr: number | null;    // PBR (배)
-  eps: number | null;    // EPS (원)
-  bps: number | null;    // BPS (원)
-  mcap: number | null;   // 시가총액 (억원)
-  w52High: number | null; // 52주 최고가
-  w52Low: number | null;  // 52주 최저가
-  roe: number | null;    // ROE (%)
-  changeRate: number | null; // 전일 대비 등락률(%)
+  price: number;               // 현재가
+  per: number | null;          // PER (배)
+  pbr: number | null;          // PBR (배)
+  eps: number | null;          // EPS (원)
+  bps: number | null;          // BPS (원)
+  dps: number | null;          // DPS 주당배당금 (원)
+  mcap: number | null;         // 시가총액 (억원)
+  sharesOutstanding: number | null; // 상장주식수 (lstn_stcn)
+  faceValue: number | null;    // 주식 액면가 (stck_fcam, 원)
+  w52High: number | null;      // 52주 최고가
+  w52Low: number | null;       // 52주 최저가
+  roe: number | null;          // ROE (%)
+  changeRate: number | null;   // 전일 대비 등락률(%)
+  volume: number | null;       // 누적 거래량
+  volumeTurnover: number | null; // 거래량 회전율(%)
 }
 
 /**
@@ -103,6 +108,11 @@ export async function fetchKISStockQuote(
       const n = parseFloat(v.replace(/,/g, ""));
       return isNaN(n) ? null : n;
     };
+    const parseInt_ = (v: string | undefined): number | null => {
+      if (!v || v.trim() === "" || v === "0") return null;
+      const n = parseInt(v.replace(/,/g, ""), 10);
+      return isNaN(n) ? null : n;
+    };
 
     const eps = parseNum(d.eps);
     const bps = parseNum(d.bps);
@@ -118,11 +128,16 @@ export async function fetchKISStockQuote(
       pbr: parseNum(d.pbr),
       eps,
       bps,
-      mcap: parseNum(d.hts_avls),     // 억원
+      dps: parseNum(d.stck_divi),       // 주당배당금(원) — 없으면 null
+      mcap: parseNum(d.hts_avls),       // 시가총액 (억원)
+      sharesOutstanding: parseInt_(d.lstn_stcn), // 상장주식수 (주)
+      faceValue: parseNum(d.stck_fcam), // 주식 액면가 (원)
       w52High: parseNum(d.w52_hgpr),
       w52Low: parseNum(d.w52_lwpr),
       roe,
       changeRate: parseNum(d.prdy_ctrt),
+      volume: parseInt_(d.acml_vol),    // 누적 거래량 (주)
+      volumeTurnover: parseNum(d.vol_tnrt), // 거래량 회전율 (%)
     };
   } catch (err) {
     console.error(`[kis] fetchKISStockQuote(${stockCode}) 예외:`, err);
@@ -152,22 +167,29 @@ export async function fetchKISStockQuotes(
 }
 
 /**
- * 분석 대상 종목의 실시간 컨텍스트 문자열 생성
+ * 분석 대상 종목의 실시간 컨텍스트 문자열 생성 + 원시 quote 반환
  */
-export async function buildKISStockContext(stockCode: string): Promise<string | null> {
+export async function buildKISStockContext(
+  stockCode: string
+): Promise<{ context: string; quote: KISStockQuote } | null> {
   const quote = await fetchKISStockQuote(stockCode);
   if (!quote || !quote.price) return null;
 
   const fmt = (v: number | null, suffix = "") =>
     v !== null ? `${v.toLocaleString("ko-KR")}${suffix}` : "N/A";
 
-  return `
+  // 상장주식수: KIS lstn_stcn 직접값 — 가장 정확한 공식 수치
+  const sharesLine = quote.sharesOutstanding != null
+    ? `⭐ 상장주식수 [KIS 공식, 최우선]: ${quote.sharesOutstanding.toLocaleString("ko-KR")}주 (${(quote.sharesOutstanding / 1e8).toFixed(4)}억주)\n⛔ 밸류에이션 주당가치(EPS/BPS/목표주가) 계산 시 이 수치(${quote.sharesOutstanding.toLocaleString("ko-KR")}주)를 반드시 사용. Yahoo Finance 수치가 다를 경우 KIS 기준값 우선.`
+    : null;
+
+  const context = `
 === KIS 실시간 시세 데이터 (${new Date().toLocaleDateString("ko-KR")} 기준) ===
 종목코드: ${stockCode}
 현재가: ${fmt(quote.price, "원")} (전일 대비 ${quote.changeRate !== null ? (quote.changeRate > 0 ? "+" : "") + quote.changeRate.toFixed(2) + "%" : "N/A"})
 52주 최고: ${fmt(quote.w52High, "원")} / 52주 최저: ${fmt(quote.w52Low, "원")}
 시가총액: ${fmt(quote.mcap, "억원")}
-
+${sharesLine ? sharesLine + "\n" : ""}
 [KIS 실시간 투자지표]
 | 지표 | 값 |
 |------|-----|
@@ -175,8 +197,13 @@ export async function buildKISStockContext(stockCode: string): Promise<string | 
 | PBR | ${quote.pbr !== null ? quote.pbr.toFixed(2) + "배" : "N/A"} |
 | EPS | ${fmt(quote.eps, "원")} |
 | BPS | ${fmt(quote.bps, "원")} |
+| DPS | ${quote.dps !== null ? fmt(quote.dps, "원") : "N/A (미지급 또는 미산출)"} |
 | ROE | ${quote.roe !== null ? quote.roe.toFixed(1) + "%" : "N/A"} |
+| 액면가 | ${quote.faceValue !== null ? fmt(quote.faceValue, "원") : "N/A"} |
+| 거래량 회전율 | ${quote.volumeTurnover !== null ? quote.volumeTurnover.toFixed(2) + "%" : "N/A"} |
 
-※ KIS Open API 실전투자 실시간 데이터입니다. 밸류에이션 현재가·BPS 기준으로 우선 활용하세요.
+※ KIS Open API 실전투자 실시간 데이터입니다. 밸류에이션 현재가·BPS·상장주식수 기준으로 최우선 활용하세요.
 `;
+
+  return { context, quote };
 }
