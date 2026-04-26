@@ -678,12 +678,13 @@ export function computePeerAverages(
 }
 
 // ─── 절대값 상한 (피어 배수 아웃라이어 필터링) ─────────────────────────────────
+// "너무 차이나는 것만" 제외 원칙 — 프리미엄 글로벌 기업(ASML·KLAC 등) 정상 배수 보존
 const PEER_ABSOLUTE_CAPS: Partial<Record<keyof PeerMultiples, number>> = {
-  ev_ebitda: 30,    // EV/EBITDA 30배 초과 → 이상치
-  per_trailing: 60, // PER 60배 초과 → 이상치
-  per_fwd: 60,
-  ev_sales: 15,     // EV/Sales 15배 초과 → 이상치 (매우 극단적 값)
-  pbr: 30,          // PBR 30배 초과 → 이상치
+  ev_ebitda: 80,    // EV/EBITDA: 반도체장비·빅테크 40~60x는 정상 범위 → 80x 초과만 이상치
+  per_trailing: 120, // PER: 고성장·적자 전환 기업 100x도 존재 → 120x 초과만
+  per_fwd: 120,
+  ev_sales: 20,     // EV/Sales: 15x → 20x (SaaS·플랫폼 고배수 허용)
+  pbr: 150,         // PBR: ASML 1271x는 이상치, KLAC 46x는 정상 → 150x 초과만
 };
 
 // Median 계산 (정렬 후 중간값)
@@ -726,17 +727,17 @@ export function computePeerMedianExcludingOutliers(
       continue;
     }
 
-    // 2차: 중간값 기준 상대 필터 (2.0배 초과 → 이상치)
+    // 2차: 중간값 기준 상대 필터 (3.0배 초과만 이상치 — "너무 차이나는 것만" 원칙)
     const nums = validEntries.map(([, v]) => v);
     const med1 = median(nums);
     const finalValid: Array<[string, number]> = [];
     for (const [ticker, v] of validEntries) {
-      if (v > med1 * 2.0) {
+      if (v > med1 * 3.0) {
         if (!outlierTags[ticker]) outlierTags[ticker] = {};
-        outlierTags[ticker][key] = `피어 중간값(${med1.toFixed(1)}x)의 2.0배 초과 이상치`;
-      } else if (v < med1 * 0.3) {
+        outlierTags[ticker][key] = `피어 중간값(${med1.toFixed(1)}x)의 3.0배 초과 이상치`;
+      } else if (v < med1 * 0.2) {
         if (!outlierTags[ticker]) outlierTags[ticker] = {};
-        outlierTags[ticker][key] = `피어 중간값(${med1.toFixed(1)}x)의 0.3배 미만 이상치`;
+        outlierTags[ticker][key] = `피어 중간값(${med1.toFixed(1)}x)의 0.2배 미만 이상치`;
       } else {
         finalValid.push([ticker, v]);
       }

@@ -2046,8 +2046,9 @@ async function fetchPeerFinancials(
 
   // ── 서버 사이드 아웃라이어 감지 ──────────────────────────────────────────────
   // 1차: 절대값 상한, 2차: 중간값 2.0배 기준 → AI에 미리 경고 전달
+  // "너무 차이나는 것만" 원칙 — 프리미엄 글로벌 기업 정상 배수 보존
   const OUTLIER_CAPS: Record<string, number> = {
-    ev_ebitda: 30, per_trailing: 60, per_fwd: 60, ev_sales: 15, pbr: 30,
+    ev_ebitda: 80, per_trailing: 120, per_fwd: 120, ev_sales: 20, pbr: 150,
   };
   type PeerRow = { ticker: string; name: string; ev_ebitda: number | null; per_trailing: number | null; per_fwd: number | null; ev_sales: number | null; pbr: number | null };
   const peerRows: PeerRow[] = results
@@ -2073,8 +2074,8 @@ async function fetchPeerFinancials(
     const mid = Math.floor(sorted.length / 2);
     const med = sorted.length % 2 !== 0 ? sorted[mid].v : (sorted[mid - 1].v + sorted[mid].v) / 2;
     for (const { ticker, name, v } of valids) {
-      if (v > med * 2.0) {
-        outlierWarnings.push(`⚠️ ${name}(${ticker}) ${key.toUpperCase().replace("_", "/")} = ${v.toFixed(1)}x → 피어 중간값(${med.toFixed(1)}x)의 2.0배 초과 이상치 → 중간값 계산에서 제외`);
+      if (v > med * 3.0) {
+        outlierWarnings.push(`⚠️ ${name}(${ticker}) ${key.toUpperCase().replace("_", "/")} = ${v.toFixed(1)}x → 피어 중간값(${med.toFixed(1)}x)의 3.0배 초과 이상치 → 중간값 계산에서 제외`);
       }
     }
   }
