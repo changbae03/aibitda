@@ -189,6 +189,20 @@ const differentiators = [
     desc: "실적 서프라이즈·FDA 결정·M&A·규제 이슈·경영진 교체 등 주가에 직접 영향을 미칠 수 있는 뉴스와 카탈리스트를 분석에 반영합니다. 단순 재무 수치를 넘어 시장 이벤트 드리븐 관점까지 목표주가에 통합합니다.",
     icon: "📰",
   },
+  {
+    title: "월간 결과 검증",
+    badge: "Monthly Outcome Verification",
+    badgeColor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
+    desc: "분석 후 30일 이상 경과한 보고서에 대해 실제 주가 방향이 AI 판정(매수/매도)과 일치했는지 자동으로 측정합니다. 방향 정확도·평균 수익률을 기간별(1개월·3개월·6개월·1년)로 집계해 공개하며, 숫자로 검증되지 않은 신뢰는 신뢰가 아니라는 원칙 아래 운영됩니다.",
+    icon: "📅",
+  },
+  {
+    title: "모델 자기보정",
+    badge: "Self-Calibrating Model",
+    badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+    desc: "섹터별 과거 방향 정확도를 누적 분석해, 특정 섹터에서 반복적으로 낙관 편향이 나타날 경우 그 섹터 분석 시 AI 프롬프트에 보정 맥락을 자동 주입합니다. 인간 연구원이 자신의 오류 패턴을 되돌아보듯, 모델 스스로 과거 실수를 다음 판단에 반영합니다.",
+    icon: "🔄",
+  },
 ];
 
 const assumptions = [
