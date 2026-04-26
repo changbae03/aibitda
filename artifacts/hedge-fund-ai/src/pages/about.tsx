@@ -190,17 +190,10 @@ const differentiators = [
     icon: "📰",
   },
   {
-    title: "월간 결과 검증",
-    badge: "Monthly Outcome Verification",
-    badgeColor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
-    desc: "분석 후 30일 이상 경과한 보고서에 대해 실제 주가 방향이 AI 판정(매수/매도)과 일치했는지 자동으로 측정합니다. 방향 정확도·평균 수익률을 기간별(1개월·3개월·6개월·1년)로 집계해 공개하며, 숫자로 검증되지 않은 신뢰는 신뢰가 아니라는 원칙 아래 운영됩니다.",
-    icon: "📅",
-  },
-  {
-    title: "모델 자기보정",
+    title: "모델 자기보정 시스템",
     badge: "Self-Calibrating Model",
     badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
-    desc: "섹터별 과거 방향 정확도를 누적 분석해, 특정 섹터에서 반복적으로 낙관 편향이 나타날 경우 그 섹터 분석 시 AI 프롬프트에 보정 맥락을 자동 주입합니다. 인간 연구원이 자신의 오류 패턴을 되돌아보듯, 모델 스스로 과거 실수를 다음 판단에 반영합니다.",
+    desc: "분석 30일 후 실제 주가 방향과 AI 판정을 자동 대조해 섹터별 정확도를 누적합니다. 특정 섹터에서 낙관 편향이 반복될 경우, 다음 분석 시 밸류에이션·투자의견 단계 프롬프트에 보정 맥락을 자동 주입합니다. 사람이 손대지 않아도 모델이 스스로 과거 실수를 다음 판단에 반영하는 구조입니다.",
     icon: "🔄",
   },
 ];
