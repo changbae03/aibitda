@@ -578,7 +578,7 @@ function VersionTimelinePanel({ ticker, currentId }: { ticker: string; currentId
                     )}
                     {v.target_price != null && (
                       <span className="text-xs text-muted-foreground">
-                        목표가 {isKR ? `${Math.round(v.target_price).toLocaleString("ko-KR")}원` : `$${v.target_price.toFixed(1)}`}
+                        목표가 {formatCurrency(Math.round(v.target_price), isKR ? "KRW" : "USD")}
                       </span>
                     )}
                     {upside !== null && (

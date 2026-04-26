@@ -212,7 +212,7 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-[10px] text-muted-foreground mb-1">예상 MRR</p>
-                  <p className="text-lg font-bold tabular-nums text-foreground">₩{revenue.mrrKrw.toLocaleString("ko-KR")}</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">{revenue.mrrKrw.toLocaleString("ko-KR")}원</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-[10px] text-muted-foreground mb-1">재방문 유저</p>

@@ -20,11 +20,8 @@ export function formatCurrency(value: number | undefined | null, currency: strin
       maximumFractionDigits: 2,
     }).format(value);
   }
-  return new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: "KRW",
-    maximumFractionDigits: 0,
-  }).format(value);
+  // KRW: "원" suffix (한국어 표기 통일, ₩ 대신 원 사용)
+  return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value)}원`;
 }
 
 export function isUSTicker(ticker: string | undefined | null): boolean {
