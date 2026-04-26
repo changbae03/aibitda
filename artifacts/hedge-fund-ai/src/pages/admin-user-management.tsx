@@ -3,6 +3,7 @@ import {
   Loader2, Search, ChevronRight, X,
   Zap, TrendingUp, RotateCcw, Plus, Minus, History,
   ArrowLeft, ArrowRight, User, Crown, FileText, ExternalLink, BarChart2, Star,
+  Download, SlidersHorizontal,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -165,6 +166,13 @@ interface UserRow {
   displayName: string | null;
   email: string | null;
   createdAt: string | null;
+  lastActivity: string | null;
+}
+
+function isInactive(lastActivity: string | null, createdAt: string | null): boolean {
+  const ref = lastActivity ?? createdAt;
+  if (!ref) return false;
+  return Date.now() - new Date(ref).getTime() > 7 * 24 * 60 * 60 * 1000;
 }
 
 const TIER_CONFIG: Record<string, { label: string; color: string; limit: number }> = {
@@ -225,8 +233,11 @@ export default function AdminUserManagement() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("created_at");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<UserRow | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
   const [analysesTotal, setAnalysesTotal] = useState(0);
@@ -248,10 +259,12 @@ export default function AdminUserManagement() {
   const limit = 50;
   const totalPages = Math.ceil(total / limit);
 
-  const loadUsers = useCallback(async (p: number, s: string) => {
+  const loadUsers = useCallback(async (p: number, s: string, tier: string, sort: string) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(p), ...(s ? { search: s } : {}) });
+      const params = new URLSearchParams({ page: String(p), sortBy: sort });
+      if (s) params.set("search", s);
+      if (tier && tier !== "all") params.set("tier", tier);
       const r = await fetch(getApiUrl(`/api/admin/user-list?${params}`), { credentials: "include" });
       if (r.ok) {
         const d = await r.json();
@@ -262,6 +275,23 @@ export default function AdminUserManagement() {
       setLoading(false);
     }
   }, []);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/user-list/export"), { credentials: "include" });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadAnalyses = useCallback(async (userId: string, p: number) => {
     setAnalysesLoading(true);
@@ -277,7 +307,7 @@ export default function AdminUserManagement() {
     }
   }, []);
 
-  useEffect(() => { loadUsers(page, search); }, [page, search, loadUsers]);
+  useEffect(() => { loadUsers(page, search, tierFilter, sortBy); }, [page, search, tierFilter, sortBy, loadUsers]);
 
   useEffect(() => {
     if (!selected) return;
@@ -298,6 +328,17 @@ export default function AdminUserManagement() {
       setSearch(v);
       setPage(1);
     }, 400);
+  };
+
+  const handleTierChange = (t: string) => {
+    setTierFilter(t);
+    setPage(1);
+    setSelected(null);
+  };
+
+  const handleSortChange = (s: string) => {
+    setSortBy(s);
+    setPage(1);
   };
 
   const showMsg = (type: "ok" | "err", text: string) => {
@@ -402,22 +443,68 @@ export default function AdminUserManagement() {
     <div className="flex h-full min-h-[calc(100vh-4rem)]">
       {/* ── 왼쪽: 유저 목록 ── */}
       <div className={cn("flex flex-col border-r border-border transition-all", selected ? "w-[55%] min-w-0" : "w-full")}>
-        <div className="px-5 py-4 border-b border-border">
-          <div className="flex items-center justify-between mb-3">
+        <div className="px-5 py-4 border-b border-border space-y-3">
+          <div className="flex items-center justify-between">
             <div>
               <h1 className="text-lg font-bold text-foreground">유저 관리</h1>
               <p className="text-xs text-muted-foreground mt-0.5">총 {total.toLocaleString()}명의 유저</p>
             </div>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            >
+              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              CSV
+            </button>
           </div>
+
+          {/* 검색 */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
             <input
               type="text"
               value={searchInput}
               onChange={e => handleSearchChange(e.target.value)}
-              placeholder="유저 ID 검색..."
-              className="w-full pl-8 pr-3 py-2 text-sm bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono"
+              placeholder="닉네임, 이메일, 유저 ID 검색..."
+              className="w-full pl-8 pr-3 py-2 text-sm bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
+          </div>
+
+          {/* 티어 필터 탭 + 정렬 */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex gap-1">
+              {([
+                { key: "all", label: "전체" },
+                { key: "free", label: "무료" },
+                { key: "beta", label: "베타" },
+                { key: "premium", label: "프리미엄" },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => handleTierChange(key)}
+                  className={cn(
+                    "px-2.5 py-1 text-[11px] rounded-md border transition-colors font-medium",
+                    tierFilter === key
+                      ? "bg-primary text-white border-primary"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >{label}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <SlidersHorizontal className="w-3 h-3" />
+              <select
+                value={sortBy}
+                onChange={e => handleSortChange(e.target.value)}
+                className="text-[11px] bg-transparent border-none outline-none cursor-pointer"
+              >
+                <option value="created_at">최근 가입</option>
+                <option value="total_analyses">분석 많은</option>
+                <option value="recent_analyses">7일 활성</option>
+                <option value="last_activity">최근 활동</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -432,57 +519,66 @@ export default function AdminUserManagement() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저 ID</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저</th>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">등급</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">가입일</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총 분석</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">마지막 활동</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총</th>
                   <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">7일</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">오늘</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">오늘</th>
                   <th className="w-6" />
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
-                  <tr
-                    key={u.userId}
-                    onClick={() => setSelected(prev => prev?.userId === u.userId ? null : u)}
-                    className={cn(
-                      "border-b border-border/50 cursor-pointer transition-colors",
-                      selected?.userId === u.userId
-                        ? "bg-primary/5 border-l-2 border-l-primary"
-                        : "hover:bg-muted/40"
-                    )}
-                  >
-                    <td className="px-4 py-2.5">
-                      {u.displayName && (
-                        <p className="text-[12px] font-semibold text-foreground">{u.displayName}</p>
+                {users.map(u => {
+                  const inactive = isInactive(u.lastActivity, u.createdAt);
+                  return (
+                    <tr
+                      key={u.userId}
+                      onClick={() => setSelected(prev => prev?.userId === u.userId ? null : u)}
+                      className={cn(
+                        "border-b border-border/50 cursor-pointer transition-colors",
+                        selected?.userId === u.userId
+                          ? "bg-primary/5 border-l-2 border-l-primary"
+                          : "hover:bg-muted/40",
+                        inactive && selected?.userId !== u.userId && "opacity-50"
                       )}
-                      <span className="font-mono text-[11px] text-muted-foreground">{shortId(u.userId)}</span>
-                      {u.adminMemo && <span className="ml-1.5 text-[10px] text-amber-500" title={u.adminMemo}>📝</span>}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {(() => {
-                        const t = TIER_CONFIG[u.tier ?? "free"] ?? TIER_CONFIG.free;
-                        return <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", t.color)}>{t.label}</span>;
-                      })()}
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{fmt(u.createdAt)}</td>
-                    <td className="px-3 py-2.5 text-right">
-                      <span className="text-sm font-semibold text-foreground tabular-nums">{u.totalAnalyses}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <span className={cn("text-xs tabular-nums", u.recentAnalyses > 0 ? "text-blue-600 font-medium" : "text-muted-foreground")}>
-                        {u.recentAnalyses}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <CreditBar used={u.dailyUsed} limit={u.dailyLimit} />
-                    </td>
-                    <td className="pr-3">
-                      <ChevronRight className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", selected?.userId === u.userId && "rotate-90")} />
-                    </td>
-                  </tr>
-                ))}
+                    >
+                      <td className="px-4 py-2.5">
+                        {u.displayName && (
+                          <p className="text-[12px] font-semibold text-foreground">{u.displayName}</p>
+                        )}
+                        {u.email && (
+                          <p className="text-[10px] text-muted-foreground truncate max-w-[120px]">{u.email}</p>
+                        )}
+                        <span className="font-mono text-[10px] text-muted-foreground/60">{shortId(u.userId)}</span>
+                        {u.adminMemo && <span className="ml-1.5 text-[10px] text-amber-500" title={u.adminMemo}>📝</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {(() => {
+                          const t = TIER_CONFIG[u.tier ?? "free"] ?? TIER_CONFIG.free;
+                          return <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", t.color)}>{t.label}</span>;
+                        })()}
+                      </td>
+                      <td className="px-3 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap hidden lg:table-cell">
+                        {u.lastActivity ? fmt(u.lastActivity) : <span className="text-muted-foreground/40">없음</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className="text-sm font-semibold text-foreground tabular-nums">{u.totalAnalyses}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className={cn("text-xs tabular-nums", u.recentAnalyses > 0 ? "text-blue-600 font-medium" : "text-muted-foreground")}>
+                          {u.recentAnalyses}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 hidden sm:table-cell">
+                        <CreditBar used={u.dailyUsed} limit={u.dailyLimit} />
+                      </td>
+                      <td className="pr-3">
+                        <ChevronRight className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", selected?.userId === u.userId && "rotate-90")} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

@@ -108,37 +108,38 @@ router.get("/stats", async (req, res) => {
 
   const days = parseInt((req.query.days as string) ?? "30", 10);
 
-  const analysisRows = await pool.query(
-    `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
-     FROM analyses
-     WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
-     GROUP BY day
-     ORDER BY day ASC`,
-    [days]
-  );
-
-  const userRows = await pool.query(
-    `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
-     FROM user_credits
-     WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
-     GROUP BY day
-     ORDER BY day ASC`,
-    [days]
-  );
-
-  const totalUsers = await pool.query(`SELECT COUNT(*) FROM user_credits`);
-  const totalAnalyses = await pool.query(`SELECT COUNT(*) FROM analyses`);
-  const todayAnalyses = await pool.query(
-    `SELECT COUNT(*) FROM analyses WHERE created_at >= CURRENT_DATE`
-  );
-
-  const tierCounts = await pool.query(
-    `SELECT tier, COUNT(*) AS cnt FROM user_credits GROUP BY tier`
-  );
+  const [analysisRows, userRows, activeUserRows, totalUsers, totalAnalyses, todayAnalyses, tierCounts] = await Promise.all([
+    pool.query(
+      `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
+       FROM analyses
+       WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+       GROUP BY day ORDER BY day ASC`,
+      [days]
+    ),
+    pool.query(
+      `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(*) AS cnt
+       FROM user_credits
+       WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+       GROUP BY day ORDER BY day ASC`,
+      [days]
+    ),
+    pool.query(
+      `SELECT DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day, COUNT(DISTINCT user_id) AS cnt
+       FROM analyses
+       WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL AND user_id IS NOT NULL
+       GROUP BY day ORDER BY day ASC`,
+      [days]
+    ),
+    pool.query(`SELECT COUNT(*) FROM user_credits`),
+    pool.query(`SELECT COUNT(*) FROM analyses`),
+    pool.query(`SELECT COUNT(*) FROM analyses WHERE created_at >= CURRENT_DATE`),
+    pool.query(`SELECT tier, COUNT(*) AS cnt FROM user_credits GROUP BY tier`),
+  ]);
 
   res.json({
     analysisByDay: analysisRows.rows.map(r => ({ day: r.day, count: parseInt(r.cnt, 10) })),
     usersByDay: userRows.rows.map(r => ({ day: r.day, count: parseInt(r.cnt, 10) })),
+    activeUsersByDay: activeUserRows.rows.map(r => ({ day: r.day, count: parseInt(r.cnt, 10) })),
     totals: {
       users: parseInt(totalUsers.rows[0].count, 10),
       analyses: parseInt(totalAnalyses.rows[0].count, 10),
@@ -223,17 +224,39 @@ router.get("/user-list", async (req, res) => {
   }
 
   const search = (req.query.search as string | undefined)?.trim() ?? "";
+  const tierFilter = (req.query.tier as string | undefined)?.trim() ?? "";
+  const sortBy = (req.query.sortBy as string | undefined) ?? "created_at";
   const page = Math.max(1, parseInt((req.query.page as string) ?? "1", 10));
   const limit = 50;
   const offset = (page - 1) * limit;
 
-  const whereClause = search
-    ? `WHERE uc.user_id ILIKE $3`
-    : "";
+  const conditions: string[] = [];
+  const baseParams: any[] = [];
 
-  const params: any[] = search
-    ? [limit, offset, `%${search}%`]
-    : [limit, offset];
+  if (search) {
+    const idx = baseParams.length + 1;
+    conditions.push(`(uc.user_id ILIKE $${idx} OR uc.display_name ILIKE $${idx} OR uc.email ILIKE $${idx})`);
+    baseParams.push(`%${search}%`);
+  }
+  if (tierFilter && tierFilter !== "all") {
+    const idx = baseParams.length + 1;
+    conditions.push(`uc.tier = $${idx}`);
+    baseParams.push(tierFilter);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const SORT_MAP: Record<string, string> = {
+    created_at: "uc.created_at DESC",
+    total_analyses: "uc.total_analyses DESC",
+    last_activity: "last_activity DESC NULLS LAST",
+    recent_analyses: "recent_analyses DESC",
+  };
+  const orderBy = SORT_MAP[sortBy] ?? SORT_MAP.created_at;
+
+  const listParams = [...baseParams, limit, offset];
+  const limitIdx = baseParams.length + 1;
+  const offsetIdx = baseParams.length + 2;
 
   const { rows } = await pool.query(
     `SELECT
@@ -247,19 +270,20 @@ router.get("/user-list", async (req, res) => {
        uc.display_name,
        uc.email,
        uc.created_at,
-       COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses
+       COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses,
+       MAX(a.created_at) AS last_activity
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
      ${whereClause}
      GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at
-     ORDER BY uc.created_at DESC
-     LIMIT $1 OFFSET $2`,
-    params
+     ORDER BY ${orderBy}
+     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    listParams
   );
 
   const countResult = await pool.query(
-    `SELECT COUNT(*) FROM user_credits uc ${search ? `WHERE uc.user_id ILIKE $1` : ""}`,
-    search ? [`%${search}%`] : []
+    `SELECT COUNT(*) FROM user_credits uc ${whereClause}`,
+    baseParams
   );
 
   res.json({
@@ -275,11 +299,50 @@ router.get("/user-list", async (req, res) => {
       displayName: r.display_name ?? null,
       email: r.email ?? null,
       createdAt: r.created_at,
+      lastActivity: r.last_activity ?? null,
     })),
     total: parseInt(countResult.rows[0].count, 10),
     page,
     limit,
   });
+});
+
+// GET /api/admin/user-list/export — 유저 목록 CSV 내보내기
+router.get("/user-list/export", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+  const { rows } = await pool.query(
+    `SELECT
+       uc.user_id, uc.display_name, uc.email, uc.tier,
+       uc.total_analyses, uc.bonus_credits, uc.daily_limit, uc.daily_used,
+       uc.created_at,
+       MAX(a.created_at) AS last_activity,
+       COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses
+     FROM user_credits uc
+     LEFT JOIN analyses a ON a.user_id = uc.user_id
+     GROUP BY uc.user_id, uc.display_name, uc.email, uc.tier, uc.total_analyses,
+              uc.bonus_credits, uc.daily_limit, uc.daily_used, uc.created_at
+     ORDER BY uc.created_at DESC`
+  );
+  const header = "카카오ID,닉네임,이메일,등급,전체분석,7일분석,보너스크레딧,오늘한도,마지막활동,가입일";
+  const lines = rows.map(r => [
+    r.user_id,
+    r.display_name ?? "",
+    r.email ?? "",
+    r.tier ?? "free",
+    r.total_analyses,
+    r.recent_analyses,
+    r.bonus_credits,
+    r.daily_limit,
+    r.last_activity ? new Date(r.last_activity).toISOString().slice(0, 10) : "",
+    r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : "",
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="users_${new Date().toISOString().slice(0,10)}.csv"`);
+  res.send("\uFEFF" + [header, ...lines].join("\n"));
 });
 
 // GET /api/admin/user-list/:userId/analyses — 특정 유저의 분석 이력
@@ -533,7 +596,7 @@ router.get("/revenue-stats", async (req, res) => {
   const userId = getUserId(req);
   if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
   try {
-    const [tierCounts, weeklySignups, tokenCosts, repeatUsers] = await Promise.all([
+    const [tierCounts, weeklySignups, tokenCosts, repeatUsers, funnelData] = await Promise.all([
       pool.query(`SELECT tier, COUNT(*) AS cnt FROM user_credits GROUP BY tier`),
       pool.query(`
         SELECT DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Seoul')::DATE AS week,
@@ -551,18 +614,31 @@ router.get("/revenue-stats", async (req, res) => {
         SELECT COUNT(DISTINCT user_id) AS repeat_users
         FROM analyses WHERE user_id IS NOT NULL
         GROUP BY user_id HAVING COUNT(*) > 1`),
+      pool.query(`
+        SELECT
+          (SELECT COUNT(*) FROM user_credits) AS total_users,
+          (SELECT COUNT(DISTINCT a.user_id) FROM analyses a WHERE a.user_id IS NOT NULL) AS analyzed_users,
+          (SELECT COUNT(DISTINCT a.user_id) FROM analyses a WHERE a.user_id IS NOT NULL
+           GROUP BY a.user_id HAVING COUNT(*) > 1) AS repeat_count
+      `),
     ]);
     const tiers: Record<string, number> = {};
     for (const r of tierCounts.rows) tiers[r.tier] = parseInt(r.cnt, 10);
     const PRICING: Record<string, number> = { free: 0, beta: 9900, premium: 29900 };
     const mrrKrw = Object.entries(tiers)
       .reduce((sum, [t, n]) => sum + (PRICING[t] ?? 0) * n, 0);
+    const f = funnelData.rows[0];
     res.json({
       tierCounts: tiers,
       mrrKrw,
       weeklySignups: weeklySignups.rows,
       tokenCosts: tokenCosts.rows[0],
       repeatUserCount: repeatUsers.rowCount ?? 0,
+      funnel: {
+        totalUsers: parseInt(f?.total_users ?? "0", 10),
+        analyzedUsers: parseInt(f?.analyzed_users ?? "0", 10),
+        repeatUsers: repeatUsers.rowCount ?? 0,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "DB error" });

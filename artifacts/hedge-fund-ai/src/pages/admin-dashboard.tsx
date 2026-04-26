@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  ComposedChart, Bar, Line, LineChart, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  CartesianGrid, Legend,
 } from "recharts";
-import { Loader2, Users, BarChart2, Activity, Crown, RefreshCw, Bell, BellOff, Save, DollarSign, Cpu } from "lucide-react";
+import {
+  Loader2, Users, BarChart2, Activity, Crown, RefreshCw, Bell, BellOff, Save,
+  DollarSign, Cpu, TrendingUp, ArrowRight,
+} from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
 interface RevenueStats {
@@ -11,12 +15,14 @@ interface RevenueStats {
   weeklySignups: Array<{ week: string; signups: number }>;
   tokenCosts: { tracked_analyses: number; total_tokens: number; total_cost_usd: number; avg_cost_usd: number };
   repeatUserCount: number;
+  funnel?: { totalUsers: number; analyzedUsers: number; repeatUsers: number };
 }
 
 interface DayCount { day: string; count: number; }
 interface StatsData {
   analysisByDay: DayCount[];
   usersByDay: DayCount[];
+  activeUsersByDay: DayCount[];
   totals: { users: number; analyses: number; todayAnalyses: number };
   tierCounts: Record<string, number>;
 }
@@ -35,18 +41,38 @@ function fmt(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function StatCard({ icon: Icon, label, value, sub }: {
-  icon: React.ElementType; label: string; value: string | number; sub?: string
+function fmtWeek(iso: string) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}주`;
+}
+
+function StatCard({ icon: Icon, label, value, sub, highlight }: {
+  icon: React.ElementType; label: string; value: string | number; sub?: string; highlight?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border p-4 flex items-start gap-3 bg-background">
-      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+    <div className={cn("rounded-xl border p-4 flex items-start gap-3 bg-background", highlight ? "border-primary/30" : "border-border")}>
+      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", highlight ? "bg-primary/15" : "bg-primary/10")}>
         <Icon className="w-4 h-4 text-primary" />
       </div>
       <div>
         <p className="text-[11px] text-muted-foreground mb-0.5">{label}</p>
-        <p className="text-2xl font-bold tabular-nums text-foreground">{value.toLocaleString()}</p>
+        <p className="text-2xl font-bold tabular-nums text-foreground">{typeof value === "number" ? value.toLocaleString() : value}</p>
         {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function FunnelBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-semibold tabular-nums text-foreground">{value.toLocaleString()}명 <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -134,21 +160,33 @@ export default function AdminDashboard() {
 
   const merged = (() => {
     if (!stats) return [];
-    const map: Record<string, { day: string; analyses: number; newUsers: number }> = {};
+    const map: Record<string, { day: string; analyses: number; newUsers: number; activeUsers: number }> = {};
     for (const r of stats.analysisByDay) {
       const k = String(r.day).slice(0, 10);
-      if (!map[k]) map[k] = { day: k, analyses: 0, newUsers: 0 };
+      if (!map[k]) map[k] = { day: k, analyses: 0, newUsers: 0, activeUsers: 0 };
       map[k].analyses = r.count;
     }
     for (const r of stats.usersByDay) {
       const k = String(r.day).slice(0, 10);
-      if (!map[k]) map[k] = { day: k, analyses: 0, newUsers: 0 };
+      if (!map[k]) map[k] = { day: k, analyses: 0, newUsers: 0, activeUsers: 0 };
       map[k].newUsers = r.count;
+    }
+    for (const r of (stats.activeUsersByDay ?? [])) {
+      const k = String(r.day).slice(0, 10);
+      if (!map[k]) map[k] = { day: k, analyses: 0, newUsers: 0, activeUsers: 0 };
+      map[k].activeUsers = r.count;
     }
     return Object.values(map).sort((a, b) => a.day.localeCompare(b.day)).map(d => ({ ...d, day: fmt(d.day) }));
   })();
 
+  const weeklyData = (revenue?.weeklySignups ?? []).map(r => ({
+    week: fmtWeek(String(r.week)),
+    signups: parseInt(String(r.signups), 10),
+  }));
+
   const noticeEnabled = settings.notice_enabled === "true";
+  const funnel = revenue?.funnel;
+  const totalUsers = stats?.totals.users ?? funnel?.totalUsers ?? 0;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -175,9 +213,30 @@ export default function AdminDashboard() {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <StatCard icon={Users} label="전체 가입자" value={stats.totals.users} />
-            <StatCard icon={Activity} label="오늘 분석" value={stats.totals.todayAnalyses} />
+            <StatCard icon={Activity} label="오늘 분석" value={stats.totals.todayAnalyses} highlight />
             <StatCard icon={BarChart2} label="전체 분석" value={stats.totals.analyses} />
           </div>
+
+          {/* ── 유저 퍼널 ── */}
+          {!revenueLoading && funnel && (
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">유저 활성 퍼널</p>
+              </div>
+              <div className="space-y-3">
+                <FunnelBar label="가입" value={funnel.totalUsers} max={funnel.totalUsers} color="bg-slate-400" />
+                <div className="flex items-center gap-1.5 text-muted-foreground/40">
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+                <FunnelBar label="첫 분석 완료" value={funnel.analyzedUsers} max={funnel.totalUsers} color="bg-blue-400" />
+                <div className="flex items-center gap-1.5 text-muted-foreground/40">
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+                <FunnelBar label="재방문 (2회+)" value={funnel.repeatUsers} max={funnel.totalUsers} color="bg-primary" />
+              </div>
+            </div>
+          )}
 
           {/* 등급 분포 */}
           <div className="rounded-xl border border-border p-4">
@@ -202,7 +261,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* ── 수익 지표 ── */}
+          {/* ── 수익 & 비용 지표 ── */}
           {!revenueLoading && revenue && (
             <div className="rounded-xl border border-border p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -235,7 +294,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* 차트 */}
+          {/* ── 일별 사용량 (분석+액티브 유저 복합) ── */}
           <div className="rounded-xl border border-border p-4">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">일별 사용량</p>
@@ -259,21 +318,36 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground text-center py-8">데이터가 없습니다</p>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={merged} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <ComposedChart data={merged} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))" }}
-                    labelStyle={{ fontWeight: 600 }}
-                  />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))" }} labelStyle={{ fontWeight: 600 }} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="analyses" name="분석 수" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="newUsers" name="신규 가입" fill="#6ee7b7" radius={[3, 3, 0, 0]} />
-                </BarChart>
+                  <Bar yAxisId="left" dataKey="analyses" name="분석 수" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="newUsers" name="신규 가입" fill="#6ee7b7" radius={[3, 3, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="activeUsers" name="액티브 유저" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                </ComposedChart>
               </ResponsiveContainer>
             )}
           </div>
+
+          {/* ── 주간 신규 가입 트렌드 ── */}
+          {!revenueLoading && weeklyData.length > 1 && (
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">주간 신규 가입 트렌드</p>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={weeklyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))" }} labelStyle={{ fontWeight: 600 }} />
+                  <Line type="monotone" dataKey="signups" name="신규 가입" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </>
       )}
 
@@ -379,7 +453,6 @@ export default function AdminDashboard() {
             />
           </div>
 
-          {/* 미리보기 */}
           {settings.notice_text && (
             <div className={cn("rounded-lg border px-4 py-2.5 text-sm", {
               "border-blue-200 bg-blue-50 text-blue-700": (settings.notice_type ?? "info") === "info",
