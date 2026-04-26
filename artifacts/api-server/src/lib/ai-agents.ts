@@ -580,9 +580,13 @@ FDA 특별 지정 → PoS 보정 (필수):
 `;
   }
 
+  // ── 뉴 스페이스 / 상업 우주 — 방산보다 먼저 체크 (RKLB 등 야후파이낸스 "aerospace & defense" 오분류 대응) ──
+  const isNewSpaceCompany = /rocket lab|rocketlab|planet labs|ast spacemobile|ast space|spire global|redwire|terran orbital|astra space|virgin galactic|momentus|satellogic|mynaric/.test(name) ||
+    /new space|commercial space|space launch|launch vehicle|launch services|small satellite|satellite constellation|cubesat|smallsat|space systems|space infrastructure|orbital launch|launch provider/.test(ind);
+
   // ── 미국 방산 (US Defense & Aerospace) ──────────────────────────────────
-  if (/defense|aerospace defense|military contractor|government defense|defense electronics|defense systems|combat systems/.test(ind) ||
-      /lockheed martin|raytheon|northrop grumman|general dynamics|l3harris|huntington ingalls|leidos|booz allen|saic|transdign|heico|bwxt|leonardo drs|curtiss-wright|moog|kaman/.test(name)) {
+  if (!isNewSpaceCompany && (/defense|aerospace defense|military contractor|government defense|defense electronics|defense systems|combat systems/.test(ind) ||
+      /lockheed martin|raytheon|northrop grumman|general dynamics|l3harris|huntington ingalls|leidos|booz allen|saic|transdign|heico|bwxt|leonardo drs|curtiss-wright|moog|kaman/.test(name))) {
     const isServiceOnly = /booz allen|saic|leidos|caci international/.test(name) || /it services|government it|consulting/.test(ind);
     return `
 [섹터 특화 지침 — 미국 방산 (US Defense & Aerospace)]
@@ -622,6 +626,69 @@ FCF 구조 분석:
 - ⚠️ 원가초과 EAC 손실이 있는 분기의 EPS/EBITDA는 정상화 필수 (일회성 손실 제거 후 Adj. EBITDA 사용)
 - ⚠️ 방산사 P/Book 의미 없음 (경쟁우위는 자산이 아닌 기술·계약 인력·분류프로그램)
 피어: LMT, RTX, NOC, GD, LHX 등 대형 프라임 EV/EBITDA, P/E, FCF Yield, Book-to-Bill, Backlog/Revenue 비교
+`;
+  }
+
+  // ── 뉴 스페이스 / 상업 우주 (New Space / Commercial Space) ─────────────
+  if (isNewSpaceCompany) {
+    return `
+[섹터 특화 지침 — 뉴 스페이스 / 상업 우주 (New Space)]
+핵심 KPI: 연간 발사 횟수(Launch Cadence), 발사 ASP(평균 단가, $M/launch), Launch Backlog(발사 수주잔고), Space Systems Backlog, 세그먼트별 Gross Margin, Cash Burn Rate(월), Runway(현금 소진 예상 월수), 위성 제조 수, 발사 성공률
+
+구조 특이사항 — 뉴 스페이스는 전통 방산·항공우주와 근본적으로 다름:
+- 대부분 **적자 성장 단계** → 전통 EV/EBITDA·P/E 사용 불가, EV/Revenue가 기본 배수
+- **이중(또는 다중) 세그먼트**: 발사 서비스 + 우주 시스템/위성 제조 + 소프트웨어/데이터 서비스 혼재
+- **옵션 가치가 핵심**: 차세대 발사체(Neutron 등) 개발 진척, NSSL 인증, 정부 계약 파이프라인
+- SpaceX(비상장)가 사실상 벤치마크 → 직접 EV/Revenue 비교 불가, 간접 추정 활용
+- 발사 실패(anomaly) 1회가 분기 매출 전체에 미치는 충격 → 발사 성공률 추이 의무 분석
+
+세그먼트 분해 (SOTP 필수):
+1. **Launch Services**: Electron 등 현재 운용 중인 발사체
+   - 현재 연간 발사 횟수 × ASP = Run-rate 매출
+   - Gross Margin % (목표: 소형 발사체 30~40% 장기 목표)
+   - Launch Manifest 공개 수(발표된 향후 발사 수) — 단기 매출 가시성
+   - 재사용 로켓 여부: 재사용화 달성 시 단가 인하 속도와 마진 개선 경로
+2. **Space Systems / Spacecraft Manufacturing**:
+   - 위성 버스, 위성 부품(태양전지판·추진계), 반응 조립체(RW) 수요
+   - 고객: 상업위성사, NASA, DoD (계약 믹스)
+   - Gross Margin % (부품·소프트웨어 마진이 발사보다 높은 경향)
+   - Backlog → 향후 2~3년 매출 인식 스케줄
+3. **차세대 발사체 옵션 가치** (해당 시):
+   - Neutron(RKLB) / Terran R / 기타 미드-헤비 발사체 개발 상황
+   - 예상 첫 발사 시기, 개발 CapEx 소요 잔액
+   - 성공 시 TAM 확대: NSSL(국가안보우주발사) 입찰 자격, 대형 정부 메가 컨스텔레이션
+   - 확률 가중 DCF로 옵션 가치 산출 (PoS 25~50% 적용, 시장 컨센서스 참조)
+
+밸류에이션 방법론 (필수 순서):
+① **SOTP (Sum-of-the-Parts) — Lead**:
+   - Launch Services EV = 2~3년 후 정상화 Revenue × 섹터 EV/Revenue 배수 / (1+WACC)^n
+   - Space Systems EV = TTM 또는 FY Revenue × 섹터 EV/Revenue 배수
+   - 차세대 발사체 옵션 EV = 성공 시 EV 추정 × PoS − 잔여 개발비
+   - 합산 EV → 순현금 가감 → 주당 가치
+② **EV/Revenue 피어 비교 — 보조**:
+   - 성장률 조정: 고성장(>50% YoY) 15~25x / 중성장(20~50%) 8~15x / 저성장 3~8x
+   - 반드시 Gross Margin %로 배수 조정 (마진 낮을수록 할인)
+③ **DCF 시나리오 (3-Case) — 보조**:
+   - Bear: 현재 Cadence 유지, 차세대 발사체 지연 2년+, 조달 원가 상승
+   - Base: Cadence 연 20~30% 성장, Space Systems Backlog 순조로운 인식, 차세대 발사체 계획대로
+   - Bull: NSSL 인증 취득, 대형 정부 메가컨스텔레이션 론치 계약, 차세대 발사체 조기 취역
+   ※ 흑자 전환 시점(EBITDA BEP 연도) 명시 필수
+
+의무 분석 항목:
+- **발사 매니페스트 & Backlog 분해**: 공개 발표된 향후 발사 수(분기별), 발사당 매출 추산
+- **Cash Burn & Runway**: 분기 순현금 변화, 현재 현금 ÷ 분기 burn = 잔여 Runway(분기)
+  · Runway < 6분기(1.5년) 시 → 희석 우려 경고 필수 (추가 자금조달 가능성 분석)
+- **재사용 로켓 진척**: 부스터 회수 성공 횟수, 재비행 목표 시점, 재사용 달성 시 ASP 변화 시나리오
+- **수직 통합도**: 발사장(자체/임차), 발사체 자체 제조, 위성 버스 자체 제조 비율 — 높을수록 원가 경쟁력
+- **정부 vs 상업 고객 믹스**: DoD/NASA(안정적·고마진 가능성) vs 상업 위성사(경쟁 심화) 비중
+- **경쟁 구도**: SpaceX Falcon 9(단가 $67M) 대비 소형 전용 발사체의 차별점 명확화 (전용 궤도·일정 유연성·소형 전용 최적화)
+- **발사 실패 이력**: 최근 anomaly 발생 시 원인·재발 방지 조치·보험 처리 분석 필수
+
+피어 그룹 선정:
+- **직접 피어(상장)**: Planet Labs (PL), AST SpaceMobile (ASTS), Redwire (RDW), Spire Global (SPIR), Satellogic (SATL), Mynaric (MYNA)
+- **간접 피어(비상장 추정)**: SpaceX(ARK/민간 거래 추정 EV ~$350B+), Blue Origin — 참고용 언급만
+- **전통 우주 방산**: Boeing Defense Space, Northrop Grumman Space, L3Harris — 다른 비즈니스 구조로 주의
+- ⚠️ 뉴 스페이스 피어는 대부분 소형 적자 기업 → 배수 신뢰도 낮음, 절대값 DCF 교차검증 필수
 `;
   }
 
