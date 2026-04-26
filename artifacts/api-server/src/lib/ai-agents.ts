@@ -633,62 +633,86 @@ FCF 구조 분석:
   if (isNewSpaceCompany) {
     return `
 [섹터 특화 지침 — 뉴 스페이스 / 상업 우주 (New Space)]
-핵심 KPI: 연간 발사 횟수(Launch Cadence), 발사 ASP(평균 단가, $M/launch), Launch Backlog(발사 수주잔고), Space Systems Backlog, 세그먼트별 Gross Margin, Cash Burn Rate(월), Runway(현금 소진 예상 월수), 위성 제조 수, 발사 성공률
+핵심 KPI: 연간 발사 횟수(Launch Cadence), 발사 ASP(평균 단가, $M/launch), 발사 성공률(%), Launch Backlog, Space Systems Backlog(세그먼트별 비중 %), 세그먼트별 Gross Margin, Cash Burn Rate(월), Runway(현금 소진 예상 월수), 수주잔고 커버리지(Backlog/TTM Revenue)
 
 구조 특이사항 — 뉴 스페이스는 전통 방산·항공우주와 근본적으로 다름:
-- 대부분 **적자 성장 단계** → 전통 EV/EBITDA·P/E 사용 불가, EV/Revenue가 기본 배수
-- **이중(또는 다중) 세그먼트**: 발사 서비스 + 우주 시스템/위성 제조 + 소프트웨어/데이터 서비스 혼재
-- **옵션 가치가 핵심**: 차세대 발사체(Neutron 등) 개발 진척, NSSL 인증, 정부 계약 파이프라인
-- SpaceX(비상장)가 사실상 벤치마크 → 직접 EV/Revenue 비교 불가, 간접 추정 활용
-- 발사 실패(anomaly) 1회가 분기 매출 전체에 미치는 충격 → 발사 성공률 추이 의무 분석
+- **세그먼트별 성숙도 비대칭**: 발사 서비스는 아직 적자·성장 단계 / 우주 시스템(부품·위성 제조)은 이미 흑자 가능 단계로 세그먼트마다 다른 방법론 적용 필수
+- **옵션 가치가 기업가치의 핵심 변수**: 차세대 발사체(Neutron 등) 개발 진척, NSSL 인증 여부, 대형 정부 컨스텔레이션 계약 수주 가능성
+- SpaceX(비상장)가 사실상 론치 벤치마크 → 직접 피어 비교 불가, 방산 서비스·부품사 배수 차용
+- 발사 실패(anomaly) 1회 = 분기 수익성 전체에 직결 → 발사 성공률 추이·보험 구조 의무 분석
+- 백로그 구성 분석 필수: Space Systems vs Launch Services 비중이 밸류에이션 방법론 결정
 
-세그먼트 분해 (SOTP 필수):
-1. **Launch Services**: Electron 등 현재 운용 중인 발사체
-   - 현재 연간 발사 횟수 × ASP = Run-rate 매출
-   - Gross Margin % (목표: 소형 발사체 30~40% 장기 목표)
-   - Launch Manifest 공개 수(발표된 향후 발사 수) — 단기 매출 가시성
-   - 재사용 로켓 여부: 재사용화 달성 시 단가 인하 속도와 마진 개선 경로
-2. **Space Systems / Spacecraft Manufacturing**:
-   - 위성 버스, 위성 부품(태양전지판·추진계), 반응 조립체(RW) 수요
-   - 고객: 상업위성사, NASA, DoD (계약 믹스)
-   - Gross Margin % (부품·소프트웨어 마진이 발사보다 높은 경향)
-   - Backlog → 향후 2~3년 매출 인식 스케줄
-3. **차세대 발사체 옵션 가치** (해당 시):
-   - Neutron(RKLB) / Terran R / 기타 미드-헤비 발사체 개발 상황
-   - 예상 첫 발사 시기, 개발 CapEx 소요 잔액
-   - 성공 시 TAM 확대: NSSL(국가안보우주발사) 입찰 자격, 대형 정부 메가 컨스텔레이션
-   - 확률 가중 DCF로 옵션 가치 산출 (PoS 25~50% 적용, 시장 컨센서스 참조)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOTP 3단계 — Lead 방법론 (필수)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 단일 배수 적용 금지. 세그먼트별로 아래 방법론을 각각 독립 적용 후 합산.
 
-밸류에이션 방법론 (필수 순서):
-① **SOTP (Sum-of-the-Parts) — Lead**:
-   - Launch Services EV = 2~3년 후 정상화 Revenue × 섹터 EV/Revenue 배수 / (1+WACC)^n
-   - Space Systems EV = TTM 또는 FY Revenue × 섹터 EV/Revenue 배수
-   - 차세대 발사체 옵션 EV = 성공 시 EV 추정 × PoS − 잔여 개발비
-   - 합산 EV → 순현금 가감 → 주당 가치
-② **EV/Revenue 피어 비교 — 보조**:
-   - 성장률 조정: 고성장(>50% YoY) 15~25x / 중성장(20~50%) 8~15x / 저성장 3~8x
-   - 반드시 Gross Margin %로 배수 조정 (마진 낮을수록 할인)
-③ **DCF 시나리오 (3-Case) — 보조**:
-   - Bear: 현재 Cadence 유지, 차세대 발사체 지연 2년+, 조달 원가 상승
-   - Base: Cadence 연 20~30% 성장, Space Systems Backlog 순조로운 인식, 차세대 발사체 계획대로
-   - Bull: NSSL 인증 취득, 대형 정부 메가컨스텔레이션 론치 계약, 차세대 발사체 조기 취역
-   ※ 흑자 전환 시점(EBITDA BEP 연도) 명시 필수
+【세그먼트 1 — Launch Services (현재 운용 발사체)】
+방법론: EV/Forward Revenue (소형 발사체는 이익 없음 → EV/Revenue 기반)
+적용 배수: 8~12x Fwd Revenue (방산 서비스 기업 수준, 성장률·성공률로 조정)
+  · 성공률 100% + Cadence YoY 30%↑ 유지 → 10~12x
+  · 성공률 하락 또는 Cadence 정체 → 8~9x
+주요 계산:
+  - 연간 발사 횟수 × ASP = Launch Revenue
+  - Gross Margin % 추이 (목표: 소형 전용 발사체 장기 30~40% 달성 가능 여부)
+  - Launch Manifest 공개 수 → 단기 매출 가시성 근거
+  - 재사용 로켓 달성 시: ASP 하락 vs Cadence 증가 트레이드오프 시나리오
 
-의무 분석 항목:
-- **발사 매니페스트 & Backlog 분해**: 공개 발표된 향후 발사 수(분기별), 발사당 매출 추산
-- **Cash Burn & Runway**: 분기 순현금 변화, 현재 현금 ÷ 분기 burn = 잔여 Runway(분기)
-  · Runway < 6분기(1.5년) 시 → 희석 우려 경고 필수 (추가 자금조달 가능성 분석)
-- **재사용 로켓 진척**: 부스터 회수 성공 횟수, 재비행 목표 시점, 재사용 달성 시 ASP 변화 시나리오
-- **수직 통합도**: 발사장(자체/임차), 발사체 자체 제조, 위성 버스 자체 제조 비율 — 높을수록 원가 경쟁력
-- **정부 vs 상업 고객 믹스**: DoD/NASA(안정적·고마진 가능성) vs 상업 위성사(경쟁 심화) 비중
-- **경쟁 구도**: SpaceX Falcon 9(단가 $67M) 대비 소형 전용 발사체의 차별점 명확화 (전용 궤도·일정 유연성·소형 전용 최적화)
-- **발사 실패 이력**: 최근 anomaly 발생 시 원인·재발 방지 조치·보험 처리 분석 필수
+【세그먼트 2 — Space Systems (위성부품·위성 제조·반응휠 등)】
+방법론: EV/정상화 EBITDA (이미 흑자 가능 세그먼트 → 방산부품 피어 배수 적용)
+적용 배수: 15~18x 정상화 EBITDA
+  ⚠️ 현재 보고 EBITDA 그대로 사용 금지 — 현재 마진이 낮더라도 목표 정상화 마진(12~15%) 가정 후 적용
+  · 계산식: Space Systems Revenue × 정상화 EBITDA Margin% × 배수
+피어: Moog Inc, Curtiss-Wright, Heico, TransDigm (방산 정밀부품 기업 → 안정적 정부 계약 기반)
+주요 데이터 포인트:
+  - Space Systems Backlog 규모 및 전체 백로그 내 비중(통상 70%↑이면 핵심 세그먼트)
+  - SDA(우주개발국) / NASA / DoD 장기 계약 포함 여부 → 매출 가시성 근거
+  - 위성 버스·반응휠·태양전지판 등 핵심 부품 자체 제조 비율 (높을수록 마진 방어력)
 
-피어 그룹 선정:
-- **직접 피어(상장)**: Planet Labs (PL), AST SpaceMobile (ASTS), Redwire (RDW), Spire Global (SPIR), Satellogic (SATL), Mynaric (MYNA)
-- **간접 피어(비상장 추정)**: SpaceX(ARK/민간 거래 추정 EV ~$350B+), Blue Origin — 참고용 언급만
-- **전통 우주 방산**: Boeing Defense Space, Northrop Grumman Space, L3Harris — 다른 비즈니스 구조로 주의
-- ⚠️ 뉴 스페이스 피어는 대부분 소형 적자 기업 → 배수 신뢰도 낮음, 절대값 DCF 교차검증 필수
+【세그먼트 3 — 차세대 발사체 옵션 가치 (Neutron 등, 해당 시)】
+방법론: rNPV (Risk-adjusted NPV) — 바이오 rNPV와 동일 구조 적용
+  rNPV = Σ [ (성공 시나리오 연도별 FCF × PoS) / (1+WACC)^t ] − 잔여 개발 CapEx
+  · PoS(성공확률): 초도 발사체 상업화 성공 25~40% (발사체 개발 역사적 실패율 반영)
+  · 성공 시 TAM: NSSL(국가안보우주발사) 입찰 자격 획득 → 중형급 정부 발사 시장 진입
+  · 개발 일정 슬리피지: 공식 발표 목표 + 12~24개월 보수적 가정 (발사체 개발 통상 지연)
+  · 발사 성공 후 NSSL 인증까지 추가 2~3년 소요 가정
+  · 잔여 개발 CapEx = 총 예상 개발비 − 현재까지 투입 누계
+
+합산 SOTP:
+Launch Services EV + Space Systems EV + Neutron rNPV + 순현금(현금 − 금융부채)
+→ 총 EV ÷ 희석 주식수 = 주당 적정가치
+⚠️ 희석 주식수: 스톡옵션·RSU·전환사채 등 잠재 희석 분 포함 fully-diluted 기준 사용
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+보조 방법론
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+② EV/Revenue 전사 피어 비교:
+   - 고성장(>50% YoY): 15~25x / 중성장(20~50%): 8~15x / 저성장: 3~8x
+   - Gross Margin % 낮을수록 배수 하단 적용
+
+③ DCF 3-Case 시나리오:
+   - Bear: Cadence 정체, 차세대 발사체 2년↑ 지연, Space Systems 마진 개선 지연
+   - Base: Launch Cadence 연 20~30% 성장, Space Systems Backlog 순조로운 인식, 차세대 발사체 계획 기준
+   - Bull: NSSL 인증 조기 달성, 대형 정부 메가컨스텔레이션 계약, 재사용 로켓 달성
+   ※ EBITDA BEP(Break-even) 연도 반드시 명시
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+의무 분석 항목
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- **Backlog 세그먼트 분해**: Space Systems vs Launch Services 비중 및 YoY 변화
+- **Cash Burn & Runway**: 분기 순현금 변화 / 현금 ÷ 분기 Burn = 잔여 Runway(분기)
+  · Runway < 6분기(1.5년) → 희석 우려 경고 및 추가 자금조달 가능성 분석 필수
+- **차세대 발사체 개발 현황**: 탱크 테스트·엔진 테스트 진척, 초도 발사 목표 분기, 슬리피지 이력
+- **재사용 로켓 진척**: 부스터 회수 성공 횟수, 재비행 목표 시점, 마진 개선 경로
+- **정부 vs 상업 고객 믹스**: DoD/NASA/SDA(안정·마진 우수) vs 상업(경쟁 노출) 비중
+- **SpaceX 경쟁 구도**: Falcon 9(~$67M/launch) 대비 소형 전용 발사체의 차별점(전용 궤도·일정 유연성·전용 최적화) 구체화
+- **발사 실패 이력**: anomaly 발생 시 원인·재발 방지 조치·보험 처리·고객 신뢰 영향 분석
+
+피어 그룹:
+- Launch Services 배수 참고: 방산 서비스 중형사(EV/Revenue 8~12x) / SpaceX 비상장 추정 참고
+- Space Systems 배수 참고: Moog, Curtiss-Wright, Heico, TransDigm (EV/EBITDA 15~18x)
+- 뉴 스페이스 직접 피어(상장): Planet Labs (PL), AST SpaceMobile (ASTS), Redwire (RDW), Spire Global (SPIR)
+- ⚠️ 뉴 스페이스 피어 대부분 소형 적자 기업 → 배수 신뢰도 낮음, SOTP 절대값이 기준
 `;
   }
 
