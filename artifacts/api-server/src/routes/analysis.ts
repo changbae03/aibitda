@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, pool } from "@workspace/db";
+import { validateTicker } from "../lib/sanitize.js";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
 import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
@@ -2174,6 +2175,16 @@ router.post("/", async (req, res) => {
     res.status(400).json({ error: "ticker는 필수입니다" });
     return;
   }
+  const validatedTicker = validateTicker(ticker);
+  if (!validatedTicker) {
+    res.status(400).json({ error: "유효하지 않은 ticker 형식입니다 (영숫자, '.', '-' 최대 20자)" });
+    return;
+  }
+
+  if (additionalContext && additionalContext.length > 2000) {
+    res.status(400).json({ error: "추가 컨텍스트는 2,000자를 초과할 수 없습니다" });
+    return;
+  }
 
   // 스케줄러 내부 호출 여부 확인 (크레딧 우회 — 이미 스케줄러에서 차감 완료)
   const isSchedulerCall =
@@ -2864,7 +2875,8 @@ router.get("/period-stats", async (_req, res) => {
 // 같은 종목의 과거 분석 히스토리 (버전 타임라인용)
 router.get("/ticker-history/:ticker", async (req, res) => {
   try {
-    const ticker = req.params.ticker.toUpperCase();
+    const ticker = validateTicker(req.params.ticker);
+    if (!ticker) return res.status(400).json({ error: "유효하지 않은 ticker" });
     const { rows } = await pool.query(
       `SELECT id, ticker, company_name, industry, status, investment_verdict, target_price,
               start_price, created_at, token_count, estimated_cost_usd

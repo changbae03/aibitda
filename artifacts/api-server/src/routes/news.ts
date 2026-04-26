@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { validateUrl, escapeHtml } from "../lib/sanitize.js";
 
 const router: IRouter = Router();
 
@@ -91,8 +92,10 @@ async function fetchTelegramChannel(channel: string): Promise<NewsItem[]> {
     const cleanHtml = rawHtml
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g, (_, href, text) => {
-        const cleanText = stripHtmlTags(text);
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">${cleanText}</a>`;
+        const safeHref = validateUrl(href);
+        const cleanText = escapeHtml(stripHtmlTags(text));
+        if (!safeHref) return cleanText;
+        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer nofollow" class="text-blue-400 hover:underline">${cleanText}</a>`;
       })
       .replace(/<b>([\s\S]*?)<\/b>/g, "<strong>$1</strong>")
       .replace(/<i>([\s\S]*?)<\/i>/g, "<em>$1</em>")

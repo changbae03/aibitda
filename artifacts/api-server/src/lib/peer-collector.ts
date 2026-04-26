@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import YahooFinance from "yahoo-finance2";
 import { correctKoreanTicker } from "./krx-cache.js";
 import { pool } from "@workspace/db";
+import { sanitizePathComponent, validateDateStr } from "./sanitize.js";
 
 const NAVER_HEADERS = {
   "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -581,7 +582,9 @@ export async function collectPeers(
 
   // Save dated file
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const dir = path.join(DATA_DIR, subject);
+  const safeSubject = sanitizePathComponent(subject);
+  if (!safeSubject) throw new Error(`Invalid subject for file storage: ${subject}`);
+  const dir = path.join(DATA_DIR, safeSubject);
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(
     path.join(dir, `peers_${dateStr}.json`),
@@ -597,7 +600,9 @@ export async function collectPeers(
 }
 
 export async function getLatestPeers(subject: string): Promise<PeerSnapshot | null> {
-  const filePath = path.join(DATA_DIR, subject, "peers_latest.json");
+  const safe = sanitizePathComponent(subject);
+  if (!safe) return null;
+  const filePath = path.join(DATA_DIR, safe, "peers_latest.json");
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     return JSON.parse(raw) as PeerSnapshot;
@@ -607,7 +612,9 @@ export async function getLatestPeers(subject: string): Promise<PeerSnapshot | nu
 }
 
 export async function getPeerHistory(subject: string): Promise<string[]> {
-  const dir = path.join(DATA_DIR, subject);
+  const safe = sanitizePathComponent(subject);
+  if (!safe) return [];
+  const dir = path.join(DATA_DIR, safe);
   try {
     const files = await fs.readdir(dir);
     return files
@@ -624,7 +631,10 @@ export async function getPeersByDate(
   subject: string,
   dateStr: string
 ): Promise<PeerSnapshot | null> {
-  const filePath = path.join(DATA_DIR, subject, `peers_${dateStr}.json`);
+  const safeSubject = sanitizePathComponent(subject);
+  const safeDateStr = validateDateStr(dateStr);
+  if (!safeSubject || !safeDateStr) return null;
+  const filePath = path.join(DATA_DIR, safeSubject, `peers_${safeDateStr}.json`);
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     return JSON.parse(raw) as PeerSnapshot;
@@ -642,7 +652,9 @@ export async function updateManualFields(
   const snapshot = await getLatestPeers(subject);
   if (!snapshot || !snapshot.peers[peerTicker]) return null;
   snapshot.peers[peerTicker] = { ...snapshot.peers[peerTicker], ...fields };
-  const dir = path.join(DATA_DIR, subject);
+  const safeSubject = sanitizePathComponent(subject);
+  if (!safeSubject) return null;
+  const dir = path.join(DATA_DIR, safeSubject);
   await fs.writeFile(
     path.join(dir, "peers_latest.json"),
     JSON.stringify(snapshot, null, 2)
