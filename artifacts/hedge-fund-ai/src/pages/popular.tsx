@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus, CalendarDays } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const VERDICT_ORDER = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"];
 const VERDICT_LABELS: Record<string, string> = {
@@ -14,6 +15,7 @@ const VERDICT_LABELS: Record<string, string> = {
 };
 const VERDICT_COLOR = ["bg-emerald-500", "bg-green-400", "bg-amber-400", "bg-red-300", "bg-red-500"];
 const VERDICT_TEXT  = ["text-emerald-700", "text-green-700", "text-amber-700", "text-red-600", "text-red-700"];
+const DONUT_COLORS  = ["#10b981", "#4ade80", "#fbbf24", "#fca5a5", "#ef4444"];
 
 interface PublicStats {
   total: number;
@@ -151,62 +153,83 @@ export default function Popular() {
       >
         <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">투자 의견 분포</p>
 
-        {/* 스택 바 */}
-        <div className="flex h-3 rounded-full overflow-hidden mb-4 gap-px">
-          {verdictSum > 0 ? (
-            verdictCounts.map((cnt, i) => (
-              cnt > 0 && (
-                <div
-                  key={i}
-                  className={cn("h-full transition-all", VERDICT_COLOR[i])}
-                  style={{ width: `${(cnt / verdictSum) * 100}%` }}
-                />
-              )
-            ))
-          ) : (
-            VERDICT_COLOR.map((color, i) => (
-              <div key={i} className={cn("h-full flex-1", color)} style={{ opacity: 0.18 }} />
-            ))
-          )}
-        </div>
+        {verdictSum > 0 ? (
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* 도넛 차트 */}
+            <div className="w-44 h-44 shrink-0 relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={VERDICT_ORDER.map((key, i) => ({
+                      name: VERDICT_LABELS[key],
+                      value: verdictMap[key] ?? 0,
+                      color: DONUT_COLORS[i],
+                    })).filter(d => d.value > 0)}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="62%"
+                    outerRadius="88%"
+                    paddingAngle={2}
+                    dataKey="value"
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    {VERDICT_ORDER.map((key, i) => (
+                      (verdictMap[key] ?? 0) > 0 && (
+                        <Cell key={key} fill={DONUT_COLORS[i]} strokeWidth={0} />
+                      )
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number, name: string) => [`${value}건 (${verdictSum > 0 ? ((value/verdictSum)*100).toFixed(1) : 0}%)`, name]}
+                    contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* 중앙 텍스트 */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[22px] font-black text-foreground tabular-nums">{verdictSum}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">건</span>
+              </div>
+            </div>
 
-        {/* 레전드 */}
-        <div className="space-y-2">
-          {VERDICT_ORDER.map((key, i) => {
-            const cnt = verdictMap[key] ?? 0;
-            const pct = verdictSum > 0 ? (cnt / verdictSum) * 100 : 0;
-            return (
-              <motion.div
-                key={key}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15 + i * 0.05 }}
-                className="flex items-center gap-2.5"
-              >
-                <div className={cn("w-2.5 h-2.5 rounded-sm shrink-0", VERDICT_COLOR[i])} />
-                <span className={cn("text-[12px] font-semibold w-24 shrink-0", VERDICT_TEXT[i])}>
-                  {VERDICT_LABELS[key]}
-                </span>
-                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                  {pct > 0 && (
-                    <motion.div
-                      className={cn("h-full rounded-full", VERDICT_COLOR[i])}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 + i * 0.05 }}
-                    />
-                  )}
-                </div>
-                <span className="text-[12px] tabular-nums text-muted-foreground shrink-0 w-10 text-right">
-                  {cnt}건
-                </span>
-                <span className="text-[11px] text-muted-foreground/50 shrink-0 w-10 text-right">
-                  {pct.toFixed(1)}%
-                </span>
-              </motion.div>
-            );
-          })}
-        </div>
+            {/* 레전드 */}
+            <div className="flex-1 space-y-2 w-full">
+              {VERDICT_ORDER.map((key, i) => {
+                const cnt = verdictMap[key] ?? 0;
+                const pct = verdictSum > 0 ? (cnt / verdictSum) * 100 : 0;
+                if (cnt === 0) return null;
+                return (
+                  <motion.div
+                    key={key}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15 + i * 0.05 }}
+                    className="flex items-center gap-2.5"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: DONUT_COLORS[i] }} />
+                    <span className={cn("text-[12px] font-semibold w-20 shrink-0", VERDICT_TEXT[i])}>
+                      {VERDICT_LABELS[key]}
+                    </span>
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: DONUT_COLORS[i] }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 + i * 0.05 }}
+                      />
+                    </div>
+                    <span className="text-[12px] tabular-nums text-muted-foreground shrink-0 w-8 text-right">{cnt}건</span>
+                    <span className="text-[11px] text-muted-foreground/50 shrink-0 w-10 text-right">{pct.toFixed(0)}%</span>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px] text-muted-foreground/50 text-center py-6">아직 분석 데이터가 없습니다.</p>
+        )}
       </motion.div>
 
       {/* 시장별 커버리지 */}

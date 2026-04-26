@@ -659,20 +659,50 @@ export default function SharePage() {
 
             {/* CTA */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="mt-6 rounded-2xl border border-slate-700 bg-slate-900 p-5 text-center"
+              className="mt-6 rounded-2xl overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%)" }}
             >
-              <p className="text-white font-bold text-[15px] mb-1">나도 AI 분석 받아보기</p>
-              <p className="text-slate-400 text-[12px] mb-4">코스피·코스닥·NYSE·NASDAQ 전 종목, 하루 3회 무료</p>
-              <button
-                onClick={() => setLocation("/")}
-                className="inline-flex items-center gap-2 bg-white text-slate-900 font-bold text-[14px] px-6 py-3 rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                애빛다 시작하기
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {/* 상단 배지 */}
+              <div className="px-5 pt-5 pb-3">
+                <div className="flex items-center justify-center gap-1.5 mb-3">
+                  <span className="text-[10px] font-bold text-blue-200 uppercase tracking-[0.12em] bg-white/10 px-2.5 py-1 rounded-full">AI 기업가치 분석 플랫폼</span>
+                </div>
+                <p className="text-white font-black text-[20px] text-center leading-tight mb-1">
+                  내 종목도 AI로 분석해보세요
+                </p>
+                <p className="text-blue-200 text-[12px] text-center leading-relaxed">
+                  헤지펀드급 7단계 파이프라인 · 코스피·코스닥·NYSE·NASDAQ
+                </p>
+              </div>
+
+              {/* 기능 하이라이트 */}
+              <div className="px-4 pb-4">
+                <div className="grid grid-cols-3 gap-2 my-3">
+                  {[
+                    { icon: Target, label: "DCF 적정주가" },
+                    { icon: ShieldCheck, label: "QC 자동검증" },
+                    { icon: BarChart2, label: "기술적 분석" },
+                  ].map(({ icon: Icon, label }) => (
+                    <div key={label} className="flex flex-col items-center gap-1.5 bg-white/10 rounded-xl py-2.5 px-1">
+                      <Icon className="w-4 h-4 text-blue-200" />
+                      <span className="text-[10px] font-semibold text-white text-center leading-tight">{label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <motion.button
+                  onClick={() => setLocation("/")}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full flex items-center justify-center gap-2 bg-white text-blue-700 font-black text-[15px] py-3.5 rounded-xl hover:bg-blue-50 transition-colors shadow-lg"
+                >
+                  지금 무료로 시작하기
+                  <ArrowRight className="w-4.5 h-4.5" />
+                </motion.button>
+                <p className="text-[10px] text-blue-300/80 text-center mt-2">하루 3회 무료 · 카카오 로그인</p>
+              </div>
             </motion.div>
 
             {/* 면책 고지 */}
