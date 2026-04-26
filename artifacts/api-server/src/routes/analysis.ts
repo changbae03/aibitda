@@ -2631,6 +2631,75 @@ router.get("/share/:id", async (req, res) => {
   }
 });
 
+router.get("/share/:id/text", async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).send("Invalid id"); return; }
+  try {
+    const aRows = await rawQuery(
+      `SELECT * FROM analyses WHERE id = $1 AND is_public = 'true' LIMIT 1`,
+      [id]
+    );
+    if (!aRows[0]) { res.status(404).send("Not found"); return; }
+    const stepsRows = await rawQuery(
+      `SELECT * FROM analysis_steps WHERE analysis_id = $1 ORDER BY id ASC`,
+      [id]
+    );
+    const a = mapAnalysisRow(aRows[0]);
+
+    const STEP_NAMES: Record<string, string> = {
+      company_intro:      "브리핑",
+      industry_analysis:  "매크로 및 산업 분석",
+      catalyst_analysis:  "투자 촉매 및 수급 분석",
+      company_analysis:   "실적 전망",
+      relative_valuation: "적정주가 산출",
+      market_analysis:    "기술적 분석",
+      investment_strategy:"최종 결론",
+    };
+    const STEP_ORDER_LOCAL = [
+      "company_intro","industry_analysis","catalyst_analysis",
+      "company_analysis","relative_valuation","market_analysis","investment_strategy",
+    ];
+
+    function cleanContent(raw: string): string {
+      return raw
+        .replace(/\nCHART_DATA:\{[^\n]+\}(\nEVENTS_DATA:\[[^\n]*\])?(\nVALUATION_DATA:\{[^\n]+\})?(\nFINAL_VALUATION_DATA:\{[^\n]+\})?\s*$/m, "")
+        .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
+        .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
+        .replace(/```json[\s\S]*?```/g, "")
+        .replace(/\{[\s\S]*?"verdict"[\s\S]*?\}/g, "")
+        .replace(/^\[STEP \d+\][^\n]*/gm, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    const steps = stepsRows
+      .filter((s: any) => s.status === "completed" && s.content)
+      .sort((a: any, b: any) => STEP_ORDER_LOCAL.indexOf(a.step_key) - STEP_ORDER_LOCAL.indexOf(b.step_key));
+
+    const lines: string[] = [];
+    lines.push(`# ${a.companyName} (${a.ticker}) 리서치 리포트`);
+    lines.push(`분석일: ${a.createdAt ? new Date(a.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "—"}`);
+    if (a.investmentVerdict) lines.push(`투자 판정: ${a.investmentVerdict}`);
+    if (a.targetPrice) lines.push(`적정주가: ${a.targetPrice.toLocaleString()}`);
+    lines.push(`\n${"=".repeat(60)}\n`);
+
+    for (const step of steps) {
+      const stepName = STEP_NAMES[step.step_key] ?? step.step_key;
+      lines.push(`## ${stepName}`);
+      lines.push(cleanContent(step.content ?? ""));
+      lines.push(`\n${"─".repeat(40)}\n`);
+    }
+
+    const text = lines.join("\n");
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.send(text);
+  } catch (err: any) {
+    console.error("[GET /analysis/share/:id/text] error:", err?.message);
+    res.status(500).send("Server error");
+  }
+});
+
 router.get("/public-stats", async (_req, res) => {
   try {
     const rows = await db
