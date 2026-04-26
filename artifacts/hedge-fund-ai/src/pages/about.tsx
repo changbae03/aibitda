@@ -273,6 +273,9 @@ export default function AboutPage() {
               {tag}
             </span>
           ))}
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-primary text-white border border-primary flex items-center gap-1">
+            ⏱ 평균 3분 완성
+          </span>
         </div>
       </div>
 
@@ -328,6 +331,10 @@ export default function AboutPage() {
                 DCF·P/B-ROE·rNPV·SOTP·NAV 등 업종에 맞는 방법론을 자동 선택해 "이 주식이 지금 비싼가, 싼가"를 수치로 답합니다.
                 분석의 민주화가 곧 투자 기회의 균등입니다.
               </p>
+              <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+                <span className="text-[11px] font-bold text-primary">⏱ 평균 3분</span>
+                <span className="text-[11px] text-muted-foreground">— 종목코드 입력부터 완성 리포트까지</span>
+              </div>
             </div>
           </div>
         </div>
@@ -355,9 +362,14 @@ export default function AboutPage() {
 
       {/* AI 파이프라인 */}
       <section>
-        <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
-          7단계 AI 분석 파이프라인
-        </h2>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+            7단계 AI 분석 파이프라인
+          </h2>
+          <span className="text-[11px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+            ⏱ 평균 3분 소요
+          </span>
+        </div>
         <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
           {pipeline.map((p, i) => (
             <div key={p.step} className="flex items-start gap-4 px-4 py-3.5">
@@ -380,6 +392,12 @@ export default function AboutPage() {
               )}
             </div>
           ))}
+          <div className="px-4 py-3 bg-primary/5 flex items-center gap-2">
+            <span className="text-primary text-[13px]">⏱</span>
+            <p className="text-[12px] text-muted-foreground/80">
+              7단계 전체 파이프라인 완료까지 <span className="font-bold text-primary">평균 3분</span> — 헤지펀드 수준의 리포트를 커피 한 잔보다 빠르게.
+            </p>
+          </div>
         </div>
       </section>
 
