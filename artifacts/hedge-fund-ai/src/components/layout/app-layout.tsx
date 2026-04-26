@@ -2,7 +2,6 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
-  Search, BookOpen, CalendarDays, BarChart2,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
@@ -119,12 +118,6 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   );
 }
 
-const BOTTOM_TABS = [
-  { href: "/analysis/new", label: "분석", icon: Search },
-  { href: "/history",      label: "내 자료", icon: BookOpen },
-  { href: "/calendar",     label: "캘린더", icon: CalendarDays },
-  { href: "/popular",      label: "통계", icon: BarChart2 },
-];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
@@ -382,7 +375,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <MarketBar />
 
         {/* Scrollable Content */}
-        <div id="print-scroll" className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <div id="print-scroll" className="flex-1 overflow-y-auto">
           <div className="container max-w-5xl mx-auto p-4 md:p-10 animate-fade-in">
             {children}
           </div>
@@ -414,37 +407,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           </footer>
         </div>
 
-        {/* ── Mobile Bottom Tab Bar ── */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-background border-t border-border print:hidden">
-          <div className="flex items-stretch h-14">
-            {BOTTOM_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive =
-                location === tab.href ||
-                (tab.href !== "/" && location.startsWith(tab.href));
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={cn(
-                    "flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors duration-150 active:scale-95",
-                    isActive
-                      ? "text-[#FF8A7A]"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "w-5 h-5 transition-all duration-150",
-                      isActive ? "stroke-[2.5]" : "stroke-[1.5]"
-                    )}
-                  />
-                  <span>{tab.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
       </main>
     </div>
   );
