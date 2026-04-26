@@ -434,6 +434,13 @@ export default function SharePage() {
     (a: any, b: any) => STEP_ORDER.indexOf(a.stepKey) - STEP_ORDER.indexOf(b.stepKey)
   );
 
+  const keyIssue = (() => {
+    const stratStep = (analysis.steps ?? []).find((s: any) => s.stepKey === "investment_strategy");
+    if (!stratStep?.content) return null;
+    const json = extractJson(stratStep.content);
+    return (json?.key_issue as string | undefined) ?? null;
+  })();
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
 
@@ -497,7 +504,7 @@ export default function SharePage() {
               <h1 className="text-white text-[22px] sm:text-[26px] font-black leading-tight mb-1">
                 {analysis.companyName}
               </h1>
-              <div className="flex flex-wrap items-center gap-2 mb-5">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
                 <span className="text-slate-400 text-[12px] font-mono">{analysis.ticker}</span>
                 {analysis.industry && (
                   <>
@@ -509,6 +516,24 @@ export default function SharePage() {
                   </>
                 )}
               </div>
+
+              {keyIssue && (
+                <div className={cn(
+                  "rounded-xl px-3.5 py-2.5 mb-4 border-l-2",
+                  isPositive
+                    ? "bg-emerald-500/8 border-emerald-500/50"
+                    : isNegative
+                    ? "bg-red-500/8 border-red-500/50"
+                    : "bg-amber-500/8 border-amber-500/50"
+                )}>
+                  <p className={cn(
+                    "text-[12px] font-medium leading-snug",
+                    isPositive ? "text-emerald-200" : isNegative ? "text-red-200" : "text-amber-200"
+                  )}>
+                    {keyIssue}
+                  </p>
+                </div>
+              )}
 
               {targetStr && (
                 <div className="flex items-end justify-between gap-3 pb-4 border-b border-slate-800">
