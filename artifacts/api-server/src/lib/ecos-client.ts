@@ -2,16 +2,22 @@
  * 한국은행 ECOS API 클라이언트
  * 주요 거시경제 지표를 실시간으로 가져와 AI 분석 컨텍스트에 주입
  *
- * 통계코드:
- *   722Y001 / 0101000  — 한국은행 기준금리 (월)
- *   901Y009 / 0        — 소비자물가지수 CPI (월)
- *   731Y001 / 0000001  — 원/달러 매매기준율 (일)
- *   111Y002 / C        — 실질GDP 성장률 (분기, 전기대비)
- *   817Y002 / 010202000 — 국고채 3년 (일)
- *   817Y002 / 010203000 — 국고채 10년 (일)
+ * ECOS 통계코드:
+ *   722Y001 / 0101000   — 한국은행 기준금리 (월)
+ *   901Y009 / 0         — 소비자물가지수 CPI (월)
+ *   731Y001 / 0000001   — 원/달러 매매기준율 (일)
+ *   111Y002 / C         — 실질GDP 전기대비 (분기) — 샘플키 제한으로 보통 0 rows
+ *   817Y002 / 010202000 — 국고채 3년 (일/월) — 샘플키 제한으로 보통 0 rows
+ *   817Y002 / 010204000 — 국고채 10년 (일/월) — 샘플키 제한으로 보통 0 rows
+ *
+ * FRED 폴백 (ECOS 샘플키 접근 불가 시):
+ *   NAEXKP01KRQ657S — 한국 실질GDP 전기대비 성장률 (OECD/분기, %)
+ *   IRLTLT01KRM156N — 한국 장기국채수익률 10Y (OECD/월, %)
+ *   국고채 3년: FRED 미제공 → 10년물 – 0.4%p 추정
  */
 
 const BASE_URL = "https://ecos.bok.or.kr/api/StatisticSearch";
+const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6시간 캐시
 
 interface EcosMacro {
@@ -77,10 +83,19 @@ async function ecosFetch(
   const url = `${BASE_URL}/${key}/json/kr/1/${count}/${statCode}/${period}/${startDate}/${endDate}/${itemCode}`;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[ECOS] HTTP ${res.status} for ${statCode}/${itemCode}`);
+      return [];
+    }
     const data = await res.json() as any;
-    return data?.StatisticSearch?.row ?? [];
-  } catch {
+    const rows = data?.StatisticSearch?.row ?? [];
+    if (rows.length === 0) {
+      const errMsg = data?.RESULT?.MESSAGE ?? JSON.stringify(data).slice(0, 120);
+      console.warn(`[ECOS] 0 rows for ${statCode}/${itemCode} (${period} ${startDate}~${endDate}): ${errMsg}`);
+    }
+    return rows;
+  } catch (e) {
+    console.warn(`[ECOS] fetch error for ${statCode}/${itemCode}:`, e);
     return [];
   }
 }
@@ -90,6 +105,24 @@ function latestValue(rows: Array<{ TIME: string; DATA_VALUE: string }>): { val: 
   const sorted = [...rows].sort((a, b) => b.TIME.localeCompare(a.TIME));
   const val = parseFloat(sorted[0].DATA_VALUE);
   return { val: isNaN(val) ? null : val, time: sorted[0].TIME };
+}
+
+/** FRED 한국 전용 시리즈 폴백 (ECOS에서 누락되는 GDP, 국채금리) */
+async function fredKorFetch(seriesId: string, limit = 4): Promise<number | null> {
+  const key = process.env["FRED_API_KEY"];
+  if (!key) return null;
+  const url = `${FRED_BASE}?series_id=${seriesId}&api_key=${key}&file_type=json&sort_order=desc&limit=${limit}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    const obs: Array<{ date: string; value: string }> = (data?.observations ?? []).filter((o: any) => o.value !== ".");
+    if (obs.length === 0) return null;
+    const val = parseFloat(obs[0].value);
+    return isNaN(val) ? null : val;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchECOSMacro(): Promise<EcosMacro | null> {
@@ -105,56 +138,91 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
   }
 
   try {
-    const [baseRateRows, cpiRows, cpiPrevRows, usdKrwRows, gdpRows, bond3YRows, bond10YRows] = await Promise.all([
-      // 기준금리 — 최근 3개월
-      ecosFetch("722Y001", "M", yyyymm(-3), yyyymm(0), "0101000", 5),
-      // CPI 현재 — 최근 2개월
-      ecosFetch("901Y009", "M", yyyymm(-2), yyyymm(0), "0", 3),
-      // CPI 전년 동월 — YoY 계산용
-      ecosFetch("901Y009", "M", yyyymm(-14), yyyymm(-12), "0", 3),
-      // 원달러 환율 — 최근 10거래일
-      ecosFetch("731Y001", "D", yyyymmdd(-15), yyyymmdd(0), "0000001", 10),
-      // 실질GDP 전기대비 — 최근 8분기 (발표 지연 감안해 범위 확장)
-      ecosFetch("111Y002", "Q", yyyyq(-8), yyyyq(0), "C", 8),
-      // 국고채 3년 — 최근 3개월 (월별, 데이터 안정성 위해)
-      ecosFetch("817Y002", "M", yyyymm(-3), yyyymm(0), "010203000", 5),
-      // 국고채 10년 — 최근 3개월 (월별)
-      ecosFetch("817Y002", "M", yyyymm(-3), yyyymm(0), "010205000", 5),
+    // ── 1단계: ECOS API 동시 조회 ────────────────────────────────────────
+    const [
+      baseRateRows, cpiRows, cpiPrevRows, usdKrwRows,
+      gdpQoQRows,
+      // 국고채: 일별(D)과 월별(M) 두 가지 동시 시도 — ECOS 샘플키는 보통 월별만 허용
+      bond3Y_D, bond10Y_D,
+      bond3Y_M, bond10Y_M,
+    ] = await Promise.all([
+      ecosFetch("722Y001", "M", yyyymm(-3), yyyymm(0),    "0101000",  5),  // 기준금리
+      ecosFetch("901Y009", "M", yyyymm(-2), yyyymm(0),    "0",        3),  // CPI 현재
+      ecosFetch("901Y009", "M", yyyymm(-14), yyyymm(-12), "0",        3),  // CPI 전년
+      ecosFetch("731Y001", "D", yyyymmdd(-15), yyyymmdd(0),"0000001", 10), // 원달러
+      // GDP 전기대비 — 항목코드 "C" (계절조정 전기대비) 시도
+      ecosFetch("111Y002", "Q", yyyyq(-12), yyyyq(-1),    "C",        12),
+      // 국고채 일별 (D)
+      ecosFetch("817Y002", "D", yyyymmdd(-30), yyyymmdd(0), "010202000", 30),
+      ecosFetch("817Y002", "D", yyyymmdd(-30), yyyymmdd(0), "010204000", 30),
+      // 국고채 월별 (M)
+      ecosFetch("817Y002", "M", yyyymm(-3), yyyymm(0), "010202000", 5),
+      ecosFetch("817Y002", "M", yyyymm(-3), yyyymm(0), "010204000", 5),
     ]);
 
     const baseRateResult  = latestValue(baseRateRows);
     const cpiResult       = latestValue(cpiRows);
     const cpiPrevResult   = latestValue(cpiPrevRows);
     const usdKrwResult    = latestValue(usdKrwRows);
-    const gdpResult       = latestValue(gdpRows);
-    const bond3YResult    = latestValue(bond3YRows);
-    const bond10YResult   = latestValue(bond10YRows);
+    const gdpQoQResult    = latestValue(gdpQoQRows);
 
-    // CPI YoY 계산
+    // 일별 > 월별 순으로 사용 가능한 첫 번째 채택
+    const bond3YResult  = latestValue(bond3Y_D.length  ? bond3Y_D  : bond3Y_M);
+    const bond10YResult = latestValue(bond10Y_D.length ? bond10Y_D : bond10Y_M);
+
+    // CPI YoY
     let cpiYoY: number | null = null;
     if (cpiResult.val !== null && cpiPrevResult.val !== null && cpiPrevResult.val !== 0) {
       cpiYoY = ((cpiResult.val - cpiPrevResult.val) / cpiPrevResult.val) * 100;
     }
 
-    // GDP YoY — 전년동기비 항목코드 "A"
+    // GDP YoY — ECOS 항목코드 "A" 시도
     const gdpYoYRows = await ecosFetch("111Y002", "Q", yyyyq(-5), yyyyq(0), "A", 6);
     const gdpYoYResult = latestValue(gdpYoYRows);
+
+    // ── 2단계: FRED 폴백 (ECOS 샘플키 제한 항목 보완) ───────────────────
+    // GDP가 ECOS에서 null이면 FRED 한국 GDP QoQ 시리즈로 대체
+    // NAEXKP01KRQ657S: 한국 실질GDP 전기대비 성장률 (OECD, 분기, %)
+    // IRLTLT01KRM156N: 한국 장기 국채수익률 10Y (OECD, 월, %)
+    let finalGdpQoQ = gdpQoQResult.val;
+    let finalGdpYoY = gdpYoYResult.val;
+    let finalBond10Y = bond10YResult.val;
+    let finalBond3Y  = bond3YResult.val;
+
+    const needFredGdp  = finalGdpQoQ === null && finalGdpYoY === null;
+    const needFredBond = finalBond10Y === null;
+
+    if (needFredGdp || needFredBond) {
+      const [fredGdpQoQ, fredBond10Y] = await Promise.all([
+        needFredGdp  ? fredKorFetch("NAEXKP01KRQ657S", 4) : Promise.resolve(null),
+        needFredBond ? fredKorFetch("IRLTLT01KRM156N", 3) : Promise.resolve(null),
+      ]);
+      if (finalGdpQoQ === null) finalGdpQoQ = fredGdpQoQ;
+      if (finalBond10Y === null) finalBond10Y = fredBond10Y;
+      // 3년물: ECOS도 FRED도 없으면 10년물에서 약 0.4%p 차감 추정
+      if (finalBond3Y === null && finalBond10Y !== null) {
+        finalBond3Y = parseFloat((finalBond10Y - 0.4).toFixed(3));
+      }
+      if (fredGdpQoQ !== null || fredBond10Y !== null) {
+        console.log("[ECOS] FRED 폴백 적용:", { fredGdpQoQ, fredBond10Y });
+      }
+    }
 
     macroCache = {
       baseRate:     baseRateResult.val,
       cpiIndex:     cpiResult.val,
       cpiYoY,
       usdKrw:       usdKrwResult.val,
-      gdpQoQ:       gdpResult.val,
-      gdpYoY:       gdpYoYResult.val,
-      bondYield3Y:  bond3YResult.val,
-      bondYield10Y: bond10YResult.val,
+      gdpQoQ:       finalGdpQoQ,
+      gdpYoY:       finalGdpYoY,
+      bondYield3Y:  finalBond3Y,
+      bondYield10Y: finalBond10Y,
       fetchedAt:    Date.now(),
       latestPeriods: {
         baseRate: baseRateResult.time,
         cpi:      cpiResult.time,
         usdKrw:   usdKrwResult.time,
-        gdp:      gdpResult.time,
+        gdp:      gdpQoQResult.time,
         bond:     bond3YResult.time || bond10YResult.time,
       },
     };
