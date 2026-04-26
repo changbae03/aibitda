@@ -889,6 +889,90 @@ Launch Services EV + Space Systems EV + Neutron rNPV + 순현금(현금 − 금�
 `;
   }
 
+  // ── 가상자산 보유 기업 / 비트코인 트레저리 / 크립토 익스체인지 ──────────────
+  const isCryptoTreasury =
+    /microstrategy|micro strategy|\bstrategy\b.*bitcoin|marathon digital|riot platforms|cleanspark|hut 8|hut8|metaplanet|cipher mining|stronghold digital|bitfarms|galaxy digital|block inc|square crypto/.test(name) ||
+    /coinbase|kraken exchange|crypto\.com|gemini exchange|bitstamp|bitfinex/.test(name) ||
+    /위메이드|두나무|dunamu|업비트/.test(name) ||
+    /bitcoin treasury|crypto treasury|digital asset treasury|bitcoin holding|cryptocurrency mining|bitcoin miner|crypto exchange platform|digital asset exchange/.test(ind);
+
+  if (isCryptoTreasury) {
+    return `
+[섹터 특화 지침 — 가상자산 보유 기업 / 비트코인 트레저리 / 크립토 익스체인지]
+핵심 KPI (유형별):
+▶ 비트코인 트레저리(MicroStrategy류): BTC 보유량(코인 수), BTC 평균 취득 단가, 순자산대비 BTC 비중(%), mNAV 배율, 레버리지 비율(부채/BTC NAV), 청산 트리거 가격, 코어 사업 Revenue/EBITDA
+▶ 크립토 익스체인지(Coinbase류): 거래 수수료 수익, 월 거래 사용자(MTU), 거래량(ADV/ATV), 수수료율(Blended Take Rate), 구독·서비스 수익 비중, 자체 보유 디지털 자산
+
+구조 특이사항:
+- **이중 가치 구조**: 코어 사업가치 + 가상자산 NAV를 반드시 분리 → 단일 EV/EBITDA 배수 적용 금지
+- **BTC 가격 민감도 극심**: 비트코인 가격 변동 → 대차대조표·순자산 직접 영향 → 밸류에이션 시나리오 의무화
+- **레버리지 리스크**: BTC 담보 대출·전환사채 등 가상자산 가격 하락 시 강제청산(Liquidation) 가능
+- **회계 처리 변경**: FASB ASC 820 공정가치 회계(2025년~) 시행 → 보유 BTC 미실현손익이 순이익에 직접 반영 (변동성 극대화)
+- **규제 리스크**: 익스체인지는 SEC/CFTC 분류, 자금세탁방지(AML), 라이선스 취소 리스크 상시 존재
+- **비상장 크립토 자산 노출**: 토큰·알트코인 보유 시 유동성 리스크와 평가 불확실성 별도 명시
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOTP 분리 — Lead 밸류에이션 (유형 A: 비트코인 트레저리)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+① **코어 사업 가치**:
+   - 코어 사업이 존재하는 경우(소프트웨어·클라우드 등) 해당 업종 방법론 독립 적용
+   - EV/Revenue 또는 EV/EBITDA (코어 사업이 적자면 EV/Revenue 사용)
+   - 코어 사업 가치가 전체 EV 대비 미미한 경우 "사실상 BTC ETF 래퍼"임을 명시
+
+② **BTC NAV (순자산가치)**:
+   BTC NAV = 보유 코인 수 × 현재 BTC 시장가 − 코인 담보 순부채
+   - 담보 부채(Secured Debt)는 반드시 BTC NAV에서 차감 (일반 부채와 별도 처리)
+   - 자체 커스터디(Self-custody) vs 제3자 커스터디 구분 → 제3자 보관 리스크 언급
+
+③ **합산 SOTP**:
+   코어 사업 EV + BTC NAV = 총 내재가치
+   mNAV(Market NAV 배율) = 시가총액 / BTC NAV
+   · mNAV > 1.5x: 시장이 BTC 보유에 레버리지·브랜드 프리미엄 부여
+   · mNAV 1.0~1.5x: 적정 수준
+   · mNAV < 1.0x: BTC 직접 보유 대비 할인 → 저평가 또는 코어 사업 부실 가능성
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BTC 가격 민감도 분석 (3-Scenario, 반드시 수치화)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+| 시나리오 | BTC 가정 가격 | BTC NAV | 총 내재가치 | 주당 가치 | 레버리지 LTV |
+|---------|-------------|---------|-----------|---------|------------|
+| Bear    | 현재 −50%    |         |           |         |            |
+| Base    | 현재 기준     |         |           |         |            |
+| Bull    | 현재 +100%   |         |           |         |            |
+※ 가정 가격은 분석 당시 BTC 현재 시장가 기준으로 작성, 구체적 달러/원 금액 명시
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+레버리지 구조 리스크 분석 (의무)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- **부채 구조 분해**: 무담보 전환사채 vs BTC 담보 대출 vs 일반 회사채 — 각각 분리해서 금리·만기 명시
+- **LTV(Loan-to-Value)**: 현재 BTC 담보 대출 잔액 / BTC 보유 시장가
+  · LTV 50% 초과 → 가격 하락 시 마진콜 경고 구간
+  · LTV 70% 초과 → 강제청산 임박 고위험
+- **청산 트리거 가격(Liquidation Price)**:
+  청산가 = BTC 담보 대출액 / (보유 코인 수 × 담보인정비율)
+  → 현재 BTC 가격 대비 몇 % 하락 시 청산 발생하는지 수치로 제시
+- **전환사채(Convertible Note) 구조**: 전환가격, 만기, 이자율, 희석 가능 주식 수 명시
+  · 만기 도래 시 현금 상환 가능 여부(현금 + BTC 매각) 분석
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+크립토 익스체인지 전용 추가 분석 (Coinbase류 해당 시)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- **수익 구조 분해**: 거래 수수료(Transaction Revenue) vs 구독·서비스(Subscription & Services) 비중
+  · 구독·서비스 비중 높을수록 안정적(비암호화폐 시장 변동성 완충)
+  · Blended Take Rate = 수수료 수익 / 거래량 — 경쟁 심화로 하락 추이 관찰
+- **거래량 사이클성**: 암호화폐 Bull/Bear 사이클과 거래량·수익 강한 양의 상관관계
+  → BTC 가격 시나리오와 연동한 거래량 민감도 분석 의무
+- **규제 리스크**: SEC 증권 분류(특정 알트코인 증권으로 분류 시 상장 의무), CFTC 관할 다툼, 라이선스(BitLicense 등)
+- **자체 보유 암호화폐**: 보유 암호화폐 종류·수량·취득가 → BTC NAV 분석에 통합
+- **경쟁 구도**: Binance(글로벌 1위, 비상장), Kraken, OKX 대비 시장점유율 및 규제 준수 프리미엄
+
+피어 비교:
+- 비트코인 트레저리: Marathon Digital(MARA), Riot Platforms(RIOT), CleanSpark(CLSK), Hut 8(HUT), Metaplanet(3350.T)
+  · ⚠️ 피어 간 BTC 보유량·레버리지·코어 사업 비중이 모두 다름 → mNAV 배율 비교가 핵심
+- 크립토 익스체인지: Coinbase(COIN), Robinhood(HOOD) 크립토 부문, Bakkt, Kraken(비상장 추정 참고)
+`;
+  }
+
   // ── 빅테크 / M7 (Mega-cap Tech) ─────────────────────────────────────────
   if (/apple inc|alphabet inc|amazon\.com|meta platforms|microsoft corp|nvidia corp|netflix inc|tesla inc/.test(name) ||
       /mega.?cap tech|bigtech|faang|m7|magnificent seven/.test(ind)) {
@@ -1259,6 +1343,35 @@ function needsREIT(industry: string, companyName: string, ticker?: string): bool
   return false;
 }
 
+function needsCryptoTreasury(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/microstrategy|micro strategy|marathon digital|riot platforms|cleanspark|hut 8|hut8|metaplanet|cipher mining|bitfarms|galaxy digital/.test(name)) return true;
+  if (/coinbase|kraken exchange|crypto\.com|gemini exchange/.test(name)) return true;
+  if (/위메이드|두나무|dunamu|업비트/.test(name)) return true;
+  if (/bitcoin treasury|crypto treasury|digital asset treasury|bitcoin holding|cryptocurrency mining|bitcoin miner|crypto exchange platform|digital asset exchange/.test(ind)) return true;
+
+  const CRYPTO_TICKERS = new Set([
+    "MSTR",  // MicroStrategy / Strategy
+    "MARA",  // Marathon Digital Holdings
+    "RIOT",  // Riot Platforms
+    "CLSK",  // CleanSpark
+    "HUT",   // Hut 8 Mining
+    "CIFR",  // Cipher Mining
+    "BTBT",  // Bit Digital
+    "COIN",  // Coinbase
+    "HOOD",  // Robinhood (crypto segment)
+    "GBTC",  // Grayscale Bitcoin Trust
+    "IBIT",  // BlackRock Bitcoin ETF (참고용)
+    "240370", // 위메이드
+  ]);
+  if (bare && CRYPTO_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
 function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
   const name = (companyName ?? "").toLowerCase();
   const ind  = (industry ?? "").toLowerCase();
@@ -1315,14 +1428,15 @@ export function buildPrompt(
   const bdcFlag          = needsBDC(industry, companyName, ticker);
   const royaltyFlag      = needsRoyaltyCompany(industry, companyName, ticker);
   const bigTechFlag      = needsBigTech(industry, companyName, ticker);
-  const usBankFlag       = needsUSBank(industry, companyName, ticker);
-  const usDefenseFlag    = needsUSDefense(industry, companyName, ticker);
-  const usBiotechFlag    = needsUSBiotech(industry, companyName, ticker);
-  const usReitFlag       = needsUSREIT(industry, companyName, ticker);
+  const usBankFlag          = needsUSBank(industry, companyName, ticker);
+  const usDefenseFlag       = needsUSDefense(industry, companyName, ticker);
+  const usBiotechFlag       = needsUSBiotech(industry, companyName, ticker);
+  const usReitFlag          = needsUSREIT(industry, companyName, ticker);
+  const cryptoTreasuryFlag  = needsCryptoTreasury(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}${cryptoTreasuryFlag ? "\n[가상자산/비트코인 트레저리 감지: 코어 사업 EV + BTC NAV를 반드시 분리하는 SOTP가 Lead입니다. 단일 EV/EBITDA 배수 적용 금지. relative_valuation 단계에서 ① 코어 사업 독립 밸류에이션 ② BTC NAV = 보유량×현재가-담보순부채 ③ mNAV 배율(시총/BTC NAV) ④ BTC 가격 Bear/Base/Bull 3-시나리오 민감도 테이블 ⑤ 레버리지 LTV 및 청산 트리거 가격을 반드시 포함하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
