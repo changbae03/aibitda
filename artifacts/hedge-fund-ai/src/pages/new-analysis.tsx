@@ -88,6 +88,65 @@ function usePersonalizedPicks() {
   });
 }
 
+// 유사 기업 추천: 상위 분석 종목의 피어 그룹에서 미분석 기업 제안
+interface RelatedCompany {
+  ticker: string;
+  companyName: string;
+  baseTicker: string;
+  baseCompanyName: string;
+}
+
+function useRelatedCompanies(
+  recentAnalyses: RecentAnalysis[] | undefined,
+  personalizedPicks: { ticker: string; companyName: string | null; count: number }[] | undefined,
+): RelatedCompany[] {
+  const [related, setRelated] = useState<RelatedCompany[]>([]);
+
+  useEffect(() => {
+    // 기준 종목: 자주 분석한 1위 종목 또는 최근 분석 종목
+    const baseTicker =
+      personalizedPicks?.[0]?.ticker ??
+      recentAnalyses?.[0]?.ticker?.replace(/\.(KS|KQ)$/, "");
+    const baseCompanyName =
+      personalizedPicks?.[0]?.companyName ??
+      recentAnalyses?.[0]?.companyName ??
+      baseTicker;
+
+    if (!baseTicker) return;
+
+    // 이미 분석한 티커 집합
+    const analyzed = new Set<string>([
+      ...(recentAnalyses?.map(a => a.ticker?.replace(/\.(KS|KQ)$/, "")) ?? []),
+      ...(personalizedPicks?.map(p => p.ticker) ?? []),
+    ]);
+
+    (async () => {
+      try {
+        const r = await fetch(
+          getApiUrl(`api/peers/latest?subject=${encodeURIComponent(baseTicker)}`),
+          { credentials: "include" },
+        );
+        if (!r.ok) return;
+        const data = await r.json();
+        const peers: RelatedCompany[] = Object.entries(
+          (data.peers ?? {}) as Record<string, { name?: string }>,
+        )
+          .filter(([t]) => !analyzed.has(t))
+          .slice(0, 6)
+          .map(([t, m]) => ({
+            ticker: t,
+            companyName: m.name ?? t,
+            baseTicker: baseTicker!,
+            baseCompanyName: baseCompanyName ?? baseTicker!,
+          }));
+        setRelated(peers);
+      } catch {}
+    })();
+  }, [recentAnalyses, personalizedPicks]);
+
+  return related;
+}
+
 function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
   if (!credits) return null;
 
@@ -175,6 +234,7 @@ export default function NewAnalysis() {
   const trending = useTrendingTickers();
   const { data: recentAnalyses } = useRecentAnalyses();
   const { data: personalizedPicks } = usePersonalizedPicks();
+  const relatedCompanies = useRelatedCompanies(recentAnalyses, personalizedPicks);
 
   useEffect(() => {
     const code = localStorage.getItem("pending_referral");
@@ -646,6 +706,39 @@ export default function NewAnalysis() {
                   </button>
                 );
               })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* 관심 있을 만한 기업 — 최다 분석 종목의 피어 그룹에서 미분석 기업 추천 */}
+        {relatedCompanies.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.08 }}
+            className="flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-1.5">
+              <Zap className="w-3 h-3 text-primary" />
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                관심 있을 만한 기업
+              </span>
+              <span className="text-[9px] text-muted-foreground/40">
+                · {relatedCompanies[0].baseCompanyName} 피어 그룹
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {relatedCompanies.map((c) => (
+                <button
+                  key={c.ticker}
+                  onClick={() => { setTicker(c.ticker); handleSubmit(c.ticker); }}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-colors disabled:opacity-40"
+                >
+                  <span className="font-mono text-[11px] text-muted-foreground/40">{c.ticker}</span>
+                  <span className="truncate max-w-[120px]">{c.companyName}</span>
+                </button>
+              ))}
             </div>
           </motion.div>
         )}
