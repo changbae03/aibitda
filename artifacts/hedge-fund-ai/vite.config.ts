@@ -4,12 +4,22 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { ogSharePlugin } from "./vite-plugin-og-share";
+import { readFileSync } from "fs";
 
 const port = Number(process.env.PORT ?? "22315");
 const basePath = process.env.BASE_PATH ?? "/";
 
+const pkg = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf-8")
+);
+const buildDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
 export default defineConfig({
   base: basePath,
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_DATE__: JSON.stringify(buildDate),
+  },
   plugins: [
     react(),
     tailwindcss(),

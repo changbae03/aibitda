@@ -636,7 +636,10 @@ export default function SettingsPage() {
           <span className="text-[13px] text-muted-foreground">애빛다 · CBST</span>
         </Row>
         <Row label="버전">
-          <span className="text-[13px] text-muted-foreground font-mono">v1.0.0</span>
+          <span className="text-[13px] text-muted-foreground font-mono">
+            v{__APP_VERSION__}
+            <span className="ml-1.5 text-[11px] text-muted-foreground/60">({__BUILD_DATE__})</span>
+          </span>
         </Row>
         <Row label="문의">
           <a href="mailto:support@cbst.ai" className="text-[13px] text-primary hover:underline">
