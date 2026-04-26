@@ -1012,6 +1012,209 @@ BTC 가격 민감도 분석 (3-Scenario, 반드시 수치화)
 `;
   }
 
+  // ── 조선 (Shipbuilding) — 한국 대형 조선 3사 + 글로벌 ────────────────────
+  const isShipbuilding =
+    /hd한국조선해양|hd현대중공업|삼성중공업|한화오션|현대미포조선|현대삼호중공업|대우조선해양|STX조선|현대비나신/.test(name) ||
+    /hyundai heavy industries|samsung heavy industries|hanwha ocean|hd hyundai heavy|hd korea shipbuilding/.test(name) ||
+    /shipbuilding|ship building|shipyard|naval architecture|vessel construction|marine engineering|offshore vessel/.test(ind);
+
+  if (isShipbuilding) {
+    return `
+[섹터 특화 지침 — 조선 (Shipbuilding)]
+핵심 KPI: 수주잔고(Order Backlog, USD), 신규 수주(New Order Wins, 분기·연간), Book-to-Bill Ratio, 잔고 커버리지(Backlog/TTM Revenue, 연), 야드 가동률(%), 선종별 마진(LNG선·컨테이너선·VLCC·드릴십), 클락슨 신조선가지수(Clarkson NB Price Index), 납기(DRV) 일정, 강재(후판) 가격
+
+구조 특이사항:
+- **수주잔고 NPV가 기업가치의 핵심**: 조선사 EV는 미래 실적의 현재가치로 결정됨. 현재 EPS/PER은 착공 지연·원가 상승·공정 진행률로 왜곡되어 Lead 지표로 사용 불가
+- **수주-매출 인식 시차 2–3년**: 오늘 수주한 선박은 2–3년 후 매출 인식. 현재 손익이 아닌 미래 이익을 선가지수·강재 단가 가정하에 추정해야 함
+- **선가지수가 이익률을 결정**: 클락슨 신조선가지수 상승기 수주한 선박은 높은 마진 잠재, 저점 수주는 납기 시 손실 위험
+- **선종 Mix**: LNG선·컨테이너선(고마진) vs 벌크선·탱커(저마진) 비중이 전체 이익률을 좌우
+- **강재(후판) 원가 리스크**: 수주 후 납기까지 원자재 가격 상승 위험 — 에스컬레이션 조항(Escalation Clause) 유무 확인 필수
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+수주잔고(Backlog) 분석 — Lead 방법론 (필수)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+수주잔고 NPV 산출 (반드시 수치화):
+  잔고 매출 = 수주잔고 × 연간 인도 스케줄 → 선종별 EBITDA 마진(%) 적용 → 세후 현금흐름 추정 → WACC 할인
+  · LNG선 EBITDA 마진: 15–20% (고부가 선종)
+  · 컨테이너선 EBITDA 마진: 10–15%
+  · 탱커/벌크선 EBITDA 마진: 5–10%
+  · WACC: 8–10% (조선업 사이클 리스크 반영)
+
+Book-to-Bill 분석:
+  Book-to-Bill = 분기 신규 수주 / 분기 매출 인식
+  · B/B ≥ 1.0x: 잔고 유지/성장 → 향후 이익 가시성 높음
+  · B/B < 1.0x: 잔고 소진 → 2–3년 후 매출 공백 위험
+  · 3분기 연속 B/B < 1.0x 시 수주 모멘텀 약화 경고
+
+잔고 커버리지(Backlog Coverage):
+  잔고/TTM Revenue (연) — 통상 조선 3사 평균: 2.5–4년
+  · 4년 이상: 향후 매출 고도 가시성 → 프리미엄 정당화
+  · 2년 미만: 수주 갱신 실패 시 이익 급락 위험
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+밸류에이션 (필수 방법론)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Lead: **수주잔고 NPV 기반 내재가치** = 선종별 인도 스케줄 × EBITDA 마진 × WACC 할인 합산
+- 보조 ①: P/Book — 조선사는 자산 집약적 → P/Book 0.8–2.0x 밴드 (선가 사이클에 연동)
+  · 선가지수 상승기: 1.5–2.5x, 하락기: 0.5–1.2x
+- 보조 ②: EV/EBITDA — 정상화된 EBITDA 기준 적용 (전환기 적자 연도 제외, 2–3년 평균 EBITDA 사용)
+  · 한국 조선 3사 피어 EV/EBITDA: 8–15x (선가 상승기 프리미엄)
+- ⚠️ 전환기(적자·손익 변동 극심) 사용 불가 지표: 현재 PER, EV/매출 (단독)
+- 3-시나리오 민감도 (선가·강재 가격 변수로):
+  | 시나리오 | 클락슨 선가지수 변동 | 강재 단가 | 백로그 NPV | 목표주가 |
+  |---------|-------------------|---------|-----------|---------|
+  | Bear    | -10% (10%)        | +20%    |           |         |
+  | Base    | 현재              | 현재     |           |         |
+  | Bull    | +15%              | -10%    |           |         |
+
+피어: HD현대중공업, 삼성중공업, 한화오션 — 수주잔고 커버리지, Book-to-Bill, EV/EBITDA, P/Book 비교
+`;
+  }
+
+  // ── K-배터리 / 2차전지 (Battery / EV Battery) ─────────────────────────────
+  const isBattery =
+    /lg에너지솔루션|lges|삼성sdi|sk이노베이션|sk온|에코프로비엠|포스코퓨처엠|엘앤에프|코스모신소재|천보|일진머티리얼즈|솔루스첨단소재/.test(name) ||
+    /lg energy solution|panasonic energy|catl|byd battery|northvolt|svolt|solid power|quantumscape|enovix|freyr/.test(name) ||
+    /battery manufacturer|ev battery|lithium.?ion battery|battery cell|battery pack|cathode material|anode material|electrolyte|solid.?state battery|battery technology/.test(ind);
+
+  if (isBattery) {
+    return `
+[섹터 특화 지침 — K-배터리 / 2차전지 (EV Battery)]
+핵심 KPI: 연간 생산 용량(GWh, 현재/예정), 가동률(%), ASP($/kWh 또는 원/kWh), EBITDA/kWh, 장기공급계약(LTA) 잔액·기간, 고객사 집중도(Tesla/GM/현대 비중), 소재 원가 패스스루(%) 비율, 에너지 밀도(Wh/kg), 전고체 개발 진척도
+
+구조 특이사항:
+- **용량 기반 밸류에이션이 핵심**: GWh 용량당 EV($/kWh or 억원/GWh)를 CATL·파나소닉 등 글로벌 피어와 비교. PER 단독 사용 시 대규모 투자 중 손실 기간 왜곡
+- **ASP 구조적 하락 커브 내재**: 배터리 가격은 연평균 10–15% 하락 추세 (Wright's Law). ASP 하락분을 원가절감·볼륨으로 상쇄할 수 있는지가 마진 방어의 핵심
+- **소재 원가 변동성**: 리튬·니켈·코발트 등 핵심 광물 가격 급등락 → LTA 내 원가 패스스루 조항(Pass-Through) 유무가 마진 안정성 결정
+- **LTA(장기공급계약) NPV가 Floor 가치**: 수주잔고 확인 가능한 LTA는 현재가치로 할인 → 적정 EV 하한선
+- **투자 사이클(Capex Cycle) 관리**: Giga-factory 건설 중 대규모 적자·FCF 적자 → 투자 전/후 이익률 괴리 주의
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+배터리 전용 밸류에이션 (필수 방법론)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+① EV/GWh Capacity 분석 (Lead):
+  EV per GWh = (시가총액 + 순부채) / 총 생산 가능 GWh (설치 기준)
+  - 글로벌 피어 기준: CATL ~$80–120M/GWh, LG에너지솔루션 ~$50–100M/GWh (시기·성장률에 따라 변동)
+  - 당사 EV/GWh를 산출하고 피어 배수와 비교하여 프리미엄/디스카운트 원인 분석
+
+② LTA NPV (Floor 가치):
+  각 고객사별 LTA 수량 × 예상 ASP(년도별 하락 반영) × EBITDA 마진 → WACC 할인 합산
+  WACC: 9–11% (배터리 기업 원가 리스크 반영)
+
+③ DCF (3단계 성장 모델):
+  Phase 1 (2026–2028): 용량 증설 중 — 가동률 상승·ASP 하락 동시 반영
+  Phase 2 (2029–2033): 안정 가동 — 원가절감으로 마진 확보, ASP 연 10% 하락 가정
+  Phase 3 (2034+): 성숙기 — 전고체 전환 가능성 옵션 가치 별도 추정
+  Terminal Growth: 2–3%
+
+④ 3-시나리오 민감도 (리튬·ASP 변수):
+  | 시나리오 | ASP 하락률 | 리튬 가격 | 가동률 | EBITDA/GWh | 목표주가 |
+  |---------|-----------|---------|------|-----------|---------|
+  | Bear    | -20%/년    | 현재+30% | 65%  |           |         |
+  | Base    | -12%/년    | 현재     | 80%  |           |         |
+  | Bull    | -8%/년     | 현재-20% | 90%+ |           |         |
+
+피어: CATL(300750.SZ), Panasonic Energy, Samsung SDI, BYD Battery, QuantumScape(QS) — EV/GWh, EBITDA/kWh, Gross Margin 비교
+`;
+  }
+
+  // ── 게임 / IP (Gaming / Interactive Entertainment) ───────────────────────
+  const isGaming =
+    /크래프톤|엔씨소프트|넥슨|넷마블|카카오게임즈|위메이드|컴투스|펄어비스|스마일게이트|데브시스터즈|미르/.test(name) ||
+    /take-two|2k games|electronic arts|ea sports|activision|blizzard|ubisoft|cd projekt|roblox|unity technologies|take two/.test(name) ||
+    /video game|game developer|gaming studio|mobile game|console game|pc game|online game|interactive entertainment|esport/.test(ind);
+
+  if (isGaming) {
+    return `
+[섹터 특화 지침 — 게임 / IP (Gaming & Interactive Entertainment)]
+핵심 KPI: MAU(월간 활성 이용자), DAU(일간 활성 이용자), ARPU(사용자당 평균 수익, 월), ARPDAU(DAU당 일 수익), 과금 유저 비율(Paying Ratio, %), LTV(유저 생애 가치), DAU/MAU Ratio(스티키니스), 파이프라인 타이틀 수·출시 시기, IP 라이선싱 로열티 수익, PC/모바일/콘솔 매출 믹스
+
+구조 특이사항:
+- **기존 게임 매출 = 수명 곡선(Decay Curve)**: 출시 후 1–3년 피크, 이후 연 20–40% 자연 감소. 신작 없으면 매출 구조적 감소
+- **파이프라인 NPV가 미래가치의 핵심**: 출시 예정 게임 × 출시 성공 확률(PoS) × 피크 매출 NPV를 합산해야 전체 내재가치 산출 가능
+- **IP 가치는 라이선싱·OSMU(One Source Multi Use)에서 발현**: 주요 IP의 브랜드 인지도·글로벌 확장성·콜라보레이션 가능성 정성 평가 필수
+- **MX(Monetization) 구조 차별화**: 부분유료화(F2P) + 확률형 아이템(가챠) → 규제 리스크 상존. 배틀패스·DLC·구독 모델은 수익 예측 가능성 향상
+- **한국 게임사 특유**: PC 온라인 비중 높음. 중국 시장 판호(版号) 리스크 상존. 엔씨·크래프톤 등은 글로벌 자체 퍼블리싱 전환 여부가 밸류에이션 배수를 결정
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+게임/IP 전용 밸류에이션 (필수 방법론)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+① 기존 게임 DCF (Existing Game Revenue Decay):
+  각 라이브 게임별: 현재 MAU × ARPU → 연간 매출 추정
+  감소율 적용: 히트 타이틀 -10–20%/년, 장수 IP -5–10%/년
+  EBITDA 마진: 대형 게임사 25–45%, 인디/중소 15–25%
+  WACC: 10–13% (한국 게임사), 8–11% (미국 대형 퍼블리셔)
+
+② 파이프라인 NPV (Pipeline Titles):
+  미출시 타이틀별: 예상 피크 MAU × 예상 ARPU × PoS(출시 성공 확률 30–70%) → 매출 피크 2–3년 후 DCF
+  · AAA급 신작(크래프톤 블루홀급): PoS 50–70%, 피크 MAU 2,000만명+
+  · 중소형 모바일: PoS 20–40%
+  파이프라인 가치 합산 = Σ(타이틀별 DCF × PoS)
+
+③ IP 라이선싱·OSMU 가치:
+  주요 IP 브랜드 인지도 × 로열티 수익 성장 가정 (연 10–30% CAGR) → 5년 NPV
+  · 콘솔 포팅, 굿즈, 영상화, 협업 콜라보 수익 포함
+
+④ 밸류에이션 배수 (보조):
+  - EV/Revenue: 대형 퍼블리셔(EA/TTWO) 3–6x, 성장형 게임사 5–10x
+  - EV/EBITDA: 대형 20–30x, 중형 10–20x
+  - P/E: GAAP 기준보다 Non-GAAP(SBC 제거) 기준 사용
+  - DAU당 EV: 플랫폼 비교용 (참고 지표)
+  ⚠️ 신작 출시 연도 EPS/EBITDA 왜곡(마케팅비 집중) → 출시 다음 해 정상화 수치 사용
+
+피어: 크래프톤(259960), 엔씨소프트(036570), 넥슨(3659.T), Take-Two(TTWO), EA, Roblox(RBLX) — MAU, ARPU, EV/Revenue, EV/EBITDA, FCF Yield 비교
+`;
+  }
+
+  // ── 해운사 (Shipping / Maritime Transport) ───────────────────────────────
+  const isShipping =
+    /hmm|팬오션|대한해운|흥아해운|에이치엠엠|현대상선|장금상선|고려해운/.test(name) ||
+    /zim integrated|maersk|hapag.?lloyd|cosco shipping|evergreen|yang ming|msc mediterranean|wan hai|pacific basin|diana shipping|danaos|safe bulkers|golden ocean/.test(name) ||
+    /container shipping|bulk shipping|tanker shipping|dry bulk|wet bulk|maritime transport|ocean freight|sea freight|liner shipping|tramp shipping/.test(ind);
+
+  if (isShipping) {
+    return `
+[섹터 특화 지침 — 해운사 (Shipping / Maritime Transport)]
+핵심 KPI: TCE Rate(Time Charter Equivalent, $/day), 선대 규모(TEU 또는 DWT), 선령(평균 선박 나이), 용선료(Time Charter Rate vs Spot Rate), 용선 커버리지(Forward Charter Coverage, %), SCFI(상하이컨테이너운임지수) / BDI(발틱건화물지수) / BDTI(탱커운임지수), NAV(순자산가치 = 선박 시장가 - 순부채), P/NAV Ratio
+
+구조 특이사항:
+- **사이클 업종 (극심한 주기성)**: 해운 운임은 글로벌 무역량·선박 공급과 비교해 비선형 반응. 운임 급등기 EPS/P/E 급락(역설적 고 EPS = P/E 낮음), 운임 급락기 적자·P/B 하락
+- **단일 배수 적용 금지**: 사이클 정점의 EPS·EBITDA로 밸류에이션하면 극단적 저평가 착시. 정상화(Mid-Cycle) 수익력 기준 적용 필수
+- **NAV가 바닥 가치**: 선박 처분 가치(Demolition Value) 이상은 주가의 절대 하단. P/NAV < 1.0x 시 구조적 저평가 또는 업황 붕괴 신호
+- **컨테이너 vs 벌크 vs 탱커**: 운임지수·사이클 구조가 다름. 컨테이너(SCFI), 건화물(BDI), 탱커(WS/BDTI) 지수별 별도 분석 필수
+- **선령 리스크**: 선박 평균 나이 15년+ 시 운용 비용 증가·해체 압력 상승. 신조 투자 타이밍이 경쟁력 결정
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+해운 전용 밸류에이션 (필수 방법론)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+① NAV 분석 (Floor 가치, Lead):
+  선박 NAV = Σ(각 선박 Secondhand Market Value) − 순부채
+  - 선박 시장가: Clarksons/VesselsValue 기준 (분석 시 최근 브로커 평가 인용)
+  - P/NAV = 시가총액 / 선박 NAV
+    · P/NAV > 1.2x: 운임 상승 기대 반영 → 프리미엄 정당화 여부 분석
+    · P/NAV < 1.0x: 선박 해체가 이상 → 시장 불신 or 구조적 과잉 공급 의심
+    · P/NAV = 1.0x: 적정 (선박 실물 가치에 수렴)
+
+② TCE-based DCF:
+  현재 용선 커버리지(Forward Coverage) × Contracted TCE Rate → 가시적 매출 현재가치
+  + 스팟 노출 분 × Mid-cycle TCE 가정 → 합산
+  WACC: 10–12% (해운 사이클 리스크)
+
+③ Mid-cycle EV/EBITDA (보조):
+  현재 EPS/EBITDA 사용 금지. 10년 평균 운임 기반 정상화 EBITDA 산출 후 적용
+  컨테이너 대형사: 4–8x, 벌크/탱커: 3–6x
+
+④ 3-시나리오 운임 민감도 (반드시 수치화):
+  | 시나리오 | SCFI/BDI 가정 | TCE Rate | 연 EBITDA | NAV 변화 | 목표주가 |
+  |---------|-------------|---------|----------|--------|---------|
+  | Bear    | -40% (공급 과잉)  |          |          |        |         |
+  | Base    | Mid-Cycle 평균   |          |          |        |         |
+  | Bull    | +60% (공급 부족)  |          |          |        |         |
+
+피어: HMM(011200), 팬오션(028670), ZIM(ZIM), 머스크(MAERSK-B.CO), Hapag-Lloyd(HLAG.DE) — P/NAV, TCE Rate, EV/EBITDA(정상화), 선대 DWT 비교
+`;
+  }
+
   // 해당 섹터 없음
   return "";
 }
@@ -1372,6 +1575,119 @@ function needsCryptoTreasury(industry: string, companyName: string, ticker?: str
   return false;
 }
 
+function needsShipbuilding(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/hd한국조선해양|hd현대중공업|삼성중공업|한화오션|현대미포조선|현대삼호중공업|대우조선해양/.test(name)) return true;
+  if (/hyundai heavy industries|samsung heavy industries|hanwha ocean|hd hyundai heavy|hd korea shipbuilding/.test(name)) return true;
+  if (/shipbuilding|ship building|shipyard|naval architecture|vessel construction|offshore vessel/.test(ind)) return true;
+
+  const SHIPBUILDING_TICKERS = new Set([
+    "329180", // HD한국조선해양
+    "009540",  // HD현대중공업
+    "010140",  // 삼성중공업
+    "042660",  // 한화오션
+    "010620",  // HD현대미포조선
+    "000100",  // 현대삼호중공업(비상장 자회사 — 지주 통해 분석)
+  ]);
+  if (bare && SHIPBUILDING_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsBattery(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/lg에너지솔루션|lges|삼성sdi|sk이노베이션|sk온|에코프로비엠|포스코퓨처엠|엘앤에프|천보|일진머티리얼/.test(name)) return true;
+  if (/lg energy solution|panasonic energy|catl|northvolt|quantumscape|enovix|solid power/.test(name)) return true;
+  if (/battery manufacturer|ev battery|lithium.?ion battery|battery cell|cathode material|anode material|solid.?state battery/.test(ind)) return true;
+
+  const BATTERY_TICKERS = new Set([
+    "373220", // LG에너지솔루션
+    "006400", // 삼성SDI
+    "096770", // SK이노베이션
+    "247540", // 에코프로비엠
+    "003670", // 포스코퓨처엠
+    "066970", // L&F(엘앤에프)
+    "278280", // 천보
+    "271940", // 일진머티리얼즈
+    "QS",     // QuantumScape
+    "ENVX",   // Enovix
+  ]);
+  if (bare && BATTERY_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsGaming(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/크래프톤|엔씨소프트|넥슨|넷마블|카카오게임즈|위메이드|컴투스|펄어비스|스마일게이트|데브시스터즈/.test(name)) return true;
+  if (/take-two|take two|electronic arts|activision|blizzard|ubisoft|cd projekt|roblox|unity technologies/.test(name)) return true;
+  if (/video game|game developer|gaming studio|mobile game|console game|online game|interactive entertainment/.test(ind)) return true;
+
+  const GAMING_TICKERS = new Set([
+    "259960", // 크래프톤
+    "036570", // 엔씨소프트
+    "251270", // 넷마블
+    "293490", // 카카오게임즈
+    "112040", // 위메이드
+    "194480", // 데브시스터즈
+    "263750", // 펄어비스
+    "TTWO",   // Take-Two Interactive
+    "EA",     // Electronic Arts
+    "RBLX",   // Roblox
+    "CDPR",   // CD Projekt
+  ]);
+  if (bare && GAMING_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsShipping(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/\bhmm\b|팬오션|대한해운|흥아해운|에이치엠엠|현대상선|장금상선|고려해운/.test(name)) return true;
+  if (/zim integrated|hapag.?lloyd|cosco shipping|evergreen marine|yang ming|pacific basin|diana shipping|danaos|golden ocean/.test(name)) return true;
+  if (/container shipping|bulk shipping|tanker shipping|dry bulk|wet bulk|maritime transport|ocean freight|liner shipping|tramp shipping/.test(ind)) return true;
+
+  const SHIPPING_TICKERS = new Set([
+    "011200", // HMM
+    "028670", // 팬오션
+    "005880", // 대한해운
+    "ZIM",    // ZIM Integrated Shipping
+    "DSX",    // Diana Shipping
+    "DAC",    // Danaos Corporation
+    "GOGL",   // Golden Ocean
+    "SBLK",   // Star Bulk Carriers
+    "MATX",   // Matson Inc
+  ]);
+  if (bare && SHIPPING_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsCBDilutionCheck(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  // 한국 주식(.KS/.KQ)에서 CB/BW 발행이 빈번한 섹터
+  const isKoreanTicker = (ticker ?? "").includes(".KS") || (ticker ?? "").includes(".KQ");
+  if (!isKoreanTicker) return false; // 미국 주식은 해당 없음
+
+  // CB/BW 발행이 특히 빈번한 섹터: 바이오·IT·소재·게임
+  if (/바이오|biotech|bio|pharma|제약|it|소프트웨어|게임|game|소재|material|2차전지|battery|전기차/.test(ind)) return true;
+
+  // 코스닥(KQ) 소형주는 일괄 체크 대상
+  if ((ticker ?? "").includes(".KQ")) return true;
+
+  return false;
+}
+
 function needsSOTP(industry: string, companyName: string, ticker?: string): boolean {
   const name = (companyName ?? "").toLowerCase();
   const ind  = (industry ?? "").toLowerCase();
@@ -1433,10 +1749,15 @@ export function buildPrompt(
   const usBiotechFlag       = needsUSBiotech(industry, companyName, ticker);
   const usReitFlag          = needsUSREIT(industry, companyName, ticker);
   const cryptoTreasuryFlag  = needsCryptoTreasury(industry, companyName, ticker);
+  const shipbuildingFlag    = needsShipbuilding(industry, companyName, ticker);
+  const batteryFlag         = needsBattery(industry, companyName, ticker);
+  const gamingFlag          = needsGaming(industry, companyName, ticker);
+  const shippingFlag        = needsShipping(industry, companyName, ticker);
+  const cbDilutionFlag      = needsCBDilutionCheck(industry, companyName, ticker);
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}${cryptoTreasuryFlag ? "\n[가상자산/비트코인 트레저리 감지: 코어 사업 EV + BTC NAV를 반드시 분리하는 SOTP가 Lead입니다. 단일 EV/EBITDA 배수 적용 금지. relative_valuation 단계에서 ① 코어 사업 독립 밸류에이션 ② BTC NAV = 보유량×현재가-담보순부채 ③ mNAV 배율(시총/BTC NAV) ④ BTC 가격 Bear/Base/Bull 3-시나리오 민감도 테이블 ⑤ 레버리지 LTV 및 청산 트리거 가격을 반드시 포함하세요.]" : ""}`;
+현재 날짜: 2026년 4월 기준. 2024년·2025년 실적·수치는 이미 확정된 과거 데이터로 취급하세요. "향후", "예상", "전망" 등의 표현을 2024~2025년 수치에 쓰는 것은 금지입니다. DCF·밸류에이션 전망 기간은 2026년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: RNAV(주택자산재평가) 기반 P/BV가 Lead 밸류에이션입니다. relative_valuation 단계에서 분양 예정 사업별 RNAV 산출, 미청구공사 리스크 평가, 수주잔고 Coverage를 반드시 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}${cryptoTreasuryFlag ? "\n[가상자산/비트코인 트레저리 감지: 코어 사업 EV + BTC NAV를 반드시 분리하는 SOTP가 Lead입니다. 단일 EV/EBITDA 배수 적용 금지. relative_valuation 단계에서 ① 코어 사업 독립 밸류에이션 ② BTC NAV = 보유량×현재가-담보순부채 ③ mNAV 배율(시총/BTC NAV) ④ BTC 가격 Bear/Base/Bull 3-시나리오 민감도 테이블 ⑤ 레버리지 LTV 및 청산 트리거 가격을 반드시 포함하세요.]" : ""}${shipbuildingFlag ? "\n[조선사 감지: 수주잔고 NPV가 Lead 밸류에이션입니다. 현재 PER 단독 사용 금지(수주-매출 2–3년 시차). relative_valuation 단계에서 ① 선종별 수주잔고 NPV 산출(LNG선/컨테이너선/탱커별 마진 차등 적용) ② Book-to-Bill Ratio 추이 ③ 잔고 커버리지(잔고/TTM Revenue, 연) ④ 클락슨 신조선가지수·강재 가격 Bear/Base/Bull 3-시나리오 민감도 테이블을 반드시 포함하세요.]" : ""}${batteryFlag ? "\n[K-배터리/2차전지 감지: EV/GWh Capacity 배수가 Lead입니다. 투자 사이클 중 적자 기간의 PER 단독 사용 금지. relative_valuation 단계에서 ① EV per GWh 산출 및 CATL·Panasonic·삼성SDI 피어 비교 ② LTA(장기공급계약) NPV Floor 가치 ③ ASP 하락 커브·리튬 가격 3-시나리오 민감도 테이블 ④ 전고체 파이프라인 옵션 가치를 반드시 포함하세요.]" : ""}${gamingFlag ? "\n[게임/IP 감지: 기존 게임 Decay DCF + 파이프라인 NPV(PoS 가중) + IP 로열티 스트림의 3중 구조가 Lead입니다. 현재 GAAP PER 단독 사용 금지(신작 출시 연도 마케팅비 왜곡). relative_valuation 단계에서 ① 라이브 타이틀별 MAU × ARPU × 수명 Decay DCF ② 미출시 파이프라인 타이틀별 PoS × 피크 매출 NPV ③ IP 라이선싱·OSMU 로열티 스트림 NPV ④ EV/Revenue·EV/EBITDA 피어 비교를 반드시 포함하세요.]" : ""}${shippingFlag ? "\n[해운사 감지: P/NAV(선박 실물가치 기반)가 Lead입니다. 사이클 정점의 EPS/PER 단독 사용 금지. relative_valuation 단계에서 ① 선박 NAV(Clarksons 기준 선박 시장가 합산 - 순부채) 및 P/NAV Ratio ② TCE Rate 기반 DCF(용선 커버리지 × Contracted Rate + Spot 노출분 × Mid-cycle TCE) ③ Mid-cycle 정상화 EV/EBITDA ④ SCFI/BDI Bear/Base/Bull 3-시나리오 운임 민감도 테이블을 반드시 포함하세요.]" : ""}${cbDilutionFlag ? "\n[한국 소·중형주 CB/BW 희석 체크 필수: 전환사채(CB)·신주인수권부사채(BW)·스톡옵션 잠재 주식이 상장주식수의 5% 이상인 경우 완전희석 주식수(Fully Diluted Shares) 기준으로 EPS·목표주가를 재산출하세요. 희석 전·후 목표주가를 모두 제시하고, 전환가액 및 미전환 잔액을 명시하세요. DART 전자공시의 전환사채 현황을 반드시 확인하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
