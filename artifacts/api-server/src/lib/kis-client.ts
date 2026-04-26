@@ -146,6 +146,69 @@ export async function fetchKISStockQuote(
 }
 
 /**
+ * 국내 주식 기간별 일별 시세 조회
+ * TR_ID: FHKST03010100 (국내주식 기간별시세(일/주/월/년))
+ * → 최근 3개월치 종가·거래대금 수집용
+ */
+interface KISDailyBar {
+  date: string;       // YYYYMMDD
+  close: number;      // 종가
+  tradingValue: number; // 당일 거래대금(원)
+}
+
+async function fetchKISDailyPriceHistory(
+  stockCode: string
+): Promise<KISDailyBar[]> {
+  try {
+    const token = await getAccessToken();
+
+    // 오늘 ~ 95일 전 (≈ 65 영업일, 3개월 + 버퍼)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 95);
+    const fmt8 = (d: Date) =>
+      d.toISOString().slice(0, 10).replace(/-/g, "");
+
+    const url = new URL(
+      `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`
+    );
+    url.searchParams.set("FID_COND_MRKT_DIV_CODE", "J");
+    url.searchParams.set("FID_INPUT_ISCD", stockCode);
+    url.searchParams.set("FID_INPUT_DATE_1", fmt8(startDate));
+    url.searchParams.set("FID_INPUT_DATE_2", fmt8(endDate));
+    url.searchParams.set("FID_PERIOD_DIV_CODE", "D");
+    url.searchParams.set("FID_ORG_ADJ_PV", "1"); // 수정주가
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: process.env.KIS_APP_KEY!,
+        appsecret: process.env.KIS_APP_SECRET!,
+        tr_id: "FHKST03010100",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) return [];
+    const json = await res.json();
+    if (json.rt_cd !== "0") return [];
+
+    const rows: any[] = Array.isArray(json.output2) ? json.output2 : [];
+
+    return rows
+      .map((d: any) => ({
+        date: String(d.stck_bsop_date ?? ""),
+        close: parseFloat((d.stck_clpr ?? "0").replace(/,/g, "")),
+        tradingValue: parseFloat((d.acml_tr_pbmn ?? "0").replace(/,/g, "")),
+      }))
+      .filter((d) => d.close > 0 && d.date.length === 8)
+      .sort((a, b) => a.date.localeCompare(b.date)); // 오름차순 (오래된 → 최신)
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 여러 종목 동시 조회 (Promise.all, 최대 20개)
  */
 export async function fetchKISStockQuotes(
@@ -168,11 +231,16 @@ export async function fetchKISStockQuotes(
 
 /**
  * 분석 대상 종목의 실시간 컨텍스트 문자열 생성 + 원시 quote 반환
+ * 기간별 시세(3개월)를 병렬 조회해서 수익률·거래대금 추세를 함께 제공
  */
 export async function buildKISStockContext(
   stockCode: string
 ): Promise<{ context: string; quote: KISStockQuote } | null> {
-  const quote = await fetchKISStockQuote(stockCode);
+  // 현재가·투자지표 + 기간별 시세를 병렬 조회
+  const [quote, history] = await Promise.all([
+    fetchKISStockQuote(stockCode),
+    fetchKISDailyPriceHistory(stockCode),
+  ]);
   if (!quote || !quote.price) return null;
 
   const fmt = (v: number | null, suffix = "") =>
@@ -182,6 +250,57 @@ export async function buildKISStockContext(
   const sharesLine = quote.sharesOutstanding != null
     ? `⭐ 상장주식수 [KIS 공식, 최우선]: ${quote.sharesOutstanding.toLocaleString("ko-KR")}주 (${(quote.sharesOutstanding / 1e8).toFixed(4)}억주)\n⛔ 밸류에이션 주당가치(EPS/BPS/목표주가) 계산 시 이 수치(${quote.sharesOutstanding.toLocaleString("ko-KR")}주)를 반드시 사용. Yahoo Finance 수치가 다를 경우 KIS 기준값 우선.`
     : null;
+
+  // ── 수익률 계산 (history 기반) ─────────────────────────────────────────────
+  // history는 오름차순(오래된→최신). 마지막 원소가 가장 최근 영업일
+  const currentPrice = quote.price;
+  let returnSection = "";
+
+  if (history.length >= 2) {
+    const calcReturn = (daysAgo: number): string | null => {
+      const idx = Math.max(0, history.length - 1 - daysAgo);
+      const pastBar = history[idx];
+      if (!pastBar || pastBar.close <= 0) return null;
+      const ret = ((currentPrice - pastBar.close) / pastBar.close * 100).toFixed(1);
+      const sign = Number(ret) >= 0 ? "+" : "";
+      return `${sign}${ret}% (${pastBar.close.toLocaleString("ko-KR")}원 → ${currentPrice.toLocaleString("ko-KR")}원)`;
+    };
+
+    const ret1m = history.length >= 21 ? calcReturn(20) : null;
+    const ret3m = history.length >= 61 ? calcReturn(60) : null;
+
+    if (ret1m || ret3m) {
+      returnSection = `\n[KIS 최근 수익률]\n`;
+      if (ret1m) returnSection += `최근 1개월 수익률: ${ret1m}\n`;
+      if (ret3m) returnSection += `최근 3개월 수익률: ${ret3m}\n`;
+    }
+  }
+
+  // ── 거래대금 추세 계산 ─────────────────────────────────────────────────────
+  let tradingValueSection = "";
+
+  if (history.length >= 5) {
+    const recent = history.slice(-20); // 최근 최대 20 영업일
+    const avg20 = recent.reduce((s, d) => s + d.tradingValue, 0) / recent.length;
+    const last5 = history.slice(-5);
+    const avg5  = last5.reduce((s, d) => s + d.tradingValue, 0) / last5.length;
+
+    if (avg20 > 0) {
+      const pctVsAvg = ((avg5 - avg20) / avg20 * 100).toFixed(0);
+      const trend =
+        Number(pctVsAvg) >= 50 ? "급증" :
+        Number(pctVsAvg) >= 20 ? "증가" :
+        Number(pctVsAvg) >= -20 ? "보통" :
+        Number(pctVsAvg) >= -50 ? "감소" : "급감";
+      const avg20B = (avg20 / 1e8).toFixed(0);
+      const avg5B  = (avg5  / 1e8).toFixed(0);
+      const sign   = Number(pctVsAvg) >= 0 ? "+" : "";
+      tradingValueSection =
+        `\n[KIS 거래대금 추세]\n` +
+        `최근 5일 평균: ${avg5B}억원 / 20일 평균: ${avg20B}억원 → ` +
+        `${sign}${pctVsAvg}% (${trend})\n`;
+    }
+  }
 
   const context = `
 === KIS 실시간 시세 데이터 (${new Date().toLocaleDateString("ko-KR")} 기준) ===
@@ -201,7 +320,7 @@ ${sharesLine ? sharesLine + "\n" : ""}
 | ROE | ${quote.roe !== null ? quote.roe.toFixed(1) + "%" : "N/A"} |
 | 액면가 | ${quote.faceValue !== null ? fmt(quote.faceValue, "원") : "N/A"} |
 | 거래량 회전율 | ${quote.volumeTurnover !== null ? quote.volumeTurnover.toFixed(2) + "%" : "N/A"} |
-
+${returnSection}${tradingValueSection}
 ※ KIS Open API 실전투자 실시간 데이터입니다. 밸류에이션 현재가·BPS·상장주식수 기준으로 최우선 활용하세요.
 `;
 
