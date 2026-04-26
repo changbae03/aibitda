@@ -74,6 +74,7 @@ const analysisLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "분석 요청이 너무 많습니다. 5분 후 다시 시도하세요." },
+  skip: (req) => req.method !== "POST",
 });
 
 const authLimiter = rateLimit({
