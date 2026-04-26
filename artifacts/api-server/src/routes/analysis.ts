@@ -5,6 +5,7 @@ import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
 import { cache, TTL } from "../lib/mem-cache.js";
 import { fetchDartSubjectBalance, fetchNaverPBR, writeMetricCache } from "../lib/peer-collector.js";
+import { fetchKISStockQuotes, buildKISStockContext } from "../lib/kis-client.js";
 import { fetchECOSMacro, buildECOSContext } from "../lib/ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../lib/fred-client.js";
 import { eq, desc, not, sql, and, isNotNull } from "drizzle-orm";
@@ -57,7 +58,7 @@ WACC 공통 가정 (한국 주식):
 `;
 
 
-// ─── KRX 실데이터 기반 업종 PBR 조회 ────────────────────────────────────────
+// ─── KRX 실데이터 + KIS 실시간 보강 기반 업종 PBR 조회 ──────────────────────
 async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> {
   try {
     // 1. 해당 종목의 업종 조회
@@ -86,14 +87,30 @@ async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> 
 
     if (!peerRes.rows.length) return null;
 
-    const peers = peerRes.rows.map(r => ({
-      code: r.code,
-      name: r.name,
-      pbr: r.pbr ? parseFloat(r.pbr) : null,
-      per: r.per ? parseFloat(r.per) : null,
-    }));
+    const peerCodes = peerRes.rows.map(r => r.code);
 
-    const validPBR = peers.filter(p => p.pbr && p.pbr > 0).map(p => p.pbr!);
+    // 3. KIS 실시간 데이터 병렬 조회 (상위 15개 + 분석 대상 종목)
+    const allCodes = [...new Set([krxCode, ...peerCodes.slice(0, 14)])];
+    const kisData = await fetchKISStockQuotes(allCodes).catch(() => new Map());
+
+    // 4. 피어 데이터 통합 (KIS 실시간 우선, 없으면 KRX 정적 fallback)
+    const peers = peerRes.rows.map(r => {
+      const kis = kisData.get(r.code);
+      return {
+        code: r.code,
+        name: r.name,
+        pbr: kis?.pbr ?? (r.pbr ? parseFloat(r.pbr) : null),
+        per: kis?.per ?? (r.per ? parseFloat(r.per) : null),
+        bps: kis?.bps ?? (r.bps ? parseFloat(r.bps) : null),
+        mcap: kis?.mcap ?? (r.mcap ? parseFloat(r.mcap) : null),
+        price: kis?.price ?? null,
+        roe: kis?.roe ?? null,
+        kisEnriched: !!kis,
+      };
+    });
+
+    // 5. 분포 통계 (KIS 보강된 PBR 기준)
+    const validPBR = peers.filter(p => p.pbr && p.pbr > 0 && p.pbr < 30).map(p => p.pbr!);
     const sorted = [...validPBR].sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)];
     const avg    = validPBR.reduce((s, v) => s + v, 0) / validPBR.length;
@@ -104,30 +121,54 @@ async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> 
     const perSorted = [...validPER].sort((a, b) => a - b);
     const perMedian = validPER.length ? perSorted[Math.floor(perSorted.length / 2)] : null;
 
+    const kisEnrichedCount = peers.filter(p => p.kisEnriched).length;
+    const dataSource = kisEnrichedCount > 0
+      ? `KIS 실시간(${kisEnrichedCount}개) + KRX 스냅샷 혼합`
+      : "KRX 스냅샷 (KRX 기준)";
+
     const peerTable = peers
       .slice(0, 15)
-      .map(p => `| ${p.code} | ${p.name} | ${p.pbr?.toFixed(2) ?? "—"} | ${p.per?.toFixed(1) ?? "—"} |`)
+      .map(p => {
+        const priceStr = p.price ? `${p.price.toLocaleString("ko-KR")}원` : "—";
+        const roeStr = p.roe !== null ? `${p.roe.toFixed(1)}%` : "—";
+        return `| ${p.code} | ${p.name} | ${p.pbr?.toFixed(2) ?? "—"} | ${p.per?.toFixed(1) ?? "—"} | ${roeStr} | ${priceStr} |`;
+      })
       .join("\n");
 
-    const snapshotDate = "2026-04-26";
+    // 분석 대상 종목 KIS 실시간 지표
+    const targetKIS = kisData.get(krxCode);
+    const targetSection = targetKIS ? `
+[분석 대상 종목 — KIS 실시간]
+| 지표 | 값 |
+|------|-----|
+| 현재가 | ${targetKIS.price.toLocaleString("ko-KR")}원 |
+| PBR(실시간) | ${targetKIS.pbr !== null ? targetKIS.pbr.toFixed(2) + "배" : "N/A"} |
+| PER(실시간) | ${targetKIS.per !== null ? targetKIS.per.toFixed(1) + "배" : "N/A"} |
+| EPS | ${targetKIS.eps !== null ? targetKIS.eps.toLocaleString("ko-KR") + "원" : "N/A"} |
+| BPS | ${targetKIS.bps !== null ? targetKIS.bps.toLocaleString("ko-KR") + "원" : "N/A"} |
+| ROE | ${targetKIS.roe !== null ? targetKIS.roe.toFixed(1) + "%" : "N/A"} |
+| 52주 최고 | ${targetKIS.w52High !== null ? targetKIS.w52High.toLocaleString("ko-KR") + "원" : "N/A"} |
+| 52주 최저 | ${targetKIS.w52Low !== null ? targetKIS.w52Low.toLocaleString("ko-KR") + "원" : "N/A"} |
+` : "";
 
     return `
-=== KRX 실데이터 기반 ${market} 업종별 피어 PBR 벤치마크 (${snapshotDate} 기준) ===
+=== KRX + KIS 실시간 업종 피어 벤치마크 ===
 분석 대상: ${name} (${krxCode}) | 업종: ${sector} | 시장: ${market}
+데이터 출처: ${dataSource}
 피어 모수: ${validPBR.length}개 종목 (PBR 유효 기준)
-
+${targetSection}
 [업종 PBR 분포]
 - 중앙값(Median):  ${median.toFixed(2)}x
 - 평균(Average):   ${avg.toFixed(2)}x
 - 1Q~3Q:           ${q1.toFixed(2)}x ~ ${q3.toFixed(2)}x
 - PER 중앙값:      ${perMedian ? perMedian.toFixed(1) + "x" : "N/A (적자 기업 다수)"}
 
-[시가총액 상위 피어 15개]
-| 종목코드 | 종목명 | PBR(배) | PER(배) |
-|--------|--------|--------|--------|
+[시가총액 상위 피어 15개 — KIS 실시간 보강]
+| 종목코드 | 종목명 | PBR(배) | PER(배) | ROE | 현재가 |
+|--------|--------|--------|--------|-----|-------|
 ${peerTable}
 
-※ 이 데이터는 KRX 실제 시장 데이터입니다. 상대가치(PBR) 산출 시 위 중앙값을 기준 배수로 사용하고,
+※ KIS 실시간 데이터로 보강된 피어 멀티플입니다. 상대가치(PBR/PER) 산출 시 위 중앙값을 기준 배수로 사용하고,
    분석 대상 기업의 ROE·성장률·수익성이 업종 평균 대비 우위인 경우 프리미엄을 정당화하세요.
    무근거 프리미엄 적용은 금지됩니다.
 `;
@@ -2144,14 +2185,15 @@ router.post("/", async (req, res) => {
   const krxCode = upperTicker.split(".")[0];
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
-  // Fetch financial data, news, DART balance sheet, macro data, start price in parallel
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote] = await Promise.all([
+  // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisContext] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
     isKoreanTicker ? fetchECOSMacro() : Promise.resolve(null),
     !isKoreanTicker ? fetchFREDMacro() : Promise.resolve(null),
     yahooFinance.quote(resolvedSymbol).catch(() => null),
+    isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
   ]);
   const startPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
 
@@ -2197,6 +2239,7 @@ router.post("/", async (req, res) => {
   const fullContext = [
     financialData,
     dartBalanceContext,
+    kisContext,
     macroContext,
     newsData,
     userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",

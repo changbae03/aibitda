@@ -66,6 +66,17 @@ Step 7: catalyst → Step 8: smart_money → Step 9: lead_validation (final verd
 - `promo_code_uses` - 프로모 코드 사용 이력 (unique per user)
 - `model_calibration` - 섹터별 AI 모델 성과 보정 데이터 (direction_accuracy, avg_price_deviation, sample_count)
 
+## KIS Open API 실시간 데이터 통합
+
+한국투자증권 Open API(실전투자)로 한국 주식 실시간 데이터를 AI 분석에 주입.
+
+- **파일**: `artifacts/api-server/src/lib/kis-client.ts`
+- **토큰 관리**: OAuth2 client_credentials 자동 발급·캐싱 (24h, 5min 버퍼)
+- **주입 시점 1**: 분석 시작 시 `buildKISStockContext(krxCode)` → 전 단계 공통 컨텍스트에 현재가·52주 고저·PER·PBR·EPS·BPS 주입
+- **주입 시점 2**: `relative_valuation` 단계의 `getKRXSectorPeerContext()` → 피어 상위 15개 종목 KIS 실시간 PER/PBR/ROE 보강 (KRX 정적 스냅샷 fallback)
+- **ROE 계산**: KIS `inquire-price` API에 ROE 필드 없음 → EPS/BPS 비율로 직접 산출
+- **환경 변수**: `KIS_APP_KEY`, `KIS_APP_SECRET` (Replit Secrets)
+
 ## AI Model Self-Calibration System
 
 30일 이상 된 완료 분석을 실제 주가와 비교하여 섹터별 편향을 측정하고, 이후 분석 프롬프트에 자동 주입하는 피드백 루프.
