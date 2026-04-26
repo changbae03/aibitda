@@ -640,4 +640,142 @@ router.delete("/promo-codes/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── AI 품질 모니터링 ────────────────────────────────────────────────────────
+router.get("/quality-stats", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  try {
+    // 일별 오류율 + 평균 소요 시간 (최근 30일)
+    const { rows: daily } = await pool.query(`
+      SELECT
+        TO_CHAR(created_at AT TIME ZONE 'Asia/Seoul', 'MM/DD') AS day,
+        DATE_TRUNC('day', created_at AT TIME ZONE 'Asia/Seoul') AS day_ts,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'error') AS errors,
+        ROUND(
+          COUNT(*) FILTER (WHERE status = 'error')::NUMERIC / NULLIF(COUNT(*), 0) * 100,
+          1
+        ) AS error_rate,
+        ROUND(
+          AVG(
+            EXTRACT(EPOCH FROM (
+              COALESCE(completed_at, updated_at) - created_at
+            ))
+          ) FILTER (WHERE status = 'completed') / 60.0,
+          1
+        ) AS avg_duration_min
+      FROM analyses
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY day, day_ts
+      ORDER BY day_ts ASC
+    `);
+
+    // 전체 요약
+    const { rows: summary } = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+        COUNT(*) FILTER (WHERE status = 'error') AS errors,
+        COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress,
+        ROUND(
+          COUNT(*) FILTER (WHERE status = 'error')::NUMERIC / NULLIF(COUNT(*), 0) * 100,
+          1
+        ) AS error_rate,
+        ROUND(
+          AVG(EXTRACT(EPOCH FROM (COALESCE(completed_at, updated_at) - created_at)) / 60.0)
+          FILTER (WHERE status = 'completed'),
+          1
+        ) AS avg_duration_min
+      FROM analyses
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+    `);
+
+    // 오류 상세 최근 10건
+    const { rows: recentErrors } = await pool.query(`
+      SELECT id, ticker, company_name, error_message, created_at
+      FROM analyses
+      WHERE status = 'error'
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    res.json({ daily, summary: summary[0], recentErrors });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+// ─── 프롬프트 버전 관리 ──────────────────────────────────────────────────────
+router.get("/prompt-versions", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { rows } = await pool.query(
+    `SELECT id, name, stage, description, ab_group, is_active, created_at, updated_at,
+            LENGTH(content) AS content_length
+     FROM prompt_versions
+     ORDER BY stage, created_at DESC`
+  );
+  res.json(rows);
+});
+
+router.get("/prompt-versions/:id", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { rows } = await pool.query(`SELECT * FROM prompt_versions WHERE id = $1`, [req.params.id]);
+  if (rows.length === 0) return res.status(404).json({ error: "not found" });
+  res.json(rows[0]);
+});
+
+router.post("/prompt-versions", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { name, stage, content, description, ab_group } = req.body;
+  if (!name || !stage || !content) return res.status(400).json({ error: "name, stage, content 필수" });
+  const { rows } = await pool.query(
+    `INSERT INTO prompt_versions (name, stage, content, description, ab_group)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [name, stage, content, description ?? null, ab_group ?? null]
+  );
+  res.json(rows[0]);
+});
+
+router.put("/prompt-versions/:id", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { name, stage, content, description, ab_group, is_active } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE prompt_versions
+     SET name = COALESCE($1, name),
+         stage = COALESCE($2, stage),
+         content = COALESCE($3, content),
+         description = COALESCE($4, description),
+         ab_group = $5,
+         is_active = COALESCE($6, is_active),
+         updated_at = NOW()
+     WHERE id = $7 RETURNING *`,
+    [name, stage, content, description, ab_group ?? null, is_active, req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: "not found" });
+  res.json(rows[0]);
+});
+
+router.patch("/prompt-versions/:id/toggle-active", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  const { rows } = await pool.query(
+    `UPDATE prompt_versions SET is_active = NOT is_active, updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: "not found" });
+  res.json(rows[0]);
+});
+
+router.delete("/prompt-versions/:id", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
+  await pool.query(`DELETE FROM prompt_versions WHERE id = $1`, [req.params.id]);
+  res.json({ ok: true });
+});
+
 export default router;

@@ -156,6 +156,21 @@ router.post("/performance/recalculate", async (req, res) => {
       updatedSectors++;
     }
 
+    // 히스토리 스냅샷 저장
+    for (const [sector, stats] of sectorStats.entries()) {
+      const directionAccuracy = stats.directionTotal > 0
+        ? (stats.directionCorrect / stats.directionTotal) * 100
+        : null;
+      const avgPriceDeviation = stats.deviationCount > 0
+        ? stats.deviationSum / stats.deviationCount
+        : null;
+      await pool.query(
+        `INSERT INTO calibration_history (sector, market, direction_accuracy, avg_price_deviation, sample_count)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [sector, stats.market, directionAccuracy, avgPriceDeviation, stats.deviationCount]
+      );
+    }
+
     return res.json({
       message: "모델 보정 완료",
       analysesProcessed: analyses.length,
@@ -173,6 +188,25 @@ router.post("/performance/recalculate", async (req, res) => {
     });
   } catch (err) {
     console.error("[performance/recalculate] error:", err);
+    return res.status(500).json({ error: String(err) });
+  }
+});
+
+router.get("/performance/calibration-history", async (req, res) => {
+  const { sector } = req.query as { sector?: string };
+  try {
+    const { rows } = await pool.query(
+      `SELECT sector, market, direction_accuracy, avg_price_deviation, sample_count,
+              TO_CHAR(recorded_at AT TIME ZONE 'Asia/Seoul', 'MM/DD') AS label,
+              recorded_at
+       FROM calibration_history
+       ${sector ? "WHERE sector = $1" : ""}
+       ORDER BY recorded_at ASC
+       LIMIT 200`,
+      sector ? [sector] : []
+    );
+    return res.json(rows);
+  } catch (err) {
     return res.status(500).json({ error: String(err) });
   }
 });

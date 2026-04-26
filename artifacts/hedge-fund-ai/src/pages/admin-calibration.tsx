@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Brain } from "lucide-react";
+import { Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Brain, ChevronDown, History } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+} from "recharts";
 
 interface CalibrationRow {
   sector: string;
@@ -100,6 +103,71 @@ function GuideText({ acc, dev }: { acc: number | null; dev: number | null }) {
   );
 }
 
+interface HistoryPoint {
+  label: string;
+  direction_accuracy: number | null;
+  avg_price_deviation: number | null;
+  sample_count: number;
+}
+
+function HistoryChart({ sector, label }: { sector: string; label: string }) {
+  const [data, setData] = useState<HistoryPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(getApiUrl(`/api/performance/calibration-history?sector=${encodeURIComponent(sector)}`), { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setData(Array.isArray(d) ? d : []))
+      .catch(() => setData([]))
+      .finally(() => setLoading(false));
+  }, [sector]);
+
+  if (loading) return <div className="flex items-center justify-center h-32"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>;
+  if (data.length < 2) return (
+    <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+      히스토리 데이터 부족 (재계산 2회 이상 필요)
+    </div>
+  );
+
+  return (
+    <div className="mt-4 space-y-4">
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+        <History className="w-3 h-3" /> {label} · 성과 추이 ({data.length}회 기록)
+      </p>
+      <div className="grid grid-cols-1 gap-4">
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1">방향 정확도 (%)</p>
+          <ResponsiveContainer width="100%" height={120}>
+            <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => [`${v?.toFixed(1)}%`, "정확도"]} />
+              <ReferenceLine y={60} stroke="hsl(var(--chart-2))" strokeDasharray="4 2" label={{ value: "60%", fontSize: 9 }} />
+              <ReferenceLine y={50} stroke="hsl(var(--destructive)/0.5)" strokeDasharray="4 2" label={{ value: "50%", fontSize: 9 }} />
+              <Line type="monotone" dataKey="direction_accuracy" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} name="정확도" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1">목표주가 편향 (%p)</p>
+          <ResponsiveContainer width="100%" height={120}>
+            <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => [`${v?.toFixed(1)}%p`, "편향"]} />
+              <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 2" />
+              <Line type="monotone" dataKey="avg_price_deviation" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={{ r: 3 }} name="편향" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminCalibration() {
   const [rows, setRows] = useState<CalibrationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,6 +175,7 @@ export default function AdminCalibration() {
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [recalcResult, setRecalcResult] = useState<RecalcResult | null>(null);
   const [recalcError, setRecalcError] = useState<string | null>(null);
+  const [expandedSector, setExpandedSector] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,39 +282,53 @@ export default function AdminCalibration() {
                   {group.label}
                 </h2>
                 <div className="space-y-2">
-                  {group.data.map(row => (
-                    <div
-                      key={row.sector}
-                      className="rounded-xl border border-border bg-background px-4 py-3.5"
-                    >
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground">
-                            {SECTOR_LABELS[row.sector] ?? row.sector}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            샘플 {row.sample_count}건 · 최종 업데이트: {formatDate(row.last_recalc_at)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground mb-1">방향 정확도</p>
-                            <AccuracyBadge value={row.direction_accuracy} />
+                  {group.data.map(row => {
+                    const sectorLabel = SECTOR_LABELS[row.sector] ?? row.sector;
+                    const isExpanded = expandedSector === row.sector;
+                    return (
+                      <div
+                        key={row.sector}
+                        className="rounded-xl border border-border bg-background px-4 py-3.5"
+                      >
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground">{sectorLabel}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              샘플 {row.sample_count}건 · 최종 업데이트: {formatDate(row.last_recalc_at)}
+                            </p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground mb-1">목표주가 편향</p>
-                            <DeviationBadge value={row.avg_price_deviation} />
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <div className="text-right">
+                              <p className="text-[10px] text-muted-foreground mb-1">방향 정확도</p>
+                              <AccuracyBadge value={row.direction_accuracy} />
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] text-muted-foreground mb-1">목표주가 편향</p>
+                              <DeviationBadge value={row.avg_price_deviation} />
+                            </div>
+                            <button
+                              onClick={() => setExpandedSector(isExpanded ? null : row.sector)}
+                              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:bg-muted transition-colors"
+                            >
+                              <History className="w-3 h-3" />
+                              <ChevronDown className={cn("w-3 h-3 transition-transform", isExpanded && "rotate-180")} />
+                            </button>
                           </div>
                         </div>
+                        {row.sample_count >= 3 && (
+                          <GuideText acc={row.direction_accuracy} dev={row.avg_price_deviation} />
+                        )}
+                        {row.sample_count < 3 && (
+                          <p className="text-[11px] text-amber-600 mt-1">→ 샘플 3건 미만 — 보정 미적용 (더 많은 분석 필요)</p>
+                        )}
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-border/50">
+                            <HistoryChart sector={row.sector} label={sectorLabel} />
+                          </div>
+                        )}
                       </div>
-                      {row.sample_count >= 3 && (
-                        <GuideText acc={row.direction_accuracy} dev={row.avg_price_deviation} />
-                      )}
-                      {row.sample_count < 3 && (
-                        <p className="text-[11px] text-amber-600 mt-1">→ 샘플 3건 미만 — 보정 미적용 (더 많은 분석 필요)</p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )

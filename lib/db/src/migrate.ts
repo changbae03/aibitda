@@ -230,6 +230,40 @@ export async function runMigrations() {
       ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS email TEXT;
     `);
 
+    // 캘리브레이션 히스토리
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS calibration_history (
+        id SERIAL PRIMARY KEY,
+        sector TEXT NOT NULL,
+        market TEXT NOT NULL,
+        direction_accuracy REAL,
+        avg_price_deviation REAL,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        recorded_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // 프롬프트 버전 관리
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS prompt_versions (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        content TEXT NOT NULL,
+        description TEXT,
+        ab_group TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // analyses 완료 시각 컬럼
+    await client.query(`
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+      ALTER TABLE analyses ADD COLUMN IF NOT EXISTS error_message TEXT;
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
