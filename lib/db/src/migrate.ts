@@ -225,6 +225,11 @@ export async function runMigrations() {
       );
     `);
 
+    // 카카오 이메일 저장
+    await client.query(`
+      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS email TEXT;
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
