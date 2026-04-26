@@ -57,6 +57,86 @@ WACC 공통 가정 (한국 주식):
 `;
 
 
+// ─── KRX 실데이터 기반 업종 PBR 조회 ────────────────────────────────────────
+async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> {
+  try {
+    // 1. 해당 종목의 업종 조회
+    const stockRes = await pool.query<{ sector: string; market: string; name: string }>(
+      `SELECT sector, market, name FROM krx_peer_data WHERE code = $1 ORDER BY snapshot_date DESC LIMIT 1`,
+      [krxCode]
+    );
+    if (!stockRes.rows.length) return null;
+
+    const { sector, market, name } = stockRes.rows[0];
+
+    // 2. 같은 업종 피어 전체 조회 (최신 스냅샷)
+    const peerRes = await pool.query<{
+      code: string; name: string; pbr: string | null; per: string | null;
+      bps: string | null; mcap: string | null;
+    }>(
+      `SELECT code, name, pbr, per, bps, mcap
+       FROM krx_peer_data
+       WHERE sector = $1 AND market = $2
+         AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
+         AND pbr IS NOT NULL AND pbr > 0
+       ORDER BY mcap DESC NULLS LAST
+       LIMIT 30`,
+      [sector, market]
+    );
+
+    if (!peerRes.rows.length) return null;
+
+    const peers = peerRes.rows.map(r => ({
+      code: r.code,
+      name: r.name,
+      pbr: r.pbr ? parseFloat(r.pbr) : null,
+      per: r.per ? parseFloat(r.per) : null,
+    }));
+
+    const validPBR = peers.filter(p => p.pbr && p.pbr > 0).map(p => p.pbr!);
+    const sorted = [...validPBR].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const avg    = validPBR.reduce((s, v) => s + v, 0) / validPBR.length;
+    const q1     = sorted[Math.floor(sorted.length * 0.25)];
+    const q3     = sorted[Math.floor(sorted.length * 0.75)];
+
+    const validPER = peers.filter(p => p.per && p.per > 0 && p.per < 200).map(p => p.per!);
+    const perSorted = [...validPER].sort((a, b) => a - b);
+    const perMedian = validPER.length ? perSorted[Math.floor(perSorted.length / 2)] : null;
+
+    const peerTable = peers
+      .slice(0, 15)
+      .map(p => `| ${p.code} | ${p.name} | ${p.pbr?.toFixed(2) ?? "—"} | ${p.per?.toFixed(1) ?? "—"} |`)
+      .join("\n");
+
+    const snapshotDate = "2026-04-26";
+
+    return `
+=== KRX 실데이터 기반 ${market} 업종별 피어 PBR 벤치마크 (${snapshotDate} 기준) ===
+분석 대상: ${name} (${krxCode}) | 업종: ${sector} | 시장: ${market}
+피어 모수: ${validPBR.length}개 종목 (PBR 유효 기준)
+
+[업종 PBR 분포]
+- 중앙값(Median):  ${median.toFixed(2)}x
+- 평균(Average):   ${avg.toFixed(2)}x
+- 1Q~3Q:           ${q1.toFixed(2)}x ~ ${q3.toFixed(2)}x
+- PER 중앙값:      ${perMedian ? perMedian.toFixed(1) + "x" : "N/A (적자 기업 다수)"}
+
+[시가총액 상위 피어 15개]
+| 종목코드 | 종목명 | PBR(배) | PER(배) |
+|--------|--------|--------|--------|
+${peerTable}
+
+※ 이 데이터는 KRX 실제 시장 데이터입니다. 상대가치(PBR) 산출 시 위 중앙값을 기준 배수로 사용하고,
+   분석 대상 기업의 ROE·성장률·수익성이 업종 평균 대비 우위인 경우 프리미엄을 정당화하세요.
+   무근거 프리미엄 적용은 금지됩니다.
+`;
+  } catch (err) {
+    console.error("[krx-peer] getKRXSectorPeerContext failed:", err);
+    return null;
+  }
+}
+
 function extractJsonSafe(raw: string): any | null {
   if (!raw) return null;
   let s = raw.trim();
@@ -3106,9 +3186,20 @@ async function executeStep(
         console.log(`[peer-select] Retry selected ${peers.length} peers`);
       }
 
-      // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
+      // 한국 주식: KRX 실데이터 기반 업종 PBR 주입
       const tickerKrxCode = analysis.ticker.split(".")[0];
       const isKoreanTicker = /^\d{6}$/.test(tickerKrxCode);
+      if (isKoreanTicker) {
+        const krxCtx = await getKRXSectorPeerContext(tickerKrxCode);
+        if (krxCtx) {
+          enrichedContext = enrichedContext ? enrichedContext + "\n\n" + krxCtx : krxCtx;
+          console.log(`[krx-peer] Injected KRX sector PBR context for ${tickerKrxCode}`);
+        } else {
+          console.warn(`[krx-peer] No KRX data found for ${tickerKrxCode} — using hardcoded benchmark`);
+        }
+      }
+
+      // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
       if (peers.length === 0 && !isKoreanTicker) {
         const mappedPeers = US_PEER_MAP[analysis.ticker.toUpperCase()];
         if (mappedPeers?.length) {
