@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, CalendarDays } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl } from "@/lib/utils";
@@ -139,6 +139,28 @@ interface PopularTicker {
   investmentVerdict: string | null;
 }
 
+interface UpcomingEarning {
+  ticker: string;
+  companyName: string;
+  earningsDate: string;
+  epsEstimate: number | null;
+  currency: string;
+  isKorean: boolean;
+}
+
+function useUpcomingEarnings() {
+  return useQuery<UpcomingEarning[]>({
+    queryKey: ["upcoming-earnings-home"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/api/market-data/earnings-calendar?period=week"));
+      if (!r.ok) return [];
+      const d = await r.json();
+      return (Array.isArray(d) ? d : []).slice(0, 5);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
 function useTrendingTickers(): PopularTicker[] {
   const [trending, setTrending] = useState<PopularTicker[]>([]);
   useEffect(() => {
@@ -174,6 +196,7 @@ export default function NewAnalysis() {
   const trending = useTrendingTickers();
   const { data: recentAnalyses } = useRecentAnalyses();
   const { data: personalizedPicks } = usePersonalizedPicks();
+  const { data: upcomingEarnings } = useUpcomingEarnings();
 
   useEffect(() => {
     const code = localStorage.getItem("pending_referral");
@@ -598,6 +621,62 @@ export default function NewAnalysis() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* 이번 주 실적 발표 */}
+        {upcomingEarnings && upcomingEarnings.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+            className="flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-1.5 justify-between">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">이번 주 실적 발표</span>
+              </div>
+              <a href="/calendar" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
+                캘린더 <ChevronRight className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {upcomingEarnings.slice(0, 3).map((e) => {
+                const shortTicker = e.ticker.replace(/\.(KS|KQ)$/, "");
+                const dateStr = e.earningsDate
+                  ? new Date(e.earningsDate).toLocaleDateString("ko-KR", { month: "short", day: "numeric", weekday: "short" })
+                  : "";
+                return (
+                  <button
+                    key={e.ticker}
+                    onClick={() => { setTicker(shortTicker); handleSubmit(shortTicker); }}
+                    disabled={isPending}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors text-left group disabled:opacity-40"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-foreground truncate">{e.companyName}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground">{shortTicker}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[11px] text-muted-foreground whitespace-nowrap">{dateStr}</p>
+                      {e.epsEstimate != null && (
+                        <p className="text-[10px] font-mono text-muted-foreground/60">
+                          EPS {e.currency === "KRW"
+                            ? `${e.epsEstimate.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`
+                            : `$${e.epsEstimate.toFixed(2)}`
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* 최근 분석 기록 (개인화) */}
         {recentAnalyses && recentAnalyses.length > 0 && (

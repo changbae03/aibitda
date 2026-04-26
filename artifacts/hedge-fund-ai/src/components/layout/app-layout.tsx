@@ -1,6 +1,9 @@
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Settings, LogIn, LogOut, Bell, Info } from "lucide-react";
+import {
+  Menu, X, Settings, LogIn, LogOut, Bell, Info,
+  Search, BookOpen, CalendarDays, BarChart2,
+} from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -43,6 +46,58 @@ function useNotice(): NoticeSettings {
   return settings;
 }
 
+interface MacroBarData {
+  usdKrw: number | null;
+  t10y: number | null;
+  fedRate: number | null;
+  baseRate: number | null;
+}
+
+function useMarketBar() {
+  const [data, setData] = useState<MacroBarData | null>(null);
+  useEffect(() => {
+    fetch(getApiUrl("/api/macro"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        setData({
+          usdKrw: d.ecos?.usdKrw ?? null,
+          t10y: d.fred?.t10y ?? null,
+          fedRate: d.fred?.fedFundsRate ?? null,
+          baseRate: d.ecos?.baseRate ?? null,
+        });
+      })
+      .catch(() => {});
+  }, []);
+  return data;
+}
+
+function MarketBar() {
+  const data = useMarketBar();
+  if (!data) return null;
+
+  const items = [
+    data.usdKrw != null && { label: "USD/KRW", value: `${data.usdKrw.toFixed(0)}원` },
+    data.baseRate != null && { label: "한국 기준금리", value: `${data.baseRate.toFixed(2)}%` },
+    data.t10y != null && { label: "미국 10Y", value: `${data.t10y.toFixed(2)}%` },
+    data.fedRate != null && { label: "Fed 금리", value: `${data.fedRate.toFixed(2)}%` },
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-0 px-4 py-1.5 border-b border-border bg-muted/20 print:hidden overflow-x-auto shrink-0">
+      {items.map((item, i) => (
+        <span key={item.label} className="flex items-center gap-1 whitespace-nowrap">
+          {i > 0 && <span className="mx-3 text-border select-none">·</span>}
+          <span className="text-[10.5px] text-muted-foreground/60">{item.label}</span>
+          <span className="text-[10.5px] font-mono font-semibold text-foreground ml-1">{item.value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed || settings.notice_enabled !== "true" || !settings.notice_text) return null;
@@ -54,7 +109,7 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   }[type] ?? "bg-blue-50 border-blue-200 text-blue-700";
 
   return (
-    <div className={cn("flex items-center gap-2 px-4 py-2 border-b text-sm print:hidden", colors)}>
+    <div className={cn("flex items-center gap-2 px-4 py-2 border-b text-sm print:hidden shrink-0", colors)}>
       <Bell className="w-3.5 h-3.5 shrink-0" />
       <span className="flex-1">{settings.notice_text}</span>
       <button onClick={() => setDismissed(true)} className="opacity-60 hover:opacity-100 transition-opacity">
@@ -63,6 +118,13 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
     </div>
   );
 }
+
+const BOTTOM_TABS = [
+  { href: "/analysis/new", label: "분석", icon: Search },
+  { href: "/history",      label: "내 자료", icon: BookOpen },
+  { href: "/calendar",     label: "캘린더", icon: CalendarDays },
+  { href: "/popular",      label: "통계", icon: BarChart2 },
+];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
@@ -123,7 +185,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const BottomNav = ({ onSelect }: { onSelect?: () => void }) => (
     <div className="px-2 py-3 space-y-0.5 border-t border-border">
-      {/* 애빛다 소개 */}
       <Link
         href="/about"
         onClick={onSelect}
@@ -138,7 +199,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         애빛다 소개
       </Link>
 
-      {/* 설정 */}
       <Link
         href="/settings"
         onClick={onSelect}
@@ -153,7 +213,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         설정
       </Link>
 
-      {/* 로그인 / 로그아웃 */}
       {user ? (
         <button
           onClick={() => { onSelect?.(); logout(); }}
@@ -320,8 +379,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         <NoticeBanner settings={notice} />
+        <MarketBar />
 
-        <div id="print-scroll" className="flex-1 overflow-y-auto">
+        {/* Scrollable Content */}
+        <div id="print-scroll" className="flex-1 overflow-y-auto pb-16 md:pb-0">
           <div className="container max-w-5xl mx-auto p-4 md:p-10 animate-fade-in">
             {children}
           </div>
@@ -352,6 +413,38 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </footer>
         </div>
+
+        {/* ── Mobile Bottom Tab Bar ── */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-background border-t border-border print:hidden">
+          <div className="flex items-stretch h-14">
+            {BOTTOM_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive =
+                location === tab.href ||
+                (tab.href !== "/" && location.startsWith(tab.href));
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={cn(
+                    "flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors duration-150 active:scale-95",
+                    isActive
+                      ? "text-[#FF8A7A]"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "w-5 h-5 transition-all duration-150",
+                      isActive ? "stroke-[2.5]" : "stroke-[1.5]"
+                    )}
+                  />
+                  <span>{tab.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </main>
     </div>
   );
