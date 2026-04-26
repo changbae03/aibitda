@@ -89,18 +89,18 @@ type SectorGroup = {
 };
 
 const METHOD_COLORS: Record<string, string> = {
-  DCF:        "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
-  EV:         "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  SOTP:       "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
-  NAV:        "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
-  FFO:        "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
-  rNPV:       "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
-  PBV:        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-  Backlog:    "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-  RAB:        "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
-  Rule40:     "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300",
-  Royalty:    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  NII:        "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300",
+  DCF:        "bg-violet-100 text-violet-900 border border-violet-300 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-700",
+  EV:         "bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700",
+  SOTP:       "bg-indigo-100 text-indigo-900 border border-indigo-300 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-700",
+  NAV:        "bg-teal-100 text-teal-900 border border-teal-300 dark:bg-teal-900/50 dark:text-teal-200 dark:border-teal-700",
+  FFO:        "bg-cyan-100 text-cyan-900 border border-cyan-300 dark:bg-cyan-900/50 dark:text-cyan-200 dark:border-cyan-700",
+  rNPV:       "bg-pink-100 text-pink-900 border border-pink-300 dark:bg-pink-900/50 dark:text-pink-200 dark:border-pink-700",
+  PBV:        "bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700",
+  Backlog:    "bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700",
+  RAB:        "bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700",
+  Rule40:     "bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-300 dark:bg-fuchsia-900/50 dark:text-fuchsia-200 dark:border-fuchsia-700",
+  Royalty:    "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700",
+  NII:        "bg-lime-100 text-lime-900 border border-lime-300 dark:bg-lime-900/50 dark:text-lime-200 dark:border-lime-700",
 };
 
 const sectorGroups: SectorGroup[] = [
@@ -143,56 +143,56 @@ const differentiators = [
   {
     title: "자기검증 반론 에이전트",
     badge: "Self-Adversarial Review",
-    badgeColor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+    badgeColor: "bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-700",
     desc: "재무 전망과 밸류에이션 단계 완료 후, AI가 스스로 핵심 가정에 대해 3가지 각도로 반론을 생성합니다. WACC 과소/과대 여부, 성장률 낙관성, 멀티플 정당성을 별도 에이전트가 비판적으로 검토합니다.",
     icon: "⚔️",
   },
   {
     title: "WACC 자동 가드레일",
     badge: "Auto WACC Guardrail",
-    badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    badgeColor: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700",
     desc: "한국 WACC 정상 범위 8~14%, 미국 7~12%를 코드에 하드코딩했습니다. WACC < 8% 감지 시 '과소 경고'와 함께 10%로 자동 상향, WACC > 15% 시 과대 경고 후 재검토를 강제합니다. 임의로 낮은 할인율을 써서 목표주가를 부풀리는 오류를 원천 차단합니다.",
     icon: "🛡️",
   },
   {
     title: "섹터별 지표 오용 차단",
     badge: "Metric Prohibition System",
-    badgeColor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+    badgeColor: "bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700",
     desc: "리츠에는 DCF·EV/EBITDA 단독 사용을 명시적으로 금지하고, 은행·금융주에는 EV/EBITDA를 금지합니다. MLP·BDC에는 EPS·PER을 완전 금지합니다. 섹터 특성을 무시한 잘못된 배수 적용이 불가능합니다.",
     icon: "🚫",
   },
   {
     title: "3단 데이터 우선순위 체계",
     badge: "Multi-Source Priority Stack",
-    badgeColor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+    badgeColor: "bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700",
     desc: "한국 기업의 재무상태표는 DART(1순위) → Yahoo Finance(2순위) → Naver(3순위)로 자동 폴백합니다. Yahoo Finance가 한국 주식 주가를 IPO 가격으로 반환하는 버그를 Naver 실시간 종가로 교정하고, KRX 기준 발행주식수를 재계산해 EPS 왜곡을 방지합니다.",
     icon: "🗂️",
   },
   {
     title: "롤링 컨텍스트 누적",
     badge: "Rolling Context Pipeline",
-    badgeColor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+    badgeColor: "bg-violet-100 text-violet-900 border border-violet-300 dark:bg-violet-900/50 dark:text-violet-200 dark:border-violet-700",
     desc: "7단계 파이프라인에서 각 에이전트는 이전 단계의 분석 결과 전체를 읽고 명시적으로 반영합니다. 팀장 브리핑 → 산업 분석 → 재무 분석 → 밸류에이션 → 최종 조율로 이어지는 누적 컨텍스트가 일관된 논리를 보장합니다.",
     icon: "🔗",
   },
   {
     title: "FDA 지정별 PoS 자동 보정",
     badge: "FDA Designation PoS Adjuster",
-    badgeColor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
+    badgeColor: "bg-pink-100 text-pink-900 border border-pink-300 dark:bg-pink-900/50 dark:text-pink-200 dark:border-pink-700",
     desc: "미국 바이오 분석 시 FDA Breakthrough Therapy 지정(+5~10%p), Priority Review(+3~5%p), Fast Track(+2~3%p)에 따라 임상 성공 확률을 자동 상향합니다. PDUFA 날짜와 AdCom 반대 다수 시 CRL 리스크를 별도 시나리오로 강제 산출합니다.",
     icon: "💊",
   },
   {
     title: "실시간 뉴스·이벤트 반영",
     badge: "News & Catalyst Integration",
-    badgeColor: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+    badgeColor: "bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700",
     desc: "실적 서프라이즈·FDA 결정·M&A·규제 이슈·경영진 교체 등 주가에 직접 영향을 미칠 수 있는 뉴스와 카탈리스트를 분석에 반영합니다. 단순 재무 수치를 넘어 시장 이벤트 드리븐 관점까지 목표주가에 통합합니다.",
     icon: "📰",
   },
   {
     title: "모델 자기보정 시스템",
     badge: "Self-Calibrating Model",
-    badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+    badgeColor: "bg-indigo-100 text-indigo-900 border border-indigo-300 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-700",
     desc: "분석 30일 후 실제 주가 방향과 AI 판정을 자동 대조해 섹터별 정확도를 누적합니다. 특정 섹터에서 낙관 편향이 반복될 경우, 다음 분석 시 밸류에이션·투자의견 단계 프롬프트에 보정 맥락을 자동 주입합니다. 사람이 손대지 않아도 모델이 스스로 과거 실수를 다음 판단에 반영하는 구조입니다.",
     icon: "🔄",
   },
@@ -616,8 +616,8 @@ export default function AboutPage() {
         <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
           투자 유의사항
         </h2>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-4 space-y-2">
-          <p className="text-[13px] font-semibold text-amber-800 dark:text-amber-300">⚠️ 본 서비스는 투자 참고용 정보만을 제공합니다</p>
+        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-4 space-y-2">
+          <p className="text-[13px] font-semibold text-amber-900 dark:text-amber-200">⚠️ 본 서비스는 투자 참고용 정보만을 제공합니다</p>
           <ul className="space-y-1.5">
             {[
               "애빛다의 분석 결과는 AI가 공개된 데이터를 기반으로 생성한 참고 자료이며, 투자 권유·자문이 아닙니다.",
@@ -625,7 +625,7 @@ export default function AboutPage() {
               "모든 투자 결정과 그에 따른 손익은 투자자 본인이 책임집니다.",
               "CBST 및 애빛다 서비스는 분석 결과의 정확성·완전성을 보장하지 않으며, 투자로 인한 손실에 대해 어떠한 책임도 지지 않습니다.",
             ].map((text, i) => (
-              <li key={i} className="flex items-start gap-2 text-[12px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+              <li key={i} className="flex items-start gap-2 text-[12px] text-amber-900 dark:text-amber-200 leading-relaxed">
                 <span className="shrink-0 mt-0.5">•</span>
                 {text}
               </li>
