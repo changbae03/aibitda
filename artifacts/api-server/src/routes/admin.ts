@@ -245,12 +245,13 @@ router.get("/user-list", async (req, res) => {
        uc.tier,
        uc.admin_memo,
        uc.display_name,
+       uc.email,
        uc.created_at,
        COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
      ${whereClause}
-     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.tier, uc.admin_memo, uc.display_name, uc.created_at
+     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at
      ORDER BY uc.created_at DESC
      LIMIT $1 OFFSET $2`,
     params
@@ -272,6 +273,7 @@ router.get("/user-list", async (req, res) => {
       tier: r.tier ?? "free",
       adminMemo: r.admin_memo ?? "",
       displayName: r.display_name ?? null,
+      email: r.email ?? null,
       createdAt: r.created_at,
     })),
     total: parseInt(countResult.rows[0].count, 10),
@@ -442,7 +444,7 @@ router.get("/user-detail/:userId", async (req, res) => {
   try {
     const [creditRow, topTickers, recentAnalyses, activityByDay] = await Promise.all([
       pool.query(
-        `SELECT user_id, daily_limit, daily_used, bonus_credits, total_analyses, tier, admin_memo, display_name, created_at
+        `SELECT user_id, daily_limit, daily_used, bonus_credits, total_analyses, tier, admin_memo, display_name, email, created_at
          FROM user_credits WHERE user_id = $1`, [targetId]
       ),
       pool.query(

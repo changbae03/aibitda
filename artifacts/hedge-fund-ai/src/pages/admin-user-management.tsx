@@ -16,6 +16,7 @@ interface UserDetail {
     tier: string;
     admin_memo: string;
     display_name: string | null;
+    email: string | null;
     created_at: string | null;
   };
   topTickers: Array<{ ticker: string; company_name: string | null; cnt: number; last_verdict: string | null; last_at: string }>;
@@ -66,6 +67,7 @@ function UserDetailModal({ userId, onClose }: { userId: string; onClose: () => v
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div><p className="text-xs text-muted-foreground">닉네임</p><p className="font-semibold">{data.user.display_name ?? "—"}</p></div>
                   <div><p className="text-xs text-muted-foreground">등급</p><p className="font-semibold capitalize">{data.user.tier}</p></div>
+                  <div className="col-span-2"><p className="text-xs text-muted-foreground">이메일</p><p className="font-semibold truncate">{data.user.email ?? "—"}</p></div>
                   <div><p className="text-xs text-muted-foreground">전체 분석 수</p><p className="font-semibold tabular-nums">{Number(data.user.total_analyses).toLocaleString()}건</p></div>
                   <div><p className="text-xs text-muted-foreground">가입일</p><p className="font-semibold">{data.user.created_at ? new Date(data.user.created_at).toLocaleDateString("ko-KR") : "—"}</p></div>
                   <div><p className="text-xs text-muted-foreground">보너스 크레딧</p><p className="font-semibold tabular-nums">{data.user.bonus_credits}</p></div>
@@ -161,6 +163,7 @@ interface UserRow {
   tier: string;
   adminMemo: string;
   displayName: string | null;
+  email: string | null;
   createdAt: string | null;
 }
 
@@ -515,6 +518,9 @@ export default function AdminUserManagement() {
                     <p className="text-sm font-semibold text-foreground">{selected.displayName}</p>
                   )}
                   <p className="text-xs font-mono text-muted-foreground truncate">{selected.userId}</p>
+                  {selected.email && (
+                    <p className="text-xs text-muted-foreground truncate">{selected.email}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
