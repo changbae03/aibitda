@@ -143,7 +143,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const adminItems = [
     { href: "/admin/dashboard", label: "대시보드" },
     { href: "/admin/user-management", label: "유저 관리" },
-    { href: "/admin/cohort", label: "코호트 분석" },
     { href: "/admin/promo-codes", label: "프로모 코드" },
     { href: "/admin/ticker-notes", label: "종목 보정 메모" },
     { href: "/admin/peers", label: "피어 멀티플" },

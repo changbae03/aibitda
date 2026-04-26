@@ -30,7 +30,6 @@ import SettingsPage from "@/pages/settings";
 import AboutPage from "@/pages/about";
 import SharePage from "@/pages/share";
 import CalendarPage from "@/pages/calendar";
-import AdminCohort from "@/pages/admin-cohort";
 import AdminPromoCodes from "@/pages/admin-promo-codes";
 import AdminSupportPage from "@/pages/admin-support";
 import AdminNoticesPage from "@/pages/admin-notices";
@@ -120,7 +119,6 @@ function Router() {
             <Route path="/settings" component={SettingsPage} />
             <Route path="/about" component={AboutPage} />
             <Route path="/calendar" component={CalendarPage} />
-            <Route path="/admin/cohort" component={AdminCohort} />
             <Route path="/admin/promo-codes" component={AdminPromoCodes} />
             <Route path="/admin/support" component={AdminSupportPage} />
             <Route path="/admin/notices" component={AdminNoticesPage} />

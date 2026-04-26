@@ -540,56 +540,6 @@ router.get("/user-detail/:userId", async (req, res) => {
   }
 });
 
-// ─── GET /api/admin/cohort ─────────────────────────────────────────────────
-router.get("/cohort", async (req, res) => {
-  const userId = getUserId(req);
-  if (!(await isAdmin(userId))) return res.status(403).json({ error: "관리자만 접근 가능합니다" });
-  try {
-    const { rows } = await pool.query(`
-      WITH cohorts AS (
-        SELECT user_id,
-               DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Seoul')::DATE AS cohort_week
-        FROM user_credits
-        WHERE created_at >= NOW() - INTERVAL '12 weeks'
-      ),
-      activities AS (
-        SELECT DISTINCT user_id,
-               DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Seoul')::DATE AS activity_week
-        FROM analyses
-      ),
-      cohort_activity AS (
-        SELECT c.cohort_week,
-               c.user_id,
-               (a.activity_week - c.cohort_week) / 7 AS week_offset
-        FROM cohorts c
-        JOIN activities a ON c.user_id = a.user_id
-      )
-      SELECT
-        cohort_week::TEXT,
-        COUNT(DISTINCT c2.user_id) AS cohort_size,
-        COALESCE(
-          JSON_AGG(
-            JSON_BUILD_OBJECT('week', ca.week_offset, 'users', ca.retained)
-            ORDER BY ca.week_offset
-          ) FILTER (WHERE ca.week_offset IS NOT NULL),
-          '[]'
-        ) AS retention
-      FROM cohorts c2
-      LEFT JOIN (
-        SELECT cohort_week, week_offset, COUNT(DISTINCT user_id) AS retained
-        FROM cohort_activity
-        WHERE week_offset >= 0 AND week_offset <= 8
-        GROUP BY cohort_week, week_offset
-      ) ca ON c2.cohort_week = ca.cohort_week
-      GROUP BY c2.cohort_week
-      ORDER BY c2.cohort_week DESC
-      LIMIT 8
-    `);
-    res.json(rows);
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "DB error" });
-  }
-});
 
 // ─── 수익 지표 ─────────────────────────────────────────────────────────────
 router.get("/revenue-stats", async (req, res) => {
