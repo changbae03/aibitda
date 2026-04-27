@@ -2580,6 +2580,57 @@ router.get("/admin-live", async (req, res) => {
   }
 });
 
+router.get("/all-reports", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt((req.query.limit as string) ?? "100"), 500);
+    const offset = parseInt((req.query.offset as string) ?? "0") || 0;
+    const statusFilter = (req.query.status as string) ?? "";
+    const search = ((req.query.search as string) ?? "").trim().toLowerCase();
+
+    let where = "WHERE a.status != 'in_progress' OR a.status = 'in_progress'";
+    const params: any[] = [];
+    let idx = 1;
+
+    if (statusFilter && statusFilter !== "all") {
+      where += ` AND a.status = $${idx++}`;
+      params.push(statusFilter);
+    }
+    if (search) {
+      where += ` AND (LOWER(a.ticker) LIKE $${idx} OR LOWER(a.company_name) LIKE $${idx})`;
+      params.push(`%${search}%`);
+      idx++;
+    }
+
+    const rows = await rawQuery(
+      `SELECT a.id, a.ticker, a.company_name, a.english_name, a.investment_verdict,
+              a.target_price, a.start_price, a.status, a.created_at, a.completed_at,
+              a.industry, a.current_step,
+              uc.display_name AS user_display_name, uc.email AS user_email
+       FROM analyses a
+       LEFT JOIN user_credits uc ON uc.user_id = a.user_id
+       ${where.replace("WHERE a.status != 'in_progress' OR a.status = 'in_progress'", "WHERE 1=1")}
+       ORDER BY a.created_at DESC
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, limit, offset]
+    );
+
+    const countRows = await rawQuery(
+      `SELECT COUNT(*) AS cnt FROM analyses a ${where.replace("WHERE a.status != 'in_progress' OR a.status = 'in_progress'", "WHERE 1=1")}`,
+      params
+    );
+
+    res.json({
+      data: rows,
+      total: parseInt(countRows[0]?.cnt ?? "0", 10),
+      limit,
+      offset,
+    });
+  } catch (err: any) {
+    console.error("[GET /analysis/all-reports] error:", err?.message);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 router.get("/popular", async (_req, res) => {
   try {
     const rawRows = await rawQuery(

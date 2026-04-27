@@ -18,6 +18,7 @@ import ModelInsights from "@/pages/model-insights";
 import News from "@/pages/news";
 import Reports from "@/pages/reports";
 import AdminLive from "@/pages/admin-live";
+import AdminAnalyses from "@/pages/admin-analyses";
 import AdminTickerNotes from "@/pages/admin-ticker-notes";
 import AdminUsers from "@/pages/admin-users";
 import AdminFeedback from "@/pages/admin-feedback";
@@ -112,6 +113,7 @@ function Router() {
             <Route path="/tracker" component={Tracker} />
             <Route path="/popular" component={Popular} />
             <Route path="/admin/live" component={AdminLive} />
+            <Route path="/admin/analyses" component={AdminAnalyses} />
             <Route path="/admin/ticker-notes" component={AdminTickerNotes} />
             <Route path="/admin/feedback" component={AdminFeedback} />
             <Route path="/admin/users" component={AdminUsers} />
