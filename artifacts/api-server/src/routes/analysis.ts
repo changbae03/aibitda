@@ -2503,7 +2503,7 @@ router.get("/live-insights", async (_req, res) => {
 // ── 관리자: 실시간 분석 현황 ────────────────────────────────────────────
 router.get("/admin-live", async (req, res) => {
   try {
-    const userId = (req as any).auth?.userId;
+    const userId = getUserId(req);
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [userId]);
     if (!(adminCheck.rowCount ?? 0)) { res.status(403).json({ error: "Forbidden" }); return; }
