@@ -123,7 +123,7 @@ async function generateLesson(
 export async function triggerModelReview(): Promise<void> {
   try {
     const completedRows = await rawQuery(
-      `SELECT * FROM analyses WHERE status = 'completed' AND entry_price IS NOT NULL`
+      `SELECT * FROM analyses WHERE status = 'completed' AND investment_verdict IS NOT NULL`
     );
     const completed = completedRows.map((r: any) => ({
       id: r.id,
@@ -132,6 +132,7 @@ export async function triggerModelReview(): Promise<void> {
       industry: r.industry,
       investmentVerdict: r.investment_verdict ?? null,
       entryPrice: r.entry_price ?? null,
+      startPrice: r.start_price ?? null,
       targetPrice: r.target_price ?? null,
       stopLoss: r.stop_loss ?? null,
       createdAt: r.created_at,
@@ -175,24 +176,27 @@ export async function triggerModelReview(): Promise<void> {
       const currentPrice = await fetchCurrentPrice(resolvedTicker);
       if (!currentPrice) continue;
 
-      const entryPrice = analysis.entryPrice;
-      const priceReturn = entryPrice
-        ? ((currentPrice - entryPrice) / entryPrice) * 100
+      // start_price = 분석 시점 실제 시장가. 방향 정확도·수익률의 기준점.
+      // entry_price = AI가 설정한 진입 구간 (매도 콜은 재관심 기준가로 설정되어 기준으로 부적합)
+      const basePrice = analysis.startPrice ?? analysis.entryPrice;
+      const priceReturn = basePrice
+        ? ((currentPrice - basePrice) / basePrice) * 100
         : 0;
       const daysElapsed = Math.floor(
         (Date.now() - new Date(analysis.createdAt).getTime()) / (1000 * 3600 * 24)
       );
       const outcome = resolveOutcome(
         analysis.investmentVerdict,
-        analysis.entryPrice,
+        analysis.startPrice ?? analysis.entryPrice,
         analysis.targetPrice,
         analysis.stopLoss,
         currentPrice
       );
 
-      // 방향성 일치 여부: 예측 방향(상승/하락)과 실제 주가 변화 방향이 일치하는지
+      // 방향성 일치 여부: 분석 시점 주가(startPrice) 대비 현재가 방향과
+      // 목표가 방향(targetPrice vs startPrice)이 일치하는지 판단
       const directionMatch = computeDirectionMatch(
-        analysis.entryPrice,
+        analysis.startPrice ?? analysis.entryPrice,
         analysis.targetPrice,
         currentPrice
       );
@@ -299,6 +303,19 @@ router.get("/public-stats", async (_req, res) => {
 router.post("/review", async (_req, res) => {
   res.json({ message: "Review started" });
   triggerModelReview().catch(console.error);
+});
+
+// 기존 model_insights 데이터 강제 재계산 (계산 로직 변경 후 사용)
+router.post("/recalculate", async (_req, res) => {
+  try {
+    // reviewed_at을 오래된 날짜로 초기화 → 6시간 쿨다운 통과하도록
+    await rawQuery(`UPDATE model_insights SET reviewed_at = '2000-01-01' WHERE 1=1`);
+    res.json({ message: "Recalculation started", note: "All records reset, triggering fresh review" });
+    triggerModelReview().catch(console.error);
+  } catch (err) {
+    console.error("[recalculate] error:", err);
+    res.status(500).json({ error: "Recalculation failed" });
+  }
 });
 
 function formatInsight(i: any) {
