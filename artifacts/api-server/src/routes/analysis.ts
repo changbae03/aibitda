@@ -2500,6 +2500,86 @@ router.get("/live-insights", async (_req, res) => {
   }
 });
 
+// ── 관리자: 실시간 분석 현황 ────────────────────────────────────────────
+router.get("/admin-live", async (req, res) => {
+  try {
+    const userId = (req as any).auth?.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [userId]);
+    if (!(adminCheck.rowCount ?? 0)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+    const STEP_LABELS: Record<string, string> = {
+      company_intro:       "기업 브리핑",
+      industry_analysis:   "산업 분석",
+      catalyst_analysis:   "촉매 분석",
+      company_analysis:    "실적 분석",
+      relative_valuation:  "적정주가 산출",
+      market_analysis:     "기술적 분석",
+      investment_strategy: "최종 결론",
+    };
+    const STEPS_TOTAL = Object.keys(STEP_LABELS).length;
+
+    // 진행 중 분석
+    const inProgress = await rawQuery(
+      `SELECT a.id, a.ticker, a.company_name, a.current_step, a.created_at, a.updated_at,
+              u.display_name, u.email
+       FROM analyses a
+       LEFT JOIN user_credits u ON u.user_id = a.user_id
+       WHERE a.status = 'in_progress'
+       ORDER BY a.created_at DESC
+       LIMIT 50`
+    );
+
+    // 최근 1시간 완료 분석
+    const recentDone = await rawQuery(
+      `SELECT a.id, a.ticker, a.company_name, a.investment_verdict, a.target_price,
+              a.created_at, a.updated_at,
+              u.display_name, u.email
+       FROM analyses a
+       LEFT JOIN user_credits u ON u.user_id = a.user_id
+       WHERE a.status = 'completed' AND a.updated_at >= NOW() - INTERVAL '1 hour'
+       ORDER BY a.updated_at DESC
+       LIMIT 50`
+    );
+
+    // 최근 1시간 실패/오류 분석
+    const recentFailed = await rawQuery(
+      `SELECT a.id, a.ticker, a.company_name, a.created_at, a.updated_at,
+              u.display_name, u.email
+       FROM analyses a
+       LEFT JOIN user_credits u ON u.user_id = a.user_id
+       WHERE a.status = 'error' AND a.updated_at >= NOW() - INTERVAL '1 hour'
+       ORDER BY a.updated_at DESC
+       LIMIT 20`
+    );
+
+    const mapRow = (r: any) => ({
+      id: r.id,
+      ticker: r.ticker,
+      companyName: r.company_name,
+      currentStep: r.current_step ?? null,
+      currentStepLabel: STEP_LABELS[r.current_step ?? ""] ?? r.current_step ?? null,
+      stepsTotal: STEPS_TOTAL,
+      investmentVerdict: r.investment_verdict ?? null,
+      targetPrice: r.target_price ?? null,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      user: r.display_name ?? r.email ?? "익명",
+    });
+
+    res.json({
+      inProgress: inProgress.map(mapRow),
+      recentDone: recentDone.map(mapRow),
+      recentFailed: recentFailed.map(mapRow),
+      stepsTotal: STEPS_TOTAL,
+      stepLabels: STEP_LABELS,
+    });
+  } catch (err: any) {
+    console.error("[GET /analysis/admin-live]", err?.message);
+    res.status(500).json({ error: "실시간 현황을 가져오지 못했습니다" });
+  }
+});
+
 router.get("/popular", async (_req, res) => {
   try {
     const rawRows = await rawQuery(
