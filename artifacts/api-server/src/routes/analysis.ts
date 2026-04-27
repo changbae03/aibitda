@@ -3418,6 +3418,29 @@ async function executeStep(
     sectorCalibration
   );
 
+  /**
+   * LLM repetition loop 방어 — 동일 구문이 연속 3회 이상 반복되면 첫 번째 이후 잘라냄
+   * 패턴 길이 20~400자 범위에서 검사
+   */
+  function trimRepetitionLoop(text: string): string {
+    if (text.length < 60) return text;
+    const searchWindow = Math.min(text.length, 4000);
+    const tail = text.slice(-searchWindow);
+    for (let patLen = 20; patLen <= 400; patLen++) {
+      if (tail.length < patLen * 3) break;
+      const p1 = tail.slice(-patLen);
+      const p2 = tail.slice(-patLen * 2, -patLen);
+      const p3 = tail.slice(-patLen * 3, -patLen * 2);
+      if (p1 === p2 && p2 === p3) {
+        // 세 번 이상 연속 반복 감지 → 첫 반복 직후까지만 유지
+        const cutAt = text.length - searchWindow + (tail.length - patLen * 3 + patLen);
+        console.warn(`[repetition-guard] loop detected patLen=${patLen}, trimming ${text.length - cutAt} chars`);
+        return text.slice(0, cutAt).trimEnd();
+      }
+    }
+    return text;
+  }
+
   let content = "";
   try {
     // 토큰 최적화: 실제 생성량 기반으로 상한 축소
@@ -3453,21 +3476,35 @@ async function executeStep(
             maxOutputTokens,
             temperature: stepTemperature,
             topP: 0.9,
-            // 토큰 절약: thinking 비활성화 — 재무 분석은 구조화 프롬프트로 충분
-            // thinking 활성화 시 호출당 1만~2만 토큰 추가 소비됨
+            // 반복 루프 억제 — presencePenalty/frequencyPenalty로 이미 출현한 토큰 패널티
+            presencePenalty: 0.4,
+            frequencyPenalty: 0.4,
             thinkingConfig: { thinkingBudget: 0 },
           },
         });
         let lastFinishReason: string | undefined;
+        let lastRepeatCheck = 0;
         for await (const chunk of stream) {
           const text = chunk.text ?? "";
           if (text) {
             content += text;
             onEvent?.({ t: text });
+            // 500자마다 실시간 반복 루프 감지 — 감지 시 스트림 즉시 종료
+            if (content.length - lastRepeatCheck > 500) {
+              lastRepeatCheck = content.length;
+              const trimmed = trimRepetitionLoop(content);
+              if (trimmed.length < content.length) {
+                content = trimmed;
+                console.warn(`[${stepKey}] repetition loop detected mid-stream — breaking`);
+                break;
+              }
+            }
           }
           const reason = chunk.candidates?.[0]?.finishReason;
           if (reason) lastFinishReason = reason;
         }
+        // 스트림 종료 후 한 번 더 검사 (마지막 청크에서 완성된 루프 처리)
+        content = trimRepetitionLoop(content);
         if (lastFinishReason === "MAX_TOKENS") {
           console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림`);
         }
@@ -3520,18 +3557,31 @@ async function executeStep(
               maxOutputTokens: synthesisMaxTokens,
               temperature: 0.25,
               topP: 0.88,
+              presencePenalty: 0.4,
+              frequencyPenalty: 0.4,
               thinkingConfig: { thinkingBudget: 0 },
             },
           });
 
           let synthesizedContent = "";
+          let synthRepeatCheck = 0;
           for await (const chunk of synthesisStream) {
             const text = chunk.text ?? "";
             if (text) {
               synthesizedContent += text;
               onEvent?.({ t: text, debateSynthesis: true });
+              if (synthesizedContent.length - synthRepeatCheck > 500) {
+                synthRepeatCheck = synthesizedContent.length;
+                const trimmed = trimRepetitionLoop(synthesizedContent);
+                if (trimmed.length < synthesizedContent.length) {
+                  synthesizedContent = trimmed;
+                  console.warn(`[debate] repetition loop detected — breaking synthesis stream`);
+                  break;
+                }
+              }
             }
           }
+          synthesizedContent = trimRepetitionLoop(synthesizedContent);
           if (synthesizedContent) {
             content = synthesizedContent;
             console.log(`[debate] ${stepKey} synthesis complete, length: ${content.length}`);
@@ -3567,17 +3617,30 @@ async function executeStep(
               maxOutputTokens: revisedMaxTokens,
               temperature: 0.2,
               topP: 0.85,
+              presencePenalty: 0.4,
+              frequencyPenalty: 0.4,
               thinkingConfig: { thinkingBudget: 0 },
             },
           });
           let revisedContent = "";
+          let revRepeatCheck = 0;
           for await (const chunk of revisedStream) {
             const text = chunk.text ?? "";
             if (text) {
               revisedContent += text;
               onEvent?.({ t: text, revised: true });
+              if (revisedContent.length - revRepeatCheck > 500) {
+                revRepeatCheck = revisedContent.length;
+                const trimmed = trimRepetitionLoop(revisedContent);
+                if (trimmed.length < revisedContent.length) {
+                  revisedContent = trimmed;
+                  console.warn(`[QC] repetition loop detected — breaking revised stream`);
+                  break;
+                }
+              }
             }
           }
+          revisedContent = trimRepetitionLoop(revisedContent);
           if (revisedContent) finalContent = revisedContent;
           validationNotes = `팀장 재검토 완료 (초기 점수: ${qcResult.score}/10, 사유: ${qcResult.feedback})`;
           onEvent?.({ qc: "revised", score: qcResult.score });
