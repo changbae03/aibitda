@@ -3476,9 +3476,6 @@ async function executeStep(
             maxOutputTokens,
             temperature: stepTemperature,
             topP: 0.9,
-            // 반복 루프 억제 — presencePenalty/frequencyPenalty로 이미 출현한 토큰 패널티
-            presencePenalty: 0.4,
-            frequencyPenalty: 0.4,
             thinkingConfig: { thinkingBudget: 0 },
           },
         });
@@ -3557,8 +3554,6 @@ async function executeStep(
               maxOutputTokens: synthesisMaxTokens,
               temperature: 0.25,
               topP: 0.88,
-              presencePenalty: 0.4,
-              frequencyPenalty: 0.4,
               thinkingConfig: { thinkingBudget: 0 },
             },
           });
@@ -3617,8 +3612,6 @@ async function executeStep(
               maxOutputTokens: revisedMaxTokens,
               temperature: 0.2,
               topP: 0.85,
-              presencePenalty: 0.4,
-              frequencyPenalty: 0.4,
               thinkingConfig: { thinkingBudget: 0 },
             },
           });
