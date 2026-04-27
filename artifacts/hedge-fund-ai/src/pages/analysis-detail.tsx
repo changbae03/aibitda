@@ -1450,7 +1450,9 @@ export default function AnalysisDetail() {
             <BrainCircuit className="text-primary w-4 h-4" />
             AI 분석 파이프라인
           </h3>
-          <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{currentStepCount} / {ANALYSIS_STEPS_ORDER.length} 단계</span>
+          <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+            {isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length} 단계
+          </span>
         </div>
         
         <div className="relative">

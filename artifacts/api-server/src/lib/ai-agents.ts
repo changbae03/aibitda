@@ -4631,13 +4631,27 @@ thesis의 핵심 전제가 실현되는지 판단할 지표 2개를 불릿으로
    - 하단(Bear): 하단 밴드 숫자
    - 목표(Base): 최종 적정주가 숫자
    - 상단(Bull): 상단 밴드 숫자
-3. verdict 결정 기준 (반드시 준수) — Base case upside = (Base target_price - 현재가) / 현재가 × 100 를 먼저 계산하고, 아래 기준만으로 verdict를 결정:
+3. verdict 결정 기준 — Base case upside = (Base target_price - 현재가) / 현재가 × 100 를 먼저 계산하고, 아래 2단계 기준을 순서대로 적용:
+
+   [1단계] 업사이드 기반 초안 판정:
    - Strong Buy: Base upside ≥ 30%
    - Buy: 15% ≤ Base upside < 30%
    - Hold: -10% ≤ Base upside < 15%
    - Sell: -25% ≤ Base upside < -10%
    - Strong Sell: Base upside < -25%
-   업사이드 수치 기준 외에 다른 이유로 verdict를 상향/하향하지 말 것. 예외 없음.
+
+   [2단계] 모멘텀 안전장치 — Sell/Strong Sell 초안 시 아래 항목을 반드시 확인하고 조정:
+   ⚠️ 아래 조건 중 하나라도 해당되면 verdict를 한 단계 보수적으로 상향하세요 (Strong Sell → Sell, Sell → Hold):
+   A. 최근 20일 기술적 추세가 확인된 상승 채널 또는 52주 신고가 근접 상태
+   B. 시장 기술적 분석 단계에서 "단기 상승 모멘텀 강함" 또는 "매수세 우위" 신호가 명시된 경우
+   C. 섹터 보정 데이터에서 이 섹터의 하락 방향 예측 정확도가 50% 미만으로 명시된 경우
+
+   ⚠️ 아래 조건이 모두 충족될 때에만 Strong Sell 유지 허용:
+   A. 기술적 분석 단계에서 명확한 하락 추세 확인 (하락 채널, 데드크로스 등)
+   B. 밸류에이션 과대평가가 명백하고 (upside < -30%), 피어 대비 멀티플도 과도
+   C. 근시일 내 실적 쇼크 또는 업황 악화 카탈리스트가 존재
+
+   → 위 조건 미충족 시 Strong Sell → Sell 또는 Hold로 조정하고 "밸류에이션 과대평가 감지되나 단기 모멘텀으로 Hold 조정" 사유를 summary에 한 문장 추가.
 4. 최종 target_price = Base 시나리오 target_price와 반드시 동일. 불일치 금지.
 5. 조율 방법 명시 의무 — target_price_rationale에 DCF/피어 조율 방법을 반드시 서술.
 6. 시나리오 확률 합계 = 반드시 100%.

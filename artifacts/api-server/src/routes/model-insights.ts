@@ -41,8 +41,23 @@ function resolveOutcome(
   currentPrice: number | null
 ): string {
   if (!currentPrice || !entryPrice) return "pending";
-  if (targetPrice && currentPrice >= targetPrice * 0.97) return "hit_target";
-  if (stopLoss && currentPrice <= stopLoss * 1.03) return "hit_stoploss";
+
+  const isBearish = verdict && /매도|Strong Sell|Sell/i.test(verdict) && !/Buy/i.test(verdict);
+
+  if (isBearish) {
+    // 매도 콜: 목표가는 진입가보다 낮아야 함
+    // hit_target = 현재가가 목표가 이하로 하락
+    if (targetPrice && targetPrice < entryPrice && currentPrice <= targetPrice * 1.03) return "hit_target";
+    // hit_stoploss = 현재가가 손절가(매도 손절 = 진입가보다 높은 가격) 이상으로 상승
+    if (stopLoss && stopLoss > entryPrice && currentPrice >= stopLoss * 0.97) return "hit_stoploss";
+  } else {
+    // 매수 콜: 목표가는 진입가보다 높아야 함
+    // hit_target = 현재가가 목표가 이상으로 상승
+    if (targetPrice && currentPrice >= targetPrice * 0.97) return "hit_target";
+    // hit_stoploss = 현재가가 손절가 이하로 하락
+    if (stopLoss && currentPrice <= stopLoss * 1.03) return "hit_stoploss";
+  }
+
   return "ongoing";
 }
 
