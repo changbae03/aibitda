@@ -1522,7 +1522,7 @@ export default function AnalysisDetail() {
               <div className="flex items-center gap-2 px-3 py-2">
                 <Loader2 className="w-3.5 h-3.5 text-primary/50 animate-spin shrink-0" />
                 <span className="text-xs text-muted-foreground">
-                  {currentStepCount}/{ANALYSIS_STEPS_ORDER.length} 분석 중...
+                  {currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length} 분석 중...
                 </span>
               </div>
             )}
