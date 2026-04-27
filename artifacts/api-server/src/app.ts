@@ -6,6 +6,9 @@ import { rateLimit } from "express-rate-limit";
 import { clerkMiddleware } from "@clerk/express";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import fs from "fs";
+import path from "path";
+import { pool } from "@workspace/db";
 
 const app: Express = express();
 
@@ -44,6 +47,7 @@ const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
   /\.riker\.replit\.dev$/,
   /\.worf\.replit\.dev$/,
   /^https:\/\/[\w-]+\.repl\.co$/,
+  /^https:\/\/aibitda\.kr$/,
 ];
 
 app.use(
@@ -109,6 +113,120 @@ app.use("/api/analysis", analysisLimiter);
 app.use("/api/admin", adminLimiter);
 
 app.use("/api", router);
+
+// ─── 공유 페이지 OG 메타태그 핸들러 (/share/:id) ────────────────────────────
+const SHARE_OG_IMAGE = "https://aibitda.kr/share-og.png";
+const FRONTEND_DIST = path.resolve(process.cwd(), "artifacts/hedge-fund-ai/dist/public/index.html");
+
+let _baseHtml: string | null = null;
+function getBaseHtml(): string {
+  if (_baseHtml) return _baseHtml;
+  try {
+    _baseHtml = fs.readFileSync(FRONTEND_DIST, "utf-8");
+  } catch {
+    _baseHtml = "";
+  }
+  return _baseHtml;
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function verdictLabel(v: string | null): string {
+  switch (v) {
+    case "Strong Buy":  return "높은 상승여력";
+    case "Buy":         return "상승여력";
+    case "Hold":        return "적정 수준";
+    case "Sell":        return "하락여지";
+    case "Strong Sell": return "높은 하락여지";
+    default:            return "";
+  }
+}
+
+app.get("/share/:id", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.redirect("/"); return; }
+
+  let companyName = "분석 보고서";
+  let ticker = "";
+  let verdict = "";
+  let targetPrice: number | null = null;
+  let startPrice: number | null = null;
+
+  try {
+    const result = await pool.query(
+      `SELECT company_name, ticker, investment_verdict, target_price, start_price
+       FROM analyses WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    if (result.rows[0]) {
+      const r = result.rows[0];
+      companyName = r.company_name ?? companyName;
+      ticker = r.ticker ?? "";
+      verdict = r.investment_verdict ?? "";
+      targetPrice = r.target_price ? Number(r.target_price) : null;
+      startPrice = r.start_price ? Number(r.start_price) : null;
+    }
+  } catch (e: any) {
+    console.error("[OG /share/:id] DB error:", e?.message);
+  }
+
+  const ogTitle = `${companyName} 분석 보고서 by Aibitda`;
+  let ogDesc = `${ticker} | AI 7단계 파이프라인 분석`;
+  if (targetPrice && startPrice && startPrice > 0) {
+    const upside = ((targetPrice - startPrice) / startPrice) * 100;
+    const sign = upside >= 0 ? "+" : "";
+    const vLabel = verdictLabel(verdict);
+    const label = vLabel ? `[${vLabel}] ` : "";
+    ogDesc = `${label}적정주가 ${targetPrice.toLocaleString("ko-KR")}원 (${sign}${upside.toFixed(1)}%) | ${ticker} AI 기업가치 분석`;
+  }
+
+  const pageUrl = `https://aibitda.kr/share/${id}`;
+
+  const baseHtml = getBaseHtml();
+  let html: string;
+
+  if (baseHtml) {
+    html = baseHtml
+      .replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(ogTitle)}</title>`)
+      .replace(/<meta property="og:title"[^>]*\/>/, `<meta property="og:title" content="${escapeAttr(ogTitle)}" />`)
+      .replace(/<meta property="og:description"[^>]*\/>/, `<meta property="og:description" content="${escapeAttr(ogDesc)}" />`)
+      .replace(/<meta property="og:image"[^>]*\/>/, `<meta property="og:image" content="${SHARE_OG_IMAGE}" />`)
+      .replace(/<meta property="og:type"[^>]*\/>/, `<meta property="og:type" content="article" />`)
+      .replace(/<meta name="twitter:title"[^>]*\/>/, `<meta name="twitter:title" content="${escapeAttr(ogTitle)}" />`)
+      .replace(/<meta name="twitter:description"[^>]*\/>/, `<meta name="twitter:description" content="${escapeAttr(ogDesc)}" />`)
+      .replace(/<meta name="twitter:image"[^>]*\/>/, `<meta name="twitter:image" content="${SHARE_OG_IMAGE}" />`)
+      + `\n<!-- og:url --><meta property="og:url" content="${pageUrl}" />`;
+  } else {
+    html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>${escapeAttr(ogTitle)}</title>
+  <meta property="og:type" content="article"/>
+  <meta property="og:site_name" content="애빛다"/>
+  <meta property="og:title" content="${escapeAttr(ogTitle)}"/>
+  <meta property="og:description" content="${escapeAttr(ogDesc)}"/>
+  <meta property="og:image" content="${SHARE_OG_IMAGE}"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:url" content="${pageUrl}"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="${escapeAttr(ogTitle)}"/>
+  <meta name="twitter:description" content="${escapeAttr(ogDesc)}"/>
+  <meta name="twitter:image" content="${SHARE_OG_IMAGE}"/>
+  <meta http-equiv="refresh" content="0;url=${pageUrl}"/>
+</head>
+<body></body>
+</html>`;
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=60");
+  res.send(html);
+});
 
 // ─── 글로벌 에러 핸들러 ────────────────────────────────────────────────────
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
