@@ -331,10 +331,6 @@ export default function AboutPage() {
                 DCF·P/B-ROE·rNPV·SOTP·NAV 등 업종에 맞는 방법론을 자동 선택해 "이 주식이 지금 비싼가, 싼가"를 수치로 답합니다.
                 분석의 민주화가 곧 투자 기회의 균등입니다.
               </p>
-              <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
-                <span className="text-[11px] font-bold text-primary">⏱ 평균 3분</span>
-                <span className="text-[11px] text-muted-foreground">— 종목코드 입력부터 완성 리포트까지</span>
-              </div>
             </div>
           </div>
         </div>
@@ -392,12 +388,6 @@ export default function AboutPage() {
               )}
             </div>
           ))}
-          <div className="px-4 py-3 bg-primary/5 flex items-center gap-2">
-            <span className="text-primary text-[13px]">⏱</span>
-            <p className="text-[12px] text-muted-foreground/80">
-              7단계 전체 파이프라인 완료까지 <span className="font-bold text-primary">평균 3분</span> — 전문 리포트를 커피 한 잔보다 빠르게.
-            </p>
-          </div>
         </div>
       </section>
 
