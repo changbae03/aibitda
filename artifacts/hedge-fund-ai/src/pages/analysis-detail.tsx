@@ -2553,43 +2553,63 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
       </div>
 
       <div className="p-4 sm:p-5">
-        <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
+        <div className="markdown-body" style={{ fontSize: isRelativeVal ? "15px" : "14px", lineHeight: isRelativeVal ? "2.0" : "1.8" }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              h2: ({ children }) => (
+              h2: ({ children }) => isRelativeVal ? (
+                <h2 className="text-[15px] font-bold text-foreground mt-8 mb-4 first:mt-0 pb-2 border-b-2 border-primary/30 flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-5 rounded-full bg-primary/70 shrink-0" />
+                  {children}
+                </h2>
+              ) : (
                 <h2 className="text-base font-bold text-foreground mt-6 mb-3 first:mt-0 pb-1.5 border-b border-border/60">
                   {children}
                 </h2>
               ),
-              h3: ({ children }) => (
+              h3: ({ children }) => isRelativeVal ? (
+                <h3 className="text-[14px] font-bold text-foreground mt-6 mb-3 flex items-center gap-2">
+                  <span className="text-primary/60 font-black">▸</span>
+                  {children}
+                </h3>
+              ) : (
                 <h3 className="text-sm font-semibold text-foreground mt-5 mb-2 flex items-center gap-1.5">
                   {children}
                 </h3>
               ),
               h4: ({ children }) => (
-                <h4 className="text-[13px] font-semibold text-foreground/80 mt-3 mb-1.5">{children}</h4>
+                <h4 className={isRelativeVal
+                  ? "text-[13.5px] font-semibold text-primary/80 mt-4 mb-2"
+                  : "text-[13px] font-semibold text-foreground/80 mt-3 mb-1.5"}>{children}</h4>
               ),
               p: ({ children }) => {
                 const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
                 if (text.startsWith("출처:") || text.startsWith("출처 :")) {
                   return <p className="mt-5 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
                 }
-                return <p className="mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]">{children}</p>;
+                return <p className={isRelativeVal
+                  ? "mb-5 last:mb-0 text-foreground leading-[2.0]"
+                  : "mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]"}>{children}</p>;
               },
-              ul: ({ children }) => <ul>{children}</ul>,
-              ol: ({ children }) => <ol>{children}</ol>,
-              li: ({ children }) => <li>{children}</li>,
-              strong: ({ children }) => (
+              ul: ({ children }) => <ul className={isRelativeVal ? "my-3 space-y-1" : ""}>{children}</ul>,
+              ol: ({ children }) => <ol className={isRelativeVal ? "my-3 space-y-1" : ""}>{children}</ol>,
+              li: ({ children }) => <li className={isRelativeVal ? "text-foreground leading-[2.0]" : ""}>{children}</li>,
+              strong: ({ children }) => isRelativeVal ? (
+                <strong className="font-bold text-foreground">{children}</strong>
+              ) : (
                 <strong>{children}</strong>
               ),
               em: ({ children }) => <em className="text-foreground/70 not-italic">{children}</em>,
-              blockquote: ({ children }) => (
+              blockquote: ({ children }) => isRelativeVal ? (
+                <blockquote className="my-4 px-4 py-3 rounded-lg bg-primary/5 border-l-4 border-primary/40 text-foreground/80 text-[14px] not-italic">
+                  {children}
+                </blockquote>
+              ) : (
                 <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
                   {children}
                 </blockquote>
               ),
-              hr: () => <hr className="my-4 border-border/60" />,
+              hr: () => <hr className={isRelativeVal ? "my-6 border-border/40" : "my-4 border-border/60"} />,
               ...MD_TABLE_COMPONENTS,
             }}
           >
