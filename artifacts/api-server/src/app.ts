@@ -183,6 +183,7 @@ app.get("/share/:id", async (req: Request, res: Response) => {
   }
 
   const pageUrl = `https://aibitda.kr/share/${id}`;
+  const safePageUrl = escapeAttr(pageUrl);
 
   const baseHtml = getBaseHtml();
   let html: string;
@@ -197,7 +198,7 @@ app.get("/share/:id", async (req: Request, res: Response) => {
       .replace(/<meta name="twitter:title"[^>]*\/>/, `<meta name="twitter:title" content="${escapeAttr(ogTitle)}" />`)
       .replace(/<meta name="twitter:description"[^>]*\/>/, `<meta name="twitter:description" content="${escapeAttr(ogDesc)}" />`)
       .replace(/<meta name="twitter:image"[^>]*\/>/, `<meta name="twitter:image" content="${SHARE_OG_IMAGE}" />`)
-      + `\n<!-- og:url --><meta property="og:url" content="${pageUrl}" />`;
+      + `\n<!-- og:url --><meta property="og:url" content="${safePageUrl}" />`;
   } else {
     html = `<!DOCTYPE html>
 <html lang="ko">
@@ -212,12 +213,12 @@ app.get("/share/:id", async (req: Request, res: Response) => {
   <meta property="og:image" content="${SHARE_OG_IMAGE}"/>
   <meta property="og:image:width" content="1200"/>
   <meta property="og:image:height" content="630"/>
-  <meta property="og:url" content="${pageUrl}"/>
+  <meta property="og:url" content="${safePageUrl}"/>
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:title" content="${escapeAttr(ogTitle)}"/>
   <meta name="twitter:description" content="${escapeAttr(ogDesc)}"/>
   <meta name="twitter:image" content="${SHARE_OG_IMAGE}"/>
-  <meta http-equiv="refresh" content="0;url=${pageUrl}"/>
+  <meta http-equiv="refresh" content="0;url=${safePageUrl}"/>
 </head>
 <body></body>
 </html>`;

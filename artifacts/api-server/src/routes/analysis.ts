@@ -2582,6 +2582,18 @@ router.get("/admin-live", async (req, res) => {
 
 router.get("/all-reports", async (req, res) => {
   try {
+    const requesterId = getUserId(req);
+    if (!requesterId) {
+      return res.status(401).json({ error: "로그인이 필요합니다." });
+    }
+    const adminCheck = await pool.query(
+      `SELECT 1 FROM admins WHERE user_id = $1`,
+      [requesterId]
+    );
+    if ((adminCheck.rowCount ?? 0) === 0) {
+      return res.status(403).json({ error: "관리자 전용 기능입니다." });
+    }
+
     const limit = Math.min(parseInt((req.query.limit as string) ?? "100"), 500);
     const offset = parseInt((req.query.offset as string) ?? "0") || 0;
     const statusFilter = (req.query.status as string) ?? "";
