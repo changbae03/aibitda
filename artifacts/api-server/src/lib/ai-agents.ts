@@ -4312,7 +4312,7 @@ ${sotpFlag ? `
 ` : ""}
 마지막 줄에 아래 형식의 JSON을 정확히 한 줄로 출력하세요. 다른 텍스트나 마크다운 없이 정확히 이 형식으로만 출력하세요.
 숫자 단위 규칙: KRW(원화) 종목은 정수(예: 53600), USD/기타 외화 종목은 소수점 포함 숫자(예: 46.83) — 쉼표, "원", "$", "%" 등 단위 문자 절대 금지:
-FINAL_VALUATION_DATA:{"current":현재주가숫자,"bear":하단밴드숫자,"base":최종적정주가숫자,"bull":상단밴드숫자,"abs_bear":DCF내재가치숫자,"abs_base":DCF내재가치숫자,"abs_bull":DCF내재가치숫자,"rel_bear":피어목표가숫자,"rel_base":피어목표가숫자,"rel_bull":피어목표가숫자}`,
+FINAL_VALUATION_DATA:{"current":현재주가숫자,"bear":하단밴드숫자,"base":최종적정주가숫자,"bull":상단밴드숫자,"abs_model":"실제사용한절대가치모델명(예:DCF,rNPV,SOTP,rNPV+SOTP,P/B-ROE,NAV,DDM,EV/Sales,AFFO 중 하나)","abs_bear":절대가치숫자,"abs_base":절대가치숫자,"abs_bull":절대가치숫자,"rel_bear":피어목표가숫자,"rel_base":피어목표가숫자,"rel_bull":피어목표가숫자}`,
     },
 
     market_analysis: {

@@ -2440,8 +2440,23 @@ function stripValuationData(content: string): string {
 interface FinalValuationData {
   current: number;
   bear: number; base: number; bull: number;
+  abs_model?: string;
   abs_bear: number; abs_base: number; abs_bull: number;
   rel_bear: number; rel_base: number; rel_bull: number;
+}
+
+function detectAbsModelFromContent(content: string): string {
+  const hasRNPV = /rNPV/i.test(content);
+  const hasSOTP = /SOTP/i.test(content);
+  if (hasRNPV && hasSOTP) return "rNPV+SOTP";
+  if (hasRNPV) return "rNPV";
+  if (hasSOTP) return "SOTP";
+  if (/P\/B[-\s]*ROE/i.test(content)) return "P/B-ROE";
+  if (/\bNAV\b/.test(content)) return "NAV";
+  if (/\bDDM\b/i.test(content)) return "DDM";
+  if (/EV\/Sales/i.test(content)) return "EV/Sales";
+  if (/\bAFFO\b/i.test(content)) return "AFFO";
+  return "DCF";
 }
 
 function parseFinalValuationData(content: string): FinalValuationData | null {
@@ -2629,7 +2644,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/80">절대가치(DCF)</td>
+                    <td className="px-3 py-2 font-medium text-foreground/80">절대가치({finalValuationData.abs_model ?? detectAbsModelFromContent(step.content ?? "")})</td>
                     <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(finalValuationData.abs_bear, priceCurrency)}</td>
                     <td className="px-3 py-2 text-right text-emerald-600 font-mono">{formatPrice(finalValuationData.abs_base, priceCurrency)}</td>
                     <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(finalValuationData.abs_bull, priceCurrency)}</td>
