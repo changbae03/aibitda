@@ -3682,16 +3682,39 @@ async function executeStep(
         entryPrice = parsePrice(json.entry_price);
         stopLoss = parsePrice(json.stop_loss);
 
-        // ── 진입가·손절가 이상값 가드 ───────────────────────────────────────
-        // 분석 시작 시 저장된 현재가(startPrice)를 기준으로
-        // entry/stop이 3배 이상 이탈하면 데이터 오류로 간주하고 null 처리
+        // ── 목표가·진입가·손절가 이상값 가드 ─────────────────────────────────
         const startPriceRow = await rawQuery(
-          `SELECT start_price FROM analyses WHERE id=$1`,
+          `SELECT start_price, ticker FROM analyses WHERE id=$1`,
           [id]
         );
         const savedStartPrice: number | null = startPriceRow[0]?.start_price ?? null;
+        const savedTicker: string = startPriceRow[0]?.ticker ?? "";
+        const isKR = /^\d{6}$/.test(savedTicker);
+
         if (savedStartPrice && savedStartPrice > 0) {
-          const MAX_RATIO = 3.0;
+          // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
+          // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
+          const TARGET_MAX_RATIO = isKR ? 3.5 : 4.5;
+          const TARGET_MIN_RATIO = isKR ? 0.15 : 0.12;
+          if (targetPrice) {
+            const tRatio = targetPrice / savedStartPrice;
+            if (tRatio > TARGET_MAX_RATIO) {
+              const capped = Math.round(savedStartPrice * TARGET_MAX_RATIO);
+              console.warn(
+                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (>${TARGET_MAX_RATIO}x ${isKR ? "KR" : "US"} cap) — clamped to ${capped}`
+              );
+              targetPrice = capped;
+            } else if (tRatio < TARGET_MIN_RATIO) {
+              const floored = Math.round(savedStartPrice * TARGET_MIN_RATIO);
+              console.warn(
+                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (<${TARGET_MIN_RATIO}x ${isKR ? "KR" : "US"} floor) — clamped to ${floored}`
+              );
+              targetPrice = floored;
+            }
+          }
+
+          // ── 진입가·손절가 3.5배 가드 ────────────────────────────────────
+          const MAX_RATIO = 3.5;
           const MIN_RATIO = 1 / MAX_RATIO;
           if (entryPrice) {
             const ratio = entryPrice / savedStartPrice;
