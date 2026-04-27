@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Building2, AlertCircle, Info, ChevronDown, ChevronUp, Globe } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getApiUrl } from "@/lib/utils";
 
 interface Peer {
   ticker: string;
@@ -213,7 +213,7 @@ export default function PeerGroupSection({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/market-data/peer-group/${encodeURIComponent(ticker)}`, {
+    fetch(getApiUrl(`/api/market-data/peer-group/${encodeURIComponent(ticker)}`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ companyName, industry, analysisSteps: analysisSteps ?? [] }),

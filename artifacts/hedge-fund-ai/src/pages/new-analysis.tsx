@@ -31,7 +31,7 @@ function useCredits() {
   return useQuery<CreditStatus>({
     queryKey: ["credits"],
     queryFn: async () => {
-      const res = await fetch("/api/credits", { credentials: "include" });
+      const res = await fetch(getApiUrl("/api/credits"), { credentials: "include" });
       if (!res.ok) return null as any;
       return res.json();
     },
@@ -253,7 +253,7 @@ export default function NewAnalysis() {
     const code = localStorage.getItem("pending_referral");
     if (!code) return;
     localStorage.removeItem("pending_referral");
-    fetch("/api/credits/referral/register", {
+    fetch(getApiUrl("/api/credits/referral/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -290,7 +290,7 @@ export default function NewAnalysis() {
     if (!query.trim()) { setSuggestions([]); setShowDropdown(false); return; }
     setIsSearching(true);
     try {
-      const res = await fetch(`/api/market-data/search/${encodeURIComponent(query)}`);
+      const res = await fetch(getApiUrl(`/api/market-data/search/${encodeURIComponent(query)}`));
       const data: SearchResult[] = await res.json();
       setSuggestions(data);
       setShowDropdown(data.length > 0);

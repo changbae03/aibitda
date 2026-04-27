@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getApiUrl } from "@/lib/utils";
 
 export interface AuthUser {
   id: string;
@@ -8,13 +9,11 @@ export interface AuthUser {
   exp?: number;
 }
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 export function useAuth() {
   return useQuery<{ user: AuthUser | null }>({
     queryKey: ["auth/me"],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+      const res = await fetch(getApiUrl("/api/auth/me"), { credentials: "include" });
       if (!res.ok) return { user: null };
       return res.json();
     },
@@ -27,7 +26,7 @@ export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      await fetch(`${API_BASE}/api/auth/logout`, {
+      await fetch(getApiUrl("/api/auth/logout"), {
         method: "POST",
         credentials: "include",
       });
@@ -39,6 +38,6 @@ export function useLogout() {
 }
 
 export function getKakaoLoginUrl() {
-  const API_BASE_FULL = window.location.origin + (import.meta.env.BASE_URL.replace(/\/$/, ""));
-  return `${API_BASE_FULL}/api/auth/kakao`;
+  const origin = window.location.origin + (import.meta.env.BASE_URL.replace(/\/$/, ""));
+  return `${origin}/api/auth/kakao`;
 }

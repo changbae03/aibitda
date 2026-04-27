@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Send, RefreshCw, ExternalLink, WifiOff, Zap, Pin, X } from "lucide-react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface NewsItem {
@@ -13,8 +13,6 @@ interface NewsItem {
   link: string;
   images: string[];
 }
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function formatRelativeDate(iso: string) {
   try {
@@ -365,7 +363,7 @@ export default function News() {
     else setRadarLoading(true);
     setRadarError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/news/radar`);
+      const res = await fetch(getApiUrl("/api/news/radar"));
       if (!res.ok) throw new Error("서버 오류");
       const data = await res.json();
       setRadarItems(data.items ?? []);
@@ -382,7 +380,7 @@ export default function News() {
     else setResearchLoading(true);
     setResearchError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/news`);
+      const res = await fetch(getApiUrl("/api/news"));
       if (!res.ok) throw new Error("서버 오류");
       const data = await res.json();
       setResearchItems(data.items ?? []);

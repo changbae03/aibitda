@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BarChart3, Info, Sparkles, Globe, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getApiUrl } from "@/lib/utils";
 
 interface GlobalFund {
   name: string;
@@ -53,7 +53,7 @@ export default function ETFSection({
     setError(null);
     const params = new URLSearchParams({ companyName });
     if (industry) params.set("industry", industry);
-    fetch(`/api/market-data/etf-inclusion/${encodeURIComponent(ticker)}?${params}`)
+    fetch(getApiUrl(`/api/market-data/etf-inclusion/${encodeURIComponent(ticker)}?${params}`))
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });

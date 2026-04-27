@@ -1139,7 +1139,7 @@ export default function AnalysisDetail() {
     setStreamingStep({ key: stepKey, content: "" });
     let completedSuccessfully = false;
     try {
-      const res = await fetch(`/api/analysis/${id}/step`, {
+      const res = await fetch(getApiUrl(`/api/analysis/${id}/step`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stepKey }),
@@ -1217,7 +1217,7 @@ export default function AnalysisDetail() {
     if (!analysis || analysis.status !== "in_progress") return;
 
     // 백그라운드 파이프라인이 실행 중인지 확인/보장 (클라이언트 이탈 후 재진입 시 안전망)
-    fetch(`/api/analysis/${id}/run-pipeline`, { method: "POST", headers: { "Content-Type": "application/json" } })
+    fetch(getApiUrl(`/api/analysis/${id}/run-pipeline`), { method: "POST", headers: { "Content-Type": "application/json" } })
       .catch(console.error);
 
     if (hasInitiatedRef.current) return;

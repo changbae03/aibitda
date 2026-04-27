@@ -5,9 +5,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    const h = window.location.hostname;
+    const isReplitOrLocal =
+      h.endsWith(".replit.app") ||
+      h.endsWith(".replit.dev") ||
+      h === "localhost" ||
+      h === "127.0.0.1";
+    if (!isReplitOrLocal) return "https://ai-bitda.replit.app";
+  }
+  return (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+}
+
 export function getApiUrl(path: string): string {
-  const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
+  if (p.startsWith("/api/auth/")) return p;
+  const base = getApiBase();
   return `${base}${p}`;
 }
 

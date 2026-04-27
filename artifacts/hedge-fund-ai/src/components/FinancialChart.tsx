@@ -12,7 +12,7 @@ import {
   Cell,
   ReferenceLine,
 } from "recharts";
-import { cn } from "@/lib/utils";
+import { cn, getApiUrl } from "@/lib/utils";
 
 interface FinancialEntry {
   period: string;
@@ -128,7 +128,7 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   useEffect(() => {
     setLoading(true);
     setError(false);
-    fetch(`/api/market-data/financials/${encodeURIComponent(ticker)}`)
+    fetch(getApiUrl(`/api/market-data/financials/${encodeURIComponent(ticker)}`))
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
