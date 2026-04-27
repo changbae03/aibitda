@@ -265,7 +265,7 @@ export default function AboutPage() {
           애빛다 소개
         </h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          AI로 기업가치를 밝히다 — 헤지펀드 수준의 밸류에이션 방법론을 누구나 사용할 수 있도록 설계된 AI 주식 리서치 플랫폼입니다.
+          AI로 기업가치를 밝히다 — 기관급 밸류에이션 방법론을 누구나 사용할 수 있도록 설계된 AI 주식 리서치 플랫폼입니다.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           {["KOSPI·KOSDAQ", "NYSE·NASDAQ", "16개 전용 밸류에이션 모델", "7단계 AI 파이프라인", "실시간 거시지표"].map((tag) => (
@@ -327,7 +327,7 @@ export default function AboutPage() {
             <div className="flex-1 min-w-0 space-y-1">
               <p className="text-[13.5px] font-bold text-foreground">애빛다의 존재 이유</p>
               <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
-                헤지펀드 리서치 팀이 수행하는 7단계 분석 — 재무 모델링, 섹터별 밸류에이션, 리스크 시나리오 — 을 AI를 통해 누구에게나 제공합니다.
+                7단계 분석 — 재무 모델링, 섹터별 밸류에이션, 리스크 시나리오 — 을 AI를 통해 누구에게나 제공합니다.
                 DCF·P/B-ROE·rNPV·SOTP·NAV 등 업종에 맞는 방법론을 자동 선택해 "이 주식이 지금 비싼가, 싼가"를 수치로 답합니다.
                 분석의 민주화가 곧 투자 기회의 균등입니다.
               </p>
@@ -395,7 +395,7 @@ export default function AboutPage() {
           <div className="px-4 py-3 bg-primary/5 flex items-center gap-2">
             <span className="text-primary text-[13px]">⏱</span>
             <p className="text-[12px] text-muted-foreground/80">
-              7단계 전체 파이프라인 완료까지 <span className="font-bold text-primary">평균 3분</span> — 헤지펀드 수준의 리포트를 커피 한 잔보다 빠르게.
+              7단계 전체 파이프라인 완료까지 <span className="font-bold text-primary">평균 3분</span> — 전문 리포트를 커피 한 잔보다 빠르게.
             </p>
           </div>
         </div>

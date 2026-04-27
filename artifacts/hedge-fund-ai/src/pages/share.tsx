@@ -650,7 +650,7 @@ export default function SharePage() {
                   내 종목도 AI로 분석해보세요
                 </p>
                 <p className="text-blue-200 text-[12px] text-center leading-relaxed">
-                  헤지펀드급 7단계 파이프라인 · 코스피·코스닥·NYSE·NASDAQ
+                  7단계 AI 파이프라인 · 코스피·코스닥·NYSE·NASDAQ
                 </p>
               </div>
 
