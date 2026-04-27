@@ -518,11 +518,14 @@ async function resolveQuote(raw: string): Promise<{ price: number | null; curren
         // closePrice = 당일 종가 or 현재가 (장 중에는 현재가)
         const rawPrice = nb?.closePrice ?? nb?.stockItemTotalInfos?.find((x: any) => x.code === "closePrice")?.value;
         const naverPrice = rawPrice ? Number(String(rawPrice).replace(/,/g, "")) : null;
-        const naverChange = nb?.compareToPreviousClosePrice != null && nb?.previousClosePrice > 0
-          ? (Number(String(nb.compareToPreviousClosePrice).replace(/,/g, "")) / Number(String(nb.previousClosePrice).replace(/,/g, ""))) * 100
-          : null;
+        // fluctuationsRatio = 네이버가 직접 제공하는 등락률(%) — previousClosePrice가 응답에 없으므로 이걸 우선 사용
+        const naverChange: number | null =
+          nb?.fluctuationsRatio != null ? Number(nb.fluctuationsRatio)
+          : nb?.compareToPreviousClosePrice != null && nb?.previousClosePrice > 0
+            ? (Number(String(nb.compareToPreviousClosePrice).replace(/,/g, "")) / Number(String(nb.previousClosePrice).replace(/,/g, ""))) * 100
+            : null;
         if (naverPrice != null && naverPrice > 0) {
-          console.log(`[resolveQuote] Naver price for ${sixDigit}: ${naverPrice}`);
+          console.log(`[resolveQuote] Naver price for ${sixDigit}: ${naverPrice} change: ${naverChange}`);
           return { price: naverPrice, currency: "KRW", change: naverChange };
         }
       }
@@ -578,11 +581,13 @@ async function resolveQuote(raw: string): Promise<{ price: number | null; curren
         const nb = await naverRes.json() as any;
         const rawPrice = nb?.closePrice ?? nb?.stockItemTotalInfos?.find((x: any) => x.code === "closePrice")?.value;
         const naverPrice = rawPrice ? Number(String(rawPrice).replace(/,/g, "")) : null;
-        const naverChange = nb?.compareToPreviousClosePrice != null && nb?.previousClosePrice > 0
-          ? (Number(String(nb.compareToPreviousClosePrice).replace(/,/g, "")) / Number(String(nb.previousClosePrice).replace(/,/g, ""))) * 100
-          : null;
+        const naverChange: number | null =
+          nb?.fluctuationsRatio != null ? Number(nb.fluctuationsRatio)
+          : nb?.compareToPreviousClosePrice != null && nb?.previousClosePrice > 0
+            ? (Number(String(nb.compareToPreviousClosePrice).replace(/,/g, "")) / Number(String(nb.previousClosePrice).replace(/,/g, ""))) * 100
+            : null;
         if (naverPrice != null && naverPrice > 0) {
-          console.log(`[resolveQuote] Naver price for ${code} (.KS/.KQ): ${naverPrice}`);
+          console.log(`[resolveQuote] Naver price for ${code} (.KS/.KQ): ${naverPrice} change: ${naverChange}`);
           return { price: naverPrice, currency: "KRW", change: naverChange };
         }
       }
