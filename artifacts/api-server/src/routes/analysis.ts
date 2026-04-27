@@ -3467,7 +3467,8 @@ async function executeStep(
         }
 
         // 밸류에이션 단계는 수치 일관성을 위해 더 낮은 temperature 사용
-        const stepTemperature = isValuationStep ? 0.2 : 0.3;
+        // 비밸류에이션도 0.15로 낮춰 단계별 결론 일관성 향상
+        const stepTemperature = isValuationStep ? 0.12 : 0.15;
         const stream = await ai.models.generateContentStream({
           model: "gemini-2.5-flash",
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
@@ -3552,8 +3553,8 @@ async function executeStep(
             config: {
               systemInstruction: systemPrompt,
               maxOutputTokens: synthesisMaxTokens,
-              temperature: 0.25,
-              topP: 0.88,
+              temperature: 0.12,
+              topP: 0.85,
               thinkingConfig: { thinkingBudget: 0 },
             },
           });
@@ -3740,6 +3741,27 @@ async function executeStep(
         if (!riskRewardRatio && rr) {
           const m = String(rr).match(/[\d.]+/g);
           if (m && m.length >= 2) riskRewardRatio = parseFloat(m[1]) / parseFloat(m[0]);
+        }
+
+        // ── 서버 사이드 판정 강제 결정 (일관성 보장) ──────────────────────────────
+        // AI 프롬프트가 같은 목표가에 다른 판정을 내릴 수 있는 확률적 오류를 방지.
+        // 목표가(targetPrice)와 분석시점 주가(savedStartPrice)로 upside를 계산해
+        // 판정을 완전 결정론적으로 덮어씀 — AI 판정은 무시함.
+        if (targetPrice && savedStartPrice && savedStartPrice > 0) {
+          const upside = (targetPrice - savedStartPrice) / savedStartPrice * 100;
+          let deterministicVerdict: string;
+          if (upside >= 30)        deterministicVerdict = "Strong Buy";
+          else if (upside >= 15)   deterministicVerdict = "Buy";
+          else if (upside >= -10)  deterministicVerdict = "Hold";
+          else if (upside >= -25)  deterministicVerdict = "Sell";
+          else                     deterministicVerdict = "Strong Sell";
+
+          if (investmentVerdict !== deterministicVerdict) {
+            console.log(
+              `[verdict-override] ${savedTicker} | AI: "${investmentVerdict}" → 확정: "${deterministicVerdict}" | upside ${upside.toFixed(1)}% (target ${targetPrice} / start ${savedStartPrice})`
+            );
+          }
+          investmentVerdict = deterministicVerdict;
         }
       } catch {
         // JSON parse failed
