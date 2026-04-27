@@ -2,10 +2,22 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2 } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl, cn } from "@/lib/utils";
+
+interface AuthUser { id: string; nickname: string; profileImage: string | null }
+function useAuth() {
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
+  useEffect(() => {
+    fetch(getApiUrl("/api/auth/me"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setUser(d?.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+  return user;
+}
 
 interface CreditStatus {
   dailyUsed: number;
@@ -229,6 +241,7 @@ export default function NewAnalysis() {
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
   const queryClient = useQueryClient();
   const { data: credits } = useCredits();
+  const user = useAuth();
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState("");
   const trending = useTrendingTickers();
@@ -317,6 +330,12 @@ export default function NewAnalysis() {
   }, []);
 
   const handleSubmit = async (tickerValue: string) => {
+    // 로그인 필수 체크
+    if (user === null) {
+      setLocation("/login");
+      return;
+    }
+
     let value = tickerValue.trim().toUpperCase();
     // 한국 종목: .KS/.KQ 없이 6자리 코드만 사용
     if (/^\d{6}\.(KS|KQ)$/.test(value)) {
@@ -615,6 +634,30 @@ export default function NewAnalysis() {
               >
                 {error}
               </motion.p>
+            )}
+          </AnimatePresence>
+
+          {/* 로그인 필요 안내 */}
+          <AnimatePresence>
+            {user === null && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mt-3 flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50"
+              >
+                <LogIn className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span className="text-xs text-amber-700 dark:text-amber-300">
+                  분석을 시작하려면{" "}
+                  <a
+                    href="/login"
+                    className="font-semibold underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200"
+                  >
+                    로그인
+                  </a>
+                  이 필요합니다
+                </span>
+              </motion.div>
             )}
           </AnimatePresence>
 
