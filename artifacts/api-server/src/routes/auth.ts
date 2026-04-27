@@ -110,7 +110,9 @@ router.get("/auth/kakao/callback", async (req, res) => {
       path: "/",
     }));
 
-    // 카카오 닉네임·이메일 → user_credits 저장 (NULL인 경우에만, 수동 변경 유지)
+    // 카카오 닉네임·이메일 → user_credits 저장 (kakao_ 접두사로 통일)
+    // getUserId()도 kakao_${id} 형식을 반환하므로 동일한 키를 사용해야 중복 방지
+    const prefixedUserId = `kakao_${user.id}`;
     try {
       await pool.query(
         `INSERT INTO user_credits (user_id, display_name, email)
@@ -118,7 +120,7 @@ router.get("/auth/kakao/callback", async (req, res) => {
          ON CONFLICT (user_id) DO UPDATE
            SET display_name = COALESCE(user_credits.display_name, EXCLUDED.display_name),
                email = COALESCE(user_credits.email, EXCLUDED.email)`,
-        [user.id, user.nickname || null, user.email || null]
+        [prefixedUserId, user.nickname || null, user.email || null]
       );
     } catch (_) {}
 

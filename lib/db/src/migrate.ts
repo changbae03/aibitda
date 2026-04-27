@@ -264,6 +264,86 @@ export async function runMigrations() {
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS error_message TEXT;
     `);
 
+    // ── [v2] Kakao user_id 접두사 통합 마이그레이션 ──────────────────────────
+    // auth.ts 콜백이 과거에 raw Kakao ID(숫자만)로 user_credits를 생성했고,
+    // credits.ts getUserId()는 kakao_${id} 형식을 사용해 두 레코드가 생겼음.
+    // 이 마이그레이션은 raw ID 레코드를 kakao_ 접두사 레코드로 통합한다.
+    await client.query(`
+      DO $$
+      DECLARE
+        raw_rec RECORD;
+        prefixed_id TEXT;
+      BEGIN
+        -- 케이스 1: kakao_ 접두사 레코드가 이미 있는 경우
+        -- → display_name/email 이전 후 raw 레코드 삭제
+        FOR raw_rec IN
+          SELECT uc_raw.user_id, uc_raw.display_name, uc_raw.email
+          FROM user_credits uc_raw
+          WHERE uc_raw.user_id ~ '^[0-9]+$'
+            AND EXISTS (
+              SELECT 1 FROM user_credits
+              WHERE user_id = 'kakao_' || uc_raw.user_id
+            )
+        LOOP
+          prefixed_id := 'kakao_' || raw_rec.user_id;
+
+          -- display_name/email 이전 (kakao_ 레코드가 NULL인 경우에만)
+          UPDATE user_credits
+          SET display_name = COALESCE(display_name, raw_rec.display_name),
+              email = COALESCE(email, raw_rec.email)
+          WHERE user_id = prefixed_id;
+
+          -- analyses 소유권 이전 (혹시 raw ID로 분석이 있다면)
+          UPDATE analyses
+          SET user_id = prefixed_id
+          WHERE user_id = raw_rec.user_id;
+
+          -- analysis_schedules 이전
+          UPDATE analysis_schedules
+          SET user_id = prefixed_id
+          WHERE user_id = raw_rec.user_id;
+
+          -- referral_uses referee_id 이전
+          UPDATE referral_uses
+          SET referee_id = prefixed_id
+          WHERE referee_id = raw_rec.user_id;
+
+          -- raw 레코드 삭제
+          DELETE FROM user_credits WHERE user_id = raw_rec.user_id;
+        END LOOP;
+
+        -- 케이스 2: raw ID 레코드만 있고 kakao_ 레코드가 없는 경우
+        -- → user_id 자체를 kakao_ 접두사로 변경
+        FOR raw_rec IN
+          SELECT user_id FROM user_credits
+          WHERE user_id ~ '^[0-9]+$'
+            AND NOT EXISTS (
+              SELECT 1 FROM user_credits
+              WHERE user_id = 'kakao_' || user_credits.user_id
+            )
+        LOOP
+          prefixed_id := 'kakao_' || raw_rec.user_id;
+
+          UPDATE analyses
+          SET user_id = prefixed_id
+          WHERE user_id = raw_rec.user_id;
+
+          UPDATE analysis_schedules
+          SET user_id = prefixed_id
+          WHERE user_id = raw_rec.user_id;
+
+          UPDATE referral_uses
+          SET referee_id = prefixed_id
+          WHERE referee_id = raw_rec.user_id;
+
+          UPDATE user_credits
+          SET user_id = prefixed_id
+          WHERE user_id = raw_rec.user_id;
+        END LOOP;
+      END $$;
+    `);
+    // ─────────────────────────────────────────────────────────────────────────
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
