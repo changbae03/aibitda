@@ -471,7 +471,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         <NoticeBanner settings={notice} />
-        <MarketBar />
 
         {/* Scrollable Content */}
         <div id="print-scroll" className="flex-1 overflow-y-auto">
