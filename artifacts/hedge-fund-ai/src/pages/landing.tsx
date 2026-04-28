@@ -82,7 +82,7 @@ function RightPanel() {
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">Consumer Electronics · KOSPI</div>
           </div>
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
             <TrendingUp className="w-3 h-3" />
             매수
           </span>
@@ -94,7 +94,7 @@ function RightPanel() {
             <div key={m.label} className={`rounded-lg p-2.5 ${m.highlight ? "bg-[#FF8A7A]/8 border border-[#FF8A7A]/20" : "bg-muted/50"}`}>
               <p className="text-[10px] text-muted-foreground/70 mb-0.5">{m.label}</p>
               <p className={`text-[13px] font-bold ${m.highlight ? "text-[#FF8A7A]" : "text-foreground"}`}>{m.value}</p>
-              <p className={`text-[10px] ${m.highlight ? "text-emerald-600 font-semibold" : "text-muted-foreground/60"}`}>{m.sub}</p>
+              <p className={`text-[10px] ${m.highlight ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground/60"}`}>{m.sub}</p>
             </div>
           ))}
         </div>

@@ -64,11 +64,11 @@ function toKoreanVerdict(verdict: string): string {
 }
 function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (s.includes("buy"))         return "bg-green-50 text-green-700 border-green-200";
-  if (s.includes("strong sell")) return "bg-red-50 text-red-700 border-red-300";
-  if (s.includes("sell"))        return "bg-red-50 text-red-600 border-red-200";
-  return "bg-amber-50 text-amber-700 border-amber-200";
+  if (s.includes("strong buy"))  return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50";
+  if (s.includes("buy"))         return "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50";
+  if (s.includes("strong sell")) return "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800/50";
+  if (s.includes("sell"))        return "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50";
+  return "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50";
 }
 function verdictBadge(verdict?: string) {
   if (!verdict) return null;
@@ -139,7 +139,7 @@ function MemoInline({ id }: { id: number }) {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="이 보고서에 대한 메모를 입력하세요..."
           rows={2}
-          className="w-full text-[12px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
+          className="w-full text-[12px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 dark:focus:ring-amber-700 leading-relaxed"
           onKeyDown={(e) => {
             if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { saveMemo(id, draft); setSaved(draft.trim()); setEditing(false); }
@@ -160,10 +160,10 @@ function MemoInline({ id }: { id: number }) {
   if (saved) {
     return (
       <div className="mt-2 flex items-start gap-1.5 group/memo" onClick={(e) => e.stopPropagation()}>
-        <div className="flex-1 text-[12px] text-muted-foreground leading-relaxed bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">{saved}</div>
+        <div className="flex-1 text-[12px] text-muted-foreground leading-relaxed bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-800/40 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">{saved}</div>
         <div className="shrink-0 mt-0.5 flex items-center gap-0.5 opacity-0 group-hover/memo:opacity-100 transition-opacity">
-          <button onClick={handleEdit} className="p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="메모 수정"><Pencil className="w-3 h-3" /></button>
-          <button onClick={handleDelete} className="p-1 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-50 transition-colors" title="메모 삭제"><Trash2 className="w-3 h-3" /></button>
+          <button onClick={handleEdit} className="p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors" title="메모 수정"><Pencil className="w-3 h-3" /></button>
+          <button onClick={handleDelete} className="p-1 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title="메모 삭제"><Trash2 className="w-3 h-3" /></button>
         </div>
       </div>
     );
@@ -338,8 +338,8 @@ function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
 
   const isPos = pct >= 0;
   const colorCls = isPos
-    ? "bg-red-50 border-red-100 text-red-500"
-    : "bg-blue-50 border-blue-100 text-blue-500";
+    ? "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-800/50 text-red-500 dark:text-red-400"
+    : "bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800/50 text-blue-500 dark:text-blue-400";
 
   return (
     <div className={cn("flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border min-w-[52px]", colorCls)}>
@@ -641,11 +641,11 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-muted-foreground/50">{list.length}건</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">상승여력 {buyCount}</span>}
-                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-100">적정수준 {holdCount}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">하락여지 {sellCount}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800/40">상승여력 {buyCount}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/40">적정수준 {holdCount}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 border border-red-100 dark:border-red-800/40">하락여지 {sellCount}</span>}
                 {reanalysisCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 dark:bg-orange-950/20 text-orange-500 dark:text-orange-400 border border-orange-200 dark:border-orange-800/40">
                     재분석 {reanalysisCount}
                   </span>
                 )}
@@ -860,12 +860,12 @@ export default function History() {
                 const effectiveEntry = entry ?? cur;
                 const isDownside = tgt < effectiveEntry;
                 const exceeded = isDownside ? cur <= tgt : cur >= tgt;
-                if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-50 text-emerald-600 border-emerald-200" };
+                if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50" };
                 const distNow  = Math.abs(cur - tgt);
                 const distThen = entry != null ? Math.abs(entry - tgt) : null;
                 if (distThen == null) return null;
-                if (distNow < distThen) return { label: "▲ 목표 접근", cls: "bg-blue-50 text-blue-600 border-blue-200" };
-                if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "bg-red-50 text-red-500 border-red-200" };
+                if (distNow < distThen) return { label: "▲ 목표 접근", cls: "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50" };
+                if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 border-red-200 dark:border-red-800/50" };
                 return { label: "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
@@ -900,12 +900,12 @@ export default function History() {
                         <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
                         {verdictBadge(a.investmentVerdict)}
                         {reanalysisLevel === "urgent" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800/50">
                             <AlertTriangle className="w-2.5 h-2.5" /> 긴급 재분석
                           </span>
                         )}
                         {reanalysisLevel === "recommend" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/20 text-orange-500 dark:text-orange-400 border border-orange-200 dark:border-orange-800/40">
                             <RefreshCw className="w-2.5 h-2.5" /> 재분석 추천
                           </span>
                         )}
@@ -943,7 +943,7 @@ export default function History() {
                           >
                             <button
                               onClick={(e) => handleDelete(a.id, e)}
-                              className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-50 transition-colors"
+                              className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
                               title="삭제"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

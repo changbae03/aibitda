@@ -81,7 +81,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="이 보고서에 대한 메모를 입력하세요..."
           rows={2}
-          className="w-full text-[13px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 leading-relaxed"
+          className="w-full text-[13px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 dark:focus:ring-amber-700 leading-relaxed"
           onKeyDown={(e) => {
             if (e.key === "Escape") { e.preventDefault(); handleCancel(); }
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
@@ -106,7 +106,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
       <p className="flex-1 text-[13px] text-foreground/70 leading-relaxed whitespace-pre-wrap break-words">{saved}</p>
       <button
         onClick={startEdit}
-        className="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 transition-colors opacity-0 group-hover/memo:opacity-100"
+        className="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors opacity-0 group-hover/memo:opacity-100"
         title="메모 수정"
       >
         <Pencil className="w-3.5 h-3.5" />
@@ -945,16 +945,16 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
                   </tr>
                 ))}
                 {avg && rows.length > 1 && (
-                  <tr className="bg-blue-50/70 font-semibold border-t border-blue-200/50">
-                    <td className="px-3 py-1.5 text-blue-700 text-[11px]">피어 평균</td>
-                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
-                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
-                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums hidden sm:table-cell">{fmtNum(avg.per_fwd, 1, "x")}</td>
-                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.ev_ebitda, 1, "x")}</td>
-                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums hidden sm:table-cell">{fmtNum(avg.ev_sales, 2, "x")}</td>
-                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.roe, 1, "%")}</td>
-                    <td className="px-3 py-1.5 text-right text-blue-700 tabular-nums">{fmtNum(avg.operating_margin, 1, "%")}</td>
-                    <td className="px-2 py-1.5 text-right text-blue-700 tabular-nums hidden sm:table-cell">{fmtMC(avg.marketCap)}</td>
+                  <tr className="bg-blue-50/70 dark:bg-blue-950/30 font-semibold border-t border-blue-200/50 dark:border-blue-800/30">
+                    <td className="px-3 py-1.5 text-blue-700 dark:text-blue-400 text-[11px]">피어 평균</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums hidden sm:table-cell">{fmtNum(avg.per_fwd, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.ev_ebitda, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums hidden sm:table-cell">{fmtNum(avg.ev_sales, 2, "x")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.roe, 1, "%")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.operating_margin, 1, "%")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums hidden sm:table-cell">{fmtMC(avg.marketCap)}</td>
                   </tr>
                 )}
               </tbody>
@@ -1322,7 +1322,7 @@ export default function AnalysisDetail() {
               )}>
                 {isComplete ? '분석 완료' : '분석 진행중'}
               </span>
-              <span className="px-2 py-0.5 text-[10px] font-medium rounded border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 flex items-center gap-1">
                 <span>⚡</span>AI 자동 생성 · 참고용
               </span>
             </div>
@@ -1635,7 +1635,7 @@ export default function AnalysisDetail() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-5 py-3 text-sm text-emerald-700 font-medium"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 px-5 py-3 text-sm text-emerald-700 dark:text-emerald-400 font-medium"
                 >
                   <Check className="w-4 h-4" />
                   피드백이 AI 학습에 반영되었습니다. 감사합니다!
@@ -1653,8 +1653,8 @@ export default function AnalysisDetail() {
                   <div className="flex items-center gap-2">
                     {(
                       [
-                        { value: 5 as const, label: "도움됐어요", icon: <ThumbsUp className="w-3.5 h-3.5" />, active: "bg-emerald-50 border-emerald-400 text-emerald-700", hover: "hover:border-emerald-300 hover:text-emerald-700" },
-                        { value: 1 as const, label: "아쉬웠어요", icon: <ThumbsDown className="w-3.5 h-3.5" />, active: "bg-rose-50 border-rose-400 text-rose-700", hover: "hover:border-rose-300 hover:text-rose-700" },
+                        { value: 5 as const, label: "도움됐어요", icon: <ThumbsUp className="w-3.5 h-3.5" />, active: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400", hover: "hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400" },
+                        { value: 1 as const, label: "아쉬웠어요", icon: <ThumbsDown className="w-3.5 h-3.5" />, active: "bg-rose-50 dark:bg-rose-950/30 border-rose-400 dark:border-rose-600 text-rose-700 dark:text-rose-400", hover: "hover:border-rose-300 hover:text-rose-700 dark:hover:text-rose-400" },
                       ] as const
                     ).map(({ value, label, icon, active, hover }) => (
                       <button
@@ -1700,11 +1700,11 @@ export default function AnalysisDetail() {
                                   "px-3 py-1.5 rounded-full border text-[12px] font-medium transition-all",
                                   feedbackRating === 5
                                     ? selected
-                                      ? "bg-emerald-50 border-emerald-400 text-emerald-700"
-                                      : "bg-background border-border text-muted-foreground hover:border-emerald-300 hover:text-emerald-600"
+                                      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400"
+                                      : "bg-background border-border text-muted-foreground hover:border-emerald-300 hover:text-emerald-600 dark:hover:text-emerald-400"
                                     : selected
-                                      ? "bg-rose-50 border-rose-400 text-rose-700"
-                                      : "bg-background border-border text-muted-foreground hover:border-rose-300 hover:text-rose-600"
+                                      ? "bg-rose-50 dark:bg-rose-950/30 border-rose-400 dark:border-rose-600 text-rose-700 dark:text-rose-400"
+                                      : "bg-background border-border text-muted-foreground hover:border-rose-300 hover:text-rose-600 dark:hover:text-rose-400"
                                 )}
                               >
                                 {selected && <span className="mr-1">✓</span>}{chip}
@@ -1739,7 +1739,7 @@ export default function AnalysisDetail() {
                     value={tickerMemo}
                     onChange={e => setTickerMemo(e.target.value)}
                     placeholder={`${analysis.companyName}(${analysis.ticker})에 대한 특수 사항, 보정 지시, 사업 특성 등을 입력하세요.\n예) HBM 점유율 변화가 핵심 드라이버 / 2023년 DS 적자는 일회성 처리할 것`}
-                    className="w-full text-[13px] rounded-lg border border-amber-200 bg-background px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 text-foreground/80 placeholder:text-amber-300"
+                    className="w-full text-[13px] rounded-lg border border-amber-200 dark:border-amber-800/50 bg-background px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 dark:focus:ring-amber-700 text-foreground/80 placeholder:text-amber-300 dark:placeholder:text-amber-700"
                     rows={3}
                     maxLength={1000}
                   />
@@ -1753,7 +1753,7 @@ export default function AnalysisDetail() {
                       저장하기
                     </button>
                     {tickerMemoSavedOk && (
-                      <span className="text-[12px] text-emerald-600 font-medium">✓ 저장됐습니다. 다음 분석부터 반영됩니다.</span>
+                      <span className="text-[12px] text-emerald-600 dark:text-emerald-400 font-medium">✓ 저장됐습니다. 다음 분석부터 반영됩니다.</span>
                     )}
                     {tickerMemo.length > 0 && (
                       <span className="text-[11px] text-amber-500 ml-auto">{tickerMemo.length}/1000</span>
