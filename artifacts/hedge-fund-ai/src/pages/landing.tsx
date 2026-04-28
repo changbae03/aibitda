@@ -23,7 +23,7 @@ const STEPS = [
   { num: 2, name: "매크로·산업 분석",       icon: Globe2,      desc: "산업 구조, 성장률, 경쟁 구도" },
   { num: 3, name: "투자 촉매·수급 분석",    icon: Zap,         desc: "주가 촉매, 세력 움직임" },
   { num: 4, name: "실적 전망",              icon: PieChart,    desc: "재무 분석 + Base 실적 추정" },
-  { num: 5, name: "적정주가 산출",          icon: Scale,       desc: "DCF + 피어 멀티플 → 목표주가" },
+  { num: 5, name: "적정주가 산출",          icon: Scale,       desc: "종목 특성에 맞는 방법론 자동 선정 (DCF·rNPV·EV/EBITDA 등)" },
   { num: 6, name: "기술적 분석",            icon: BarChart2,   desc: "차트, 진입 구간, 손절 전략" },
   { num: 7, name: "최종 결론",              icon: ShieldCheck, desc: "통합 검토 → 최종 투자 전략" },
 ];
@@ -182,9 +182,6 @@ export default function Landing() {
                         <span className={`text-[13.5px] font-bold leading-tight ${isLast ? "text-[#FF8A7A]" : "text-foreground"}`}>
                           {step.name}
                         </span>
-                        {idx === 4 && (
-                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#FF8A7A]/15 text-[#FF8A7A]">DCF·rNPV</span>
-                        )}
                       </div>
                       <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug">{step.desc}</p>
                     </div>
@@ -195,11 +192,20 @@ export default function Landing() {
           </div>
 
           {/* 하단 info */}
-          <div className="mt-6 flex items-center gap-2 px-4 py-3 rounded-xl bg-muted/40 border border-border">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#FF8A7A] animate-pulse flex-shrink-0" />
-            <p className="text-[12px] text-muted-foreground/80 leading-snug">
-              Gemini 2.5 Flash 기반 · 코스피·코스닥·NYSE·NASDAQ 전 종목 지원
-            </p>
+          <div className="mt-6 px-4 py-3.5 rounded-xl bg-muted/40 border border-border space-y-2">
+            <div className="flex items-start gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#FF8A7A] mt-1.5 flex-shrink-0" />
+              <p className="text-[12px] text-muted-foreground/80 leading-snug">
+                바이오(rNPV)·건설(P/BV)·금융(P/B-ROE)·조선(수주잔고 NPV) 등<br />
+                <span className="font-semibold text-foreground/75">섹터·종목 특성에 따라 밸류에이션 방법론을 자동으로 선정합니다.</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 flex-shrink-0" />
+              <p className="text-[12px] text-muted-foreground/60 leading-snug">
+                코스피·코스닥·NYSE·NASDAQ · 실시간 재무·공시·뉴스 데이터 연동
+              </p>
+            </div>
           </div>
         </motion.div>
 
