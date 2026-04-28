@@ -338,8 +338,8 @@ function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
 
   const isPos = pct >= 0;
   const colorCls = isPos
-    ? "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-800/50 text-red-500 dark:text-red-400"
-    : "bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800/50 text-blue-500 dark:text-blue-400";
+    ? "dark:bg-red-950/30 border-red-400 dark:border-red-800/50 text-red-500 dark:text-red-400"
+    : "dark:bg-blue-950/30 border-blue-400 dark:border-blue-800/50 text-blue-500 dark:text-blue-400";
 
   return (
     <div className={cn("flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border min-w-[52px]", colorCls)}>
@@ -645,7 +645,7 @@ export default function History() {
                 {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-500 dark:border-amber-800/40">적정수준 {holdCount}</span>}
                 {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-500 dark:border-blue-800/40">하락여지 {sellCount}</span>}
                 {reanalysisCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800/40">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 border border-orange-400 dark:border-orange-800/40">
                     재분석 {reanalysisCount}
                   </span>
                 )}
@@ -860,12 +860,12 @@ export default function History() {
                 const effectiveEntry = entry ?? cur;
                 const isDownside = tgt < effectiveEntry;
                 const exceeded = isDownside ? cur <= tgt : cur >= tgt;
-                if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800/50" };
+                if (exceeded) return { label: "🎯 목표 달성", cls: "dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-500 dark:border-emerald-800/50" };
                 const distNow  = Math.abs(cur - tgt);
                 const distThen = entry != null ? Math.abs(entry - tgt) : null;
                 if (distThen == null) return null;
-                if (distNow < distThen) return { label: "▲ 목표 접근", cls: "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50" };
-                if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50" };
+                if (distNow < distThen) return { label: "▲ 목표 접근", cls: "dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-400 dark:border-blue-800/50" };
+                if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "dark:bg-red-950/30 text-red-500 dark:text-red-400 border-red-400 dark:border-red-800/50" };
                 return { label: "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
@@ -900,12 +900,12 @@ export default function History() {
                         <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
                         {verdictBadge(a.investmentVerdict)}
                         {reanalysisLevel === "urgent" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-400 dark:border-red-800/50">
                             <AlertTriangle className="w-2.5 h-2.5" /> 긴급 재분석
                           </span>
                         )}
                         {reanalysisLevel === "recommend" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800/40">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 border border-orange-400 dark:border-orange-800/40">
                             <RefreshCw className="w-2.5 h-2.5" /> 재분석 추천
                           </span>
                         )}

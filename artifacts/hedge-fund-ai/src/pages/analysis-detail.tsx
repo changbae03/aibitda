@@ -864,7 +864,7 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
           <Database className="w-4 h-4 text-blue-500" />
           <span className="font-semibold text-sm">피어 멀티플 실측 데이터</span>
           {data && (
-            <span className="text-[10px] bg-green-100 text-green-700 rounded px-1.5 py-0.5 font-medium">
+            <span className="text-[10px] dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-500 dark:border-green-800/50 rounded px-1.5 py-0.5 font-medium">
               {rows.length}개 피어
             </span>
           )}

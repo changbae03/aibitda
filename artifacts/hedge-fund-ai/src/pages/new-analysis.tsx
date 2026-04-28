@@ -168,10 +168,10 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
     <div className="flex items-center gap-2 flex-wrap">
       <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
         credits.remaining === 0
-          ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
+          ? "dark:bg-red-950/30 border-red-400 dark:border-red-800/50 text-red-600 dark:text-red-400"
           : credits.remaining <= 1
-          ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
-          : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
+          ? "dark:bg-amber-950/20 border-amber-500 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+          : "dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
       }`}>
         <Zap className="w-3 h-3" />
         오늘 {dailyRemaining}회 남음
