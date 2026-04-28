@@ -81,7 +81,7 @@ export default function Landing() {
     if (activeStep < 0) return;
     const t = setTimeout(() => {
       setActiveStep(prev => (prev + 1) % STEPS.length);
-    }, 1800);
+    }, 3000);
     return () => clearTimeout(t);
   }, [activeStep]);
 
