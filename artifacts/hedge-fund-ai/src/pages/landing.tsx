@@ -200,6 +200,12 @@ export default function Landing() {
                 <span className="font-semibold text-foreground/75">섹터·종목 특성에 따라 밸류에이션 방법론을 자동으로 선정합니다.</span>
               </p>
             </div>
+            <div className="flex items-start gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#FF8A7A]/50 mt-1.5 flex-shrink-0" />
+              <p className="text-[12px] text-muted-foreground/80 leading-snug">
+                <span className="font-semibold text-foreground/75">한국 주식시장에 특화된 AI</span>로, 코스피·코스닥의 업종 관행과 공시 체계를 반영해 지속적으로 발전합니다.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 flex-shrink-0" />
               <p className="text-[12px] text-muted-foreground/60 leading-snug">
