@@ -290,11 +290,11 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
 function verdictStyle(verdict: string | null | undefined) {
   if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted/40", border: "border-border" };
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "dark:bg-emerald-950/40", border: "border-emerald-500 dark:border-emerald-800" };
-  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700 dark:text-green-400",     bg: "dark:bg-green-950/40",   border: "border-green-500 dark:border-green-800" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-blue-700 dark:text-blue-400",       bg: "dark:bg-blue-950/40",    border: "border-blue-500 dark:border-blue-800" };
-  if (s.includes("sell"))        return { label: "하락여지",      color: "text-blue-600 dark:text-blue-400",       bg: "dark:bg-blue-950/40",    border: "border-blue-400 dark:border-blue-800" };
-  return { label: "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "dark:bg-amber-900/20", border: "border-amber-500 dark:border-amber-700" };
+  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-800 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-400 dark:border-emerald-700" };
+  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-800 dark:text-green-300",     bg: "bg-green-50 dark:bg-green-950/40",     border: "border-green-400 dark:border-green-700" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-blue-800 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-400 dark:border-blue-700" };
+  if (s.includes("sell"))        return { label: "하락여지",      color: "text-blue-700 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-400 dark:border-blue-700" };
+  return { label: "적정 수준", color: "text-amber-800 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-400 dark:border-amber-700" };
 }
 
 declare global { interface Window { Kakao: any } }
