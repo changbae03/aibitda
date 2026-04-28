@@ -64,11 +64,11 @@ function toKoreanVerdict(verdict: string): string {
 }
 function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700";
-  if (s.includes("buy"))         return "bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300 border-green-400 dark:border-green-700";
-  if (s.includes("strong sell")) return "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-400 dark:border-blue-700";
-  if (s.includes("sell"))        return "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
-  return "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-400 dark:border-amber-700";
+  if (s.includes("strong buy"))  return "dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700";
+  if (s.includes("buy"))         return "dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-400 dark:border-green-700";
+  if (s.includes("strong sell")) return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
+  if (s.includes("sell"))        return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
+  return "dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-amber-700";
 }
 function verdictBadge(verdict?: string) {
   if (!verdict) return null;
@@ -641,9 +641,9 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-muted-foreground/50">{list.length}건</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300 border border-green-400 dark:border-green-700">상승여력 {buyCount}</span>}
-                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-400 dark:border-amber-700">적정수준 {holdCount}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-400 dark:border-blue-700">하락여지 {sellCount}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-400 dark:border-green-700">상승여력 {buyCount}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">적정수준 {holdCount}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">하락여지 {sellCount}</span>}
                 {reanalysisCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border border-orange-400 dark:border-orange-700">
                     재분석 {reanalysisCount}

@@ -90,9 +90,9 @@ const COUNTRY_FLAG: Record<string, string> = {
 };
 
 const IMPORTANCE_STYLE: Record<string, { dot: string; badge: string; label: string }> = {
-  high:   { dot: "bg-red-500",    badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",    label: "매우 중요" },
-  medium: { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", label: "중요" },
-  low:    { dot: "bg-slate-300",  badge: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "보통" },
+  high:   { dot: "bg-red-500",    badge: "text-red-700 dark:bg-red-900/40 dark:text-red-300",    label: "매우 중요" },
+  medium: { dot: "bg-amber-400",  badge: "text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", label: "중요" },
+  low:    { dot: "bg-slate-300",  badge: "text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "보통" },
 };
 
 const CATEGORY_ICON: Record<string, string> = {
