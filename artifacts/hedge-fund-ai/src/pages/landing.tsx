@@ -300,10 +300,8 @@ export default function Landing() {
                           />
                         )}
                       </AnimatePresence>
-                      <motion.div
-                        animate={isActive ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-                        transition={isActive ? { duration: 0.7, ease: "easeOut" } : {}}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${
                           isActive
                             ? "bg-[#FF8A7A] border-[#FF8A7A] text-white shadow-lg shadow-[#FF8A7A]/30"
                             : isLast
@@ -316,33 +314,27 @@ export default function Landing() {
                         ) : (
                           <span className="text-[12px] font-black">{step.num}</span>
                         )}
-                      </motion.div>
+                      </div>
                     </div>
 
                     {/* 텍스트 */}
-                    <div className="pt-1.5 pb-2 flex-1">
+                    <div className="pt-1.5 pb-2 flex-1 relative">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[13.5px] font-bold leading-tight transition-colors duration-300 ${
+                        <span className={`text-[13.5px] font-bold leading-tight transition-colors duration-500 ${
                           isActive ? "text-[#FF8A7A]" : isLast ? "text-[#FF8A7A]" : "text-foreground"
                         }`}>
                           {step.name}
                         </span>
-                        {/* 활성 스텝 "분석 중" 표시 */}
-                        <AnimatePresence>
-                          {isActive && (
-                            <motion.span
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.8 }}
-                              transition={{ duration: 0.2 }}
-                              className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#FF8A7A]/15 text-[#FF8A7A] border border-[#FF8A7A]/30"
-                            >
-                              분석 중
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
+                        {/* 활성 스텝 표시 – absolute로 레이아웃 영향 없음 */}
+                        <motion.span
+                          animate={{ opacity: isActive ? 1 : 0 }}
+                          transition={{ duration: 0.4 }}
+                          className="absolute right-0 top-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#FF8A7A]/15 text-[#FF8A7A] border border-[#FF8A7A]/30 pointer-events-none"
+                        >
+                          분석 중
+                        </motion.span>
                       </div>
-                      <p className={`text-[12px] mt-0.5 leading-snug transition-colors duration-300 ${
+                      <p className={`text-[12px] mt-0.5 leading-snug transition-colors duration-500 ${
                         isActive ? "text-muted-foreground" : "text-muted-foreground/65"
                       }`}>
                         {step.desc}
