@@ -290,11 +290,11 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
 function verdictStyle(verdict: string | null | undefined) {
   if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted" };
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/40" };
-  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700 dark:text-green-400",   bg: "bg-green-50 dark:bg-green-950/40" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700 dark:text-red-400",       bg: "bg-red-50 dark:bg-red-950/40" };
-  if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600 dark:text-red-400",       bg: "bg-red-50 dark:bg-red-950/40" };
-  return { label: "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20" };
+  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-800 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-950/40" };
+  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-800 dark:text-green-400",   bg: "bg-green-100 dark:bg-green-950/40" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-blue-800 dark:text-blue-400",     bg: "bg-blue-100 dark:bg-blue-950/40" };
+  if (s.includes("sell"))        return { label: "하락여지",      color: "text-blue-700 dark:text-blue-400",     bg: "bg-blue-100 dark:bg-blue-950/40" };
+  return { label: "적정 수준", color: "text-amber-800 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/20" };
 }
 
 declare global { interface Window { Kakao: any } }
@@ -1859,11 +1859,11 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
   const verdictMeta = (v: string) => {
     if (!v) return { label: "—", color: "text-foreground", bg: "bg-muted", border: "border-border", dot: "#6b7280" };
     const s = v.toLowerCase();
-    if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/40",  border: "border-emerald-200 dark:border-emerald-800", dot: "#059669" };
-    if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700 dark:text-green-400",     bg: "bg-green-50 dark:bg-green-950/40",      border: "border-green-200 dark:border-green-800",     dot: "#16a34a" };
-    if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-red-700 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/40",          border: "border-red-200 dark:border-red-800",         dot: "#dc2626" };
-    if (s.includes("sell"))        return { label: "하락여지",      color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/40",          border: "border-red-200 dark:border-red-800",         dot: "#ef4444" };
-    return { label: "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-700", dot: "#d97706" };
+    if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-800 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-950/40",  border: "border-emerald-300 dark:border-emerald-800", dot: "#059669" };
+    if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-800 dark:text-green-400",     bg: "bg-green-100 dark:bg-green-950/40",      border: "border-green-300 dark:border-green-800",     dot: "#16a34a" };
+    if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-blue-800 dark:text-blue-400",       bg: "bg-blue-100 dark:bg-blue-950/40",        border: "border-blue-300 dark:border-blue-800",       dot: "#2563eb" };
+    if (s.includes("sell"))        return { label: "하락여지",      color: "text-blue-700 dark:text-blue-400",       bg: "bg-blue-100 dark:bg-blue-950/40",        border: "border-blue-200 dark:border-blue-800",       dot: "#3b82f6" };
+    return { label: "적정 수준", color: "text-amber-800 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/20", border: "border-amber-300 dark:border-amber-700", dot: "#d97706" };
   };
 
   return (
