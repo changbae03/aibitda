@@ -66,8 +66,8 @@ function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50";
   if (s.includes("buy"))         return "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50";
-  if (s.includes("strong sell")) return "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-800/50";
-  if (s.includes("sell"))        return "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50";
+  if (s.includes("strong sell")) return "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-800/50";
+  if (s.includes("sell"))        return "bg-blue-100 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50";
   return "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50";
 }
 function verdictBadge(verdict?: string) {
@@ -643,7 +643,7 @@ export default function History() {
                 <span className="text-[11px] text-muted-foreground/50">{list.length}건</span>
                 {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800/40">상승여력 {buyCount}</span>}
                 {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/40">적정수준 {holdCount}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 border border-red-100 dark:border-red-800/40">하락여지 {sellCount}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40">하락여지 {sellCount}</span>}
                 {reanalysisCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 dark:bg-orange-950/20 text-orange-500 dark:text-orange-400 border border-orange-200 dark:border-orange-800/40">
                     재분석 {reanalysisCount}

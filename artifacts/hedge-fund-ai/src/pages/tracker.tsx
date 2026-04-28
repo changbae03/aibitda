@@ -30,8 +30,8 @@ function verdictBadge(verdict: string | null) {
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return { label: "높은 상승여력", cls: "bg-emerald-100 text-emerald-700" };
   if (s.includes("buy"))         return { label: "상승여력",     cls: "bg-green-100 text-green-700" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", cls: "bg-red-100 text-red-700" };
-  if (s.includes("sell"))        return { label: "하락여지",     cls: "bg-red-100 text-red-600" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", cls: "bg-blue-100 text-blue-700" };
+  if (s.includes("sell"))        return { label: "하락여지",     cls: "bg-blue-100 text-blue-600" };
   return { label: "보유", cls: "bg-amber-100 text-amber-700" };
 }
 
