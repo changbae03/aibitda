@@ -2181,6 +2181,35 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  // ── 지원 시장 검증: 한국(KOSPI·KOSDAQ) + 미국(NYSE·NASDAQ·AMEX) 만 허용 ──
+  // 비지원 거래소 suffix 차단 (.T=도쿄, .L=런던, .HK=홍콩, .AX=호주 등)
+  const UNSUPPORTED_SUFFIX = /\.(T|L|HK|AX|TO|F|SW|PA|AS|MC|MI|BR|VI|WA|PR|IS|KL|SI|JK|NZ|SA|MX|BK|ST|CO|HE|NX|OL|LS|IC|TL|BO|NS|SZ|SS)$/i;
+  if (UNSUPPORTED_SUFFIX.test(validatedTicker)) {
+    res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분석 가능합니다. 일본·유럽·아시아 등 해외 거래소는 지원하지 않습니다." });
+    return;
+  }
+
+  // 미국 영문 티커: Yahoo Finance로 quoteType·거래소 확인 (ETF·인덱스펀드 차단)
+  const isKorean6 = /^\d{6}$/.test(validatedTicker);
+  const isKoreanSuffix = /\.(KS|KQ)$/i.test(validatedTicker);
+  if (!isKorean6 && !isKoreanSuffix) {
+    try {
+      const q = await yahooFinance.quote(validatedTicker, { fields: ["quoteType", "exchange"] as any });
+      const qType = (q as any)?.quoteType as string | undefined;
+      const qExchange = (q as any)?.exchange as string | undefined ?? "";
+      if (qType === "ETF" || qType === "MUTUALFUND" || qType === "INDEX") {
+        res.status(400).json({ error: "ETF·인덱스펀드는 분석 대상이 아닙니다. 개별 주식 종목코드를 입력해주세요." });
+        return;
+      }
+      // 비지원 US 거래소(OTC 핑크, 회색 시장 등) 추가 차단
+      const US_ALLOWED = new Set(["NMS", "NGM", "NCM", "NYQ", "NYS", "NYE", "ASE", "AMX", "PCX", "CBOE", "PNK", ""]);
+      if (qExchange && !US_ALLOWED.has(qExchange)) {
+        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분석 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
+        return;
+      }
+    } catch { /* Yahoo 조회 실패 시 무시하고 진행 */ }
+  }
+
   if (additionalContext && additionalContext.length > 2000) {
     res.status(400).json({ error: "추가 컨텍스트는 2,000자를 초과할 수 없습니다" });
     return;

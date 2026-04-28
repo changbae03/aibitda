@@ -112,7 +112,7 @@ const sectorGroups: SectorGroup[] = [
   {
     market: "한국",
     subtitle: "KOSPI · KOSDAQ",
-    headerCls: "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800",
+    headerCls: "bg-blue-50 border-blue-200 dark:bg-blue-500/10 dark:border-blue-600/50",
     borderCls: "border-l-blue-400",
     items: [
       { name: "일반기업",    tags: [{ label: "DCF",          color: METHOD_COLORS.DCF   }, { label: "EV/EBITDA",   color: METHOD_COLORS.EV    }] },
@@ -129,7 +129,7 @@ const sectorGroups: SectorGroup[] = [
   {
     market: "미국 · 글로벌",
     subtitle: "NYSE · NASDAQ",
-    headerCls: "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
+    headerCls: "bg-red-50 border-red-200 dark:bg-red-500/10 dark:border-red-600/50",
     borderCls: "border-l-red-400",
     items: [
       { name: "리츠 (REIT)",      tags: [{ label: "P/AFFO",      color: METHOD_COLORS.FFO   }, { label: "Cap Rate NAV",  color: METHOD_COLORS.NAV   }] },
@@ -448,8 +448,8 @@ export default function AboutPage() {
             <div key={group.market} className={cn("rounded-xl border overflow-hidden", group.headerCls)}>
               {/* 그룹 헤더 */}
               <div className={cn("px-4 py-2.5 border-b flex items-center justify-between", group.headerCls)}>
-                <span className="text-[13px] font-black tracking-tight text-foreground/80">{group.market}</span>
-                <span className="text-[10.5px] font-semibold text-muted-foreground/60 font-mono">{group.subtitle}</span>
+                <span className="text-[13px] font-black tracking-tight text-foreground">{group.market}</span>
+                <span className="text-[10.5px] font-semibold text-muted-foreground/75 font-mono">{group.subtitle}</span>
               </div>
 
               {/* 섹터 카드 그리드 */}

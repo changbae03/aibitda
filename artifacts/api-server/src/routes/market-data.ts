@@ -464,8 +464,10 @@ router.get("/search/:query", async (req, res) => {
     try {
       const result = await (yahooFinance as any).search(query, { newsCount: 0, quotesCount: 20 });
       const quotes: any[] = result?.quotes ?? [];
+      // 지원 거래소: KOSPI·KOSDAQ (한국), NYSE·NASDAQ·AMEX (미국) 만 허용
+      const ALLOWED_EXCHANGES = new Set(["KOSPI", "KOSDAQ", "NASDAQ", "NYSE", "AMEX"]);
       yahoo = quotes
-        .filter((q: any) => q.symbol && q.quoteType === "EQUITY")
+        .filter((q: any) => q.symbol && (q.quoteType === "EQUITY"))
         .map((q: any) => {
           let exchange = q.exchange ?? "";
           if (q.symbol.endsWith(".KS")) exchange = "KOSPI";
@@ -473,14 +475,15 @@ router.get("/search/:query", async (req, res) => {
           else if (exchange === "NMS" || exchange === "NGM" || exchange === "NCM") exchange = "NASDAQ";
           else if (exchange === "NYQ" || exchange === "NYS") exchange = "NYSE";
           else if (exchange === "ASE" || exchange === "AMX") exchange = "AMEX";
-          else if (!exchange) exchange = "US";
           return {
             symbol: q.symbol,
             shortname: q.longname || q.shortname || q.symbol,
             exchange,
             quoteType: "EQUITY",
           };
-        });
+        })
+        // 비지원 거래소(도쿄·런던·홍콩 등) 및 exchange 미확인 종목 제거
+        .filter((q: any) => ALLOWED_EXCHANGES.has(q.exchange));
     } catch { /* fall through */ }
 
     // 로컬 결과 우선, Yahoo Finance 결과 추가 (중복 심볼 제거)
