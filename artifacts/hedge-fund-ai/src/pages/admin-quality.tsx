@@ -164,7 +164,7 @@ function MonitoringTab() {
 
       {/* 최근 오류 목록 */}
       {errors.length > 0 && (
-        <div className="rounded-xl border border-border bg-background overflow-hidden">
+        <div className="rounded-xl border border-border bg-background overflow-x-auto">
           <div className="px-4 py-3 border-b border-border bg-muted/20">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> 최근 오류 분석 ({errors.length}건)

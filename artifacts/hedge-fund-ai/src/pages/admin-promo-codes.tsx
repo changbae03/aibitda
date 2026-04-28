@@ -203,8 +203,8 @@ export default function AdminPromoCodes() {
           <p className="text-sm">등록된 프로모 코드가 없습니다</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-border overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-2xl border border-border overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border">
                 <th className="px-4 py-3 text-left font-semibold text-muted-foreground">코드</th>

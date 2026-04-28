@@ -115,7 +115,6 @@ export default function AdminAnalyses() {
 
       {/* 필터 & 검색 */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* 상태 필터 */}
         <div className="flex gap-1 bg-muted rounded-lg p-0.5">
           {[
             { value: "all", label: "전체" },
@@ -138,7 +137,6 @@ export default function AdminAnalyses() {
           ))}
         </div>
 
-        {/* 검색 */}
         <form onSubmit={handleSearch} className="flex gap-1.5 flex-1 min-w-[200px]">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -158,7 +156,7 @@ export default function AdminAnalyses() {
         </form>
       </div>
 
-      {/* 테이블 */}
+      {/* 테이블 (데스크톱) / 카드 목록 (모바일) */}
       <div className="rounded-xl border border-border bg-background overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
@@ -171,17 +169,111 @@ export default function AdminAnalyses() {
           </div>
         ) : (
           <>
-            {/* 테이블 헤더 */}
-            <div className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-2.5 border-b border-border bg-muted/40">
-              {["#", "기업", "상태", "투자의견", "목표가", "상승여력", "분석일시"].map((h) => (
-                <span key={h} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate">
-                  {h}
-                </span>
-              ))}
+            {/* ─── 데스크톱 테이블 (md 이상) ─── */}
+            <div className={cn("hidden md:block", isFetching && "opacity-60 pointer-events-none")}>
+              <div className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-2.5 border-b border-border bg-muted/40">
+                {["#", "기업", "상태", "투자의견", "목표가", "상승여력", "분석일시"].map((h) => (
+                  <span key={h} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate">
+                    {h}
+                  </span>
+                ))}
+              </div>
+              <div className="divide-y divide-border/60">
+                {data.data.map((row) => {
+                  const verdict = row.investment_verdict ? VERDICT_MAP[row.investment_verdict] : null;
+                  const up = upside(row);
+                  const isCompleted = row.status === "completed";
+                  const isInProgress = row.status === "in_progress";
+
+                  return (
+                    <div
+                      key={row.id}
+                      onClick={() => setLocation(`/analysis/${row.id}`)}
+                      className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors items-center"
+                    >
+                      <span className="text-[11px] font-mono text-muted-foreground/60">{row.id}</span>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[13px] font-semibold text-foreground truncate">{row.company_name}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{row.ticker}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {row.user_display_name ? (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <User className="w-3 h-3" />
+                              {row.user_display_name}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground/40">익명</span>
+                          )}
+                          {row.industry && (
+                            <span className="text-[10px] text-muted-foreground/50 truncate">{row.industry}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        ) : isInProgress ? (
+                          <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin shrink-0" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        )}
+                        <span className="text-[11px] text-muted-foreground truncate">
+                          {isCompleted ? "완료" : isInProgress
+                            ? (STEP_LABEL[row.current_step ?? ""] ?? "진행중")
+                            : "실패"}
+                        </span>
+                      </div>
+
+                      <div>
+                        {verdict ? (
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", verdict.color)}>
+                            {verdict.label}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground/40">—</span>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        {row.target_price != null ? (
+                          <span className="text-[12px] font-bold tabular-nums text-foreground">
+                            {formatCurrency(row.target_price, row.ticker.includes(".") ? undefined : "KRW").replace("₩", "")}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground/40">—</span>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        {up != null ? (
+                          <span className={cn(
+                            "text-[12px] font-bold tabular-nums",
+                            up >= 0 ? "text-red-500" : "text-blue-500"
+                          )}>
+                            {up >= 0 ? "+" : ""}{up.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground/40">—</span>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {format(parseISO(row.created_at), "MM.dd HH:mm", { locale: ko })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* 행 목록 */}
-            <div className={cn("divide-y divide-border/60", isFetching && "opacity-60 pointer-events-none")}>
+            {/* ─── 모바일 카드 목록 (md 미만) ─── */}
+            <div className={cn("md:hidden divide-y divide-border/60", isFetching && "opacity-60 pointer-events-none")}>
               {data.data.map((row) => {
                 const verdict = row.investment_verdict ? VERDICT_MAP[row.investment_verdict] : null;
                 const up = upside(row);
@@ -192,87 +284,66 @@ export default function AdminAnalyses() {
                   <div
                     key={row.id}
                     onClick={() => setLocation(`/analysis/${row.id}`)}
-                    className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors items-center"
+                    className="px-4 py-3.5 hover:bg-muted/30 cursor-pointer transition-colors active:bg-muted/50"
                   >
-                    {/* ID */}
-                    <span className="text-[11px] font-mono text-muted-foreground/60">{row.id}</span>
-
-                    {/* 기업 정보 */}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-[13px] font-semibold text-foreground truncate">{row.company_name}</span>
-                        <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{row.ticker}</span>
+                    {/* 상단: 기업명 + 상태 */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[14px] font-semibold text-foreground truncate">{row.company_name}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{row.ticker}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {row.user_display_name ? (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <User className="w-3 h-3" />
+                              {row.user_display_name}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground/40">익명</span>
+                          )}
+                          {row.industry && (
+                            <span className="text-[10px] text-muted-foreground/50 truncate max-w-[100px]">{row.industry}</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {row.user_display_name ? (
-                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <User className="w-3 h-3" />
-                            {row.user_display_name}
-                          </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : isInProgress ? (
+                          <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
                         ) : (
-                          <span className="text-[10px] text-muted-foreground/40">익명</span>
+                          <XCircle className="w-3.5 h-3.5 text-red-400" />
                         )}
-                        {row.industry && (
-                          <span className="text-[10px] text-muted-foreground/50 truncate">{row.industry}</span>
-                        )}
+                        <span className="text-[11px] text-muted-foreground">
+                          {isCompleted ? "완료" : isInProgress
+                            ? (STEP_LABEL[row.current_step ?? ""] ?? "진행중")
+                            : "실패"}
+                        </span>
                       </div>
                     </div>
 
-                    {/* 상태 */}
-                    <div className="flex items-center gap-1">
-                      {isCompleted ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      ) : isInProgress ? (
-                        <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin shrink-0" />
-                      ) : (
-                        <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                      )}
-                      <span className="text-[11px] text-muted-foreground truncate">
-                        {isCompleted ? "완료" : isInProgress
-                          ? (STEP_LABEL[row.current_step ?? ""] ?? "진행중")
-                          : "실패"}
-                      </span>
-                    </div>
-
-                    {/* 투자의견 */}
-                    <div>
+                    {/* 하단: 투자의견 + 목표가 + 상승여력 + 날짜 */}
+                    <div className="flex items-center gap-2 flex-wrap">
                       {verdict ? (
                         <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", verdict.color)}>
                           {verdict.label}
                         </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground/40">—</span>
-                      )}
-                    </div>
-
-                    {/* 목표가 */}
-                    <div className="text-right">
-                      {row.target_price != null ? (
-                        <span className="text-[12px] font-bold tabular-nums text-foreground">
+                      ) : null}
+                      {row.target_price != null && (
+                        <span className="text-[11px] font-bold tabular-nums text-foreground">
                           {formatCurrency(row.target_price, row.ticker.includes(".") ? undefined : "KRW").replace("₩", "")}
                         </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground/40">—</span>
                       )}
-                    </div>
-
-                    {/* 상승여력 */}
-                    <div className="text-right">
-                      {up != null ? (
+                      {up != null && (
                         <span className={cn(
-                          "text-[12px] font-bold tabular-nums",
+                          "text-[11px] font-bold tabular-nums",
                           up >= 0 ? "text-red-500" : "text-blue-500"
                         )}>
                           {up >= 0 ? "+" : ""}{up.toFixed(1)}%
                         </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground/40">—</span>
                       )}
-                    </div>
-
-                    {/* 날짜 */}
-                    <div className="text-right">
-                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                      <span className="text-[10px] text-muted-foreground/60 ml-auto tabular-nums">
                         {format(parseISO(row.created_at), "MM.dd HH:mm", { locale: ko })}
                       </span>
                     </div>

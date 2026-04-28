@@ -442,7 +442,10 @@ export default function AdminUserManagement() {
     <>
     <div className="flex h-full min-h-[calc(100vh-4rem)]">
       {/* ── 왼쪽: 유저 목록 ── */}
-      <div className={cn("flex flex-col border-r border-border transition-all", selected ? "w-[55%] min-w-0" : "w-full")}>
+      <div className={cn(
+        "flex flex-col border-r border-border transition-all",
+        selected ? "hidden md:flex md:w-[55%] md:min-w-0" : "w-full"
+      )}>
         <div className="px-5 py-4 border-b border-border space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -599,9 +602,13 @@ export default function AdminUserManagement() {
         )}
       </div>
 
-      {/* ── 오른쪽: 유저 상세 ── */}
+      {/* ── 오른쪽: 유저 상세 (데스크톱 사이드패널 + 모바일 full-screen 오버레이) ── */}
       {selected && (
-        <div className="flex-1 flex flex-col overflow-hidden bg-background">
+        <div className={cn(
+          "flex flex-col bg-background",
+          "fixed inset-0 z-40",
+          "md:static md:flex-1 md:overflow-hidden md:z-auto"
+        )}>
           {/* 헤더 */}
           <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -632,8 +639,14 @@ export default function AdminUserManagement() {
               >
                 <User className="w-3 h-3" /> 상세 프로필
               </button>
-              <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-muted flex-shrink-0">
-                <X className="w-4 h-4 text-muted-foreground" />
+              {/* 모바일: 뒤로가기, 데스크톱: 닫기(X) */}
+              <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-muted flex-shrink-0 flex items-center gap-1">
+                <span className="md:hidden">
+                  <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+                </span>
+                <span className="hidden md:inline">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </span>
               </button>
             </div>
           </div>
