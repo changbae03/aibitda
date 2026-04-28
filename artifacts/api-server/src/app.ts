@@ -9,6 +9,7 @@ import router from "./routes";
 import fs from "fs";
 import path from "path";
 import { pool } from "@workspace/db";
+import { generateOgPng, type OgImageData } from "./lib/og-image";
 
 const app: Express = express();
 
@@ -114,8 +115,55 @@ app.use("/api/admin", adminLimiter);
 
 app.use("/api", router);
 
+// ─── OG 이미지 캐시 ────────────────────────────────────────────────────────
+const ogImageCache = new Map<number, { png: Buffer; ts: number }>();
+const OG_CACHE_TTL = 1000 * 60 * 60 * 24; // 24시간
+
+// ─── 동적 OG 이미지 엔드포인트 ─────────────────────────────────────────────
+app.get("/api/og/:id", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).end(); return; }
+
+  const cached = ogImageCache.get(id);
+  if (cached && Date.now() - cached.ts < OG_CACHE_TTL) {
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(cached.png);
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT company_name, ticker, investment_verdict, target_price, start_price, created_at
+       FROM analyses WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    if (!result.rows[0]) { res.status(404).end(); return; }
+    const r = result.rows[0];
+    const isUS = !/^\d{6}$/.test(r.ticker) && !r.ticker.endsWith(".KS") && !r.ticker.endsWith(".KQ");
+    const data: OgImageData = {
+      companyName: r.company_name ?? "분석 보고서",
+      ticker: r.ticker ?? "",
+      verdict: r.investment_verdict ?? null,
+      targetPrice: r.target_price ? Number(r.target_price) : null,
+      startPrice: r.start_price ? Number(r.start_price) : null,
+      currency: isUS ? "USD" : "KRW",
+      createdAt: r.created_at ? new Date(r.created_at) : null,
+    };
+    const png = await generateOgPng(data);
+    if (!png) { res.status(503).end(); return; }
+    ogImageCache.set(id, { png, ts: Date.now() });
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(png);
+  } catch (e: any) {
+    console.error("[GET /api/og/:id] error:", e?.message);
+    res.status(500).end();
+  }
+});
+
 // ─── 공유 페이지 OG 메타태그 핸들러 (/share/:id) ────────────────────────────
-const SHARE_OG_IMAGE = "https://aibitda.kr/share-og.png";
+const SHARE_OG_IMAGE_STATIC = "https://aibitda.kr/share-og.png";
 const FRONTEND_DIST = path.resolve(process.cwd(), "artifacts/hedge-fund-ai/dist/public/index.html");
 
 let _baseHtml: string | null = null;
@@ -179,11 +227,16 @@ app.get("/share/:id", async (req: Request, res: Response) => {
     const sign = upside >= 0 ? "+" : "";
     const vLabel = verdictLabel(verdict);
     const label = vLabel ? `[${vLabel}] ` : "";
-    ogDesc = `${label}적정주가 ${targetPrice.toLocaleString("ko-KR")}원 (${sign}${upside.toFixed(1)}%) | ${ticker} AI 기업가치 분석`;
+    const isUS = !/^\d{6}$/.test(ticker) && !ticker.endsWith(".KS") && !ticker.endsWith(".KQ");
+    const priceStr = isUS
+      ? `$${targetPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+      : `${targetPrice.toLocaleString("ko-KR")}원`;
+    ogDesc = `${label}적정주가 ${priceStr} (${sign}${upside.toFixed(1)}%) | ${ticker} AI 기업가치 분석`;
   }
 
   const pageUrl = `https://aibitda.kr/share/${id}`;
   const safePageUrl = escapeAttr(pageUrl);
+  const ogImage = `https://aibitda.kr/api/og/${id}`;
 
   const baseHtml = getBaseHtml();
   let html: string;
@@ -193,11 +246,11 @@ app.get("/share/:id", async (req: Request, res: Response) => {
       .replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(ogTitle)}</title>`)
       .replace(/<meta property="og:title"[^>]*\/>/, `<meta property="og:title" content="${escapeAttr(ogTitle)}" />`)
       .replace(/<meta property="og:description"[^>]*\/>/, `<meta property="og:description" content="${escapeAttr(ogDesc)}" />`)
-      .replace(/<meta property="og:image"[^>]*\/>/, `<meta property="og:image" content="${SHARE_OG_IMAGE}" />`)
+      .replace(/<meta property="og:image"[^>]*\/>/, `<meta property="og:image" content="${escapeAttr(ogImage)}" />`)
       .replace(/<meta property="og:type"[^>]*\/>/, `<meta property="og:type" content="article" />`)
       .replace(/<meta name="twitter:title"[^>]*\/>/, `<meta name="twitter:title" content="${escapeAttr(ogTitle)}" />`)
       .replace(/<meta name="twitter:description"[^>]*\/>/, `<meta name="twitter:description" content="${escapeAttr(ogDesc)}" />`)
-      .replace(/<meta name="twitter:image"[^>]*\/>/, `<meta name="twitter:image" content="${SHARE_OG_IMAGE}" />`)
+      .replace(/<meta name="twitter:image"[^>]*\/>/, `<meta name="twitter:image" content="${escapeAttr(ogImage)}" />`)
       + `\n<!-- og:url --><meta property="og:url" content="${safePageUrl}" />`;
   } else {
     html = `<!DOCTYPE html>
@@ -210,14 +263,14 @@ app.get("/share/:id", async (req: Request, res: Response) => {
   <meta property="og:site_name" content="애빛다"/>
   <meta property="og:title" content="${escapeAttr(ogTitle)}"/>
   <meta property="og:description" content="${escapeAttr(ogDesc)}"/>
-  <meta property="og:image" content="${SHARE_OG_IMAGE}"/>
+  <meta property="og:image" content="${escapeAttr(ogImage)}"/>
   <meta property="og:image:width" content="1200"/>
   <meta property="og:image:height" content="630"/>
   <meta property="og:url" content="${safePageUrl}"/>
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:title" content="${escapeAttr(ogTitle)}"/>
   <meta name="twitter:description" content="${escapeAttr(ogDesc)}"/>
-  <meta name="twitter:image" content="${SHARE_OG_IMAGE}"/>
+  <meta name="twitter:image" content="${escapeAttr(ogImage)}"/>
   <meta http-equiv="refresh" content="0;url=${safePageUrl}"/>
 </head>
 <body></body>
