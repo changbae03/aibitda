@@ -66,8 +66,8 @@ function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50";
   if (s.includes("buy"))         return "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50";
-  if (s.includes("strong sell")) return "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800/50";
-  if (s.includes("sell"))        return "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50";
+  if (s.includes("strong sell")) return "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-800/50";
+  if (s.includes("sell"))        return "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50";
   return "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50";
 }
 function verdictBadge(verdict?: string) {
