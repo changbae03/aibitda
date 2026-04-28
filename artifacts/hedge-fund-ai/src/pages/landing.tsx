@@ -44,7 +44,7 @@ function FloatingTicker({ item, delay }: { item: typeof SAMPLE_TICKERS[0]; delay
     <motion.div
       initial={{ opacity: 0, y: 0 }}
       animate={{ opacity: [0, 0.55, 0.55, 0], y: -60 }}
-      transition={{ duration: 4, delay, ease: "easeOut", repeat: Infinity, repeatDelay: SAMPLE_TICKERS.length * 1.1 }}
+      transition={{ duration: 7, delay: delay * 2, ease: "easeOut", repeat: Infinity, repeatDelay: SAMPLE_TICKERS.length * 2.8 }}
       className="absolute pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-background/60 backdrop-blur-sm shadow-sm"
       style={{ left: `${10 + (delay * 13) % 75}%`, bottom: "15%" }}
     >
@@ -81,7 +81,7 @@ export default function Landing() {
     if (activeStep < 0) return;
     const t = setTimeout(() => {
       setActiveStep(prev => (prev + 1) % STEPS.length);
-    }, 750);
+    }, 1800);
     return () => clearTimeout(t);
   }, [activeStep]);
 
@@ -153,7 +153,7 @@ export default function Landing() {
               {/* 로고 glow pulse */}
               <motion.span
                 animate={{ opacity: [0.4, 0.9, 0.4] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
                 className="absolute inset-0 blur-xl pointer-events-none"
                 style={{ color: "#FF8A7A", zIndex: -1 }}
                 aria-hidden
@@ -185,7 +185,7 @@ export default function Landing() {
             <div className="flex items-center justify-center lg:justify-start gap-2">
               <motion.span
                 animate={{ scale: [1, 1.03, 1] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11.5px] font-bold text-[#FF8A7A]"
               >
                 <Clock className="w-3 h-3" />
@@ -217,7 +217,7 @@ export default function Landing() {
               {/* shimmer sweep */}
               <motion.div
                 animate={{ x: ["-100%", "200%"] }}
-                transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 3.5, ease: "easeInOut" }}
+                transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
                 className="absolute inset-y-0 w-1/3 pointer-events-none z-20"
                 style={{
                   background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
@@ -295,14 +295,14 @@ export default function Landing() {
                             initial={{ scale: 0.8, opacity: 0.8 }}
                             animate={{ scale: 1.6, opacity: 0 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.65, ease: "easeOut" }}
+                            transition={{ duration: 1.1, ease: "easeOut" }}
                             className="absolute inset-0 rounded-full border-2 border-[#FF8A7A]"
                           />
                         )}
                       </AnimatePresence>
                       <motion.div
                         animate={isActive ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-                        transition={isActive ? { duration: 0.4, ease: "easeOut" } : {}}
+                        transition={isActive ? { duration: 0.7, ease: "easeOut" } : {}}
                         className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
                           isActive
                             ? "bg-[#FF8A7A] border-[#FF8A7A] text-white shadow-lg shadow-[#FF8A7A]/30"
