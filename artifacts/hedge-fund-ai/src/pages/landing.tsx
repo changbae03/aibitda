@@ -7,7 +7,7 @@ import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale } fr
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const ACCENT = "#6366F1";
+const ACCENT = "#FF8A7A";
 
 function KakaoIcon() {
   return (
