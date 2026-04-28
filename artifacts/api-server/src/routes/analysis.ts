@@ -3595,10 +3595,10 @@ async function executeStep(
 
   let content = "";
   try {
-    // 토큰 최적화: 실제 생성량 기반으로 상한 축소
-    // company_analysis는 긴 재무 테이블 포함하므로 16k, 나머지 8k로 충분
+    // 토큰 한도: 대형 제약(LLY 등) rNPV 파이프라인 + Cliff-Adjusted DCF + SOP 등
+    // company_analysis·relative_valuation은 32k, 나머지 8k
     const maxOutputTokens =
-      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 16384 : 8192;
+      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 8192;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃) 여부 판별
     const isTransient = (err: unknown) => {
@@ -3657,6 +3657,25 @@ async function executeStep(
         content = trimRepetitionLoop(content);
         if (lastFinishReason === "MAX_TOKENS") {
           console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림`);
+          // relative_valuation: FINAL_VALUATION_DATA JSON이 없으면 복구 시도
+          if (stepKey === "relative_valuation" && !content.includes("FINAL_VALUATION_DATA")) {
+            try {
+              console.log(`[${stepKey}] FINAL_VALUATION_DATA 누락 — 복구 시도`);
+              const recoveryPrompt = `아래는 밸류에이션 보고서가 토큰 한도로 잘린 내용입니다. 이 보고서에서 제시된 목표주가와 밴드를 기반으로 FINAL_VALUATION_DATA JSON 블록 하나만 생성하세요. 다른 설명 없이 JSON 블록만 출력하세요.\n\n[잘린 보고서 끝부분]\n${content.slice(-3000)}`;
+              const recoveryResp = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: [{ role: "user", parts: [{ text: recoveryPrompt }] }],
+                config: { maxOutputTokens: 512, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
+              });
+              const recoveryText = recoveryResp.text ?? "";
+              if (recoveryText.includes("FINAL_VALUATION_DATA")) {
+                content = content + "\n\n" + recoveryText;
+                console.log(`[${stepKey}] FINAL_VALUATION_DATA 복구 성공`);
+              }
+            } catch (recoveryErr) {
+              console.warn(`[${stepKey}] FINAL_VALUATION_DATA 복구 실패:`, recoveryErr);
+            }
+          }
         }
         console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}, attempt: ${attempt}`);
         if (!content) content = "분석 결과를 생성하지 못했습니다.";
@@ -3697,7 +3716,7 @@ async function executeStep(
             : `\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)을 그대로 유지하면서 최종 완성본을 다시 작성하세요.`;
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
-          const synthesisMaxTokens = stepKey === "company_analysis" ? 16384 : 16384;
+          const synthesisMaxTokens = 32768; // Debate 합성: 전체 보고서 재작성이므로 32k 필요
 
           const synthesisStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
@@ -3756,7 +3775,7 @@ async function executeStep(
         try {
           const revisedUserPrompt = userPrompt +
             `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
-          const revisedMaxTokens = stepKey === "company_analysis" ? 16384 : 8192;
+          const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 8192;
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
