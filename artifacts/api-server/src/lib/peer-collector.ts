@@ -306,8 +306,8 @@ async function fetchDartFinancials(corpCode: string): Promise<{
         return null;
       };
 
-      // 일반기업: 매출액 / 은행·보험·금융: 이자수익, 영업수익, 순이자이익
-      const revenue = find(["매출액", "이자수익", "영업수익", "순이자이익", "보험료수익"]);
+      // 일반기업: 매출액 / 건설업: 공사매출·건설매출 / 은행·보험·금융: 이자수익, 영업수익
+      const revenue = find(["매출액", "공사매출", "건설매출", "도급매출", "이자수익", "영업수익", "순이자이익", "보험료수익"]);
       const operating_income = find(["영업이익", "영업손실"]);
       const equity = findBS(["자본총계"]);
 
@@ -332,6 +332,9 @@ export interface DartSubjectBalance {
   totalLiab: number | null;
   equity: number | null;
   totalDebt: number | null;
+  // 건설업 특화 계정
+  unbilledWork: number | null;          // 미청구공사
+  constructionReceivables: number | null; // 공사미수금
 }
 
 export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSubjectBalance | null> {
@@ -390,8 +393,12 @@ export async function fetchDartSubjectBalance(stockCode: string): Promise<DartSu
         ].filter((v): v is number => v != null);
         const totalDebt = debtItems.length > 0 ? debtItems.reduce((a, b) => a + b, 0) : null;
 
+        // 건설업 특화 계정 (없으면 null — 비건설사에도 무해)
+        const unbilledWork             = findBS(["미청구공사"]);
+        const constructionReceivables  = findBS(["공사미수금", "공사수입금"]);
+
         if (cash !== null || totalAssets !== null) {
-          return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt };
+          return { year, fsType: sj, cash, totalAssets, totalLiab, equity, totalDebt, unbilledWork, constructionReceivables };
         }
       } catch {
         continue;

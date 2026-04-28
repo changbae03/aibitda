@@ -2271,6 +2271,14 @@ router.post("/", async (req, res) => {
       netDebtStr = "N/A";
     }
 
+    const constructionLines: string[] = [];
+    if (dartBalance.unbilledWork != null) {
+      constructionLines.push(`미청구공사: ${fmtKrw(dartBalance.unbilledWork)}  ※ 건설업 핵심 리스크 — 매출 대비 10% 초과 시 대손 주의`);
+    }
+    if (dartBalance.constructionReceivables != null) {
+      constructionLines.push(`공사미수금: ${fmtKrw(dartBalance.constructionReceivables)}`);
+    }
+
     dartBalanceContext = [
       `\n[⭐ DART 사업보고서 재무상태표 — ${dartBalance.year}년 ${dartBalance.fsType === "CFS" ? "연결" : "별도"} 기준]`,
       `⚠️ 이 데이터는 DART OpenAPI 원천 데이터입니다. Yahoo Finance 수치와 다를 경우 이 값을 우선 사용하세요.`,
@@ -2280,6 +2288,7 @@ router.post("/", async (req, res) => {
       `자본총계: ${fmtKrw(dartBalance.equity)}`,
       dartBalance.totalDebt != null ? `금융부채(차입금+사채+리스 합계): ${fmtKrw(dartBalance.totalDebt)}` : `금융부채: 개별 차입금·사채 항목 미검출 (무차입/소액 차입 가능성)`,
       `순현금/순부채: ${netDebtStr}`,
+      ...constructionLines,
     ].filter(Boolean).join("\n");
   }
 
