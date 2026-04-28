@@ -100,11 +100,24 @@ router.get("/auth/kakao/callback", async (req, res) => {
 
     const proto = req.headers["x-forwarded-proto"] || req.protocol;
     const host = req.headers["x-forwarded-host"] || req.get("host");
-    const baseUrl = `${proto}://${host}`;
+
+    // 프론트엔드 URL 결정: KAKAO_REDIRECT_URI origin > FRONTEND_URL > 요청 헤더 순서로 우선
+    // 배포 환경에서 x-forwarded-host가 내부 API 호스트로 오는 경우 방지
+    const kakaoRedirectUri = process.env.KAKAO_REDIRECT_URI;
+    const frontendOrigin =
+      process.env.FRONTEND_URL?.trim() ||
+      (kakaoRedirectUri ? new URL(kakaoRedirectUri).origin : null) ||
+      `${proto}://${host}`;
+
+    console.log("[Kakao] headers x-forwarded-host:", req.headers["x-forwarded-host"]);
+    console.log("[Kakao] headers host:", req.get("host"));
+    console.log("[Kakao] resolved frontendOrigin:", frontendOrigin);
+
+    const isSecure = proto === "https" || frontendOrigin.startsWith("https://");
 
     res.setHeader("Set-Cookie", cookie.serialize("auth_token", token, {
       httpOnly: true,
-      secure: proto === "https",
+      secure: isSecure,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 30,
       path: "/",
@@ -125,7 +138,8 @@ router.get("/auth/kakao/callback", async (req, res) => {
     } catch (_) {}
 
     console.log("[Kakao] login success, user:", user.id, user.nickname);
-    res.redirect(`${baseUrl}/`);
+    console.log("[Kakao] redirecting to:", `${frontendOrigin}/`);
+    res.redirect(`${frontendOrigin}/`);
   } catch (err) {
     console.error("[Kakao] callback exception:", err);
     res.status(500).send("카카오 로그인 처리 중 오류 발생");

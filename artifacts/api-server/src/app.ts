@@ -17,7 +17,21 @@ const app: Express = express();
 app.set("trust proxy", 1);
 
 // ─── 보안 헤더 (Helmet) ───────────────────────────────────────────────────
+// 전체 앱: HSTS 등 기본 보안 헤더 적용, CSP는 API 라우트에만 적용
 app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false,   // SPA(Clerk·Kakao iFrame 등) 호환을 위해 글로벌 CSP 비활성화
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  })
+);
+// API 라우트 전용 엄격한 CSP (프론트엔드 SPA에는 미적용)
+app.use(
+  "/api",
   helmet({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
@@ -29,14 +43,9 @@ app.use(
         connectSrc: ["'self'", "https:"],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
       },
     },
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true,
-    },
+    hsts: false,  // 전체 앱 HSTS에서 이미 적용
   })
 );
 
@@ -281,6 +290,28 @@ app.get("/share/:id", async (req: Request, res: Response) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   res.send(html);
 });
+
+// ─── SPA catch-all: 빌드된 프론트엔드 정적 파일 서빙 ──────────────────────────
+// 배포 환경에서 별도 프론트엔드 서비스가 없을 경우 API 서버가 직접 SPA를 서빙
+// process.cwd()가 workspace root 또는 api-server 패키지 디렉토리일 수 있으므로 둘 다 탐색
+const DIST_PUBLIC_CANDIDATES = [
+  path.resolve(process.cwd(), "artifacts/hedge-fund-ai/dist/public"),        // cwd = workspace root
+  path.resolve(process.cwd(), "../../artifacts/hedge-fund-ai/dist/public"),  // cwd = api-server dir
+  path.resolve(import.meta.dirname ?? __dirname, "../../../artifacts/hedge-fund-ai/dist/public"), // ESM __dirname
+];
+const DIST_PUBLIC = DIST_PUBLIC_CANDIDATES.find(p => fs.existsSync(p) && fs.existsSync(path.join(p, "index.html"))) ?? "";
+if (DIST_PUBLIC) {
+  console.log("[SPA] Static files found, serving SPA from:", DIST_PUBLIC);
+  // 정적 에셋 (JS·CSS·이미지)을 먼저 서빙, index.html 자동 fallback 비활성화
+  app.use(express.static(DIST_PUBLIC, { index: false }));
+  // API나 특정 경로에 해당하지 않는 모든 GET 요청 → index.html 반환 (SPA 라우팅)
+  // Express 5에서는 "*" 와일드카드 대신 정규식 사용
+  app.get(/.*/, (_req: Request, res: Response) => {
+    res.sendFile(path.join(DIST_PUBLIC, "index.html"));
+  });
+} else {
+  console.log("[SPA] No dist/public found — skipping static serving (dev mode)");
+}
 
 // ─── 글로벌 에러 핸들러 ────────────────────────────────────────────────────
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
