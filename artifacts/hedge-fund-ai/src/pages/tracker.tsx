@@ -28,11 +28,11 @@ const REFRESH_INTERVAL = 30_000;
 function verdictBadge(verdict: string | null) {
   if (!verdict) return null;
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "높은 상승여력", cls: "bg-emerald-100 text-emerald-700" };
-  if (s.includes("buy"))         return { label: "상승여력",     cls: "bg-green-100 text-green-700" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", cls: "bg-blue-100 text-blue-700" };
-  if (s.includes("sell"))        return { label: "하락여지",     cls: "bg-blue-100 text-blue-600" };
-  return { label: "보유", cls: "bg-amber-100 text-amber-700" };
+  if (s.includes("strong buy"))  return { label: "높은 상승여력", cls: "border dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-500 dark:border-emerald-800/50" };
+  if (s.includes("buy"))         return { label: "상승여력",     cls: "border dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-500 dark:border-green-800/50" };
+  if (s.includes("strong sell")) return { label: "높은 하락여지", cls: "border dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-500 dark:border-blue-800/50" };
+  if (s.includes("sell"))        return { label: "하락여지",     cls: "border dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-400 dark:border-blue-800/50" };
+  return { label: "보유", cls: "border dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-500 dark:border-amber-800/50" };
 }
 
 function upsideColor(pct: number) {
