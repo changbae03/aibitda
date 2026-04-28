@@ -87,6 +87,16 @@ Step 7: catalyst → Step 8: smart_money → Step 9: lead_validation (final verd
 - **섹터 분류**: KR/US × 산업군(바이오, 반도체, 금융, 건설, 통신, 리츠 등) 조합으로 12개 섹터 분류
 - **최소 샘플 3건** 이상일 때만 보정값 활성화 (데이터 부족 시 기존 프롬프트 유지)
 
+## UI/UX Design System
+
+- **브랜드 컬러**: `#FF8A7A` (코랄/살몬)
+- **폰트**: Pretendard (한국어 최적화), Spoqa Han Sans Neo (브랜드 워드마크)
+- **다크 모드**: Deep Navy (`222 47% 8%`) 배경
+- **사이드바**: 아이콘(Sparkles/BookOpen/CalendarDays/BarChart2) + 브랜드 컬러 active state + 사용자 프로필/크레딧 도트 표시
+- **랜딩 우측**: 실제 분석 결과 미리보기 데모 (주가 카드 + 지표 그리드 + 파이프라인)
+- **애니메이션**: framer-motion (페이지 전환, 드롭다운, 모달)
+- **핵심 컴포넌트**: `app-layout.tsx` (사이드바+레이아웃), `landing.tsx` (랜딩), `analysis-detail.tsx` (리포트)
+
 ## API Routes
 
 - `POST /api/analysis` - 새 분석 시작

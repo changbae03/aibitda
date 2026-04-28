@@ -2,6 +2,8 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
+  Sparkles, BookOpen, CalendarDays, BarChart2,
+  Zap, User,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
@@ -16,6 +18,12 @@ interface AuthUser {
   profileImage: string | null;
 }
 
+interface CreditInfo {
+  remaining: number;
+  dailyLimit: number;
+  dailyUsed: number;
+}
+
 function useAuth() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
   useEffect(() => {
@@ -25,6 +33,18 @@ function useAuth() {
       .catch(() => setUser(null));
   }, []);
   return user;
+}
+
+function useCredits(loggedIn: boolean) {
+  const [credits, setCredits] = useState<CreditInfo | null>(null);
+  useEffect(() => {
+    if (!loggedIn) return;
+    fetch(getApiUrl("/api/credits"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setCredits(d); })
+      .catch(() => {});
+  }, [loggedIn]);
+  return credits;
 }
 
 async function logout() {
@@ -85,12 +105,12 @@ function MarketBar() {
   if (items.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-0 px-4 py-1.5 border-b border-border bg-muted/20 print:hidden overflow-x-auto shrink-0">
+    <div className="flex items-center gap-0 px-4 py-2 border-b border-border bg-muted/30 print:hidden overflow-x-auto shrink-0">
       {items.map((item, i) => (
         <span key={item.label} className="flex items-center gap-1 whitespace-nowrap">
-          {i > 0 && <span className="mx-3 text-border select-none">·</span>}
-          <span className="text-[10.5px] text-muted-foreground/60">{item.label}</span>
-          <span className="text-[10.5px] font-mono font-semibold text-foreground ml-1">{item.value}</span>
+          {i > 0 && <span className="mx-3 text-border/60 select-none">·</span>}
+          <span className="text-[11px] text-muted-foreground/70">{item.label}</span>
+          <span className="text-[11px] font-mono font-bold text-foreground/80 ml-1">{item.value}</span>
         </span>
       ))}
     </div>
@@ -118,12 +138,51 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   );
 }
 
+const NAV_ITEMS = [
+  { href: "/analysis/new", label: "AI 기업분석",  Icon: Sparkles },
+  { href: "/history",       label: "내가 본 자료", Icon: BookOpen },
+  { href: "/calendar",      label: "마켓 캘린더",  Icon: CalendarDays },
+  { href: "/popular",       label: "애빛다 통계",  Icon: BarChart2 },
+];
+
+const ADMIN_ITEMS = [
+  { href: "/admin/dashboard",       label: "대시보드" },
+  { href: "/admin/live",            label: "실시간 분석 현황" },
+  { href: "/admin/analyses",        label: "전체 보고서 목록" },
+  { href: "/admin/user-management", label: "유저 관리" },
+  { href: "/admin/promo-codes",     label: "프로모 코드" },
+  { href: "/admin/ticker-notes",    label: "종목 보정 메모" },
+  { href: "/admin/notices",         label: "공지사항 관리" },
+  { href: "/admin/feedback",        label: "유저 피드백" },
+  { href: "/admin/support",         label: "고객 문의" },
+  { href: "/admin/calibration",     label: "모델 보정 현황" },
+  { href: "/admin/quality",         label: "AI 품질 관리" },
+  { href: "/admin/users",           label: "관리자 관리" },
+];
+
+function CreditDots({ credits }: { credits: CreditInfo }) {
+  const remaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: credits.dailyLimit }).map((_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "w-2 h-2 rounded-full transition-colors",
+            i < remaining ? "bg-[#FF8A7A]" : "bg-muted-foreground/20"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const user = useAuth();
+  const credits = useCredits(user !== undefined && user !== null);
   const notice = useNotice();
 
   useEffect(() => {
@@ -133,59 +192,63 @@ export function AppLayout({ children }: AppLayoutProps) {
       .catch(() => {});
   }, []);
 
-  const navItems = [
-    { href: "/analysis/new", label: "AI 기업분석" },
-    { href: "/history", label: "내가 본 자료" },
-    { href: "/calendar", label: "마켓 캘린더" },
-    { href: "/popular", label: "애빛다 통계" },
-  ];
+  const NavLinks = ({ onSelect }: { onSelect?: () => void }) => (
+    <>
+      {NAV_ITEMS.map(({ href, label, Icon }) => {
+        const isActive =
+          location === href || (href !== "/" && location.startsWith(href));
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={onSelect}
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150",
+              isActive
+                ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            )}
+          >
+            <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground/60")} />
+            {label}
+          </Link>
+        );
+      })}
+    </>
+  );
 
-  const adminItems = [
-    { href: "/admin/dashboard", label: "대시보드" },
-    { href: "/admin/live", label: "실시간 분석 현황" },
-    { href: "/admin/analyses", label: "전체 보고서 목록" },
-    { href: "/admin/user-management", label: "유저 관리" },
-    { href: "/admin/promo-codes", label: "프로모 코드" },
-    { href: "/admin/ticker-notes", label: "종목 보정 메모" },
-    { href: "/admin/notices", label: "공지사항 관리" },
-    { href: "/admin/feedback", label: "유저 피드백" },
-    { href: "/admin/support", label: "고객 문의" },
-    { href: "/admin/calibration", label: "모델 보정 현황" },
-    { href: "/admin/quality", label: "AI 품질 관리" },
-    { href: "/admin/users", label: "관리자 관리" },
-  ];
+  const UserSection = () => (
+    <div className="px-3 py-3 border-t border-border space-y-2">
+      {user && (
+        <div className="flex items-center gap-2.5 px-1 py-1.5">
+          <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center shrink-0">
+            {user.profileImage ? (
+              <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
+            ) : (
+              <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-semibold text-foreground truncate">{user.nickname}</p>
+            {credits && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <CreditDots credits={credits} />
+                <span className="text-[10px] text-muted-foreground/60">
+                  오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-  const NavLinks = ({ onSelect }: { onSelect?: () => void }) =>
-    navItems.map((item) => {
-      const isActive =
-        location === item.href ||
-        (item.href !== "/" && location.startsWith(item.href));
-      return (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={onSelect}
-          className={cn(
-            "block px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors duration-150",
-            isActive
-              ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent"
-          )}
-        >
-          {item.label}
-        </Link>
-      );
-    });
-
-  const BottomNav = ({ onSelect }: { onSelect?: () => void }) => (
-    <div className="px-2 py-3 space-y-0.5 border-t border-border">
       <Link
         href="/about"
-        onClick={onSelect}
+        onClick={() => {}}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
           location === "/about"
-            ? "bg-accent text-foreground"
+            ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
@@ -195,11 +258,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <Link
         href="/settings"
-        onClick={onSelect}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
           location === "/settings"
-            ? "bg-accent text-foreground"
+            ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
@@ -209,8 +271,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {user ? (
         <button
-          onClick={() => { onSelect?.(); logout(); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150 text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={logout}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 text-muted-foreground hover:text-foreground hover:bg-accent"
         >
           <LogOut className="w-3.5 h-3.5 shrink-0" />
           로그아웃
@@ -218,11 +280,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       ) : user === null ? (
         <Link
           href="/login"
-          onClick={onSelect}
           className={cn(
-            "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
             location === "/login"
-              ? "bg-accent text-foreground"
+              ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
               : "text-muted-foreground hover:text-foreground hover:bg-accent"
           )}
         >
@@ -239,9 +300,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       <aside className="w-52 shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-border bg-background">
         {/* Logo */}
         <div className="px-5 h-14 flex items-center border-b border-border">
-          <Link href="/analysis/new" className="block">
+          <Link href="/analysis/new" className="block group">
             <span
-              className="text-[22px] font-black tracking-tighter leading-none select-none"
+              className="text-[22px] font-black tracking-tighter leading-none select-none transition-opacity group-hover:opacity-80"
               style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
             >
               애빛다
@@ -250,22 +311,22 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           <NavLinks />
           {isAdmin && (
             <div className="pt-4">
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
-              {adminItems.map(item => {
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">관리자</p>
+              {ADMIN_ITEMS.map(item => {
                 const isActive = location === item.href || location.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+                      "block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150",
                       isActive
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
+                        ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                        : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
                     )}
                   >
                     {item.label}
@@ -276,12 +337,11 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </nav>
 
-        {/* Bottom Nav */}
-        <BottomNav />
+        <UserSection />
 
         {/* Slogan */}
-        <div className="px-5 py-3 border-t border-border">
-          <p className="text-[10px] text-muted-foreground/50 leading-relaxed">
+        <div className="px-5 py-2.5 border-t border-border">
+          <p className="text-[10px] text-muted-foreground/40 leading-relaxed tracking-wide">
             AI로 기업가치를 밝히다
           </p>
         </div>
@@ -322,12 +382,12 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+              <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
                 <NavLinks onSelect={() => setMenuOpen(false)} />
                 {isAdmin && (
                   <div className="pt-4">
-                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">관리자</p>
-                    {adminItems.map(item => {
+                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">관리자</p>
+                    {ADMIN_ITEMS.map(item => {
                       const isActive = location === item.href || location.startsWith(item.href);
                       return (
                         <Link
@@ -335,10 +395,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                           href={item.href}
                           onClick={() => setMenuOpen(false)}
                           className={cn(
-                            "block px-3 py-2 rounded-md text-[13px] font-medium transition-colors duration-150",
+                            "block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150",
                             isActive
-                              ? "bg-accent text-foreground"
-                              : "text-muted-foreground/70 hover:text-foreground hover:bg-accent"
+                              ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                              : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
                           )}
                         >
                           {item.label}
@@ -348,7 +408,45 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </div>
                 )}
               </nav>
-              <BottomNav onSelect={() => setMenuOpen(false)} />
+
+              {/* Mobile user section */}
+              <div className="px-3 py-3 border-t border-border space-y-0.5">
+                {user && (
+                  <div className="flex items-center gap-2.5 px-2 py-2 mb-1">
+                    <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center shrink-0">
+                      {user.profileImage ? (
+                        <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground truncate">{user.nickname}</p>
+                      {credits && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <CreditDots credits={credits} />
+                          <span className="text-[10px] text-muted-foreground/60">오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <Link href="/about" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  <Info className="w-3.5 h-3.5" /> 애빛다 소개
+                </Link>
+                <Link href="/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  <Settings className="w-3.5 h-3.5" /> 설정
+                </Link>
+                {user ? (
+                  <button onClick={() => { setMenuOpen(false); logout(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    <LogOut className="w-3.5 h-3.5" /> 로그아웃
+                  </button>
+                ) : user === null ? (
+                  <Link href="/login" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    <LogIn className="w-3.5 h-3.5" /> 로그인
+                  </Link>
+                ) : null}
+              </div>
             </motion.aside>
           </>
         )}

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { motion } from "framer-motion";
+import { TrendingUp, CheckCircle2, Clock, BarChart2, Globe, Zap } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -17,17 +18,6 @@ function KakaoIcon() {
   );
 }
 
-function GoogleIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" fill="#4285F4" />
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23Z" fill="#34A853" />
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84Z" fill="#FBBC05" />
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53Z" fill="#EA4335" />
-    </svg>
-  );
-}
-
 const DEMO_STEPS = [
   { key: "company_intro",       label: "기업 브리핑",           done: true,  active: false },
   { key: "industry_analysis",   label: "매크로 및 산업 분석",    done: true,  active: false },
@@ -38,7 +28,6 @@ const DEMO_STEPS = [
   { key: "investment_strategy", label: "최종 결론",              done: false, active: false },
 ];
 
-
 function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
   return (
     <span className="relative flex h-2 w-2">
@@ -48,58 +37,110 @@ function PulsingDot({ color = "#FF8A7A" }: { color?: string }) {
   );
 }
 
+const MOCK_METRICS = [
+  { label: "현재가",      value: "74,100원",  sub: "KOSPI" },
+  { label: "목표주가",    value: "95,000원",  sub: "+28.2%", highlight: true },
+  { label: "PER (현재)",  value: "16.4×",    sub: "업종 평균 18.2×" },
+  { label: "EV/EBITDA",  value: "8.9×",     sub: "적정 수준" },
+];
+
 function RightPanel() {
   const [thinkingDots, setThinkingDots] = useState(1);
+  const [barWidths, setBarWidths] = useState([55, 78, 65, 90, 42]);
 
   useEffect(() => {
     const t = setInterval(() => setThinkingDots(d => (d % 3) + 1), 500);
     return () => clearInterval(t);
   }, []);
 
-  return (
-    <div className="flex flex-col bg-muted/50 border-t md:border-t-0 md:border-l border-border px-6 py-8 md:p-8 overflow-hidden md:justify-center md:h-full">
+  useEffect(() => {
+    const t = setInterval(() => {
+      setBarWidths(prev => prev.map(w => {
+        const delta = (Math.random() - 0.48) * 4;
+        return Math.max(30, Math.min(95, w + delta));
+      }));
+    }, 1400);
+    return () => clearInterval(t);
+  }, []);
 
-      {/* 종목 정보 */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <PulsingDot color="#FF8A7A" />
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">AI 분석 라이브 미리보기</span>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-xl font-bold text-foreground">삼성전자</span>
-          <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">005930</span>
-        </div>
-        <div className="text-xs text-muted-foreground mt-0.5">Consumer Electronics · 코스피</div>
+  return (
+    <div className="flex flex-col bg-gradient-to-br from-muted/40 to-muted/20 border-t md:border-t-0 md:border-l border-border overflow-hidden md:justify-center md:h-full px-6 py-8 md:px-10 md:py-10">
+
+      {/* 라이브 헤더 */}
+      <div className="flex items-center gap-2 mb-5">
+        <PulsingDot color="#FF8A7A" />
+        <span className="text-[10.5px] font-bold text-muted-foreground uppercase tracking-widest">AI 분석 라이브 미리보기</span>
       </div>
 
-      {/* 분석 단계 */}
-      <div className="mb-6">
-        <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-3">분석 파이프라인 (7단계)</p>
-        <div className="space-y-2">
+      {/* 종목 카드 */}
+      <div className="bg-background border border-border rounded-xl p-4 mb-4 shadow-sm">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[17px] font-bold text-foreground">삼성전자</span>
+              <span className="text-[11px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">005930</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Consumer Electronics · KOSPI</div>
+          </div>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <TrendingUp className="w-3 h-3" />
+            매수
+          </span>
+        </div>
+
+        {/* 핵심 지표 그리드 */}
+        <div className="grid grid-cols-2 gap-2">
+          {MOCK_METRICS.map(m => (
+            <div key={m.label} className={`rounded-lg p-2.5 ${m.highlight ? "bg-[#FF8A7A]/8 border border-[#FF8A7A]/20" : "bg-muted/50"}`}>
+              <p className="text-[10px] text-muted-foreground/70 mb-0.5">{m.label}</p>
+              <p className={`text-[13px] font-bold ${m.highlight ? "text-[#FF8A7A]" : "text-foreground"}`}>{m.value}</p>
+              <p className={`text-[10px] ${m.highlight ? "text-emerald-600 font-semibold" : "text-muted-foreground/60"}`}>{m.sub}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 분석 파이프라인 */}
+      <div className="bg-background border border-border rounded-xl p-4 shadow-sm">
+        <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest mb-3">분석 파이프라인 (7단계)</p>
+        <div className="space-y-1.5">
           {DEMO_STEPS.map((step, i) => (
             <motion.div
               key={step.key}
-              initial={{ opacity: 0, x: 12 }}
+              initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: i * 0.07 }}
               className="flex items-center gap-2.5"
             >
-              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+              <div className="w-4 h-4 flex items-center justify-center shrink-0">
                 {step.done ? (
-                  <span className="text-emerald-500 text-[11px]">✓</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                 ) : step.active ? (
                   <PulsingDot color="#FF8A7A" />
                 ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 block" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/25 block" />
                 )}
               </div>
-              <span className={`text-xs ${step.done ? "text-muted-foreground" : step.active ? "text-foreground/90 font-semibold" : "text-muted-foreground/50"}`}>
-                {step.label}
-              </span>
-              {step.active && (
-                <span className="text-[10px] text-[#FF8A7A] font-medium">
-                  분석 중{".".repeat(thinkingDots)}
+              <div className="flex-1 flex items-center gap-1.5">
+                <span className={`text-[12px] ${step.done ? "text-muted-foreground" : step.active ? "text-foreground font-semibold" : "text-muted-foreground/40"}`}>
+                  {step.label}
                 </span>
+                {step.active && (
+                  <>
+                    <span className="h-1 w-1 rounded-full bg-[#FF8A7A]/40" />
+                    <span className="text-[10px] text-[#FF8A7A] font-semibold">분석 중{".".repeat(thinkingDots)}</span>
+                  </>
+                )}
+              </div>
+              {step.done && (
+                <div className="h-1 rounded-full bg-muted overflow-hidden" style={{ width: `${barWidths[i % barWidths.length]}px` }}>
+                  <motion.div
+                    className="h-full rounded-full bg-emerald-400/60"
+                    animate={{ width: `${barWidths[i % barWidths.length]}%` }}
+                    transition={{ duration: 1.2, ease: "easeInOut" }}
+                    style={{ width: "100%" }}
+                  />
+                </div>
               )}
             </motion.div>
           ))}
@@ -124,7 +165,6 @@ export default function Landing() {
     }
   }, []);
 
-  // Clerk 로그인(구글 등) 또는 카카오 JWT 로그인 — 둘 중 하나라도 있으면 앱으로 이동
   useEffect(() => {
     if (isLoaded && isSignedIn) {
       setLocation("/analysis/new");
@@ -156,60 +196,100 @@ export default function Landing() {
     <div className="min-h-screen flex flex-col md:flex-row" style={{ fontFamily: "'Pretendard', sans-serif" }}>
 
       {/* 왼쪽: 로그인 폼 */}
-      <div className="w-full md:w-[420px] lg:w-[440px] shrink-0 flex flex-col justify-center px-8 py-10 md:px-10 md:py-12 bg-background">
+      <div className="w-full md:w-[420px] lg:w-[460px] shrink-0 flex flex-col justify-center px-8 py-10 md:px-12 md:py-14 bg-background relative">
 
-        {/* 로고 */}
-        <div className="mb-10">
-          <h1 className="text-[32px] font-black tracking-tight mb-1" style={{ color: "#FF8A7A" }}>
-            애빛다
-          </h1>
-          <p className="text-[15px] text-muted-foreground font-medium">AI로 기업가치를 밝히다</p>
+        {/* 미묘한 배경 텍스처 */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-[#FF8A7A]/5 blur-3xl" />
+          <div className="absolute -bottom-12 -right-12 w-48 h-48 rounded-full bg-[#FF8A7A]/5 blur-2xl" />
         </div>
 
-        {/* 설명 */}
-        <div className="mb-8">
-          <p className="text-[15px] text-foreground/70 leading-relaxed">
-            산업 분석부터 기술적 분석, 적정주가 산출까지<br />
-            7단계에 걸쳐 분석합니다.
-          </p>
-          <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5">
-            <span className="text-[11px] font-bold text-primary">⏱ 평균 3분</span>
-            <span className="text-[11px] text-muted-foreground">만에 완성되는 리포트</span>
-          </div>
-        </div>
-
-        {/* 로그인 버튼 */}
-        <div className="space-y-3 mb-8">
-          <button
-            onClick={handleKakaoLogin}
-            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] transition-all hover:opacity-90 active:scale-[0.98]"
-            style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
+        <div className="relative z-10">
+          {/* 로고 */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-10"
           >
-            <KakaoIcon />
-            카카오로 시작하기
-          </button>
+            <h1 className="text-[38px] font-black tracking-tighter mb-1.5 leading-none" style={{ color: "#FF8A7A" }}>
+              애빛다
+            </h1>
+            <p className="text-[14px] text-muted-foreground font-medium tracking-wide">AI로 기업가치를 밝히다</p>
+          </motion.div>
 
-        </div>
-
-        {/* 특징 3가지 */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
-          {[
-            { icon: "🏢", label: "미국·한국", desc: "주식 분석 지원" },
-            { icon: "⏱️", label: "평균 3분", desc: "완성되는 리포트", highlight: true },
-            { icon: "📊", label: "실시간", desc: "주가·재무 데이터" },
-          ].map(f => (
-            <div key={f.label} className={`rounded-xl p-3 text-center border ${(f as { highlight?: boolean }).highlight ? "border-primary/40 bg-primary/5" : "bg-muted/50 border-border"}`}>
-              <div className="text-base mb-1">{f.icon}</div>
-              <div className={`text-xs font-bold ${(f as { highlight?: boolean }).highlight ? "text-primary" : "text-foreground/90"}`}>{f.label}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">{f.desc}</div>
+          {/* 설명 */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.08 }}
+            className="mb-8"
+          >
+            <p className="text-[15px] text-foreground/80 leading-relaxed font-medium mb-3">
+              산업 분석부터 기술적 분석, 적정주가 산출까지<br />
+              7단계에 걸쳐 깊이 있게 분석합니다.
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11.5px] font-bold text-[#FF8A7A]">
+                <Clock className="w-3 h-3" />
+                평균 3분 완성
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 border border-border text-[11.5px] font-medium text-muted-foreground">
+                <Globe className="w-3 h-3" />
+                한국·미국 주식
+              </span>
             </div>
-          ))}
-        </div>
+          </motion.div>
 
-        <p className="text-center text-[11px] text-muted-foreground/50 leading-relaxed">
-          로그인 시 <span className="underline cursor-pointer text-muted-foreground">이용약관</span> 및{" "}
-          <span className="underline cursor-pointer text-muted-foreground">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.
-        </p>
+          {/* 로그인 버튼 */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.14 }}
+            className="space-y-3 mb-8"
+          >
+            <button
+              onClick={handleKakaoLogin}
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm"
+              style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
+            >
+              <KakaoIcon />
+              카카오로 시작하기
+            </button>
+          </motion.div>
+
+          {/* 특징 3가지 */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="grid grid-cols-3 gap-2.5 mb-8"
+          >
+            {[
+              { Icon: Globe,    label: "한국·미국", desc: "주식 분석" },
+              { Icon: Zap,      label: "7단계 AI",  desc: "파이프라인", highlight: true },
+              { Icon: BarChart2, label: "실시간",   desc: "주가·재무" },
+            ].map(f => (
+              <div
+                key={f.label}
+                className={`rounded-xl p-3 text-center border transition-colors ${
+                  f.highlight
+                    ? "border-[#FF8A7A]/30 bg-[#FF8A7A]/6"
+                    : "bg-muted/40 border-border"
+                }`}
+              >
+                <f.Icon className={`w-4 h-4 mx-auto mb-1.5 ${f.highlight ? "text-[#FF8A7A]" : "text-muted-foreground/60"}`} />
+                <div className={`text-[11.5px] font-bold ${f.highlight ? "text-[#FF8A7A]" : "text-foreground/90"}`}>{f.label}</div>
+                <div className="text-[10px] text-muted-foreground/60 mt-0.5">{f.desc}</div>
+              </div>
+            ))}
+          </motion.div>
+
+          <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
+            로그인 시 <span className="underline cursor-pointer text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</span> 및{" "}
+            <span className="underline cursor-pointer text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.
+          </p>
+        </div>
       </div>
 
       {/* 오른쪽: 라이브 미리보기 */}
