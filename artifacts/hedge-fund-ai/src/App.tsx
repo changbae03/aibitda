@@ -90,6 +90,38 @@ function SignInPage() {
   );
 }
 
+function PublicDocLayout({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation();
+  return (
+    <div className="min-h-screen bg-background" style={{ fontFamily: "'Pretendard', sans-serif" }}>
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-border">
+        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center gap-3">
+          <button
+            onClick={() => setLocation("/")}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7" />
+            </svg>
+            돌아가기
+          </button>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="text-sm font-bold" style={{ color: "#FF8A7A" }}>애빛다</span>
+        </div>
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function PublicTermsPage() {
+  return <PublicDocLayout><TermsPage /></PublicDocLayout>;
+}
+
+function PublicPrivacyPage() {
+  return <PublicDocLayout><PrivacyPage /></PublicDocLayout>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -98,6 +130,8 @@ function Router() {
       <Route path="/login" component={Landing} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/share/:id" component={SharePage} />
+      <Route path="/terms" component={PublicTermsPage} />
+      <Route path="/privacy" component={PublicPrivacyPage} />
 
       {/* 사이드바 있는 앱 페이지 */}
       <Route>
@@ -127,8 +161,6 @@ function Router() {
             <Route path="/admin/notices" component={AdminNoticesPage} />
             <Route path="/admin/calibration" component={AdminCalibration} />
             <Route path="/admin/quality" component={AdminQuality} />
-            <Route path="/privacy" component={PrivacyPage} />
-            <Route path="/terms" component={TermsPage} />
             <Route path="/disclaimer" component={DisclaimerPage} />
             <Route path="/support" component={SupportPage} />
             <Route path="/notices" component={NoticesPage} />

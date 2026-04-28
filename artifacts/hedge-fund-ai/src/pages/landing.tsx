@@ -1,5 +1,5 @@
 import { useSignIn, useUser } from "@clerk/react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useEffect } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { motion } from "framer-motion";
@@ -121,9 +121,9 @@ export default function Landing() {
 
           <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
             로그인 시{" "}
-            <span className="underline cursor-pointer text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</span>{" "}
+            <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
             및{" "}
-            <span className="underline cursor-pointer text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</span>
+            <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
             에 동의하는 것으로 간주됩니다.
           </p>
         </motion.div>
