@@ -890,6 +890,15 @@ export default function AnalysisDetail() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
+  // 관리자 여부
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.isAdmin) setIsAdmin(true); })
+      .catch(() => {});
+  }, []);
+
   // 종목별 관리자 메모 상태
   const [tickerMemo, setTickerMemo] = useState("");
   const [tickerMemoSaved, setTickerMemoSaved] = useState("");
@@ -1708,8 +1717,8 @@ export default function AnalysisDetail() {
               )}
             </div>
 
-            {/* 관리자 종목 보정 메모 — 개발 환경에서만 표시 */}
-            {isComplete && import.meta.env.DEV && (
+            {/* 관리자 종목 보정 메모 — 관리자에게만 표시 */}
+            {isComplete && isAdmin && (
               <div className="mt-4 print:hidden">
                 <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/15 px-5 py-4 space-y-3">
                   <div className="flex items-center gap-2">
