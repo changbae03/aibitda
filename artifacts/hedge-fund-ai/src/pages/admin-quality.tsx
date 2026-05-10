@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Loader2, AlertTriangle, Clock, BarChart2, Plus, Edit3, Trash2,
   CheckCircle2, X, Save, ChevronDown, ChevronUp, Activity, FlaskConical,
+  ShieldCheck, RefreshCw, ExternalLink,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import {
@@ -483,16 +484,304 @@ function PromptVersionTab() {
   );
 }
 
+// ─── QA 채점 탭 ──────────────────────────────────────────────────────────────
+
+interface QAReport {
+  id: number;
+  ticker: string;
+  company_name: string;
+  investment_verdict: string | null;
+  target_price: number | null;
+  start_price: number | null;
+  qa_score: number | null;
+  qa_flags: string[];
+  grade: string;
+  created_at: string;
+  user_name: string | null;
+}
+
+interface QASummary {
+  total: string;
+  avg_score: string | null;
+  unscored: string;
+  grade_a: string; grade_b: string; grade_c: string; grade_d: string; grade_f: string;
+}
+
+const FLAG_LABELS: Record<string, string> = {
+  has_target_price: "목표가",
+  has_verdict: "투자의견",
+  has_stop_loss: "손절가",
+  has_entry_price: "진입가",
+  has_risk_reward: "위험/보상",
+  all_steps: "7섹션",
+  content_length: "내용길이",
+  has_dcf_table: "DCF테이블",
+  has_peer_table: "피어테이블",
+  no_placeholder: "플레이스홀더",
+  has_scenarios: "시나리오",
+};
+
+function gradeColor(grade: string) {
+  if (grade === "A") return "text-emerald-500";
+  if (grade === "B") return "text-blue-500";
+  if (grade === "C") return "text-yellow-500";
+  if (grade === "D") return "text-orange-500";
+  if (grade === "F") return "text-red-500";
+  return "text-muted-foreground";
+}
+
+function scoreBar(score: number | null) {
+  if (score === null) return null;
+  const color = score >= 90 ? "bg-emerald-500" : score >= 75 ? "bg-blue-500" : score >= 60 ? "bg-yellow-500" : score >= 40 ? "bg-orange-500" : "bg-red-500";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full", color)} style={{ width: `${score}%` }} />
+      </div>
+      <span className="text-xs tabular-nums font-semibold w-8 text-right">{score}</span>
+    </div>
+  );
+}
+
+function QATab() {
+  const [data, setData] = useState<{ summary: QASummary; reports: QAReport[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [rescoring, setRescoring] = useState<number | null>(null);
+  const [filterScore, setFilterScore] = useState<"all" | "low" | "unscored">("all");
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const showMsg = (type: "ok" | "err", text: string) => {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = filterScore === "low" ? "?maxScore=59" : filterScore === "unscored" ? "?maxScore=100&minScore=0" : "";
+      const r = await fetch(getApiUrl(`/api/admin/qa-reports${params}`), { credentials: "include" });
+      if (r.ok) setData(await r.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [filterScore]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const rescore = async (id: number) => {
+    setRescoring(id);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/qa-check/${id}`), { method: "POST", credentials: "include" });
+      if (r.ok) { showMsg("ok", `#${id} 재채점 완료`); load(); }
+      else showMsg("err", "재채점 실패");
+    } finally { setRescoring(null); }
+  };
+
+  const batchRescore = async () => {
+    setBatchRunning(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/qa-check-all"), { method: "POST", credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        showMsg("ok", `전체 ${d.count}건 채점 시작 (백그라운드 처리 중)`);
+        setTimeout(load, 5000);
+      } else showMsg("err", "배치 채점 실패");
+    } finally { setBatchRunning(false); }
+  };
+
+  const s = data?.summary;
+  const gradeStats = s ? [
+    { g: "A", n: s.grade_a, color: "bg-emerald-500" },
+    { g: "B", n: s.grade_b, color: "bg-blue-500" },
+    { g: "C", n: s.grade_c, color: "bg-yellow-500" },
+    { g: "D", n: s.grade_d, color: "bg-orange-500" },
+    { g: "F", n: s.grade_f, color: "bg-red-500" },
+  ] : [];
+
+  return (
+    <div className="space-y-5">
+      {msg && (
+        <div className={cn("rounded-xl px-4 py-2.5 text-sm border", msg.type === "ok" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* 상단 요약 + 버튼 */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="text-[13px] text-muted-foreground">
+          완성된 리포트를 자동으로 채점합니다. 새 분석이 완료될 때마다 자동으로 점수가 기록됩니다.
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} /> 새로고침
+          </button>
+          <button
+            onClick={batchRescore}
+            disabled={batchRunning}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
+          >
+            {batchRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+            전체 재채점
+          </button>
+        </div>
+      </div>
+
+      {/* 집계 카드 */}
+      {s && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border bg-background px-4 py-3">
+            <p className="text-[10px] text-muted-foreground mb-1">완성 리포트</p>
+            <p className="text-xl font-bold tabular-nums">{Number(s.total).toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">미채점 {Number(s.unscored).toLocaleString()}건</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background px-4 py-3">
+            <p className="text-[10px] text-muted-foreground mb-1">평균 점수</p>
+            <p className="text-xl font-bold tabular-nums">{s.avg_score ? `${s.avg_score}점` : "—"}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background px-4 py-3 col-span-2">
+            <p className="text-[10px] text-muted-foreground mb-2">등급 분포</p>
+            <div className="flex items-end gap-2 h-10">
+              {gradeStats.map(({ g, n, color }) => {
+                const cnt = Number(n);
+                const total = Number(s.total) || 1;
+                const pct = Math.round((cnt / total) * 100);
+                return (
+                  <div key={g} className="flex flex-col items-center gap-0.5 flex-1">
+                    <span className="text-[10px] text-muted-foreground">{cnt}</span>
+                    <div className="w-full rounded-sm" style={{ height: `${Math.max(4, pct * 0.28)}px` }}>
+                      <div className={cn("w-full h-full rounded-sm opacity-80", color)} />
+                    </div>
+                    <span className={cn("text-[10px] font-bold", gradeColor(g))}>{g}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 필터 */}
+      <div className="flex gap-1.5">
+        {([["all", "전체"], ["low", "C 이하 (저품질)"], ["unscored", "미채점"]] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setFilterScore(k)}
+            className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+              filterScore === k
+                ? "bg-primary text-white border-primary"
+                : "border-border text-muted-foreground hover:bg-muted"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 리포트 테이블 */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : !data?.reports.length ? (
+        <div className="rounded-xl border border-border bg-muted/20 py-16 text-center text-muted-foreground text-sm">
+          해당하는 리포트 없음
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-background overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr className="border-b border-border/50 bg-muted/10">
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">종목</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase w-24">점수</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">등급</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">실패 항목</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">의견</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">일시</th>
+                <th className="px-3 py-2.5 w-16" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.reports.map(r => (
+                <tr key={r.id} className="border-b border-border/30 last:border-0 hover:bg-muted/10 transition-colors">
+                  <td className="px-4 py-2.5">
+                    <a
+                      href={`/analysis/${r.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 group"
+                    >
+                      <span className="font-mono text-xs font-semibold group-hover:text-primary transition-colors">{r.ticker}</span>
+                      <span className="text-xs text-muted-foreground truncate max-w-[100px]">{r.company_name}</span>
+                      <ExternalLink className="w-3 h-3 text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0" />
+                    </a>
+                    {r.user_name && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{r.user_name}</p>}
+                  </td>
+                  <td className="px-3 py-2.5 w-28">
+                    {r.qa_score !== null ? scoreBar(r.qa_score) : <span className="text-[11px] text-muted-foreground/40">미채점</span>}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={cn("text-base font-black tabular-nums", gradeColor(r.grade))}>{r.grade}</span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {r.qa_flags.length === 0
+                        ? <span className="text-[10px] text-emerald-500 font-medium">전항목 통과</span>
+                        : r.qa_flags.map(f => (
+                            <span key={f} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-medium whitespace-nowrap">
+                              {FLAG_LABELS[f] ?? f}
+                            </span>
+                          ))
+                      }
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className="text-[11px] text-muted-foreground truncate max-w-[80px] block">
+                      {r.investment_verdict ?? "—"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-[11px] text-muted-foreground whitespace-nowrap">
+                    {fmt(r.created_at)}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <button
+                      onClick={() => rescore(r.id)}
+                      disabled={rescoring === r.id}
+                      title="재채점"
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-40"
+                    >
+                      {rescoring === r.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <RefreshCw className="w-3.5 h-3.5" />
+                      }
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
-type Tab = "monitoring" | "prompts";
+type Tab = "monitoring" | "qa" | "prompts";
 
 export default function AdminQuality() {
   const [tab, setTab] = useState<Tab>("monitoring");
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "monitoring", label: "분석 모니터링", icon: Activity },
-    { key: "prompts", label: "프롬프트 버전", icon: FlaskConical },
+    { key: "qa",         label: "QA 채점",       icon: ShieldCheck },
+    { key: "prompts",    label: "프롬프트 버전",  icon: FlaskConical },
   ];
 
   return (
@@ -502,7 +791,7 @@ export default function AdminQuality() {
           <Activity className="w-5 h-5 text-primary" /> AI 품질 관리
         </h1>
         <p className="text-[13px] text-muted-foreground mt-1">
-          분석 오류율·소요 시간 모니터링과 프롬프트 버전 관리를 한 곳에서.
+          오류율 모니터링, 리포트 자동 QA 채점, 프롬프트 버전 관리를 한 곳에서.
         </p>
       </div>
 
@@ -530,7 +819,8 @@ export default function AdminQuality() {
 
       <div>
         {tab === "monitoring" && <MonitoringTab />}
-        {tab === "prompts" && <PromptVersionTab />}
+        {tab === "qa"         && <QATab />}
+        {tab === "prompts"    && <PromptVersionTab />}
       </div>
     </div>
   );

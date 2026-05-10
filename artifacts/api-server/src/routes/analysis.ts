@@ -20,6 +20,7 @@ import {
 } from "../lib/ai-agents.js";
 import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
+import { runQACheck } from "../lib/qa-checker.js";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -4459,6 +4460,44 @@ async function executeStep(
       }
 
       triggerModelReview().catch(console.error);
+
+      // ── QA 자동 채점 (백그라운드) ──────────────────────────────────────────
+      (async () => {
+        try {
+          await pool.query(`
+            ALTER TABLE analyses
+              ADD COLUMN IF NOT EXISTS qa_score INTEGER,
+              ADD COLUMN IF NOT EXISTS qa_flags TEXT
+          `);
+          const [aRes, sRes] = await Promise.all([
+            pool.query(
+              `SELECT investment_verdict, target_price, entry_price, stop_loss, risk_reward_ratio
+               FROM analyses WHERE id = $1`, [id]
+            ),
+            pool.query(
+              `SELECT step_key, content FROM analysis_steps WHERE analysis_id = $1`, [id]
+            ),
+          ]);
+          if (aRes.rows[0]) {
+            const a = aRes.rows[0];
+            const qaResult = runQACheck({
+              investmentVerdict: a.investment_verdict,
+              targetPrice: a.target_price,
+              entryPrice: a.entry_price,
+              stopLoss: a.stop_loss,
+              riskRewardRatio: a.risk_reward_ratio,
+              steps: sRes.rows.map((r: any) => ({ stepKey: r.step_key, content: r.content ?? "" })),
+            });
+            await pool.query(
+              `UPDATE analyses SET qa_score=$1, qa_flags=$2 WHERE id=$3`,
+              [qaResult.score, JSON.stringify(qaResult.flags), id]
+            );
+            console.log(`[qa] #${id} 자동 채점 완료: ${qaResult.score}점 (${qaResult.grade})`);
+          }
+        } catch (e) {
+          console.error(`[qa] #${id} 자동 채점 실패:`, e);
+        }
+      })();
 
       // ── 종목별 자동 학습 데이터 저장 ─────────────────────────────────────
       // 분석 완료 시마다 ticker_notes.auto_learning 업데이트 (누적)

@@ -784,4 +784,137 @@ router.delete("/prompt-versions/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── QA 자동 채점 ──────────────────────────────────────────────────────────────
+
+import { runQACheck } from "../lib/qa-checker.js";
+
+async function ensureQAColumns() {
+  await pool.query(`
+    ALTER TABLE analyses
+      ADD COLUMN IF NOT EXISTS qa_score INTEGER,
+      ADD COLUMN IF NOT EXISTS qa_flags TEXT
+  `);
+}
+
+async function scoreOne(analysisId: number) {
+  await ensureQAColumns();
+  const [aRes, sRes] = await Promise.all([
+    pool.query(
+      `SELECT investment_verdict, target_price, entry_price, stop_loss, risk_reward_ratio
+       FROM analyses WHERE id = $1`,
+      [analysisId]
+    ),
+    pool.query(
+      `SELECT step_key, content FROM analysis_steps WHERE analysis_id = $1`,
+      [analysisId]
+    ),
+  ]);
+  if (!aRes.rows[0]) return null;
+  const a = aRes.rows[0];
+  const result = runQACheck({
+    investmentVerdict: a.investment_verdict,
+    targetPrice: a.target_price,
+    entryPrice: a.entry_price,
+    stopLoss: a.stop_loss,
+    riskRewardRatio: a.risk_reward_ratio,
+    steps: sRes.rows.map((r: any) => ({ stepKey: r.step_key, content: r.content ?? "" })),
+  });
+  await pool.query(
+    `UPDATE analyses SET qa_score=$1, qa_flags=$2 WHERE id=$3`,
+    [result.score, JSON.stringify(result.flags), analysisId]
+  );
+  return result;
+}
+
+// GET /api/admin/qa-reports — QA 점수 포함 완성 리포트 목록
+router.get("/qa-reports", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "관리자만 접근 가능합니다" }); return; }
+
+  await ensureQAColumns();
+
+  const minScore = parseInt(req.query.minScore as string ?? "0", 10);
+  const maxScore = parseInt(req.query.maxScore as string ?? "100", 10);
+  const limit = Math.min(parseInt(req.query.limit as string ?? "100", 10), 500);
+
+  const { rows } = await pool.query(
+    `SELECT a.id, a.ticker, a.company_name, a.investment_verdict, a.target_price, a.start_price,
+            a.qa_score, a.qa_flags, a.created_at, a.updated_at,
+            uc.display_name AS user_name
+     FROM analyses a
+     LEFT JOIN user_credits uc ON uc.user_id = a.user_id
+     WHERE a.status = 'completed'
+       AND (a.qa_score IS NULL OR (a.qa_score >= $1 AND a.qa_score <= $2))
+     ORDER BY a.qa_score ASC NULLS FIRST, a.created_at DESC
+     LIMIT $3`,
+    [minScore, maxScore, limit]
+  );
+
+  const gradeOf = (s: number | null): string => {
+    if (s === null) return "?";
+    if (s >= 90) return "A";
+    if (s >= 75) return "B";
+    if (s >= 60) return "C";
+    if (s >= 40) return "D";
+    return "F";
+  };
+
+  const summary = await pool.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE status='completed') AS total,
+       ROUND(AVG(qa_score) FILTER (WHERE status='completed' AND qa_score IS NOT NULL)) AS avg_score,
+       COUNT(*) FILTER (WHERE status='completed' AND qa_score IS NULL) AS unscored,
+       COUNT(*) FILTER (WHERE status='completed' AND qa_score >= 90) AS grade_a,
+       COUNT(*) FILTER (WHERE status='completed' AND qa_score >= 75 AND qa_score < 90) AS grade_b,
+       COUNT(*) FILTER (WHERE status='completed' AND qa_score >= 60 AND qa_score < 75) AS grade_c,
+       COUNT(*) FILTER (WHERE status='completed' AND qa_score >= 40 AND qa_score < 60) AS grade_d,
+       COUNT(*) FILTER (WHERE status='completed' AND qa_score < 40) AS grade_f
+     FROM analyses`
+  );
+
+  res.json({
+    summary: summary.rows[0],
+    reports: rows.map(r => ({
+      ...r,
+      qa_flags: r.qa_flags ? JSON.parse(r.qa_flags) : [],
+      grade: gradeOf(r.qa_score),
+    })),
+  });
+});
+
+// POST /api/admin/qa-check/:id — 단일 리포트 채점
+router.post("/qa-check/:id", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "관리자만 접근 가능합니다" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "잘못된 ID" }); return; }
+
+  const result = await scoreOne(id);
+  if (!result) { res.status(404).json({ error: "분석을 찾을 수 없습니다" }); return; }
+
+  res.json(result);
+});
+
+// POST /api/admin/qa-check-all — 완성 리포트 전체 배치 채점
+router.post("/qa-check-all", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "관리자만 접근 가능합니다" }); return; }
+
+  const { rows } = await pool.query(
+    `SELECT id FROM analyses WHERE status='completed' ORDER BY created_at DESC LIMIT 500`
+  );
+
+  res.json({ started: true, count: rows.length });
+
+  (async () => {
+    let ok = 0, fail = 0;
+    for (const row of rows) {
+      try { await scoreOne(row.id); ok++; }
+      catch { fail++; }
+    }
+    console.log(`[qa-batch] 완료: ${ok}건 성공, ${fail}건 실패`);
+  })().catch(console.error);
+});
+
 export default router;
