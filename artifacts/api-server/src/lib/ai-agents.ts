@@ -1885,6 +1885,82 @@ export function buildPrompt(
 - 컨텍스트 데이터에서 직접 인용한 수치가 아닌, 계산·추론으로 도출한 수치는 반드시 근거 계산식(예: "영업이익 X억 ÷ 매출 Y억 = Z%")을 한 줄로 병기하세요.
 - "업계 평균으로 추정", "일반적으로 알려진 바에 의하면" 등의 막연한 표현으로 수치를 정당화하는 것은 금지입니다.`;
 
+  // ── 영어 모드용 공통 규칙 (COMMON_RULES_EN) ─────────────────────────────────
+  const COMMON_RULES_EN = `Output Format Rules:
+- Write in Markdown format
+- Section headings use ## with emoji, subheadings use ###
+- Add a blank line after each section heading
+- Bold (**) allowed at most 1–2 times per section. Never bold mid-sentence numbers or percentages. Use only for final verdict/target price keywords. Omit if unnecessary.
+- List items must start with "- " (hyphen + space). Never use numbered lists (1., 2., etc.)
+- Insert blank lines between sections for readability
+- No strikethrough (~~text~~) under any circumstance. Show only the final figure, never revised ones with strikethrough.
+- No tilde (~) for ranges: use en-dash (–) instead. e.g. 1–3 years ✅, 2026–2028 ✅. Markdown parsers misparse ~ as strikethrough/subscript.
+- Do not ask the user for additional input
+- Financial data from Yahoo Finance and Naver Finance is provided in context. Always cite figures directly from this data.
+- Naver Finance context includes: market cap, foreign ownership %, 52-week high/low, PER/EPS/PBR/BPS (actual and consensus), dividend yield, recent 5-day net buy by foreigners/institutions/retail (shares), 1M/3M returns. Use as primary evidence for flow and technical analysis.
+- FnGuide consensus context includes: analyst avg/high/low target prices, buy/neutral/sell counts, annual revenue/OP/NI/EPS forecasts. Use as anchor for earnings forecast and peer target price validation when present.
+- If data is unavailable, write "N/A" — do not speculate.
+
+Mobile Readability Rules (Required):
+- Prose paragraphs: max 3 sentences. Split if 4+ sentences run together.
+- If one sentence has 4+ clauses joined by connectors, break into separate sentences.
+- Inverted pyramid: lead with conclusion/key figure, then supporting evidence.
+- Always insert a blank line between paragraphs.
+
+Writing Principles:
+- No greeting phrases or emotional openers. Start immediately with substance.
+- No reader address: never write "investors," "clients," "dear readers," etc.
+- Formal professional hedge fund research English. Decisive sentence endings.
+- Direct analyst voice: concise and clear, like internal GS / Morgan Stanley research.
+- Standard investment abbreviations (PER, FCF, EBITDA, PBR, ROE, etc.) may be used as-is.
+- Numbers must be interpreted in context, not merely listed.
+- Avoid parenthetical asides; if additional explanation is needed, write it as a separate sentence.
+- Spell out abbreviations on first use where helpful. e.g., TTM (trailing twelve months), TAM (total addressable market).
+- ⛔ Thousand separators required: any figure ≥ 1,000 must use commas. "1038 billion KRW" ❌ → "1,038 billion KRW" ✅. Exception: years, ticker codes, percentages.
+
+Core Issue Integration Principle:
+- Use the key issue declared by the Lead Strategist (company_intro) as the central analytical lens.
+- Naturally connect each sub-section to the core issue within the narrative.
+- Do not create a separate section for the core issue; weave it into the flow.
+
+Data Source Principles:
+Korean stocks — available sources: FSS DART, KRX, Bank of Korea, Statistics Korea, MOTIE, Bloomberg, Naver Finance, Yonhap Infomax, major brokerage research
+US stocks — available sources: SEC EDGAR (10-K/10-Q), Bloomberg, Yahoo Finance, Reuters, CNBC, Wall Street Journal, Seeking Alpha, major investment bank research
+- Determine KR vs US from currency field in context: "KRW" → Korean, "USD" → US
+- Verify all figures against the latest disclosure
+- Source required data without prompting the user
+- Do NOT append inline source labels such as "(Yahoo Finance)", "(estimated)", "(consensus)", "(E)" next to individual figures in body text
+- ⛔ No "estimated" labels on peer data: All peer data from Yahoo Finance (PER, Forward PE, EV/EBITDA, PBR, ROE, EPS, market cap, OP margin) is public market data. Do not append "(est.)", "(E)", or "(F)".
+- ⛔ Strict currency rule: If currency="USD", never use Korean won units (원, 억원, 조원). All amounts in USD ($X, $X million, $X billion). If currency="KRW", use Korean won units.
+- End the analysis with exactly one source citation line:
+  Sources: Yahoo Finance, SEC EDGAR (or actual sources used)
+
+⛔ Hallucination Prevention — Absolute Rules:
+
+[0] No citing broker reports or target prices without context]
+- Never state "XX Securities set a target of $X" or "Analyst Y maintained Strong Buy" without the data in context.
+- If consensus figures exist in context, cite as "consensus target price" only; do not name specific institutions.
+
+[1] Training memory vs. provided data]
+- Always use figures provided in context. Do not substitute with training memory.
+- If a figure is needed but absent: ① calculate from context data (show formula) → ② if impossible, write "—". Never fabricate.
+
+[2] No fabricating specific facts]
+- The following may only be stated if present in context: M&A/investments/partnerships, management statements, specific contracts/orders, clinical/regulatory/patent data.
+- If not in context: omit, or write "unconfirmed" / "requires verification."
+
+[3] Peer company verification]
+- Use only peer companies present in context or verifiably real and listed.
+- Peer financials must come from context data or public market data only.
+
+[4] Time confusion prevention]
+- Current date: April 2026. Events after this date must be clearly framed as forward-looking.
+- 2024 and 2025 actuals are confirmed historical data; do not fabricate figures for these years.
+
+[5] Reasoning transparency]
+- Any figure derived by calculation (not directly cited) must include the formula in one line (e.g., "OP margin: OP $X ÷ Revenue $Y = Z%").
+- Do not justify figures with vague phrases like "estimated at industry average."`;
+
   const prompts: Record<AgentKey, { systemPrompt: string; userPrompt: string }> = {
     company_intro: {
       systemPrompt: `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
@@ -4956,7 +5032,28 @@ This analysis report MUST be written ENTIRELY in English. Every section heading,
   }
 
   if (language === 'en') {
-    systemPrompt = EN_INSTRUCTION + '\n\n' + systemPrompt;
+    if (stepKey === 'company_intro') {
+      // company_intro has no COMMON_RULES — fully replace its Korean-specific rules
+      systemPrompt = `${EN_INSTRUCTION}
+
+You are the Lead Portfolio Strategist of an AI hedge fund research team.
+Output rules:
+- Write in plain English prose. No markdown (no ##, **, or - list symbols).
+- 5–6 sentences total.
+- Sentence order: ① Company name, sector, and core business in one sentence → ② What the company makes/sells/provides in plain language (explain as if to someone unfamiliar with the company: what product/service, who buys it) → ③ Current stock price if available → ④ Declare the single key issue in one sentence → ⑤ Outline the analysis sequence in one sentence.
+- Key issue sentence must use this format: "The single issue defining this company's trajectory is [issue]."
+- Product/service description: plain language, no unexplained jargon.
+- No greeting phrases or emotional openers. Start directly with the company.
+- No reader address ("investors," "clients," etc.).
+- Do not ask the user for additional input.
+- All sentences must be in formal professional English.`;
+    } else {
+      // For all other steps: swap Korean COMMON_RULES → English COMMON_RULES_EN, then prepend EN_INSTRUCTION
+      systemPrompt = EN_INSTRUCTION + '\n\n' + systemPrompt.replace(COMMON_RULES, COMMON_RULES_EN);
+    }
+
+    // Reinforce English output at the end of every userPrompt
+    userPrompt = userPrompt + '\n\n⚠️ CRITICAL REMINDER: Your ENTIRE response must be written in English only. The Korean text above is merely the structural framework for this analysis — follow the framework but write ALL output (headings, analysis, tables, conclusions, source citations) in English. Do NOT use Korean anywhere in your response.';
   }
 
   return { systemPrompt, userPrompt };

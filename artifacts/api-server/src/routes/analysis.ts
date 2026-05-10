@@ -4156,7 +4156,9 @@ async function executeStep(
           if (stepKey === "relative_valuation" && !content.includes("FINAL_VALUATION_DATA")) {
             try {
               console.log(`[${stepKey}] FINAL_VALUATION_DATA 누락 — 복구 시도`);
-              const recoveryPrompt = `아래는 밸류에이션 보고서가 토큰 한도로 잘린 내용입니다. 이 보고서에서 제시된 목표주가와 밴드를 기반으로 FINAL_VALUATION_DATA JSON 블록 하나만 생성하세요. 다른 설명 없이 JSON 블록만 출력하세요.\n\n[잘린 보고서 끝부분]\n${content.slice(-3000)}`;
+              const recoveryPrompt = (analysis as any).language === 'en'
+                ? `The valuation report below was truncated due to token limits. Based on the target price and bands presented in this report, generate ONLY the FINAL_VALUATION_DATA JSON block. Output the JSON block only — no explanation.\n\n[Truncated report tail]\n${content.slice(-3000)}`
+                : `아래는 밸류에이션 보고서가 토큰 한도로 잘린 내용입니다. 이 보고서에서 제시된 목표주가와 밴드를 기반으로 FINAL_VALUATION_DATA JSON 블록 하나만 생성하세요. 다른 설명 없이 JSON 블록만 출력하세요.\n\n[잘린 보고서 끝부분]\n${content.slice(-3000)}`;
               const recoveryResp = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: [{ role: "user", parts: [{ text: recoveryPrompt }] }],
@@ -4206,9 +4208,14 @@ async function executeStep(
           // Round 3: 애널리스트가 반론 수용·반박 후 최종본 확정 (스트리밍)
           onEvent?.({ debate: "synthesizing" });
 
-          const synthesisInstruction = stepKey === "company_analysis"
-            ? `\n\n---\n[내부 검토 — Devil's Advocate 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 기존 보고서 형식·구조를 그대로 유지하면서 최종 완성본을 다시 작성하세요. 반론 항목을 별도 섹션으로 노출하지 마세요.`
-            : `\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)을 그대로 유지하면서 최종 완성본을 다시 작성하세요.`;
+          const isEnLang = (analysis as any).language === 'en';
+          const synthesisInstruction = isEnLang
+            ? (stepKey === "company_analysis"
+              ? `\n\n---\n[Internal Review — Devil's Advocate Feedback]\n${challengerFeedback}\n\n[Instruction] Review the 3 challenges above. Incorporate valid criticisms by supplementing figures and arguments; rebut points you disagree with using specific evidence. Maintain the existing report format and structure. Do not expose the challenge items as a separate section. Write the final version ENTIRELY in English.`
+              : `\n\n---\n[Internal Review — Valuation Skeptic Feedback]\n${challengerFeedback}\n\n[Instruction] Review the 3 challenges above. Re-examine WACC, growth rate, and multiple assumptions. Incorporate valid criticisms with updated figures; rebut points you disagree with using specific evidence. Maintain the existing report format (DCF table, FINAL_VALUATION_DATA JSON included). Write the final version ENTIRELY in English.`)
+            : (stepKey === "company_analysis"
+              ? `\n\n---\n[내부 검토 — Devil's Advocate 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 기존 보고서 형식·구조를 그대로 유지하면서 최종 완성본을 다시 작성하세요. 반론 항목을 별도 섹션으로 노출하지 마세요.`
+              : `\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)을 그대로 유지하면서 최종 완성본을 다시 작성하세요.`);
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
           const synthesisMaxTokens = 24576; // Debate 합성: 24k (잘림 방지 + 비용 절감 절충)
@@ -4269,7 +4276,9 @@ async function executeStep(
         onEvent?.({ qc: "revising", score: qcResult.score, feedback: qcResult.feedback });
         try {
           const revisedUserPrompt = userPrompt +
-            `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
+            ((analysis as any).language === 'en'
+              ? `\n\n---\n[Lead Strategist Review — Mandatory Revision]\n${qcResult.feedback}\nAddress the above points clearly and rewrite the analysis to a higher standard of completeness. Write the ENTIRE revised report in English only.`
+              : `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`);
           const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
