@@ -75,6 +75,35 @@ function calculateBollingerBands(closes: number[], period = 20, multiplier = 2) 
   return { upper, middle, lower };
 }
 
+// ── 입력 검증 헬퍼 ────────────────────────────────────────────────────────────
+
+/** 허용된 차트 기간 값 (화이트리스트) */
+const ALLOWED_PERIODS = new Set(["3m", "6m", "1y", "2y", "5y"]);
+
+/** 허용된 차트 인터벌 값 (화이트리스트) */
+const ALLOWED_INTERVALS = new Set(["1d", "1wk", "1mo"]);
+
+/** 기간 → 일수 매핑 (안전한 객체 — 프로토타입 없음) */
+const PERIOD_TO_DAYS = Object.assign(Object.create(null) as Record<string, number>, {
+  "3m": 90, "6m": 180, "1y": 365, "2y": 730, "5y": 1825,
+});
+
+/**
+ * 티커 심볼을 검증하고 정규화합니다.
+ * 허용 형식: 영숫자, 점, 하이픈, 숫자(6자리 한국 코드)
+ * 최대 20자. 허용되지 않으면 null 반환.
+ */
+function sanitizeTicker(raw: string): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const t = raw.trim().toUpperCase();
+  if (t.length === 0 || t.length > 20) return null;
+  // 허용: 영문, 숫자, 점, 하이픈, 앰퍼샌드(BRK-B, KT&G 등)
+  if (!/^[A-Z0-9.\-&]{1,20}$/.test(t)) return null;
+  // 경로 순회 방지
+  if (t.includes("..") || t.includes("/") || t.includes("\\")) return null;
+  return t;
+}
+
 function isValidEquityName(name: string | undefined, symbol: string): boolean {
   if (!name) return false;
   // Invalid if name contains commas (fund/index codes) or is identical to the ticker
@@ -1077,9 +1106,11 @@ JSON 배열만 출력. 코드블록·설명 불필요.`;
 
 router.get("/earnings-calendar", async (req, res) => {
   try {
-  const range   = (req.query.range   as string) ?? "week";
-  const extra   = (req.query.tickers as string) ?? "";
-  const days    = range === "month" ? 30 : 7;
+  const rawRange = typeof req.query.range === "string" ? req.query.range : "week";
+  const range    = rawRange === "month" ? "month" : "week";
+  const rawExtra = typeof req.query.tickers === "string" ? req.query.tickers : "";
+  const extra    = rawExtra;
+  const days     = range === "month" ? 30 : 7;
 
   // ── KST(UTC+9) 기준 오늘 자정 ───────────────────────────────────────────
   const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -1111,7 +1142,9 @@ router.get("/earnings-calendar", async (req, res) => {
 
   // ── 2. 기본 주요 한국/미국 종목 보완 ──────────────────────────────────────
   const defaultTickers = CALENDAR_DEFAULT_TICKERS;
-  const extraTickers   = extra ? extra.split(",").map(t => t.trim()).filter(Boolean) : [];
+  const extraTickers   = extra
+    ? extra.split(",").map(t => sanitizeTicker(t)).filter((t): t is string => t !== null).slice(0, 20)
+    : [];
 
   // 종목 코드 → 한국어 회사명 맵 (KOREAN_COMPANY_MAP 기반, 티커 접미사 정규화)
   const KR_NAME_MAP: Record<string, string> = {};
@@ -1343,21 +1376,16 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
 });
 
 router.get("/:ticker", async (req, res) => {
-  const { ticker } = req.params;
-  const { period = "1y", interval = "1d" } = req.query as {
-    period?: string;
-    interval?: string;
-  };
+  const ticker = sanitizeTicker(req.params.ticker ?? "");
+  if (!ticker) { res.status(400).json({ error: "Invalid ticker symbol" }); return; }
+
+  const rawPeriod   = typeof req.query.period   === "string" ? req.query.period   : "1y";
+  const rawInterval = typeof req.query.interval  === "string" ? req.query.interval  : "1d";
+  const period   = ALLOWED_PERIODS.has(rawPeriod)   ? rawPeriod   : "1y";
+  const interval = ALLOWED_INTERVALS.has(rawInterval) ? rawInterval : "1d";
 
   try {
-    const periodMap: Record<string, number> = {
-      "3m": 90,
-      "6m": 180,
-      "1y": 365,
-      "2y": 730,
-      "5y": 1825,
-    };
-    const days = periodMap[period] ?? 365;
+    const days = PERIOD_TO_DAYS[period] ?? 365;
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -1500,7 +1528,8 @@ router.get("/:ticker", async (req, res) => {
 
 // GET /api/market-data/financials/:ticker — structured annual + quarterly income statement
 router.get("/financials/:ticker", async (req, res) => {
-  const ticker = (req.params.ticker as string).toUpperCase();
+  const ticker = sanitizeTicker(req.params.ticker ?? "");
+  if (!ticker) { res.status(400).json({ error: "Invalid ticker symbol" }); return; }
   const NAVER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     "Referer": "https://m.stock.naver.com/",
@@ -1818,9 +1847,15 @@ router.get("/en-name/:code", async (req, res) => {
   }
 });
 
-// GET /api/market-data/debug-price/:ticker — 임시 진단용: Yahoo Finance + Naver 가격 비교
+// GET /api/market-data/debug-price/:ticker — 진단용 (개발 환경 전용)
 router.get("/debug-price/:ticker", async (req, res) => {
-  const { ticker } = req.params;
+  if (process.env["NODE_ENV"] === "production") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const ticker = sanitizeTicker(req.params.ticker ?? "");
+  if (!ticker) { res.status(400).json({ error: "Invalid ticker symbol" }); return; }
+
   const result: any = {};
   try {
     const q = await yahooFinance.quote(ticker);
