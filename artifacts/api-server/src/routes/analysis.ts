@@ -2570,7 +2570,8 @@ function mapAnalysisRow(row: any): typeof analysesTable.$inferSelect {
     userFeedback: row.user_feedback ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  } as typeof analysesTable.$inferSelect;
+    language: row.language ?? "ko",
+  } as any;
 }
 
 function mapStepRow(row: any): typeof analysisStepsTable.$inferSelect {
@@ -2773,14 +2774,26 @@ router.post("/", async (req, res) => {
     .filter(Boolean)
     .join("\n\n") || null;
 
+  // 사용자 언어 설정 조회
+  let userLanguage: "ko" | "en" = "ko";
+  if (userId) {
+    try {
+      const langResult = await pool.query(
+        `SELECT language FROM user_settings WHERE user_id = $1`,
+        [userId]
+      );
+      if (langResult.rows[0]?.language === "en") userLanguage = "en";
+    } catch { /* 기본값 'ko' 유지 */ }
+  }
+
   let analysis: typeof analysesTable.$inferSelect;
   try {
     const client = await pool.connect();
     try {
       const insertResult = await client.query(
         `INSERT INTO analyses
-           (user_id, ticker, company_name, english_name, industry, additional_context, status, current_step, is_public, start_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           (user_id, ticker, company_name, english_name, industry, additional_context, status, current_step, is_public, start_price, language)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           userId ?? null,
@@ -2793,6 +2806,7 @@ router.post("/", async (req, res) => {
           "company_intro",
           "true",
           startPrice,
+          userLanguage,
         ]
       );
       analysis = mapAnalysisRow(insertResult.rows[0]);
@@ -4045,7 +4059,8 @@ async function executeStep(
     analysis.industry,
     enrichedContext,
     previousStepsForContext,
-    sectorCalibration
+    sectorCalibration,
+    ((analysis as any).language ?? "ko") as "ko" | "en"
   );
 
   /**

@@ -1746,7 +1746,8 @@ export function buildPrompt(
   industry: string,
   additionalContext: string | null | undefined,
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>,
-  calibrationContext?: string | null
+  calibrationContext?: string | null,
+  language?: "ko" | "en"
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate    = getSectorTemplate(industry, companyName);
   const sotpFlag         = needsSOTP(industry, companyName, ticker);
@@ -4937,11 +4938,26 @@ ${COMMON_RULES}`,
   };
 
   const result = prompts[stepKey];
+
+  const EN_INSTRUCTION = `[CRITICAL LANGUAGE INSTRUCTION — MUST FOLLOW]
+This analysis report MUST be written ENTIRELY in English. Every section heading, sentence, number description, table label, and conclusion must be in English only. Do NOT use Korean or any other language anywhere in the output.
+- Korean company names and proper nouns should appear in their standard English/romanized form (e.g., Samsung Electronics, SK Hynix, Hyundai Motor, POSCO, KakaoBank).
+- All financial terminology must be in English: Revenue, Operating Income, Net Income, EBITDA, Free Cash Flow, etc.
+- All units in English: "billion KRW", "trillion KRW", "billion USD", etc. (never "억원", "조원")
+- Writing style: professional English-language hedge fund research report.
+- The final source citation line must also be in English (e.g., "Sources: Yahoo Finance, SEC EDGAR").
+`;
+
+  let systemPrompt = result.systemPrompt;
+  let userPrompt = result.userPrompt;
+
   if (calibrationContext && (stepKey === 'relative_valuation' || stepKey === 'investment_strategy')) {
-    return {
-      systemPrompt: result.systemPrompt + '\n\n' + calibrationContext,
-      userPrompt: result.userPrompt,
-    };
+    systemPrompt = systemPrompt + '\n\n' + calibrationContext;
   }
-  return result;
+
+  if (language === 'en') {
+    systemPrompt = EN_INSTRUCTION + '\n\n' + systemPrompt;
+  }
+
+  return { systemPrompt, userPrompt };
 }

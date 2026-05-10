@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2 } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, Globe } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -110,6 +110,10 @@ export default function SettingsPage() {
   const [promoApplying, setPromoApplying] = useState(false);
   const [promoResult, setPromoResult] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  const [language, setLanguage] = useState<"ko" | "en">("ko");
+  const [langSaving, setLangSaving] = useState(false);
+  const [langMsg, setLangMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
@@ -130,6 +134,11 @@ export default function SettingsPage() {
     fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.isAdmin) setIsAdmin(true); })
+      .catch(() => {});
+
+    fetch(getApiUrl("/api/user/settings"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.language) setLanguage(d.language); })
       .catch(() => {});
   }, []);
 
@@ -226,6 +235,31 @@ export default function SettingsPage() {
       setDeleteError("네트워크 오류가 발생했습니다.");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const saveLanguage = async (lang: "ko" | "en") => {
+    if (langSaving) return;
+    setLanguage(lang);
+    setLangSaving(true);
+    setLangMsg(null);
+    try {
+      const r = await fetch(getApiUrl("/api/user/settings"), {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: lang }),
+      });
+      if (r.ok) {
+        setLangMsg({ type: "ok", text: lang === "en" ? "English mode enabled. New analyses will be written in English." : "한국어 모드로 변경되었습니다. 새 분석부터 적용됩니다." });
+      } else {
+        setLangMsg({ type: "err", text: "저장에 실패했습니다" });
+      }
+    } catch {
+      setLangMsg({ type: "err", text: "네트워크 오류가 발생했습니다" });
+    } finally {
+      setLangSaving(false);
+      setTimeout(() => setLangMsg(null), 4000);
     }
   };
 
@@ -459,6 +493,53 @@ export default function SettingsPage() {
           </div>
         </Section>
       )}
+
+      {/* ── 언어 / Language ── */}
+      <Section title="언어 / Language">
+        <div className="px-4 py-4 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Globe className="w-4 h-4 text-primary" />
+            <p className="text-[13px] font-medium text-foreground">분석 리포트 언어</p>
+          </div>
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+            영어(English) 선택 시 새로 시작하는 분석 리포트가 전체 영어로 작성됩니다. 기존 분석에는 영향을 주지 않습니다.
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            {(["ko", "en"] as const).map((lang) => {
+              const isSelected = language === lang;
+              return (
+                <motion.button
+                  key={lang}
+                  onClick={() => saveLanguage(lang)}
+                  disabled={langSaving}
+                  whileTap={{ scale: 0.97 }}
+                  className={cn(
+                    "relative flex flex-col items-center gap-1.5 p-3.5 rounded-xl border-2 transition-all duration-200 disabled:opacity-50",
+                    isSelected
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-accent/50"
+                  )}
+                >
+                  <span className="text-2xl">{lang === "ko" ? "🇰🇷" : "🇺🇸"}</span>
+                  <span className={cn("text-[13px] font-semibold", isSelected ? "text-foreground" : "text-muted-foreground")}>
+                    {lang === "ko" ? "한국어" : "English"}
+                  </span>
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                    </div>
+                  )}
+                </motion.button>
+              );
+            })}
+          </div>
+          {langMsg && (
+            <p className={cn("text-[12px]", langMsg.type === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-500")}>
+              {langMsg.text}
+            </p>
+          )}
+        </div>
+      </Section>
 
       {/* ── 테마 ── */}
       <Section title="테마">

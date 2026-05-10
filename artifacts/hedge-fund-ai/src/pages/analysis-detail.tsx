@@ -1306,10 +1306,10 @@ export default function AnalysisDetail() {
                   ? "bg-success/10 text-success border-success/20" 
                   : "bg-warning/10 text-warning border-warning/20 animate-pulse"
               )}>
-                {isComplete ? '분석 완료' : '분석 진행중'}
+                {isComplete ? ((analysis as any).language === 'en' ? 'Analysis Complete' : '분석 완료') : ((analysis as any).language === 'en' ? 'In Progress' : '분석 진행중')}
               </span>
               <span className="px-2 py-0.5 text-[10px] font-medium rounded border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 flex items-center gap-1">
-                <span>⚡</span>AI 자동 생성 · 참고용
+                <span>⚡</span>{(analysis as any).language === 'en' ? 'AI Generated · For Reference' : 'AI 자동 생성 · 참고용'}
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground leading-tight">
@@ -1367,7 +1367,7 @@ export default function AnalysisDetail() {
                       {upsidePct !== null ? (
                         <>
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-                            {upsidePct >= 0 ? "상승여력" : "하락여지"}
+                            {(analysis as any).language === 'en' ? (upsidePct >= 0 ? "Upside Potential" : "Downside Risk") : (upsidePct >= 0 ? "상승여력" : "하락여지")}
                           </p>
                           <p className={`text-4xl font-black tabular-nums leading-none tracking-tight ${upsidePct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
                             {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
@@ -1386,21 +1386,29 @@ export default function AnalysisDetail() {
                     )}
                     <div className="space-y-1.5 font-mono text-xs">
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
-                        <span className="text-muted-foreground">적정주가 <span className="text-xs opacity-60">(12개월)</span></span>
+                        <span className="text-muted-foreground">{(analysis as any).language === 'en' ? <>Target Price <span className="text-xs opacity-60">(12M)</span></> : <>적정주가 <span className="text-xs opacity-60">(12개월)</span></>}</span>
                         <span className={`font-bold ${targetColor}`}>{formatCurrency(analysis.targetPrice, currency)}</span>
                       </div>
                       {sp && (
                         <div className="flex justify-between items-center border-b border-border pb-1.5">
-                          <span className="text-muted-foreground">분석 시작가</span>
+                          <span className="text-muted-foreground">{(analysis as any).language === 'en' ? 'Analysis Start Price' : '분석 시작가'}</span>
                           <span className="text-foreground/70 font-medium">{formatCurrency(sp, currency)}</span>
                         </div>
                       )}
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
-                        <span className="text-muted-foreground">{isSellVerdict ? "재관심 기준가" : "진입가"}</span>
+                        <span className="text-muted-foreground">
+                          {(analysis as any).language === 'en'
+                            ? (isSellVerdict ? "Re-entry Threshold" : "Entry Price")
+                            : (isSellVerdict ? "재관심 기준가" : "진입가")}
+                        </span>
                         <span className={`font-semibold ${isSellVerdict ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>{formatCurrency(analysis.entryPrice, currency)}</span>
                       </div>
                       <div className="flex justify-between items-center pt-0.5">
-                        <span className="text-muted-foreground">{isSellVerdict ? "청산 우선 구간" : "손절가"}</span>
+                        <span className="text-muted-foreground">
+                          {(analysis as any).language === 'en'
+                            ? (isSellVerdict ? "Liquidation Zone" : "Stop Loss")
+                            : (isSellVerdict ? "청산 우선 구간" : "손절가")}
+                        </span>
                         <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency)}</span>
                       </div>
                     </div>
@@ -1414,7 +1422,7 @@ export default function AnalysisDetail() {
                 className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
               >
                 <Share2 className="w-3.5 h-3.5" />
-                이 분석 공유하기
+                {(analysis as any).language === 'en' ? 'Share this analysis' : '이 분석 공유하기'}
               </button>
 
             </div>
@@ -1444,10 +1452,10 @@ export default function AnalysisDetail() {
         <div className="flex items-center justify-between mb-3 sm:mb-5">
           <h3 className="font-display font-semibold text-sm sm:text-base flex items-center gap-2">
             <BrainCircuit className="text-primary w-4 h-4" />
-            AI 분석 파이프라인
+            {(analysis as any).language === 'en' ? 'AI Analysis Pipeline' : 'AI 분석 파이프라인'}
           </h3>
           <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-            {isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length} 단계
+            {isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length} {(analysis as any).language === 'en' ? 'steps' : '단계'}
           </span>
         </div>
         
@@ -1477,7 +1485,7 @@ export default function AnalysisDetail() {
                       "text-[10px] font-medium leading-tight text-center max-w-[56px] break-keep",
                       isDone ? "text-primary" : isCurrent ? "text-primary" : "text-muted-foreground"
                     )}>
-                      {agent.name}
+                      {(analysis as any).language === 'en' ? (agent.nameEn ?? agent.name) : agent.name}
                     </span>
                   </div>
                 );
@@ -1493,7 +1501,7 @@ export default function AnalysisDetail() {
           {[...analysis.steps]
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
-            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} />
+            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} isEn={(analysis as any).language === 'en'} />
           ))}
         </AnimatePresence>
 
@@ -1546,18 +1554,18 @@ export default function AnalysisDetail() {
                     </div>
                     <div className="flex-1">
                       <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-                      <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{(analysis as any).language === 'en' ? (agent.nameEn ?? agent.name) : agent.name}</span>
                     </div>
                     <span className="text-[10px] text-muted-foreground/50 font-mono">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center py-8 px-5">
                     <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
                       <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
-                      <span>분석 리포트 작성 중...</span>
+                      <span>{(analysis as any).language === 'en' ? 'Writing analysis report...' : '분석 리포트 작성 중...'}</span>
                     </div>
                     {agent.description && (
                       <p className="mt-2 text-[11px] text-muted-foreground/60 text-center font-mono tracking-wide">
-                        {agent.description}
+                        {(analysis as any).language === 'en' ? (agent.descriptionEn ?? agent.description) : agent.description}
                       </p>
                     )}
                     <div className="mt-3 min-h-[36px] flex items-center justify-center px-4 w-full">
@@ -1815,14 +1823,14 @@ export default function AnalysisDetail() {
                 const tp = analysis.targetPrice ?? null;
                 const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
                 if (upsidePct == null) return (
-                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{toKoreanVerdict(analysis.investmentVerdict)}</span>
+                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{(analysis as any).language === 'en' ? (analysis.investmentVerdict ?? '–') : toKoreanVerdict(analysis.investmentVerdict)}</span>
                 );
                 return (
                   <div className="text-right shrink-0">
                     <p className={`text-[20px] font-black tabular-nums leading-none ${upsidePct >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                       {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
                     </p>
-                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{upsidePct >= 0 ? "상승여력" : "하락여지"}</p>
+                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{(analysis as any).language === 'en' ? (upsidePct >= 0 ? "Upside" : "Downside") : (upsidePct >= 0 ? "상승여력" : "하락여지")}</p>
                   </div>
                 );
               })()}
@@ -1830,13 +1838,13 @@ export default function AnalysisDetail() {
             <div className="space-y-1 font-mono">
               {analysis.targetPrice && (
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground/60">적정주가</span>
+                  <span className="text-muted-foreground/60">{(analysis as any).language === 'en' ? "Target Price" : "적정주가"}</span>
                   <span className="font-bold text-foreground/80">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
               )}
               {analysis.entryPrice && (
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground/60">진입가</span>
+                  <span className="text-muted-foreground/60">{(analysis as any).language === 'en' ? "Entry" : "진입가"}</span>
                   <span className="font-semibold text-emerald-500">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
               )}
@@ -1844,7 +1852,7 @@ export default function AnalysisDetail() {
             <div className="mt-2.5 pt-2 border-t border-border/60">
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50">
                 <TrendingUp className="w-3 h-3" />
-                <span>스크롤하여 전체 분석 보기</span>
+                <span>{(analysis as any).language === 'en' ? "Scroll to read full analysis" : "스크롤하여 전체 분석 보기"}</span>
               </div>
             </div>
           </motion.div>
@@ -2864,16 +2872,18 @@ function ValuationScaleBar({
   );
 }
 
-function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number }) {
+function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice, isEn = false }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number, isEn?: boolean }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
     name: step.agentName ?? "에이전트",
+    nameEn: step.agentName ?? "Agent",
     role: step.agentRole ?? step.stepKey,
     icon: BrainCircuit,
     color: "text-primary",
     bgColor: "bg-primary/10",
     description: "",
+    descriptionEn: "",
   };
 
   if (step.stepKey === "investment_strategy") {
@@ -2919,7 +2929,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
         <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
       </div>
