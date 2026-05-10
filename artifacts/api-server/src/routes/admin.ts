@@ -264,7 +264,7 @@ router.get("/user-list", async (req, res) => {
        uc.daily_used,
        uc.daily_limit,
        uc.bonus_credits,
-       uc.total_analyses,
+       COUNT(a.id) AS total_analyses,
        uc.tier,
        uc.admin_memo,
        uc.display_name,
@@ -275,7 +275,7 @@ router.get("/user-list", async (req, res) => {
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
      ${whereClause}
-     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.total_analyses, uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at
+     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at
      ORDER BY ${orderBy}
      LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
     listParams
@@ -317,13 +317,13 @@ router.get("/user-list/export", async (req, res) => {
   const { rows } = await pool.query(
     `SELECT
        uc.user_id, uc.display_name, uc.email, uc.tier,
-       uc.total_analyses, uc.bonus_credits, uc.daily_limit, uc.daily_used,
+       COUNT(a.id) AS total_analyses, uc.bonus_credits, uc.daily_limit, uc.daily_used,
        uc.created_at,
        MAX(a.created_at) AS last_activity,
        COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
-     GROUP BY uc.user_id, uc.display_name, uc.email, uc.tier, uc.total_analyses,
+     GROUP BY uc.user_id, uc.display_name, uc.email, uc.tier,
               uc.bonus_credits, uc.daily_limit, uc.daily_used, uc.created_at
      ORDER BY uc.created_at DESC`
   );
@@ -507,8 +507,14 @@ router.get("/user-detail/:userId", async (req, res) => {
   try {
     const [creditRow, topTickers, recentAnalyses, activityByDay] = await Promise.all([
       pool.query(
-        `SELECT user_id, daily_limit, daily_used, bonus_credits, total_analyses, tier, admin_memo, display_name, email, created_at
-         FROM user_credits WHERE user_id = $1`, [targetId]
+        `SELECT uc.user_id, uc.daily_limit, uc.daily_used, uc.bonus_credits,
+                COUNT(a.id) AS total_analyses,
+                uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at
+         FROM user_credits uc
+         LEFT JOIN analyses a ON a.user_id = uc.user_id
+         WHERE uc.user_id = $1
+         GROUP BY uc.user_id, uc.daily_limit, uc.daily_used, uc.bonus_credits,
+                  uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at`, [targetId]
       ),
       pool.query(
         `SELECT ticker, company_name, COUNT(*) AS cnt,
