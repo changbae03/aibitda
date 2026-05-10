@@ -66,90 +66,6 @@ function useNotice(): NoticeSettings {
   return settings;
 }
 
-interface MacroBarData {
-  usdKrw: number | null;
-  t10y: number | null;
-  fedRate: number | null;
-  baseRate: number | null;
-}
-
-function useMarketBar() {
-  const [data, setData] = useState<MacroBarData | null>(null);
-  useEffect(() => {
-    fetch(getApiUrl("/api/macro"), { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d) return;
-        setData({
-          usdKrw: d.ecos?.usdKrw ?? null,
-          t10y: d.fred?.t10y ?? null,
-          fedRate: d.fred?.fedFundsRate ?? null,
-          baseRate: d.ecos?.baseRate ?? null,
-        });
-      })
-      .catch(() => {});
-  }, []);
-  return data;
-}
-
-function getRateStyle(v: number, hi: number, lo: number): { color: string; arrow: string | null } {
-  if (v >= hi) return { color: "text-orange-400 dark:text-orange-400", arrow: "▲" };
-  if (v <= lo) return { color: "text-emerald-500 dark:text-emerald-400", arrow: "▼" };
-  return { color: "text-foreground/70", arrow: null };
-}
-
-function MarketBar() {
-  const data = useMarketBar();
-  if (!data) return null;
-
-  const items: Array<{ label: string; value: string; color: string; arrow: string | null }> = [];
-
-  if (data.usdKrw != null) {
-    const v = data.usdKrw;
-    const color = v > 1420 ? "text-orange-400" : v < 1330 ? "text-emerald-400" : "text-foreground/70";
-    const arrow = v > 1420 ? "▲" : v < 1330 ? "▼" : null;
-    items.push({ label: "USD/KRW", value: `${v.toFixed(0)}원`, color, arrow });
-  }
-  if (data.baseRate != null) {
-    const s = getRateStyle(data.baseRate, 3.5, 2.0);
-    items.push({ label: "🇰🇷 기준금리", value: `${data.baseRate.toFixed(2)}%`, ...s });
-  }
-  if (data.t10y != null) {
-    const s = getRateStyle(data.t10y, 4.5, 3.5);
-    items.push({ label: "US 10Y", value: `${data.t10y.toFixed(2)}%`, ...s });
-  }
-  if (data.fedRate != null) {
-    const s = getRateStyle(data.fedRate, 5.0, 3.0);
-    items.push({ label: "Fed", value: `${data.fedRate.toFixed(2)}%`, ...s });
-  }
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className="flex items-center gap-0 px-3 py-1.5 border-b border-border bg-muted/30 print:hidden overflow-x-auto shrink-0 scrollbar-none">
-      {items.map((item, i) => (
-        <span key={item.label} className="flex items-center gap-1 whitespace-nowrap">
-          {i > 0 && <span className="mx-2.5 text-border/50 select-none">·</span>}
-          <span className="text-[10.5px] text-muted-foreground/55">{item.label}</span>
-          <span className={cn("text-[10.5px] font-mono font-bold ml-1 tabular-nums", item.color)}>
-            {item.value}
-          </span>
-          {item.arrow && (
-            <span className={cn("text-[9px] ml-0.5 leading-none", item.color)}>{item.arrow}</span>
-          )}
-        </span>
-      ))}
-      <button
-        onClick={openCommandPalette}
-        className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors shrink-0"
-      >
-        <Search className="w-2.5 h-2.5" />
-        <span className="hidden sm:inline text-[10px]">검색</span>
-        <kbd className="hidden sm:inline px-1 py-0.5 rounded text-[8px] border border-border/40 bg-muted/50 font-mono ml-0.5">⌘K</kbd>
-      </button>
-    </div>
-  );
-}
 
 function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   const [dismissed, setDismissed] = useState(false);
@@ -578,7 +494,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         <NoticeBanner settings={notice} />
-        <MarketBar />
 
         {/* Scrollable Content */}
         <div id="print-scroll" className="flex-1 overflow-y-auto">
