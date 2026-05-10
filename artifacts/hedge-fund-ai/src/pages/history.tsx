@@ -326,6 +326,7 @@ interface PerfResult {
 function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
   label: string; pct: number | null; daysElapsed: number; requiredDays: number;
 }) {
+  const { isEn } = useLanguage();
   const elapsed = daysElapsed >= requiredDays;
 
   if (!elapsed) {
