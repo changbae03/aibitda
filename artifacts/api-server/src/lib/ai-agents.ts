@@ -4600,10 +4600,10 @@ Base upside가 –10% 미만이면 [A. 매도 대응 전략]만 작성하고, �
 
 ---
 
-위 분석을 마친 후, 반드시 아래 두 JSON을 응답의 마지막에 각각 단독 줄로 출력하세요 (코드블록·설명 없이):
+위 분석을 마친 후, 반드시 아래 세 JSON을 응답의 마지막에 각각 단독 줄로 출력하세요 (코드블록·설명 없이):
 
 ① 가격 레벨 데이터 (한 줄):
-CHART_DATA:{"support":0,"resistance":0,"entryMin":0,"entryMax":0,"stopLoss":0,"target1":0,"target2":0}
+CHART_DATA:{"support":0,"resistance":0,"entryMin":0,"entryMax":0,"stopLoss":0,"target1":0,"target2":0,"currentPrice":0}
 
 각 필드 (단위: 원 또는 USD 정수):
 - support: 핵심 지지선 1
@@ -4613,6 +4613,7 @@ CHART_DATA:{"support":0,"resistance":0,"entryMin":0,"entryMax":0,"stopLoss":0,"t
 - stopLoss: [Buy] 최종 손절가 / [Sell] 보유자 1차 차익실현 기준가 (현재가 기준 +5~10% 저항선)
 - target1: 1차 목표가 (적정주가 Base — Sell이면 음수 upside)
 - target2: 2차 목표가 (상단 밴드 Bull)
+- currentPrice: 분석 시점 현재가 (컨텍스트에서 직접 인용)
 
 ② 차트 이벤트 주석 (한 줄) — 최근 1~2년 내 주가에 영향을 준 핵심 이슈 최대 6개:
 EVENTS_DATA:[{"date":"YYYY-MM","label":"이벤트명 (10자 이내)","type":"catalyst"}]
@@ -4620,7 +4621,16 @@ EVENTS_DATA:[{"date":"YYYY-MM","label":"이벤트명 (10자 이내)","type":"cat
 type 분류: "catalyst"(긍정 촉매), "risk"(리스크·악재), "earnings"(실적 발표), "news"(중요 뉴스)
 날짜 형식: "YYYY-MM" (해당 이벤트가 발생한 연월, 예: "2024-11")
 label: 핵심만 10자 이내 — 예) "HBM4 공급계약", "4Q24 어닝쇼크", "AI칩 수출규제", "엔비디아 파트너십"
-이벤트가 불분명하면 빈 배열 [] 출력 (추측 금지)`,
+이벤트가 불분명하면 빈 배열 [] 출력 (추측 금지)
+
+③ 기술적 신호 요약 (한 줄):
+MARKET_SIGNALS_DATA:{"trend":"bullish","position52w":45,"signal":"buy","rrRatio":2.5}
+
+각 필드:
+- trend: "bullish"(상승 추세) / "bearish"(하락 추세) / "neutral"(횡보)
+- position52w: 현재가의 52주 밴드 내 위치 (52주 저가=0, 52주 고가=100, 0~100 정수)
+- signal: "buy"(매수 진입 구간) / "wait"(관망·추가 확인 필요) / "sell"(매도·차익실현 대응)
+- rrRatio: 손익비 숫자 (예: 2.5 → 손익비 2.5:1)`,
     },
 
     catalyst_analysis: {

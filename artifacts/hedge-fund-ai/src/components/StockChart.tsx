@@ -28,6 +28,7 @@ export interface ChartLevels {
   stopLoss?: number;
   target1?: number;
   target2?: number;
+  currentPrice?: number;
 }
 
 export interface ChartEvent {

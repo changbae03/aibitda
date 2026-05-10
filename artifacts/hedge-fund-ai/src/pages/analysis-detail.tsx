@@ -1484,7 +1484,7 @@ export default function AnalysisDetail() {
           {[...analysis.steps]
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
-            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} />
+            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} />
           ))}
         </AnimatePresence>
 
@@ -2451,9 +2451,164 @@ function parseChartEvents(content: string): ChartEvent[] {
 function stripChartData(content: string): string {
   return content
     .replace(/\n?---\n[\s\S]*?CHART_DATA:\{[^\n]+\}[\s\S]*$/, "")
-    .replace(/\nCHART_DATA:\{[^\n]+\}\s*(\nEVENTS_DATA:\[[^\n]*\])?\s*$/, "")
-    .replace(/\nEVENTS_DATA:\[[^\n]*\]\s*$/, "")
+    .replace(/\nCHART_DATA:\{[^\n]+\}\s*(\nEVENTS_DATA:\[[^\n]*\])?\s*(\nMARKET_SIGNALS_DATA:\{[^\n]+\})?\s*$/, "")
+    .replace(/\nEVENTS_DATA:\[[^\n]*\]\s*(\nMARKET_SIGNALS_DATA:\{[^\n]+\})?\s*$/, "")
+    .replace(/\nMARKET_SIGNALS_DATA:\{[^\n]+\}\s*$/, "")
     .trim();
+}
+
+interface MarketSignals {
+  trend: "bullish" | "bearish" | "neutral";
+  position52w: number;
+  signal: "buy" | "wait" | "sell";
+  rrRatio: number;
+}
+
+function parseMarketSignals(content: string): MarketSignals | null {
+  const match = content.match(/MARKET_SIGNALS_DATA:(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(match[1]) as Partial<MarketSignals>;
+    if (!p.trend) return null;
+    return {
+      trend: p.trend ?? "neutral",
+      position52w: typeof p.position52w === "number" ? Math.max(0, Math.min(100, p.position52w)) : 50,
+      signal: p.signal ?? "wait",
+      rrRatio: typeof p.rrRatio === "number" ? p.rrRatio : 0,
+    };
+  } catch { return null; }
+}
+
+function MarketSignalChips({ signals }: { signals: MarketSignals }) {
+  const trendMap = {
+    bullish: { label: "▲ 상승 추세", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60" },
+    bearish: { label: "▼ 하락 추세", cls: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60" },
+    neutral: { label: "→ 횡보 구간", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60" },
+  };
+  const signalMap = {
+    buy:  { label: "매수 진입", cls: "bg-emerald-500 text-white" },
+    wait: { label: "관망",      cls: "bg-amber-500 text-white"   },
+    sell: { label: "매도 대응", cls: "bg-red-500 text-white"     },
+  };
+  const tc = trendMap[signals.trend] ?? trendMap.neutral;
+  const sc = signalMap[signals.signal] ?? signalMap.wait;
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-border">
+      <span className={cn("text-[11px] font-bold px-3 py-1.5 rounded-full", tc.cls)}>{tc.label}</span>
+      <div className="flex items-center gap-1.5 bg-muted/60 border border-border rounded-full px-3 py-1.5">
+        <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">52주</span>
+        <div className="w-14 h-1.5 bg-muted-foreground/20 rounded-full overflow-hidden">
+          <div className="h-full rounded-full bg-foreground/60 transition-all" style={{ width: `${signals.position52w}%` }} />
+        </div>
+        <span className="text-[10px] font-mono font-bold text-foreground/80">{signals.position52w}%</span>
+      </div>
+      <span className={cn("text-[11px] font-bold px-3 py-1.5 rounded-full", sc.cls)}>{sc.label}</span>
+      {signals.rrRatio > 0 && (
+        <div className="flex items-center gap-1.5 bg-muted/60 border border-border rounded-full px-3 py-1.5">
+          <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">손익비</span>
+          <span className="text-[11px] font-mono font-bold text-foreground">{signals.rrRatio.toFixed(1)} : 1</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TechnicalLevelLadder({ levels, startPrice, currency }: {
+  levels: ChartLevels;
+  startPrice?: number;
+  currency: "KRW" | "USD";
+}) {
+  const cp = (levels.currentPrice && levels.currentPrice > 0) ? levels.currentPrice : (startPrice && startPrice > 0 ? startPrice : 0);
+  if (!cp) return null;
+
+  const fmtP = (v: number) => currency === "USD"
+    ? `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `${v.toLocaleString("ko-KR")}원`;
+  const fmtPct = (v: number) => {
+    const p = ((v - cp) / cp * 100);
+    return { str: (p >= 0 ? "+" : "") + p.toFixed(1) + "%", isUp: p >= 0 };
+  };
+
+  type LItem = {
+    key: string; label: string; price: number; sub?: string;
+    variant: "stop" | "entry" | "current" | "resistance" | "support" | "target1" | "target2";
+  };
+  const raw: (LItem | null)[] = [
+    (levels.stopLoss && levels.stopLoss > 0) ? { key: "sl", label: "손절가", price: levels.stopLoss, variant: "stop" } : null,
+    (levels.entryMin && levels.entryMax && levels.entryMin > 0)
+      ? { key: "em", label: "진입 구간", price: levels.entryMin, sub: "~" + fmtP(levels.entryMax), variant: "entry" }
+      : (levels.entryMin && levels.entryMin > 0) ? { key: "em", label: "진입 하단", price: levels.entryMin, variant: "entry" } : null,
+    { key: "cp", label: "현재가", price: cp, variant: "current" },
+    (levels.resistance && levels.resistance > 0) ? { key: "res", label: "저항선", price: levels.resistance, variant: "resistance" } : null,
+    (levels.target1 && levels.target1 > 0) ? { key: "t1", label: "1차 목표가", price: levels.target1, variant: "target1" } : null,
+    (levels.target2 && levels.target2 > 0) ? { key: "t2", label: "2차 목표가", price: levels.target2, variant: "target2" } : null,
+  ];
+  const items = raw.filter((v): v is LItem => v !== null).sort((a, b) => a.price - b.price);
+  if (items.length < 2) return null;
+
+  const prices = items.map(i => i.price);
+  const minP = Math.min(...prices) * 0.988;
+  const maxP = Math.max(...prices) * 1.012;
+  const toPos = (p: number) => Math.max(0, Math.min(100, ((p - minP) / (maxP - minP)) * 100));
+
+  const styleMap: Record<string, { bg: string; border: string; label: string; price: string }> = {
+    stop:       { bg: "bg-red-50 dark:bg-red-950/30",        border: "border-red-200 dark:border-red-800/60",         label: "text-red-500 dark:text-red-400",           price: "text-red-700 dark:text-red-300" },
+    entry:      { bg: "bg-blue-50 dark:bg-blue-950/30",      border: "border-blue-300 dark:border-blue-700/60",       label: "text-blue-600 dark:text-blue-400",          price: "text-blue-700 dark:text-blue-300" },
+    current:    { bg: "bg-foreground",                       border: "border-foreground",                              label: "text-background/60",                       price: "text-background" },
+    resistance: { bg: "bg-orange-50 dark:bg-orange-950/20",  border: "border-orange-200 dark:border-orange-700/50",   label: "text-orange-600 dark:text-orange-400",      price: "text-orange-700 dark:text-orange-300" },
+    support:    { bg: "bg-amber-50 dark:bg-amber-950/20",    border: "border-amber-200 dark:border-amber-700/50",     label: "text-amber-600 dark:text-amber-400",        price: "text-amber-700 dark:text-amber-300" },
+    target1:    { bg: "bg-emerald-50 dark:bg-emerald-950/30",border: "border-emerald-200 dark:border-emerald-700/60", label: "text-emerald-600 dark:text-emerald-400",    price: "text-emerald-700 dark:text-emerald-300" },
+    target2:    { bg: "bg-emerald-100 dark:bg-emerald-900/30",border: "border-emerald-300 dark:border-emerald-600",   label: "text-emerald-700 dark:text-emerald-300",   price: "text-emerald-800 dark:text-emerald-200" },
+  };
+
+  return (
+    <div className="mb-5 pt-4 border-t border-border">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-1 h-3.5 rounded-full bg-indigo-500" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">가격 구간 요약</span>
+        <span className="text-[10px] text-muted-foreground/50 font-mono hidden sm:inline">현재가 기준 상대 위치</span>
+      </div>
+
+      {/* Horizontal bar */}
+      <div className="relative h-5 bg-muted/40 rounded-full mx-1 mb-4 overflow-hidden">
+        {levels.stopLoss && levels.stopLoss > 0 && (
+          <div className="absolute inset-y-0 left-0 bg-red-400/20 rounded-l-full"
+            style={{ width: `${toPos(levels.stopLoss)}%` }} />
+        )}
+        {levels.entryMin && levels.entryMax && levels.entryMin > 0 && (
+          <div className="absolute inset-y-0 bg-blue-400/30 border-x border-blue-400/50"
+            style={{ left: `${toPos(levels.entryMin)}%`, width: `${Math.max(0, toPos(levels.entryMax) - toPos(levels.entryMin))}%` }} />
+        )}
+        {levels.target1 && levels.target1 > 0 && (
+          <div className="absolute inset-y-0 bg-emerald-400/20"
+            style={{ left: `${toPos(levels.target1)}%`, right: 0 }} />
+        )}
+        <div className="absolute inset-y-0 w-0.5 bg-foreground/60"
+          style={{ left: `${toPos(cp)}%`, transform: "translateX(-50%)" }} />
+        <div className="absolute top-1/2 w-3.5 h-3.5 bg-foreground rounded-full border-2 border-background shadow-sm"
+          style={{ left: `${toPos(cp)}%`, transform: "translate(-50%, -50%)" }} />
+      </div>
+
+      {/* Cards */}
+      <div className="overflow-x-auto scrollbar-none -mx-1 pb-1">
+        <div className="flex items-stretch gap-1.5 min-w-max px-1">
+          {items.map((item) => {
+            const st = styleMap[item.variant] ?? styleMap.support;
+            const p = item.variant !== "current" ? fmtPct(item.price) : null;
+            return (
+              <div key={item.key}
+                className={cn("rounded-xl border px-2.5 sm:px-3 py-2 min-w-[76px] flex flex-col items-center gap-0.5", st.bg, st.border)}>
+                <span className={cn("text-[9px] font-semibold uppercase tracking-wide leading-tight text-center", st.label)}>{item.label}</span>
+                <span className={cn("text-[11px] font-mono font-bold leading-tight", st.price)}>{fmtP(item.price)}</span>
+                {item.sub && <span className={cn("text-[9px] font-mono leading-tight", st.label)}>{item.sub}</span>}
+                {p && <span className={cn("text-[10px] font-bold leading-tight", p.isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>{p.str}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface ValuationData {
@@ -2720,7 +2875,7 @@ function ValuationScaleBar({
   );
 }
 
-function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
+function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
@@ -2741,6 +2896,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   const isRelativeVal = step.stepKey === "relative_valuation";
   const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
   const chartEvents = isMarket ? parseChartEvents(step.content ?? "") : [];
+  const marketSignals = isMarket ? parseMarketSignals(step.content ?? "") : null;
   const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
   const finalValuationData = isRelativeVal ? parseFinalValuationData(step.content ?? "") : null;
   const displayContent = stripPromptInstructions(stripEstimationLabels(
@@ -2790,6 +2946,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
             style={{ overflow: "hidden" }}
           >
       <div className="p-4 sm:p-5">
+        {/* Market & Technical Analyst: 기술적 신호 칩 */}
+        {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} />}
+
         <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -2832,6 +2991,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           </ReactMarkdown>
         </div>
 
+        {/* Market & Technical Analyst: 가격 구간 레이더 */}
+        {isMarket && chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
+          <TechnicalLevelLadder levels={chartLevels} startPrice={startPrice} currency={priceCurrency} />
+        )}
+
         {/* 기술적 분석: 주가 차트 (지지/저항·진입·목표·이벤트 포함) */}
         {isMarket && ticker && (
           <div className="mt-5 pt-4 border-t border-border">
@@ -2844,7 +3008,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 </span>
               )}
               {chartEvents.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 text-violet-600 border border-violet-200">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/60">
                   핵심 이슈 {chartEvents.length}건
                 </span>
               )}
