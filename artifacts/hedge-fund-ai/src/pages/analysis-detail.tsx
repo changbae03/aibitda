@@ -2699,7 +2699,144 @@ function stripFinalValuationData(content: string): string {
     .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/^FINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
     .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
+    .replace(/\nSEGMENT_FORECAST_DATA:\{[^\n]+\}\s*$/m, "")
+    .replace(/^SEGMENT_FORECAST_DATA:\{[^\n]+\}\s*$/m, "")
+    .replace(/SEGMENT_FORECAST_DATA:\{[^\n]+\}/g, "")
     .trim();
+}
+
+interface SegmentForecastEntry { name: string; rev26: number | null; rev27: number | null; op26: number | null; op27: number | null; }
+interface SegmentForecastData { currency: string; segments: SegmentForecastEntry[]; }
+
+function parseSegmentForecastData(content: string): SegmentForecastData | null {
+  const match = content.match(/SEGMENT_FORECAST_DATA:(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]) as SegmentForecastData;
+    if (!parsed.segments?.length) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function fmtAmt(value: number | null, currency: string): string {
+  if (value == null) return "-";
+  if (currency === "KRW") {
+    const v = value * 1e8;
+    const tril = v / 1e12;
+    if (Math.abs(tril) >= 1) return `${tril.toFixed(1)}조`;
+    return `${Math.round(v / 1e8)}억`;
+  }
+  const v = value * 1e6;
+  const bil = v / 1e9;
+  if (Math.abs(bil) >= 1) return `$${bil.toFixed(1)}B`;
+  return `$${Math.round(v / 1e6)}M`;
+}
+
+function fmtAmtRaw(value: number | null, currency: string): string {
+  if (value == null) return "-";
+  if (currency === "KRW") {
+    const tril = value / 1e12;
+    if (Math.abs(tril) >= 1) return `${tril.toFixed(1)}조`;
+    return `${Math.round(value / 1e8)}억`;
+  }
+  const bil = value / 1e9;
+  if (Math.abs(bil) >= 1) return `$${bil.toFixed(1)}B`;
+  return `$${(value / 1e6).toFixed(0)}M`;
+}
+
+function ForwardEstimatesTable({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<{ annual: any[]; currency: string } | null>(null);
+  useEffect(() => {
+    fetch(getApiUrl(`/api/market-data/financials/${ticker}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setData(d))
+      .catch(() => {});
+  }, [ticker]);
+
+  if (!data) return null;
+  const estimates = data.annual.filter((e: any) => e.isEstimate && e.revenue != null);
+  if (estimates.length === 0) return null;
+  const historicals = data.annual.filter((e: any) => !e.isEstimate && e.revenue != null);
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-1 h-3.5 rounded-full bg-amber-400" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">실적 전망</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700">애널리스트 컨센서스</span>
+      </div>
+      <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[340px] text-xs border-collapse">
+          <thead>
+            <tr className="bg-muted/60">
+              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">연도</th>
+              <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">매출</th>
+              <th className="px-3 py-2 text-right font-semibold text-foreground/50 border-b border-border">YoY</th>
+              <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">영업이익</th>
+              <th className="px-3 py-2 text-right font-semibold text-foreground/50 border-b border-border">OPM</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {estimates.map((e: any, i: number) => {
+              const prevArr = i === 0 ? historicals : estimates.slice(0, i);
+              const prev = prevArr[prevArr.length - 1];
+              const yoy = prev?.revenue && e.revenue ? ((e.revenue - prev.revenue) / prev.revenue * 100) : null;
+              return (
+                <tr key={e.period} className="hover:bg-muted/10 transition-colors">
+                  <td className="px-3 py-2 font-semibold text-amber-500">{e.period.slice(0, 4)}E</td>
+                  <td className="px-3 py-2 text-right font-mono text-indigo-500">{fmtAmtRaw(e.revenue, data.currency)}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {yoy != null ? (
+                      <span className={yoy >= 0 ? "text-emerald-500" : "text-rose-500"}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</span>
+                    ) : <span className="text-muted-foreground">-</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-emerald-600">{e.operatingIncome != null ? fmtAmtRaw(e.operatingIncome, data.currency) : "-"}</td>
+                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">{e.operatingMargin != null ? `${e.operatingMargin.toFixed(1)}%` : "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SegmentForecastTable({ data }: { data: SegmentForecastData }) {
+  const has27 = data.segments.some(s => s.rev27 != null || s.op27 != null);
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-1 h-3.5 rounded-full bg-violet-400" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">사업부별 실적 전망</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-700">AI 추정</span>
+      </div>
+      <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[380px] text-xs border-collapse">
+          <thead>
+            <tr className="bg-muted/60">
+              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">사업부</th>
+              <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">매출(26E)</th>
+              <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">영업익(26E)</th>
+              {has27 && <th className="px-3 py-2 text-right font-semibold text-indigo-400 border-b border-border">매출(27E)</th>}
+              {has27 && <th className="px-3 py-2 text-right font-semibold text-emerald-500 border-b border-border">영업익(27E)</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {data.segments.map(s => (
+              <tr key={s.name} className="hover:bg-muted/10 transition-colors">
+                <td className="px-3 py-2 font-medium text-foreground/80">{s.name}</td>
+                <td className="px-3 py-2 text-right font-mono text-indigo-500">{fmtAmt(s.rev26, data.currency)}</td>
+                <td className="px-3 py-2 text-right font-mono text-emerald-600">{fmtAmt(s.op26, data.currency)}</td>
+                {has27 && <td className="px-3 py-2 text-right font-mono text-indigo-400">{fmtAmt(s.rev27, data.currency)}</td>}
+                {has27 && <td className="px-3 py-2 text-right font-mono text-emerald-500">{fmtAmt(s.op27, data.currency)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function stripEstimationLabels(content: string): string {
@@ -2906,6 +3043,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
             />
           </div>
         )}
+
+        {/* Valuation Analyst — 실적 전망 (ForwardEstimatesTable) */}
+        {isRelativeVal && ticker && <ForwardEstimatesTable ticker={ticker} />}
+
+        {/* Valuation Analyst — 사업부별 실적 전망 (AI SEGMENT_FORECAST_DATA) */}
+        {isRelativeVal && (() => {
+          const segData = parseSegmentForecastData(step.content ?? "");
+          return segData ? <SegmentForecastTable data={segData} /> : null;
+        })()}
 
         {/* Valuation Analyst — 최종 조율 적정주가 시각화 */}
         {isRelativeVal && finalValuationData && (() => {
