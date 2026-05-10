@@ -2943,20 +2943,16 @@ Unlevered Beta 참조: 위 [국가별 WACC 기준 파라미터] 테이블 우선
 
 **⛔ 재투자 계산 — Maintenance + Growth 분리 공식 (위 공통 규칙과 동일하게 적용):**
 
-    Maintenance Capex = MAX(컨텍스트 앵커 하한, D&A × 1.3, 기업별 절대 하한)
+    Maintenance Capex = MAX(컨텍스트 앵커 하한, D&A × 업종계수)
+                        [업종계수: 반도체·에너지·통신 1.3~1.5 | 일반제조 1.0~1.2 | IT서비스 0.5~0.8]
     Growth Capex      = MAX(0, 매출증분 ÷ S-to-C − Maintenance Capex)
     당해연도 재투자    = Maintenance Capex + Growth Capex
 
-**기업별 절대 하한 (Maintenance Capex 최솟값 — 어떤 시나리오에서도 이 미만 금지):**
-- 삼성전자(005930): **100조원/year** (D&A ~45조, 기술 리더십 유지 CAPEX 최소 규모)
-- SK하이닉스(000660): **20조원/year** (D&A ~18조, HBM 공정 유지 CAPEX 최소 규모)
-- TSMC(TSM): **USD 280억/year** (최근 연간 CAPEX 수준 기준)
-
 **자가검증 체크리스트 (DCF 표 작성 전 필수):**
-1. 각 연도: 컨텍스트 앵커 하한 ≤ 당해 Maintenance Capex? → No면 즉시 상향
+1. 각 연도: 컨텍스트 앵커 하한(서버 계산 MAX(실제CAPEX, D&A×1.2)) ≤ 당해 Maintenance Capex? → No면 즉시 상향
 2. 전년 대비 총 재투자 감소율이 –30% 초과? → Maintenance 재계산
-3. SK하이닉스인데 총 재투자 < 20조? → 즉시 20조로 교체
-4. 삼성전자인데 총 재투자 < 100조? → 즉시 100조로 교체
+3. 반도체·에너지 등 자산집약 업종: Maintenance Capex ≥ MAX(컨텍스트 앵커 하한, D&A × 1.3) 반드시 유지
+4. 전체 예측 기간 중 Maintenance Capex가 D&A 미만으로 내려가는 연도가 있으면 → 해당 연도 즉시 D&A 수준으로 상향
 
 ✅ **NOPAT 대비 재투자율 검증:** 재투자 ÷ NOPAT이 반도체 성장·유지기에서 80–130%면 정상 (2년 연속 40% 미만이면 S-to-C 재검토)
 ✅ **S-to-C 일관성:** 전체 예측 기간(2026–2033) 내 S-to-C 변화폭 ±0.15 이내 유지
