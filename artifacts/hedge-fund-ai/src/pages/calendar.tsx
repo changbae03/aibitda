@@ -95,6 +95,143 @@ const COUNTRY_FLAG: Record<string, string> = {
   DE: "🇩🇪", GB: "🇬🇧", FR: "🇫🇷", AU: "🇦🇺", CA: "🇨🇦",
 };
 
+// ── 경제지표 한국어 제목 → 영어 번역 ─────────────────────────────────────────
+// Gemini가 생성하는 한국어 이벤트명을 키워드 매칭으로 영어로 변환
+const ECONOMIC_TITLE_EN: Array<[RegExp, string]> = [
+  // 미국
+  [/FOMC.*금리|연방준비제도.*금리|연준.*금리결정/i,       "FOMC Rate Decision"],
+  [/FOMC/i,                                              "FOMC"],
+  [/비농업.*고용|비농업일자리|비농업고용/i,               "Non-Farm Payrolls (NFP)"],
+  [/신규.*실업.*수당|실업수당.*청구/i,                    "Initial Jobless Claims"],
+  [/실업률/i,                                            "Unemployment Rate"],
+  [/소매.*판매/i,                                        "Retail Sales"],
+  [/ISM.*제조업.*PMI|ISM.*제조업/i,                      "ISM Manufacturing PMI"],
+  [/ISM.*서비스.*PMI|ISM.*서비스업/i,                    "ISM Services PMI"],
+  [/PCE.*물가|개인소비지출.*물가/i,                       "PCE Price Index"],
+  [/PPI|생산자.*물가/i,                                   "Producer Price Index (PPI)"],
+  [/미국.*CPI|미국.*소비자.*물가/i,                       "US CPI"],
+  [/CPI|소비자.*물가/i,                                   "Consumer Price Index (CPI)"],
+  [/미국.*GDP|미국.*국내총생산/i,                         "US GDP"],
+  [/GDP.*성장|국내총생산.*성장/i,                         "GDP Growth Rate"],
+  [/GDP/i,                                               "GDP"],
+  [/내구재.*주문/i,                                       "Durable Goods Orders"],
+  [/주택.*착공|신규.*주택.*착공/i,                        "Housing Starts"],
+  [/기존.*주택.*판매/i,                                   "Existing Home Sales"],
+  [/신규.*주택.*판매/i,                                   "New Home Sales"],
+  [/소비자.*심리|미시간.*심리/i,                          "Consumer Sentiment (UMich)"],
+  [/컨퍼런스.*소비자.*신뢰/i,                             "Conference Board Consumer Confidence"],
+  // 한국
+  [/한국은행.*기준금리|BOK.*금리/i,                       "Bank of Korea Rate Decision"],
+  [/한국.*무역수지/i,                                     "Korea Trade Balance"],
+  [/한국.*산업생산/i,                                     "Korea Industrial Production"],
+  [/한국.*GDP/i,                                          "Korea GDP"],
+  // 유로존
+  [/ECB.*금리|유럽중앙은행.*금리/i,                       "ECB Rate Decision"],
+  [/유로존.*CPI|유로존.*소비자.*물가/i,                   "Eurozone CPI"],
+  [/유로존.*GDP/i,                                        "Eurozone GDP"],
+  [/유로존.*PMI/i,                                        "Eurozone PMI"],
+  // 중국
+  [/중국.*제조업.*PMI/i,                                  "China Manufacturing PMI"],
+  [/중국.*비제조업.*PMI/i,                                "China Non-Manufacturing PMI"],
+  [/중국.*PMI/i,                                          "China PMI"],
+  [/중국.*CPI|중국.*소비자.*물가/i,                       "China CPI"],
+  [/중국.*무역수지/i,                                     "China Trade Balance"],
+  [/중국.*GDP/i,                                          "China GDP"],
+  // 일본
+  [/BOJ.*금리|일본은행.*금리/i,                           "BOJ Rate Decision"],
+  [/일본.*CPI|일본.*소비자.*물가/i,                       "Japan CPI"],
+  [/일본.*GDP/i,                                          "Japan GDP"],
+  [/일본.*무역수지/i,                                     "Japan Trade Balance"],
+  // 공통
+  [/금리결정|금리.*결정/i,                                "Rate Decision"],
+  [/무역수지/i,                                           "Trade Balance"],
+  [/제조업.*PMI/i,                                        "Manufacturing PMI"],
+  [/서비스.*PMI|비제조업.*PMI/i,                          "Services PMI"],
+  [/PMI/i,                                                "PMI"],
+  [/산업생산/i,                                           "Industrial Production"],
+];
+
+function translateEconomicTitle(title: string): string {
+  for (const [pattern, en] of ECONOMIC_TITLE_EN) {
+    if (pattern.test(title)) return en;
+  }
+  return title;
+}
+
+// ── 한국 종목 ticker → 영어 회사명 매핑 ──────────────────────────────────────
+const KR_TICKER_EN: Record<string, string> = {
+  // KOSPI 대형주
+  "005930.KS": "Samsung Electronics", "005930": "Samsung Electronics",
+  "000660.KS": "SK Hynix",            "000660": "SK Hynix",
+  "373220.KS": "LG Energy Solution",  "373220": "LG Energy Solution",
+  "207940.KS": "Samsung Biologics",   "207940": "Samsung Biologics",
+  "005380.KS": "Hyundai Motor",       "005380": "Hyundai Motor",
+  "068270.KS": "Celltrion",           "068270": "Celltrion",
+  "000270.KS": "Kia",                 "000270": "Kia",
+  "035420.KS": "NAVER",               "035420": "NAVER",
+  "105560.KS": "KB Financial",        "105560": "KB Financial",
+  "051910.KS": "LG Chem",             "051910": "LG Chem",
+  "055550.KS": "Shinhan Financial",   "055550": "Shinhan Financial",
+  "006400.KS": "Samsung SDI",         "006400": "Samsung SDI",
+  "035720.KS": "Kakao",               "035720": "Kakao",
+  "012330.KS": "Hyundai Mobis",       "012330": "Hyundai Mobis",
+  "005490.KS": "POSCO Holdings",      "005490": "POSCO Holdings",
+  "086790.KS": "Hana Financial",      "086790": "Hana Financial",
+  "066570.KS": "LG Electronics",      "066570": "LG Electronics",
+  "028260.KS": "Samsung C&T",         "028260": "Samsung C&T",
+  "009150.KS": "Samsung Electro-Mech","009150": "Samsung Electro-Mech",
+  "011070.KS": "LG Innotek",          "011070": "LG Innotek",
+  "003670.KS": "POSCO Future M",      "003670": "POSCO Future M",
+  "316140.KS": "Woori Financial",     "316140": "Woori Financial",
+  "010130.KS": "Korea Zinc",          "010130": "Korea Zinc",
+  "024110.KS": "IBK",                 "024110": "IBK",
+  "017670.KS": "SK Telecom",          "017670": "SK Telecom",
+  "323410.KS": "KakaoBank",           "323410": "KakaoBank",
+  "377300.KS": "Kakao Pay",           "377300": "Kakao Pay",
+  "259960.KS": "Krafton",             "259960": "Krafton",
+  "352820.KS": "HYBE",                "352820": "HYBE",
+  "030200.KS": "KT",                  "030200": "KT",
+  "012450.KS": "Hanwha Aerospace",    "012450": "Hanwha Aerospace",
+  "034020.KS": "Doosan Enerbility",   "034020": "Doosan Enerbility",
+  "096770.KS": "SK Innovation",       "096770": "SK Innovation",
+  "015760.KS": "KEPCO",               "015760": "KEPCO",
+  "000720.KS": "Hyundai E&C",         "000720": "Hyundai E&C",
+  "329180.KS": "HD Hyundai Heavy Ind","329180": "HD Hyundai Heavy Ind",
+  "004020.KS": "Hyundai Steel",       "004020": "Hyundai Steel",
+  "036570.KS": "NCSoft",              "036570": "NCSoft",
+  "251270.KS": "Netmarble",           "251270": "Netmarble",
+  "011170.KS": "Lotte Chemical",      "011170": "Lotte Chemical",
+  "086280.KS": "Hyundai Glovis",      "086280": "Hyundai Glovis",
+  "010950.KS": "S-Oil",               "010950": "S-Oil",
+  "033780.KS": "KT&G",                "033780": "KT&G",
+  "009830.KS": "Hanwha Solutions",    "009830": "Hanwha Solutions",
+  "267260.KS": "HD Hyundai Electric", "267260": "HD Hyundai Electric",
+  "454910.KS": "Doosan Robotics",     "454910": "Doosan Robotics",
+  "000100.KS": "Yuhan",               "000100": "Yuhan",
+  "128940.KS": "Hanmi Pharm",         "128940": "Hanmi Pharm",
+  // KOSDAQ
+  "247540.KQ": "EcoPro BM",           "247540": "EcoPro BM",
+  "086520.KQ": "EcoPro",              "086520": "EcoPro",
+  "028300.KQ": "HLB",                 "028300": "HLB",
+  "196170.KQ": "Alteogen",            "196170": "Alteogen",
+  "141080.KQ": "LegaChem Bio",        "141080": "LegaChem Bio",
+  "214150.KQ": "Classys",             "214150": "Classys",
+  "293490.KQ": "Kakao Games",         "293490": "Kakao Games",
+  "263750.KQ": "Pearl Abyss",         "263750": "Pearl Abyss",
+  "357780.KQ": "SoulBrain",           "357780": "SoulBrain",
+  "240810.KQ": "Wonik IPS",           "240810": "Wonik IPS",
+  "078160.KQ": "Medipost",            "078160": "Medipost",
+  "091990.KQ": "Celltrion Healthcare","091990": "Celltrion Healthcare",
+  "048260.KQ": "Osstem Implant",      "048260": "Osstem Implant",
+  "069620.KQ": "Daewoong Pharma",     "069620": "Daewoong Pharma",
+  "007660.KQ": "ISU Petasys",         "007660": "ISU Petasys",
+};
+
+function translateCompanyName(ticker: string, companyName: string): string {
+  const enName = KR_TICKER_EN[ticker] ?? KR_TICKER_EN[ticker.replace(/\.(KS|KQ)$/, "")];
+  return enName ?? companyName;
+}
+
 const IMPORTANCE_STYLE: Record<string, { dot: string; badge: string; ko: string; en: string }> = {
   high:   { dot: "bg-red-500",    badge: "text-red-700 dark:bg-red-900/40 dark:text-red-300",    ko: "매우 중요", en: "High" },
   medium: { dot: "bg-amber-400",  badge: "text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", ko: "중요", en: "Medium" },
@@ -125,7 +262,9 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm font-semibold text-foreground truncate">{entry.companyName}</span>
+          <span className="text-sm font-semibold text-foreground truncate">
+            {isEn && entry.isKorean ? translateCompanyName(entry.ticker, entry.companyName) : entry.companyName}
+          </span>
           <ExchangeBadge ticker={entry.ticker} isKorean={entry.isKorean} />
           <span className="text-xs text-muted-foreground">{shortTicker}</span>
         </div>
@@ -185,7 +324,9 @@ function EconomicCard({ event }: { event: EconomicEvent }) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm font-semibold text-foreground leading-snug">{event.title}</span>
+          <span className="text-sm font-semibold text-foreground leading-snug">
+            {isEn ? translateEconomicTitle(event.title) : event.title}
+          </span>
           <span className="text-sm">{flag}</span>
           <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", imp.badge)}>
             {impLabel}
