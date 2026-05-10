@@ -2724,6 +2724,50 @@ function stripPromptInstructions(content: string): string {
     .join("\n");
 }
 
+// ── ValuationScaleBar: 방법론별 Bear/Base/Bull 범위를 공통 스케일로 시각화 ──────
+function ValuationScaleBar({
+  label, bear, base, bull, current, globalMin, globalMax, currency,
+}: {
+  label: string; bear: number; base: number; bull: number;
+  current: number; globalMin: number; globalMax: number; currency: "KRW" | "USD";
+}) {
+  const span = globalMax - globalMin || 1;
+  const toP = (v: number) => Math.max(0, Math.min(100, ((v - globalMin) / span) * 100));
+  const bearP = toP(bear); const baseP = toP(base); const bullP = toP(bull); const curP = toP(current);
+  const isUp = base >= current;
+  const upside = current > 0 ? ((base - current) / current * 100) : 0;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-border/40 last:border-0">
+      <span className="text-[11px] font-medium text-muted-foreground w-20 shrink-0 leading-tight">{label}</span>
+      <div className="flex-1 relative h-7 min-w-0">
+        {/* track */}
+        <div className="absolute top-1/2 -translate-y-1/2 inset-x-0 h-1 bg-border/60 rounded-full" />
+        {/* fill bear→bull */}
+        <div className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full opacity-25"
+          style={{ left: `${bearP}%`, right: `${100 - bullP}%`, background: isUp ? "#10b981" : "#ef4444" }} />
+        {/* bear dot */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-rose-400 ring-2 ring-background"
+          style={{ left: `${bearP}%` }} />
+        {/* bull dot */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-blue-400 ring-2 ring-background"
+          style={{ left: `${bullP}%` }} />
+        {/* base dot — larger */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full shadow ring-2 ring-background z-10"
+          style={{ left: `${baseP}%`, background: isUp ? "#10b981" : "#ef4444" }} />
+        {/* current price line */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-6 bg-foreground/50 z-20 rounded-full"
+          style={{ left: `${curP}%` }} />
+      </div>
+      <div className="w-32 shrink-0 text-right flex items-baseline justify-end gap-1.5">
+        <span className="text-[11px] font-mono font-semibold text-foreground">{formatPrice(base, currency)}</span>
+        <span className={cn("text-[10px] font-mono font-bold", isUp ? "text-emerald-500" : "text-rose-500")}>
+          {isUp ? "+" : ""}{upside.toFixed(1)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -2916,58 +2960,112 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
           </div>
         )}
 
-        {/* Fundamental & Valuation 적정주가 요약 박스 */}
-        {isFundamental && valuationData && (
+        {/* Financial Analyst: 재무 차트 (매출·이익 추이) */}
+        {isFundamental && ticker && (
           <div className="mt-5 pt-4 border-t border-border">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 적정주가</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">3-Method 종합</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">매출 · 이익 추이</span>
             </div>
-            <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
-              <table className="w-full min-w-[300px] text-xs border-collapse">
-                <thead>
-                  <tr className="bg-muted/60">
-                    <th className="px-3 py-2.5 text-left font-semibold text-foreground/80 border-b border-border">방법론</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-rose-600 border-b border-border">Bear</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-blue-600 border-b border-border">Bull</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/80">DCF</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.dcf_bear, priceCurrency)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.dcf_base, priceCurrency)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.dcf_bull, priceCurrency)}</td>
-                  </tr>
-                  <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/80">Forward P/E</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.pe_bear, priceCurrency)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.pe_base, priceCurrency)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.pe_bull, priceCurrency)}</td>
-                  </tr>
-                  <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/80">EV/EBITDA</td>
-                    <td className="px-3 py-2 text-right text-rose-600 font-mono">{formatPrice(valuationData.ev_bear, priceCurrency)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-600 font-mono font-semibold">{formatPrice(valuationData.ev_base, priceCurrency)}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 font-mono">{formatPrice(valuationData.ev_bull, priceCurrency)}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div className="bg-muted/40 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border sm:flex sm:items-center sm:justify-between">
-                <span className="text-xs text-muted-foreground">현재 주가</span>
-                <span className="font-mono text-sm font-semibold text-foreground text-right sm:text-left">{formatPrice(valuationData.current, priceCurrency)}</span>
-                <span className="text-xs text-muted-foreground">
-                  Base {valuationData.dcf_base >= valuationData.current ? "상승여력" : "하락여지"}
-                </span>
-                <span className={`font-mono text-sm font-bold text-right sm:text-left ${valuationData.dcf_base > valuationData.current ? "text-emerald-600" : "text-rose-600"}`}>
-                  {valuationData.current > 0 ? `${((valuationData.dcf_base - valuationData.current) / valuationData.current * 100).toFixed(1)}%` : "-"}
-                </span>
-              </div>
-            </div>
+            <FinancialChart ticker={ticker} />
           </div>
         )}
+
+        {/* Fundamental & Valuation 적정주가 — 레인지 바 + 요약 테이블 */}
+        {isFundamental && valuationData && (() => {
+          const gMin = Math.min(valuationData.dcf_bear, valuationData.pe_bear, valuationData.ev_bear, valuationData.current) * 0.96;
+          const gMax = Math.max(valuationData.dcf_bull, valuationData.pe_bull, valuationData.ev_bull) * 1.04;
+          const avgBase = (valuationData.dcf_base + valuationData.pe_base + valuationData.ev_base) / 3;
+          const avgUpside = valuationData.current > 0 ? ((avgBase - valuationData.current) / valuationData.current * 100) : 0;
+          const isUp = avgBase >= valuationData.current;
+          return (
+            <div className="mt-5 pt-4 border-t border-border">
+              {/* 섹션 헤더 */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 적정주가</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">3-Method 종합</span>
+              </div>
+
+              {/* 현재가 + 평균 업사이드 요약 칩 */}
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
+                  <span className="text-[11px] text-muted-foreground">현재가</span>
+                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency)}</span>
+                </div>
+                <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
+                  <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
+                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>3방법론 평균</span>
+                  <span className={cn("text-[13px] font-mono font-bold", isUp ? "text-emerald-600" : "text-rose-600")}>
+                    {isUp ? "+" : ""}{avgUpside.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* 레인지 바 시각화 */}
+              <div className="bg-muted/30 dark:bg-muted/10 rounded-xl px-4 pt-2 pb-1 mb-3 border border-border/50">
+                {/* 범례 */}
+                <div className="flex items-center gap-4 mb-2 pb-2 border-b border-border/40">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-rose-400" />
+                    <span className="text-[10px] text-muted-foreground">Bear</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] text-muted-foreground">Base (적정)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                    <span className="text-[10px] text-muted-foreground">Bull</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <div className="w-0.5 h-3 rounded-full bg-foreground/50" />
+                    <span className="text-[10px] text-muted-foreground">현재가</span>
+                  </div>
+                </div>
+                <ValuationScaleBar label="DCF" bear={valuationData.dcf_bear} base={valuationData.dcf_base} bull={valuationData.dcf_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
+                <ValuationScaleBar label="Fwd P/E" bear={valuationData.pe_bear} base={valuationData.pe_base} bull={valuationData.pe_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
+                <ValuationScaleBar label="EV/EBITDA" bear={valuationData.ev_bear} base={valuationData.ev_base} bull={valuationData.ev_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
+              </div>
+
+              {/* 상세 수치 테이블 (접힌 형태) */}
+              <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+                <table className="w-full min-w-[300px] text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-muted/60">
+                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">방법론</th>
+                      <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
+                      <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
+                      <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {[
+                      { label: "DCF", bear: valuationData.dcf_bear, base: valuationData.dcf_base, bull: valuationData.dcf_bull },
+                      { label: "Fwd P/E", bear: valuationData.pe_bear, base: valuationData.pe_base, bull: valuationData.pe_bull },
+                      { label: "EV/EBITDA", bear: valuationData.ev_bear, base: valuationData.ev_base, bull: valuationData.ev_bull },
+                    ].map(({ label, bear, base, bull }) => {
+                      const up = valuationData.current > 0 ? ((base - valuationData.current) / valuationData.current * 100) : 0;
+                      return (
+                        <tr key={label} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-3 py-2 font-medium text-foreground/80">{label}</td>
+                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency)}</td>
+                          <td className="px-3 py-2 text-right font-mono">
+                            <span className="font-semibold text-foreground">{formatPrice(base, priceCurrency)}</span>
+                            <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                              {up >= 0 ? "+" : ""}{up.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
 
       </div>
           </motion.div>
