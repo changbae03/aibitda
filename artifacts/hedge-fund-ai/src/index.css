@@ -233,10 +233,10 @@
   font-weight: 800;
   letter-spacing: -0.01em;
   color: #111827;
-  margin-top: 2.2rem;
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #111827;
+  margin-top: 2.4rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1.5px solid #e5e7eb;
 }
 .markdown-body h2:first-child { margin-top: 0; }
 
@@ -298,7 +298,7 @@
 }
 .dark .markdown-body h2 {
   color: hsl(var(--foreground));
-  border-bottom-color: hsl(var(--foreground) / 0.3);
+  border-bottom-color: hsl(var(--border));
 }
 .dark .markdown-body h3 {
   color: #60a5fa;

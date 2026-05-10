@@ -1454,16 +1454,20 @@ export default function AnalysisDetail() {
 
                 return (
                   <>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-xl font-bold text-foreground">
-                        {upsidePct !== null
-                          ? (upsidePct >= 0 ? "상승여력" : "하락여지")
-                          : toKoreanVerdict(analysis.investmentVerdict)}
-                      </div>
-                      {upsidePct !== null && (
-                        <span className={`text-sm font-black tabular-nums ${upsidePct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                          {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
-                        </span>
+                    <div className="mb-4">
+                      {upsidePct !== null ? (
+                        <>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                            {upsidePct >= 0 ? "상승여력" : "하락여지"}
+                          </p>
+                          <p className={`text-4xl font-black tabular-nums leading-none tracking-tight ${upsidePct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
+                            {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
+                          </p>
+                        </>
+                      ) : (
+                        <div className="text-xl font-bold text-foreground">
+                          {toKoreanVerdict(analysis.investmentVerdict)}
+                        </div>
                       )}
                     </div>
                     {contradictory && (
@@ -1484,7 +1488,7 @@ export default function AnalysisDetail() {
                       )}
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
                         <span className="text-muted-foreground">{isSellVerdict ? "재관심 기준가" : "진입가"}</span>
-                        <span className="text-foreground font-semibold">{formatCurrency(analysis.entryPrice, currency)}</span>
+                        <span className={`font-semibold ${isSellVerdict ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>{formatCurrency(analysis.entryPrice, currency)}</span>
                       </div>
                       <div className="flex justify-between items-center pt-0.5">
                         <span className="text-muted-foreground">{isSellVerdict ? "청산 우선 구간" : "손절가"}</span>
@@ -1519,7 +1523,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* 내 메모 */}
-      <div className="bg-amber-50/60 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-5 py-4 print:hidden">
+      <div className="bg-amber-50/60 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-4 py-2.5 print:hidden">
         <MemoSection analysisId={analysis.id} />
       </div>
 
@@ -1732,7 +1736,7 @@ export default function AnalysisDetail() {
                   피드백이 AI 학습에 반영되었습니다. 감사합니다!
                 </motion.div>
               ) : (
-                <div className="rounded-xl border border-border bg-muted/50 px-5 py-4 space-y-3">
+                <div className="rounded-xl border border-border bg-background px-5 py-4 space-y-3">
                   {/* 헤더 */}
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />

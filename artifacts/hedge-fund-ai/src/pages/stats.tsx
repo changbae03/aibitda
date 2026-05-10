@@ -122,26 +122,66 @@ export default function Stats() {
       {/* 결과 분포 */}
       {stats.reviewedCount > 0 && (
         <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">결과 분포</h2>
-          <div className="space-y-3">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[14px] font-bold text-foreground/90">결과 분포</h2>
+            <span className="text-[11px] text-muted-foreground">
+              총 {stats.reviewedCount}건 중 진행중 {stats.ongoingCount}건
+            </span>
+          </div>
+
+          {/* 완결 케이스 분포 (목표달성 vs 손절) */}
+          {(stats.hitTargetCount + stats.hitStopCount) > 0 && (
+            <div className="mb-4">
+              <p className="text-[11px] text-muted-foreground mb-2">
+                완결 케이스 {stats.hitTargetCount + stats.hitStopCount}건 기준
+              </p>
+              {[
+                { label: "목표 달성", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-400" },
+                { label: "손절 발생", count: stats.hitStopCount, color: "bg-red-400", textColor: "text-red-600 dark:text-red-400" },
+              ].map(({ label, count, color, textColor }) => {
+                const concluded = stats.hitTargetCount + stats.hitStopCount;
+                const pct = concluded > 0 ? (count / concluded) * 100 : 0;
+                return (
+                  <div key={label} className="flex items-center gap-3 mb-2">
+                    <span className="w-16 text-[12px] text-muted-foreground shrink-0">{label}</span>
+                    <div className="flex-1 bg-muted rounded-full h-2.5 overflow-hidden">
+                      <motion.div
+                        className={cn("h-2.5 rounded-full", color)}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                      />
+                    </div>
+                    <span className={cn("w-20 text-right text-[12px] font-semibold tabular-nums", textColor)}>
+                      {count}건 ({pct.toFixed(0)}%)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 전체 분포 (진행중 포함) */}
+          <div className="pt-3 border-t border-border">
+            <p className="text-[11px] text-muted-foreground mb-2">전체 현황</p>
             {[
-              { label: "목표 달성", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700" },
-              { label: "진행중", count: stats.ongoingCount, color: "bg-blue-400", textColor: "text-blue-700" },
-              { label: "손절 발생", count: stats.hitStopCount, color: "bg-red-400", textColor: "text-red-700" },
+              { label: "목표 달성", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-400" },
+              { label: "진행중", count: stats.ongoingCount, color: "bg-blue-400", textColor: "text-blue-700 dark:text-blue-400" },
+              { label: "손절 발생", count: stats.hitStopCount, color: "bg-red-400", textColor: "text-red-600 dark:text-red-400" },
             ].map(({ label, count, color, textColor }) => {
               const pct = stats.reviewedCount > 0 ? (count / stats.reviewedCount) * 100 : 0;
               return (
-                <div key={label} className="flex items-center gap-3">
-                  <span className="w-16 text-[12px] text-muted-foreground shrink-0">{label}</span>
-                  <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                <div key={label} className="flex items-center gap-3 mb-1.5">
+                  <span className="w-16 text-[11px] text-muted-foreground shrink-0">{label}</span>
+                  <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
                     <motion.div
-                      className={cn("h-2 rounded-full", color)}
+                      className={cn("h-1.5 rounded-full", color)}
                       initial={{ width: 0 }}
                       animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.8, ease: "easeOut" }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
                     />
                   </div>
-                  <span className={cn("w-16 text-right text-[12px] font-semibold", textColor)}>
+                  <span className={cn("w-20 text-right text-[11px] tabular-nums", textColor)}>
                     {count}건 ({pct.toFixed(0)}%)
                   </span>
                 </div>
@@ -157,10 +197,14 @@ export default function Stats() {
           <h2 className="text-[14px] font-bold text-foreground/90 mb-4">최근 결과 사례</h2>
           <div className="space-y-2">
             {stats.recentCases.map((c, idx) => {
-              const isHit = c.outcome === "hit_target";
+                      const isHit = c.outcome === "hit_target";
+              const isStop = c.outcome === "hit_stop";
               const ret = c.priceReturn;
               const retStr = ret != null ? `${ret >= 0 ? "+" : ""}${ret.toFixed(1)}%` : "—";
-              const retColor = ret != null ? (ret >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground";
+              const retColor = isStop
+                ? "text-red-500"
+                : ret != null ? (ret >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground";
+              const stopButPositive = isStop && ret != null && ret > 0;
               return (
                 <motion.div
                   key={idx}
@@ -190,7 +234,10 @@ export default function Stats() {
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className={cn("text-[14px] font-bold", retColor)}>{retStr}</span>
+                    <span className={cn("text-[14px] font-bold tabular-nums", retColor)}>{retStr}</span>
+                    {stopButPositive && (
+                      <p className="text-[10px] text-amber-500 mt-0.5">손절 후 반등</p>
+                    )}
                   </div>
                   {c.analysisId && (
                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />

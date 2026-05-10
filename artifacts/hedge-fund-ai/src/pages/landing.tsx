@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale } from "lucide-react";
+import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, TrendingUp } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -20,7 +20,7 @@ function KakaoIcon() {
 }
 
 const STEPS = [
-  { num: 1, name: "브리핑",                icon: ShieldCheck, desc: "종목 개요 & 분석 방향 설정" },
+  { num: 1, name: "브리핑",                icon: FileText,    desc: "종목 개요 & 분석 방향 설정" },
   { num: 2, name: "매크로·산업 분석",       icon: Globe2,      desc: "산업 구조, 성장률, 경쟁 구도" },
   { num: 3, name: "투자 촉매·수급 분석",    icon: Zap,         desc: "주가 촉매, 세력 움직임" },
   { num: 4, name: "실적 전망",              icon: PieChart,    desc: "재무 분석 + Base 실적 추정" },
