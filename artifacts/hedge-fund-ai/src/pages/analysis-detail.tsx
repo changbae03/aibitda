@@ -2945,20 +2945,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
                 </div>
               </div>
 
-              {/* 레인지 바 시각화 */}
-              <div className="bg-muted/30 dark:bg-muted/10 rounded-xl px-4 pt-2 pb-1 mb-3 border border-border/50">
-                {/* 범례 */}
-                <div className="flex items-center gap-4 mb-2 pb-2 border-b border-border/40">
-                  <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-400" /><span className="text-[10px] text-muted-foreground">Bear</span></div>
-                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500" /><span className="text-[10px] text-muted-foreground">Base</span></div>
-                  <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-400" /><span className="text-[10px] text-muted-foreground">Bull</span></div>
-                  <div className="flex items-center gap-1.5 ml-auto"><div className="w-0.5 h-3 rounded-full bg-foreground/50" /><span className="text-[10px] text-muted-foreground">현재가</span></div>
-                </div>
-                <ValuationScaleBar label={`절대가치\n(${absModel})`} bear={fv.abs_bear} base={fv.abs_base} bull={fv.abs_bull} current={fv.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
-                <ValuationScaleBar label="상대가치\n(피어)" bear={fv.rel_bear} base={fv.rel_base} bull={fv.rel_bull} current={fv.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
-                <ValuationScaleBar label="조율\n적정주가" bear={fv.bear} base={fv.base} bull={fv.bull} current={fv.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
-              </div>
-
               {/* 상세 수치 테이블 */}
               <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
                 <table className="w-full min-w-[300px] text-xs border-collapse">
