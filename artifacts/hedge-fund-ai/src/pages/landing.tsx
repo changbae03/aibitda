@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, Activity } from "lucide-react";
 import { useLanguage } from "@/lib/language-context";
 
@@ -118,9 +118,9 @@ export default function Landing() {
 
           {/* ── 왼쪽: 로그인 카드 ── */}
           <motion.div
-            initial={{ opacity: 0, x: -16 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6 }}
             className="w-full max-w-sm flex-shrink-0"
           >
             {/* 로고 */}
@@ -208,9 +208,9 @@ export default function Landing() {
 
           {/* ── 오른쪽: 7단계 파이프라인 ── */}
           <motion.div
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
             className="w-full lg:pt-2"
           >
             <div className="mb-5">
@@ -247,28 +247,12 @@ export default function Landing() {
                   const isDone = !isLast && idx < activeStep;
 
                   return (
-                    <motion.div
+                    <div
                       key={step.num}
-                      initial={{ opacity: 0, x: 12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.35, delay: 0.18 + idx * 0.06 }}
                       className="flex items-start gap-4"
                     >
                       {/* 아이콘 원형 */}
                       <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center z-10">
-                        <AnimatePresence>
-                          {isActive && (
-                            <motion.div
-                              key="pulse"
-                              className="absolute inset-0 rounded-full border-2 border-[#FF8A7A]"
-                              initial={{ scale: 1, opacity: 0.8 }}
-                              animate={{ scale: 1.7, opacity: 0 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.9, repeat: Infinity, ease: "easeOut" }}
-                            />
-                          )}
-                        </AnimatePresence>
-
                         <motion.div
                           animate={{
                             backgroundColor: isLast
@@ -282,18 +266,12 @@ export default function Landing() {
                               ? "#FF8A7A"
                               : isDone
                               ? "rgba(255,138,122,0.5)"
-                              : "rgba(255,138,122,0.35)",
-                            scale: isActive ? 1.1 : 1,
+                              : "rgba(255,138,122,0.25)",
                           }}
-                          transition={{ duration: 0.35, ease: "easeOut" }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
                           className="w-10 h-10 rounded-full flex items-center justify-center border-2"
                         >
-                          <motion.span
-                            animate={{
-                              color: isLast || isActive ? "#ffffff" : isDone ? "#FF8A7A" : "#FF8A7A",
-                            }}
-                            transition={{ duration: 0.25 }}
-                          >
+                          <span style={{ color: isLast || isActive ? "#ffffff" : "#FF8A7A" }}>
                             {isLast ? (
                               <Icon className="w-4 h-4" />
                             ) : isDone ? (
@@ -303,40 +281,32 @@ export default function Landing() {
                             ) : (
                               <span className="text-[12px] font-black">{step.num}</span>
                             )}
-                          </motion.span>
+                          </span>
                         </motion.div>
                       </div>
 
                       {/* 텍스트 */}
                       <div className="pt-1.5 pb-2 min-w-0">
-                        <motion.span
-                          animate={{
-                            color: isLast
-                              ? "#FF8A7A"
-                              : isActive
+                        <span
+                          className="text-[13.5px] font-bold leading-tight block transition-colors duration-500"
+                          style={{
+                            color: isLast || isActive
                               ? "#FF8A7A"
                               : isDone
-                              ? "rgba(255,138,122,0.7)"
-                              : "hsl(var(--foreground))",
+                              ? "rgba(255,138,122,0.65)"
+                              : undefined,
                           }}
-                          transition={{ duration: 0.3 }}
-                          className="text-[13.5px] font-bold leading-tight block"
                         >
                           {step.name}
                           {isActive && (
-                            <motion.span
-                              initial={{ opacity: 0, x: -4 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0 }}
-                              className="ml-2 text-[10px] font-bold text-[#FF8A7A] bg-[#FF8A7A]/10 px-1.5 py-0.5 rounded-full border border-[#FF8A7A]/20 tracking-wide"
-                            >
+                            <span className="ml-2 text-[10px] font-bold text-[#FF8A7A] bg-[#FF8A7A]/10 px-1.5 py-0.5 rounded-full border border-[#FF8A7A]/20 tracking-wide">
                               {isEn ? "Analyzing" : "분석 중"}
-                            </motion.span>
+                            </span>
                           )}
-                        </motion.span>
+                        </span>
                         <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug">{step.desc}</p>
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>
