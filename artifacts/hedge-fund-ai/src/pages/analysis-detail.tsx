@@ -25,7 +25,6 @@ import {
   ThumbsDown,
   MessageSquare,
   Swords,
-  CalendarClock,
   History,
   ChevronDown,
   TrendingUp,
@@ -691,203 +690,7 @@ function VersionTimelinePanel({ ticker, currentId }: { ticker: string; currentId
   );
 }
 
-// ─── ScheduleModal ────────────────────────────────────────────────────────────
-const FREQ_OPTIONS = [
-  { value: "weekly",   label: "매주",  desc: "7일마다 자동 재분석" },
-  { value: "biweekly", label: "격주",  desc: "14일마다 자동 재분석" },
-  { value: "monthly",  label: "매월",  desc: "30일마다 자동 재분석" },
-];
 
-function ScheduleModal({
-  analysisId,
-  ticker,
-  companyName,
-  onClose,
-}: {
-  analysisId: number;
-  ticker: string;
-  companyName: string;
-  onClose: () => void;
-}) {
-  const [existing, setExisting] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [selected, setSelected] = useState<string>("weekly");
-  const [done, setDone] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(getApiUrl("/api/analysis/schedules"), { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then((list: any[]) => {
-        const match = list.find((s: any) => s.ticker === ticker && s.enabled);
-        setExisting(match ?? null);
-        if (match) setSelected(match.frequency);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [ticker]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const r = await fetch(getApiUrl(`/api/analysis/${analysisId}/schedule`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ frequency: selected }),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        setDone(`⚠️ ${data.error ?? "저장 실패"}`);
-        return;
-      }
-      setExisting(data);
-      const label = FREQ_OPTIONS.find(f => f.value === selected)?.label ?? selected;
-      setDone(`✓ ${companyName} 재실행 스케줄이 ${label} 주기로 등록됐습니다`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!existing) return;
-    setDeleting(true);
-    try {
-      const r = await fetch(getApiUrl(`/api/analysis/schedules/${existing.id}`), {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (r.ok) {
-        setExisting(null);
-        setDone("스케줄이 삭제됐습니다");
-      }
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        key="backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-        onClick={onClose}
-      >
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-        <motion.div
-          key="modal"
-          initial={{ y: 30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 20, opacity: 0 }}
-          className="relative w-full max-w-sm mx-4 mb-4 sm:mb-0 bg-background rounded-2xl shadow-2xl overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold text-foreground">재실행 예약</span>
-            </div>
-            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-muted transition-colors">
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </div>
-
-          <div className="px-5 py-4 space-y-4">
-            {/* 종목 정보 */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="px-2 py-0.5 bg-primary/10 text-primary font-mono font-bold rounded text-xs border border-primary/20">{ticker}</span>
-              <span className="font-semibold text-foreground">{companyName}</span>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : done ? (
-              <div className="py-4 text-center">
-                <p className="text-sm text-foreground font-medium">{done}</p>
-                <button
-                  onClick={onClose}
-                  className="mt-3 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-                >
-                  닫기
-                </button>
-              </div>
-            ) : (
-              <>
-                {existing && (
-                  <div className="px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5" />
-                    현재 <span className="font-bold">
-                      {FREQ_OPTIONS.find(f => f.value === existing.frequency)?.label ?? existing.frequency}
-                    </span> 주기로 등록됨
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">재실행 주기 선택</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {FREQ_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setSelected(opt.value)}
-                        className={cn(
-                          "flex flex-col items-center py-2.5 px-2 rounded-xl border text-center transition-all",
-                          selected === opt.value
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40"
-                        )}
-                      >
-                        <span className="text-sm font-bold">{opt.label}</span>
-                        <span className="text-[10px] mt-0.5 leading-tight">{opt.desc.replace("마다 자동 재분석", "")}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground text-center">
-                    {FREQ_OPTIONS.find(f => f.value === selected)?.desc}
-                  </p>
-                </div>
-
-                <p className="text-[11px] text-muted-foreground/70 flex items-start gap-1">
-                  <Clock className="w-3 h-3 mt-0.5 shrink-0" />
-                  실행 시 크레딧 1개가 차감됩니다. 크레딧이 부족한 경우 자동으로 다음 주기로 연기됩니다.
-                </p>
-
-                <div className="flex gap-2">
-                  {existing && (
-                    <button
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      className="px-3 py-2 rounded-xl border border-destructive/30 text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                    >
-                      {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "삭제"}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {saving ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>{existing ? "주기 변경" : "예약 등록"}</>
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  );
-}
 
 // ─── PeerMultiplesPanel ───────────────────────────────────────────────────────
 
@@ -1080,7 +883,6 @@ export default function AnalysisDetail() {
 
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   // 피드백 상태
   const [feedbackRating, setFeedbackRating] = useState<1 | 5 | null>(null);
@@ -1606,14 +1408,6 @@ export default function AnalysisDetail() {
                 이 분석 공유하기
               </button>
 
-              {/* 재실행 예약 버튼 */}
-              <button
-                onClick={() => setShowScheduleModal(true)}
-                className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent hover:text-foreground active:scale-[0.98] transition-all border border-border"
-              >
-                <CalendarClock className="w-3.5 h-3.5" />
-                재실행 예약
-              </button>
             </div>
           )}
           </div>
@@ -1784,14 +1578,6 @@ export default function AnalysisDetail() {
                 공유하기
               </button>
             </div>
-            {showScheduleModal && (
-              <ScheduleModal
-                analysisId={analysis.id}
-                ticker={analysis.ticker}
-                companyName={analysis.companyName}
-                onClose={() => setShowScheduleModal(false)}
-              />
-            )}
             {showShareModal && (
               <ShareModal analysis={analysis} onClose={() => setShowShareModal(false)} />
             )}
