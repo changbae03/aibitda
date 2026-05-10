@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, Globe } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
 
 const themes = [
@@ -110,7 +111,7 @@ export default function SettingsPage() {
   const [promoApplying, setPromoApplying] = useState(false);
   const [promoResult, setPromoResult] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  const [language, setLanguage] = useState<"ko" | "en">("ko");
+  const { language, setLanguage: ctxSetLanguage, isEn } = useLanguage();
   const [langSaving, setLangSaving] = useState(false);
   const [langMsg, setLangMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
@@ -136,10 +137,6 @@ export default function SettingsPage() {
       .then(d => { if (d?.isAdmin) setIsAdmin(true); })
       .catch(() => {});
 
-    fetch(getApiUrl("/api/user/settings"), { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.language) setLanguage(d.language); })
-      .catch(() => {});
   }, []);
 
   const handleLogout = async () => {
@@ -165,12 +162,12 @@ export default function SettingsPage() {
       const d = await r.json();
       if (r.ok) {
         setUser(prev => prev ? { ...prev, displayName: d.displayName } : prev);
-        setNicknameMsg({ type: "ok", text: "닉네임이 저장됐습니다" });
+        setNicknameMsg({ type: "ok", text: isEn ? "Display name saved" : "닉네임이 저장됐습니다" });
       } else {
-        setNicknameMsg({ type: "err", text: d.error ?? "저장에 실패했습니다" });
+        setNicknameMsg({ type: "err", text: d.error ?? (isEn ? "Failed to save" : "저장에 실패했습니다") });
       }
     } catch {
-      setNicknameMsg({ type: "err", text: "네트워크 오류가 발생했습니다" });
+      setNicknameMsg({ type: "err", text: isEn ? "Network error" : "네트워크 오류가 발생했습니다" });
     } finally {
       setNicknameSaving(false);
       setTimeout(() => setNicknameMsg(null), 3000);
@@ -199,7 +196,7 @@ export default function SettingsPage() {
           .then(data => setCredits(data))
           .catch(() => {});
       } else {
-        setPromoResult({ type: "err", text: d.error ?? "코드 적용에 실패했습니다" });
+        setPromoResult({ type: "err", text: d.error ?? (isEn ? "Failed to apply code" : "코드 적용에 실패했습니다") });
       }
     } catch {
       setPromoResult({ type: "err", text: "네트워크 오류가 발생했습니다" });
@@ -240,23 +237,13 @@ export default function SettingsPage() {
 
   const saveLanguage = async (lang: "ko" | "en") => {
     if (langSaving) return;
-    setLanguage(lang);
     setLangSaving(true);
     setLangMsg(null);
     try {
-      const r = await fetch(getApiUrl("/api/user/settings"), {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: lang }),
-      });
-      if (r.ok) {
-        setLangMsg({ type: "ok", text: lang === "en" ? "English mode enabled. New analyses will be written in English." : "한국어 모드로 변경되었습니다. 새 분석부터 적용됩니다." });
-      } else {
-        setLangMsg({ type: "err", text: "저장에 실패했습니다" });
-      }
+      await ctxSetLanguage(lang);
+      setLangMsg({ type: "ok", text: lang === "en" ? "English mode enabled. New analyses will be written in English." : "한국어 모드로 변경됐습니다. 새 분석부터 적용됩니다." });
     } catch {
-      setLangMsg({ type: "err", text: "네트워크 오류가 발생했습니다" });
+      setLangMsg({ type: "err", text: isEn ? "Failed to save" : "저장에 실패했습니다" });
     } finally {
       setLangSaving(false);
       setTimeout(() => setLangMsg(null), 4000);
@@ -283,10 +270,10 @@ export default function SettingsPage() {
         setFbContent("");
       } else {
         const d = await r.json().catch(() => ({}));
-        setFbError(d.error ?? "전송에 실패했습니다. 다시 시도해주세요.");
+        setFbError(d.error ?? (isEn ? "Failed to send. Please try again." : "전송에 실패했습니다. 다시 시도해주세요."));
       }
     } catch {
-      setFbError("네트워크 오류가 발생했습니다.");
+      setFbError(isEn ? "Network error. Please try again." : "네트워크 오류가 발생했습니다.");
     } finally {
       setFbSubmitting(false);
     }
@@ -296,15 +283,17 @@ export default function SettingsPage() {
   const dailyLimit = credits?.dailyLimit ?? 3;
   const usagePct = Math.min(100, (dailyUsed / dailyLimit) * 100);
 
+  const t = (ko: string, en: string) => isEn ? en : ko;
+
   return (
     <div className="max-w-xl space-y-8 pb-20">
       <div>
-        <h1 className="text-xl font-bold text-foreground">설정</h1>
-        <p className="text-sm text-muted-foreground mt-1">계정 및 앱 환경을 관리합니다</p>
+        <h1 className="text-xl font-bold text-foreground">{t("설정", "Settings")}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{t("계정 및 앱 환경을 관리합니다", "Manage your account and app settings")}</p>
       </div>
 
       {/* ── 계정 ── */}
-      <Section title="계정">
+      <Section title={t("계정", "Account")}>
         {user === undefined ? (
           <Row>
             <div className="h-4 w-32 bg-muted animate-pulse rounded" />
@@ -325,14 +314,14 @@ export default function SettingsPage() {
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   {user.displayName && (
-                    <span className="text-[11px] text-muted-foreground">카카오: {user.nickname}</span>
+                    <span className="text-[11px] text-muted-foreground">{isEn ? `Kakao: ${user.nickname}` : `카카오: ${user.nickname}`}</span>
                   )}
                   {!user.displayName && (
-                    <span className="text-[11px] text-muted-foreground">카카오 로그인</span>
+                    <span className="text-[11px] text-muted-foreground">{t("카카오 로그인", "Kakao Login")}</span>
                   )}
                   {isAdmin && (
                     <span className="flex items-center gap-0.5 text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                      <Shield className="w-2.5 h-2.5" />관리자
+                      <Shield className="w-2.5 h-2.5" />{t("관리자", "Admin")}
                     </span>
                   )}
                 </div>
@@ -341,8 +330,8 @@ export default function SettingsPage() {
 
             {/* 닉네임 설정 */}
             <div className="px-4 py-3.5 space-y-2.5 border-t border-border">
-              <p className="text-[12px] font-medium text-foreground/70">닉네임 설정</p>
-              <p className="text-[11px] text-muted-foreground/60">카카오 이름 대신 서비스 내에서 사용할 이름을 설정합니다. 최대 20자.</p>
+              <p className="text-[12px] font-medium text-foreground/70">{t("닉네임 설정", "Display Name")}</p>
+              <p className="text-[11px] text-muted-foreground/60">{t("카카오 이름 대신 서비스 내에서 사용할 이름을 설정합니다. 최대 20자.", "Set a custom name to use in the app instead of your Kakao name. Max 20 chars.")}</p>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -362,7 +351,7 @@ export default function SettingsPage() {
                     <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
                       className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />
                   ) : <Check className="w-3.5 h-3.5" />}
-                  저장
+                  {t("저장", "Save")}
                 </button>
               </div>
               {nicknameMsg && (
@@ -379,7 +368,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-2 text-[13px] font-medium text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                {loggingOut ? "로그아웃 중..." : "로그아웃"}
+                {loggingOut ? t("로그아웃 중...", "Signing out...") : t("로그아웃", "Sign Out")}
               </button>
             </Row>
           </>
@@ -389,7 +378,7 @@ export default function SettingsPage() {
               onClick={() => setLocation("/login")}
               className="text-[13px] font-medium text-primary hover:underline"
             >
-              카카오로 로그인하기 →
+              {t("카카오로 로그인하기 →", "Sign in with Kakao →")}
             </button>
           </Row>
         )}
@@ -397,13 +386,15 @@ export default function SettingsPage() {
 
       {/* ── 오늘의 분석 현황 ── */}
       {user && credits && (
-        <Section title="오늘의 분석 현황">
+        <Section title={t("오늘의 분석 현황", "Today's Usage")}>
           <div className="px-4 py-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-primary" />
                 <span className="text-[13px] font-medium text-foreground">
-                  {isAdmin ? "무제한 (관리자)" : `오늘 ${dailyUsed}회 사용 / ${dailyLimit}회`}
+                  {isAdmin
+                    ? t("무제한 (관리자)", "Unlimited (Admin)")
+                    : isEn ? `Used ${dailyUsed} / ${dailyLimit} today` : `오늘 ${dailyUsed}회 사용 / ${dailyLimit}회`}
                 </span>
               </div>
               {!isAdmin && (
@@ -411,7 +402,7 @@ export default function SettingsPage() {
                   "text-[12px] font-semibold",
                   credits.remaining === 0 ? "text-red-500" : credits.remaining <= 1 ? "text-amber-500" : "text-emerald-600"
                 )}>
-                  {credits.remaining}회 남음
+                  {isEn ? `${credits.remaining} left` : `${credits.remaining}회 남음`}
                 </span>
               )}
             </div>
@@ -429,7 +420,9 @@ export default function SettingsPage() {
               </div>
             )}
             <p className="text-[11px] text-muted-foreground/60">
-              {isAdmin ? "관리자 계정은 분석 횟수 제한이 없습니다." : "매일 자정(KST) 기준으로 횟수가 초기화됩니다."}
+              {isAdmin
+                ? t("관리자 계정은 분석 횟수 제한이 없습니다.", "Admin accounts have unlimited analyses.")
+                : t("매일 자정(KST) 기준으로 횟수가 초기화됩니다.", "Resets daily at midnight KST.")}
             </p>
           </div>
         </Section>
@@ -437,10 +430,10 @@ export default function SettingsPage() {
 
       {/* ── 프로모 코드 ── */}
       {user && (
-        <Section title="프로모 코드">
+        <Section title={t("프로모 코드", "Promo Code")}>
           <div className="px-4 py-4 space-y-3">
             <p className="text-[12px] text-muted-foreground">
-              프로모 코드를 입력하면 크레딧 추가 또는 등급 업그레이드 혜택을 받을 수 있습니다.
+              {t("프로모 코드를 입력하면 크레딧 추가 또는 등급 업그레이드 혜택을 받을 수 있습니다.", "Enter a promo code to receive bonus credits or a tier upgrade.")}
             </p>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -450,7 +443,7 @@ export default function SettingsPage() {
                   value={promoCode}
                   onChange={e => setPromoCode(e.target.value.toUpperCase())}
                   onKeyDown={e => e.key === "Enter" && applyPromo()}
-                  placeholder="코드 입력 (예: AIVIT2026)"
+                  placeholder={t("코드 입력 (예: AIVIT2026)", "Enter code (e.g. AIVIT2026)")}
                   className="w-full pl-9 pr-3 py-2.5 text-[13px] font-mono rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 placeholder:text-muted-foreground/40 uppercase tracking-widest"
                 />
               </div>
@@ -466,7 +459,7 @@ export default function SettingsPage() {
               >
                 {promoApplying ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
-                ) : "적용"}
+                ) : t("적용", "Apply")}
               </button>
             </div>
             <AnimatePresence>
@@ -499,10 +492,10 @@ export default function SettingsPage() {
         <div className="px-4 py-4 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <Globe className="w-4 h-4 text-primary" />
-            <p className="text-[13px] font-medium text-foreground">분석 리포트 언어</p>
+            <p className="text-[13px] font-medium text-foreground">{t("분석 리포트 언어", "Analysis Report Language")}</p>
           </div>
           <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
-            영어(English) 선택 시 새로 시작하는 분석 리포트가 전체 영어로 작성됩니다. 기존 분석에는 영향을 주지 않습니다.
+            {t("영어(English) 선택 시 새로 시작하는 분석 리포트가 전체 영어로 작성됩니다. 기존 분석에는 영향을 주지 않습니다.", "Choosing English will write all new analysis reports in English. Existing reports are not affected.")}
           </p>
           <div className="grid grid-cols-2 gap-2.5">
             {(["ko", "en"] as const).map((lang) => {
@@ -542,7 +535,7 @@ export default function SettingsPage() {
       </Section>
 
       {/* ── 테마 ── */}
-      <Section title="테마">
+      <Section title={t("테마", "Theme")}>
         <div className="px-4 py-4">
           <div className="grid grid-cols-3 gap-2.5">
             {themes.map((t) => {
@@ -584,23 +577,23 @@ export default function SettingsPage() {
           </div>
           <p className="text-[11px] text-muted-foreground/60 mt-3">
             {mounted && theme === "system"
-              ? "OS의 다크/라이트 설정을 자동으로 따릅니다."
+              ? t("OS의 다크/라이트 설정을 자동으로 따릅니다.", "Follows your OS dark/light setting.")
               : mounted && theme === "dark"
-              ? "다크 모드가 활성화되어 있습니다."
-              : "라이트 모드가 활성화되어 있습니다."}
+              ? t("다크 모드가 활성화되어 있습니다.", "Dark mode is active.")
+              : t("라이트 모드가 활성화되어 있습니다.", "Light mode is active.")}
           </p>
         </div>
       </Section>
 
       {/* ── 피드백 보내기 ── */}
-      <Section title="피드백">
+      <Section title={t("피드백", "Feedback")}>
         <div className="px-4 py-4 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <MessageSquare className="w-4 h-4 text-primary" />
-            <p className="text-[13px] font-medium text-foreground">의견 보내기</p>
+            <p className="text-[13px] font-medium text-foreground">{t("의견 보내기", "Send Feedback")}</p>
           </div>
           <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
-            분석 품질, 불편한 점, 기능 제안 등 무엇이든 알려주세요. 서비스 개선에 반영됩니다.
+            {t("분석 품질, 불편한 점, 기능 제안 등 무엇이든 알려주세요. 서비스 개선에 반영됩니다.", "Tell us anything — analysis quality, issues, or feature requests. We read every message.")}
           </p>
 
           <AnimatePresence mode="wait">
@@ -614,13 +607,13 @@ export default function SettingsPage() {
                 <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
                   <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <p className="text-[13px] font-semibold text-foreground">의견을 전달했습니다</p>
-                <p className="text-[12px] text-muted-foreground">소중한 피드백 감사합니다.</p>
+                <p className="text-[13px] font-semibold text-foreground">{t("의견을 전달했습니다", "Feedback sent!")}</p>
+                <p className="text-[12px] text-muted-foreground">{t("소중한 피드백 감사합니다.", "Thank you for your feedback.")}</p>
                 <button
                   onClick={() => setFbDone(false)}
                   className="mt-1 text-[12px] text-primary hover:underline"
                 >
-                  다시 보내기
+                  {t("다시 보내기", "Send another")}
                 </button>
               </motion.div>
             ) : (
@@ -666,7 +659,7 @@ export default function SettingsPage() {
                 <textarea
                   value={fbContent}
                   onChange={(e) => { setFbContent(e.target.value); if (fbError) setFbError(""); }}
-                  placeholder="불편한 점, 개선 아이디어, 칭찬 등 자유롭게 작성해주세요..."
+                  placeholder={t("불편한 점, 개선 아이디어, 칭찬 등 자유롭게 작성해주세요...", "Share any issues, ideas, or praise...")}
                   rows={4}
                   maxLength={2000}
                   className="w-full text-[13px] text-foreground placeholder:text-muted-foreground/50 bg-background border border-border rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all leading-relaxed"
@@ -695,12 +688,12 @@ export default function SettingsPage() {
                           transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
                           className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full"
                         />
-                        전송 중
+                        {t("전송 중", "Sending...")}
                       </>
                     ) : (
                       <>
                         <Send className="w-3.5 h-3.5" />
-                        보내기
+                        {t("보내기", "Send")}
                       </>
                     )}
                   </button>
@@ -712,17 +705,17 @@ export default function SettingsPage() {
       </Section>
 
       {/* ── 서비스 정보 ── */}
-      <Section title="서비스 정보">
-        <Row label="서비스">
+      <Section title={t("서비스 정보", "About")}>
+        <Row label={t("서비스", "Service")}>
           <span className="text-[13px] text-muted-foreground">애빛다 · CBST</span>
         </Row>
-        <Row label="버전">
+        <Row label={t("버전", "Version")}>
           <span className="text-[13px] text-muted-foreground font-mono">
             v{__APP_VERSION__}
             <span className="ml-1.5 text-[11px] text-muted-foreground/60">({__BUILD_DATE__})</span>
           </span>
         </Row>
-        <Row label="문의">
+        <Row label={t("문의", "Contact")}>
           <a href="mailto:support@cbst.ai" className="text-[13px] text-primary hover:underline">
             support@cbst.ai
           </a>
@@ -731,17 +724,17 @@ export default function SettingsPage() {
 
       {/* ── 계정 탈퇴 ── */}
       {user && (
-        <Section title="위험 구역">
+        <Section title={t("위험 구역", "Danger Zone")}>
           <div className="px-4 py-4 space-y-2">
             <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
-              탈퇴하면 모든 분석 내역과 계정 정보가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+              {t("탈퇴하면 모든 분석 내역과 계정 정보가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.", "Deleting your account will permanently remove all analyses and account data. This cannot be undone.")}
             </p>
             <button
               onClick={openDeleteModal}
               className="flex items-center gap-2 text-[13px] font-medium text-red-500 hover:text-red-600 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              계정 탈퇴
+              {t("계정 탈퇴", "Delete Account")}
             </button>
           </div>
         </Section>
@@ -772,22 +765,22 @@ export default function SettingsPage() {
                     <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                   </div>
                   <div>
-                    <p className="text-[14px] font-bold text-foreground">정말 탈퇴하시겠습니까?</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">이 작업은 되돌릴 수 없습니다</p>
+                    <p className="text-[14px] font-bold text-foreground">{t("정말 탈퇴하시겠습니까?", "Delete your account?")}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t("이 작업은 되돌릴 수 없습니다", "This action cannot be undone")}</p>
                   </div>
                 </div>
 
                 {/* 안내 */}
                 <ul className="text-[12px] text-muted-foreground space-y-1 list-disc list-inside bg-muted/50 rounded-lg px-3 py-2.5">
-                  <li>모든 분석 리포트 및 내역 삭제</li>
-                  <li>계정 정보 및 크레딧 삭제</li>
-                  <li>추천인 코드 및 보너스 삭제</li>
+                  <li>{t("모든 분석 리포트 및 내역 삭제", "All analysis reports and history")}</li>
+                  <li>{t("계정 정보 및 크레딧 삭제", "Account info and credits")}</li>
+                  <li>{t("추천인 코드 및 보너스 삭제", "Referral codes and bonuses")}</li>
                 </ul>
 
                 {/* 확인 입력 */}
                 <div className="space-y-1.5">
                   <p className="text-[12px] text-foreground/70">
-                    확인을 위해 <span className="font-bold text-red-500">탈퇴</span>를 입력하세요
+                    {isEn ? <>Type <span className="font-bold text-red-500">DELETE</span> to confirm</> : <>확인을 위해 <span className="font-bold text-red-500">탈퇴</span>를 입력하세요</>}
                   </p>
                   <input
                     ref={deleteInputRef}
@@ -795,7 +788,7 @@ export default function SettingsPage() {
                     value={deleteInput}
                     onChange={e => { setDeleteInput(e.target.value); setDeleteError(""); }}
                     onKeyDown={e => e.key === "Enter" && handleDeleteAccount()}
-                    placeholder="탈퇴"
+                    placeholder={t("탈퇴", "DELETE")}
                     className="w-full px-3 py-2 text-[13px] bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                   />
                   {deleteError && (
@@ -809,14 +802,14 @@ export default function SettingsPage() {
                     onClick={() => setShowDeleteModal(false)}
                     className="flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl border border-border text-foreground hover:bg-accent transition-colors"
                   >
-                    취소
+                    {t("취소", "Cancel")}
                   </button>
                   <button
                     onClick={handleDeleteAccount}
-                    disabled={deleteInput !== "탈퇴" || deleting}
+                    disabled={deleteInput !== (isEn ? "DELETE" : "탈퇴") || deleting}
                     className={cn(
                       "flex-1 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5",
-                      deleteInput === "탈퇴" && !deleting
+                      deleteInput === (isEn ? "DELETE" : "탈퇴") && !deleting
                         ? "bg-red-500 text-white hover:bg-red-600"
                         : "bg-muted text-muted-foreground cursor-not-allowed"
                     )}
@@ -830,7 +823,7 @@ export default function SettingsPage() {
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    {deleting ? "처리 중..." : "탈퇴하기"}
+                    {deleting ? t("처리 중...", "Processing...") : t("탈퇴하기", "Delete Account")}
                   </button>
                 </div>
               </div>

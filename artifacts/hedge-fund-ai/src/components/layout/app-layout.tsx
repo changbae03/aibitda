@@ -6,6 +6,7 @@ import {
   User, Search, ChevronRight,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import { AnimatePresence, motion } from "framer-motion";
 import { openCommandPalette } from "@/components/ui/command-palette";
 
@@ -89,10 +90,10 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
 }
 
 const NAV_ITEMS = [
-  { href: "/analysis/new", label: "AI 기업분석",  Icon: Sparkles },
-  { href: "/history",       label: "내가 본 자료", Icon: BookOpen },
-  { href: "/calendar",      label: "마켓 캘린더",  Icon: CalendarDays },
-  { href: "/popular",       label: "애빛다 통계",  Icon: BarChart2 },
+  { href: "/analysis/new", label: "AI 기업분석",  labelEn: "AI Analysis",     Icon: Sparkles },
+  { href: "/history",       label: "내가 본 자료", labelEn: "My Reports",      Icon: BookOpen },
+  { href: "/calendar",      label: "마켓 캘린더",  labelEn: "Market Calendar", Icon: CalendarDays },
+  { href: "/popular",       label: "애빛다 통계",  labelEn: "Statistics",      Icon: BarChart2 },
 ];
 
 const ADMIN_ITEMS = [
@@ -135,6 +136,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const user = useAuth();
   const credits = useCredits(user !== undefined && user !== null);
   const notice = useNotice();
+  const { isEn } = useLanguage();
 
   useEffect(() => {
     fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
@@ -145,15 +147,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const NavLinks = ({ onSelect, expanded }: { onSelect?: () => void; expanded?: boolean }) => (
     <>
-      {NAV_ITEMS.map(({ href, label, Icon }) => {
+      {NAV_ITEMS.map(({ href, label, labelEn, Icon }) => {
         const isActive =
           location === href || (href !== "/" && location.startsWith(href));
+        const displayLabel = isEn ? labelEn : label;
         return (
           <Link
             key={href}
             href={href}
             onClick={onSelect}
-            title={!expanded ? label : undefined}
+            title={!expanded ? displayLabel : undefined}
             className={cn(
               "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150 overflow-hidden",
               isActive
@@ -166,7 +169,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               "whitespace-nowrap transition-[opacity,max-width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
               expanded ? "opacity-100 max-w-[160px] delay-75" : "opacity-0 max-w-0 overflow-hidden delay-0"
             )}>
-              {label}
+              {displayLabel}
             </span>
           </Link>
         );
@@ -190,7 +193,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {credits && (
               <div className="flex items-center gap-1.5 mt-0.5">
                 <CreditDots credits={credits} />
-                <span className="text-[10px] text-muted-foreground/60">오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음</span>
+                <span className="text-[10px] text-muted-foreground/60">{isEn ? `${Math.max(0, credits.dailyLimit - credits.dailyUsed)} left today` : `오늘 ${Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음`}</span>
               </div>
             )}
           </div>
@@ -210,7 +213,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <Link
         href="/about"
-        title={!expanded ? "애빛다 소개" : undefined}
+        title={!expanded ? (isEn ? "About" : "애빛다 소개") : undefined}
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
           location === "/about"
@@ -220,13 +223,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         <Info className="w-3.5 h-3.5 shrink-0" />
         <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
-          애빛다 소개
+          {isEn ? "About" : "애빛다 소개"}
         </span>
       </Link>
 
       <Link
         href="/settings"
-        title={!expanded ? "설정" : undefined}
+        title={!expanded ? (isEn ? "Settings" : "설정") : undefined}
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
           location === "/settings"
@@ -236,25 +239,25 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         <Settings className="w-3.5 h-3.5 shrink-0" />
         <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
-          설정
+          {isEn ? "Settings" : "설정"}
         </span>
       </Link>
 
       {user ? (
         <button
           onClick={logout}
-          title={!expanded ? "로그아웃" : undefined}
+          title={!expanded ? (isEn ? "Sign Out" : "로그아웃") : undefined}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 text-muted-foreground hover:text-foreground hover:bg-accent overflow-hidden"
         >
           <LogOut className="w-3.5 h-3.5 shrink-0" />
           <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
-            로그아웃
+            {isEn ? "Sign Out" : "로그아웃"}
           </span>
         </button>
       ) : user === null ? (
         <Link
           href="/login"
-          title={!expanded ? "로그인" : undefined}
+          title={!expanded ? (isEn ? "Sign In" : "로그인") : undefined}
           className={cn(
             "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
             location === "/login"
@@ -264,7 +267,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         >
           <LogIn className="w-3.5 h-3.5 shrink-0" />
           <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
-            로그인
+            {isEn ? "Sign In" : "로그인"}
           </span>
         </Link>
       ) : null}
@@ -358,7 +361,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           sidebarExpanded ? "opacity-100 delay-100" : "opacity-0 delay-0"
         )}>
           <p className="text-[10px] text-muted-foreground/35 leading-relaxed tracking-wide whitespace-nowrap">
-            AI로 기업가치를 밝히다
+            {isEn ? "Illuminating value with AI" : "AI로 기업가치를 밝히다"}
           </p>
         </div>
 
@@ -449,25 +452,25 @@ export function AppLayout({ children }: AppLayoutProps) {
                       {credits && (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <CreditDots credits={credits} />
-                          <span className="text-[10px] text-muted-foreground/60">오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음</span>
+                          <span className="text-[10px] text-muted-foreground/60">{isEn ? `${Math.max(0, credits.dailyLimit - credits.dailyUsed)} left today` : `오늘 ${Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음`}</span>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
                 <Link href="/about" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                  <Info className="w-3.5 h-3.5" /> 애빛다 소개
+                  <Info className="w-3.5 h-3.5" /> {isEn ? "About" : "애빛다 소개"}
                 </Link>
                 <Link href="/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                  <Settings className="w-3.5 h-3.5" /> 설정
+                  <Settings className="w-3.5 h-3.5" /> {isEn ? "Settings" : "설정"}
                 </Link>
                 {user ? (
                   <button onClick={() => { setMenuOpen(false); logout(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                    <LogOut className="w-3.5 h-3.5" /> 로그아웃
+                    <LogOut className="w-3.5 h-3.5" /> {isEn ? "Sign Out" : "로그아웃"}
                   </button>
                 ) : user === null ? (
                   <Link href="/login" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                    <LogIn className="w-3.5 h-3.5" /> 로그인
+                    <LogIn className="w-3.5 h-3.5" /> {isEn ? "Sign In" : "로그인"}
                   </Link>
                 ) : null}
               </div>
@@ -515,24 +518,37 @@ export function AppLayout({ children }: AppLayoutProps) {
           <footer className="border-t border-border mt-8 print:hidden">
             <div className="container max-w-5xl mx-auto px-3 sm:px-6 md:px-10 py-5 sm:py-6">
               <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-muted-foreground mb-4">
-                <Link href="/privacy" className="hover:text-foreground transition-colors">개인정보처리방침</Link>
+                <Link href="/privacy" className="hover:text-foreground transition-colors">{isEn ? "Privacy Policy" : "개인정보처리방침"}</Link>
                 <span className="text-border select-none">|</span>
-                <Link href="/terms" className="hover:text-foreground transition-colors">이용약관</Link>
+                <Link href="/terms" className="hover:text-foreground transition-colors">{isEn ? "Terms of Service" : "이용약관"}</Link>
                 <span className="text-border select-none">|</span>
-                <Link href="/notices" className="hover:text-foreground transition-colors">공지사항</Link>
+                <Link href="/notices" className="hover:text-foreground transition-colors">{isEn ? "Notices" : "공지사항"}</Link>
                 <span className="text-border select-none">|</span>
-                <Link href="/disclaimer" className="hover:text-foreground transition-colors">투자유의사항</Link>
+                <Link href="/disclaimer" className="hover:text-foreground transition-colors">{isEn ? "Disclaimer" : "투자유의사항"}</Link>
                 <span className="text-border select-none">|</span>
-                <Link href="/support" className="hover:text-foreground transition-colors">고객센터</Link>
+                <Link href="/support" className="hover:text-foreground transition-colors">{isEn ? "Support" : "고객센터"}</Link>
               </nav>
-              <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
-                애빛다의 모든 콘텐츠는 AI가 자동 생성한 참고용 정보이며, 특정 금융투자상품의 매수·매도·보유를 권유하거나 추천하지 않습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.
-              </p>
-              <p className="text-[11px] text-muted-foreground/70 mt-1 leading-relaxed">
-                본 서비스는 자본시장법상 투자자문업·투자일임업에 해당하지 않으며, 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
-              </p>
+              {isEn ? (
+                <>
+                  <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                    All content on CBST (애빛다) is AI-generated for reference purposes only and does not constitute a recommendation to buy, sell, or hold any financial instrument. Final investment decisions remain solely the responsibility of the investor.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1 leading-relaxed">
+                    This service does not constitute investment advisory or discretionary investment management under applicable law. All content is AI-generated and disclosed as such.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                    애빛다의 모든 콘텐츠는 AI가 자동 생성한 참고용 정보이며, 특정 금융투자상품의 매수·매도·보유를 권유하거나 추천하지 않습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1 leading-relaxed">
+                    본 서비스는 자본시장법상 투자자문업·투자일임업에 해당하지 않으며, 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
+                  </p>
+                </>
+              )}
               <p className="text-[11px] text-muted-foreground/50 mt-1.5">
-                © {new Date().getFullYear()} 애빛다 · CBST. AI로 기업가치를 밝히다.
+                © {new Date().getFullYear()} 애빛다 · CBST. {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다."}
               </p>
             </div>
           </footer>

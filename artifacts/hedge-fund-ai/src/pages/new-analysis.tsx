@@ -6,6 +6,7 @@ import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl, cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 
 interface AuthUser { id: string; nickname: string; profileImage: string | null }
 function useAuth() {
@@ -160,6 +161,7 @@ function useRelatedCompanies(
 }
 
 function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
+  const { isEn } = useLanguage();
   if (!credits) return null;
 
   const dailyRemaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
@@ -174,7 +176,7 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
           : "dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
       }`}>
         <Zap className="w-3 h-3" />
-        오늘 {dailyRemaining}회 남음
+        {isEn ? `${dailyRemaining} left today` : `오늘 ${dailyRemaining}회 남음`}
       </div>
     </div>
   );
@@ -237,6 +239,7 @@ function useTrendingTickers(): PopularTicker[] {
 }
 
 export default function NewAnalysis() {
+  const { isEn } = useLanguage();
   const [, setLocation] = useLocation();
   const { mutateAsync: startAnalysis, isPending } = useStartAnalysis();
   const queryClient = useQueryClient();
@@ -470,11 +473,14 @@ export default function NewAnalysis() {
             className="text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.1]"
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900 }}
           >
-            어떤 종목을<br />분석할까요?
+            {isEn ? <>Which stock would you<br />like to analyze?</> : <>어떤 종목을<br />분석할까요?</>}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed break-keep">
-            코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{" "}
-            <br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다
+            {isEn ? (
+              <>Search by ticker or company name (KOSPI · KOSDAQ · NYSE · NASDAQ){" "}<br className="hidden sm:block" />and our AI agents will start a deep analysis instantly</>
+            ) : (
+              <>코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{" "}<br className="hidden sm:block" />AI 에이전트가 즉시 심층 분석을 시작합니다</>
+            )}
           </p>
           <CreditsBadge credits={credits} />
         </div>
@@ -515,7 +521,7 @@ export default function NewAnalysis() {
               {isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <>분석 시작<ArrowRight className="w-3.5 h-3.5" /></>
+                <>{isEn ? "Analyze" : "분석 시작"}<ArrowRight className="w-3.5 h-3.5" /></>
               )}
             </button>
           </div>
@@ -539,10 +545,10 @@ export default function NewAnalysis() {
                 {/* 드롭다운 헤더 */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
                   <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    종목 선택
+                    {isEn ? "Select Stock" : "종목 선택"}
                   </span>
                   <span className="text-[10px] text-muted-foreground/60">
-                    ↑↓ 이동 · Enter 선택
+                    {isEn ? "↑↓ Navigate · Enter to select" : "↑↓ 이동 · Enter 선택"}
                   </span>
                 </div>
 
@@ -587,7 +593,7 @@ export default function NewAnalysis() {
                         <span className="font-mono text-xs text-muted-foreground">{code}</span>
                       </div>
                       <div className={`flex items-center gap-1 shrink-0 transition-opacity ${isHighlighted ? "opacity-100" : "opacity-0"}`}>
-                        <span className="text-[10px] text-primary font-medium">선택</span>
+                        <span className="text-[10px] text-primary font-medium">{isEn ? "Select" : "선택"}</span>
                         <ChevronRight className="w-3.5 h-3.5 text-primary" />
                       </div>
                       {!isHighlighted && (
@@ -610,7 +616,7 @@ export default function NewAnalysis() {
                 className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5"
               >
                 <Loader2 className="w-3 h-3 animate-spin" />
-                종목 검색 중...
+                {isEn ? "Searching..." : "종목 검색 중..."}
               </motion.p>
             )}
           </AnimatePresence>
@@ -624,7 +630,7 @@ export default function NewAnalysis() {
                 exit={{ opacity: 0 }}
                 className="mt-2 text-xs text-primary font-medium flex items-center gap-1"
               >
-                ↑ 위 목록에서 종목을 클릭하거나 ↑↓ 방향키로 선택 후 Enter를 눌러주세요
+                {isEn ? "↑ Click a stock above or use ↑↓ arrow keys, then press Enter" : "↑ 위 목록에서 종목을 클릭하거나 ↑↓ 방향키로 선택 후 Enter를 눌러주세요"}
               </motion.p>
             )}
           </AnimatePresence>
@@ -653,14 +659,11 @@ export default function NewAnalysis() {
               >
                 <LogIn className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span className="text-xs text-amber-700 dark:text-amber-300">
-                  분석을 시작하려면{" "}
-                  <a
-                    href="/login"
-                    className="font-semibold underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200"
-                  >
-                    로그인
-                  </a>
-                  이 필요합니다
+                  {isEn ? (
+                    <>Please{" "}<a href="/login" className="font-semibold underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200">sign in</a>{" "}to start analysis</>
+                  ) : (
+                    <>분석을 시작하려면{" "}<a href="/login" className="font-semibold underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200">로그인</a>이 필요합니다</>
+                  )}
                 </span>
               </motion.div>
             )}
@@ -672,8 +675,8 @@ export default function NewAnalysis() {
               animate={{ opacity: 1 }}
               className="mt-3 flex flex-col items-center gap-1"
             >
-              <p className="text-xs text-muted-foreground text-center">분석 파이프라인 초기화 중...</p>
-              <p className="text-[11px] text-primary/70 font-medium text-center">⏱ 완성까지 평균 3분 소요됩니다</p>
+              <p className="text-xs text-muted-foreground text-center">{isEn ? "Initializing analysis pipeline..." : "분석 파이프라인 초기화 중..."}</p>
+              <p className="text-[11px] text-primary/70 font-medium text-center">{isEn ? "⏱ Average 3 minutes to complete" : "⏱ 완성까지 평균 3분 소요됩니다"}</p>
             </motion.div>
           ) : (
             <motion.p
@@ -681,7 +684,7 @@ export default function NewAnalysis() {
               animate={{ opacity: 1 }}
               className="mt-2 text-[11px] text-muted-foreground/50 text-center"
             >
-              ⏱ 평균 3분 만에 리포트 완성
+              {isEn ? "⏱ Report completed in ~3 minutes" : "⏱ 평균 3분 만에 리포트 완성"}
             </motion.p>
           )}
         </form>
@@ -705,10 +708,10 @@ export default function NewAnalysis() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-3 h-3 text-primary" />
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">최근 분석 종목</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Recent Analyses" : "최근 분석 종목"}</span>
                 </div>
                 <a href="/history" className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
-                  전체 기록 <ChevronRight className="w-3 h-3" />
+                  {isEn ? "All History" : "전체 기록"} <ChevronRight className="w-3 h-3" />
                 </a>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -745,7 +748,7 @@ export default function NewAnalysis() {
             >
               <div className="flex items-center gap-1.5">
                 <Flame className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">많이 찾는 종목</span>
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Trending" : "많이 찾는 종목"}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {trending.map((t) => (
@@ -779,8 +782,8 @@ export default function NewAnalysis() {
           >
             <div className="flex items-center gap-1.5">
               <Zap className="w-3 h-3 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">관심 있을 만한 기업</span>
-              <span className="text-[9px] text-muted-foreground/40">· {relatedCompanies[0].baseCompanyName} 피어</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "You May Be Interested In" : "관심 있을 만한 기업"}</span>
+              <span className="text-[9px] text-muted-foreground/40">· {relatedCompanies[0].baseCompanyName} {isEn ? "peers" : "피어"}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {relatedCompanies.map((c) => (
@@ -826,7 +829,7 @@ export default function NewAnalysis() {
                 <Building2 className="w-5 h-5 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">AI 기업분석</p>
+                <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">{isEn ? "AI Analysis" : "AI 기업분석"}</p>
                 <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{confirmModal.companyName}</h3>
                 <p className="font-mono text-[11px] text-muted-foreground/50">{confirmModal.ticker}</p>
               </div>
@@ -834,19 +837,33 @@ export default function NewAnalysis() {
 
             {/* 설명 */}
             <div className="rounded-xl bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
-              <p className="text-[13.5px] text-foreground/85 leading-relaxed">
-                <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
-                7단계 심층 분석을 시작합니다.
-              </p>
-              <p className="text-[11.5px] text-muted-foreground">
-                평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
-              </p>
+              {isEn ? (
+                <>
+                  <p className="text-[13.5px] text-foreground/85 leading-relaxed">
+                    <span className="font-bold" style={{ color: "#FF8A7A" }}>CBST's AI analyst team</span><br />
+                    will start a 7-step deep analysis.
+                  </p>
+                  <p className="text-[11.5px] text-muted-foreground">
+                    ~3 minutes · Auto-selects DCF/rNPV valuation
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13.5px] text-foreground/85 leading-relaxed">
+                    <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
+                    7단계 심층 분석을 시작합니다.
+                  </p>
+                  <p className="text-[11.5px] text-muted-foreground">
+                    평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
+                  </p>
+                </>
+              )}
             </div>
 
             {/* 크레딧 */}
             {credits && (
               <p className="text-[11px] text-muted-foreground/50 text-center mb-4">
-                오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 사용 가능
+                {isEn ? `${Math.max(0, credits.dailyLimit - credits.dailyUsed)} analyses available today` : `오늘 ${Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 사용 가능`}
               </p>
             )}
 
@@ -856,7 +873,7 @@ export default function NewAnalysis() {
                 onClick={() => setConfirmModal(null)}
                 className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
               >
-                취소
+                {isEn ? "Cancel" : "취소"}
               </button>
               <button
                 onClick={() => { setConfirmModal(null); handleSubmit(confirmModal.ticker); }}
@@ -867,7 +884,7 @@ export default function NewAnalysis() {
                 {isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <>분석 시작 <ArrowRight className="w-4 h-4" /></>
+                  <>{isEn ? "Start Analysis" : "분석 시작"} <ArrowRight className="w-4 h-4" /></>
                 )}
               </button>
             </div>

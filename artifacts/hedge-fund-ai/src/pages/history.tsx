@@ -10,6 +10,7 @@ import {
   ChevronDown, AlertTriangle, SlidersHorizontal, Timer,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface QuoteResult {
@@ -70,9 +71,17 @@ function verdictStyle(verdict: string): string {
   if (s.includes("sell"))        return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
   return "dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-amber-700";
 }
-function verdictBadge(verdict?: string) {
+function toEnVerdict(verdict: string): string {
+  const s = verdict.toLowerCase();
+  if (s.includes("strong buy"))  return "Strong Buy";
+  if (s.includes("buy"))         return "Buy";
+  if (s.includes("strong sell")) return "Strong Sell";
+  if (s.includes("sell"))        return "Sell";
+  return "Hold";
+}
+function verdictBadge(verdict?: string, isEn?: boolean) {
   if (!verdict) return null;
-  const label = toKoreanVerdict(verdict);
+  const label = isEn ? toEnVerdict(verdict) : toKoreanVerdict(verdict);
   const cls = verdictStyle(verdict);
   return (
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border", cls)}>
@@ -170,17 +179,17 @@ function MemoInline({ id }: { id: number }) {
   }
   return (
     <button onClick={handleEdit} className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-amber-500 transition-colors opacity-0 group-hover:opacity-100">
-      <Pencil className="w-3 h-3" /> 메모 추가
+      <Pencil className="w-3 h-3" /> Add memo
     </button>
   );
 }
 
 // ── PriceTrack: 중앙 진입가 기준 좌우 이동 시각화 ───────────────────────────────
 function PriceTrack({
-  entry, tgt, cur, currency,
+  entry, tgt, cur, currency, isEn,
 }: {
   entry: number; tgt: number; cur: number;
-  currency: string;
+  currency: string; isEn?: boolean;
 }) {
   // 방향: target이 entry보다 낮으면 하락 목표 (과평가 해소)
   const isDownside = tgt < entry;
@@ -208,8 +217,12 @@ function PriceTrack({
     : ((tgt - cur) / cur) * 100;     // 적정가까지 남은 상승률 (양수=업사이드)
 
   const tgtLabel = (() => {
-    if (exceeded) return isDownside ? "✓ 적정가 도달" : "✓ 달성";
-    if (isDownside) return gapPct > 0 ? `과열 +${gapPct.toFixed(1)}%` : "적정가 근접";
+    if (exceeded) return isDownside
+      ? (isEn ? "✓ Target reached" : "✓ 적정가 도달")
+      : (isEn ? "✓ Achieved" : "✓ 달성");
+    if (isDownside) return gapPct > 0
+      ? (isEn ? `Overheated +${gapPct.toFixed(1)}%` : `과열 +${gapPct.toFixed(1)}%`)
+      : (isEn ? "Near target" : "적정가 근접");
     return `${gapPct >= 0 ? "+" : ""}${gapPct.toFixed(1)}%`;
   })();
 
@@ -281,7 +294,7 @@ function PriceTrack({
           className="absolute text-center"
           style={{ left: `${entryPos}%`, transform: "translateX(-50%)" }}
         >
-          <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5 whitespace-nowrap">분석 당시</p>
+          <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5 whitespace-nowrap">{isEn ? "At Analysis" : "분석 당시"}</p>
           <p className="font-mono text-[9px] font-semibold text-muted-foreground/60 tabular-nums whitespace-nowrap">{formatCurrency(entry, currency)}</p>
         </div>
 
@@ -291,7 +304,7 @@ function PriceTrack({
           style={{ left: `${tgtPos}%`, transform: "translateX(-50%)" }}
         >
           <p className={cn("text-[8px] leading-none mb-0.5 whitespace-nowrap", exceeded ? "text-emerald-500" : "text-muted-foreground/50")}>
-            적정주가 {tgtLabel}
+            {isEn ? "Target " : "적정주가 "}{tgtLabel}
           </p>
           <p className={cn("font-mono text-[9px] font-semibold tabular-nums whitespace-nowrap", exceeded ? "text-emerald-600" : "text-muted-foreground/60")}>
             {formatCurrency(tgt, currency)}
@@ -321,7 +334,7 @@ function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
       <div className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/60 min-w-[52px]">
         <span className="text-[9px] font-medium text-muted-foreground/60 leading-none">{label}</span>
         <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/40 leading-none mt-0.5">
-          <Timer className="w-2.5 h-2.5" />{remaining}일
+          <Timer className="w-2.5 h-2.5" />{remaining}{isEn ? "d" : "일"}
         </span>
       </div>
     );
@@ -351,9 +364,10 @@ function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
   );
 }
 
-function PerformanceBadges({ analysisDate, perf }: {
+function PerformanceBadges({ analysisDate, perf, isEn }: {
   analysisDate: string;
   perf: PerfResult | undefined;
+  isEn?: boolean;
 }) {
   const daysElapsed = Math.floor((Date.now() - new Date(analysisDate).getTime()) / (1000 * 60 * 60 * 24));
 
@@ -361,10 +375,10 @@ function PerformanceBadges({ analysisDate, perf }: {
 
   return (
     <div className="mt-2.5 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
-      <span className="text-[9px] font-semibold text-muted-foreground/40 uppercase tracking-wide mr-0.5 whitespace-nowrap">분석 후 성과</span>
-      <PerfBadge label="1주일" pct={perf?.w1 ?? null} daysElapsed={daysElapsed} requiredDays={7} />
-      <PerfBadge label="1개월" pct={perf?.m1 ?? null} daysElapsed={daysElapsed} requiredDays={30} />
-      <PerfBadge label="3개월" pct={perf?.m3 ?? null} daysElapsed={daysElapsed} requiredDays={90} />
+      <span className="text-[9px] font-semibold text-muted-foreground/40 uppercase tracking-wide mr-0.5 whitespace-nowrap">{isEn ? "Post-Analysis Return" : "분석 후 성과"}</span>
+      <PerfBadge label={isEn ? "1W" : "1주일"} pct={perf?.w1 ?? null} daysElapsed={daysElapsed} requiredDays={7} />
+      <PerfBadge label={isEn ? "1M" : "1개월"} pct={perf?.m1 ?? null} daysElapsed={daysElapsed} requiredDays={30} />
+      <PerfBadge label={isEn ? "3M" : "3개월"} pct={perf?.m3 ?? null} daysElapsed={daysElapsed} requiredDays={90} />
     </div>
   );
 }
@@ -392,6 +406,7 @@ type SortKey = "date" | "upside" | "return" | "name";
 type VerdictFilter = "all" | "buy" | "sell" | "hold";
 
 export default function History() {
+  const { isEn } = useLanguage();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: serverAnalyses, isLoading } = useListAnalyses();
@@ -554,9 +569,9 @@ export default function History() {
     return items;
   }, [list, verdictFilter, industryFilter, sortBy, quotes]);
 
-  const sortLabels: Record<SortKey, string> = {
-    date: "최신순", upside: "업사이드 큰 순", return: "수익률 순", name: "기업명순",
-  };
+  const sortLabels: Record<SortKey, string> = isEn
+    ? { date: "Newest", upside: "Highest Upside", return: "Best Return", name: "Alphabetical" }
+    : { date: "최신순", upside: "업사이드 큰 순", return: "수익률 순", name: "기업명순" };
 
   // ── 정확도 통계 ────────────────────────────────────────────────────────
   const accuracyStats = useMemo(() => {
@@ -625,7 +640,7 @@ export default function History() {
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-[22px] font-black tracking-tight text-foreground" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
-            내가 본 자료
+            {isEn ? "My Reports" : "내가 본 자료"}
           </h1>
           {list.length > 0 && (() => {
             const buyCount  = list.filter((a) => (a.investmentVerdict ?? "").toLowerCase().includes("buy")).length;
@@ -641,12 +656,12 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-muted-foreground/50">{list.length}건</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-400 dark:border-green-700">상승여력 {buyCount}</span>}
-                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">적정수준 {holdCount}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">하락여지 {sellCount}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-400 dark:border-green-700">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
                 {reanalysisCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border border-orange-400 dark:border-orange-700">
-                    재분석 {reanalysisCount}
+                    {isEn ? `Re-analyze ${reanalysisCount}` : `재분석 ${reanalysisCount}`}
                   </span>
                 )}
               </div>
@@ -659,10 +674,10 @@ export default function History() {
               onClick={() => { fetchQuotes(list); fetchSparklines(list); }}
               disabled={quotesLoading}
               className="flex items-center gap-1 text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-30"
-              title="현재가 새로고침"
+              title={isEn ? "Refresh prices" : "현재가 새로고침"}
             >
               <RefreshCw className={cn("w-3 h-3", quotesLoading && "animate-spin")} />
-              <span>새로고침</span>
+              <span>{isEn ? "Refresh" : "새로고침"}</span>
             </button>
 
             <AnimatePresence mode="wait">
@@ -675,7 +690,7 @@ export default function History() {
                   transition={{ duration: 0.15 }}
                   className="flex items-center gap-1.5"
                 >
-                  <span className="text-[11px] text-red-500 font-medium">전체 삭제?</span>
+                  <span className="text-[11px] text-red-500 font-medium">{isEn ? "Delete all?" : "전체 삭제?"}</span>
                   <button
                     onClick={handleDeleteAll}
                     disabled={deletingAll}
@@ -686,13 +701,13 @@ export default function History() {
                     ) : (
                       <Trash2 className="w-3 h-3" />
                     )}
-                    확인
+                    {isEn ? "Confirm" : "확인"}
                   </button>
                   <button
                     onClick={() => setConfirmDeleteAll(false)}
                     className="px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:bg-muted transition-colors"
                   >
-                    취소
+                    {isEn ? "Cancel" : "취소"}
                   </button>
                 </motion.div>
               ) : (
@@ -703,10 +718,10 @@ export default function History() {
                   exit={{ opacity: 0 }}
                   onClick={() => setConfirmDeleteAll(true)}
                   className="flex items-center gap-1 text-[11px] text-muted-foreground/40 hover:text-red-400 transition-colors"
-                  title="전체 삭제"
+                  title={isEn ? "Delete All" : "전체 삭제"}
                 >
                   <Trash2 className="w-3 h-3" />
-                  <span>전체 삭제</span>
+                  <span>{isEn ? "Delete All" : "전체 삭제"}</span>
                 </motion.button>
               )}
             </AnimatePresence>
@@ -719,17 +734,17 @@ export default function History() {
         <div className="mb-4">
           <div className="rounded-xl border border-border bg-background px-5 py-3 flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">주가 방향 정확도</p>
-              <p className="text-[11px] text-muted-foreground/50">상승·하락 방향 예측 기준</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">{isEn ? "Price Direction Accuracy" : "주가 방향 정확도"}</p>
+              <p className="text-[11px] text-muted-foreground/50">{isEn ? "Based on up/down direction predictions" : "상승·하락 방향 예측 기준"}</p>
               {accuracyStats.pendingCount > 0 && (
                 <p className="text-[10px] text-muted-foreground/40 mt-0.5">
-                  {accuracyStats.pendingCount}건 미반영 제외 (±0.5% 미만)
+                  {isEn ? `${accuracyStats.pendingCount} excluded (±0.5% move)` : `${accuracyStats.pendingCount}건 미반영 제외 (±0.5% 미만)`}
                 </p>
               )}
             </div>
             <div className="text-right">
               {accuracyStats.total === 0 ? (
-                <p className="text-[13px] font-semibold text-muted-foreground/40">평가 대기 중</p>
+                <p className="text-[13px] font-semibold text-muted-foreground/40">{isEn ? "Awaiting evaluation" : "평가 대기 중"}</p>
               ) : (
                 <>
                   <p className={cn(
@@ -740,7 +755,7 @@ export default function History() {
                   )}>
                     {accuracyStats.dirAccuracy.toFixed(0)}<span className="text-[14px] font-semibold text-muted-foreground ml-0.5">%</span>
                   </p>
-                  <p className="text-[10px] text-muted-foreground/40 mt-0.5">{accuracyStats.total}건 기준</p>
+                  <p className="text-[10px] text-muted-foreground/40 mt-0.5">{isEn ? `${accuracyStats.total} samples` : `${accuracyStats.total}건 기준`}</p>
                 </>
               )}
             </div>
@@ -755,7 +770,9 @@ export default function History() {
 
           {/* Verdict 필터 */}
           {(["all", "buy", "sell", "hold"] as VerdictFilter[]).map((v) => {
-            const labels: Record<VerdictFilter, string> = { all: "전체", buy: "상승여력", sell: "하락여지", hold: "적정수준" };
+            const labels: Record<VerdictFilter, string> = isEn
+              ? { all: "All", buy: "Buy", sell: "Sell", hold: "Hold" }
+              : { all: "전체", buy: "상승여력", sell: "하락여지", hold: "적정수준" };
             const active = verdictFilter === v;
             return (
               <button
@@ -824,20 +841,20 @@ export default function History() {
       {list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
           <Inbox className="w-10 h-10 text-muted-foreground/30" />
-          <p className="text-[15px] font-medium text-muted-foreground">아직 분석한 기업이 없어요</p>
-          <p className="text-[13px] text-muted-foreground/50">AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요</p>
+          <p className="text-[15px] font-medium text-muted-foreground">{isEn ? "No analyses yet" : "아직 분석한 기업이 없어요"}</p>
+          <p className="text-[13px] text-muted-foreground/50">{isEn ? "Search for a company to start your first analysis" : "AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요"}</p>
           <button
             onClick={() => setLocation("/analysis/new")}
             className="mt-2 px-4 py-2 rounded-md text-[13px] font-medium bg-[#1d4ed8] text-white hover:bg-blue-700 transition-colors"
           >
-            분석 시작하기
+            {isEn ? "Start Analysis" : "분석 시작하기"}
           </button>
         </div>
       ) : filteredAndSorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-          <p className="text-[14px] font-medium text-muted-foreground">필터 조건에 맞는 항목이 없어요</p>
+          <p className="text-[14px] font-medium text-muted-foreground">{isEn ? "No items match the filter" : "필터 조건에 맞는 항목이 없어요"}</p>
           <button onClick={() => { setVerdictFilter("all"); setIndustryFilter("all"); }} className="text-[12px] text-blue-500 hover:underline">
-            필터 초기화
+            {isEn ? "Reset Filters" : "필터 초기화"}
           </button>
         </div>
       ) : (
@@ -860,13 +877,13 @@ export default function History() {
                 const effectiveEntry = entry ?? cur;
                 const isDownside = tgt < effectiveEntry;
                 const exceeded = isDownside ? cur <= tgt : cur >= tgt;
-                if (exceeded) return { label: "🎯 목표 달성", cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700" };
+                if (exceeded) return { label: isEn ? "🎯 Target Hit" : "🎯 목표 달성", cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700" };
                 const distNow  = Math.abs(cur - tgt);
                 const distThen = entry != null ? Math.abs(entry - tgt) : null;
                 if (distThen == null) return null;
-                if (distNow < distThen) return { label: "▲ 목표 접근", cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-400 dark:border-blue-700" };
-                if (distNow > distThen) return { label: "▼ 목표 이탈", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
-                return { label: "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
+                if (distNow < distThen) return { label: isEn ? "▲ Approaching" : "▲ 목표 접근", cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-400 dark:border-blue-700" };
+                if (distNow > distThen) return { label: isEn ? "▼ Diverging" : "▼ 목표 이탈", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
+                return { label: isEn ? "— Flat" : "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
               return (
@@ -898,15 +915,15 @@ export default function History() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[15px] font-semibold text-foreground truncate">{a.companyName}</span>
                         <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
-                        {verdictBadge(a.investmentVerdict)}
+                        {verdictBadge(a.investmentVerdict, isEn)}
                         {reanalysisLevel === "urgent" && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-400 dark:border-red-700">
-                            <AlertTriangle className="w-2.5 h-2.5" /> 긴급 재분석
+                            <AlertTriangle className="w-2.5 h-2.5" /> {isEn ? "Re-analyze Now" : "긴급 재분석"}
                           </span>
                         )}
                         {reanalysisLevel === "recommend" && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border border-orange-400 dark:border-orange-700">
-                            <RefreshCw className="w-2.5 h-2.5" /> 재분석 추천
+                            <RefreshCw className="w-2.5 h-2.5" /> {isEn ? "Re-analyze" : "재분석 추천"}
                           </span>
                         )}
                       </div>
@@ -928,9 +945,9 @@ export default function History() {
                             className="flex items-center gap-1.5"
                             onClick={cancelConfirm}
                           >
-                            <span className="text-[12px] text-muted-foreground mr-0.5">삭제할까요?</span>
-                            <button onClick={(e) => confirmDelete(a.id, isLocalOnly, e)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
-                            <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-muted text-foreground/70 text-[11px] font-semibold hover:bg-muted transition-colors">취소</button>
+                            <span className="text-[12px] text-muted-foreground mr-0.5">{isEn ? "Delete?" : "삭제할까요?"}</span>
+                            <button onClick={(e) => confirmDelete(a.id, isLocalOnly, e)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold hover:bg-red-600 transition-colors">{isEn ? "Delete" : "삭제"}</button>
+                            <button onClick={cancelConfirm} className="px-2.5 py-1 rounded-lg bg-muted text-foreground/70 text-[11px] font-semibold hover:bg-muted transition-colors">{isEn ? "Cancel" : "취소"}</button>
                           </motion.div>
                         ) : (
                           <motion.div
@@ -982,17 +999,17 @@ export default function History() {
                       if (tgt) return (
                         <div className="mt-3 flex items-stretch rounded-xl overflow-hidden border border-border text-center">
                           <div className="flex-1 px-2.5 py-2 bg-muted/50 border-r border-border">
-                            <p className="text-[9px] text-muted-foreground mb-0.5">분석 당시</p>
+                            <p className="text-[9px] text-muted-foreground mb-0.5">{isEn ? "At Analysis" : "분석 당시"}</p>
                             <p className="text-[12px] font-bold text-foreground/70 tabular-nums">
                               {entry != null ? formatCurrency(entry, currency) : <span className="text-muted-foreground/50">—</span>}
                             </p>
                           </div>
                           <div className="flex-1 px-2.5 py-2 bg-background border-r border-border">
-                            <p className="text-[9px] text-muted-foreground mb-0.5">현재가</p>
+                            <p className="text-[9px] text-muted-foreground mb-0.5">{isEn ? "Current" : "현재가"}</p>
                             <p className="text-[12px] font-bold text-muted-foreground/50">—</p>
                           </div>
                           <div className="flex-1 px-2.5 py-2 bg-background">
-                            <p className="text-[9px] text-muted-foreground mb-0.5">적정주가</p>
+                            <p className="text-[9px] text-muted-foreground mb-0.5">{isEn ? "Target" : "적정주가"}</p>
                             <p className="text-[12px] font-bold text-foreground/80 tabular-nums">{formatCurrency(tgt, currency)}</p>
                           </div>
                         </div>
@@ -1007,10 +1024,11 @@ export default function History() {
                           tgt={tgt}
                           cur={cur}
                           currency={currency}
+                          isEn={isEn}
                         />
                         {dayChange != null && (
                           <p className={cn("text-[13px] font-bold text-right tabular-nums", dayChange >= 0 ? "text-red-500" : "text-blue-500")}>
-                            오늘 {dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
+                            {isEn ? "Today " : "오늘 "}{dayChange >= 0 ? "+" : ""}{dayChange.toFixed(2)}%
                           </p>
                         )}
                       </>
@@ -1018,7 +1036,7 @@ export default function History() {
                   })()}
 
                   {/* 기간별 성과 트래킹 */}
-                  <PerformanceBadges analysisDate={a.createdAt} perf={perf[a.id]} />
+                  <PerformanceBadges analysisDate={a.createdAt} perf={perf[a.id]} isEn={isEn} />
 
                   {/* ⑮ Hover card preview */}
                   {a.status === "completed" && (a.targetPrice || a.entryPrice || a.stopLoss) && (
@@ -1027,7 +1045,7 @@ export default function History() {
                         {a.targetPrice && (
                           <div className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                            <span className="text-[10px] text-muted-foreground/60">적정주가</span>
+                            <span className="text-[10px] text-muted-foreground/60">{isEn ? "Target" : "적정주가"}</span>
                             <span className="text-[11px] font-mono font-bold text-foreground/80">
                               {formatCurrency(a.targetPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}
                             </span>
@@ -1036,7 +1054,7 @@ export default function History() {
                         {a.entryPrice && (
                           <div className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                            <span className="text-[10px] text-muted-foreground/60">진입가</span>
+                            <span className="text-[10px] text-muted-foreground/60">{isEn ? "Entry" : "진입가"}</span>
                             <span className="text-[11px] font-mono font-bold text-foreground/80">
                               {formatCurrency(a.entryPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}
                             </span>
@@ -1045,7 +1063,7 @@ export default function History() {
                         {a.stopLoss && (
                           <div className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                            <span className="text-[10px] text-muted-foreground/60">손절가</span>
+                            <span className="text-[10px] text-muted-foreground/60">{isEn ? "Stop Loss" : "손절가"}</span>
                             <span className="text-[11px] font-mono font-bold text-destructive/80">
                               {formatCurrency(a.stopLoss, isUSTicker(a.ticker) ? "USD" : "KRW")}
                             </span>

@@ -6,6 +6,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/ui/command-palette";
+import { LanguageProvider } from "@/lib/language-context";
 import { AppLayout } from "@/components/layout/app-layout";
 import NotFound from "@/pages/not-found";
 
@@ -198,8 +199,10 @@ function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <WouterRouter base={basePath}>
-        <ClerkProviderWithRoutes />
-        <CommandPalette />
+        <LanguageProvider>
+          <ClerkProviderWithRoutes />
+          <CommandPalette />
+        </LanguageProvider>
       </WouterRouter>
     </ThemeProvider>
   );
