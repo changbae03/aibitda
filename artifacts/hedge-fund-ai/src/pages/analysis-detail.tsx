@@ -1082,18 +1082,18 @@ export default function AnalysisDetail() {
             if (msg.debate === "challenging") {
               setStreamingStep(prev => prev ? { ...prev, debateStatus: "challenging" } : null);
             } else if (msg.debate === "synthesizing") {
-              setStreamingStep(prev => prev ? { ...prev, debateStatus: "synthesizing", content: "" } : null);
+              setStreamingStep(prev => prev ? { ...prev, debateStatus: "synthesizing" } : null);
             } else if (msg.qc === "checking") {
-              setStreamingStep(prev => prev ? { ...prev, content: "", debateStatus: undefined, qcStatus: "checking" } : null);
+              setStreamingStep(prev => prev ? { ...prev, debateStatus: undefined, qcStatus: "checking" } : null);
             } else if (msg.qc === "approved") {
               setStreamingStep(prev => prev ? { ...prev, qcStatus: "approved", qcScore: msg.score } : null);
             } else if (msg.qc === "revising") {
-              setStreamingStep(prev => prev ? { ...prev, content: "", qcStatus: "revising", qcScore: msg.score, qcFeedback: msg.feedback } : null);
+              setStreamingStep(prev => prev ? { ...prev, qcStatus: "revising", qcScore: msg.score, qcFeedback: msg.feedback } : null);
             } else if (msg.qc === "revised") {
               setStreamingStep(prev => prev ? { ...prev, qcStatus: "revised", qcScore: msg.score } : null);
-            } else if (msg.t) {
-              setStreamingStep(prev => prev ? { ...prev, content: prev.content + msg.t } : null);
             }
+            // msg.t (text token) — StreamingCard가 content를 표시하지 않으므로
+            // state 업데이트 없이 무시. 서버가 DB에 저장 후 refetch로 표시됨.
             if (msg.done) {
               queryClient.invalidateQueries({ queryKey: getGetAnalysisQueryKey(id) });
               completedSuccessfully = true;
@@ -1489,7 +1489,7 @@ export default function AnalysisDetail() {
         </AnimatePresence>
 
         {/* Streaming card — live typewriter while AI writes */}
-        <div className="print:hidden">
+        <div className="print:hidden" style={{ contain: "layout" }}>
           <AnimatePresence>
             {streamingStep && (
               <StreamingCard
