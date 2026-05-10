@@ -1594,6 +1594,44 @@ router.get("/financials/:ticker", async (req, res) => {
         }
       } catch { /* Yahoo 보충 실패해도 Naver 데이터로 진행 */ }
 
+      // ── Yahoo Finance earningsTrend 로 미래 전망 보충 (Naver 미포함 연도만) ──
+      try {
+        const yahooTicker = ticker.includes(".") ? ticker : `${koreanCode}.KS`;
+        const qs = await yahooFinance.quoteSummary(yahooTicker, {
+          modules: ["earningsTrend" as any],
+        });
+        const trend: any[] = (qs as any).earningsTrend?.trend ?? [];
+        const annualYears = new Set(annual.map((e: any) => String(e.period).slice(0, 4)));
+        // 과거 실적 평균 OPM (추정치 제외)
+        const histOPMs = annual
+          .filter((e: any) => !e.isEstimate && e.operatingMargin != null)
+          .map((e: any) => e.operatingMargin as number);
+        const avgOPM = histOPMs.length ? histOPMs.reduce((a, b) => a + b, 0) / histOPMs.length : null;
+
+        for (const t of trend) {
+          if (!["0y", "+1y", "+2y"].includes(t.period ?? "")) continue;
+          const endDate: Date | null = t.endDate ?? null;
+          if (!endDate) continue;
+          const dateStr = new Date(endDate).toISOString().slice(0, 7); // "2027-12"
+          const yearStr = dateStr.slice(0, 4);
+          if (annualYears.has(yearStr)) continue; // Naver 데이터 우선
+          const rev: number | null = t.revenueEstimate?.avg ?? null;
+          if (!rev) continue;
+          const op = avgOPM != null ? rev * (avgOPM / 100) : null;
+          annual.push({
+            period: dateStr,
+            isEstimate: true,
+            opIncomeFromMargin: op != null,
+            revenue: rev,
+            operatingIncome: op,
+            netIncome: null,
+            operatingMargin: avgOPM,
+          });
+          annualYears.add(yearStr);
+        }
+        annual = annual.sort((a: any, b: any) => a.period.localeCompare(b.period));
+      } catch { /* 전망 보충 실패 시 Naver 데이터만 사용 */ }
+
       res.json({
         ticker,
         currency: "KRW",
@@ -1628,20 +1666,15 @@ router.get("/financials/:ticker", async (req, res) => {
       }),
     ]);
 
-    // fundamentalsTimeSeries processResponse strips the type prefix:
-    // annualTotalRevenue → totalRevenue, annualOperatingIncome → operatingIncome, etc.
-    // Both annual and quarterly entries share the same field names after stripping.
     const toEntry = (e: any) => {
       const rev: number | null = e.totalRevenue ?? null;
       const opIncome: number | null = e.operatingIncome ?? null;
       const netIncome: number | null = e.netIncome ?? null;
-      // date is a Unix timestamp in milliseconds in fundamentalsTimeSeries response
-      const dateStr = e.date
-        ? new Date(e.date).toISOString().slice(0, 7)
-        : "";
+      const dateStr = e.date ? new Date(e.date).toISOString().slice(0, 7) : "";
       return {
         period: dateStr,
         isEstimate: false,
+        opIncomeFromMargin: false,
         revenue: rev,
         operatingIncome: opIncome,
         netIncome,
@@ -1649,7 +1682,7 @@ router.get("/financials/:ticker", async (req, res) => {
       };
     };
 
-    const annual = (Array.isArray(annualRaw) ? annualRaw : [])
+    let annual = (Array.isArray(annualRaw) ? annualRaw : [])
       .map(toEntry)
       .filter((e: any) => e.revenue != null)
       .sort((a: any, b: any) => b.period.localeCompare(a.period));
@@ -1659,6 +1692,43 @@ router.get("/financials/:ticker", async (req, res) => {
       .filter((e: any) => e.revenue != null)
       .sort((a: any, b: any) => b.period.localeCompare(a.period))
       .slice(0, 10); // 최대 10분기
+
+    // ── Yahoo earningsTrend 로 미래 전망 추가 (0y / +1y / +2y) ───────────────
+    try {
+      const qs = await yahooFinance.quoteSummary(ticker, {
+        modules: ["earningsTrend" as any],
+      });
+      const trend: any[] = (qs as any).earningsTrend?.trend ?? [];
+      const annualYears = new Set(annual.map((e: any) => String(e.period).slice(0, 4)));
+      // 과거 실적 평균 OPM (추정치 제외)
+      const histOPMs = annual
+        .filter((e: any) => !e.isEstimate && e.operatingMargin != null)
+        .map((e: any) => e.operatingMargin as number);
+      const avgOPM = histOPMs.length ? histOPMs.reduce((a, b) => a + b, 0) / histOPMs.length : null;
+
+      for (const t of trend) {
+        if (!["0y", "+1y", "+2y"].includes(t.period ?? "")) continue;
+        const endDate: Date | null = t.endDate ?? null;
+        if (!endDate) continue;
+        const dateStr = new Date(endDate).toISOString().slice(0, 7);
+        const yearStr = dateStr.slice(0, 4);
+        if (annualYears.has(yearStr)) continue;
+        const rev: number | null = t.revenueEstimate?.avg ?? null;
+        if (!rev) continue;
+        const op = avgOPM != null ? rev * (avgOPM / 100) : null;
+        annual.push({
+          period: dateStr,
+          isEstimate: true,
+          opIncomeFromMargin: op != null,
+          revenue: rev,
+          operatingIncome: op,
+          netIncome: null,
+          operatingMargin: avgOPM,
+        });
+        annualYears.add(yearStr);
+      }
+      annual = annual.sort((a: any, b: any) => a.period.localeCompare(b.period));
+    } catch { /* 전망 보충 실패 시 역사 데이터만 사용 */ }
 
     res.json({ ticker, currency: "USD", annual, quarterly });
   } catch (err: any) {
