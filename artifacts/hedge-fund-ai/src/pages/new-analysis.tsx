@@ -686,19 +686,66 @@ export default function NewAnalysis() {
           )}
         </form>
 
-        {/* 인기 종목 */}
+        {/* ── 최근 분석 종목 (로그인 유저 전용) — 칩 형태 ── */}
+        {user && recentAnalyses && recentAnalyses.length > 0 && (() => {
+          const seen = new Set<string>();
+          const uniqueRecent = recentAnalyses.filter(a => {
+            const t = a.ticker?.replace(/\.(KS|KQ)$/, "") ?? a.ticker;
+            if (seen.has(t)) return false;
+            seen.add(t);
+            return true;
+          }).slice(0, 6);
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col gap-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3 text-primary" />
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">최근 분석 종목</span>
+                </div>
+                <a href="/history" className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
+                  전체 기록 <ChevronRight className="w-3 h-3" />
+                </a>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {uniqueRecent.map(a => {
+                  const shortTicker = a.ticker?.replace(/\.(KS|KQ)$/, "") ?? a.ticker;
+                  const vm = VERDICT_MINI[a.investmentVerdict ?? ""];
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => showConfirm(shortTicker, a.companyName ?? shortTicker)}
+                      disabled={isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:text-foreground transition-all disabled:opacity-40 group"
+                    >
+                      <span className="font-mono text-[11px] text-muted-foreground/40 group-hover:text-primary/50 transition-colors">{shortTicker}</span>
+                      <span className="text-[12.5px] text-muted-foreground font-medium group-hover:text-foreground transition-colors">{a.companyName ?? shortTicker}</span>
+                      {vm && <span className={cn("flex items-center", vm.color)}>{vm.icon}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          );
+        })()}
+
+        {/* ── 많이 찾는 종목 (전체 유저 인기 순위) ── */}
         <AnimatePresence>
           {trending.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.3, delay: 0.04 }}
               className="flex flex-col gap-2"
             >
               <div className="flex items-center gap-1.5">
                 <Flame className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">많이 찾은 기업</span>
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">많이 찾는 종목</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {trending.map((t) => (
@@ -713,7 +760,7 @@ export default function NewAnalysis() {
                     <span className="font-mono text-[10px] text-muted-foreground/50 group-hover:text-primary/60 transition-colors">{t.ticker}</span>
                     <span className="text-[12.5px] text-foreground/80 font-medium">{t.companyName}</span>
                     {t.count > 1 && (
-                      <span className="text-[9px] text-muted-foreground/50 font-medium">×{t.count}</span>
+                      <span className="text-[9px] text-muted-foreground/40 tabular-nums">{t.count}회</span>
                     )}
                   </motion.button>
                 ))}
@@ -722,57 +769,7 @@ export default function NewAnalysis() {
           )}
         </AnimatePresence>
 
-        {/* 자주 분석한 종목 (개인화) — 이력 2개 이상인 경우 표시 */}
-        {personalizedPicks && personalizedPicks.length >= 2 && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.05 }}
-            className="flex flex-col gap-2"
-          >
-            <div className="flex items-center gap-1.5">
-              <BarChart2 className="w-3 h-3 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">자주 분석한 종목</span>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {personalizedPicks.slice(0, 4).map((p) => {
-                const lastAnalysis = recentAnalyses?.find(
-                  a => (a.ticker?.replace(/\.(KS|KQ)$/, "") === p.ticker) || a.ticker === p.ticker
-                );
-                const vm = VERDICT_MINI[lastAnalysis?.investmentVerdict ?? ""];
-                return (
-                  <button
-                    key={p.ticker}
-                    onClick={() => showConfirm(p.ticker, p.companyName ?? p.ticker)}
-                    disabled={isPending}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors text-left group disabled:opacity-40"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-foreground truncate">{p.companyName ?? p.ticker}</p>
-                      <p className="text-[11px] font-mono text-muted-foreground">{p.ticker}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {p.count > 1 && (
-                        <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">×{p.count}회</span>
-                      )}
-                      {vm && (
-                        <span className={cn("flex items-center gap-0.5 text-[11px] font-semibold", vm.color)}>
-                          {vm.icon}
-                        </span>
-                      )}
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-
-        {/* 관심 있을 만한 기업 — 최다 분석 종목의 피어 그룹에서 미분석 기업 추천 */}
+        {/* ── 관심 있을 만한 기업 (피어 그룹 추천) ── */}
         {relatedCompanies.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -782,12 +779,8 @@ export default function NewAnalysis() {
           >
             <div className="flex items-center gap-1.5">
               <Zap className="w-3 h-3 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                관심 있을 만한 기업
-              </span>
-              <span className="text-[9px] text-muted-foreground/40">
-                · {relatedCompanies[0].baseCompanyName} 피어 그룹
-              </span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">관심 있을 만한 기업</span>
+              <span className="text-[9px] text-muted-foreground/40">· {relatedCompanies[0].baseCompanyName} 피어</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {relatedCompanies.map((c) => (
@@ -801,64 +794,6 @@ export default function NewAnalysis() {
                   <span className="truncate max-w-[120px]">{c.companyName}</span>
                 </button>
               ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* 최근 분석 기록 (개인화) */}
-        {recentAnalyses && recentAnalyses.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-            className="flex flex-col gap-2"
-          >
-            <div className="flex items-center gap-1.5 justify-between">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">최근 분석 기록</span>
-              </div>
-              <a href="/history" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
-                전체 보기 <ChevronRight className="w-3 h-3" />
-              </a>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {recentAnalyses.slice(0, 4).map(a => {
-                const vm = VERDICT_MINI[a.investmentVerdict ?? ""];
-                const shortTicker = a.ticker?.replace(/\.(KS|KQ)$/, "");
-                const upside = a.targetPrice && a.startPrice
-                  ? ((a.targetPrice - a.startPrice) / a.startPrice) * 100
-                  : null;
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => setLocation(`/analysis/${a.id}`)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors text-left group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-foreground truncate">{a.companyName ?? a.ticker}</p>
-                      <p className="text-[11px] font-mono text-muted-foreground">{shortTicker}</p>
-                    </div>
-                    <div className="text-right shrink-0 space-y-0.5">
-                      {vm && (
-                        <p className={`text-xs font-semibold flex items-center gap-1 justify-end ${vm.color}`}>
-                          {vm.icon}
-                          {a.investmentVerdict}
-                        </p>
-                      )}
-                      {upside !== null && (
-                        <p className={`text-[10px] font-mono ${upside >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                          {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
-                  </button>
-                );
-              })}
             </div>
           </motion.div>
         )}
