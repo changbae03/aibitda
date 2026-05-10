@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import { getUserId } from "../lib/credits.js";
+import { sendTelegram } from "../lib/telegram.js";
 
 const router = Router();
 
@@ -48,6 +49,15 @@ router.post("/feedback", async (req, res) => {
     await q(
       `INSERT INTO feedback (user_id, category, content) VALUES ($1, $2, $3)`,
       [userId ?? null, category ?? null, content.trim()]
+    );
+
+    const categoryLabel = category ?? "미분류";
+    const userLabel = userId ? `유저 ID: <code>${userId}</code>` : "비로그인";
+    await sendTelegram(
+      `💬 <b>새 피드백</b>\n` +
+      `분류: ${categoryLabel}\n` +
+      `${userLabel}\n\n` +
+      `${content.trim().slice(0, 500)}${content.trim().length > 500 ? "..." : ""}`
     );
 
     res.json({ success: true });
