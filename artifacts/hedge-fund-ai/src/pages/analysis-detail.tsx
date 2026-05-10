@@ -380,14 +380,14 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
   return "적정 수준";
 }
 
-function verdictStyle(verdict: string | null | undefined) {
+function verdictStyle(verdict: string | null | undefined, isEn = false) {
   if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted/40", border: "border-border" };
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-800 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-400 dark:border-emerald-700" };
-  if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-800 dark:text-green-300",     bg: "bg-green-50 dark:bg-green-950/40",     border: "border-green-400 dark:border-green-700" };
-  if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-blue-800 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-400 dark:border-blue-700" };
-  if (s.includes("sell"))        return { label: "하락여지",      color: "text-blue-700 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-400 dark:border-blue-700" };
-  return { label: "적정 수준", color: "text-amber-800 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-400 dark:border-amber-700" };
+  if (s.includes("strong buy"))  return { label: isEn ? "Strong Upside" : "높은 상승여력", color: "text-emerald-800 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-400 dark:border-emerald-700" };
+  if (s.includes("buy"))         return { label: isEn ? "Upside"        : "상승여력",      color: "text-green-800 dark:text-green-300",     bg: "bg-green-50 dark:bg-green-950/40",     border: "border-green-400 dark:border-green-700" };
+  if (s.includes("strong sell")) return { label: isEn ? "Strong Downside" : "높은 하락여지", color: "text-blue-800 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-400 dark:border-blue-700" };
+  if (s.includes("sell"))        return { label: isEn ? "Downside"      : "하락여지",      color: "text-blue-700 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-400 dark:border-blue-700" };
+  return { label: isEn ? "Fair Value" : "적정 수준", color: "text-amber-800 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-400 dark:border-amber-700" };
 }
 
 declare global { interface Window { Kakao: any } }
@@ -411,7 +411,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
   const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
   const url = analysis?.id ? `${base}/share/${analysis.id}` : window.location.href;
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
-  const vs = verdictStyle(analysis?.verdict);
+  const vs = verdictStyle(analysis?.verdict, isEnModal);
   const targetPriceStr = analysis?.targetPrice
     ? formatCurrency(analysis.targetPrice, currency)
     : null;
@@ -491,7 +491,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         >
           {/* ── Header ── */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
-            <span className="text-sm font-bold text-foreground/90">리포트 공유</span>
+            <span className="text-sm font-bold text-foreground/90">{isEnModal ? "Share Report" : "리포트 공유"}</span>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-muted transition-colors">
               <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -542,21 +542,21 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               whileTap={{ scale: 0.98 }}
             >
               {copied
-                ? <><Check className="w-4.5 h-4.5" /> 링크가 복사되었습니다!</>
+                ? <><Check className="w-4.5 h-4.5" /> {isEnModal ? "Link copied!" : "링크가 복사되었습니다!"}</>
                 : <><svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                   </svg>
-                  링크 복사하기</>
+                  {isEnModal ? "Copy Link" : "링크 복사하기"}</>
               }
             </motion.button>
             <p className="text-center text-[10px] text-muted-foreground mt-1.5">
-              로그인 없이도 누구나 리포트를 볼 수 있습니다
+              {isEnModal ? "Anyone can view this report — no login required" : "로그인 없이도 누구나 리포트를 볼 수 있습니다"}
             </p>
           </div>
 
           {/* ── 소셜 공유 ── */}
           <div className="px-5 mb-4">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">소셜 공유</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isEnModal ? "Share via" : "소셜 공유"}</p>
             <div className="grid grid-cols-2 gap-2">
               {/* KakaoTalk */}
               <button
@@ -1071,7 +1071,7 @@ export default function AnalysisDetail() {
   const [showStickyNav, setShowStickyNav] = useState(false);
 
   const handleDelete = () => {
-    if (!confirm("이 분석을 삭제하시겠습니까?")) return;
+    if (!confirm((analysis as any)?.language === 'en' ? "Delete this analysis?" : "이 분석을 삭제하시겠습니까?")) return;
     deleteAnalysis(id, { onSuccess: () => setLocation("/") });
   };
 
@@ -1249,7 +1249,7 @@ export default function AnalysisDetail() {
               <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
             </h1>
             {analysis.englishName && <p className="text-sm text-gray-500 mt-0.5">{analysis.englishName}</p>}
-            <p className="text-xs text-gray-400 mt-1">{toKoreanIndustry(analysis.industry)} &nbsp;·&nbsp; {isEn ? format(new Date(analysis.createdAt), 'MMM d, yyyy HH:mm') : format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} {isEn ? "generated" : "생성"}</p>
+            <p className="text-xs text-gray-400 mt-1">{isEn ? (analysis.industry ?? '') : toKoreanIndustry(analysis.industry)} &nbsp;·&nbsp; {isEn ? format(new Date(analysis.createdAt), 'MMM d, yyyy HH:mm') : format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} {isEn ? "generated" : "생성"}</p>
           </div>
           {analysis.investmentVerdict && (
             <div className="text-right">
