@@ -497,13 +497,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Scrollable Content */}
         <div id="print-scroll" className="flex-1 overflow-y-auto">
-          <div className="container max-w-5xl mx-auto p-4 md:p-10 animate-fade-in">
+          <div className="container max-w-5xl mx-auto px-3 py-4 md:p-10 animate-fade-in">
             {children}
           </div>
 
           {/* Footer */}
           <footer className="border-t border-border mt-8 print:hidden">
-            <div className="container max-w-5xl mx-auto px-6 md:px-10 py-6">
+            <div className="container max-w-5xl mx-auto px-3 sm:px-6 md:px-10 py-5 sm:py-6">
               <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[11.5px] text-muted-foreground mb-4">
                 <Link href="/privacy" className="hover:text-foreground transition-colors">개인정보처리방침</Link>
                 <span className="text-border select-none">|</span>

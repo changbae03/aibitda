@@ -305,9 +305,10 @@
 .markdown-body tr.sub-metric-row td:not(:first-child) { color: #6b7280; font-size: 0.78rem; }
 @media (max-width: 640px) {
   .markdown-body .table-wrap { margin: 0.75rem 0; }
-  .markdown-body table { font-size: 0.75rem; min-width: 420px; }
-  .markdown-body th { padding: 0.35rem 0.5rem; font-size: 0.72rem; }
-  .markdown-body td { padding: 0.35rem 0.5rem; }
+  .markdown-body table { font-size: 0.73rem; min-width: 360px; }
+  .markdown-body th { padding: 0.3rem 0.45rem; font-size: 0.7rem; }
+  .markdown-body td { padding: 0.3rem 0.45rem; font-size: 0.73rem; }
+  .markdown-body td:first-child { white-space: normal; }
 }
 
 /* ── 다크모드: markdown-body 색상 오버라이드 ── */

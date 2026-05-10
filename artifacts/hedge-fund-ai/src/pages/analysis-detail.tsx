@@ -1213,7 +1213,7 @@ export default function AnalysisDetail() {
   };
 
   return (
-    <div id="analysis-report-content" className="space-y-6 pb-20">
+    <div id="analysis-report-content" className="space-y-4 sm:space-y-6 pb-20">
       {/* 인쇄 전용 헤더 — 화면에서는 숨김, 인쇄 시에만 표시 */}
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
@@ -1254,7 +1254,7 @@ export default function AnalysisDetail() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.18 }}
-            className="sticky top-0 z-30 -mx-4 md:-mx-10 px-4 md:px-10 py-2.5 bg-background/90 backdrop-blur-md border-b border-border print:hidden"
+            className="sticky top-0 z-30 -mx-3 md:-mx-10 px-3 md:px-10 py-2.5 bg-background/90 backdrop-blur-md border-b border-border print:hidden"
           >
             <div className="flex items-center gap-3 max-w-5xl mx-auto">
               <span className="font-mono text-xs text-muted-foreground/60 shrink-0">{analysis.ticker}</span>
@@ -1284,10 +1284,10 @@ export default function AnalysisDetail() {
       </AnimatePresence>
 
       {/* Header */}
-      <div ref={headerRef} className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
+      <div ref={headerRef} className="bg-card border border-border rounded-2xl p-3 sm:p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-5">
           <div>
-            <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-md font-mono font-bold tracking-wider text-sm border border-primary/20">
                 {analysis.ticker}
               </span>
@@ -1309,12 +1309,12 @@ export default function AnalysisDetail() {
             {analysis.englishName && (
               <p className="text-sm text-muted-foreground mt-0.5 mb-1 font-normal">{analysis.englishName}</p>
             )}
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mt-2">
-              <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> {toKoreanIndustry(analysis.industry)}</span>
-              <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground mt-2">
+              <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {toKoreanIndustry(analysis.industry)}</span>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
               {headerMarketCap != null && (
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" />
+                <span className="flex items-center gap-1">
+                  <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                   시총 {headerMarketCap.currency === "USD"
                     ? headerMarketCap.value >= 1e12
                       ? `$${(headerMarketCap.value / 1e12).toFixed(1)}T`
@@ -1420,7 +1420,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* Financial Chart */}
-      <div className="bg-card border border-border rounded-2xl p-5">
+      <div className="bg-card border border-border rounded-2xl p-3 sm:p-5">
         <FinancialChart ticker={analysis.ticker} />
       </div>
 
@@ -1431,9 +1431,9 @@ export default function AnalysisDetail() {
       <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} />
 
       {/* Progress Track */}
-      <div className="bg-card border border-border rounded-2xl p-5 print:hidden sticky top-12 z-20 shadow-sm">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display font-semibold text-base flex items-center gap-2">
+      <div className="bg-card border border-border rounded-2xl p-3 sm:p-5 print:hidden sticky top-12 z-20 shadow-sm">
+        <div className="flex items-center justify-between mb-3 sm:mb-5">
+          <h3 className="font-display font-semibold text-sm sm:text-base flex items-center gap-2">
             <BrainCircuit className="text-primary w-4 h-4" />
             AI 분석 파이프라인
           </h3>
@@ -1442,36 +1442,38 @@ export default function AnalysisDetail() {
           </span>
         </div>
         
-        <div className="relative">
-          <div className="absolute top-4 left-4 right-4 h-0.5 bg-border z-0" />
-          <div 
-            className="absolute top-4 left-4 h-0.5 bg-primary z-0 transition-all duration-700 ease-out"
-            style={{ width: `calc(${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}% - 2rem)` }}
-          />
-          <div className="relative z-10 flex justify-between">
-            {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
-              const isDone = idx < currentStepCount;
-              const isCurrent = idx === currentStepCount;
-              const agent = AGENTS[stepKey];
-              return (
-                <div key={stepKey} className="flex flex-col items-center gap-1.5">
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
-                    isDone ? "bg-primary border-primary text-primary-foreground" : 
-                    isCurrent ? "bg-card border-primary text-primary animate-pulse" : 
-                    "bg-card border-border text-muted-foreground"
-                  )}>
-                    {isDone ? <CheckCircle2 className="w-4 h-4" /> : <agent.icon className="w-3.5 h-3.5" />}
+        <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
+          <div className="relative min-w-[480px]">
+            <div className="absolute top-4 left-4 right-4 h-0.5 bg-border z-0" />
+            <div 
+              className="absolute top-4 left-4 h-0.5 bg-primary z-0 transition-all duration-700 ease-out"
+              style={{ width: `calc(${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}% - 2rem)` }}
+            />
+            <div className="relative z-10 flex justify-between">
+              {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
+                const isDone = idx < currentStepCount;
+                const isCurrent = idx === currentStepCount;
+                const agent = AGENTS[stepKey];
+                return (
+                  <div key={stepKey} className="flex flex-col items-center gap-1.5">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
+                      isDone ? "bg-primary border-primary text-primary-foreground" : 
+                      isCurrent ? "bg-card border-primary text-primary animate-pulse" : 
+                      "bg-card border-border text-muted-foreground"
+                    )}>
+                      {isDone ? <CheckCircle2 className="w-4 h-4" /> : <agent.icon className="w-3.5 h-3.5" />}
+                    </div>
+                    <span className={cn(
+                      "text-[10px] font-medium leading-tight text-center max-w-[56px] break-keep",
+                      isDone ? "text-primary" : isCurrent ? "text-primary" : "text-muted-foreground"
+                    )}>
+                      {agent.name}
+                    </span>
                   </div>
-                  <span className={cn(
-                    "text-[10px] font-medium leading-tight text-center max-w-[64px] break-keep",
-                    isDone ? "text-primary" : isCurrent ? "text-primary" : "text-muted-foreground"
-                  )}>
-                    {agent.name}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -2086,12 +2088,12 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                       <div
                         key={i}
                         className={cn(
-                          "rounded-xl border border-border bg-card p-3.5 flex items-center gap-4 border-l-4",
+                          "rounded-xl border border-border bg-card p-3 sm:p-3.5 flex items-center gap-3 sm:gap-4 border-l-4",
                           isBear ? "border-l-red-400" : isBull ? "border-l-emerald-500" : "border-l-blue-500"
                         )}
                       >
                         {/* 시나리오 이름 */}
-                        <div className="w-20 shrink-0">
+                        <div className="w-14 sm:w-20 shrink-0">
                           <span className={cn(
                             "text-xs font-bold",
                             isBear ? "text-red-500" : isBull ? "text-emerald-600" : "text-blue-600"
@@ -2117,7 +2119,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         </div>
 
                         {/* 확률 바 */}
-                        <div className="w-20 shrink-0">
+                        <div className="w-16 sm:w-20 shrink-0">
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-[10px] text-muted-foreground">확률</span>
                             <span className="text-[11px] font-bold text-foreground/80">{!isNaN(pNum) ? pNum + "%" : pStr}</span>
@@ -2385,13 +2387,13 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       style={{ borderLeftColor: color }}
     >
       {/* 헤더 */}
-      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-          <agent.icon className="w-4.5 h-4.5" style={{ color }} />
+      <div className="bg-muted/40 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+          <agent.icon className="w-4 h-4" style={{ color }} />
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
         </div>
       </div>
 
@@ -2764,15 +2766,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
     >
       {/* ⑪ Accordion header */}
       <div
-        className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl cursor-pointer hover:bg-muted/60 transition-colors select-none"
+        className="bg-muted/40 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl cursor-pointer hover:bg-muted/60 transition-colors select-none"
         onClick={() => setCollapsed(c => !c)}
       >
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-          <agent.icon className="w-4.5 h-4.5" style={{ color }} />
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+          <agent.icon className="w-4 h-4" style={{ color }} />
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
         </div>
         <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
       </div>
