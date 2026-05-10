@@ -3,10 +3,11 @@ import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
   Sparkles, BookOpen, CalendarDays, BarChart2,
-  Zap, User,
+  User, Search, ChevronRight,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
+import { openCommandPalette } from "@/components/ui/command-palette";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -91,28 +92,61 @@ function useMarketBar() {
   return data;
 }
 
+function getRateStyle(v: number, hi: number, lo: number): { color: string; arrow: string | null } {
+  if (v >= hi) return { color: "text-orange-400 dark:text-orange-400", arrow: "▲" };
+  if (v <= lo) return { color: "text-emerald-500 dark:text-emerald-400", arrow: "▼" };
+  return { color: "text-foreground/70", arrow: null };
+}
+
 function MarketBar() {
   const data = useMarketBar();
   if (!data) return null;
 
-  const items = [
-    data.usdKrw != null && { label: "USD/KRW", value: `${data.usdKrw.toFixed(0)}원` },
-    data.baseRate != null && { label: "한국 기준금리", value: `${data.baseRate.toFixed(2)}%` },
-    data.t10y != null && { label: "미국 10Y", value: `${data.t10y.toFixed(2)}%` },
-    data.fedRate != null && { label: "Fed 금리", value: `${data.fedRate.toFixed(2)}%` },
-  ].filter(Boolean) as { label: string; value: string }[];
+  const items: Array<{ label: string; value: string; color: string; arrow: string | null }> = [];
+
+  if (data.usdKrw != null) {
+    const v = data.usdKrw;
+    const color = v > 1420 ? "text-orange-400" : v < 1330 ? "text-emerald-400" : "text-foreground/70";
+    const arrow = v > 1420 ? "▲" : v < 1330 ? "▼" : null;
+    items.push({ label: "USD/KRW", value: `${v.toFixed(0)}원`, color, arrow });
+  }
+  if (data.baseRate != null) {
+    const s = getRateStyle(data.baseRate, 3.5, 2.0);
+    items.push({ label: "🇰🇷 기준금리", value: `${data.baseRate.toFixed(2)}%`, ...s });
+  }
+  if (data.t10y != null) {
+    const s = getRateStyle(data.t10y, 4.5, 3.5);
+    items.push({ label: "US 10Y", value: `${data.t10y.toFixed(2)}%`, ...s });
+  }
+  if (data.fedRate != null) {
+    const s = getRateStyle(data.fedRate, 5.0, 3.0);
+    items.push({ label: "Fed", value: `${data.fedRate.toFixed(2)}%`, ...s });
+  }
 
   if (items.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-0 px-4 py-2 border-b border-border bg-muted/30 print:hidden overflow-x-auto shrink-0">
+    <div className="flex items-center gap-0 px-3 py-1.5 border-b border-border bg-muted/30 print:hidden overflow-x-auto shrink-0 scrollbar-none">
       {items.map((item, i) => (
         <span key={item.label} className="flex items-center gap-1 whitespace-nowrap">
-          {i > 0 && <span className="mx-3 text-border/60 select-none">·</span>}
-          <span className="text-[11px] text-muted-foreground/70">{item.label}</span>
-          <span className="text-[11px] font-mono font-bold text-foreground/80 ml-1">{item.value}</span>
+          {i > 0 && <span className="mx-2.5 text-border/50 select-none">·</span>}
+          <span className="text-[10.5px] text-muted-foreground/55">{item.label}</span>
+          <span className={cn("text-[10.5px] font-mono font-bold ml-1 tabular-nums", item.color)}>
+            {item.value}
+          </span>
+          {item.arrow && (
+            <span className={cn("text-[9px] ml-0.5 leading-none", item.color)}>{item.arrow}</span>
+          )}
         </span>
       ))}
+      <button
+        onClick={openCommandPalette}
+        className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors shrink-0"
+      >
+        <Search className="w-2.5 h-2.5" />
+        <span className="hidden sm:inline text-[10px]">검색</span>
+        <kbd className="hidden sm:inline px-1 py-0.5 rounded text-[8px] border border-border/40 bg-muted/50 font-mono ml-0.5">⌘K</kbd>
+      </button>
     </div>
   );
 }
@@ -181,6 +215,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const user = useAuth();
   const credits = useCredits(user !== undefined && user !== null);
   const notice = useNotice();
@@ -192,7 +227,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       .catch(() => {});
   }, []);
 
-  const NavLinks = ({ onSelect }: { onSelect?: () => void }) => (
+  const NavLinks = ({ onSelect, expanded }: { onSelect?: () => void; expanded?: boolean }) => (
     <>
       {NAV_ITEMS.map(({ href, label, Icon }) => {
         const isActive =
@@ -202,25 +237,31 @@ export function AppLayout({ children }: AppLayoutProps) {
             key={href}
             href={href}
             onClick={onSelect}
+            title={!expanded ? label : undefined}
             className={cn(
-              "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150",
+              "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150 overflow-hidden",
               isActive
                 ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
                 : "text-muted-foreground hover:text-foreground hover:bg-accent"
             )}
           >
             <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground/60")} />
-            {label}
+            <span className={cn(
+              "whitespace-nowrap transition-all duration-200",
+              expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden"
+            )}>
+              {label}
+            </span>
           </Link>
         );
       })}
     </>
   );
 
-  const UserSection = () => (
-    <div className="px-3 py-3 border-t border-border space-y-2">
-      {user && (
-        <div className="flex items-center gap-2.5 px-1 py-1.5">
+  const UserSection = ({ expanded }: { expanded?: boolean }) => (
+    <div className="px-2 py-3 border-t border-border space-y-1">
+      {user && expanded && (
+        <div className="flex items-center gap-2.5 px-2 py-1.5 mb-0.5">
           <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center shrink-0">
             {user.profileImage ? (
               <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
@@ -228,15 +269,24 @@ export function AppLayout({ children }: AppLayoutProps) {
               <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
             )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 overflow-hidden">
             <p className="text-[12px] font-semibold text-foreground truncate">{user.nickname}</p>
             {credits && (
               <div className="flex items-center gap-1.5 mt-0.5">
                 <CreditDots credits={credits} />
-                <span className="text-[10px] text-muted-foreground/60">
-                  오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음
-                </span>
+                <span className="text-[10px] text-muted-foreground/60">오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음</span>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+      {user && !expanded && (
+        <div className="flex justify-center py-1">
+          <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center">
+            {user.profileImage ? (
+              <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
+            ) : (
+              <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
             )}
           </div>
         </div>
@@ -244,51 +294,62 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <Link
         href="/about"
-        onClick={() => {}}
+        title={!expanded ? "애빛다 소개" : undefined}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
+          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
           location === "/about"
             ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
         <Info className="w-3.5 h-3.5 shrink-0" />
-        애빛다 소개
+        <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
+          애빛다 소개
+        </span>
       </Link>
 
       <Link
         href="/settings"
+        title={!expanded ? "설정" : undefined}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
+          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
           location === "/settings"
             ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
         <Settings className="w-3.5 h-3.5 shrink-0" />
-        설정
+        <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
+          설정
+        </span>
       </Link>
 
       {user ? (
         <button
           onClick={logout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 text-muted-foreground hover:text-foreground hover:bg-accent"
+          title={!expanded ? "로그아웃" : undefined}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 text-muted-foreground hover:text-foreground hover:bg-accent overflow-hidden"
         >
           <LogOut className="w-3.5 h-3.5 shrink-0" />
-          로그아웃
+          <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
+            로그아웃
+          </span>
         </button>
       ) : user === null ? (
         <Link
           href="/login"
+          title={!expanded ? "로그인" : undefined}
           className={cn(
-            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
+            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 overflow-hidden",
             location === "/login"
               ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
               : "text-muted-foreground hover:text-foreground hover:bg-accent"
           )}
         >
           <LogIn className="w-3.5 h-3.5 shrink-0" />
-          로그인
+          <span className={cn("whitespace-nowrap transition-all duration-200", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden")}>
+            로그인
+          </span>
         </Link>
       ) : null}
     </div>
@@ -296,24 +357,50 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
-      {/* ── Desktop Sidebar ── */}
-      <aside className="w-52 shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-border bg-background">
+      {/* ── Desktop Sidebar Rail ── */}
+      <aside
+        className={cn(
+          "shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-border bg-background/95 backdrop-blur-sm transition-all duration-200 ease-in-out overflow-hidden",
+          sidebarExpanded ? "w-52" : "w-14"
+        )}
+        onMouseEnter={() => setSidebarExpanded(true)}
+        onMouseLeave={() => setSidebarExpanded(false)}
+      >
         {/* Logo */}
-        <div className="px-5 h-14 flex items-center border-b border-border">
-          <Link href="/analysis/new" className="block group">
+        <div className="h-14 flex items-center border-b border-border px-3 overflow-hidden">
+          <Link href="/analysis/new" className="flex items-center gap-0 group overflow-hidden">
             <span
-              className="text-[22px] font-black tracking-tighter leading-none select-none transition-opacity group-hover:opacity-80"
+              className="text-[22px] font-black tracking-tighter leading-none select-none transition-opacity group-hover:opacity-80 shrink-0"
               style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
             >
-              애빛다
+              애
+            </span>
+            <span
+              className={cn(
+                "text-[22px] font-black tracking-tighter leading-none select-none transition-all duration-200 group-hover:opacity-80 overflow-hidden whitespace-nowrap",
+                sidebarExpanded ? "opacity-100 max-w-[80px]" : "opacity-0 max-w-0"
+              )}
+              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
+            >
+              빛다
             </span>
           </Link>
+          <button
+            onClick={openCommandPalette}
+            title="검색 (⌘K)"
+            className={cn(
+              "ml-auto p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200 shrink-0",
+              sidebarExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          <NavLinks />
-          {isAdmin && (
+        <nav className="flex-1 px-1.5 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden scrollbar-none">
+          <NavLinks expanded={sidebarExpanded} />
+          {isAdmin && sidebarExpanded && (
             <div className="pt-4">
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">관리자</p>
               {ADMIN_ITEMS.map(item => {
@@ -323,7 +410,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150",
+                      "block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150 whitespace-nowrap overflow-hidden",
                       isActive
                         ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
                         : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
@@ -337,13 +424,24 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </nav>
 
-        <UserSection />
+        <UserSection expanded={sidebarExpanded} />
 
         {/* Slogan */}
-        <div className="px-5 py-2.5 border-t border-border">
-          <p className="text-[10px] text-muted-foreground/40 leading-relaxed tracking-wide">
+        <div className={cn(
+          "px-4 py-2.5 border-t border-border overflow-hidden transition-all duration-200",
+          sidebarExpanded ? "opacity-100" : "opacity-0"
+        )}>
+          <p className="text-[10px] text-muted-foreground/35 leading-relaxed tracking-wide whitespace-nowrap">
             AI로 기업가치를 밝히다
           </p>
+        </div>
+
+        {/* Expand toggle hint */}
+        <div className={cn(
+          "absolute right-0 top-1/2 -translate-y-1/2 w-4 h-8 flex items-center justify-center transition-all duration-200",
+          sidebarExpanded ? "opacity-0" : "opacity-0 hover:opacity-40"
+        )}>
+          <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
       </aside>
 
@@ -383,7 +481,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </button>
               </div>
               <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-                <NavLinks onSelect={() => setMenuOpen(false)} />
+                <NavLinks onSelect={() => setMenuOpen(false)} expanded={true} />
                 {isAdmin && (
                   <div className="pt-4">
                     <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">관리자</p>
@@ -462,15 +560,25 @@ export function AppLayout({ children }: AppLayoutProps) {
           >
             애빛다
           </span>
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={openCommandPalette}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              title="검색"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
         </header>
 
         <NoticeBanner settings={notice} />
+        <MarketBar />
 
         {/* Scrollable Content */}
         <div id="print-scroll" className="flex-1 overflow-y-auto">

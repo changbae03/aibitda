@@ -1,10 +1,10 @@
 import { useSignIn, useUser } from "@clerk/react";
 import { useLocation, Link } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, TrendingUp } from "lucide-react";
+import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, TrendingUp, Target, Activity } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -29,11 +29,49 @@ const STEPS = [
   { num: 7, name: "최종 결론",              icon: ShieldCheck, desc: "통합 검토 → 최종 투자 전략" },
 ];
 
+interface PublicStats {
+  totalAnalyses: number;
+  reviewedCount: number;
+  hitTargetCount: number;
+  winRate: number | null;
+  avgReturn: number | null;
+}
+
+function usePublicStats() {
+  const [stats, setStats] = useState<PublicStats | null>(null);
+  useEffect(() => {
+    fetch(getApiUrl("api/model-insights/public-stats"))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d); })
+      .catch(() => {});
+  }, []);
+  return stats;
+}
+
+function AnimatedNumber({ target, suffix = "", prefix = "" }: { target: number; suffix?: string; prefix?: string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    if (target === 0) return;
+    const duration = 1200;
+    const steps = 40;
+    const step = target / steps;
+    let current = 0;
+    const interval = setInterval(() => {
+      current = Math.min(current + step, target);
+      setDisplay(Math.round(current));
+      if (current >= target) clearInterval(interval);
+    }, duration / steps);
+    return () => clearInterval(interval);
+  }, [target]);
+  return <>{prefix}{display.toLocaleString()}{suffix}</>;
+}
+
 export default function Landing() {
   const { isSignedIn, isLoaded } = useUser();
   const { signIn } = useSignIn();
   const [, setLocation] = useLocation();
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
+  const stats = usePublicStats();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -68,150 +106,222 @@ export default function Landing() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-background px-6 py-12"
+      className="min-h-screen flex flex-col items-center justify-center bg-background px-6 py-12 relative overflow-hidden"
       style={{ fontFamily: "'Pretendard', sans-serif" }}
     >
-      {/* 배경 */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#FF8A7A]/5 blur-3xl" />
-        <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full bg-[#FF8A7A]/5 blur-2xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#FF8A7A]/3 blur-3xl" />
+      {/* 배경 그라디언트 */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#FF8A7A]/6 blur-[120px]" />
+        <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-[#FF8A7A]/5 blur-[80px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full bg-[#FF8A7A]/3 blur-[100px]" />
+        {/* 격자 무늬 배경 */}
+        <div
+          className="absolute inset-0 opacity-[0.015] dark:opacity-[0.04]"
+          style={{
+            backgroundImage: `linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)`,
+            backgroundSize: "48px 48px",
+          }}
+        />
       </div>
 
-      <div className="relative z-10 w-full max-w-4xl flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-16">
+      <div className="relative z-10 w-full max-w-4xl flex flex-col gap-10">
 
-        {/* ── 왼쪽: 로그인 카드 ── */}
-        <motion.div
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.45 }}
-          className="w-full max-w-sm flex-shrink-0"
-        >
-          {/* 로고 */}
-          <div className="mb-8 text-center lg:text-left">
-            <h1 className="text-[44px] font-black tracking-tighter mb-1.5 leading-none" style={{ color: "#FF8A7A" }}>
-              애빛다
-            </h1>
-            <p className="text-[14px] text-muted-foreground font-medium tracking-wide">AI로 기업가치를 밝히다</p>
-          </div>
+        {/* ── 메인 콘텐츠 ── */}
+        <div className="flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-16">
 
-          {/* 설명 */}
-          <div className="mb-6 text-center lg:text-left">
-            <p className="text-[15px] text-foreground/75 leading-relaxed font-medium mb-4">
-              코스피·코스닥·미국 주식을<br />
-              7단계 AI 파이프라인으로 깊이 분석합니다.
-            </p>
-            <div className="flex items-center justify-center lg:justify-start gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11.5px] font-bold text-[#FF8A7A]">
-                <Clock className="w-3 h-3" />
-                평균 3분 완성
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 border border-border text-[11.5px] font-medium text-muted-foreground">
-                <Globe className="w-3 h-3" />
-                한국·미국 주식
-              </span>
-            </div>
-          </div>
-
-          {/* 로그인 버튼 */}
-          <div className="space-y-3 mb-6">
-            <button
-              onClick={handleKakaoLogin}
-              className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm"
-              style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
-            >
-              <KakaoIcon />
-              카카오로 시작하기
-            </button>
-
-            {/* 개발 환경 전용 미리보기 로그인 */}
-            {import.meta.env.DEV && (
-              <div className="pt-3 border-t border-dashed border-border/50">
-                <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">개발 환경 전용</p>
-                <button
-                  onClick={handleDevLogin}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all"
-                >
-                  <span>🛠</span>
-                  미리보기 계정으로 로그인
-                </button>
+          {/* ── 왼쪽: 로그인 카드 ── */}
+          <motion.div
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.45 }}
+            className="w-full max-w-sm flex-shrink-0"
+          >
+            {/* 로고 */}
+            <div className="mb-8 text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11px] font-bold text-[#FF8A7A] mb-4 tracking-widest uppercase">
+                <Activity className="w-3 h-3" />
+                AI 주식 리서치
               </div>
-            )}
-          </div>
-
-          <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
-            로그인 시{" "}
-            <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
-            및{" "}
-            <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
-            에 동의하는 것으로 간주됩니다.
-          </p>
-        </motion.div>
-
-        {/* ── 오른쪽: 7단계 파이프라인 ── */}
-        <motion.div
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.45, delay: 0.1 }}
-          className="w-full lg:pt-2"
-        >
-          <div className="mb-5">
-            <p className="text-[12px] font-bold text-[#FF8A7A] tracking-widest uppercase mb-1">AI 분석 파이프라인</p>
-            <h2 className="text-[20px] font-black text-foreground tracking-tight">7단계 심층 리서치</h2>
-          </div>
-
-          <div className="relative">
-            {/* 연결선 */}
-            <div
-              className="absolute left-[19px] top-5 w-px bg-gradient-to-b from-[#FF8A7A]/40 via-[#FF8A7A]/20 to-transparent"
-              style={{ height: "calc(100% - 40px)" }}
-            />
-
-            <div className="space-y-1">
-              {STEPS.map((step, idx) => {
-                const Icon = step.icon;
-                const isLast = idx === STEPS.length - 1;
-                return (
-                  <motion.div
-                    key={step.num}
-                    initial={{ opacity: 0, x: 12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.35, delay: 0.18 + idx * 0.06 }}
-                    className="flex items-start gap-4 group"
-                  >
-                    {/* 아이콘 + 번호 */}
-                    <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center z-10">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                          isLast
-                            ? "bg-[#FF8A7A] border-[#FF8A7A] text-white"
-                            : "bg-background border-[#FF8A7A]/35 text-[#FF8A7A] group-hover:border-[#FF8A7A]/70"
-                        }`}
-                      >
-                        {isLast ? (
-                          <Icon className="w-4 h-4" />
-                        ) : (
-                          <span className="text-[12px] font-black">{step.num}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 텍스트 */}
-                    <div className="pt-1.5 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[13.5px] font-bold leading-tight ${isLast ? "text-[#FF8A7A]" : "text-foreground"}`}>
-                          {step.name}
-                        </span>
-                      </div>
-                      <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug">{step.desc}</p>
-                    </div>
-                  </motion.div>
-                );
-              })}
+              <h1 className="text-[52px] font-black tracking-tighter mb-1.5 leading-none" style={{ color: "#FF8A7A" }}>
+                애빛다
+              </h1>
+              <p className="text-[14px] text-muted-foreground font-medium tracking-wide">AI로 기업가치를 밝히다</p>
             </div>
-          </div>
-        </motion.div>
 
+            {/* 설명 */}
+            <div className="mb-6 text-center lg:text-left">
+              <p className="text-[15px] text-foreground/75 leading-relaxed font-medium mb-4">
+                코스피·코스닥·미국 주식을<br />
+                7단계 AI 파이프라인으로 깊이 분석합니다.
+              </p>
+              <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11.5px] font-bold text-[#FF8A7A]">
+                  <Clock className="w-3 h-3" />
+                  평균 3분 완성
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 border border-border text-[11.5px] font-medium text-muted-foreground">
+                  <Globe className="w-3 h-3" />
+                  한국·미국 주식
+                </span>
+              </div>
+            </div>
+
+            {/* 로그인 버튼 */}
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={handleKakaoLogin}
+                className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm"
+                style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
+              >
+                <KakaoIcon />
+                카카오로 시작하기
+              </button>
+
+              {import.meta.env.DEV && (
+                <div className="pt-3 border-t border-dashed border-border/50">
+                  <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">개발 환경 전용</p>
+                  <button
+                    onClick={handleDevLogin}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all"
+                  >
+                    <span>🛠</span>
+                    미리보기 계정으로 로그인
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
+              로그인 시{" "}
+              <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
+              및{" "}
+              <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
+              에 동의하는 것으로 간주됩니다.
+            </p>
+          </motion.div>
+
+          {/* ── 오른쪽: 7단계 파이프라인 ── */}
+          <motion.div
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.45, delay: 0.1 }}
+            className="w-full lg:pt-2"
+          >
+            <div className="mb-5">
+              <p className="text-[12px] font-bold text-[#FF8A7A] tracking-widest uppercase mb-1">AI 분석 파이프라인</p>
+              <h2 className="text-[20px] font-black text-foreground tracking-tight">7단계 심층 리서치</h2>
+            </div>
+
+            <div className="relative">
+              <div
+                className="absolute left-[19px] top-5 w-px bg-gradient-to-b from-[#FF8A7A]/40 via-[#FF8A7A]/20 to-transparent"
+                style={{ height: "calc(100% - 40px)" }}
+              />
+
+              <div className="space-y-1">
+                {STEPS.map((step, idx) => {
+                  const Icon = step.icon;
+                  const isLast = idx === STEPS.length - 1;
+                  return (
+                    <motion.div
+                      key={step.num}
+                      initial={{ opacity: 0, x: 12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.35, delay: 0.18 + idx * 0.06 }}
+                      className="flex items-start gap-4 group"
+                    >
+                      <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center z-10">
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
+                            isLast
+                              ? "bg-[#FF8A7A] border-[#FF8A7A] text-white"
+                              : "bg-background border-[#FF8A7A]/35 text-[#FF8A7A] group-hover:border-[#FF8A7A]/70"
+                          }`}
+                        >
+                          {isLast ? (
+                            <Icon className="w-4 h-4" />
+                          ) : (
+                            <span className="text-[12px] font-black">{step.num}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pt-1.5 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[13.5px] font-bold leading-tight ${isLast ? "text-[#FF8A7A]" : "text-foreground"}`}>
+                            {step.name}
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug">{step.desc}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* ── 신뢰 지표 바 ── */}
+        {stats && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+            className="w-full"
+          >
+            <div className="bg-card/60 backdrop-blur-sm border border-border/60 rounded-2xl px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {
+                  icon: TrendingUp,
+                  label: "누적 분석",
+                  value: stats.totalAnalyses,
+                  suffix: "건",
+                  color: "text-[#FF8A7A]",
+                },
+                {
+                  icon: Target,
+                  label: "목표가 달성률",
+                  value: stats.winRate != null ? Math.round(stats.winRate) : null,
+                  suffix: "%",
+                  color: stats.winRate != null && stats.winRate >= 50 ? "text-emerald-500" : "text-amber-500",
+                },
+                {
+                  icon: BarChart2,
+                  label: "평균 수익률",
+                  value: stats.avgReturn != null ? parseFloat(Math.abs(stats.avgReturn).toFixed(1)) : null,
+                  prefix: stats.avgReturn != null && stats.avgReturn >= 0 ? "+" : "-",
+                  suffix: "%",
+                  color: stats.avgReturn != null && stats.avgReturn >= 0 ? "text-emerald-500" : "text-blue-400",
+                },
+                {
+                  icon: Activity,
+                  label: "추적 중인 종목",
+                  value: stats.reviewedCount,
+                  suffix: "건",
+                  color: "text-blue-400",
+                },
+              ].map(({ icon: Icon, label, value, suffix, prefix, color }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#FF8A7A]/10 flex items-center justify-center shrink-0">
+                    <Icon className="w-3.5 h-3.5 text-[#FF8A7A]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground/60 leading-none mb-1">{label}</p>
+                    <p className={`text-[18px] font-black leading-none tabular-nums ${color}`}>
+                      {value != null ? (
+                        <AnimatedNumber target={value} suffix={suffix} prefix={prefix} />
+                      ) : "—"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-[10px] text-muted-foreground/35 mt-2">
+              실제 분석 결과 기반 · 과거 성과가 미래 수익을 보장하지 않습니다
+            </p>
+          </motion.div>
+        )}
       </div>
     </div>
   );

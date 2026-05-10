@@ -27,6 +27,8 @@ import {
   Swords,
   CalendarClock,
   History,
+  ChevronDown,
+  TrendingUp,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -1221,6 +1223,14 @@ export default function AnalysisDetail() {
   const runStreamingStepRef = useRef<((stepKey: string) => void) | null>(null);
   const hasInitiatedRef = useRef(false);
 
+  // ⑨ Floating verdict card
+  const verdictRef = useRef<HTMLDivElement>(null);
+  const [showFloatingVerdict, setShowFloatingVerdict] = useState(false);
+
+  // ⑩ Sticky step nav
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [showStickyNav, setShowStickyNav] = useState(false);
+
   const handleDelete = () => {
     if (!confirm("이 분석을 삭제하시겠습니까?")) return;
     deleteAnalysis(id, { onSuccess: () => setLocation("/") });
@@ -1341,6 +1351,30 @@ export default function AnalysisDetail() {
     return () => clearTimeout(timer);
   }, [analysis?.status, analysis?.steps.length, isStreaming, runStreamingStep]);
 
+  // ⑨ IntersectionObserver for floating verdict card
+  useEffect(() => {
+    const el = verdictRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowFloatingVerdict(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [analysis?.id]);
+
+  // ⑩ IntersectionObserver for sticky step nav
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyNav(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [analysis?.id]);
+
   if (isLoading) return (
     <div className="p-20 text-center">
       <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
@@ -1397,8 +1431,45 @@ export default function AnalysisDetail() {
         목록으로
       </button>
 
+      {/* ⑩ Sticky Step Nav — 헤더 스크롤 아웃 시 표시 */}
+      <AnimatePresence>
+        {showStickyNav && analysis && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.18 }}
+            className="sticky top-0 z-30 -mx-4 md:-mx-10 px-4 md:px-10 py-2.5 bg-background/90 backdrop-blur-md border-b border-border print:hidden"
+          >
+            <div className="flex items-center gap-3 max-w-5xl mx-auto">
+              <span className="font-mono text-xs text-muted-foreground/60 shrink-0">{analysis.ticker}</span>
+              <span className="text-sm font-bold text-foreground truncate flex-1">{analysis.companyName}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
+                  const isDone = idx < analysis.steps.length;
+                  const isCurrent = idx === analysis.steps.length;
+                  return (
+                    <div
+                      key={stepKey}
+                      className={cn(
+                        "w-2 h-2 rounded-full transition-colors",
+                        isDone ? "bg-primary" : isCurrent ? "bg-primary/50 animate-pulse" : "bg-border"
+                      )}
+                      title={AGENTS[stepKey]?.name}
+                    />
+                  );
+                })}
+                <span className="ml-1.5 text-[10px] font-mono text-muted-foreground/60">
+                  {analysis.steps.length}/{ANALYSIS_STEPS_ORDER.length}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
-      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
+      <div ref={headerRef} className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
           <div>
             <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -1433,7 +1504,7 @@ export default function AnalysisDetail() {
 
           {/* Verdict Card */}
           {isComplete && analysis.investmentVerdict && (
-            <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
+            <div ref={verdictRef} className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
               {(() => {
                 const isSellVerdict = ["sell", "strong sell"].includes((analysis.investmentVerdict ?? "").toLowerCase());
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
@@ -1539,7 +1610,7 @@ export default function AnalysisDetail() {
       <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} />
 
       {/* Progress Track */}
-      <div className="bg-card border border-border rounded-2xl p-5 print:hidden">
+      <div className="bg-card border border-border rounded-2xl p-5 print:hidden sticky top-12 z-20 shadow-sm">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-display font-semibold text-base flex items-center gap-2">
             <BrainCircuit className="text-primary w-4 h-4" />
@@ -1893,6 +1964,63 @@ export default function AnalysisDetail() {
                 <p className="text-[10.5px] text-muted-foreground mt-1">
                   분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.
                 </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ⑨ Floating Verdict Card — verdict card 뷰포트 이탈 시 우하단에 표시 */}
+      <AnimatePresence>
+        {showFloatingVerdict && isComplete && analysis.investmentVerdict && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.95 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="fixed bottom-5 right-4 z-50 bg-card/95 border border-border rounded-2xl shadow-2xl p-4 min-w-[200px] max-w-[240px] print:hidden"
+            style={{ backdropFilter: "blur(16px)" }}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2.5">
+              <div className="min-w-0">
+                <p className="text-[10px] font-mono text-muted-foreground/60 leading-none mb-0.5">{analysis.ticker}</p>
+                <p className="text-[12.5px] font-bold text-foreground leading-tight truncate">{analysis.companyName}</p>
+              </div>
+              {(() => {
+                const sp = (analysis as any).startPrice as number | null ?? null;
+                const tp = analysis.targetPrice ?? null;
+                const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
+                if (upsidePct == null) return (
+                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{toKoreanVerdict(analysis.investmentVerdict)}</span>
+                );
+                return (
+                  <div className="text-right shrink-0">
+                    <p className={`text-[20px] font-black tabular-nums leading-none ${upsidePct >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                      {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
+                    </p>
+                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{upsidePct >= 0 ? "상승여력" : "하락여지"}</p>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="space-y-1 font-mono">
+              {analysis.targetPrice && (
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-muted-foreground/60">적정주가</span>
+                  <span className="font-bold text-foreground/80">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
+                </div>
+              )}
+              {analysis.entryPrice && (
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-muted-foreground/60">진입가</span>
+                  <span className="font-semibold text-emerald-500">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
+                </div>
+              )}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-border/60">
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50">
+                <TrendingUp className="w-3 h-3" />
+                <span>스크롤하여 전체 분석 보기</span>
               </div>
             </div>
           </motion.div>
@@ -2630,25 +2758,41 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
   ));
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="bg-card border border-border rounded-xl border-l-4"
+      className="bg-card border border-border rounded-xl border-l-4 overflow-hidden"
       style={{ borderLeftColor: color }}
     >
-      <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+      {/* ⑪ Accordion header */}
+      <div
+        className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl cursor-pointer hover:bg-muted/60 transition-colors select-none"
+        onClick={() => setCollapsed(c => !c)}
+      >
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
           <agent.icon className="w-4.5 h-4.5" style={{ color }} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
           <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
         </div>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
       </div>
 
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+          >
       <div className="p-4 sm:p-5">
         <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
           <ReactMarkdown
@@ -2826,6 +2970,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName }: { step
         )}
 
       </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

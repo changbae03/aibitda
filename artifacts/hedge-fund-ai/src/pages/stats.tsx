@@ -24,13 +24,41 @@ interface PublicStats {
   }[];
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function useCountUp(target: number, duration = 900): number {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!target) return;
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const progress = Math.min((Date.now() - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setVal(Math.round(target * eased));
+      if (progress >= 1) clearInterval(timer);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return val;
+}
+
+function StatCard({ label, value, sub, color, rawValue }: { label: string; value: string; sub?: string; color?: string; rawValue?: number }) {
+  const animated = useCountUp(rawValue ?? 0);
+  const displayValue = rawValue != null
+    ? value.replace(/([\d.]+)/, () => {
+        const formatted = Number.isInteger(rawValue) ? animated.toString() : animated.toFixed(1);
+        return formatted;
+      })
+    : value;
   return (
-    <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
+    <motion.div
+      className="bg-background border border-border rounded-2xl p-5 shadow-sm"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
       <p className="text-[12px] text-muted-foreground font-medium mb-1">{label}</p>
-      <p className={cn("text-3xl font-black tracking-tight leading-none", color ?? "text-foreground")}>{value}</p>
+      <p className={cn("text-3xl font-black tracking-tight leading-none tabular-nums", color ?? "text-foreground")}>{displayValue}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-1.5">{sub}</p>}
-    </div>
+    </motion.div>
   );
 }
 
@@ -98,24 +126,28 @@ export default function Stats() {
           label="총 분석 수"
           value={stats.totalAnalyses.toLocaleString()}
           sub="누적 AI 분석 보고서"
+          rawValue={stats.totalAnalyses}
         />
         <StatCard
           label="목표가 달성률"
           value={winRateStr}
           sub={`${stats.hitTargetCount}건 달성 / ${stats.reviewedCount}건 검토`}
           color={winRateColor}
+          rawValue={stats.winRate ?? undefined}
         />
         <StatCard
           label="평균 수익률"
           value={avgReturnStr}
           sub="진입가 기준 평균"
           color={avgReturnColor}
+          rawValue={stats.avgReturn != null ? Math.abs(stats.avgReturn) : undefined}
         />
         <StatCard
           label="추적 중"
           value={stats.ongoingCount.toLocaleString()}
           sub="현재 진행중인 포지션"
           color="text-blue-600"
+          rawValue={stats.ongoingCount}
         />
       </div>
 

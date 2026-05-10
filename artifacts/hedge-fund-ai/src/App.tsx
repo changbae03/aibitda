@@ -5,6 +5,7 @@ import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CommandPalette } from "@/components/ui/command-palette";
 import { AppLayout } from "@/components/layout/app-layout";
 import NotFound from "@/pages/not-found";
 
@@ -195,9 +196,10 @@ function ClerkProviderWithRoutes() {
 
 function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <WouterRouter base={basePath}>
         <ClerkProviderWithRoutes />
+        <CommandPalette />
       </WouterRouter>
     </ThemeProvider>
   );

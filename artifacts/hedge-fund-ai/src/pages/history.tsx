@@ -1020,6 +1020,41 @@ export default function History() {
                   {/* 기간별 성과 트래킹 */}
                   <PerformanceBadges analysisDate={a.createdAt} perf={perf[a.id]} />
 
+                  {/* ⑮ Hover card preview */}
+                  {a.status === "completed" && (a.targetPrice || a.entryPrice || a.stopLoss) && (
+                    <div className="mt-2 overflow-hidden max-h-0 group-hover:max-h-24 transition-all duration-200 ease-in-out">
+                      <div className="pt-2 border-t border-border/60 flex items-center gap-3 flex-wrap">
+                        {a.targetPrice && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                            <span className="text-[10px] text-muted-foreground/60">적정주가</span>
+                            <span className="text-[11px] font-mono font-bold text-foreground/80">
+                              {formatCurrency(a.targetPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}
+                            </span>
+                          </div>
+                        )}
+                        {a.entryPrice && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                            <span className="text-[10px] text-muted-foreground/60">진입가</span>
+                            <span className="text-[11px] font-mono font-bold text-foreground/80">
+                              {formatCurrency(a.entryPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}
+                            </span>
+                          </div>
+                        )}
+                        {a.stopLoss && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                            <span className="text-[10px] text-muted-foreground/60">손절가</span>
+                            <span className="text-[11px] font-mono font-bold text-destructive/80">
+                              {formatCurrency(a.stopLoss, isUSTicker(a.ticker) ? "USD" : "KRW")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Memo */}
                   <MemoInline id={a.id} />
                 </motion.div>
