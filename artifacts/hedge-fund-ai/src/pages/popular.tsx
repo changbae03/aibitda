@@ -141,7 +141,7 @@ export default function Popular() {
           <BarChart3 className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-foreground">{t("애빛다 통계", "CBST Statistics")}</h1>
+          <h1 className="text-lg font-bold text-foreground">{t("애빛다 통계", "AiBITDA Statistics")}</h1>
           <p className="text-[12px] text-muted-foreground">{t("애빛다 AI 분석 누적 데이터 · 전체 공개", "Cumulative AI analysis data · Public")}</p>
         </div>
       </div>
