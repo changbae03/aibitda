@@ -206,9 +206,9 @@ async function runQCCheck(
   const isFundamental = stepKey === "company_analysis";
   const isRelativeValuation = stepKey === "relative_valuation";
   // Use longer excerpts so full financial tables and key-metrics blocks are captured
-  const excerptLength = isRelativeValuation ? 8000 : isFundamental ? 8000 : 3000;
+  const excerptLength = isRelativeValuation ? 5000 : isFundamental ? 5000 : 2500;
   // For fundamental analysis also include the tail (핵심 지표 도출 블록은 맨 끝에 위치)
-  const tailLength = isFundamental ? 3000 : 0;
+  const tailLength = isFundamental ? 2000 : 0;
   const excerpt = tailLength > 0
     ? content.slice(0, excerptLength) + (content.length > excerptLength ? "\n...[중략]...\n" + content.slice(-tailLength) : "")
     : content.slice(0, excerptLength);
@@ -327,7 +327,8 @@ ${excerpt}
 
 // ─── Devil's Advocate Debate (company_analysis & relative_valuation) ─────────
 
-const DEBATE_STEPS = new Set<AgentKey>(["company_analysis", "relative_valuation"]);
+// Debate는 목표주가 산출(relative_valuation)에만 유지 — company_analysis는 QC 검증으로 대체
+const DEBATE_STEPS = new Set<AgentKey>(["relative_valuation"]);
 
 async function runDebateChallenge(
   stepKey: "company_analysis" | "relative_valuation",
@@ -336,7 +337,7 @@ async function runDebateChallenge(
   ticker: string
 ): Promise<string> {
   const isFundamental = stepKey === "company_analysis";
-  const excerpt = draft.slice(0, 10000);
+  const excerpt = draft.slice(0, 6000);
 
   const challengerPrompt = isFundamental
     ? `당신은 AI 헤지펀드 리서치 팀의 Devil's Advocate(반론 전문가)입니다.
@@ -3647,10 +3648,10 @@ async function executeStep(
 
   let content = "";
   try {
-    // 토큰 한도: 대형 제약(LLY 등) rNPV 파이프라인 + Cliff-Adjusted DCF + SOP 등
-    // company_analysis·relative_valuation은 32k, 나머지 8k
+    // 토큰 한도: company_analysis·relative_valuation은 20k, 나머지 6k (비용 절감)
+    // 실측상 20k로 복잡한 기업(대형 제약 rNPV, SOP 등)도 대부분 커버 가능
     const maxOutputTokens =
-      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 8192;
+      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 20480 : 6144;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃) 여부 판별
     const isTransient = (err: unknown) => {
@@ -3768,7 +3769,7 @@ async function executeStep(
             : `\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)을 그대로 유지하면서 최종 완성본을 다시 작성하세요.`;
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
-          const synthesisMaxTokens = 32768; // Debate 합성: 전체 보고서 재작성이므로 32k 필요
+          const synthesisMaxTokens = 20480; // Debate 합성: 20k면 충분 (비용 절감)
 
           const synthesisStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
@@ -3827,7 +3828,7 @@ async function executeStep(
         try {
           const revisedUserPrompt = userPrompt +
             `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
-          const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 8192;
+          const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 20480 : 6144;
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
