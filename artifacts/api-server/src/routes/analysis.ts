@@ -746,6 +746,98 @@ function pct(val: number | undefined | null): string {
   return `${(val * 100).toFixed(1)}%`;
 }
 
+/**
+ * 52주 주간 수익률 기반 역사적 베타 계산
+ * 벤치마크: KOSPI(.KS)→^KS11 | KOSDAQ(.KQ)→^KQ11 | 미국→^GSPC
+ * Blume 조정: β_adj = 0.67×β_raw + 0.33 (1.0 방향 회귀)
+ * R² < 0.15이면 1.0 방향으로 추가 수렴
+ */
+async function computeHistoricalBeta(
+  symbol: string,
+  indexSymbol: string
+): Promise<{ beta: number; rSquared: number; n: number } | null> {
+  try {
+    const startDate = new Date();
+    startDate.setFullYear(startDate.getFullYear() - 1);
+    startDate.setDate(startDate.getDate() - 14); // 1년 + 2주 여유
+    const period1 = startDate.toISOString().slice(0, 10);
+
+    const [stockHistory, indexHistory] = await Promise.all([
+      yahooFinance.historical(symbol, { period1, interval: "1wk" }, { validateResult: false }).catch(() => null),
+      yahooFinance.historical(indexSymbol, { period1, interval: "1wk" }, { validateResult: false }).catch(() => null),
+    ]);
+
+    if (!stockHistory?.length || !indexHistory?.length) return null;
+
+    const getKey = (d: Date) => d.toISOString().slice(0, 10);
+    const stockMap = new Map<string, number>();
+    for (const q of stockHistory) {
+      const c = (q as any).adjClose ?? (q as any).close;
+      if (c != null && c > 0) stockMap.set(getKey(q.date), c);
+    }
+    const indexMap = new Map<string, number>();
+    for (const q of indexHistory) {
+      const c = (q as any).adjClose ?? (q as any).close;
+      if (c != null && c > 0) indexMap.set(getKey(q.date), c);
+    }
+
+    const stockDates = [...stockMap.keys()].sort();
+    const stockReturns: number[] = [];
+    const indexReturns: number[] = [];
+
+    for (let i = 1; i < stockDates.length; i++) {
+      const d = stockDates[i];
+      const dPrev = stockDates[i - 1];
+      const sc = stockMap.get(d)!;
+      const scPrev = stockMap.get(dPrev)!;
+      const ic = indexMap.get(d);
+      const icPrev = indexMap.get(dPrev);
+      if (!ic || !icPrev || scPrev === 0 || icPrev === 0) continue;
+      stockReturns.push((sc - scPrev) / scPrev);
+      indexReturns.push((ic - icPrev) / icPrev);
+    }
+
+    const n = stockReturns.length;
+    if (n < 12) return null;
+
+    const meanS = stockReturns.reduce((a, b) => a + b, 0) / n;
+    const meanI = indexReturns.reduce((a, b) => a + b, 0) / n;
+
+    let covSI = 0, varI = 0, varS = 0;
+    for (let i = 0; i < n; i++) {
+      const ds = stockReturns[i] - meanS;
+      const di = indexReturns[i] - meanI;
+      covSI += ds * di;
+      varI  += di * di;
+      varS  += ds * ds;
+    }
+    covSI /= (n - 1);
+    varI  /= (n - 1);
+    varS  /= (n - 1);
+
+    if (varI === 0 || varS === 0) return null;
+
+    const betaRaw = covSI / varI;
+    const rSquared = Math.min(1, Math.max(0, (covSI * covSI) / (varI * varS)));
+    // Blume 조정: 1.0 방향으로 회귀
+    const betaBlume = 0.67 * betaRaw + 0.33;
+    // R² < 0.15이면 신뢰도 낮아 1.0 추가 수렴
+    const rWeight = Math.min(1, rSquared / 0.15);
+    const betaFinal = rSquared >= 0.15
+      ? betaBlume
+      : betaBlume * rWeight + 1.0 * (1 - rWeight);
+
+    return {
+      beta: parseFloat(betaFinal.toFixed(3)),
+      rSquared: parseFloat(rSquared.toFixed(3)),
+      n,
+    };
+  } catch (err) {
+    console.warn("[beta] 역사적 베타 계산 오류:", (err as any)?.message?.slice(0, 80));
+    return null;
+  }
+}
+
 async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const fcCacheKey = `financial:${resolvedSymbol}`;
   const fcCached = cache.get<string>(fcCacheKey);
@@ -783,6 +875,11 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
   const koreanCodeEarly = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/i)?.[1] ?? null;
 
+  // 역사적 베타 계산 — 메인 fetches와 병렬로 시작 (대기 없이 즉시 실행)
+  const betaIndexSymbol = resolvedSymbol.endsWith(".KS") ? "^KS11"
+    : resolvedSymbol.endsWith(".KQ") ? "^KQ11" : "^GSPC";
+  const histBetaPromise = computeHistoricalBeta(resolvedSymbol, betaIndexSymbol);
+
   const [summaryRes, tsRes, naverBasicRes, quoteRes] = await Promise.allSettled([
     yahooFinance.quoteSummary(resolvedSymbol, {
       modules: [
@@ -809,6 +906,14 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
       ? yahooFinance.quote(resolvedSymbol).catch(() => null)
       : Promise.resolve(null),
   ]);
+
+  // 역사적 베타 수거 (병렬 실행 완료 대기)
+  const histBeta = await histBetaPromise.catch(() => null);
+  if (histBeta) {
+    console.log(`[beta] ${resolvedSymbol} vs ${betaIndexSymbol}: β=${histBeta.beta} R²=${histBeta.rSquared} n=${histBeta.n}주`);
+  } else {
+    console.log(`[beta] ${resolvedSymbol} 역사적 베타 계산 실패 — Yahoo 베타 폴백`);
+  }
 
   if (summaryRes.status === "rejected") {
     console.error(`[financial-data] quoteSummary failed for ${resolvedSymbol} — will build context from Naver/quote fallback:`, (summaryRes.reason as any)?.message?.slice(0, 120));
@@ -941,7 +1046,12 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.enterpriseToRevenue != null) lines.push(`EV/매출: ${ks.enterpriseToRevenue.toFixed(2)}x`);
     if (ks.enterpriseToEbitda != null)  lines.push(`EV/EBITDA: ${ks.enterpriseToEbitda.toFixed(2)}x`);
     if (ks.pegRatio != null)        lines.push(`PEG: ${ks.pegRatio.toFixed(2)}`);
-    if (ks.beta != null)            lines.push(`베타: ${ks.beta.toFixed(2)}`);
+    if (histBeta) {
+      lines.push(`베타(역사적52주,Blume조정,${betaIndexSymbol}): ${histBeta.beta.toFixed(3)} | R²=${histBeta.rSquared.toFixed(3)} | n=${histBeta.n}주${histBeta.rSquared < 0.15 ? " ⚠️R²낮음→섹터베타50:50병용권장" : " ✅신뢰구간정상"}`);
+      if (ks.beta != null) lines.push(`베타(Yahoo참고): ${ks.beta.toFixed(2)}`);
+    } else if (ks.beta != null) {
+      lines.push(`베타(Yahoo): ${ks.beta.toFixed(2)}`);
+    }
     if (ks.bookValue != null)       lines.push(`BPS(Yahoo, 참고용): ${ks.bookValue.toFixed(2)}${currency} ← 아래 서버계산 BPS와 다를 경우 서버계산값 우선`);
     if (ks.sharesOutstanding) {
       const sh = ks.sharesOutstanding;
@@ -1428,7 +1538,10 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
     // ── 서버 WACC 추정값 계산 (Rf + Beta × ERP 방식) ─────────────────────────────
     {
-      const beta = ks?.beta ?? null;
+      const beta = histBeta?.beta ?? ks?.beta ?? null;
+      const betaSrc = histBeta?.beta != null
+        ? `역사적52주,Blume,R²=${histBeta.rSquared},${betaIndexSymbol}`
+        : `Yahoo`;
       const mcap = waccMcap;
       const latestDebt = latestWaccYear ? debtMap[latestWaccYear] : null;
       const latestCash = latestWaccYear ? cashTsMap[latestWaccYear] : null;
@@ -1472,7 +1585,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         }
         waccLines.push(
           `\n[🧮 서버 계산 WACC 추정값 — 반드시 출발점으로 사용]` +
-          `\n  Beta(Yahoo): ${beta.toFixed(2)} | Rf: ${(Rf*100).toFixed(1)}% | ERP: ${(ERP*100).toFixed(1)}%` +
+          `\n  Beta(${betaSrc}): ${beta.toFixed(2)} | Rf: ${(Rf*100).toFixed(1)}% | ERP: ${(ERP*100).toFixed(1)}%` +
           `\n  CoE = ${(Rf*100).toFixed(1)}% + ${beta.toFixed(2)}×${(ERP*100).toFixed(1)}% = ${CoEPct}%` +
           `\n  D/(D+E) = ${(DoverEplusD*100).toFixed(1)}%  |  E/(D+E) = ${(EoverEplusD*100).toFixed(1)}%` +
           `\n  CoD(after-tax) = ${(codAfterTax*100).toFixed(2)}%` +

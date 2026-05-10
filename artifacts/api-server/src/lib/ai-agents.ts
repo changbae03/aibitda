@@ -2975,7 +2975,16 @@ CoD(after-tax) = 이자비용 / 이자부 금융부채 × (1-세율) | WACC = Co
 - 주당 내재가치 단위: USD/share ($/주)
 - 적정주가 산출식: 주당 내재가치 = 주주가치($백만) × 1,000,000 ÷ 발행주식수 = $/주
 
-Unlevered β (Damodaran Jan 2025 US Sector Betas — 1순위 참조):
+⭐ **[Beta 선택 우선순위 — WACC 계산 전 반드시 확인]**
+1순위: 컨텍스트 "베타(역사적52주,Blume조정,...)" 값 → 이 값이 있으면 **LEVERED β로 직접 사용** (CoE = Rf + β_역사적 × ERP)
+   - Blume 조정(0.67×β_raw+0.33)이 이미 완료된 값 → 추가 조정 불필요
+   - R² 값도 컨텍스트에 제공됨: R² < 0.15 경고가 있으면 신뢰도 낮음 → 아래 섹터 테이블 중간값과 50:50 평균 사용
+   - Unlevered β 역산이 필요할 경우: β_unlev = β_역사적 ÷ (1 + (1-세율) × D/E)
+2순위: 아래 섹터 Unlevered β 테이블 → Relevered β로 변환
+   - KRW 종목: 아래 [⭐ 한국 코스피·코스닥 Unlevered β 1순위표] 우선 사용
+   - USD 종목: 아래 [Damodaran US 미국 전용] 표 사용
+
+Unlevered β (Damodaran Jan 2025 US Sector Betas — ⚠️ 미국(USD) 종목 전용. 한국 종목은 아래 코스피·코스닥 표 사용):
 | 업종 | Unlevered β | 업종 | Unlevered β |
 |-----|-----------|-----|-----------|
 | Semiconductor | 1.39 | Semiconductor Equipment | 1.49 |
@@ -3032,9 +3041,9 @@ Unlevered β (Damodaran Jan 2025 US Sector Betas — 1순위 참조):
   - D/(D+E) < 5% → "부채 비중 X%로 CoD가 WACC에 미치는 영향 미미 (CoD × D% < 0.25%p) → WACC ≈ CoE" 명시
   - 이 경우 CoD 계산 과정은 간략화하고, WACC는 사실상 CoE로 수렴함을 설명
 
-Unlevered Beta 참조: 위 [국가별 WACC 기준 파라미터] 테이블 우선 적용 — currency 필드로 국가 판단
+Unlevered Beta 참조: KRW 종목은 아래 [⭐ 한국 1순위] 표 사용. USD 종목은 위 Damodaran US 표 사용. 역사적 베타 컨텍스트 있으면 1순위로 우선 적용.
 
-📋 **한국 종목 Unlevered β 확장 참조표 (2024~2025 코스피·코스닥 기준)**:
+⭐ **[한국 종목 1순위] Unlevered β 참조표 (2024~2025 코스피·코스닥 기준) — KRW 종목은 반드시 이 표를 우선 사용**:
 | 업종 분류 | Unlevered β 범위 |
 |---------|---------------|
 | 반도체·메모리 | 1.2~1.5 |
