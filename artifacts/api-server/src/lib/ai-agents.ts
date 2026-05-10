@@ -2722,7 +2722,25 @@ TV = FCFF(10년) × (1+g) / (WACC-g) | 주주가치 = Σ PV(FCFF) + PV(TV) + 순
 
   ✅ 총 재투자 = Maintenance Capex + Growth Capex
 
-**[연도별 재투자 계산 순서 — 반드시 공식으로 계산, 임의 추정 금지]**
+**[STEP 1A — 자본경량(Capital-Light) 기업 감지 (먼저 확인)]**
+컨텍스트 "[DCF 재투자 앵커]"에 "자본경량(Capital-Light) 기업 감지"가 명시되어 있거나,
+CAPEX/매출 < 4%(Apple·Alphabet·Meta·Netflix·Adobe 등 IT/플랫폼·소프트웨어)에 해당하면
+아래 ⭐ ROIC 기반 재투자 방식을 사용하세요. 일반 Growth Capex 공식 적용 금지.
+
+⭐ **[자본경량 기업 전용 — ROIC 기반 재투자]**
+재투자 = NOPAT × Reinvestment Rate
+  - Reinvestment Rate(연도별) = 해당연도 매출성장률 ÷ ROIC
+  - ROIC: 과거 3년 평균 ROIC 또는 컨텍스트 재무 데이터 기반 추정
+    - ROIC = NOPAT ÷ (자기자본 + 총부채 − 현금) — 컨텍스트 재무상태표 수치 활용
+  - 예(Apple): NOPAT $115B, 성장률 6%, ROIC 50%
+    → Reinvestment Rate = 6% ÷ 50% = 12%
+    → 재투자 = $115B × 12% = $13.8B  ← 매출·이익 성장에 비례해 연도별로 변동
+  - 재투자가 Maintenance Capex 하한보다 낮으면 → 하한으로 상향 (물리 설비 유지비 최소 보장)
+  - ✅ 총 재투자 = MAX(컨텍스트 앵커 Maintenance 하한, NOPAT × Reinvestment Rate)
+  - 보고서에 "자본경량 기업 ROIC 기반 재투자 적용: ROIC=__%, g=__%, Reinvestment Rate=__%"를 연도별로 명시 필수
+
+**[STEP 1B — 일반 기업 연도별 재투자 계산 순서 — 반드시 공식으로 계산, 임의 추정 금지]**
+(자본경량 기업이 아닌 경우에만 적용)
 ① 컨텍스트 앵커에서 Maintenance Capex 하한값 확인
 ② 해당 연도 Growth Capex = MAX(0, 매출증분÷S-to-C − Maintenance Capex)
    - 매출증분 = 해당연도 매출 − 전년도 매출

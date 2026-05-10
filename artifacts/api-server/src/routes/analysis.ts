@@ -1127,27 +1127,50 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     const capexVal = latestCapexYear ? capexMap[latestCapexYear] : null;
     const dnaVal   = latestDnaYear   ? dnaMap[latestDnaYear]    : null;
 
+    // 자본경량(Capital-Light) IT/플랫폼 기업 감지
+    // D&A의 대부분이 소프트웨어·IP 상각이라 물리 설비 유지비가 적음 → D&A×0.7 적용
+    const capitalLightTickers = new Set([
+      'AAPL', 'GOOGL', 'GOOG', 'META', 'NFLX', 'CRM', 'ADBE', 'NOW',
+      'SHOP', 'SNAP', 'PINS', 'SPOT', 'UBER', 'LYFT', 'ABNB',
+    ]);
+    const capexRevRatio = (capexVal != null && fd?.totalRevenue)
+      ? Math.abs(capexVal) / fd.totalRevenue : null;
+    const isCapitalLight = !isKorean && (
+      capitalLightTickers.has(resolvedSymbol.toUpperCase().split('.')[0]) ||
+      (capexRevRatio !== null && capexRevRatio < 0.04)
+    );
+    const dnaMultiplier = isCapitalLight ? 0.7 : 1.2;
+    const dnaMultiplierLabel = isCapitalLight ? "0.7 (IT/플랫폼 자본경량 업종)" : "1.2";
+
     if (capexVal != null || dnaVal != null) {
       lines.push("\n[DCF 재투자 앵커 — 반드시 재투자 하한으로 사용]");
       lines.push("⛔ 아래 수치를 DCF 재투자 계산의 기준점으로 사용하세요. 무시 금지.");
+      if (isCapitalLight) {
+        lines.push(`  ℹ️ 자본경량(Capital-Light) 기업 감지 → D&A 계수 ${dnaMultiplierLabel} 적용. ROIC 기반 재투자 방식 사용 권장.`);
+      }
 
       if (capexVal != null) {
         const capexAbs = Math.abs(capexVal); // Yahoo sometimes stores as negative
         lines.push(`  최근 실제 CAPEX (${latestCapexYear}): ${fmtNum(capexAbs, currency)}  ← Maintenance Capex 하한 앵커`);
         if (dnaVal != null) {
           const dnaAbs = Math.abs(dnaVal);
-          const maintenanceFloor = Math.max(capexAbs, dnaAbs * 1.2);
+          const maintenanceFloor = Math.max(capexAbs, dnaAbs * dnaMultiplier);
           lines.push(`  D&A (${latestDnaYear}): ${fmtNum(dnaAbs, currency)}`);
-          lines.push(`  Maintenance Capex 하한 = MAX(실제CAPEX, D&A×1.2) = ${fmtNum(maintenanceFloor, currency)}  ← 어떤 연도에도 재투자가 이 값 미만이면 오류`);
-          lines.push(`  ⚠️ Growth Capex = MAX(0, 매출증분÷S-to-C − Maintenance Capex 하한)`);
-          lines.push(`  ⚠️ 총 재투자 = Maintenance Capex 하한 + Growth Capex`);
+          lines.push(`  Maintenance Capex 하한 = MAX(실제CAPEX, D&A×${dnaMultiplierLabel}) = ${fmtNum(maintenanceFloor, currency)}  ← 어떤 연도에도 재투자가 이 값 미만이면 오류`);
+          if (isCapitalLight) {
+            lines.push(`  ⚠️ 자본경량 기업: Growth Capex 공식 대신 NOPAT×(g/ROIC) 방식으로 재투자 산출 권장`);
+            lines.push(`  ⚠️ 총 재투자 = MAX(Maintenance Capex 하한, NOPAT × (g ÷ ROIC))`);
+          } else {
+            lines.push(`  ⚠️ Growth Capex = MAX(0, 매출증분÷S-to-C − Maintenance Capex 하한)`);
+            lines.push(`  ⚠️ 총 재투자 = Maintenance Capex 하한 + Growth Capex`);
+          }
         } else {
           lines.push(`  ⚠️ 총 재투자 ≥ ${fmtNum(capexAbs, currency)} (최근 CAPEX 이상 유지 필수)`);
         }
       } else if (dnaVal != null) {
         const dnaAbs = Math.abs(dnaVal);
         lines.push(`  D&A (${latestDnaYear}): ${fmtNum(dnaAbs, currency)}`);
-        lines.push(`  Maintenance Capex 하한 (D&A×1.2) = ${fmtNum(dnaAbs * 1.2, currency)}  ← 재투자 최솟값`);
+        lines.push(`  Maintenance Capex 하한 (D&A×${dnaMultiplierLabel}) = ${fmtNum(dnaAbs * dnaMultiplier, currency)}  ← 재투자 최솟값`);
       }
     }
   }
