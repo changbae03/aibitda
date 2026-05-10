@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, Children, isValidElement, cloneElement } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useGetAnalysis, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -155,6 +155,97 @@ function prepareMarkdown(md: string): string {
   return out.join("\n");
 }
 
+const ROADMAP_GROUPS: Record<string, { label: string; range: string; bg: string; text: string; border: string }> = {
+  "단기": { label: "단기",  range: "1~3개월",  bg: "#EFF6FF", text: "#1D4ED8", border: "#93C5FD" },
+  "중기": { label: "중기",  range: "3~12개월", bg: "#FFFBEB", text: "#B45309", border: "#FCD34D" },
+  "장기": { label: "장기",  range: "12개월+",  bg: "#F0FDF4", text: "#15803D", border: "#86EFAC" },
+};
+
+function getCellText(el: any): string {
+  if (!isValidElement(el)) return "";
+  const cells = Children.toArray((el as any).props?.children ?? []);
+  const first = cells[0] as any;
+  const text = first?.props?.children;
+  return typeof text === "string" ? text.trim() : "";
+}
+
+function RoadmapTbody({ children }: { children: React.ReactNode }) {
+  const rows = Children.toArray(children).filter(isValidElement);
+  const labels = rows.map(getCellText);
+  const isRoadmap = labels.some((l) => l === "단기" || l === "중기" || l === "장기");
+
+  if (!isRoadmap) {
+    return (
+      <tbody>
+        {rows.map((row: any, i) => {
+          const firstCell = Children.toArray(row.props?.children ?? [])[0] as any;
+          const text = firstCell?.props?.children ?? "";
+          const isSubRow = typeof text === "string" && text.startsWith("↳");
+          return cloneElement(row, { key: i, className: isSubRow ? "sub-metric-row" : "" });
+        })}
+      </tbody>
+    );
+  }
+
+  type Group = { key: string; config: typeof ROADMAP_GROUPS[string]; rows: any[] };
+  const groups: Group[] = [];
+  for (const row of rows) {
+    const lbl = getCellText(row);
+    const cfg = ROADMAP_GROUPS[lbl];
+    if (!cfg) continue;
+    if (groups.length && groups[groups.length - 1].key === lbl) {
+      groups[groups.length - 1].rows.push(row);
+    } else {
+      groups.push({ key: lbl, config: cfg, rows: [row] });
+    }
+  }
+
+  return (
+    <tbody>
+      {groups.map((group, gi) =>
+        group.rows.map((row: any, ri: number) => {
+          const cells = Children.toArray(row.props?.children ?? []);
+          const dataCells = cells.slice(1);
+          const isFirstOfGroup = ri === 0;
+          const isFirstRow = gi === 0 && ri === 0;
+          return (
+            <tr
+              key={`${gi}-${ri}`}
+              style={{ borderTop: isFirstOfGroup && !isFirstRow ? `2px solid ${group.config.border}` : undefined }}
+            >
+              {isFirstOfGroup && (
+                <td
+                  rowSpan={group.rows.length}
+                  style={{
+                    background: group.config.bg,
+                    borderRight: `2px solid ${group.config.border}`,
+                    verticalAlign: "middle",
+                    textAlign: "center",
+                    padding: "0.5rem 0.75rem",
+                    whiteSpace: "nowrap",
+                    width: "72px",
+                    minWidth: "72px",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                    <span style={{ color: group.config.text, fontWeight: 700, fontSize: "0.75rem" }}>
+                      {group.config.label}
+                    </span>
+                    <span style={{ color: group.config.text, fontSize: "0.65rem", opacity: 0.8 }}>
+                      {group.config.range}
+                    </span>
+                  </div>
+                </td>
+              )}
+              {dataCells}
+            </tr>
+          );
+        })
+      )}
+    </tbody>
+  );
+}
+
 const MD_TABLE_COMPONENTS = {
   table: ({ children }: any) => (
     <div className="table-wrap">
@@ -162,7 +253,7 @@ const MD_TABLE_COMPONENTS = {
     </div>
   ),
   thead: ({ children }: any) => <thead>{children}</thead>,
-  tbody: ({ children }: any) => <tbody>{children}</tbody>,
+  tbody: ({ children }: any) => <RoadmapTbody>{children}</RoadmapTbody>,
   tr: ({ children, ...props }: any) => {
     const firstCell = Array.isArray(children) ? children[0] : children;
     const cellText = firstCell?.props?.children ?? "";
