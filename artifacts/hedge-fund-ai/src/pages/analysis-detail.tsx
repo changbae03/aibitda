@@ -2549,7 +2549,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{agent.name}</span>
+          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
       </div>
 
@@ -2563,9 +2563,9 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
           <span className="text-center">{cfg.label}</span>
         </div>
         {/* 단계별 설명 — writing 단계에서 agent description 표시 */}
-        {phase === "writing" && agent.description && (
+        {phase === "writing" && (agent.descriptionEn || agent.description) && (
           <p className="mt-2 text-[11px] text-muted-foreground/60 text-center font-mono tracking-wide">
-            {agent.description}
+            {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
           </p>
         )}
         {/* 세부 메시지 — 고정 높이 영역으로 레이아웃 안정화 */}
