@@ -9,6 +9,8 @@ interface LanguageContextValue {
   setLanguage: (lang: Language) => Promise<void>;
 }
 
+const LS_KEY = "aibitda-lang";
+
 const LanguageContext = createContext<LanguageContextValue>({
   language: "ko",
   isEn: false,
@@ -16,17 +18,29 @@ const LanguageContext = createContext<LanguageContextValue>({
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("ko");
+  const [language, setLanguageState] = useState<Language>(() => {
+    try {
+      const stored = localStorage.getItem(LS_KEY);
+      if (stored === "en" || stored === "ko") return stored;
+    } catch {}
+    return "ko";
+  });
 
   useEffect(() => {
     fetch(getApiUrl("/api/user/settings"), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.language) setLanguageState(d.language as Language); })
+      .then(d => {
+        if (d?.language === "en" || d?.language === "ko") {
+          setLanguageState(d.language);
+          try { localStorage.setItem(LS_KEY, d.language); } catch {}
+        }
+      })
       .catch(() => {});
   }, []);
 
   const setLanguage = async (lang: Language) => {
     setLanguageState(lang);
+    try { localStorage.setItem(LS_KEY, lang); } catch {}
     try {
       await fetch(getApiUrl("/api/user/settings"), {
         method: "PUT",

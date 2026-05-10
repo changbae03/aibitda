@@ -5,6 +5,7 @@ import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, Activity } from "lucide-react";
+import { useLanguage } from "@/lib/language-context";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -19,7 +20,18 @@ function KakaoIcon() {
   );
 }
 
-const STEPS = [
+function GoogleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" fill="#4285F4" />
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23Z" fill="#34A853" />
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84Z" fill="#FBBC05" />
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53Z" fill="#EA4335" />
+    </svg>
+  );
+}
+
+const STEPS_KO = [
   { num: 1, name: "브리핑",                icon: FileText,    desc: "종목 개요 & 분석 방향 설정" },
   { num: 2, name: "매크로·산업 분석",       icon: Globe2,      desc: "산업 구조, 성장률, 경쟁 구도" },
   { num: 3, name: "투자 촉매·수급 분석",    icon: Zap,         desc: "주가 촉매, 세력 움직임" },
@@ -29,12 +41,25 @@ const STEPS = [
   { num: 7, name: "최종 결론",              icon: ShieldCheck, desc: "통합 검토 → 최종 투자 전략" },
 ];
 
+const STEPS_EN = [
+  { num: 1, name: "Briefing",               icon: FileText,    desc: "Company overview & research scope setting" },
+  { num: 2, name: "Macro & Industry",       icon: Globe2,      desc: "Industry structure, growth rate, competitive landscape" },
+  { num: 3, name: "Catalysts & Flow",       icon: Zap,         desc: "Price catalysts, institutional activity" },
+  { num: 4, name: "Earnings Outlook",       icon: PieChart,    desc: "Financial analysis + earnings estimate" },
+  { num: 5, name: "Valuation",              icon: Scale,       desc: "Auto-selects best method: DCF, rNPV, EV/EBITDA, etc." },
+  { num: 6, name: "Technical Analysis",     icon: BarChart2,   desc: "Chart patterns, entry zones, stop-loss strategy" },
+  { num: 7, name: "Final Conclusion",       icon: ShieldCheck, desc: "Integrated review → final investment strategy" },
+];
+
 export default function Landing() {
   const { isSignedIn, isLoaded } = useUser();
   const { signIn } = useSignIn();
   const [, setLocation] = useLocation();
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
+  const { isEn, language, setLanguage } = useLanguage();
+
+  const STEPS = isEn ? STEPS_EN : STEPS_KO;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -79,6 +104,22 @@ export default function Landing() {
       className="min-h-screen flex flex-col items-center justify-center bg-background px-6 py-12 relative overflow-hidden"
       style={{ fontFamily: "'Pretendard', sans-serif" }}
     >
+      {/* 언어 토글 */}
+      <div className="absolute top-5 right-5 z-20 flex items-center gap-1 bg-muted/60 border border-border rounded-full p-1">
+        <button
+          onClick={() => setLanguage("ko")}
+          className={`px-3 py-1 text-[11px] font-bold rounded-full transition-all ${language === "ko" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          한국어
+        </button>
+        <button
+          onClick={() => setLanguage("en")}
+          className={`px-3 py-1 text-[11px] font-bold rounded-full transition-all ${language === "en" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          English
+        </button>
+      </div>
+
       {/* 배경 그라디언트 */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#FF8A7A]/6 blur-[120px]" />
@@ -109,28 +150,33 @@ export default function Landing() {
             <div className="mb-8 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11px] font-bold text-[#FF8A7A] mb-4 tracking-widest uppercase">
                 <Activity className="w-3 h-3" />
-                AI 주식 리서치
+                {isEn ? "AI Stock Research" : "AI 주식 리서치"}
               </div>
               <h1 className="text-[52px] font-black tracking-tighter mb-1.5 leading-none" style={{ color: "#FF8A7A" }}>
-                애빛다
+                {isEn ? "AiBITDA" : "애빛다"}
               </h1>
-              <p className="text-[14px] text-muted-foreground font-medium tracking-wide">AI로 기업가치를 밝히다</p>
+              <p className="text-[14px] text-muted-foreground font-medium tracking-wide">
+                {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다"}
+              </p>
             </div>
 
             {/* 설명 */}
             <div className="mb-6 text-center lg:text-left">
               <p className="text-[15px] text-foreground/75 leading-relaxed font-medium mb-4">
-                코스피·코스닥·미국 주식을<br />
-                7단계 AI 파이프라인으로 깊이 분석합니다.
+                {isEn ? (
+                  <>Korean KOSPI·KOSDAQ &amp; US stocks,<br />deeply analyzed in a 7-step AI pipeline.</>
+                ) : (
+                  <>코스피·코스닥·미국 주식을<br />7단계 AI 파이프라인으로 깊이 분석합니다.</>
+                )}
               </p>
               <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF8A7A]/10 border border-[#FF8A7A]/20 text-[11.5px] font-bold text-[#FF8A7A]">
                   <Clock className="w-3 h-3" />
-                  평균 3분 완성
+                  {isEn ? "~3 min per report" : "평균 3분 완성"}
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 border border-border text-[11.5px] font-medium text-muted-foreground">
                   <Globe className="w-3 h-3" />
-                  한국·미국 주식
+                  {isEn ? "KR & US stocks" : "한국·미국 주식"}
                 </span>
               </div>
             </div>
@@ -143,29 +189,50 @@ export default function Landing() {
                 style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
               >
                 <KakaoIcon />
-                카카오로 시작하기
+                {isEn ? "Continue with Kakao" : "카카오로 시작하기"}
+              </button>
+
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] border border-border bg-background text-foreground/90 hover:bg-muted/50 transition-all active:scale-[0.98]"
+              >
+                <GoogleIcon />
+                {isEn ? "Continue with Google" : "구글로 시작하기"}
               </button>
 
               {import.meta.env.DEV && (
                 <div className="pt-3 border-t border-dashed border-border/50">
-                  <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">개발 환경 전용</p>
+                  <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">
+                    {isEn ? "Dev only" : "개발 환경 전용"}
+                  </p>
                   <button
                     onClick={handleDevLogin}
                     className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all"
                   >
                     <span>🛠</span>
-                    미리보기 계정으로 로그인
+                    {isEn ? "Preview account login" : "미리보기 계정으로 로그인"}
                   </button>
                 </div>
               )}
             </div>
 
             <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
-              로그인 시{" "}
-              <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
-              및{" "}
-              <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
-              에 동의하는 것으로 간주됩니다.
+              {isEn ? (
+                <>
+                  By signing in, you agree to our{" "}
+                  <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">Terms of Service</Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">Privacy Policy</Link>.
+                </>
+              ) : (
+                <>
+                  로그인 시{" "}
+                  <Link href="/terms" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">이용약관</Link>{" "}
+                  및{" "}
+                  <Link href="/privacy" className="underline text-muted-foreground/70 hover:text-foreground transition-colors">개인정보처리방침</Link>
+                  에 동의하는 것으로 간주됩니다.
+                </>
+              )}
             </p>
           </motion.div>
 
@@ -177,8 +244,12 @@ export default function Landing() {
             className="w-full lg:pt-2"
           >
             <div className="mb-5">
-              <p className="text-[12px] font-bold text-[#FF8A7A] tracking-widest uppercase mb-1">AI 분석 파이프라인</p>
-              <h2 className="text-[20px] font-black text-foreground tracking-tight">7단계 심층 리서치</h2>
+              <p className="text-[12px] font-bold text-[#FF8A7A] tracking-widest uppercase mb-1">
+                {isEn ? "AI Analysis Pipeline" : "AI 분석 파이프라인"}
+              </p>
+              <h2 className="text-[20px] font-black text-foreground tracking-tight">
+                {isEn ? "7-Step Deep Research" : "7단계 심층 리서치"}
+              </h2>
             </div>
 
             <div className="relative">
@@ -188,7 +259,6 @@ export default function Landing() {
                 style={{ height: "calc(100% - 40px)" }}
               >
                 <div className="absolute inset-0 bg-gradient-to-b from-[#FF8A7A]/30 via-[#FF8A7A]/15 to-transparent" />
-                {/* 활성 단계 진행 표시 */}
                 <motion.div
                   className="absolute top-0 left-0 w-full bg-[#FF8A7A]"
                   animate={{
@@ -216,7 +286,6 @@ export default function Landing() {
                     >
                       {/* 아이콘 원형 */}
                       <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center z-10">
-                        {/* 활성 단계 펄스 링 */}
                         <AnimatePresence>
                           {isActive && (
                             <motion.div
@@ -291,7 +360,7 @@ export default function Landing() {
                               exit={{ opacity: 0 }}
                               className="ml-2 text-[10px] font-bold text-[#FF8A7A] bg-[#FF8A7A]/10 px-1.5 py-0.5 rounded-full border border-[#FF8A7A]/20 tracking-wide"
                             >
-                              분석 중
+                              {isEn ? "Analyzing" : "분석 중"}
                             </motion.span>
                           )}
                         </motion.span>
