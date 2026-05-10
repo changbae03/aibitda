@@ -3,20 +3,63 @@
  * 실전투자 환경 기반 — 실시간 주식 현재가·PER·PBR·EPS·BPS 조회
  */
 
+import { pool } from "@workspace/db";
+
 const BASE_URL = "https://openapi.koreainvestment.com:9443";
+const KIS_TOKEN_CACHE_KEY = "kis_access_token";
 
 interface KISToken {
   access_token: string;
   expires_at: number; // epoch ms
 }
 
+// 인메모리 1차 캐시 (프로세스 내 재호출 최적화)
 let _tokenCache: KISToken | null = null;
 
+/** DB(system_cache)에서 토큰 로드 — 서버 재시작 후에도 재사용 */
+async function loadTokenFromDB(): Promise<KISToken | null> {
+  try {
+    const r = await pool.query<{ data: KISToken }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [KIS_TOKEN_CACHE_KEY]
+    );
+    return r.rows[0]?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 발급된 토큰을 DB(system_cache)에 저장 */
+async function saveTokenToDB(token: KISToken): Promise<void> {
+  try {
+    const expiresAt = new Date(token.expires_at).toISOString();
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [KIS_TOKEN_CACHE_KEY, JSON.stringify(token), expiresAt]
+    );
+  } catch (e: any) {
+    console.warn("[kis] 토큰 DB 저장 실패 (무시):", e?.message);
+  }
+}
+
 async function getAccessToken(): Promise<string> {
+  // 1) 인메모리 캐시 확인
   if (_tokenCache && Date.now() < _tokenCache.expires_at) {
     return _tokenCache.access_token;
   }
 
+  // 2) DB 캐시 확인 — 서버 재시작 후에도 기존 토큰 재사용
+  const dbToken = await loadTokenFromDB();
+  if (dbToken && Date.now() < dbToken.expires_at) {
+    _tokenCache = dbToken;
+    console.log("[kis] DB 캐시에서 토큰 재사용 (재발급 없음)");
+    return _tokenCache.access_token;
+  }
+
+  // 3) 새 토큰 발급 (카카오 알림 발생 — 최소화 대상)
+  console.log("[kis] 새 액세스 토큰 발급 요청");
   const res = await fetch(`${BASE_URL}/oauth2/tokenP`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -43,6 +86,9 @@ async function getAccessToken(): Promise<string> {
     access_token: data.access_token,
     expires_at: Date.now() + expiresIn * 1000,
   };
+
+  // DB에도 저장 — 다음 서버 재시작 시 재발급 방지
+  await saveTokenToDB(_tokenCache);
 
   return _tokenCache.access_token;
 }
