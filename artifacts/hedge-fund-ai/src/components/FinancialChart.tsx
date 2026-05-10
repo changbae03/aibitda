@@ -34,15 +34,13 @@ interface FinancialData {
 
 function formatPeriodLabel(period: string, view: "annual" | "quarterly"): string {
   if (view === "annual") {
-    // 연간: "2024" or "2024-12" → "2024"
     return period.slice(0, 4);
   }
-  // 분기: "2025-06" → month=06 → Q2 → "2Q25"
   const match = period.match(/^(\d{4})[-.](\d{2})$/);
   if (!match) return period;
-  const year = match[1].slice(2); // "25"
+  const year = match[1].slice(2);
   const month = parseInt(match[2], 10);
-  const q = Math.ceil(month / 3); // 1~12 → Q1~Q4
+  const q = Math.ceil(month / 3);
   return `${q}Q${year}`;
 }
 
@@ -81,7 +79,7 @@ const COLORS = {
   },
 };
 
-const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis }: any) => {
+const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis, isEn }: any) => {
   if (!active || !payload?.length) return null;
   const entry: FinancialEntry | undefined = payload[0]?.payload;
   return (
@@ -89,17 +87,24 @@ const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis }:
       <div className="font-semibold text-foreground mb-2">
         {label}
         {entry?.isEstimate && (
-          <span className="ml-1.5 text-[10px] font-normal text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">추정치</span>
+          <span className="ml-1.5 text-[10px] font-normal text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">
+            {isEn ? "Estimate" : "추정치"}
+          </span>
         )}
       </div>
       {payload.map((p: any) => (
         p.value != null && (
           <div key={p.dataKey} className="flex justify-between gap-4 mb-1">
             <span style={{ color: p.color }}>
-              {p.dataKey === "revenue" ? "매출" :
-               p.dataKey === "operatingIncome" ? "영업이익" : "영업이익률"}
+              {p.dataKey === "revenue"
+                ? (isEn ? "Revenue" : "매출")
+                : p.dataKey === "operatingIncome"
+                  ? (isEn ? "Op. Income" : "영업이익")
+                  : (isEn ? "OP Margin" : "영업이익률")}
               {p.dataKey === "operatingIncome" && entry?.opIncomeFromMargin && (
-                <span className="ml-1 text-muted-foreground">(이익률 추정)</span>
+                <span className="ml-1 text-muted-foreground">
+                  {isEn ? "(margin est.)" : "(이익률 추정)"}
+                </span>
               )}
             </span>
             <span className="font-mono font-semibold text-foreground">
@@ -112,14 +117,14 @@ const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis }:
       ))}
       {separateIncomeAxis && (
         <div className="mt-1.5 pt-1.5 border-t border-border/50 text-[10px] text-muted-foreground">
-          * 매출·영업이익 축 독립 적용
+          {isEn ? "* Independent axes" : "* 매출·영업이익 축 독립 적용"}
         </div>
       )}
     </div>
   );
 };
 
-export default function FinancialChart({ ticker }: { ticker: string }) {
+export default function FinancialChart({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
   const [data, setData] = useState<FinancialData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -137,7 +142,7 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   if (loading) {
     return (
       <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
-        재무 데이터 로딩 중...
+        {isEn ? "Loading financial data..." : "재무 데이터 로딩 중..."}
       </div>
     );
   }
@@ -145,19 +150,19 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   if (error || !data) {
     return (
       <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
-        재무 데이터를 불러올 수 없습니다
+        {isEn ? "Unable to load financial data" : "재무 데이터를 불러올 수 없습니다"}
       </div>
     );
   }
 
   const entries = (view === "annual" ? data.annual : data.quarterly)
     .filter((e) => e.revenue != null || e.operatingIncome != null)
-    .sort((a, b) => a.period.localeCompare(b.period)); // 왼쪽=옛날, 오른쪽=최신
+    .sort((a, b) => a.period.localeCompare(b.period));
 
   if (!entries.length) {
     return (
       <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
-        표시할 데이터가 없습니다
+        {isEn ? "No data available" : "표시할 데이터가 없습니다"}
       </div>
     );
   }
@@ -167,8 +172,6 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
   const revenueVals = entries.map((e) => e.revenue).filter((v): v is number => v != null);
   const incomeVals = entries.map((e) => e.operatingIncome).filter((v): v is number => v != null);
 
-
-  // Combined domain: revenue + operating income share the left axis
   const allVals = [...revenueVals, ...incomeVals];
   const allMax = allVals.length ? Math.max(...allVals) : 0;
   const allMin = allVals.length ? Math.min(...allVals) : 0;
@@ -177,7 +180,6 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
     ? [Math.floor(allMin * 1.3), Math.ceil(allMax * 1.15)]
     : [0, Math.ceil(allMax * 1.15) || 1];
 
-  // Margin axis
   const allMargins = entries
     .map((e) => e.operatingMargin)
     .filter((v): v is number => v != null);
@@ -190,7 +192,9 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">매출 · 이익 추이</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {isEn ? "Revenue & Profit Trend" : "매출 · 이익 추이"}
+          </h3>
         </div>
         <div className="flex gap-1">
           {(["annual", "quarterly"] as const).map((v) => (
@@ -204,7 +208,9 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               )}
             >
-              {v === "annual" ? "연간" : "분기"}
+              {v === "annual"
+                ? (isEn ? "Annual" : "연간")
+                : (isEn ? "Quarterly" : "분기")}
             </button>
           ))}
         </div>
@@ -225,11 +231,14 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
           {hasNegative && (
             <ReferenceLine yAxisId="left" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
           )}
-          <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={false} />} />
+          <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={false} isEn={isEn} />} />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
             formatter={(value) =>
-              value === "revenue" ? "매출" :
-              value === "operatingIncome" ? "영업이익" : "영업이익률"
+              value === "revenue"
+                ? (isEn ? "Revenue" : "매출")
+                : value === "operatingIncome"
+                  ? (isEn ? "Op. Income" : "영업이익")
+                  : (isEn ? "OP Margin" : "영업이익률")
             } />
           <Bar yAxisId="left" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
             {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.revenue : COLORS.revenue} />)}
@@ -245,7 +254,9 @@ export default function FinancialChart({ ticker }: { ticker: string }) {
       </ResponsiveContainer>
 
       {entries.some((e) => e.isEstimate) && (
-        <p className="text-[10px] text-muted-foreground text-right">옅은 색 = 컨센서스 추정치</p>
+        <p className="text-[10px] text-muted-foreground text-right">
+          {isEn ? "Light color = Consensus estimate" : "옅은 색 = 컨센서스 추정치"}
+        </p>
       )}
     </div>
   );

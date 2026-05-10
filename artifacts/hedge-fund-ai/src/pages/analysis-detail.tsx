@@ -52,7 +52,7 @@ function saveMemo(id: number, text: string) {
   } catch {}
 }
 
-function MemoSection({ analysisId }: { analysisId: number }) {
+function MemoSection({ analysisId, isEn = false }: { analysisId: number; isEn?: boolean }) {
   const [saved, setSaved] = useState(() => getMemo(analysisId));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -69,7 +69,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
         className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-amber-500 transition-colors print:hidden"
       >
         <StickyNote className="w-3.5 h-3.5" />
-        메모 추가
+        {isEn ? "Add note" : "메모 추가"}
       </button>
     );
   }
@@ -81,7 +81,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
           ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="이 보고서에 대한 메모를 입력하세요..."
+          placeholder={isEn ? "Enter notes about this report..." : "이 보고서에 대한 메모를 입력하세요..."}
           rows={2}
           className="w-full text-[13px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 dark:focus:ring-amber-700 leading-relaxed"
           onKeyDown={(e) => {
@@ -91,12 +91,12 @@ function MemoSection({ analysisId }: { analysisId: number }) {
         />
         <div className="flex items-center gap-2">
           <button onClick={handleSave} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[12px] font-semibold transition-colors">
-            <Check className="w-3.5 h-3.5" /> 저장
+            <Check className="w-3.5 h-3.5" /> {isEn ? "Save" : "저장"}
           </button>
           <button onClick={handleCancel} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted hover:bg-muted text-muted-foreground text-[12px] font-semibold transition-colors">
-            <X className="w-3.5 h-3.5" /> 취소
+            <X className="w-3.5 h-3.5" /> {isEn ? "Cancel" : "취소"}
           </button>
-          <span className="text-[11px] text-muted-foreground/50">⌘Enter로 저장</span>
+          <span className="text-[11px] text-muted-foreground/50">{isEn ? "⌘Enter to save" : "⌘Enter로 저장"}</span>
         </div>
       </div>
     );
@@ -109,7 +109,7 @@ function MemoSection({ analysisId }: { analysisId: number }) {
       <button
         onClick={startEdit}
         className="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors opacity-0 group-hover/memo:opacity-100"
-        title="메모 수정"
+        title={isEn ? "Edit note" : "메모 수정"}
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
@@ -407,6 +407,7 @@ function loadKakaoSDK(): Promise<void> {
 
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const isEnModal = analysis?.language === 'en';
   const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
   const url = analysis?.id ? `${base}/share/${analysis.id}` : window.location.href;
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
@@ -419,10 +420,14 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     ? new Date(analysis.createdAt).toISOString().slice(0, 10).replace(/-/g, ".")
     : new Date().toISOString().slice(0, 10).replace(/-/g, ".");
   const verdictRaw = analysis?.investmentVerdict ?? analysis?.verdict ?? null;
-  const verdictKo = verdictRaw ? toKoreanVerdict(verdictRaw) : null;
-  const shareText = verdictKo && verdictKo !== "—"
-    ? `${analysis?.companyName ?? ""} [${verdictKo}] · AI가 분석한 기업가치를 확인하세요 | 애빛다`
-    : `${analysis?.companyName ?? ""} · AI 기업가치 분석 리포트 | 애빛다`;
+  const verdictLabel = verdictRaw ? (isEnModal ? verdictRaw : toKoreanVerdict(verdictRaw)) : null;
+  const shareText = verdictLabel && verdictLabel !== "—"
+    ? (isEnModal
+        ? `${analysis?.companyName ?? ""} [${verdictLabel}] · Check the AI-analyzed company valuation | AiBITDA`
+        : `${analysis?.companyName ?? ""} [${verdictLabel}] · AI가 분석한 기업가치를 확인하세요 | 애빛다`)
+    : (isEnModal
+        ? `${analysis?.companyName ?? ""} · AI Equity Research Report | AiBITDA`
+        : `${analysis?.companyName ?? ""} · AI 기업가치 분석 리포트 | 애빛다`);
 
   const handleKakao = async () => {
     const key = import.meta.env.VITE_KAKAO_JS_KEY;
@@ -435,11 +440,11 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         objectType: "feed",
         content: {
           title: shareText,
-          description: `${shareDateStr} · AI 7단계 파이프라인이 분석한 기업가치 리포트`,
+          description: isEnModal ? `${shareDateStr} · AI 7-step pipeline equity research report` : `${shareDateStr} · AI 7단계 파이프라인이 분석한 기업가치 리포트`,
           imageUrl,
           link: { mobileWebUrl: url, webUrl: url },
         },
-        buttons: [{ title: "리포트 보기", link: { mobileWebUrl: url, webUrl: url } }],
+        buttons: [{ title: isEnModal ? "View Report" : "리포트 보기", link: { mobileWebUrl: url, webUrl: url } }],
       });
     } catch { handleCopy(); }
   };
@@ -511,7 +516,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               </div>
               {targetPriceStr && (
                 <div className="text-right flex-shrink-0">
-                  <div className="text-white/50 text-[9px]">적정주가</div>
+                  <div className="text-white/50 text-[9px]">{isEnModal ? "Target" : "적정주가"}</div>
                   <div className="text-white text-[13px] font-black">{targetPriceStr}</div>
                 </div>
               )}
@@ -602,7 +607,7 @@ const VERDICT_SHORT: Record<string, { label: string; dot: string }> = {
   "Strong Sell": { label: "강매도", dot: "bg-red-500" },
 };
 
-function VersionTimelinePanel({ ticker, currentId }: { ticker: string; currentId: number }) {
+function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: string; currentId: number; isEn?: boolean }) {
   const [versions, setVersions] = useState<VersionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [, navigate] = useLocation();
@@ -612,26 +617,36 @@ function VersionTimelinePanel({ ticker, currentId }: { ticker: string; currentId
     setLoading(true);
     fetch(getApiUrl(`/api/analysis/ticker-history/${encodeURIComponent(ticker)}`), { credentials: "include" })
       .then(r => r.json())
-      .then(setVersions)
+      .then(data => setVersions(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [ticker]);
 
   if (loading) return (
     <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-2 text-muted-foreground text-sm">
-      <Loader2 className="w-4 h-4 animate-spin" /> 버전 히스토리 로딩 중…
+      <Loader2 className="w-4 h-4 animate-spin" /> {isEn ? "Loading version history…" : "버전 히스토리 로딩 중…"}
     </div>
   );
   if (versions.length <= 1) return null;
 
   const isKR = !ticker.includes(".") || ticker.endsWith(".KS") || ticker.endsWith(".KQ");
 
+  const verdictLabel = (v: string | null): string => {
+    if (!v) return "";
+    if (isEn) return v;
+    return VERDICT_SHORT[v]?.label ?? v;
+  };
+
   return (
     <div className="bg-card border border-border rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-4">
         <History className="w-4 h-4 text-primary shrink-0" />
-        <h3 className="font-semibold text-sm text-foreground">분석 버전 타임라인</h3>
-        <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{versions.length}개 리포트</span>
+        <h3 className="font-semibold text-sm text-foreground">
+          {isEn ? "Analysis Version Timeline" : "분석 버전 타임라인"}
+        </h3>
+        <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          {isEn ? `${versions.length} reports` : `${versions.length}개 리포트`}
+        </span>
       </div>
       <div className="relative">
         <div className="absolute left-3.5 top-2 bottom-2 w-px bg-border" />
@@ -660,18 +675,18 @@ function VersionTimelinePanel({ ticker, currentId }: { ticker: string; currentId
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-muted-foreground font-mono">
-                      {new Date(v.created_at).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+                      {new Date(v.created_at).toLocaleDateString(isEn ? "en-US" : "ko-KR", { month: "short", day: "numeric" })}
                     </span>
-                    {isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">현재</span>}
-                    {i === 0 && !isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">최신</span>}
+                    {isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">{isEn ? "Current" : "현재"}</span>}
+                    {i === 0 && !isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{isEn ? "Latest" : "최신"}</span>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    {vc && (
-                      <span className="text-xs font-semibold text-foreground">{vc.label}</span>
+                    {v.investment_verdict && (
+                      <span className="text-xs font-semibold text-foreground">{verdictLabel(v.investment_verdict)}</span>
                     )}
                     {v.target_price != null && (
                       <span className="text-xs text-muted-foreground">
-                        목표가 {formatCurrency(Math.round(v.target_price), isKR ? "KRW" : "USD")}
+                        {isEn ? "Target" : "목표가"} {formatCurrency(Math.round(v.target_price), isKR ? "KRW" : "USD")}
                       </span>
                     )}
                     {upside !== null && (
@@ -726,7 +741,7 @@ function fmtMC(v: number | null | undefined): string {
   return `${(v / 1e6).toFixed(0)}M`;
 }
 
-function PeerMultiplesPanel({ ticker }: { ticker: string }) {
+function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
   const [data, setData] = useState<PeerSnapshotResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -759,10 +774,10 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
       >
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-blue-500" />
-          <span className="font-semibold text-sm">피어 멀티플 실측 데이터</span>
+          <span className="font-semibold text-sm">{isEn ? "Peer Multiples (Real Data)" : "피어 멀티플 실측 데이터"}</span>
           {data && (
             <span className="text-[10px] dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-500 dark:border-green-800/50 rounded px-1.5 py-0.5 font-medium">
-              {rows.length}개 피어
+              {isEn ? `${rows.length} peers` : `${rows.length}개 피어`}
             </span>
           )}
           {loading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
@@ -770,7 +785,7 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
         <div className="flex items-center gap-2">
           {data && (
             <span className="text-[10px] text-muted-foreground hidden sm:block">
-              수집: {new Date(data.collected_at).toLocaleDateString("ko-KR")}
+              {isEn ? "Collected:" : "수집:"} {new Date(data.collected_at).toLocaleDateString(isEn ? "en-US" : "ko-KR")}
             </span>
           )}
           <span
@@ -793,7 +808,7 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-muted/50">
-                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">종목</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{isEn ? "Ticker" : "종목"}</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/B</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E</th>
                   <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">P/E Fwd</th>
@@ -801,7 +816,7 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
                   <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">EV/Sales</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">ROE</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">OPM</th>
-                  <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">시총</th>
+                  <th className="px-2 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap hidden sm:table-cell">{isEn ? "Mkt Cap" : "시총"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -843,7 +858,7 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
                 ))}
                 {avg && rows.length > 1 && (
                   <tr className="bg-blue-50/70 dark:bg-blue-950/30 font-semibold border-t border-blue-200/50 dark:border-blue-800/30">
-                    <td className="px-3 py-1.5 text-blue-700 dark:text-blue-400 text-[11px]">피어 평균</td>
+                    <td className="px-3 py-1.5 text-blue-700 dark:text-blue-400 text-[11px]">{isEn ? "Peer Avg" : "피어 평균"}</td>
                     <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
                     <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
                     <td className="px-2 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums hidden sm:table-cell">{fmtNum(avg.per_fwd, 1, "x")}</td>
@@ -1211,6 +1226,7 @@ export default function AnalysisDetail() {
 
   const currentStepCount = analysis.steps.length;
   const isComplete = analysis.status === 'completed';
+  const isEn = (analysis as any).language === 'en';
 
   const handleRunNextStep = () => {
     if (isComplete || isStreaming || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
@@ -1227,19 +1243,19 @@ export default function AnalysisDetail() {
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">애빛다 &nbsp;|&nbsp; AI 기업분석 리포트</div>
+            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">{isEn ? "AiBITDA  |  AI Equity Research Report" : "애빛다 \u00a0|\u00a0 AI 기업분석 리포트"}</div>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               {analysis.companyName}
               <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
             </h1>
             {analysis.englishName && <p className="text-sm text-gray-500 mt-0.5">{analysis.englishName}</p>}
-            <p className="text-xs text-gray-400 mt-1">{toKoreanIndustry(analysis.industry)} &nbsp;·&nbsp; {format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} 생성</p>
+            <p className="text-xs text-gray-400 mt-1">{toKoreanIndustry(analysis.industry)} &nbsp;·&nbsp; {isEn ? format(new Date(analysis.createdAt), 'MMM d, yyyy HH:mm') : format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} {isEn ? "generated" : "생성"}</p>
           </div>
           {analysis.investmentVerdict && (
             <div className="text-right">
-              <div className="text-xl font-bold text-gray-900">{toKoreanVerdict(analysis.investmentVerdict)}</div>
+              <div className="text-xl font-bold text-gray-900">{isEn ? analysis.investmentVerdict : toKoreanVerdict(analysis.investmentVerdict)}</div>
               {analysis.targetPrice && (
-                <div className="text-sm text-gray-600 mt-0.5">12개월 적정주가 {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</div>
+                <div className="text-sm text-gray-600 mt-0.5">{isEn ? "12M Target Price" : "12개월 적정주가"} {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</div>
               )}
             </div>
           )}
@@ -1252,7 +1268,7 @@ export default function AnalysisDetail() {
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group print:hidden"
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-        목록으로
+        {isEn ? "Back" : "목록으로"}
       </button>
 
       {/* ⑩ Sticky Step Nav — 헤더 스크롤 아웃 시 표시 */}
@@ -1306,10 +1322,10 @@ export default function AnalysisDetail() {
                   ? "bg-success/10 text-success border-success/20" 
                   : "bg-warning/10 text-warning border-warning/20 animate-pulse"
               )}>
-                {isComplete ? ((analysis as any).language === 'en' ? 'Analysis Complete' : '분석 완료') : ((analysis as any).language === 'en' ? 'In Progress' : '분석 진행중')}
+                {isComplete ? (isEn ? 'Analysis Complete' : '분석 완료') : (isEn ? 'In Progress' : '분석 진행중')}
               </span>
               <span className="px-2 py-0.5 text-[10px] font-medium rounded border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 flex items-center gap-1">
-                <span>⚡</span>{(analysis as any).language === 'en' ? 'AI Generated · For Reference' : 'AI 자동 생성 · 참고용'}
+                <span>⚡</span>{isEn ? 'AI Generated · For Reference' : 'AI 자동 생성 · 참고용'}
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground leading-tight">
@@ -1320,11 +1336,11 @@ export default function AnalysisDetail() {
             )}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground mt-2">
               <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {toKoreanIndustry(analysis.industry)}</span>
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {isEn ? format(new Date(analysis.createdAt), 'MMM d HH:mm') : format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
               {headerMarketCap != null && (
                 <span className="flex items-center gap-1">
                   <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                  시총 {headerMarketCap.currency === "USD"
+                  {isEn ? "Mkt Cap" : "시총"} {headerMarketCap.currency === "USD"
                     ? headerMarketCap.value >= 1e12
                       ? `$${(headerMarketCap.value / 1e12).toFixed(1)}T`
                       : headerMarketCap.value >= 1e9
@@ -1375,13 +1391,13 @@ export default function AnalysisDetail() {
                         </>
                       ) : (
                         <div className="text-xl font-bold text-foreground">
-                          {toKoreanVerdict(analysis.investmentVerdict)}
+                          {isEn ? analysis.investmentVerdict : toKoreanVerdict(analysis.investmentVerdict)}
                         </div>
                       )}
                     </div>
                     {contradictory && (
                       <div className="mb-2 px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-[10px] text-amber-700 dark:text-amber-400">
-                        ⚠️ 가격 데이터 불일치 — 재분석을 권장합니다
+                        {isEn ? "⚠️ Price data mismatch — re-analysis recommended" : "⚠️ 가격 데이터 불일치 — 재분석을 권장합니다"}
                       </div>
                     )}
                     <div className="space-y-1.5 font-mono text-xs">
@@ -1433,19 +1449,19 @@ export default function AnalysisDetail() {
 
       {/* 내 메모 */}
       <div className="bg-amber-50/60 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-4 py-2.5 print:hidden">
-        <MemoSection analysisId={analysis.id} />
+        <MemoSection analysisId={analysis.id} isEn={isEn} />
       </div>
 
       {/* Financial Chart */}
       <div className="bg-card border border-border rounded-2xl p-3 sm:p-5">
-        <FinancialChart ticker={analysis.ticker} />
+        <FinancialChart ticker={analysis.ticker} isEn={isEn} />
       </div>
 
       {/* Peer Multiples Panel */}
-      <PeerMultiplesPanel ticker={analysis.ticker} />
+      <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
 
       {/* Version Timeline */}
-      <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} />
+      <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
 
       {/* Progress Track */}
       <div className="bg-card border border-border rounded-2xl p-3 sm:p-5 print:hidden sticky top-12 z-20 shadow-sm">
@@ -1517,6 +1533,7 @@ export default function AnalysisDetail() {
                 qcScore={streamingStep.qcScore}
                 qcFeedback={streamingStep.qcFeedback}
                 debateStatus={streamingStep.debateStatus}
+                isEn={isEn}
               />
             )}
           </AnimatePresence>
@@ -1530,7 +1547,7 @@ export default function AnalysisDetail() {
               <div className="flex items-center gap-2 px-3 py-2">
                 <Loader2 className="w-3.5 h-3.5 text-primary/50 animate-spin shrink-0" />
                 <span className="text-xs text-muted-foreground">
-                  {currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length} 분석 중...
+                  {currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length} {isEn ? "analyzing..." : "분석 중..."}
                 </span>
               </div>
             )}
@@ -1594,7 +1611,7 @@ export default function AnalysisDetail() {
                 className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground/80 transition-all duration-200 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
               >
                 <Share2 className="w-4 h-4" />
-                공유하기
+                {isEn ? "Share" : "공유하기"}
               </button>
             </div>
             {showShareModal && (
@@ -1614,14 +1631,14 @@ export default function AnalysisDetail() {
                     <BrainCircuit className="w-5 h-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-[13px] font-bold leading-tight">이 분석이 마음에 드셨나요?</p>
-                    <p className="text-white/50 text-[11px] mt-0.5">가입하고 직접 AI 분석을 시작해 보세요</p>
+                    <p className="text-white text-[13px] font-bold leading-tight">{isEn ? "Did you find this analysis useful?" : "이 분석이 마음에 드셨나요?"}</p>
+                    <p className="text-white/50 text-[11px] mt-0.5">{isEn ? "Sign up and start your own AI analysis" : "가입하고 직접 AI 분석을 시작해 보세요"}</p>
                   </div>
                   <a
                     href="/sign-in"
                     className="flex-shrink-0 px-4 py-2 rounded-xl bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors whitespace-nowrap"
                   >
-                    분석 시작하기 →
+                    {isEn ? "Start Analysis →" : "분석 시작하기 →"}
                   </a>
                 </motion.div>
               </div>
@@ -1636,23 +1653,23 @@ export default function AnalysisDetail() {
                   className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 px-5 py-3 text-sm text-emerald-700 dark:text-emerald-400 font-medium"
                 >
                   <Check className="w-4 h-4" />
-                  피드백이 AI 학습에 반영되었습니다. 감사합니다!
+                  {isEn ? "Your feedback helps improve our AI. Thank you!" : "피드백이 AI 학습에 반영되었습니다. 감사합니다!"}
                 </motion.div>
               ) : (
                 <div className="rounded-xl border border-border bg-background px-5 py-4 space-y-3">
                   {/* 헤더 */}
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">이 분석이 도움이 됐나요?</span>
-                    <span className="text-[10px] text-muted-foreground">— 답변이 AI 개선에 사용됩니다</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Was this analysis helpful?" : "이 분석이 도움이 됐나요?"}</span>
+                    <span className="text-[10px] text-muted-foreground">{isEn ? "— Your answer helps improve our AI" : "— 답변이 AI 개선에 사용됩니다"}</span>
                   </div>
 
                   {/* 👍 / 👎 버튼 — 클릭 즉시 칩 펼침 */}
                   <div className="flex items-center gap-2">
                     {(
                       [
-                        { value: 5 as const, label: "도움됐어요", icon: <ThumbsUp className="w-3.5 h-3.5" />, active: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400", hover: "hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400" },
-                        { value: 1 as const, label: "아쉬웠어요", icon: <ThumbsDown className="w-3.5 h-3.5" />, active: "bg-rose-50 dark:bg-rose-950/30 border-rose-400 dark:border-rose-600 text-rose-700 dark:text-rose-400", hover: "hover:border-rose-300 hover:text-rose-700 dark:hover:text-rose-400" },
+                        { value: 5 as const, label: isEn ? "Helpful" : "도움됐어요", icon: <ThumbsUp className="w-3.5 h-3.5" />, active: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400", hover: "hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400" },
+                        { value: 1 as const, label: isEn ? "Not helpful" : "아쉬웠어요", icon: <ThumbsDown className="w-3.5 h-3.5" />, active: "bg-rose-50 dark:bg-rose-950/30 border-rose-400 dark:border-rose-600 text-rose-700 dark:text-rose-400", hover: "hover:border-rose-300 hover:text-rose-700 dark:hover:text-rose-400" },
                       ] as const
                     ).map(({ value, label, icon, active, hover }) => (
                       <button
@@ -1679,13 +1696,19 @@ export default function AnalysisDetail() {
                         className="overflow-hidden space-y-2.5"
                       >
                         <p className="text-[11px] text-muted-foreground">
-                          {feedbackRating === 5 ? "어떤 점이 좋았나요?" : "어떤 점이 아쉬웠나요?"}
-                          <span className="ml-1 text-muted-foreground/50">(여러 개 선택 가능)</span>
+                          {isEn
+                            ? (feedbackRating === 5 ? "What did you like?" : "What could be better?")
+                            : (feedbackRating === 5 ? "어떤 점이 좋았나요?" : "어떤 점이 아쉬웠나요?")}
+                          <span className="ml-1 text-muted-foreground/50">{isEn ? "(select multiple)" : "(여러 개 선택 가능)"}</span>
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {(feedbackRating === 5
-                            ? ["밸류에이션 근거가 명확해요", "투자 판단에 도움됐어요", "데이터가 풍부해요", "리스크 분석이 탄탄해요", "업종 이해가 깊어요"]
-                            : ["데이터가 부정확해요", "밸류에이션 근거가 약해요", "결론이 모호해요", "업종 이해가 부족해요", "리스크가 간과됐어요"]
+                            ? (isEn
+                              ? ["Valuation was clear", "Helped my investment decision", "Data was rich", "Risk analysis was solid", "Industry understanding was deep"]
+                              : ["밸류에이션 근거가 명확해요", "투자 판단에 도움됐어요", "데이터가 풍부해요", "리스크 분석이 탄탄해요", "업종 이해가 깊어요"])
+                            : (isEn
+                              ? ["Data was inaccurate", "Valuation rationale was weak", "Conclusion was vague", "Lacked industry understanding", "Risks were overlooked"]
+                              : ["데이터가 부정확해요", "밸류에이션 근거가 약해요", "결론이 모호해요", "업종 이해가 부족해요", "리스크가 간과됐어요"])
                           ).map((chip) => {
                             const selected = feedbackChips.includes(chip);
                             return (
@@ -1716,7 +1739,7 @@ export default function AnalysisDetail() {
                           className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-foreground text-white text-[13px] font-semibold hover:bg-foreground/80 transition-colors disabled:opacity-50"
                         >
                           {feedbackSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          제출하기
+                          {isEn ? "Submit" : "제출하기"}
                         </button>
                       </motion.div>
                     )}
@@ -1767,35 +1790,69 @@ export default function AnalysisDetail() {
               <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-card border border-border border-l-4 border-l-amber-400 px-4 py-3">
                 <span className="text-amber-500 text-base leading-none mt-0.5 shrink-0">⚠</span>
                 <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                  <span className="font-bold text-foreground/80">AI 자동 생성 콘텐츠.</span> 본 리포트는 대형 언어모델(LLM) AI가 공개 데이터를 바탕으로 자동 생성한 분석 참고 자료입니다. 인간 전문가의 검토를 거치지 않았으며, 사실 오류·추론 오류가 포함될 수 있습니다. 투자 결정 전 반드시 공식 공시 자료 및 전문가 의견을 별도로 확인하십시오.
+                  {isEn ? (
+                    <><span className="font-bold text-foreground/80">AI-Generated Content.</span> This report was automatically generated by a large language model (LLM) AI based on publicly available data. It has not been reviewed by human experts and may contain factual or reasoning errors. Always verify with official filings and professional advice before making investment decisions.</>
+                  ) : (
+                    <><span className="font-bold text-foreground/80">AI 자동 생성 콘텐츠.</span> 본 리포트는 대형 언어모델(LLM) AI가 공개 데이터를 바탕으로 자동 생성한 분석 참고 자료입니다. 인간 전문가의 검토를 거치지 않았으며, 사실 오류·추론 오류가 포함될 수 있습니다. 투자 결정 전 반드시 공식 공시 자료 및 전문가 의견을 별도로 확인하십시오.</>
+                  )}
                 </p>
               </div>
 
               <div className="rounded-xl bg-muted/50 border border-border px-5 py-4 space-y-2">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">투자 유의사항 (Legal Disclaimer)</p>
-                <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                  본 리포트는 「CBST」가 운영하는 AI 정보 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 자본시장과 금융투자업에 관한 법률상 투자자문업 또는 투자일임업에 해당하지 않으며, 특정인을 대상으로 한 개별 투자 판단·조언을 제공하지 않습니다.
-                </p>
-                <div className="space-y-2 mt-1">
-                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                    <span className="font-semibold text-foreground/70">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
-                  </p>
-                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                    <span className="font-semibold text-foreground/70">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
-                  </p>
-                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                    <span className="font-semibold text-foreground/70">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
-                  </p>
-                  <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                    <span className="font-semibold text-foreground/70">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
-                  </p>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
-                  본 리포트의 무단 복제·배포·재가공은 금지됩니다. &nbsp;·&nbsp; 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
-                </p>
-                <p className="text-[10.5px] text-muted-foreground mt-1">
-                  분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.
-                </p>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Legal Disclaimer" : "투자 유의사항 (Legal Disclaimer)"}</p>
+                {isEn ? (
+                  <>
+                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      This report is <span className="font-semibold">for informational purposes only</span>, automatically generated by AiBITDA (operated by CBST) using publicly available financial data, market information, and corporate disclosures. This service does not constitute investment advisory or discretionary investment management.
+                    </p>
+                    <div className="space-y-2 mt-1">
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">Investment responsibility:</span> Price levels, scenarios, and analytical figures in this report do not constitute a recommendation to buy or sell any security. All content is for informational purposes only. The final responsibility for any investment decision rests solely with the investor.
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">AI limitations:</span> Target prices and financial estimates are predictions based on specific algorithms and assumptions. Actual results may differ materially due to data limitations, model errors, and market volatility. We make no warranty regarding the accuracy, completeness, or timeliness of this information.
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">Risk of loss:</span> Past performance or AI simulation results do not guarantee future returns. Financial instruments may result in partial or total loss of principal.
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">Independent verification recommended:</span> Before relying on this material, independently verify information through trusted sources such as official exchange filings, company press releases, and regulatory databases.
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
+                      Unauthorized reproduction or redistribution is prohibited. &nbsp;·&nbsp; AI-generated content disclosed per applicable regulation.
+                    </p>
+                    <p className="text-[10.5px] text-muted-foreground mt-1">
+                      Generated: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("en-US") : "—"} &nbsp;·&nbsp; © CBST (AiBITDA AI). All rights reserved.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      본 리포트는 「CBST」가 운영하는 AI 정보 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 자본시장과 금융투자업에 관한 법률상 투자자문업 또는 투자일임업에 해당하지 않으며, 특정인을 대상으로 한 개별 투자 판단·조언을 제공하지 않습니다.
+                    </p>
+                    <div className="space-y-2 mt-1">
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
+                      </p>
+                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground/70">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
+                      본 리포트의 무단 복제·배포·재가공은 금지됩니다. &nbsp;·&nbsp; 인공지능 기본법에 따라 AI 생성 콘텐츠임을 고지합니다.
+                    </p>
+                    <p className="text-[10.5px] text-muted-foreground mt-1">
+                      분석 생성일: {analysis.createdAt ? new Date(analysis.createdAt).toLocaleString("ko-KR") : "—"} &nbsp;·&nbsp; © CBST(애빛다 AI). All rights reserved.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
@@ -1823,14 +1880,14 @@ export default function AnalysisDetail() {
                 const tp = analysis.targetPrice ?? null;
                 const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
                 if (upsidePct == null) return (
-                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{(analysis as any).language === 'en' ? (analysis.investmentVerdict ?? '–') : toKoreanVerdict(analysis.investmentVerdict)}</span>
+                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{isEn ? (analysis.investmentVerdict ?? '–') : toKoreanVerdict(analysis.investmentVerdict)}</span>
                 );
                 return (
                   <div className="text-right shrink-0">
                     <p className={`text-[20px] font-black tabular-nums leading-none ${upsidePct >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                       {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
                     </p>
-                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{(analysis as any).language === 'en' ? (upsidePct >= 0 ? "Upside" : "Downside") : (upsidePct >= 0 ? "상승여력" : "하락여지")}</p>
+                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{isEn ? (upsidePct >= 0 ? "Upside" : "Downside") : (upsidePct >= 0 ? "상승여력" : "하락여지")}</p>
                   </div>
                 );
               })()}
@@ -1838,13 +1895,13 @@ export default function AnalysisDetail() {
             <div className="space-y-1 font-mono">
               {analysis.targetPrice && (
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground/60">{(analysis as any).language === 'en' ? "Target Price" : "적정주가"}</span>
+                  <span className="text-muted-foreground/60">{isEn ? "Target Price" : "적정주가"}</span>
                   <span className="font-bold text-foreground/80">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
               )}
               {analysis.entryPrice && (
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground/60">{(analysis as any).language === 'en' ? "Entry" : "진입가"}</span>
+                  <span className="text-muted-foreground/60">{isEn ? "Entry" : "진입가"}</span>
                   <span className="font-semibold text-emerald-500">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
                 </div>
               )}
@@ -1852,7 +1909,7 @@ export default function AnalysisDetail() {
             <div className="mt-2.5 pt-2 border-t border-border/60">
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50">
                 <TrendingUp className="w-3 h-3" />
-                <span>{(analysis as any).language === 'en' ? "Scroll to read full analysis" : "스크롤하여 전체 분석 보기"}</span>
+                <span>{isEn ? "Scroll to read full analysis" : "스크롤하여 전체 분석 보기"}</span>
               </div>
             </div>
           </motion.div>
@@ -1907,18 +1964,18 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(s.replace(/'/g, '"')); } catch { return null; }
 }
 
-function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string }) {
+function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean }) {
   const json = extractJson(step.content);
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
 
   const verdictMeta = (v: string) => {
     if (!v) return { label: "—", color: "text-foreground", bg: "bg-muted", border: "border-border", dot: "#6b7280" };
     const s = v.toLowerCase();
-    if (s.includes("strong buy"))  return { label: "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "dark:bg-emerald-950/40", border: "border-emerald-500 dark:border-emerald-800", dot: "#059669" };
-    if (s.includes("buy"))         return { label: "상승여력",      color: "text-green-700 dark:text-green-400",     bg: "dark:bg-green-950/40",   border: "border-green-500 dark:border-green-800",     dot: "#16a34a" };
-    if (s.includes("strong sell")) return { label: "높은 하락여지", color: "text-blue-700 dark:text-blue-400",       bg: "dark:bg-blue-950/40",    border: "border-blue-500 dark:border-blue-800",       dot: "#2563eb" };
-    if (s.includes("sell"))        return { label: "하락여지",      color: "text-blue-600 dark:text-blue-400",       bg: "dark:bg-blue-950/40",    border: "border-blue-400 dark:border-blue-800",       dot: "#3b82f6" };
-    return { label: "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "dark:bg-amber-900/20", border: "border-amber-500 dark:border-amber-700", dot: "#d97706" };
+    if (s.includes("strong buy"))  return { label: isEn ? "Strong Upside" : "높은 상승여력", color: "text-emerald-700 dark:text-emerald-400", bg: "dark:bg-emerald-950/40", border: "border-emerald-500 dark:border-emerald-800", dot: "#059669" };
+    if (s.includes("buy"))         return { label: isEn ? "Upside" : "상승여력",             color: "text-green-700 dark:text-green-400",     bg: "dark:bg-green-950/40",   border: "border-green-500 dark:border-green-800",     dot: "#16a34a" };
+    if (s.includes("strong sell")) return { label: isEn ? "Strong Downside" : "높은 하락여지", color: "text-blue-700 dark:text-blue-400",       bg: "dark:bg-blue-950/40",    border: "border-blue-500 dark:border-blue-800",       dot: "#2563eb" };
+    if (s.includes("sell"))        return { label: isEn ? "Downside" : "하락여지",            color: "text-blue-600 dark:text-blue-400",       bg: "dark:bg-blue-950/40",    border: "border-blue-400 dark:border-blue-800",       dot: "#3b82f6" };
+    return { label: isEn ? "Fair Value" : "적정 수준", color: "text-amber-700 dark:text-amber-400", bg: "dark:bg-amber-900/20", border: "border-amber-500 dark:border-amber-700", dot: "#d97706" };
   };
 
   return (
@@ -1935,7 +1992,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             <agent.icon className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-white font-display font-semibold text-sm leading-tight">최종 투자 전략</p>
+            <p className="text-white font-display font-semibold text-sm leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
             <p className="text-muted-foreground text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
           </div>
         </div>
@@ -1955,7 +2012,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               <div className="flex flex-wrap gap-1.5">
                 {json.confidence && (
                   <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-muted text-foreground/70 border border-border">
-                    신뢰도 {json.confidence}
+                    {isEn ? "Confidence" : "신뢰도"} {json.confidence}
                   </span>
                 )}
                 {json.investment_period && (
@@ -1965,7 +2022,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 )}
                 {json.risk_reward && (
                   <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-muted text-foreground/70 border border-border">
-                    손익비(R/R) {json.risk_reward}
+                    {isEn ? "R/R" : "손익비(R/R)"} {json.risk_reward}
                   </span>
                 )}
               </div>
@@ -1974,7 +2031,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {/* ── ② 핵심 이슈 ── */}
             {json.key_issue && (
               <div className="px-4 sm:px-6 py-4 bg-amber-50/60 dark:bg-amber-900/15">
-                <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">핵심 이슈</p>
+                <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">{isEn ? "Key Issue" : "핵심 이슈"}</p>
                 <p className="text-sm text-foreground/90 leading-relaxed font-medium">{json.key_issue}</p>
               </div>
             )}
@@ -2026,10 +2083,10 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                   : null;
 
               // 레이블 — 매도 시 의미에 맞는 용어로
-              const entryLabel = isSell ? "재관심 기준가" : "진입가";
-              const stopLabel = isSell ? "청산 우선 구간" : "손절가";
-              const entrySubLabel = isSell ? "매도 후 재진입 고려 구간" : "진입 목표 가격";
-              const stopSubLabel = isSell ? "단계적 차익실현 구간" : "손절 기준선";
+              const entryLabel = isSell ? (isEn ? "Re-entry Threshold" : "재관심 기준가") : (isEn ? "Entry Price" : "진입가");
+              const stopLabel = isSell ? (isEn ? "Liquidation Zone" : "청산 우선 구간") : (isEn ? "Stop Loss" : "손절가");
+              const entrySubLabel = isSell ? (isEn ? "Re-entry zone after sell" : "매도 후 재진입 고려 구간") : (isEn ? "Target entry price" : "진입 목표 가격");
+              const stopSubLabel = isSell ? (isEn ? "Profit-taking zone" : "단계적 차익실현 구간") : (isEn ? "Stop loss level" : "손절 기준선");
 
               return (
                 <div className="px-4 sm:px-6 py-4">
@@ -2054,7 +2111,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     <div className={`rounded-xl border ${targetCardStyle.border} ${targetCardStyle.bg} p-3 sm:p-4`}>
                       <div className="flex items-center gap-1 mb-2">
                         <span className={`w-1.5 h-1.5 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
-                        <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>적정주가 <span className="font-normal opacity-70">(12개월)</span></p>
+                        <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>{isEn ? "Fair Value" : "적정주가"} <span className="font-normal opacity-70">(12M)</span></p>
                       </div>
                       <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{formatPrice(json.target_price, priceCurrency)}</p>
                       {upsideFromCurrent !== null ? (
@@ -2062,7 +2119,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                           {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
                         </p>
                       ) : (
-                        <p className={`text-[10px] ${targetCardStyle.labelColor} mt-1 hidden sm:block`}>현재가 기준</p>
+                        <p className={`text-[10px] ${targetCardStyle.labelColor} mt-1 hidden sm:block`}>{isEn ? "vs. current" : "현재가 기준"}</p>
                       )}
                     </div>
 
@@ -2088,7 +2145,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
             {/* ── ⑤ 시나리오 카드 ── */}
             {json.scenarios?.length > 0 && (
               <div className="px-4 sm:px-6 py-4">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">시나리오 분석</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Scenario Analysis" : "시나리오 분석"}</p>
                 <div className="space-y-2">
                   {json.scenarios.map((s: any, i: number) => {
                     const isBear = s.case === "Bear";
@@ -2117,9 +2174,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                           )}>
                             {isBear ? "▼ Bear" : isBull ? "▲ Bull" : "— Base"}
                           </span>
-                          {isBase && <p className="text-[10px] text-muted-foreground mt-0.5">기본 전망</p>}
-                          {isBull && <p className="text-[10px] text-muted-foreground mt-0.5">낙관 전망</p>}
-                          {isBear && <p className="text-[10px] text-muted-foreground mt-0.5">비관 전망</p>}
+                          {isBase && <p className="text-[10px] text-muted-foreground mt-0.5">{isEn ? "Base Case" : "기본 전망"}</p>}
+                          {isBull && <p className="text-[10px] text-muted-foreground mt-0.5">{isEn ? "Bull Case" : "낙관 전망"}</p>}
+                          {isBear && <p className="text-[10px] text-muted-foreground mt-0.5">{isEn ? "Bear Case" : "비관 전망"}</p>}
                         </div>
 
                         {/* 적정주가 + 등락률 */}
@@ -2138,7 +2195,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         {/* 확률 바 */}
                         <div className="w-16 sm:w-20 shrink-0">
                           <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] text-muted-foreground">확률</span>
+                            <span className="text-[10px] text-muted-foreground">{isEn ? "Prob." : "확률"}</span>
                             <span className="text-[11px] font-bold text-foreground/80">{!isNaN(pNum) ? pNum + "%" : pStr}</span>
                           </div>
                           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -2162,7 +2219,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               <div className="px-4 sm:px-6 py-4 grid sm:grid-cols-2 gap-5">
                 {json.risks?.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">핵심 리스크</p>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Key Risks" : "핵심 리스크"}</p>
                     <ul className="space-y-2">
                       {json.risks.map((r: string, i: number) => (
                         <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-foreground/70 leading-relaxed">
@@ -2175,7 +2232,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 )}
                 {json.monitoring_indicators?.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">모니터링 지표</p>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">{isEn ? "Monitoring Indicators" : "모니터링 지표"}</p>
                     <ul className="space-y-2">
                       {json.monitoring_indicators.map((m: string, i: number) => (
                         <li key={i} className="flex items-start gap-2.5 text-[12.5px] text-muted-foreground leading-relaxed">
@@ -2194,8 +2251,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
         );
       })() : (
         <div className="p-6 text-sm text-foreground/60 leading-relaxed">
-          <p className="text-amber-600 font-medium mb-2 text-xs uppercase tracking-widest">분석 결과 로드 중 오류</p>
-          <p>최종 투자 전략 데이터를 불러오지 못했습니다. 분석을 다시 실행해 주세요.</p>
+          <p className="text-amber-600 font-medium mb-2 text-xs uppercase tracking-widest">{isEn ? "Error loading analysis" : "분석 결과 로드 중 오류"}</p>
+          <p>{isEn ? "Failed to load strategy data. Please re-run the analysis." : "최종 투자 전략 데이터를 불러오지 못했습니다. 분석을 다시 실행해 주세요."}</p>
         </div>
       )}
     </motion.div>
@@ -2265,6 +2322,69 @@ const SLOW_STEP_MESSAGES: Record<string, string[]> = {
   ],
 };
 
+const SLOW_STEP_MESSAGES_EN: Record<string, string[]> = {
+  company_intro: [
+    "Digging through annual reports from page one 📄",
+    "Figuring out what this company actually does 🤔",
+    "Reading IR materials... filtering out the marketing spin",
+    "Looking for the founding story — hoping it's interesting 😄",
+    "Company overview almost ready!",
+  ],
+  industry_analysis: [
+    "Drawing the industry map 🗺️",
+    "Analyzing competitors (don't tell them 😅)",
+    "Crunching market size numbers 🧮",
+    "Porter's Five Forces... brings back memories",
+    "This industry is pretty complex. Getting it organized",
+    "Almost there — industry structure is taking shape!",
+  ],
+  catalyst_analysis: [
+    "Hunting for issues that could move the stock 🎯",
+    "Weighing tailwinds against headwinds ⚖️",
+    "Mining real catalysts from the news pile 🔍",
+    "Predicting what will matter next quarter 🔮",
+    "Judging whether this is a story stock or not",
+    "Wrapping up catalyst analysis!",
+  ],
+  company_analysis: [
+    "Spread out three years of financial statements 📊",
+    "Revenue is rising but margins... 🤔 Digging into why",
+    "Figuring out why operating CF diverges from net income",
+    "Uncovering the real earnings drivers",
+    "High debt — checking if it's manageable",
+    "Calculating EPS and EBITDA from scratch ✏️",
+    "Lots of data here — just a little longer 🙏",
+    "Almost done! Final review underway",
+  ],
+  relative_valuation: [
+    "Spreading out 10 years of DCF inputs 📈",
+    "Computing WACC... there are a lot of moving parts",
+    "Gathering peer multiples — cheap or expensive?",
+    "Making sure Terminal Value isn't inflated 😅",
+    "Back-solving the current price with Reverse DCF",
+    "Reconciling intrinsic value vs. relative value",
+    "Verifying FCFF consistency... leaving no gaps",
+    "Final step: narrowing two fair values into one 🎯",
+  ],
+  market_analysis: [
+    "Pulling up the charts 📉📈",
+    "Finding support levels with a ruler 📏",
+    "Precisely calculating support & resistance zones",
+    "Tracking foreign and institutional money flow 🕵️",
+    "Calculating whether this price is an entry 💭",
+    "Carefully deciding where to place the stop loss",
+    "Entry point almost locked in!",
+  ],
+  investment_strategy: [
+    "Synthesizing all six analysis stages in my head 🧠",
+    "Is the upside large enough? The numbers will tell",
+    "Compressing the investment thesis to one sentence ✍️",
+    "Final balance of risks vs. opportunities ⚖️",
+    "Finalizing the target price... almost there!",
+    "Doing the last review of the report 📝",
+  ],
+};
+
 const DEBATE_MESSAGES: Record<string, string[]> = {
   challenging: [
     "팀 전원이 초안을 처음부터 다시 뜯어보고 있어요 🔍",
@@ -2283,8 +2403,26 @@ const DEBATE_MESSAGES: Record<string, string[]> = {
   ],
 };
 
-function RotatingDebateMessage({ phase }: { phase: "challenging" | "checking" }) {
-  const messages = DEBATE_MESSAGES[phase];
+const DEBATE_MESSAGES_EN: Record<string, string[]> = {
+  challenging: [
+    "The whole team is re-examining the draft from scratch 🔍",
+    "\"Is this assumption really correct?\" — sharp eyes are on it",
+    "Everyone is combing through for hidden risks 🔥",
+    "Rigorously re-validating each assumption 💡",
+    "\"Would a real investor find this convincing?\" — review continues",
+    "Critical feedback from the team is pouring in ⚡",
+  ],
+  checking: [
+    "The lead strategist is re-reading the report from the top 👀",
+    "Manually verifying every number 🔢",
+    "\"Is the evidence strong enough?\" — checking carefully",
+    "Looking for any gaps in the logical flow 🔍",
+    "Lead approval imminent... almost there!",
+  ],
+};
+
+function RotatingDebateMessage({ phase, isEn = false }: { phase: "challenging" | "checking"; isEn?: boolean }) {
+  const messages = (isEn ? DEBATE_MESSAGES_EN : DEBATE_MESSAGES)[phase];
   const [idx, setIdx] = useState(0);
   const [visible, setVisible] = useState(true);
 
@@ -2313,8 +2451,8 @@ function RotatingDebateMessage({ phase }: { phase: "challenging" | "checking" })
   );
 }
 
-function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
-  const messages = SLOW_STEP_MESSAGES[stepKey];
+function RotatingAnalysisMessage({ stepKey, isEn = false }: { stepKey: string; isEn?: boolean }) {
+  const messages = (isEn ? SLOW_STEP_MESSAGES_EN : SLOW_STEP_MESSAGES)[stepKey];
   const [idx, setIdx] = useState(0);
   const [visible, setVisible] = useState(true);
 
@@ -2334,7 +2472,7 @@ function RotatingAnalysisMessage({ stepKey }: { stepKey: string }) {
     return () => clearInterval(interval);
   }, [messages]);
 
-  if (!messages) return <p className="text-[12px] text-muted-foreground/70 text-center italic">분석 중...</p>;
+  if (!messages) return <p className="text-[12px] text-muted-foreground/70 text-center italic">{isEn ? "Analyzing..." : "분석 중..."}</p>;
 
   return (
     <p
@@ -2362,13 +2500,14 @@ const AGENT_COLORS: Record<string, string> = {
   investment_strategy: BRAND_BLUE,
 };
 
-function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debateStatus }: {
+function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debateStatus, isEn = false }: {
   stepKey: string;
   content: string;
   qcStatus?: "checking" | "approved" | "revising" | "revised";
   qcScore?: number;
   qcFeedback?: string;
   debateStatus?: "challenging" | "synthesizing";
+  isEn?: boolean;
 }) {
   const agent = AGENTS[stepKey];
   const color = AGENT_COLORS[stepKey] ?? "hsl(218, 67%, 44%)";
@@ -2384,12 +2523,12 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
   })();
 
   const phaseConfig = {
-    writing:      { icon: Loader2,      spin: true,  pulse: false, color: "text-muted-foreground",  label: "분석 리포트 작성 중..." },
-    challenging:  { icon: Swords,       spin: false, pulse: true,  color: "text-violet-600",         label: "팀 전원 심층 재검토 중..." },
-    synthesizing: { icon: RefreshCw,    spin: true,  pulse: false, color: "text-blue-600",           label: "재검토 의견 반영하여 재작성 중..." },
-    checking:     { icon: ShieldCheck,  spin: false, pulse: true,  color: "text-amber-600",          label: "Lead Portfolio Strategist 검토 중..." },
-    revising:     { icon: RefreshCw,    spin: true,  pulse: false, color: "text-amber-600",          label: "팀장 피드백 반영 재작성 중..." },
-    done:         { icon: CheckCircle2, spin: false, pulse: false, color: "text-emerald-600",        label: "검토 완료, 저장 중..." },
+    writing:      { icon: Loader2,      spin: true,  pulse: false, color: "text-muted-foreground",  label: isEn ? "Writing analysis report..." : "분석 리포트 작성 중..." },
+    challenging:  { icon: Swords,       spin: false, pulse: true,  color: "text-violet-600",         label: isEn ? "Deep review in progress..." : "팀 전원 심층 재검토 중..." },
+    synthesizing: { icon: RefreshCw,    spin: true,  pulse: false, color: "text-blue-600",           label: isEn ? "Revising based on review..." : "재검토 의견 반영하여 재작성 중..." },
+    checking:     { icon: ShieldCheck,  spin: false, pulse: true,  color: "text-amber-600",          label: isEn ? "Lead Portfolio Strategist reviewing..." : "Lead Portfolio Strategist 검토 중..." },
+    revising:     { icon: RefreshCw,    spin: true,  pulse: false, color: "text-amber-600",          label: isEn ? "Revising based on lead feedback..." : "팀장 피드백 반영 재작성 중..." },
+    done:         { icon: CheckCircle2, spin: false, pulse: false, color: "text-emerald-600",        label: isEn ? "Review complete, saving..." : "검토 완료, 저장 중..." },
   } as const;
 
   const cfg = phaseConfig[phase];
@@ -2431,9 +2570,9 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
         )}
         {/* 세부 메시지 — 고정 높이 영역으로 레이아웃 안정화 */}
         <div className="mt-3 min-h-[36px] flex items-center justify-center px-4 w-full">
-          {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} />}
-          {phase === "challenging" && <RotatingDebateMessage phase="challenging" />}
-          {phase === "checking" && <RotatingDebateMessage phase="checking" />}
+          {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} isEn={isEn} />}
+          {phase === "challenging" && <RotatingDebateMessage phase="challenging" isEn={isEn} />}
+          {phase === "checking" && <RotatingDebateMessage phase="checking" isEn={isEn} />}
         </div>
       </div>
     </motion.div>
@@ -2496,16 +2635,16 @@ function parseMarketSignals(content: string): MarketSignals | null {
   } catch { return null; }
 }
 
-function MarketSignalChips({ signals }: { signals: MarketSignals }) {
+function MarketSignalChips({ signals, isEn = false }: { signals: MarketSignals; isEn?: boolean }) {
   const trendMap = {
-    bullish: { label: "▲ 상승 추세", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60" },
-    bearish: { label: "▼ 하락 추세", cls: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60" },
-    neutral: { label: "→ 횡보 구간", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60" },
+    bullish: { label: isEn ? "▲ Uptrend" : "▲ 상승 추세", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60" },
+    bearish: { label: isEn ? "▼ Downtrend" : "▼ 하락 추세", cls: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60" },
+    neutral: { label: isEn ? "→ Sideways" : "→ 횡보 구간", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60" },
   };
   const signalMap = {
-    buy:  { label: "매수 진입", cls: "bg-emerald-500 text-white" },
-    wait: { label: "관망",      cls: "bg-amber-500 text-white"   },
-    sell: { label: "매도 대응", cls: "bg-red-500 text-white"     },
+    buy:  { label: isEn ? "Buy Signal" : "매수 진입", cls: "bg-emerald-500 text-white" },
+    wait: { label: isEn ? "Hold" : "관망",            cls: "bg-amber-500 text-white"   },
+    sell: { label: isEn ? "Sell Signal" : "매도 대응", cls: "bg-red-500 text-white"    },
   };
   const tc = trendMap[signals.trend] ?? trendMap.neutral;
   const sc = signalMap[signals.signal] ?? signalMap.wait;
@@ -2513,7 +2652,7 @@ function MarketSignalChips({ signals }: { signals: MarketSignals }) {
     <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-border">
       <span className={cn("text-[11px] font-bold px-3 py-1.5 rounded-full", tc.cls)}>{tc.label}</span>
       <div className="flex items-center gap-1.5 bg-muted/60 border border-border rounded-full px-3 py-1.5">
-        <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">52주</span>
+        <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">52W</span>
         <div className="w-14 h-1.5 bg-muted-foreground/20 rounded-full overflow-hidden">
           <div className="h-full rounded-full bg-foreground/60 transition-all" style={{ width: `${signals.position52w}%` }} />
         </div>
@@ -2522,7 +2661,7 @@ function MarketSignalChips({ signals }: { signals: MarketSignals }) {
       <span className={cn("text-[11px] font-bold px-3 py-1.5 rounded-full", sc.cls)}>{sc.label}</span>
       {signals.rrRatio > 0 && (
         <div className="flex items-center gap-1.5 bg-muted/60 border border-border rounded-full px-3 py-1.5">
-          <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">손익비</span>
+          <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">R/R</span>
           <span className="text-[11px] font-mono font-bold text-foreground">{signals.rrRatio.toFixed(1)} : 1</span>
         </div>
       )}
@@ -2530,10 +2669,11 @@ function MarketSignalChips({ signals }: { signals: MarketSignals }) {
   );
 }
 
-function TechnicalLevelLadder({ levels, startPrice, currency }: {
+function TechnicalLevelLadder({ levels, startPrice, currency, isEn = false }: {
   levels: ChartLevels;
   startPrice?: number;
   currency: "KRW" | "USD";
+  isEn?: boolean;
 }) {
   const cp = (levels.currentPrice && levels.currentPrice > 0) ? levels.currentPrice : (startPrice && startPrice > 0 ? startPrice : 0);
   if (!cp) return null;
@@ -2551,14 +2691,14 @@ function TechnicalLevelLadder({ levels, startPrice, currency }: {
     variant: "stop" | "entry" | "current" | "resistance" | "support" | "target1" | "target2";
   };
   const raw: (LItem | null)[] = [
-    (levels.stopLoss && levels.stopLoss > 0) ? { key: "sl", label: "손절가", price: levels.stopLoss, variant: "stop" } : null,
+    (levels.stopLoss && levels.stopLoss > 0) ? { key: "sl", label: isEn ? "Stop Loss" : "손절가", price: levels.stopLoss, variant: "stop" } : null,
     (levels.entryMin && levels.entryMax && levels.entryMin > 0)
-      ? { key: "em", label: "진입 구간", price: levels.entryMin, sub: "~" + fmtP(levels.entryMax), variant: "entry" }
-      : (levels.entryMin && levels.entryMin > 0) ? { key: "em", label: "진입 하단", price: levels.entryMin, variant: "entry" } : null,
-    { key: "cp", label: "현재가", price: cp, variant: "current" },
-    (levels.resistance && levels.resistance > 0) ? { key: "res", label: "저항선", price: levels.resistance, variant: "resistance" } : null,
-    (levels.target1 && levels.target1 > 0) ? { key: "t1", label: "1차 목표가", price: levels.target1, variant: "target1" } : null,
-    (levels.target2 && levels.target2 > 0) ? { key: "t2", label: "2차 목표가", price: levels.target2, variant: "target2" } : null,
+      ? { key: "em", label: isEn ? "Entry Zone" : "진입 구간", price: levels.entryMin, sub: "~" + fmtP(levels.entryMax), variant: "entry" }
+      : (levels.entryMin && levels.entryMin > 0) ? { key: "em", label: isEn ? "Entry Low" : "진입 하단", price: levels.entryMin, variant: "entry" } : null,
+    { key: "cp", label: isEn ? "Current" : "현재가", price: cp, variant: "current" },
+    (levels.resistance && levels.resistance > 0) ? { key: "res", label: isEn ? "Resistance" : "저항선", price: levels.resistance, variant: "resistance" } : null,
+    (levels.target1 && levels.target1 > 0) ? { key: "t1", label: isEn ? "Target 1" : "1차 목표가", price: levels.target1, variant: "target1" } : null,
+    (levels.target2 && levels.target2 > 0) ? { key: "t2", label: isEn ? "Target 2" : "2차 목표가", price: levels.target2, variant: "target2" } : null,
   ];
   const items = raw.filter((v): v is LItem => v !== null).sort((a, b) => a.price - b.price);
   if (items.length < 2) return null;
@@ -2582,8 +2722,8 @@ function TechnicalLevelLadder({ levels, startPrice, currency }: {
     <div className="mb-5 pt-4 border-t border-border">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-1 h-3.5 rounded-full bg-indigo-500" />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">가격 구간 요약</span>
-        <span className="text-[10px] text-muted-foreground/50 font-mono hidden sm:inline">현재가 기준 상대 위치</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price Level Summary" : "가격 구간 요약"}</span>
+        <span className="text-[10px] text-muted-foreground/50 font-mono hidden sm:inline">{isEn ? "Relative to current price" : "현재가 기준 상대 위치"}</span>
       </div>
 
       {/* Cards */}
@@ -2711,7 +2851,7 @@ function fmtAmtRaw(value: number | null, currency: string): string {
   return `$${(value / 1e6).toFixed(0)}M`;
 }
 
-function ForwardEstimatesTable({ ticker }: { ticker: string }) {
+function ForwardEstimatesTable({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
   const [data, setData] = useState<{ annual: any[]; currency: string } | null>(null);
   useEffect(() => {
     fetch(getApiUrl(`/api/market-data/financials/${ticker}`))
@@ -2729,17 +2869,17 @@ function ForwardEstimatesTable({ ticker }: { ticker: string }) {
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
         <div className="w-1 h-3.5 rounded-full bg-amber-400" />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">실적 전망</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700">애널리스트 컨센서스</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Earnings Forecast" : "실적 전망"}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700">{isEn ? "Analyst Consensus" : "애널리스트 컨센서스"}</span>
       </div>
       <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[340px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted/60">
-              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">연도</th>
-              <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">매출</th>
+              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Year" : "연도"}</th>
+              <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">{isEn ? "Revenue" : "매출"}</th>
               <th className="px-3 py-2 text-right font-semibold text-foreground/50 border-b border-border">YoY</th>
-              <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">영업이익</th>
+              <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">{isEn ? "Op. Income" : "영업이익"}</th>
               <th className="px-3 py-2 text-right font-semibold text-foreground/50 border-b border-border">OPM</th>
             </tr>
           </thead>
@@ -2769,24 +2909,24 @@ function ForwardEstimatesTable({ ticker }: { ticker: string }) {
   );
 }
 
-function SegmentForecastTable({ data }: { data: SegmentForecastData }) {
+function SegmentForecastTable({ data, isEn = false }: { data: SegmentForecastData; isEn?: boolean }) {
   const has27 = data.segments.some(s => s.rev27 != null || s.op27 != null);
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
         <div className="w-1 h-3.5 rounded-full bg-violet-400" />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">사업부별 실적 전망</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-700">AI 추정</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Segment Forecast" : "사업부별 실적 전망"}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-700">{isEn ? "AI Estimate" : "AI 추정"}</span>
       </div>
       <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[380px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted/60">
-              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">사업부</th>
-              <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">매출(26E)</th>
-              <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">영업익(26E)</th>
-              {has27 && <th className="px-3 py-2 text-right font-semibold text-indigo-400 border-b border-border">매출(27E)</th>}
-              {has27 && <th className="px-3 py-2 text-right font-semibold text-emerald-500 border-b border-border">영업익(27E)</th>}
+              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Segment" : "사업부"}</th>
+              <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">{isEn ? "Rev(26E)" : "매출(26E)"}</th>
+              <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">{isEn ? "Op.(26E)" : "영업익(26E)"}</th>
+              {has27 && <th className="px-3 py-2 text-right font-semibold text-indigo-400 border-b border-border">{isEn ? "Rev(27E)" : "매출(27E)"}</th>}
+              {has27 && <th className="px-3 py-2 text-right font-semibold text-emerald-500 border-b border-border">{isEn ? "Op.(27E)" : "영업익(27E)"}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -2887,7 +3027,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   };
 
   if (step.stepKey === "investment_strategy") {
-    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} />;
+    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} />;
   }
 
   const isMarket = step.stepKey === "market_analysis";
@@ -2946,7 +3086,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           >
       <div className="p-4 sm:p-5">
         {/* Market & Technical Analyst: 기술적 신호 칩 */}
-        {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} />}
+        {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} isEn={isEn} />}
 
         <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
           <ReactMarkdown
@@ -2992,7 +3132,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
 
         {/* Market & Technical Analyst: 가격 구간 레이더 */}
         {isMarket && chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
-          <TechnicalLevelLadder levels={chartLevels} startPrice={startPrice} currency={priceCurrency} />
+          <TechnicalLevelLadder levels={chartLevels} startPrice={startPrice} currency={priceCurrency} isEn={isEn} />
         )}
 
         {/* 기술적 분석: 주가 차트 (지지/저항·진입·목표·이벤트 포함) */}
@@ -3000,15 +3140,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           <div className="mt-5 pt-4 border-t border-border">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">주가 차트</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price Chart" : "주가 차트"}</span>
               {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
-                  진입·목표·손절 레벨 포함
+                  {isEn ? "Incl. entry/target/stop" : "진입·목표·손절 레벨 포함"}
                 </span>
               )}
               {chartEvents.length > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/60">
-                  핵심 이슈 {chartEvents.length}건
+                  {isEn ? `${chartEvents.length} key events` : `핵심 이슈 ${chartEvents.length}건`}
                 </span>
               )}
             </div>
@@ -3035,25 +3175,25 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               {/* 섹션 헤더 */}
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">최종 조율 적정주가</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>절대가치 × 상대가치 조율</span>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Final Blended Target" : "최종 조율 적정주가"}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>{isEn ? "Absolute × Relative Blend" : "절대가치 × 상대가치 조율"}</span>
               </div>
 
               {/* 현재가 + 조율 업사이드 칩 */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
-                  <span className="text-[11px] text-muted-foreground">현재가</span>
+                  <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(fv.current, priceCurrency)}</span>
                 </div>
                 <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
                   <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
-                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>조율 적정주가</span>
+                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>{isEn ? "Blended Target" : "조율 적정주가"}</span>
                   <span className={cn("text-[13px] font-mono font-bold", isUp ? "text-emerald-600" : "text-rose-600")}>
                     {isUp ? "+" : ""}{upside.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-muted/50 rounded-lg px-3 py-1.5">
-                  <span className="text-[11px] text-muted-foreground">밴드</span>
+                  <span className="text-[11px] text-muted-foreground">{isEn ? "Band" : "밴드"}</span>
                   <span className="text-[11px] font-mono text-rose-500">{formatPrice(fv.bear, priceCurrency)}</span>
                   <span className="text-[10px] text-muted-foreground/50">~</span>
                   <span className="text-[11px] font-mono text-blue-500">{formatPrice(fv.bull, priceCurrency)}</span>
@@ -3065,7 +3205,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                 <table className="w-full min-w-[300px] text-xs border-collapse">
                   <thead>
                     <tr className="bg-muted/60">
-                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">구분</th>
+                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "구분"}</th>
                       <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
                       <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
                       <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
@@ -3073,9 +3213,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                   </thead>
                   <tbody className="divide-y divide-border/60">
                     {[
-                      { label: `절대가치 (${absModel})`, bear: fv.abs_bear, base: fv.abs_base, bull: fv.abs_bull, bold: false },
-                      { label: "상대가치 (피어)", bear: fv.rel_bear, base: fv.rel_base, bull: fv.rel_bull, bold: false },
-                      { label: "조율 적정주가", bear: fv.bear, base: fv.base, bull: fv.bull, bold: true },
+                      { label: isEn ? `Absolute (${absModel})` : `절대가치 (${absModel})`, bear: fv.abs_bear, base: fv.abs_base, bull: fv.abs_bull, bold: false },
+                      { label: isEn ? "Relative (Peers)" : "상대가치 (피어)", bear: fv.rel_bear, base: fv.rel_base, bull: fv.rel_bull, bold: false },
+                      { label: isEn ? "Blended Target" : "조율 적정주가", bear: fv.bear, base: fv.base, bull: fv.bull, bold: true },
                     ].map(({ label, bear, base, bull, bold }) => {
                       const up = fv.current > 0 ? ((base - fv.current) / fv.current * 100) : 0;
                       return (
@@ -3112,19 +3252,19 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               {/* 섹션 헤더 */}
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">밸류에이션 적정주가</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">3-Method 종합</span>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Valuation Fair Value" : "밸류에이션 적정주가"}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">{isEn ? "3-Method Blend" : "3-Method 종합"}</span>
               </div>
 
               {/* 현재가 + 평균 업사이드 요약 칩 */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
-                  <span className="text-[11px] text-muted-foreground">현재가</span>
+                  <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency)}</span>
                 </div>
                 <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
                   <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
-                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>3방법론 평균</span>
+                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>{isEn ? "3-Method Avg." : "3방법론 평균"}</span>
                   <span className={cn("text-[13px] font-mono font-bold", isUp ? "text-emerald-600" : "text-rose-600")}>
                     {isUp ? "+" : ""}{avgUpside.toFixed(1)}%
                   </span>
@@ -3141,7 +3281,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] text-muted-foreground">Base (적정)</span>
+                    <span className="text-[10px] text-muted-foreground">{isEn ? "Base (Fair)" : "Base (적정)"}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-blue-400" />
@@ -3149,7 +3289,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                   </div>
                   <div className="flex items-center gap-1.5 ml-auto">
                     <div className="w-0.5 h-3 rounded-full bg-foreground/50" />
-                    <span className="text-[10px] text-muted-foreground">현재가</span>
+                    <span className="text-[10px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   </div>
                 </div>
                 <ValuationScaleBar label="DCF" bear={valuationData.dcf_bear} base={valuationData.dcf_base} bull={valuationData.dcf_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
@@ -3162,7 +3302,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                 <table className="w-full min-w-[300px] text-xs border-collapse">
                   <thead>
                     <tr className="bg-muted/60">
-                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">방법론</th>
+                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "방법론"}</th>
                       <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
                       <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
                       <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
