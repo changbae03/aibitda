@@ -863,41 +863,6 @@ export default function NewAnalysis() {
           </motion.div>
         )}
 
-        {/* Quick picks — 기본 예시 */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">국내</span>
-            <div className="flex flex-wrap gap-2">
-              {EXAMPLES_KR.map((ex) => (
-                <button
-                  key={ex.ticker}
-                  onClick={() => showConfirm(ex.ticker, ex.label)}
-                  disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                >
-                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
-                  <span>{ex.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider whitespace-nowrap">미국</span>
-            <div className="flex flex-wrap gap-2">
-              {EXAMPLES_US.map((ex) => (
-                <button
-                  key={ex.ticker}
-                  onClick={() => showConfirm(ex.ticker, ex.label)}
-                  disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                >
-                  <span className="font-mono text-[11px] text-muted-foreground/40">{ex.ticker}</span>
-                  <span>{ex.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
       </motion.div>
     </div>
 
