@@ -50,7 +50,7 @@ export default function Landing() {
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveStep(prev => (prev + 1) % 6);
-    }, 1800);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
