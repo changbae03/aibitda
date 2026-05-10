@@ -1228,6 +1228,21 @@ export default function AnalysisDetail() {
   const isComplete = analysis.status === 'completed';
   const isEn = (analysis as any).language === 'en';
 
+  // investment_strategy 스텝 JSON을 1차 소스로 → DB값 불일치 방지
+  const effectiveVerdict: string | null = (() => {
+    const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
+    if (stratStep?.content) {
+      try {
+        let s = (stratStep.content as string).replace(/```(?:json)?\s*/gi, "").replace(/```/g, "");
+        const start = s.indexOf("{"); const end = s.lastIndexOf("}");
+        if (start !== -1 && end !== -1) s = s.slice(start, end + 1);
+        const j = JSON.parse(s);
+        if (j?.verdict) return j.verdict as string;
+      } catch { /* fall through */ }
+    }
+    return (analysis as any).investmentVerdict ?? null;
+  })();
+
   const handleRunNextStep = () => {
     if (isComplete || isStreaming || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[currentStepCount];
@@ -1357,10 +1372,10 @@ export default function AnalysisDetail() {
           <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
 
           {/* Verdict Card */}
-          {isComplete && analysis.investmentVerdict && (
+          {isComplete && effectiveVerdict && (
             <div ref={verdictRef} className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
               {(() => {
-                const isSellVerdict = ["sell", "strong sell"].includes((analysis.investmentVerdict ?? "").toLowerCase());
+                const isSellVerdict = ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase());
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
 
                 // 현재가(분석 시작 시 저장된 startPrice) 기준 upside 계산
@@ -1391,7 +1406,7 @@ export default function AnalysisDetail() {
                         </>
                       ) : (
                         <div className="text-xl font-bold text-foreground">
-                          {isEn ? analysis.investmentVerdict : toKoreanVerdict(analysis.investmentVerdict)}
+                          {isEn ? effectiveVerdict : toKoreanVerdict(effectiveVerdict)}
                         </div>
                       )}
                     </div>
@@ -1861,7 +1876,7 @@ export default function AnalysisDetail() {
 
       {/* ⑨ Floating Verdict Card — verdict card 뷰포트 이탈 시 우하단에 표시 */}
       <AnimatePresence>
-        {showFloatingVerdict && isComplete && analysis.investmentVerdict && (
+        {showFloatingVerdict && isComplete && effectiveVerdict && (
           <motion.div
             initial={{ opacity: 0, y: 16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1880,7 +1895,7 @@ export default function AnalysisDetail() {
                 const tp = analysis.targetPrice ?? null;
                 const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
                 if (upsidePct == null) return (
-                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{isEn ? (analysis.investmentVerdict ?? '–') : toKoreanVerdict(analysis.investmentVerdict)}</span>
+                  <span className="text-[11px] font-bold text-foreground/80 shrink-0">{isEn ? (effectiveVerdict ?? '–') : toKoreanVerdict(effectiveVerdict)}</span>
                 );
                 return (
                   <div className="text-right shrink-0">
