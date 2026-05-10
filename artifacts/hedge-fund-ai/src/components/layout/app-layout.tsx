@@ -163,8 +163,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           >
             <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground/60")} />
             <span className={cn(
-              "whitespace-nowrap transition-all duration-200",
-              expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 overflow-hidden"
+              "whitespace-nowrap transition-[opacity,max-width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+              expanded ? "opacity-100 max-w-[160px] delay-75" : "opacity-0 max-w-0 overflow-hidden delay-0"
             )}>
               {label}
             </span>
@@ -276,47 +276,51 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* ── Desktop Sidebar Rail ── */}
       <aside
         className={cn(
-          "shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-border bg-background/95 backdrop-blur-sm transition-all duration-200 ease-in-out overflow-hidden",
+          "shrink-0 flex-col z-20 hidden md:flex print:hidden border-r border-border bg-background/95 backdrop-blur-sm overflow-hidden",
+          "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
           sidebarExpanded ? "w-52" : "w-14"
         )}
         onMouseEnter={() => setSidebarExpanded(true)}
         onMouseLeave={() => setSidebarExpanded(false)}
       >
         {/* Logo */}
-        <div className="h-14 flex items-center border-b border-border overflow-hidden">
-          {sidebarExpanded ? (
-            /* 펼쳐진 상태: 애빛다 + 검색 버튼 */
-            <>
-              <Link href="/analysis/new" className="flex items-center gap-0 group px-3 min-w-0">
-                <span
-                  className="text-[22px] font-black tracking-tighter leading-none select-none group-hover:opacity-80 shrink-0"
-                  style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
-                >
-                  애빛다
-                </span>
-              </Link>
-              <button
-                onClick={openCommandPalette}
-                title="검색 (⌘K)"
-                className="ml-auto mr-2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-              >
-                <Search className="w-3.5 h-3.5" />
-              </button>
-            </>
-          ) : (
-            /* 접힌 상태: 애 글자만 가운데 */
-            <Link
-              href="/analysis/new"
-              className="w-full flex items-center justify-center group"
+        <div className="h-14 flex items-center border-b border-border overflow-hidden relative">
+          {/* 접힌 상태: 애 글자 가운데 */}
+          <Link
+            href="/analysis/new"
+            className={cn(
+              "absolute inset-0 flex items-center justify-center group transition-opacity duration-300",
+              sidebarExpanded ? "opacity-0 pointer-events-none" : "opacity-100"
+            )}
+          >
+            <span
+              className="text-[20px] font-black tracking-tighter leading-none select-none group-hover:opacity-70 transition-opacity duration-200"
+              style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
             >
+              애
+            </span>
+          </Link>
+          {/* 펼쳐진 상태: 애빛다 + 검색 버튼 */}
+          <div className={cn(
+            "flex items-center w-full transition-opacity duration-300",
+            sidebarExpanded ? "opacity-100 delay-100" : "opacity-0 pointer-events-none"
+          )}>
+            <Link href="/analysis/new" className="flex items-center group px-3 min-w-0">
               <span
-                className="text-[20px] font-black tracking-tighter leading-none select-none group-hover:opacity-80"
+                className="text-[22px] font-black tracking-tighter leading-none select-none group-hover:opacity-70 transition-opacity duration-200 whitespace-nowrap"
                 style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
               >
-                애
+                애빛다
               </span>
             </Link>
-          )}
+            <button
+              onClick={openCommandPalette}
+              title="검색 (⌘K)"
+              className="ml-auto mr-2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Nav */}
@@ -350,8 +354,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Slogan */}
         <div className={cn(
-          "px-4 py-2.5 border-t border-border overflow-hidden transition-all duration-200",
-          sidebarExpanded ? "opacity-100" : "opacity-0"
+          "px-4 py-2.5 border-t border-border overflow-hidden transition-opacity duration-300",
+          sidebarExpanded ? "opacity-100 delay-100" : "opacity-0 delay-0"
         )}>
           <p className="text-[10px] text-muted-foreground/35 leading-relaxed tracking-wide whitespace-nowrap">
             AI로 기업가치를 밝히다
