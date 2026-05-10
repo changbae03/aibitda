@@ -2569,26 +2569,6 @@ function TechnicalLevelLadder({ levels, startPrice, currency }: {
         <span className="text-[10px] text-muted-foreground/50 font-mono hidden sm:inline">현재가 기준 상대 위치</span>
       </div>
 
-      {/* Horizontal bar */}
-      <div className="relative h-5 bg-muted/40 rounded-full mx-1 mb-4 overflow-hidden">
-        {levels.stopLoss && levels.stopLoss > 0 && (
-          <div className="absolute inset-y-0 left-0 bg-red-400/20 rounded-l-full"
-            style={{ width: `${toPos(levels.stopLoss)}%` }} />
-        )}
-        {levels.entryMin && levels.entryMax && levels.entryMin > 0 && (
-          <div className="absolute inset-y-0 bg-blue-400/30 border-x border-blue-400/50"
-            style={{ left: `${toPos(levels.entryMin)}%`, width: `${Math.max(0, toPos(levels.entryMax) - toPos(levels.entryMin))}%` }} />
-        )}
-        {levels.target1 && levels.target1 > 0 && (
-          <div className="absolute inset-y-0 bg-emerald-400/20"
-            style={{ left: `${toPos(levels.target1)}%`, right: 0 }} />
-        )}
-        <div className="absolute inset-y-0 w-0.5 bg-foreground/60"
-          style={{ left: `${toPos(cp)}%`, transform: "translateX(-50%)" }} />
-        <div className="absolute top-1/2 w-3.5 h-3.5 bg-foreground rounded-full border-2 border-background shadow-sm"
-          style={{ left: `${toPos(cp)}%`, transform: "translate(-50%, -50%)" }} />
-      </div>
-
       {/* Cards */}
       <div className="overflow-x-auto scrollbar-none -mx-1 pb-1">
         <div className="flex items-stretch gap-1.5 min-w-max px-1">
