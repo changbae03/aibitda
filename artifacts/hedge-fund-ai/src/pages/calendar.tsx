@@ -9,6 +9,7 @@ import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/lib/language-context";
+import { getKrEngName } from "@/lib/kr-eng-names";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 interface EarningsEntry {
@@ -250,6 +251,17 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
   const hasRevenue = entry.revenueEstimate !== null;
   const shortTicker = entry.ticker.replace(/\.(KS|KQ)$/, "");
 
+  const [displayName, setDisplayName] = useState(entry.companyName);
+  useEffect(() => {
+    if (isEn && entry.isKorean) {
+      getKrEngName(entry.ticker).then(name => {
+        setDisplayName(name || translateCompanyName(entry.ticker, entry.companyName));
+      });
+    } else {
+      setDisplayName(entry.companyName);
+    }
+  }, [isEn, entry.ticker, entry.companyName, entry.isKorean]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -263,7 +275,7 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">
-            {isEn && entry.isKorean ? translateCompanyName(entry.ticker, entry.companyName) : entry.companyName}
+            {displayName}
           </span>
           <ExchangeBadge ticker={entry.ticker} isKorean={entry.isKorean} />
           <span className="text-xs text-muted-foreground">{shortTicker}</span>

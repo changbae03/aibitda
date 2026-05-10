@@ -1803,6 +1803,21 @@ JSON만 출력하세요. 코드블록 없이.`;
   }
 });
 
+// GET /api/market-data/en-name/:code — KIS API 영어 종목명 조회 (캐시 적용)
+router.get("/en-name/:code", async (req, res) => {
+  const { code } = req.params;
+  const normalized = code.replace(/\.(KS|KQ)$/i, "");
+  if (!/^\d{6}$/.test(normalized)) return res.json({ engName: null });
+
+  try {
+    const { fetchKISEngName } = await import("../lib/kis-client");
+    const engName = await fetchKISEngName(normalized);
+    return res.json({ engName });
+  } catch {
+    return res.json({ engName: null });
+  }
+});
+
 // GET /api/market-data/debug-price/:ticker — 임시 진단용: Yahoo Finance + Naver 가격 비교
 router.get("/debug-price/:ticker", async (req, res) => {
   const { ticker } = req.params;

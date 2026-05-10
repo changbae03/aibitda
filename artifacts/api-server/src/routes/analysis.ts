@@ -3377,23 +3377,24 @@ router.get("/public-stats", async (_req, res) => {
       else usCount++;
     }
 
-    const tickerCount: Record<string, { count: number; companyName: string; latestVerdict: string | null; latestId: number }> = {};
+    const tickerCount: Record<string, { count: number; companyName: string; englishName: string | null; latestVerdict: string | null; latestId: number }> = {};
     for (const r of rows) {
       if (!tickerCount[r.ticker]) {
-        tickerCount[r.ticker] = { count: 0, companyName: r.companyName, latestVerdict: null, latestId: r.id };
+        tickerCount[r.ticker] = { count: 0, companyName: r.companyName, englishName: r.englishName ?? null, latestVerdict: null, latestId: r.id };
       }
       tickerCount[r.ticker].count++;
       if (r.id > tickerCount[r.ticker].latestId) {
         tickerCount[r.ticker].latestId = r.id;
         tickerCount[r.ticker].latestVerdict = r.investmentVerdict ?? null;
         tickerCount[r.ticker].companyName = r.companyName;
+        if (r.englishName) tickerCount[r.ticker].englishName = r.englishName;
       }
     }
     const uniqueTickerCount = Object.keys(tickerCount).length;
     const topTickers = Object.entries(tickerCount)
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 10)
-      .map(([ticker, d]) => ({ ticker, companyName: d.companyName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
+      .map(([ticker, d]) => ({ ticker, companyName: d.companyName, englishName: d.englishName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
 
     // ── 최근 14일 일별 분석 추이 ──────────────────────────────────────────────
     const recentTrend: { date: string; count: number }[] = [];

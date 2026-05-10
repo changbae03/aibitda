@@ -914,7 +914,9 @@ export default function History() {
                     {/* 종목명 + 배지 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[15px] font-semibold text-foreground truncate">{a.companyName}</span>
+                        <span className="text-[15px] font-semibold text-foreground truncate">
+                          {isEn && (a as any).englishName ? (a as any).englishName : a.companyName}
+                        </span>
                         <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
                         {verdictBadge(a.investmentVerdict, isEn)}
                         {reanalysisLevel === "urgent" && (

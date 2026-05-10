@@ -5,6 +5,7 @@ import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useLanguage } from "@/lib/language-context";
+import { getKrEngName } from "@/lib/kr-eng-names";
 
 const VERDICT_ORDER = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"];
 const VERDICT_LABELS_KO: Record<string, string> = {
@@ -31,7 +32,7 @@ interface PublicStats {
   krCount: number;
   usCount: number;
   uniqueTickerCount: number;
-  topTickers: { ticker: string; companyName: string; count: number; latestVerdict: string | null; latestId: number }[];
+  topTickers: { ticker: string; companyName: string; englishName: string | null; count: number; latestVerdict: string | null; latestId: number }[];
 }
 
 interface PeriodBucket {
@@ -47,6 +48,49 @@ interface PeriodBucket {
   directionCorrectCount: number;
   directionTotalCount: number;
   avgReturn: number | null;
+}
+
+interface TickerEntry {
+  ticker: string;
+  companyName: string;
+  englishName: string | null;
+  count: number;
+}
+
+function TickerRow({ entry, rank, isEn }: { entry: TickerEntry; rank: number; isEn: boolean }) {
+  const isKorean = /^\d{6}/.test(entry.ticker.split(".")[0]);
+  const [displayName, setDisplayName] = useState(
+    isEn && entry.englishName ? entry.englishName : entry.companyName
+  );
+
+  useEffect(() => {
+    if (!isEn) { setDisplayName(entry.companyName); return; }
+    if (entry.englishName) { setDisplayName(entry.englishName); return; }
+    if (!isKorean) { setDisplayName(entry.companyName); return; }
+    getKrEngName(entry.ticker).then(name => {
+      setDisplayName(name || entry.companyName);
+    });
+  }, [isEn, entry.ticker, entry.companyName, entry.englishName, isKorean]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.25 + rank * 0.04 }}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border transition-colors"
+    >
+      <span className="text-[12px] font-bold text-muted-foreground/40 w-5 tabular-nums">{rank}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[14px] font-semibold text-foreground truncate">{displayName}</span>
+          <span className="text-[11px] font-mono text-muted-foreground">{entry.ticker}</span>
+        </div>
+      </div>
+      <span className="text-[12px] tabular-nums text-muted-foreground shrink-0">
+        {entry.count}{isEn ? "x" : "회"}
+      </span>
+    </motion.div>
+  );
 }
 
 export default function Popular() {
@@ -322,28 +366,9 @@ export default function Popular() {
           </p>
         ) : (
           <div className="space-y-2">
-            {topTickers.map((t2, i) => {
-              return (
-                <motion.div
-                  key={t2.ticker}
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.25 + i * 0.04 }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border transition-colors"
-                >
-                  <span className="text-[12px] font-bold text-muted-foreground/40 w-5 tabular-nums">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-semibold text-foreground truncate">{t2.companyName}</span>
-                      <span className="text-[11px] font-mono text-muted-foreground">{t2.ticker}</span>
-                    </div>
-                  </div>
-                  <span className="text-[12px] tabular-nums text-muted-foreground shrink-0">
-                    {t2.count}{isEn ? "x" : "회"}
-                  </span>
-                </motion.div>
-              );
-            })}
+            {topTickers.map((entry, i) => (
+              <TickerRow key={entry.ticker} entry={entry} rank={i + 1} isEn={isEn} />
+            ))}
           </div>
         )}
       </motion.div>

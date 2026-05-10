@@ -208,6 +208,49 @@ async function fetchKISDailyPriceHistory(
   }
 }
 
+// ── 영어 종목명 인메모리 캐시 ────────────────────────────────────────────────
+const _engNameCache = new Map<string, string | null>();
+
+/**
+ * KIS search-stock-info → prdt_eng_name (영문 상품명) 조회
+ * TR_ID: CTPF1002R, PRDT_TYPE_CD: 300 (주식)
+ */
+export async function fetchKISEngName(code: string): Promise<string | null> {
+  const normalized = code.replace(/\.(KS|KQ)$/i, "");
+  if (!/^\d{6}$/.test(normalized)) return null;
+  if (_engNameCache.has(normalized)) return _engNameCache.get(normalized) ?? null;
+
+  try {
+    const token = await getAccessToken();
+    const url = new URL(`${BASE_URL}/uapi/domestic-stock/v1/quotations/search-stock-info`);
+    url.searchParams.set("PDNO", normalized);
+    url.searchParams.set("PRDT_TYPE_CD", "300");
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: process.env.KIS_APP_KEY!,
+        appsecret: process.env.KIS_APP_SECRET!,
+        tr_id: "CTPF1002R",
+        custtype: "P",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) { _engNameCache.set(normalized, null); return null; }
+
+    const json = await res.json();
+    if (json.rt_cd !== "0") { _engNameCache.set(normalized, null); return null; }
+
+    const raw = json.output?.prdt_eng_name?.trim() || null;
+    _engNameCache.set(normalized, raw);
+    return raw;
+  } catch {
+    _engNameCache.set(normalized, null);
+    return null;
+  }
+}
+
 /**
  * 여러 종목 동시 조회 (Promise.all, 최대 20개)
  */
