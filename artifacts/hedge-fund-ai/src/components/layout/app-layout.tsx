@@ -283,10 +283,16 @@ export function AppLayout({ children }: AppLayoutProps) {
         onMouseLeave={() => setSidebarExpanded(false)}
       >
         {/* Logo */}
-        <div className="h-14 flex items-center border-b border-border px-3 overflow-hidden">
-          <Link href="/analysis/new" className="flex items-center gap-0 group overflow-hidden">
+        <div className={cn(
+          "h-14 flex items-center border-b border-border transition-all duration-200 overflow-hidden",
+          sidebarExpanded ? "px-3" : "px-0 justify-center"
+        )}>
+          <Link href="/analysis/new" className="flex items-center gap-0 group min-w-0">
             <span
-              className="text-[22px] font-black tracking-tighter leading-none select-none transition-opacity group-hover:opacity-80 shrink-0"
+              className={cn(
+                "font-black tracking-tighter leading-none select-none transition-all duration-200 group-hover:opacity-80 shrink-0",
+                sidebarExpanded ? "text-[22px]" : "text-[20px]"
+              )}
               style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
             >
               애
