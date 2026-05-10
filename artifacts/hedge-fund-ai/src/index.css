@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-display: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
   --color-background: hsl(var(--background));
