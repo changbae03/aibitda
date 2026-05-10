@@ -3,6 +3,11 @@ import YahooFinance from "yahoo-finance2";
 import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
 import { GoogleGenAI } from "@google/genai";
 import { pool } from "@workspace/db";
+import { cache } from "../lib/mem-cache";
+
+const TTL_BATCH_QUOTES      = 2  * 60 * 1000;  //  2분 — 현재가 (잦은 변동)
+const TTL_BATCH_SPARKLINES  = 30 * 60 * 1000;  // 30분 — 90일 차트 (거의 불변)
+const TTL_BATCH_PERFORMANCE = 60 * 60 * 1000;  // 60분 — 과거 성과 (불변)
 
 const yahooFinance = new YahooFinance();
 
@@ -613,13 +618,25 @@ router.post("/batch-quotes", async (req, res) => {
   }
 
   const results: Record<string, { price: number | null; currency: string; change: number | null }> = {};
+  const toFetch: string[] = [];
+
+  for (const raw of tickers.slice(0, 40)) {
+    const ticker = raw.trim();
+    if (!ticker) continue;
+    const cached = cache.get<{ price: number | null; currency: string; change: number | null }>(`bq:${ticker}`);
+    if (cached) {
+      results[ticker] = cached;
+    } else {
+      toFetch.push(ticker);
+    }
+  }
 
   await Promise.all(
-    tickers.slice(0, 40).map(async (raw) => {
-      const ticker = raw.trim();
-      if (!ticker) return;
+    toFetch.map(async (ticker) => {
       try {
-        results[ticker] = await resolveQuote(ticker);
+        const q = await resolveQuote(ticker);
+        cache.set(`bq:${ticker}`, q, TTL_BATCH_QUOTES);
+        results[ticker] = q;
       } catch {
         results[ticker] = { price: null, currency: "KRW", change: null };
       }
@@ -638,6 +655,19 @@ router.post("/batch-sparklines", async (req, res) => {
   }
 
   const result: Record<string, { closes: number[]; change3m: number | null }> = {};
+  const toFetch: string[] = [];
+
+  for (const raw of tickers.slice(0, 20)) {
+    const ticker = raw.trim();
+    if (!ticker) continue;
+    const cacheKey = `bsp:${ticker}:${days}`;
+    const cached = cache.get<{ closes: number[]; change3m: number | null }>(cacheKey);
+    if (cached) {
+      result[ticker] = cached;
+    } else {
+      toFetch.push(ticker);
+    }
+  }
 
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - Math.min(days, 180));
@@ -647,15 +677,13 @@ router.post("/batch-sparklines", async (req, res) => {
   const p2 = tomorrow.toISOString().split("T")[0];
 
   await Promise.allSettled(
-    tickers.slice(0, 20).map(async (raw) => {
-      const ticker = raw.trim();
-      if (!ticker) return;
+    toFetch.map(async (ticker) => {
+      const cacheKey = `bsp:${ticker}:${days}`;
       try {
         const isKoreanSix = /^\d{6}$/.test(ticker.split(".")[0]) && !ticker.includes(".");
         let closes: number[] = [];
 
         if (isKoreanSix) {
-          // KQ/KS 둘 다 시도, 종가가 있는 쪽 선택 (KQ 우선)
           const [kqChart, ksChart] = await Promise.allSettled([
             yahooFinance.chart(`${ticker}.KQ`, { period1: p1, period2: p2, interval: "1d" }),
             yahooFinance.chart(`${ticker}.KS`, { period1: p1, period2: p2, interval: "1d" }),
@@ -675,7 +703,9 @@ router.post("/batch-sparklines", async (req, res) => {
         const change3m = closes.length >= 2
           ? ((closes[closes.length - 1] - closes[0]) / closes[0]) * 100
           : null;
-        result[ticker] = { closes, change3m };
+        const val = { closes, change3m };
+        cache.set(cacheKey, val, TTL_BATCH_SPARKLINES);
+        result[ticker] = val;
       } catch {
         result[ticker] = { closes: [], change3m: null };
       }
@@ -695,6 +725,17 @@ router.post("/batch-performance", async (req, res) => {
 
   type PerfResult = { w1: number | null; m1: number | null; m3: number | null; entryClose: number | null };
   const results: Record<number, PerfResult> = {};
+  const toFetch: typeof items = [];
+
+  for (const item of items) {
+    const cacheKey = `bperf:${item.id}`;
+    const cached = cache.get<PerfResult>(cacheKey);
+    if (cached) {
+      results[item.id] = cached;
+    } else {
+      toFetch.push(item);
+    }
+  }
 
   // 특정 날짜 이후 첫 번째 거래일 종가를 찾는 헬퍼
   function findClose(quotes: Array<{ date: Date; close: number | null }>, afterDate: Date, plusDays: number): number | null {
@@ -731,10 +772,9 @@ router.post("/batch-performance", async (req, res) => {
   }
 
   await Promise.allSettled(
-    items.slice(0, 30).map(async ({ id, ticker, analysisDate }) => {
+    toFetch.slice(0, 30).map(async ({ id, ticker, analysisDate }) => {
       try {
         const fromDate = new Date(analysisDate);
-        // 분석일 하루 전부터 조회 (한국 장 마감 후 분석한 경우 당일 종가 포함)
         fromDate.setDate(fromDate.getDate() - 1);
 
         const quotes = await fetchQuotes(ticker, fromDate);
@@ -743,7 +783,6 @@ router.post("/batch-performance", async (req, res) => {
           return;
         }
 
-        // 분석일 기준 첫 거래일 종가 = 기준가 (entry)
         const analysisTs = new Date(analysisDate);
         const entryQuote = quotes.find(q => q.close != null && q.close > 0 && new Date(q.date) >= new Date(analysisTs.toISOString().split("T")[0]));
         const entryClose = entryQuote?.close ?? null;
@@ -755,12 +794,14 @@ router.post("/batch-performance", async (req, res) => {
         const pct = (close: number | null) =>
           close != null ? ((close - entryClose) / entryClose) * 100 : null;
 
-        results[id] = {
+        const perf = {
           entryClose,
           w1: pct(findClose(quotes, new Date(analysisDate), 7)),
           m1: pct(findClose(quotes, new Date(analysisDate), 30)),
           m3: pct(findClose(quotes, new Date(analysisDate), 90)),
         };
+        cache.set(`bperf:${id}`, perf, TTL_BATCH_PERFORMANCE);
+        results[id] = perf;
       } catch {
         results[id] = { w1: null, m1: null, m3: null, entryClose: null };
       }

@@ -2403,18 +2403,32 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const userId = getUserId(req);
-    const aRows = userId
-      ? await rawQuery(`SELECT * FROM analyses WHERE user_id = $1 ORDER BY created_at DESC`, [userId])
-      : [];
-    const analyses = aRows.map(mapAnalysisRow);
-
-    const results = await Promise.all(
-      analyses.map(async (a) => {
-        const sRows = await rawQuery(`SELECT * FROM analysis_steps WHERE analysis_id = $1`, [a.id]);
-        return formatAnalysis(a, sRows.map(mapStepRow));
-      })
+    if (!userId) {
+      res.json([]);
+      return;
+    }
+    const aRows = await rawQuery(
+      `SELECT * FROM analyses WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
     );
-
+    if (aRows.length === 0) {
+      res.json([]);
+      return;
+    }
+    const ids = aRows.map((r: any) => r.id);
+    const sRows = await rawQuery(
+      `SELECT * FROM analysis_steps WHERE analysis_id = ANY($1::int[]) ORDER BY created_at ASC`,
+      [ids]
+    );
+    const stepsByAnalysis = new Map<number, any[]>();
+    for (const s of sRows) {
+      const list = stepsByAnalysis.get(s.analysis_id) ?? [];
+      list.push(s);
+      stepsByAnalysis.set(s.analysis_id, list);
+    }
+    const results = aRows
+      .map(mapAnalysisRow)
+      .map((a: any) => formatAnalysis(a, (stepsByAnalysis.get(a.id) ?? []).map(mapStepRow)));
     res.json(results);
   } catch (err: any) {
     console.error("[GET /analysis] DB error:", err?.message, err?.cause);

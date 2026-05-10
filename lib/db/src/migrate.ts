@@ -344,6 +344,15 @@ export async function runMigrations() {
     `);
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── 성능 인덱스 ─────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_analyses_user_id_created_at
+        ON analyses (user_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_analysis_steps_analysis_id
+        ON analysis_steps (analysis_id);
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
