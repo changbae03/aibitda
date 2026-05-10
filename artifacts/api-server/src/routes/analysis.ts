@@ -793,6 +793,8 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         "balanceSheetHistory",
         "cashflowStatementHistory",
         "earningsTrend",
+        "earningsHistory",
+        "recommendationTrend",
         "institutionOwnership",
         "insiderTransactions",
       ] as any,
@@ -956,6 +958,72 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (ks.shortRatio != null)      lines.push(`공매도 커버일수: ${ks.shortRatio.toFixed(1)}일`);
     if (ks.dividendYield != null)   lines.push(`배당수익률: ${pct(ks.dividendYield)}`);
     if (ks.payoutRatio != null)     lines.push(`배당성향: ${pct(ks.payoutRatio)}`);
+
+    // ── 서버 계산 Forward P/E — 섹터 벤치마크 비교 ────────────────────────────────
+    // AI가 Forward P/E를 임의 해석하는 것을 방지. 섹터 중앙값과의 프리미엄/디스카운트를 명시해 AI가
+    // 상대가치평가에서 올바른 기준을 사용하도록 유도.
+    {
+      const currentPrice: number | null = fd?.currentPrice ?? sd?.regularMarketPrice ?? null;
+      const fwdEps: number | null = ks?.forwardEps ?? null;
+      const sectorName: string | null = (result as any).assetProfile?.sector ?? null;
+
+      if (currentPrice != null && fwdEps != null && Math.abs(fwdEps) > 0.001) {
+        const fwdPE = currentPrice / fwdEps;
+
+        // 섹터별 Forward P/E 벤치마크 중앙값 (2024~2025년 글로벌 기준)
+        const sectorFwdPEBenchmarks: Record<string, { median: number; range: string; label: string }> = {
+          "Technology":            { median: 28, range: "22~38x", label: "IT/테크" },
+          "Semiconductors":        { median: 22, range: "18~32x", label: "반도체" },
+          "Healthcare":            { median: 18, range: "14~25x", label: "헬스케어" },
+          "Communication Services":{ median: 18, range: "14~24x", label: "통신서비스" },
+          "Consumer Discretionary":{ median: 20, range: "15~28x", label: "소비재(경기)" },
+          "Consumer Staples":      { median: 18, range: "15~22x", label: "소비재(필수)" },
+          "Industrials":           { median: 18, range: "14~23x", label: "산업재" },
+          "Financials":            { median: 13, range: "10~17x", label: "금융" },
+          "Energy":                { median: 12, range: "9~16x",  label: "에너지" },
+          "Materials":             { median: 14, range: "11~18x", label: "소재" },
+          "Real Estate":           { median: 30, range: "22~40x", label: "부동산(리츠)" },
+          "Utilities":             { median: 15, range: "12~19x", label: "유틸리티" },
+        };
+
+        // 한국 코스피/코스닥 섹터별 Forward P/E (KRW 기업 전용 중앙값 — 코리아 디스카운트 반영)
+        const krSectorFwdPEBenchmarks: Record<string, { median: number; range: string; label: string }> = {
+          "Technology":            { median: 14, range: "10~20x", label: "IT/테크(KR)" },
+          "Semiconductors":        { median: 12, range: "9~18x",  label: "반도체(KR)" },
+          "Healthcare":            { median: 20, range: "14~30x", label: "헬스케어(KR)" },
+          "Consumer Discretionary":{ median: 12, range: "8~18x",  label: "소비재(KR)" },
+          "Industrials":           { median: 10, range: "7~14x",  label: "산업재(KR)" },
+          "Financials":            { median:  8, range: "5~11x",  label: "금융(KR)" },
+          "Energy":                { median:  9, range: "6~13x",  label: "에너지(KR)" },
+        };
+
+        const benchmarkMap = currency === "KRW" ? krSectorFwdPEBenchmarks : sectorFwdPEBenchmarks;
+        const benchmark = sectorName ? benchmarkMap[sectorName] : null;
+
+        if (fwdPE > 0 && fwdPE < 500) {
+          lines.push(`\n[📊 서버 계산 Forward P/E — 섹터 벤치마크 비교]`);
+          lines.push(`  현재가: ${currency === "KRW" ? fmtNum(currentPrice, currency) : `$${currentPrice.toFixed(2)}`} | Forward EPS: ${fwdEps.toFixed(2)} ${currency}`);
+          lines.push(`  서버 계산 Forward P/E = ${fwdPE.toFixed(1)}x`);
+          if (benchmark) {
+            const premDisc = ((fwdPE - benchmark.median) / benchmark.median * 100).toFixed(1);
+            const premDiscLabel = fwdPE > benchmark.median * 1.2
+              ? `⚠️ 섹터 중앙값 대비 ${premDisc}% 프리미엄 — 고성장 근거 없으면 피어 배수 보수적 적용`
+              : fwdPE < benchmark.median * 0.8
+              ? `ℹ️ 섹터 중앙값 대비 ${premDisc}% 디스카운트 — 코리아디스카운트·리스크 반영 또는 저평가 검토`
+              : `✅ 섹터 중앙값(${benchmark.median}x) 대비 ${premDisc}% — 적정 밸류에이션 범위`;
+            lines.push(`  섹터(${benchmark.label}) 중앙값: ${benchmark.median}x | 범위: ${benchmark.range}`);
+            lines.push(`  → ${premDiscLabel}`);
+            lines.push(`  ⛔ 상대가치평가 시 이 Forward P/E(${fwdPE.toFixed(1)}x)와 섹터 중앙값(${benchmark.median}x)을 기준으로 적정 배수 설정. 임의 배수 금지.`);
+          } else {
+            lines.push(`  (섹터 미분류 — 피어 멀티플과 직접 비교 요망)`);
+          }
+        } else if (fwdPE <= 0) {
+          lines.push(`\n[📊 서버 계산 Forward P/E]`);
+          lines.push(`  Forward EPS 음수(${fwdEps.toFixed(2)}) → Forward P/E 의미 없음 (적자 예상 기업)`);
+          lines.push(`  → 상대가치평가: P/B, EV/Sales 등 대체 배수 사용`);
+        }
+      }
+    }
   }
 
   // ── US 주식 수급 동향: 기관 투자자 13F + 내부자 거래 (SEC Form 4) ─────────────
@@ -1075,6 +1143,65 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         `  ${year}년: 매출 ${rev} | GP ${gp}(${gpM}) | 영업이익 ${op}(${opM})${opMFlag} | EBITDA ${ebitda}(${ebitdaM}) | 순이익 ${ni}(${niM})${niNote} | EPS ${eps} | ROE ${roeStr} | 자기자본 ${eq} | D/E ${de}`
       );
     }
+
+    // ── OPM 추세 요약 (DCF OPM 가정 앵커) ──────────────────────────────────────────
+    // 역대 OPM 데이터를 집계해 AI가 DCF 영업이익률 가정을 과낙관하는 것을 방지
+    {
+      const opmHistory: Array<{year: string; opm: number}> = [];
+      for (const y of allYears) {
+        const revRaw = revMap[y];
+        const opRaw  = opMap[y];
+        if (revRaw != null && opRaw != null && Math.abs(revRaw) > 0) {
+          const opmPct = opRaw / revRaw * 100;
+          if (Math.abs(opmPct) < 200) opmHistory.push({ year: y, opm: opmPct }); // 극단값 제외
+        }
+      }
+      if (opmHistory.length >= 2) {
+        const sorted = opmHistory.sort((a, b) => Number(a.year) - Number(b.year));
+        const firstOpm = sorted[0].opm;
+        const lastOpm  = sorted[sorted.length - 1].opm;
+        const maxOpm   = Math.max(...opmHistory.map(h => h.opm));
+        const opmTrend = lastOpm > firstOpm + 3 ? "개선 추세" : lastOpm < firstOpm - 3 ? "악화 추세" : "안정적";
+        lines.push(`\n[📈 OPM 추세 요약 — DCF 영업이익률 가정 상한 앵커]`);
+        lines.push(`  ⛔ DCF 추정 OPM은 반드시 역사적 최고 OPM(${maxOpm.toFixed(1)}%)을 상한으로 설정. 초과 금지.`);
+        lines.push(`  ${sorted.map(h => `${h.year}: ${h.opm.toFixed(1)}%`).join(" → ")} [${opmTrend}]`);
+        lines.push(`  역사적 최고 OPM: ${maxOpm.toFixed(1)}% | 최근 OPM: ${lastOpm.toFixed(1)}%`);
+        if (lastOpm < maxOpm - 10) {
+          lines.push(`  ⚠️ 최근 OPM(${lastOpm.toFixed(1)}%)이 역사적 최고(${maxOpm.toFixed(1)}%)보다 ${(maxOpm - lastOpm).toFixed(1)}%p 낮음 → DCF 회복 가정 근거 명시 필수`);
+        }
+      }
+    }
+
+    // ── 역사적 ROIC 계산 — 자본 효율성 앵커 ──────────────────────────────────────
+    // ROIC = NOPAT ÷ 투자자본 = [영업이익×(1-세율)] ÷ (Total Debt + Equity - Cash)
+    // S-to-C 계산 및 자본경량 기업 분류의 핵심 근거
+    {
+      const taxRate = 0.25; // 법인세율 가정 (25%)
+      const roicHistory: Array<{year: string; roic: number}> = [];
+      for (const y of allYears.slice(0, 3)) {
+        const opRaw  = opMap[y];
+        const eqRaw  = eqMap[y];
+        const debt   = debtMap[y] ?? 0;
+        const cash   = cashTsMap[y] ?? 0;
+        const ic     = (eqRaw ?? 0) + debt - cash;
+        if (opRaw != null && ic > 0) {
+          const nopat = opRaw * (1 - taxRate);
+          const roicPct = nopat / ic * 100;
+          if (Math.abs(roicPct) < 500) roicHistory.push({ year: y, roic: roicPct });
+        }
+      }
+      if (roicHistory.length > 0) {
+        const avgRoic = roicHistory.reduce((s, h) => s + h.roic, 0) / roicHistory.length;
+        lines.push(`\n[⚙️ 역사적 ROIC — 자본효율성 · 재투자 앵커]`);
+        lines.push(`  ROIC = [영업이익×(1-25%)] ÷ 투자자본(IC = Debt+Equity-Cash)`);
+        for (const h of roicHistory) {
+          lines.push(`  ${h.year}: ROIC ${h.roic.toFixed(1)}%`);
+        }
+        lines.push(`  평균 ROIC: ${avgRoic.toFixed(1)}% → 자본경량 기업 기준(>25%): ${avgRoic > 25 ? "✅ 해당" : "❌ 해당 안 됨"}`);
+        lines.push(`  ✅ 자본경량 기업(ROIC>25%) 재투자: NOPAT × (성장률÷ROIC) 방식 권장`);
+        lines.push(`  ⛔ DCF 장기 ROIC 가정이 역사적 평균(${avgRoic.toFixed(1)}%)의 2배를 초과하면 과낙관 — 재검토 필수`);
+      }
+    }
   } else {
     // Fallback: legacy incomeStatementHistory
     const incomeStmts: any[] = (result.incomeStatementHistory as any)?.incomeStatementHistory ?? [];
@@ -1172,6 +1299,46 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const dnaAbs = Math.abs(dnaVal);
         lines.push(`  D&A (${latestDnaYear}): ${fmtNum(dnaAbs, currency)}`);
         lines.push(`  Maintenance Capex 하한 (D&A×${dnaMultiplierLabel}) = ${fmtNum(dnaAbs * dnaMultiplier, currency)}  ← 재투자 최솟값`);
+      }
+
+      // ── 서버 계산 Sales-to-Capital(S-to-C) 비율 — DCF 성장 투자효율 앵커 ─────────
+      // S-to-C = 매출 ÷ 투자자본(IC = Total Debt + Equity - Cash)
+      // DCF 재투자: Growth Capex = 매출증분 ÷ S-to-C
+      // 이 값 없이 AI가 임의로 S-to-C를 쓰면 재투자 수치가 크게 왜곡됨
+      {
+        const stocYears = Object.keys(revMap)
+          .filter(y => revMap[y] != null && eqMap[y] != null)
+          .sort((a, b) => Number(b) - Number(a))
+          .slice(0, 3);
+
+        if (stocYears.length > 0) {
+          lines.push(`\n[📐 서버 계산 Sales-to-Capital(S-to-C) 비율 — DCF Growth Capex 앵커]`);
+          lines.push(`  ⛔ Growth Capex = 매출증분 ÷ S-to-C (서버 계산 앵커 범위 사용. 임의 S-to-C 금지)`);
+
+          const stocVals: number[] = [];
+          for (const y of stocYears) {
+            const rev   = revMap[y];
+            const eq    = eqMap[y];
+            const debt  = debtMap[y] ?? 0;
+            const cash  = cashTsMap[y] ?? 0;
+            const ic    = eq + debt - cash;
+            if (ic > 0 && rev != null) {
+              const stoc = rev / ic;
+              stocVals.push(stoc);
+              lines.push(`  ${y}: 매출 ${fmtNum(rev, currency)} ÷ 투자자본(IC) ${fmtNum(ic, currency)} = S-to-C ${stoc.toFixed(2)}x`);
+            }
+          }
+          if (stocVals.length > 0) {
+            const avg = stocVals.reduce((a, b) => a + b, 0) / stocVals.length;
+            const stocLabel =
+              avg < 0.8  ? "낮음 (자본집약 — 재투자 부담 대)" :
+              avg < 1.5  ? "보통 (중간 자본집약)" :
+              avg < 3.0  ? "높음 (자본경량 경향)" :
+                           "매우 높음 (IT/플랫폼형 자본경량)";
+            lines.push(`  ✅ 3년 평균 S-to-C: ${avg.toFixed(2)}x [${stocLabel}]`);
+            lines.push(`  → Growth Capex 계산 시 이 범위(${Math.max(avg * 0.8, 0.5).toFixed(1)}x–${(avg * 1.2).toFixed(1)}x)를 사용. 범위 이탈 시 재계산 필수.`);
+          }
+        }
       }
     }
   }
@@ -1460,6 +1627,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     // Yahoo earningsTrend 매핑:
     //   "0y" period  = 가장 최근 완료된 회계연도 (= DCF Base Year / Year 0)
     //   "+1y" period = 내년 회계연도 추정 (= DCF Year 1)
+    //   "+2y" period = 2년후 추정 (= DCF Year 2 앵커)
     // 따라서: DCF Year 0 = priorActualRev(실제값), DCF Year 1 = yr1RevCapped
     if (priorActualRev != null) {
       lines.push(`\n[🔒 서버 계산 DCF 매출 출발점 — 이 값을 그대로 사용, 변경 금지]`);
@@ -1471,8 +1639,138 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         lines.push(`  DCF Year 1 매출 (확정값): ${fmtNum(yr1RevCapped, currency)} | 성장률: ${(g1*100).toFixed(1)}%${yr1WasCapped ? " (서버 60% 상한 적용)" : ""}`);
         lines.push(`  ⛔ DCF Year 1 매출이 ${fmtNum(yr1RevCapped, currency)}을 초과하면 즉시 수정 필수`);
       }
+
+      // Year 2 = "+2y" Yahoo 컨센서스 앵커 (가장 흔히 누락되어 AI가 임의 추정하는 구간)
+      const yr2Trend = trends.find((t: any) => t.period === "+2y");
+      if (yr2Trend && yr1RevCapped != null) {
+        const yr2RevRaw: number | null = yr2Trend.revenueEstimate?.avg ?? null;
+        if (yr2RevRaw != null) {
+          const yr2GrowthActual = (yr2RevRaw - yr1RevCapped) / yr1RevCapped;
+          const yr2GrowthCapped = Math.min(yr2GrowthActual, MAX_REV_GROWTH);
+          const yr2WasCapped = yr2GrowthActual > MAX_REV_GROWTH;
+          const yr2RevCapped = yr2WasCapped ? yr1RevCapped * (1 + yr2GrowthCapped) : yr2RevRaw;
+          lines.push(`  DCF Year 2 매출 (컨센서스 앵커): ${fmtNum(yr2RevCapped, currency)} | 성장률: ${(yr2GrowthCapped*100).toFixed(1)}%${yr2WasCapped ? " (60% 상한 적용)" : ""}`);
+          lines.push(`  ⚠️ DCF Year 2 매출은 이 컨센서스 앵커 기준으로 설정 — Year1→2 성장 둔화가 이미 반영된 값`);
+        }
+      } else if (yr2Trend == null && yr1RevCapped != null) {
+        lines.push(`  DCF Year 2: 컨센서스 미제공 — Year 1 성장률의 30~50%로 자동 수렴 적용 필수`);
+      }
+
       lines.push(`  ⛔ NOPAT = 영업이익(EBIT) × (1 - 유효세율). 세전 영업이익을 NOPAT으로 쓰는 것은 오류입니다.`);
       lines.push(`  ⛔ 재투자 = 매출증분 ÷ S-to-C + Maintenance CAPEX. 임의 추정 금지.`);
+    }
+
+    // ── EPS 추정 수정 방향 (밸류에이션 정확도 선행지표) ──────────────────────────────
+    {
+      const revisionPeriods = trends.filter((t: any) => ["0y", "+1y"].includes(t.period));
+      const hasRevisionData = revisionPeriods.some((t: any) => t.epsTrend || t.epsRevisions);
+      if (hasRevisionData) {
+        lines.push("\n[📊 EPS 추정 수정 방향 — 밸류에이션 정확도 핵심 선행지표]");
+        lines.push("⚠️ 애널리스트 추정이 상향 수정되는 종목은 실제 주가 상승을 선행합니다. 이 데이터를 밸류에이션 가정의 필수 인풋으로 활용하세요.");
+        for (const t of revisionPeriods) {
+          const periodLabel = t.period === "0y" ? "금년도(0y)" : "내년도(+1y)";
+          const epsTrend = t.epsTrend as any;
+          const epsRevisions = t.epsRevisions as any;
+          if (!epsTrend && !epsRevisions) continue;
+
+          lines.push(`\n  [${periodLabel} EPS 수정 추세]`);
+
+          if (epsTrend) {
+            const curr   = epsTrend.current     != null ? Number(epsTrend.current).toFixed(2)     : null;
+            const d30    = epsTrend["30daysAgo"] != null ? Number(epsTrend["30daysAgo"]).toFixed(2) : null;
+            const d90    = epsTrend["90daysAgo"] != null ? Number(epsTrend["90daysAgo"]).toFixed(2) : null;
+            const currN  = epsTrend.current     != null ? Number(epsTrend.current)     : null;
+            const d30N   = epsTrend["30daysAgo"] != null ? Number(epsTrend["30daysAgo"]) : null;
+            const d90N   = epsTrend["90daysAgo"] != null ? Number(epsTrend["90daysAgo"]) : null;
+
+            let trend1m = "";
+            if (currN != null && d30N != null && d30N !== 0) {
+              const chg = (currN - d30N) / Math.abs(d30N) * 100;
+              trend1m = chg > 0.5 ? `▲${chg.toFixed(1)}% 상향` : chg < -0.5 ? `▼${Math.abs(chg).toFixed(1)}% 하향` : "→ 보합";
+            }
+            let trend3m = "";
+            if (currN != null && d90N != null && d90N !== 0) {
+              const chg = (currN - d90N) / Math.abs(d90N) * 100;
+              trend3m = chg > 0.5 ? `▲${chg.toFixed(1)}% 상향` : chg < -0.5 ? `▼${Math.abs(chg).toFixed(1)}% 하향` : "→ 보합";
+            }
+            if (curr || d30 || d90) {
+              lines.push(`    현재 EPS 컨센서스: ${curr ?? "-"} | 30일전: ${d30 ?? "-"}${trend1m ? ` (1개월: ${trend1m})` : ""} | 90일전: ${d90 ?? "-"}${trend3m ? ` (3개월: ${trend3m})` : ""}`);
+            }
+          }
+
+          if (epsRevisions) {
+            const up30 = Number(epsRevisions.upLast30days   ?? 0);
+            const dn30 = Number(epsRevisions.downLast30days ?? 0);
+            const dn90 = Number(epsRevisions.downLast90days ?? 0);
+            const up7  = Number(epsRevisions.upLast7days    ?? 0);
+            const direction = up30 > dn30 ? "📈 상향 우세" : up30 < dn30 ? "📉 하향 우세" : "→ 중립";
+            lines.push(`    최근 30일: 상향 ${up30}건 / 하향 ${dn30}건 → ${direction} | 7일내 상향: ${up7}건 | 90일내 하향 누계: ${dn90}건`);
+            if (up30 >= dn30 * 2 && up30 >= 3) {
+              lines.push(`    ✅ 강한 상향 수정 모멘텀 — DCF 성장률 가정을 보수적으로 압축할 필요 없음`);
+            } else if (dn30 >= up30 * 2 && dn30 >= 3) {
+              lines.push(`    ⚠️ 강한 하향 수정 모멘텀 — DCF Year 2~3 성장률 가정을 컨센서스 대비 10~15% 추가 하향 보수화 필요`);
+            }
+          }
+        }
+      }
+    }
+
+    // ── 실적 서프라이즈 이력 (컨센서스 신뢰도 검증) ────────────────────────────────
+    {
+      const earningsHistory = (result as any).earningsHistory;
+      if (earningsHistory?.history?.length) {
+        lines.push("\n[📋 실적 서프라이즈 이력 — 컨센서스 신뢰도 & DCF 가정 보정 근거]");
+        lines.push("⚠️ Beat 패턴이 강한 기업은 컨센서스 EPS를 그대로 써도 보수적. Miss 패턴이 강하면 DCF 성장률을 추가 하향해야 합니다.");
+        const history = (earningsHistory.history as any[]).slice(0, 8);
+        let beatCount = 0, missCount = 0;
+        for (const h of history) {
+          const qDate = h.quarter ? new Date(h.quarter * 1000).toISOString().slice(0, 7) : "?";
+          const actual   = h.epsActual   != null ? Number(h.epsActual).toFixed(2)   : "-";
+          const estimate = h.epsEstimate != null ? Number(h.epsEstimate).toFixed(2) : "-";
+          const surprisePct = h.surprisePercent != null ? Number(h.surprisePercent) : null;
+          const surpriseStr = surprisePct != null ? `${surprisePct > 0 ? "+" : ""}${surprisePct.toFixed(1)}%` : "-";
+          const icon = surprisePct != null ? (surprisePct > 1 ? "✅" : surprisePct < -1 ? "❌" : "→") : "";
+          if (surprisePct != null) { surprisePct > 1 ? beatCount++ : surprisePct < -1 ? missCount++ : null; }
+          lines.push(`  ${qDate}: EPS 실제 ${actual} / 추정 ${estimate} → 서프라이즈 ${surpriseStr} ${icon}`);
+        }
+        const total = beatCount + missCount;
+        if (total > 0) {
+          const beatRate = (beatCount / total * 100).toFixed(0);
+          const quality =
+            beatCount >= total * 0.75 ? "🟢 높음 — 컨센서스 신뢰도 우수, 보수적 하향 불필요"
+            : beatCount >= total * 0.5 ? "🟡 보통 — 컨센서스를 그대로 사용하되 Bear 가중치 조금 확대"
+            : "🔴 낮음 — 컨센서스 과낙관, DCF Year 2~3 성장률을 10~15% 추가 하향 보수화 필수";
+          lines.push(`  Beat율: ${beatRate}% (${beatCount}/${total}건) | 컨센서스 신뢰도: ${quality}`);
+        }
+      }
+    }
+
+    // ── 애널리스트 투자의견 추세 ──────────────────────────────────────────────────
+    {
+      const recTrend = (result as any).recommendationTrend;
+      if (recTrend?.trend?.length) {
+        const rts = (recTrend.trend as any[]).slice(0, 4);
+        lines.push("\n[📊 애널리스트 투자의견 추세 — 시장 컨센서스 방향]");
+        for (const rt of rts) {
+          const label = rt.period === "0m" ? "현재월" : rt.period === "-1m" ? "1개월전" : rt.period === "-2m" ? "2개월전" : "3개월전";
+          const sb = Number(rt.strongBuy ?? 0);
+          const b  = Number(rt.buy       ?? 0);
+          const hv = Number(rt.hold      ?? 0);
+          const s  = Number(rt.sell      ?? 0);
+          const ss = Number(rt.strongSell ?? 0);
+          const tot = sb + b + hv + s + ss;
+          const bullPct = tot > 0 ? `${((sb + b) / tot * 100).toFixed(0)}%` : "-";
+          lines.push(`  ${label}: 강매수 ${sb} / 매수 ${b} / 중립 ${hv} / 매도 ${s} / 강매도 ${ss} | 매수비중 ${bullPct}`);
+        }
+        if (rts.length >= 2) {
+          const cur = rts[0];  const old = rts[rts.length - 1];
+          const curBull = Number(cur.strongBuy ?? 0) + Number(cur.buy ?? 0);
+          const oldBull = Number(old.strongBuy ?? 0) + Number(old.buy ?? 0);
+          if (curBull > oldBull) lines.push(`  → 매수 의견 증가 추세 (긍정적 신호 — 밸류에이션 상방 바이어스 정당화)`);
+          else if (curBull < oldBull) lines.push(`  → 매수 의견 감소 추세 (주의 신호 — 목표주가 달성 후 차익실현 가능성)`);
+          else lines.push(`  → 투자의견 안정 유지`);
+        }
+      }
     }
   }
 
