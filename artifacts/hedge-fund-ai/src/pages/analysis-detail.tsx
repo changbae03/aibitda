@@ -3109,16 +3109,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           );
         })()}
 
-        {/* Financial Analyst: 재무 차트 (매출·이익 추이) */}
-        {isFundamental && ticker && (
-          <div className="mt-5 pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">매출 · 이익 추이</span>
-            </div>
-            <FinancialChart ticker={ticker} />
-          </div>
-        )}
 
         {/* Fundamental & Valuation 적정주가 — 레인지 바 + 요약 테이블 */}
         {isFundamental && valuationData && (() => {
