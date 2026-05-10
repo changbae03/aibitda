@@ -1653,7 +1653,7 @@ router.get("/financials/:ticker", async (req, res) => {
     const threeYearsAgo = new Date();
     threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
 
-    const [annualRaw, quarterlyRaw] = await Promise.all([
+    const [annualRaw, quarterlyRaw, usQuoteRaw] = await Promise.all([
       (yahooFinance as any).fundamentalsTimeSeries(ticker, {
         period1: fiveYearsAgo,
         type: "annual",
@@ -1664,7 +1664,9 @@ router.get("/financials/:ticker", async (req, res) => {
         type: "quarterly",
         module: "financials",
       }),
+      yahooFinance.quote(ticker, { fields: ["marketCap"] }).catch(() => null),
     ]);
+    const usMarketCap: number | null = (usQuoteRaw as any)?.marketCap ?? null;
 
     const toEntry = (e: any) => {
       const rev: number | null = e.totalRevenue ?? null;
@@ -1730,7 +1732,7 @@ router.get("/financials/:ticker", async (req, res) => {
       annual = annual.sort((a: any, b: any) => a.period.localeCompare(b.period));
     } catch { /* 전망 보충 실패 시 역사 데이터만 사용 */ }
 
-    res.json({ ticker, currency: "USD", annual, quarterly });
+    res.json({ ticker, currency: "USD", marketCap: usMarketCap, annual, quarterly });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Failed to fetch Yahoo financials" });
   }

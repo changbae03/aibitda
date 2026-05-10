@@ -29,6 +29,7 @@ import {
   History,
   ChevronDown,
   TrendingUp,
+  Building2,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -1103,6 +1104,18 @@ export default function AnalysisDetail() {
     }
   }, [analysis?.id, analysis?.userRating, analysis?.userFeedback]);
 
+  // 시가총액 fetch
+  const [headerMarketCap, setHeaderMarketCap] = useState<{ value: number; currency: string } | null>(null);
+  useEffect(() => {
+    if (!analysis?.ticker) return;
+    fetch(getApiUrl(`/api/market-data/financials/${encodeURIComponent(analysis.ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => {
+        if (d?.marketCap != null) setHeaderMarketCap({ value: d.marketCap, currency: d.currency ?? "KRW" });
+      })
+      .catch(() => {});
+  }, [analysis?.ticker]);
+
   // 종목별 메모 로드
   useEffect(() => {
     if (!analysis?.ticker) return;
@@ -1497,6 +1510,20 @@ export default function AnalysisDetail() {
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mt-2">
               <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> {toKoreanIndustry(analysis.industry)}</span>
               <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
+              {headerMarketCap != null && (
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" />
+                  시총 {headerMarketCap.currency === "USD"
+                    ? headerMarketCap.value >= 1e12
+                      ? `$${(headerMarketCap.value / 1e12).toFixed(1)}T`
+                      : headerMarketCap.value >= 1e9
+                      ? `$${(headerMarketCap.value / 1e9).toFixed(1)}B`
+                      : `$${(headerMarketCap.value / 1e6).toFixed(0)}M`
+                    : headerMarketCap.value >= 1e12
+                    ? `${(headerMarketCap.value / 1e12).toFixed(1)}조`
+                    : `${Math.round(headerMarketCap.value / 1e8)}억`}
+                </span>
+              )}
             </div>
           </div>
 
