@@ -3648,10 +3648,10 @@ async function executeStep(
 
   let content = "";
   try {
-    // 토큰 한도: company_analysis·relative_valuation은 20k, 나머지 6k (비용 절감)
-    // 실측상 20k로 복잡한 기업(대형 제약 rNPV, SOP 등)도 대부분 커버 가능
+    // 토큰 한도: company_analysis·relative_valuation은 32k 유지 (잘림 방지)
+    // 나머지 5개 단계는 6k (원래 8k에서 절감)
     const maxOutputTokens =
-      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 20480 : 6144;
+      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃) 여부 판별
     const isTransient = (err: unknown) => {
@@ -3769,7 +3769,7 @@ async function executeStep(
             : `\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)을 그대로 유지하면서 최종 완성본을 다시 작성하세요.`;
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
-          const synthesisMaxTokens = 20480; // Debate 합성: 20k면 충분 (비용 절감)
+          const synthesisMaxTokens = 24576; // Debate 합성: 24k (잘림 방지 + 비용 절감 절충)
 
           const synthesisStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
@@ -3828,7 +3828,7 @@ async function executeStep(
         try {
           const revisedUserPrompt = userPrompt +
             `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`;
-          const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 20480 : 6144;
+          const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
           const revisedStream = await ai.models.generateContentStream({
             model: "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
