@@ -4,14 +4,22 @@ import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Min
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { useLanguage } from "@/lib/language-context";
 
 const VERDICT_ORDER = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"];
-const VERDICT_LABELS: Record<string, string> = {
+const VERDICT_LABELS_KO: Record<string, string> = {
   "Strong Buy":  "높은 상승여력",
   "Buy":         "상승여력",
   "Hold":        "적정 수준",
   "Sell":        "하락여지",
   "Strong Sell": "높은 하락여지",
+};
+const VERDICT_LABELS_EN: Record<string, string> = {
+  "Strong Buy":  "Strong Buy",
+  "Buy":         "Buy",
+  "Hold":        "Hold",
+  "Sell":        "Sell",
+  "Strong Sell": "Strong Sell",
 };
 const VERDICT_COLOR = ["bg-emerald-500", "bg-green-400", "bg-amber-400", "bg-red-300", "bg-red-500"];
 const VERDICT_TEXT  = ["text-emerald-700", "text-green-700", "text-amber-700", "text-red-600", "text-red-700"];
@@ -42,6 +50,9 @@ interface PeriodBucket {
 }
 
 export default function Popular() {
+  const { isEn } = useLanguage();
+  const t = (ko: string, en: string) => isEn ? en : ko;
+
   const [, setLocation] = useLocation();
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [periods, setPeriods] = useState<PeriodBucket[]>([]);
@@ -73,7 +84,8 @@ export default function Popular() {
   const topTickers = stats?.topTickers ?? [];
   const marketTotal = krCount + usCount;
 
-  // 판정 분포용 수치
+  const VERDICT_LABELS = isEn ? VERDICT_LABELS_EN : VERDICT_LABELS_KO;
+
   const verdictCounts = VERDICT_ORDER.map(k => verdictMap[k] ?? 0);
   const verdictSum = verdictCounts.reduce((a, b) => a + b, 0);
 
@@ -85,8 +97,8 @@ export default function Popular() {
           <BarChart3 className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-foreground">애빛다 통계</h1>
-          <p className="text-[12px] text-muted-foreground">애빛다 AI 분석 누적 데이터 · 전체 공개</p>
+          <h1 className="text-lg font-bold text-foreground">{t("애빛다 통계", "CBST Statistics")}</h1>
+          <p className="text-[12px] text-muted-foreground">{t("애빛다 AI 분석 누적 데이터 · 전체 공개", "Cumulative AI analysis data · Public")}</p>
         </div>
       </div>
 
@@ -98,17 +110,18 @@ export default function Popular() {
       >
         {[
           {
-            label: "누적 분석 리포트",
-            value: `${total.toLocaleString()}건`,
-            sub: "AI 7단계 파이프라인으로 완료된 전체 분석 건수",
+            label: t("누적 분석 리포트", "Total Reports"),
+            value: `${total.toLocaleString()}${t("건", "")}`,
+            sub: t("AI 7단계 파이프라인으로 완료된 전체 분석 건수", "Analyses completed via 7-stage AI pipeline"),
             icon: BarChart3,
             color: "text-primary",
             bg: "bg-primary/10",
           },
           {
-            label: "종목 커버리지",
-            value: `${stats?.uniqueTickerCount ?? 0}종목`,
-            sub: `분석된 고유 종목 수 · 한국 ${krCount}건 · 미국 ${usCount}건`,
+            label: t("종목 커버리지", "Stock Coverage"),
+            value: `${stats?.uniqueTickerCount ?? 0}${t("종목", " stocks")}`,
+            sub: t(`분석된 고유 종목 수 · 한국 ${krCount}건 · 미국 ${usCount}건`,
+                   `Unique stocks analyzed · KR ${krCount} · US ${usCount}`),
             icon: Target,
             color: "text-amber-500",
             bg: "bg-amber-50",
@@ -140,7 +153,8 @@ export default function Popular() {
       >
         <CalendarDays className="w-3.5 h-3.5 text-muted-foreground/50" />
         <p className="text-[11px] text-muted-foreground/60">
-          데이터 시작일 <span className="font-semibold text-muted-foreground/80">2026.04.23</span> ~
+          {t("데이터 시작일", "Data since")}{" "}
+          <span className="font-semibold text-muted-foreground/80">2026.04.23</span> ~
         </p>
       </motion.div>
 
@@ -151,7 +165,9 @@ export default function Popular() {
         transition={{ delay: 0.08 }}
         className="rounded-xl border border-border bg-background p-5"
       >
-        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">투자 의견 분포</p>
+        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">
+          {t("투자 의견 분포", "Verdict Distribution")}
+        </p>
 
         {verdictSum > 0 ? (
           <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -181,7 +197,10 @@ export default function Popular() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number, name: string) => [`${value}건 (${verdictSum > 0 ? ((value/verdictSum)*100).toFixed(1) : 0}%)`, name]}
+                    formatter={(value: number, name: string) => [
+                      `${value}${t("건", "")} (${verdictSum > 0 ? ((value/verdictSum)*100).toFixed(1) : 0}%)`,
+                      name,
+                    ]}
                     contentStyle={{ fontSize: 11, borderRadius: 8 }}
                   />
                 </PieChart>
@@ -189,7 +208,7 @@ export default function Popular() {
               {/* 중앙 텍스트 */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-[22px] font-black text-foreground tabular-nums">{verdictSum}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">건</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{t("건", "total")}</span>
               </div>
             </div>
 
@@ -220,7 +239,9 @@ export default function Popular() {
                         transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 + i * 0.05 }}
                       />
                     </div>
-                    <span className="text-[12px] tabular-nums text-muted-foreground shrink-0 w-8 text-right">{cnt}건</span>
+                    <span className="text-[12px] tabular-nums text-muted-foreground shrink-0 w-8 text-right">
+                      {cnt}{t("건", "")}
+                    </span>
                     <span className="text-[11px] text-muted-foreground/50 shrink-0 w-10 text-right">{pct.toFixed(0)}%</span>
                   </motion.div>
                 );
@@ -228,7 +249,9 @@ export default function Popular() {
             </div>
           </div>
         ) : (
-          <p className="text-[13px] text-muted-foreground/50 text-center py-6">아직 분석 데이터가 없습니다.</p>
+          <p className="text-[13px] text-muted-foreground/50 text-center py-6">
+            {t("아직 분석 데이터가 없습니다.", "No analysis data yet.")}
+          </p>
         )}
       </motion.div>
 
@@ -241,7 +264,9 @@ export default function Popular() {
       >
         <div className="flex items-center gap-2 mb-4">
           <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">시장별 커버리지</p>
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+            {t("시장별 커버리지", "Coverage by Market")}
+          </p>
         </div>
 
         <div className="flex h-3 rounded-full overflow-hidden mb-4 gap-px bg-muted">
@@ -265,13 +290,13 @@ export default function Popular() {
 
         <div className="flex gap-4">
           {[
-            { label: "한국", count: krCount, color: "bg-blue-500" },
-            { label: "미국", count: usCount, color: "bg-red-400" },
-          ].map(({ label, count, color }) => (
-            <div key={label} className="flex items-center gap-2">
+            { ko: "한국", en: "Korea", count: krCount, color: "bg-blue-500" },
+            { ko: "미국", en: "US",    count: usCount, color: "bg-red-400" },
+          ].map(({ ko: koLabel, en: enLabel, count, color }) => (
+            <div key={koLabel} className="flex items-center gap-2">
               <div className={cn("w-2.5 h-2.5 rounded-sm shrink-0", color)} />
-              <span className="text-[12px] font-semibold text-foreground">{label}</span>
-              <span className="text-[12px] tabular-nums text-muted-foreground">{count}건</span>
+              <span className="text-[12px] font-semibold text-foreground">{isEn ? enLabel : koLabel}</span>
+              <span className="text-[12px] tabular-nums text-muted-foreground">{count}{t("건", "")}</span>
               <span className="text-[11px] text-muted-foreground/50">
                 ({marketTotal > 0 ? ((count / marketTotal) * 100).toFixed(0) : 0}%)
               </span>
@@ -287,16 +312,20 @@ export default function Popular() {
         transition={{ delay: 0.2 }}
         className="rounded-xl border border-border bg-background p-5"
       >
-        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">많이 분석된 종목</p>
+        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">
+          {t("많이 분석된 종목", "Most Analyzed Stocks")}
+        </p>
 
         {topTickers.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground/50 text-center py-6">아직 누적된 분석 데이터가 없습니다.</p>
+          <p className="text-[13px] text-muted-foreground/50 text-center py-6">
+            {t("아직 누적된 분석 데이터가 없습니다.", "No accumulated analysis data yet.")}
+          </p>
         ) : (
           <div className="space-y-2">
-            {topTickers.map((t, i) => {
+            {topTickers.map((t2, i) => {
               return (
                 <motion.div
-                  key={t.ticker}
+                  key={t2.ticker}
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.25 + i * 0.04 }}
@@ -305,11 +334,13 @@ export default function Popular() {
                   <span className="text-[12px] font-bold text-muted-foreground/40 w-5 tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-semibold text-foreground truncate">{t.companyName}</span>
-                      <span className="text-[11px] font-mono text-muted-foreground">{t.ticker}</span>
+                      <span className="text-[14px] font-semibold text-foreground truncate">{t2.companyName}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">{t2.ticker}</span>
                     </div>
                   </div>
-                  <span className="text-[12px] tabular-nums text-muted-foreground shrink-0">{t.count}회</span>
+                  <span className="text-[12px] tabular-nums text-muted-foreground shrink-0">
+                    {t2.count}{isEn ? "x" : "회"}
+                  </span>
                 </motion.div>
               );
             })}
@@ -326,13 +357,19 @@ export default function Popular() {
       >
         <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border bg-muted/20">
           <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">기간별 성과 트래킹</p>
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+            {t("기간별 성과 트래킹", "Performance by Period")}
+          </p>
         </div>
 
         {periods.every(p => p.total === 0) ? (
           <div className="px-5 py-8 text-center">
-            <p className="text-[13px] text-muted-foreground/50">아직 기간별 성과를 집계할 데이터가 없습니다.</p>
-            <p className="text-[11px] text-muted-foreground/30 mt-1">분석 후 1개월 이상 경과한 보고서가 생기면 표시됩니다.</p>
+            <p className="text-[13px] text-muted-foreground/50">
+              {t("아직 기간별 성과를 집계할 데이터가 없습니다.", "No performance data available yet.")}
+            </p>
+            <p className="text-[11px] text-muted-foreground/30 mt-1">
+              {t("분석 후 1개월 이상 경과한 보고서가 생기면 표시됩니다.", "Appears when reports are at least 1 month old.")}
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -361,10 +398,10 @@ export default function Popular() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-bold text-foreground">{p.label}</span>
-                      <span className="text-[11px] text-muted-foreground">경과 보고서</span>
+                      <span className="text-[11px] text-muted-foreground">{t("경과 보고서", "reports")}</span>
                     </div>
                     <span className={cn("text-[12px] font-semibold tabular-nums", hasData ? "text-foreground" : "text-muted-foreground/40")}>
-                      {p.total}건
+                      {p.total}{t("건", "")}
                     </span>
                   </div>
 
@@ -372,20 +409,20 @@ export default function Popular() {
                     <div className="grid grid-cols-3 gap-3">
                       {/* 방향 정확도 */}
                       <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                        <p className="text-[10px] text-muted-foreground mb-1">방향 정확도</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">{t("방향 정확도", "Direction Accuracy")}</p>
                         <p className={cn("text-[18px] font-black tabular-nums leading-none", dirColor)}>
                           {hasDirection && p.directionAccuracy != null ? `${p.directionAccuracy.toFixed(0)}%` : "—"}
                         </p>
                         {hasDirection && (
                           <p className="text-[9px] text-muted-foreground/50 mt-1">
-                            {p.directionCorrectCount}/{p.directionTotalCount}건 정확
+                            {p.directionCorrectCount}/{p.directionTotalCount}{t("건 정확", " correct")}
                           </p>
                         )}
                       </div>
 
                       {/* 평균 수익률 */}
                       <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                        <p className="text-[10px] text-muted-foreground mb-1">평균 수익률</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">{t("평균 수익률", "Avg Return")}</p>
                         <div className={cn("flex items-center gap-0.5", returnColor)}>
                           <ReturnIcon className="w-3.5 h-3.5 shrink-0" />
                           <p className="text-[18px] font-black tabular-nums leading-none">
@@ -394,17 +431,17 @@ export default function Popular() {
                               : "—"}
                           </p>
                         </div>
-                        <p className="text-[9px] text-muted-foreground/50 mt-1">진입가 기준</p>
+                        <p className="text-[9px] text-muted-foreground/50 mt-1">{t("진입가 기준", "From entry")}</p>
                       </div>
 
                       {/* 분석 건수 */}
                       <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                        <p className="text-[10px] text-muted-foreground mb-1">분석 건수</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">{t("분석 건수", "Reports")}</p>
                         <p className="text-[18px] font-black tabular-nums leading-none text-foreground">
-                          {p.total}<span className="text-[11px] font-normal text-muted-foreground ml-0.5">건</span>
+                          {p.total}<span className="text-[11px] font-normal text-muted-foreground ml-0.5">{t("건", "")}</span>
                         </p>
                         <p className="text-[9px] text-muted-foreground/50 mt-1">
-                          매수·매도 판정 {p.directionTotalCount}건
+                          {t("매수·매도 판정", "Buy/Sell verdicts")} {p.directionTotalCount}{t("건", "")}
                         </p>
                       </div>
                     </div>
@@ -431,7 +468,10 @@ export default function Popular() {
 
         <div className="px-5 py-3 bg-muted/10 border-t border-border">
           <p className="text-[10px] text-muted-foreground/50">
-            ※ 방향 정확도는 매수·매도 판정 보고서에서 실제 주가 방향(상승/하락)이 일치한 비율입니다. Hold 판정은 제외됩니다.
+            {t(
+              "※ 방향 정확도는 매수·매도 판정 보고서에서 실제 주가 방향(상승/하락)이 일치한 비율입니다. Hold 판정은 제외됩니다.",
+              "※ Direction Accuracy is the rate at which Buy/Sell verdicts correctly predicted the actual price direction. Hold verdicts are excluded."
+            )}
           </p>
         </div>
       </motion.div>
