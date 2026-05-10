@@ -174,4 +174,39 @@ router.post("/auth/logout", (req, res) => {
   res.json({ success: true });
 });
 
+// ── 개발 환경 전용 테스트 로그인 ────────────────────────────────────────────
+if (process.env.NODE_ENV !== "production") {
+  router.post("/auth/dev-login", async (req, res) => {
+    const devUser = {
+      id: "dev_preview",
+      nickname: "미리보기 계정",
+      profileImage: null,
+      email: "dev@aibitda.kr",
+    };
+    const token = jwt.sign(devUser, JWT_SECRET, { expiresIn: "7d" });
+
+    // user_credits 행 생성 (없으면 insert)
+    try {
+      await pool.query(
+        `INSERT INTO user_credits (user_id, display_name, email, daily_limit)
+         VALUES ($1, $2, $3, 99)
+         ON CONFLICT (user_id) DO UPDATE SET daily_limit = 99`,
+        [`kakao_${devUser.id}`, devUser.nickname, devUser.email]
+      );
+    } catch (_) {}
+
+    const proto = req.headers["x-forwarded-proto"] || req.protocol;
+    const isSecure = proto === "https";
+
+    res.setHeader("Set-Cookie", cookie.serialize("auth_token", token, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    }));
+    res.json({ success: true, user: devUser });
+  });
+}
+
 export default router;

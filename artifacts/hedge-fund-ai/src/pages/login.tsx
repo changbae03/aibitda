@@ -1,6 +1,7 @@
 import { useSignIn, useUser } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
+import { getApiUrl } from "@/lib/utils";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -39,6 +40,11 @@ export default function Login() {
 
   const handleKakaoLogin = () => {
     window.location.href = "/api/auth/kakao";
+  };
+
+  const handleDevLogin = async () => {
+    await fetch(getApiUrl("/api/auth/dev-login"), { method: "POST", credentials: "include" });
+    window.location.href = "/";
   };
 
   const handleGoogleLogin = async () => {
@@ -95,6 +101,20 @@ export default function Login() {
           로그인하면 <span className="underline cursor-pointer">이용약관</span> 및{" "}
           <span className="underline cursor-pointer">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.
         </p>
+
+        {/* 개발 환경 전용 미리보기 로그인 */}
+        {import.meta.env.DEV && (
+          <div className="mt-8 pt-6 border-t border-dashed border-border">
+            <p className="text-center text-[10.5px] text-muted-foreground/50 mb-3 uppercase tracking-widest font-medium">개발 환경 전용</p>
+            <button
+              onClick={handleDevLogin}
+              className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-[13px] font-semibold border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all"
+            >
+              <span className="text-[15px]">🛠</span>
+              미리보기 계정으로 로그인
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

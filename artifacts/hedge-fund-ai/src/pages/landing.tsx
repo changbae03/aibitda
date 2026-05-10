@@ -2,6 +2,7 @@ import { useSignIn, useUser } from "@clerk/react";
 import { useLocation, Link } from "wouter";
 import { useEffect } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
+import { getApiUrl } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale } from "lucide-react";
 
@@ -46,6 +47,11 @@ export default function Landing() {
   }, [isLoaded, isSignedIn, kakaoLoading, kakaoAuth, setLocation]);
 
   const handleKakaoLogin = () => { window.location.href = getKakaoLoginUrl(); };
+
+  const handleDevLogin = async () => {
+    await fetch(getApiUrl("/api/auth/dev-login"), { method: "POST", credentials: "include" });
+    window.location.href = "/analysis/new";
+  };
 
   const handleGoogleLogin = async () => {
     if (!signIn) return;
@@ -117,6 +123,20 @@ export default function Landing() {
               <KakaoIcon />
               카카오로 시작하기
             </button>
+
+            {/* 개발 환경 전용 미리보기 로그인 */}
+            {import.meta.env.DEV && (
+              <div className="pt-3 border-t border-dashed border-border/50">
+                <p className="text-center text-[9.5px] text-muted-foreground/35 mb-2 uppercase tracking-widest">개발 환경 전용</p>
+                <button
+                  onClick={handleDevLogin}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all"
+                >
+                  <span>🛠</span>
+                  미리보기 계정으로 로그인
+                </button>
+              </div>
+            )}
           </div>
 
           <p className="text-center text-[11px] text-muted-foreground/45 leading-relaxed">
