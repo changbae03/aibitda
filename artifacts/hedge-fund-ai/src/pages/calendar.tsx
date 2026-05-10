@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
-import { ko } from "date-fns/locale";
+import { ko, enUS } from "date-fns/locale";
 import {
   CalendarDays, RefreshCw, TrendingUp, DollarSign,
   ChevronRight, Building2, AlertCircle, Sparkles, Globe, X,
@@ -8,6 +8,7 @@ import {
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLanguage } from "@/lib/language-context";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 interface EarningsEntry {
@@ -66,12 +67,17 @@ function fmtRevenue(val: number | null, isKorean: boolean): string {
 }
 
 function DateBadge({ dateStr }: { dateStr: string }) {
+  const { isEn } = useLanguage();
   const d = parseISO(dateStr);
   if (isToday(d)) return (
-    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ml-2">오늘</span>
+    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ml-2">
+      {isEn ? "Today" : "오늘"}
+    </span>
   );
   if (isTomorrow(d)) return (
-    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ml-2">내일</span>
+    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ml-2">
+      {isEn ? "Tomorrow" : "내일"}
+    </span>
   );
   return null;
 }
@@ -89,10 +95,10 @@ const COUNTRY_FLAG: Record<string, string> = {
   DE: "🇩🇪", GB: "🇬🇧", FR: "🇫🇷", AU: "🇦🇺", CA: "🇨🇦",
 };
 
-const IMPORTANCE_STYLE: Record<string, { dot: string; badge: string; label: string }> = {
-  high:   { dot: "bg-red-500",    badge: "text-red-700 dark:bg-red-900/40 dark:text-red-300",    label: "매우 중요" },
-  medium: { dot: "bg-amber-400",  badge: "text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", label: "중요" },
-  low:    { dot: "bg-slate-300",  badge: "text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "보통" },
+const IMPORTANCE_STYLE: Record<string, { dot: string; badge: string; ko: string; en: string }> = {
+  high:   { dot: "bg-red-500",    badge: "text-red-700 dark:bg-red-900/40 dark:text-red-300",    ko: "매우 중요", en: "High" },
+  medium: { dot: "bg-amber-400",  badge: "text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", ko: "중요", en: "Medium" },
+  low:    { dot: "bg-slate-300",  badge: "text-slate-500 dark:bg-slate-800 dark:text-slate-400", ko: "보통", en: "Low" },
 };
 
 const CATEGORY_ICON: Record<string, string> = {
@@ -102,6 +108,7 @@ const CATEGORY_ICON: Record<string, string> = {
 
 // ── 서브 컴포넌트 ──────────────────────────────────────────────────────────────
 function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e: EarningsEntry) => void }) {
+  const { isEn } = useLanguage();
   const hasEps = entry.epsEstimate !== null;
   const hasRevenue = entry.revenueEstimate !== null;
   const shortTicker = entry.ticker.replace(/\.(KS|KQ)$/, "");
@@ -127,7 +134,7 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
             {hasEps && (
               <span className="flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />
-                EPS 예상: <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
+                {isEn ? "EPS Est:" : "EPS 예상:"} <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
                 {entry.epsLow !== null && entry.epsHigh !== null && (
                   <span className="text-muted-foreground/70">({fmtEps(entry.epsLow, entry.currency)} – {fmtEps(entry.epsHigh, entry.currency)})</span>
                 )}
@@ -136,12 +143,12 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
             {hasRevenue && (
               <span className="flex items-center gap-1">
                 <DollarSign className="w-3 h-3" />
-                매출 예상: <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
+                {isEn ? "Rev Est:" : "매출 예상:"} <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
               </span>
             )}
           </div>
         ) : (
-          <p className="mt-1 text-xs text-muted-foreground/60">컨센서스 데이터 없음</p>
+          <p className="mt-1 text-xs text-muted-foreground/60">{isEn ? "No consensus data" : "컨센서스 데이터 없음"}</p>
         )}
       </div>
       <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 mt-1" />
@@ -153,16 +160,17 @@ function fmtIndicator(value: string | undefined | null, unit: string | undefined
   if (value == null || value === "") return "N/A";
   const v = String(value).trim();
   if (!unit) return v;
-  // 이미 단위가 포함된 경우 중복 추가 방지 (끝이 unit으로 끝나거나 숫자+단위 패턴)
   const u = unit.trim();
   if (v.endsWith(u) || v.toLowerCase().endsWith(u.toLowerCase())) return v;
   return `${v}${u}`;
 }
 
 function EconomicCard({ event }: { event: EconomicEvent }) {
+  const { isEn } = useLanguage();
   const imp = IMPORTANCE_STYLE[event.importance] ?? IMPORTANCE_STYLE.low;
   const flag = COUNTRY_FLAG[event.country] ?? "🌐";
   const catIcon = CATEGORY_ICON[event.category] ?? "📋";
+  const impLabel = isEn ? imp.en : imp.ko;
 
   return (
     <motion.div
@@ -170,7 +178,6 @@ function EconomicCard({ event }: { event: EconomicEvent }) {
       animate={{ opacity: 1, y: 0 }}
       className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card"
     >
-      {/* 중요도 점 + 아이콘 */}
       <div className="mt-0.5 w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 relative">
         <span className="text-base leading-none">{catIcon}</span>
         <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-background", imp.dot)} />
@@ -181,7 +188,7 @@ function EconomicCard({ event }: { event: EconomicEvent }) {
           <span className="text-sm font-semibold text-foreground leading-snug">{event.title}</span>
           <span className="text-sm">{flag}</span>
           <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", imp.badge)}>
-            {imp.label}
+            {impLabel}
           </span>
           {event.time && (
             <span className="text-[10px] text-muted-foreground ml-auto">
@@ -193,12 +200,12 @@ function EconomicCard({ event }: { event: EconomicEvent }) {
         <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{event.category}</span>
           {event.forecast != null && event.forecast !== "" && (
-            <span>예상: <span className="text-foreground font-medium">
+            <span>{isEn ? "Fcst:" : "예상:"} <span className="text-foreground font-medium">
               {fmtIndicator(event.forecast, event.unit)}
             </span></span>
           )}
           {event.previous != null && event.previous !== "" && (
-            <span>이전: <span className="text-foreground/70">
+            <span>{isEn ? "Prev:" : "이전:"} <span className="text-foreground/70">
               {fmtIndicator(event.previous, event.unit)}
             </span></span>
           )}
@@ -217,8 +224,11 @@ function DateGroup({
   items: CalendarItem[];
   onSelectEarnings: (e: EarningsEntry) => void;
 }) {
+  const { isEn } = useLanguage();
   const d = parseISO(date);
-  const label = format(d, "M월 d일 (EEE)", { locale: ko });
+  const label = isEn
+    ? format(d, "MMM d (EEE)", { locale: enUS })
+    : format(d, "M월 d일 (EEE)", { locale: ko });
   const earningsCount = items.filter(i => i.kind === "earnings").length;
   const economicCount = items.filter(i => i.kind === "economic").length;
 
@@ -228,8 +238,8 @@ function DateGroup({
         <h3 className="text-sm font-semibold text-foreground">{label}</h3>
         <DateBadge dateStr={date} />
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-          {earningsCount > 0 && <span>{earningsCount}종목 실적</span>}
-          {economicCount > 0 && <span>{economicCount}개 지표</span>}
+          {earningsCount > 0 && <span>{isEn ? `${earningsCount} Earnings` : `${earningsCount}종목 실적`}</span>}
+          {economicCount > 0 && <span>{isEn ? `${economicCount} Indicators` : `${economicCount}개 지표`}</span>}
         </div>
       </div>
       <div className="space-y-2">
@@ -247,6 +257,9 @@ function DateGroup({
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export default function CalendarPage() {
+  const { isEn } = useLanguage();
+  const t = (ko: string, en: string) => isEn ? en : ko;
+
   const [range, setRange] = useState<Range>("week");
   const [filter, setFilter] = useState<Filter>("all");
   const [earnings, setEarnings] = useState<EarningsEntry[]>([]);
@@ -297,7 +310,7 @@ export default function CalendarPage() {
         setLastFetched(new Date(now));
       }
     } catch (e: any) {
-      if (mountedRef.current) setError(e.message ?? "불러오기 실패");
+      if (mountedRef.current) setError(e.message ?? t("불러오기 실패", "Failed to load"));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -305,13 +318,11 @@ export default function CalendarPage() {
 
   useEffect(() => { fetchAll(range); }, [range, fetchAll]);
 
-  // 필터링된 아이템 → 날짜별 그룹
   const allItems: CalendarItem[] = [
     ...(filter !== "economic" ? earnings.map(e => ({ kind: "earnings" as const, date: e.earningsDate, data: e })) : []),
     ...(filter !== "earnings" ? economic.map(e => ({ kind: "economic" as const, date: e.date, data: e })) : []),
   ];
 
-  // 중요도 HIGH → 먼저, 그 외 원래 순서
   const grouped = allItems.reduce<Record<string, CalendarItem[]>>((acc, item) => {
     if (!acc[item.date]) acc[item.date] = [];
     acc[item.date].push(item);
@@ -336,10 +347,10 @@ export default function CalendarPage() {
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-1">
           <CalendarDays className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-bold text-foreground">마켓 캘린더</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("마켓 캘린더", "Market Calendar")}</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          실적 발표 · 경제지표 · 금리결정 등 주요 시장 일정
+          {t("실적 발표 · 경제지표 · 금리결정 등 주요 시장 일정", "Earnings · Economic Indicators · Rate Decisions and more")}
         </p>
       </div>
 
@@ -356,7 +367,7 @@ export default function CalendarPage() {
                 : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
             )}
           >
-            {r === "week" ? "이번 주 (7일)" : "이번 달 (30일)"}
+            {r === "week" ? t("이번 주 (7일)", "This Week (7d)") : t("이번 달 (30일)", "This Month (30d)")}
           </button>
         ))}
         <button
@@ -371,10 +382,10 @@ export default function CalendarPage() {
       {/* 필터 탭 */}
       <div className="flex items-center gap-1.5 mb-4">
         {([
-          { key: "all", label: "전체" },
-          { key: "earnings", label: "📢 실적 발표" },
-          { key: "economic", label: "📊 경제지표" },
-        ] as { key: Filter; label: string }[]).map(({ key, label }) => (
+          { key: "all", ko: "전체", en: "All" },
+          { key: "earnings", ko: "📢 실적 발표", en: "📢 Earnings" },
+          { key: "economic", ko: "📊 경제지표", en: "📊 Economic" },
+        ] as { key: Filter; ko: string; en: string }[]).map(({ key, ko: koLabel, en: enLabel }) => (
           <button
             key={key}
             onClick={() => setFilter(key)}
@@ -385,7 +396,7 @@ export default function CalendarPage() {
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            {label}
+            {isEn ? enLabel : koLabel}
           </button>
         ))}
       </div>
@@ -393,7 +404,7 @@ export default function CalendarPage() {
       {/* 업데이트 시각 */}
       {lastFetched && !loading && (
         <p className="text-xs text-muted-foreground mb-3">
-          업데이트: {format(lastFetched, "HH:mm:ss")} 기준
+          {t("업데이트:", "Updated:")} {format(lastFetched, "HH:mm:ss")}
         </p>
       )}
 
@@ -404,8 +415,8 @@ export default function CalendarPage() {
             className="flex flex-col items-center py-16 text-muted-foreground"
           >
             <RefreshCw className="w-8 h-8 animate-spin mb-3 text-primary/60" />
-            <p className="text-sm">캘린더 데이터를 불러오는 중…</p>
-            <p className="text-xs mt-1 text-muted-foreground/60">실적 + 경제지표 일정 조회 중 (수 초 소요)</p>
+            <p className="text-sm">{t("캘린더 데이터를 불러오는 중…", "Loading calendar data…")}</p>
+            <p className="text-xs mt-1 text-muted-foreground/60">{t("실적 + 경제지표 일정 조회 중 (수 초 소요)", "Fetching earnings + economic events (may take a few seconds)")}</p>
           </motion.div>
         ) : error ? (
           <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -414,7 +425,7 @@ export default function CalendarPage() {
             <AlertCircle className="w-8 h-8 mb-3 text-destructive/60" />
             <p className="text-sm text-destructive">{error}</p>
             <button onClick={() => fetchAll(range, true)} className="mt-3 text-xs text-primary underline underline-offset-2">
-              다시 시도
+              {t("다시 시도", "Retry")}
             </button>
           </motion.div>
         ) : sortedDates.length === 0 ? (
@@ -422,23 +433,23 @@ export default function CalendarPage() {
             className="flex flex-col items-center py-16 text-muted-foreground"
           >
             <CalendarDays className="w-10 h-10 mb-3 text-muted-foreground/40" />
-            <p className="text-sm font-medium">해당 기간 일정 없음</p>
-            <p className="text-xs mt-1 text-muted-foreground/60">기간이나 필터를 변경해 보세요</p>
+            <p className="text-sm font-medium">{t("해당 기간 일정 없음", "No events for this period")}</p>
+            <p className="text-xs mt-1 text-muted-foreground/60">{t("기간이나 필터를 변경해 보세요", "Try changing the range or filter")}</p>
           </motion.div>
         ) : (
           <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {/* 요약 배너 */}
             <div className="mb-4 px-3 py-2.5 rounded-xl bg-muted/60 text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
               <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-              <span>향후 {range === "week" ? "7일" : "30일"}</span>
+              <span>{t(`향후 ${range === "week" ? "7일" : "30일"}`, `Next ${range === "week" ? "7" : "30"} days`)}</span>
               {filter !== "economic" && (
                 <span>
-                  <span className="font-semibold text-foreground">{totalEarnings}개 종목</span> 실적 발표
+                  <span className="font-semibold text-foreground">{totalEarnings}{t("개 종목", " stocks")}</span> {t("실적 발표", "earnings")}
                 </span>
               )}
               {filter !== "earnings" && (
                 <span>
-                  <span className="font-semibold text-foreground">{totalEconomic}개</span> 경제지표
+                  <span className="font-semibold text-foreground">{totalEconomic}{t("개", "")}</span> {t("경제지표", "economic indicators")}
                 </span>
               )}
             </div>
@@ -446,11 +457,11 @@ export default function CalendarPage() {
             {/* 중요도 범례 */}
             {filter !== "earnings" && (
               <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground/60">중요도:</span>
+                <span className="font-medium text-foreground/60">{t("중요도:", "Importance:")}</span>
                 {(["high", "medium", "low"] as const).map(imp => (
                   <span key={imp} className="flex items-center gap-1">
                     <span className={cn("w-2 h-2 rounded-full", IMPORTANCE_STYLE[imp].dot)} />
-                    {IMPORTANCE_STYLE[imp].label}
+                    {isEn ? IMPORTANCE_STYLE[imp].en : IMPORTANCE_STYLE[imp].ko}
                   </span>
                 ))}
               </div>
@@ -481,11 +492,11 @@ export default function CalendarPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{pendingEntry.companyName}</p>
-                <p className="text-xs text-muted-foreground">AI 분석을 시작할까요?</p>
+                <p className="text-xs text-muted-foreground">{t("AI 분석을 시작할까요?", "Start AI Analysis?")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => setPendingEntry(null)} className="px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors">
-                  취소
+                  {t("취소", "Cancel")}
                 </button>
                 <button
                   onClick={() => {
@@ -494,7 +505,7 @@ export default function CalendarPage() {
                   }}
                   className="px-3.5 py-1.5 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  분석 시작
+                  {t("분석 시작", "Analyze")}
                 </button>
               </div>
               <button onClick={() => setPendingEntry(null)} className="ml-0.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors">

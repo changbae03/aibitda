@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { TrendingUp, TrendingDown, Target, BarChart3, Loader2, ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/language-context";
 
 interface PublicStats {
   totalAnalyses: number;
@@ -63,6 +64,9 @@ function StatCard({ label, value, sub, color, rawValue }: { label: string; value
 }
 
 export default function Stats() {
+  const { isEn } = useLanguage();
+  const t = (ko: string, en: string) => isEn ? en : ko;
+
   const [, setLocation] = useLocation();
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +89,7 @@ export default function Stats() {
   if (!stats) {
     return (
       <div className="flex items-center justify-center py-32 text-muted-foreground text-sm">
-        데이터를 불러올 수 없습니다
+        {t("데이터를 불러올 수 없습니다", "Could not load data")}
       </div>
     );
   }
@@ -113,39 +117,39 @@ export default function Stats() {
           className="text-[22px] font-black tracking-tight text-foreground mb-1"
           style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}
         >
-          AI 분석 정확도
+          {t("AI 분석 정확도", "AI Analysis Accuracy")}
         </h1>
         <p className="text-[13px] text-muted-foreground">
-          애빛다 AI가 분석한 종목의 실제 주가 성과를 공개합니다
+          {t("애빛다 AI가 분석한 종목의 실제 주가 성과를 공개합니다", "Actual price performance of stocks analyzed by CBST AI")}
         </p>
       </div>
 
       {/* 핵심 지표 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
-          label="총 분석 수"
+          label={t("총 분석 수", "Total Analyses")}
           value={stats.totalAnalyses.toLocaleString()}
-          sub="누적 AI 분석 보고서"
+          sub={t("누적 AI 분석 보고서", "Cumulative AI reports")}
           rawValue={stats.totalAnalyses}
         />
         <StatCard
-          label="목표가 달성률"
+          label={t("목표가 달성률", "Target Hit Rate")}
           value={winRateStr}
-          sub={`${stats.hitTargetCount}건 달성 / ${stats.reviewedCount}건 검토`}
+          sub={`${stats.hitTargetCount}${t("건 달성", " hits")} / ${stats.reviewedCount}${t("건 검토", " reviewed")}`}
           color={winRateColor}
           rawValue={stats.winRate ?? undefined}
         />
         <StatCard
-          label="평균 수익률"
+          label={t("평균 수익률", "Avg Return")}
           value={avgReturnStr}
-          sub="진입가 기준 평균"
+          sub={t("진입가 기준 평균", "Avg from entry price")}
           color={avgReturnColor}
           rawValue={stats.avgReturn != null ? Math.abs(stats.avgReturn) : undefined}
         />
         <StatCard
-          label="추적 중"
+          label={t("추적 중", "Tracking")}
           value={stats.ongoingCount.toLocaleString()}
-          sub="현재 진행중인 포지션"
+          sub={t("현재 진행중인 포지션", "Active positions")}
           color="text-blue-600"
           rawValue={stats.ongoingCount}
         />
@@ -155,24 +159,27 @@ export default function Stats() {
       {stats.reviewedCount > 0 && (
         <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[14px] font-bold text-foreground/90">결과 분포</h2>
+            <h2 className="text-[14px] font-bold text-foreground/90">{t("결과 분포", "Outcome Distribution")}</h2>
             <span className="text-[11px] text-muted-foreground">
-              총 {stats.reviewedCount}건 중 진행중 {stats.ongoingCount}건
+              {t(`총 ${stats.reviewedCount}건 중 진행중 ${stats.ongoingCount}건`,
+                 `${stats.ongoingCount} ongoing of ${stats.reviewedCount} total`)}
             </span>
           </div>
 
-          {/* 완결 케이스 분포 (목표달성 vs 손절) */}
+          {/* 완결 케이스 분포 */}
           {(stats.hitTargetCount + stats.hitStopCount) > 0 && (
             <div className="mb-4">
               <p className="text-[11px] text-muted-foreground mb-2">
-                완결 케이스 {stats.hitTargetCount + stats.hitStopCount}건 기준
+                {t(`완결 케이스 ${stats.hitTargetCount + stats.hitStopCount}건 기준`,
+                   `${stats.hitTargetCount + stats.hitStopCount} concluded cases`)}
               </p>
               {[
-                { label: "목표 달성", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-400" },
-                { label: "손절 발생", count: stats.hitStopCount, color: "bg-red-400", textColor: "text-red-600 dark:text-red-400" },
-              ].map(({ label, count, color, textColor }) => {
+                { ko: "목표 달성", en: "Target Hit", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-400" },
+                { ko: "손절 발생", en: "Stop Loss",  count: stats.hitStopCount,   color: "bg-red-400",     textColor: "text-red-600 dark:text-red-400" },
+              ].map(({ ko: koLabel, en: enLabel, count, color, textColor }) => {
                 const concluded = stats.hitTargetCount + stats.hitStopCount;
                 const pct = concluded > 0 ? (count / concluded) * 100 : 0;
+                const label = isEn ? enLabel : koLabel;
                 return (
                   <div key={label} className="flex items-center gap-3 mb-2">
                     <span className="w-16 text-[12px] text-muted-foreground shrink-0">{label}</span>
@@ -185,7 +192,7 @@ export default function Stats() {
                       />
                     </div>
                     <span className={cn("w-20 text-right text-[12px] font-semibold tabular-nums", textColor)}>
-                      {count}건 ({pct.toFixed(0)}%)
+                      {count}{t("건", "")} ({pct.toFixed(0)}%)
                     </span>
                   </div>
                 );
@@ -193,15 +200,16 @@ export default function Stats() {
             </div>
           )}
 
-          {/* 전체 분포 (진행중 포함) */}
+          {/* 전체 분포 */}
           <div className="pt-3 border-t border-border">
-            <p className="text-[11px] text-muted-foreground mb-2">전체 현황</p>
+            <p className="text-[11px] text-muted-foreground mb-2">{t("전체 현황", "Overall")}</p>
             {[
-              { label: "목표 달성", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-400" },
-              { label: "진행중", count: stats.ongoingCount, color: "bg-blue-400", textColor: "text-blue-700 dark:text-blue-400" },
-              { label: "손절 발생", count: stats.hitStopCount, color: "bg-red-400", textColor: "text-red-600 dark:text-red-400" },
-            ].map(({ label, count, color, textColor }) => {
+              { ko: "목표 달성", en: "Target Hit", count: stats.hitTargetCount, color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-400" },
+              { ko: "진행중",   en: "Ongoing",    count: stats.ongoingCount,    color: "bg-blue-400",    textColor: "text-blue-700 dark:text-blue-400" },
+              { ko: "손절 발생", en: "Stop Loss",  count: stats.hitStopCount,   color: "bg-red-400",     textColor: "text-red-600 dark:text-red-400" },
+            ].map(({ ko: koLabel, en: enLabel, count, color, textColor }) => {
               const pct = stats.reviewedCount > 0 ? (count / stats.reviewedCount) * 100 : 0;
+              const label = isEn ? enLabel : koLabel;
               return (
                 <div key={label} className="flex items-center gap-3 mb-1.5">
                   <span className="w-16 text-[11px] text-muted-foreground shrink-0">{label}</span>
@@ -214,7 +222,7 @@ export default function Stats() {
                     />
                   </div>
                   <span className={cn("w-20 text-right text-[11px] tabular-nums", textColor)}>
-                    {count}건 ({pct.toFixed(0)}%)
+                    {count}{t("건", "")} ({pct.toFixed(0)}%)
                   </span>
                 </div>
               );
@@ -226,7 +234,7 @@ export default function Stats() {
       {/* 최근 사례 */}
       {stats.recentCases.length > 0 && (
         <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">최근 결과 사례</h2>
+          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">{t("최근 결과 사례", "Recent Cases")}</h2>
           <div className="space-y-2">
             {stats.recentCases.map((c, idx) => {
                       const isHit = c.outcome === "hit_target";
@@ -261,14 +269,14 @@ export default function Stats() {
                       <span className="text-[11px] text-muted-foreground font-mono">{c.ticker}</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
-                      {c.daysElapsed != null ? `${c.daysElapsed}일 후` : ""} ·{" "}
-                      {isHit ? "목표 달성" : "손절 발생"}
+                      {c.daysElapsed != null ? (isEn ? `After ${c.daysElapsed}d` : `${c.daysElapsed}일 후`) : ""} ·{" "}
+                      {isHit ? t("목표 달성", "Target Hit") : t("손절 발생", "Stop Loss")}
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <span className={cn("text-[14px] font-bold tabular-nums", retColor)}>{retStr}</span>
                     {stopButPositive && (
-                      <p className="text-[10px] text-amber-500 mt-0.5">손절 후 반등</p>
+                      <p className="text-[10px] text-amber-500 mt-0.5">{t("손절 후 반등", "Bounced after stop")}</p>
                     )}
                   </div>
                   {c.analysisId && (
@@ -284,7 +292,7 @@ export default function Stats() {
       {/* 업종별 현황 */}
       {topIndustries.length > 0 && (
         <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">업종별 현황</h2>
+          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">{t("업종별 현황", "By Industry")}</h2>
           <div className="divide-y divide-neutral-50">
             {topIndustries.map(([industry, data]) => {
               const rate = data.total > 0 ? (data.hitTarget / data.total) * 100 : 0;
@@ -292,13 +300,13 @@ export default function Stats() {
                 <div key={industry} className="flex items-center justify-between py-2.5">
                   <div className="flex-1 min-w-0">
                     <span className="text-[13px] text-foreground/80 truncate">{industry}</span>
-                    <span className="ml-2 text-[11px] text-muted-foreground">{data.total}건</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground">{data.total}{t("건", "")}</span>
                   </div>
                   <div className="text-right shrink-0">
                     <span className={cn("text-[13px] font-semibold",
                       rate >= 60 ? "text-emerald-600" : rate >= 40 ? "text-amber-600" : "text-red-500"
                     )}>
-                      달성률 {rate.toFixed(0)}%
+                      {t("달성률", "Hit")} {rate.toFixed(0)}%
                     </span>
                     {data.avgReturn != null && (
                       <span className={cn("ml-2 text-[11px]",
@@ -319,13 +327,14 @@ export default function Stats() {
       {stats.reviewedCount === 0 && (
         <div className="text-center py-12 text-muted-foreground">
           <BarChart3 className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-[14px] font-medium">아직 검토된 분석 결과가 없습니다</p>
-          <p className="text-[12px] mt-1">분석 완료 후 일정 기간이 지나면 성과 데이터가 여기에 표시됩니다</p>
+          <p className="text-[14px] font-medium">{t("아직 검토된 분석 결과가 없습니다", "No reviewed results yet")}</p>
+          <p className="text-[12px] mt-1">{t("분석 완료 후 일정 기간이 지나면 성과 데이터가 여기에 표시됩니다", "Performance data will appear here after analyses are reviewed")}</p>
         </div>
       )}
 
       <p className="text-[11px] text-muted-foreground/50 text-center">
-        ※ 과거 성과는 미래 수익률을 보장하지 않습니다. 투자 판단은 본인 책임입니다.
+        {t("※ 과거 성과는 미래 수익률을 보장하지 않습니다. 투자 판단은 본인 책임입니다.",
+           "※ Past performance does not guarantee future returns. Invest at your own risk.")}
       </p>
     </div>
   );
