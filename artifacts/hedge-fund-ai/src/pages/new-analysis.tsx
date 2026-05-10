@@ -279,7 +279,8 @@ export default function NewAnalysis() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectHint, setSelectHint] = useState(false); // 드롭다운 선택 유도 힌트
+  const [selectHint, setSelectHint] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -371,13 +372,16 @@ export default function NewAnalysis() {
 
   handleSubmitRef.current = handleSubmit;
 
-  const handleSelectSuggestion = (sym: string) => {
-    // 한국 종목 suffix 제거 후 표시
-    const normalized = /^\d{6}\.(KS|KQ)$/.test(sym.toUpperCase()) ? sym.split(".")[0] : sym;
-    setTicker(normalized);
+  const showConfirm = (tickerVal: string, companyName: string) => {
+    setTicker(tickerVal);
     setSuggestions([]);
     setShowDropdown(false);
-    handleSubmit(normalized);
+    setConfirmModal({ ticker: tickerVal, companyName });
+  };
+
+  const handleSelectSuggestion = (sym: string, name?: string) => {
+    const normalized = /^\d{6}\.(KS|KQ)$/.test(sym.toUpperCase()) ? sym.split(".")[0] : sym;
+    showConfirm(normalized, name ?? normalized);
   };
 
   // 6자리 숫자 코드 or 순수 영문 티커(1-5자)는 직접 입력 허용
@@ -403,9 +407,9 @@ export default function NewAnalysis() {
 
     const val = ticker.trim();
 
-    // 6자리 숫자 코드 또는 영문 1~5자 티커 → 직접 제출 허용
+    // 6자리 숫자 코드 또는 영문 1~5자 티커 → 확인 팝업 표시
     if (isDirectTicker(val)) {
-      handleSubmit(val);
+      showConfirm(val, val);
       return;
     }
 
@@ -452,6 +456,7 @@ export default function NewAnalysis() {
   };
 
   return (
+    <>
     <div className="min-h-[75vh] flex flex-col items-center justify-center">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -560,8 +565,8 @@ export default function NewAnalysis() {
                     <motion.button
                       key={s.symbol}
                       type="button"
-                      onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
-                      onTouchEnd={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol); }}
+                      onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol, s.shortname); }}
+                      onTouchEnd={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol, s.shortname); }}
                       animate={isHighlighted ? { backgroundColor: "hsl(var(--accent))" } : { backgroundColor: "transparent" }}
                       whileHover={{ backgroundColor: "hsl(var(--accent))" }}
                       whileTap={{ scale: 0.99 }}
@@ -701,7 +706,7 @@ export default function NewAnalysis() {
                     key={t.ticker}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => { setTicker(t.ticker); handleSubmit(t.ticker); }}
+                    onClick={() => showConfirm(t.ticker, t.companyName ?? t.ticker)}
                     disabled={isPending}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-40 group"
                   >
@@ -738,7 +743,7 @@ export default function NewAnalysis() {
                 return (
                   <button
                     key={p.ticker}
-                    onClick={() => { setTicker(p.ticker); handleSubmit(p.ticker); }}
+                    onClick={() => showConfirm(p.ticker, p.companyName ?? p.ticker)}
                     disabled={isPending}
                     className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors text-left group disabled:opacity-40"
                   >
@@ -788,7 +793,7 @@ export default function NewAnalysis() {
               {relatedCompanies.map((c) => (
                 <button
                   key={c.ticker}
-                  onClick={() => { setTicker(c.ticker); handleSubmit(c.ticker); }}
+                  onClick={() => showConfirm(c.ticker, c.companyName ?? c.ticker)}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-colors disabled:opacity-40"
                 >
@@ -866,7 +871,7 @@ export default function NewAnalysis() {
               {EXAMPLES_KR.map((ex) => (
                 <button
                   key={ex.ticker}
-                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  onClick={() => showConfirm(ex.ticker, ex.label)}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
                 >
@@ -882,7 +887,7 @@ export default function NewAnalysis() {
               {EXAMPLES_US.map((ex) => (
                 <button
                   key={ex.ticker}
-                  onClick={() => { setTicker(ex.ticker); handleSubmit(ex.ticker); }}
+                  onClick={() => showConfirm(ex.ticker, ex.label)}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-[12.5px] text-muted-foreground hover:border-foreground hover:text-foreground transition-colors disabled:opacity-40"
                 >
@@ -895,5 +900,81 @@ export default function NewAnalysis() {
         </div>
       </motion.div>
     </div>
+
+    {/* ── 분석 확인 모달 ── */}
+    <AnimatePresence>
+      {confirmModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setConfirmModal(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-sm p-6"
+          >
+            {/* 헤더 */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Building2 className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">AI 기업분석</p>
+                <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{confirmModal.companyName}</h3>
+                <p className="font-mono text-[11px] text-muted-foreground/50">{confirmModal.ticker}</p>
+              </div>
+            </div>
+
+            {/* 설명 */}
+            <div className="rounded-xl bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
+              <p className="text-[13.5px] text-foreground/85 leading-relaxed">
+                <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
+                7단계 심층 분석을 시작합니다.
+              </p>
+              <p className="text-[11.5px] text-muted-foreground">
+                평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
+              </p>
+            </div>
+
+            {/* 크레딧 */}
+            {credits && (
+              <p className="text-[11px] text-muted-foreground/50 text-center mb-4">
+                오늘 {Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 사용 가능
+              </p>
+            )}
+
+            {/* 버튼 */}
+            <div className="flex gap-2.5">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { setConfirmModal(null); handleSubmit(confirmModal.ticker); }}
+                disabled={isPending}
+                className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ backgroundColor: "#FF8A7A" }}
+              >
+                {isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>분석 시작 <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
