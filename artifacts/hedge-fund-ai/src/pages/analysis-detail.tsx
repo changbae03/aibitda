@@ -3023,15 +3023,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           </div>
         )}
 
-        {/* Valuation Analyst — 실적 전망 (ForwardEstimatesTable) */}
-        {isRelativeVal && ticker && <ForwardEstimatesTable ticker={ticker} />}
-
-        {/* Valuation Analyst — 사업부별 실적 전망 (AI SEGMENT_FORECAST_DATA) */}
-        {isRelativeVal && (() => {
-          const segData = parseSegmentForecastData(step.content ?? "");
-          return segData ? <SegmentForecastTable data={segData} /> : null;
-        })()}
-
         {/* Valuation Analyst — 최종 조율 적정주가 시각화 */}
         {isRelativeVal && finalValuationData && (() => {
           const fv = finalValuationData;
