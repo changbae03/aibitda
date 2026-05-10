@@ -1386,7 +1386,9 @@ export default function AnalysisDetail() {
 
                 // 의견과 실제 방향 불일치 감지
                 const verdictIsPositive = !isSellVerdict;
-                const contradictory = isActualUpside !== null && verdictIsPositive !== isActualUpside;
+                // Hold(중립)는 방향성이 없으므로 경고 제외, Buy/Sell 계열만 체크
+                const verdictHasDirection = ["buy", "strong buy", "sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase());
+                const contradictory = verdictHasDirection && isActualUpside !== null && verdictIsPositive !== isActualUpside;
 
                 const targetColor = isActualUpside === false
                   ? "text-rose-600 dark:text-rose-400"
