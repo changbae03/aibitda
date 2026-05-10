@@ -3,8 +3,8 @@ import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
-import { motion } from "framer-motion";
-import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, TrendingUp, Target, Activity } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, Activity } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -29,49 +29,12 @@ const STEPS = [
   { num: 7, name: "최종 결론",              icon: ShieldCheck, desc: "통합 검토 → 최종 투자 전략" },
 ];
 
-interface PublicStats {
-  totalAnalyses: number;
-  reviewedCount: number;
-  hitTargetCount: number;
-  winRate: number | null;
-  avgReturn: number | null;
-}
-
-function usePublicStats() {
-  const [stats, setStats] = useState<PublicStats | null>(null);
-  useEffect(() => {
-    fetch(getApiUrl("api/model-insights/public-stats"))
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setStats(d); })
-      .catch(() => {});
-  }, []);
-  return stats;
-}
-
-function AnimatedNumber({ target, suffix = "", prefix = "" }: { target: number; suffix?: string; prefix?: string }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    if (target === 0) return;
-    const duration = 1200;
-    const steps = 40;
-    const step = target / steps;
-    let current = 0;
-    const interval = setInterval(() => {
-      current = Math.min(current + step, target);
-      setDisplay(Math.round(current));
-      if (current >= target) clearInterval(interval);
-    }, duration / steps);
-    return () => clearInterval(interval);
-  }, [target]);
-  return <>{prefix}{display.toLocaleString()}{suffix}</>;
-}
-
 export default function Landing() {
   const { isSignedIn, isLoaded } = useUser();
   const { signIn } = useSignIn();
   const [, setLocation] = useLocation();
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
-  const stats = usePublicStats();
+  const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -83,6 +46,13 @@ export default function Landing() {
     if (isLoaded && isSignedIn) { setLocation("/analysis/new"); return; }
     if (!kakaoLoading && kakaoAuth?.user) setLocation("/analysis/new");
   }, [isLoaded, isSignedIn, kakaoLoading, kakaoAuth, setLocation]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveStep(prev => (prev + 1) % 6);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleKakaoLogin = () => { window.location.href = getKakaoLoginUrl(); };
 
@@ -114,7 +84,6 @@ export default function Landing() {
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#FF8A7A]/6 blur-[120px]" />
         <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-[#FF8A7A]/5 blur-[80px]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full bg-[#FF8A7A]/3 blur-[100px]" />
-        {/* 격자 무늬 배경 */}
         <div
           className="absolute inset-0 opacity-[0.015] dark:opacity-[0.04]"
           style={{
@@ -213,45 +182,119 @@ export default function Landing() {
             </div>
 
             <div className="relative">
+              {/* 수직 연결선 */}
               <div
-                className="absolute left-[19px] top-5 w-px bg-gradient-to-b from-[#FF8A7A]/40 via-[#FF8A7A]/20 to-transparent"
+                className="absolute left-[19px] top-5 w-px"
                 style={{ height: "calc(100% - 40px)" }}
-              />
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-[#FF8A7A]/30 via-[#FF8A7A]/15 to-transparent" />
+                {/* 활성 단계 진행 표시 */}
+                <motion.div
+                  className="absolute top-0 left-0 w-full bg-[#FF8A7A]"
+                  animate={{
+                    height: `${((activeStep + 1) / 6) * 100}%`,
+                    opacity: 0.6,
+                  }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                />
+              </div>
 
               <div className="space-y-1">
                 {STEPS.map((step, idx) => {
                   const Icon = step.icon;
                   const isLast = idx === STEPS.length - 1;
+                  const isActive = !isLast && activeStep === idx;
+                  const isDone = !isLast && idx < activeStep;
+
                   return (
                     <motion.div
                       key={step.num}
                       initial={{ opacity: 0, x: 12 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.35, delay: 0.18 + idx * 0.06 }}
-                      className="flex items-start gap-4 group"
+                      className="flex items-start gap-4"
                     >
+                      {/* 아이콘 원형 */}
                       <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center z-10">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                            isLast
-                              ? "bg-[#FF8A7A] border-[#FF8A7A] text-white"
-                              : "bg-background border-[#FF8A7A]/35 text-[#FF8A7A] group-hover:border-[#FF8A7A]/70"
-                          }`}
-                        >
-                          {isLast ? (
-                            <Icon className="w-4 h-4" />
-                          ) : (
-                            <span className="text-[12px] font-black">{step.num}</span>
+                        {/* 활성 단계 펄스 링 */}
+                        <AnimatePresence>
+                          {isActive && (
+                            <motion.div
+                              key="pulse"
+                              className="absolute inset-0 rounded-full border-2 border-[#FF8A7A]"
+                              initial={{ scale: 1, opacity: 0.8 }}
+                              animate={{ scale: 1.7, opacity: 0 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.9, repeat: Infinity, ease: "easeOut" }}
+                            />
                           )}
-                        </div>
+                        </AnimatePresence>
+
+                        <motion.div
+                          animate={{
+                            backgroundColor: isLast
+                              ? "#FF8A7A"
+                              : isActive
+                              ? "#FF8A7A"
+                              : isDone
+                              ? "rgba(255,138,122,0.15)"
+                              : "transparent",
+                            borderColor: isLast || isActive
+                              ? "#FF8A7A"
+                              : isDone
+                              ? "rgba(255,138,122,0.5)"
+                              : "rgba(255,138,122,0.35)",
+                            scale: isActive ? 1.1 : 1,
+                          }}
+                          transition={{ duration: 0.35, ease: "easeOut" }}
+                          className="w-10 h-10 rounded-full flex items-center justify-center border-2"
+                        >
+                          <motion.span
+                            animate={{
+                              color: isLast || isActive ? "#ffffff" : isDone ? "#FF8A7A" : "#FF8A7A",
+                            }}
+                            transition={{ duration: 0.25 }}
+                          >
+                            {isLast ? (
+                              <Icon className="w-4 h-4" />
+                            ) : isDone ? (
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <span className="text-[12px] font-black">{step.num}</span>
+                            )}
+                          </motion.span>
+                        </motion.div>
                       </div>
 
-                      <div className="pt-1.5 pb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[13.5px] font-bold leading-tight ${isLast ? "text-[#FF8A7A]" : "text-foreground"}`}>
-                            {step.name}
-                          </span>
-                        </div>
+                      {/* 텍스트 */}
+                      <div className="pt-1.5 pb-2 min-w-0">
+                        <motion.span
+                          animate={{
+                            color: isLast
+                              ? "#FF8A7A"
+                              : isActive
+                              ? "#FF8A7A"
+                              : isDone
+                              ? "rgba(255,138,122,0.7)"
+                              : "hsl(var(--foreground))",
+                          }}
+                          transition={{ duration: 0.3 }}
+                          className="text-[13.5px] font-bold leading-tight block"
+                        >
+                          {step.name}
+                          {isActive && (
+                            <motion.span
+                              initial={{ opacity: 0, x: -4 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0 }}
+                              className="ml-2 text-[10px] font-bold text-[#FF8A7A] bg-[#FF8A7A]/10 px-1.5 py-0.5 rounded-full border border-[#FF8A7A]/20 tracking-wide"
+                            >
+                              분석 중
+                            </motion.span>
+                          )}
+                        </motion.span>
                         <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug">{step.desc}</p>
                       </div>
                     </motion.div>
@@ -262,66 +305,6 @@ export default function Landing() {
           </motion.div>
         </div>
 
-        {/* ── 신뢰 지표 바 ── */}
-        {stats && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="w-full"
-          >
-            <div className="bg-card/60 backdrop-blur-sm border border-border/60 rounded-2xl px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                {
-                  icon: TrendingUp,
-                  label: "누적 분석",
-                  value: stats.totalAnalyses,
-                  suffix: "건",
-                  color: "text-[#FF8A7A]",
-                },
-                {
-                  icon: Target,
-                  label: "목표가 달성률",
-                  value: stats.winRate != null ? Math.round(stats.winRate) : null,
-                  suffix: "%",
-                  color: stats.winRate != null && stats.winRate >= 50 ? "text-emerald-500" : "text-amber-500",
-                },
-                {
-                  icon: BarChart2,
-                  label: "평균 수익률",
-                  value: stats.avgReturn != null ? parseFloat(Math.abs(stats.avgReturn).toFixed(1)) : null,
-                  prefix: stats.avgReturn != null && stats.avgReturn >= 0 ? "+" : "-",
-                  suffix: "%",
-                  color: stats.avgReturn != null && stats.avgReturn >= 0 ? "text-emerald-500" : "text-blue-400",
-                },
-                {
-                  icon: Activity,
-                  label: "추적 중인 종목",
-                  value: stats.reviewedCount,
-                  suffix: "건",
-                  color: "text-blue-400",
-                },
-              ].map(({ icon: Icon, label, value, suffix, prefix, color }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#FF8A7A]/10 flex items-center justify-center shrink-0">
-                    <Icon className="w-3.5 h-3.5 text-[#FF8A7A]" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground/60 leading-none mb-1">{label}</p>
-                    <p className={`text-[18px] font-black leading-none tabular-nums ${color}`}>
-                      {value != null ? (
-                        <AnimatedNumber target={value} suffix={suffix} prefix={prefix} />
-                      ) : "—"}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-center text-[10px] text-muted-foreground/35 mt-2">
-              실제 분석 결과 기반 · 과거 성과가 미래 수익을 보장하지 않습니다
-            </p>
-          </motion.div>
-        )}
       </div>
     </div>
   );
