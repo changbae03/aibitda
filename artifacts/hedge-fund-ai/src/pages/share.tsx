@@ -417,7 +417,17 @@ export default function SharePage() {
   );
 
   const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-  const vs = verdictStyle(analysis.investmentVerdict);
+
+  // investment_strategy 스텝 JSON을 1차 소스로 사용해 verdict 불일치 방지
+  const stratJson = (() => {
+    const stratStep = (analysis.steps ?? []).find((s: any) => s.stepKey === "investment_strategy");
+    if (!stratStep?.content) return null;
+    return extractJson(stratStep.content);
+  })();
+  const effectiveVerdict: string | null =
+    (stratJson?.verdict as string | null) ?? analysis.investmentVerdict ?? null;
+
+  const vs = verdictStyle(effectiveVerdict);
   const targetStr = analysis.targetPrice ? formatCurrency(analysis.targetPrice, currency) : null;
   const startPriceStr = analysis.startPrice ? formatCurrency(analysis.startPrice, currency) : null;
   const up = upside(analysis.targetPrice, analysis.startPrice ?? analysis.entryPrice);
@@ -425,20 +435,15 @@ export default function SharePage() {
     ? new Date(analysis.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
     : null;
 
-  const isPositive = analysis.investmentVerdict === "Strong Buy" || analysis.investmentVerdict === "Buy";
-  const isNegative = analysis.investmentVerdict === "Strong Sell" || analysis.investmentVerdict === "Sell";
+  const isPositive = effectiveVerdict === "Strong Buy" || effectiveVerdict === "Buy";
+  const isNegative = effectiveVerdict === "Strong Sell" || effectiveVerdict === "Sell";
   const isSellVerdict = isNegative;
 
   const sortedSteps = [...(analysis.steps ?? [])].sort(
     (a: any, b: any) => STEP_ORDER.indexOf(a.stepKey) - STEP_ORDER.indexOf(b.stepKey)
   );
 
-  const keyIssue = (() => {
-    const stratStep = (analysis.steps ?? []).find((s: any) => s.stepKey === "investment_strategy");
-    if (!stratStep?.content) return null;
-    const json = extractJson(stratStep.content);
-    return (json?.key_issue as string | undefined) ?? null;
-  })();
+  const keyIssue = (stratJson?.key_issue as string | undefined) ?? null;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
