@@ -49,79 +49,19 @@ const PIPELINE_EN = [
 ];
 
 const DATA_SOURCES_KO = [
-  {
-    name: "Yahoo Finance",
-    role: "재무제표 · WACC 핵심 수치",
-    detail: "EPS·매출·EBITDA·총부채·시가총액·베타·발행주식수 등 글로벌 재무 데이터",
-    color: "bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800",
-    dot: "bg-purple-500",
-  },
-  {
-    name: "DART (금융감독원)",
-    role: "한국 기업 원천 재무상태표",
-    detail: "연결·별도 재무상태표 (현금·자산·부채·자본·금융부채 직접 조회) — Yahoo Finance 수치보다 우선 적용",
-    color: "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800",
-    dot: "bg-blue-500",
-  },
-  {
-    name: "KRX (한국거래소)",
-    role: "KOSPI·KOSDAQ 종목 목록",
-    detail: "2,700+ 상장 종목의 정확한 거래소·티커 매핑 — AI의 심볼 오류 자동 교정",
-    color: "bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-800",
-    dot: "bg-teal-500",
-  },
-  {
-    name: "ECOS (한국은행)",
-    role: "한국 실시간 거시지표",
-    detail: "기준금리·CPI·원달러환율·GDP 성장률 — WACC 무위험수익률·환율 환산에 실시간 반영",
-    color: "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800",
-    dot: "bg-amber-500",
-  },
-  {
-    name: "FRED (연준)",
-    role: "미국 실시간 거시지표",
-    detail: "Fed 금리·10Y/2Y 국채수익률·장단기 스프레드·CPI·GDP·실업률 — 미국 주식 WACC Rf에 실시간 반영",
-    color: "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
-    dot: "bg-red-500",
-  },
+  { name: "Yahoo Finance",    role: "재무제표 · WACC 핵심 수치",    detail: "EPS·매출·EBITDA·총부채·시가총액·베타·발행주식수 등 글로벌 재무 데이터",                                                                   accent: "border-l-purple-500", dot: "bg-purple-500" },
+  { name: "DART (금융감독원)", role: "한국 기업 원천 재무상태표",     detail: "연결·별도 재무상태표 (현금·자산·부채·자본·금융부채 직접 조회) — Yahoo Finance 수치보다 우선 적용",                                          accent: "border-l-blue-500",   dot: "bg-blue-500"   },
+  { name: "KRX (한국거래소)", role: "KOSPI·KOSDAQ 종목 목록",         detail: "2,700+ 상장 종목의 정확한 거래소·티커 매핑 — AI의 심볼 오류 자동 교정",                                                                      accent: "border-l-teal-500",   dot: "bg-teal-500"   },
+  { name: "ECOS (한국은행)",  role: "한국 실시간 거시지표",            detail: "기준금리·CPI·원달러환율·GDP 성장률 — WACC 무위험수익률·환율 환산에 실시간 반영",                                                              accent: "border-l-amber-500",  dot: "bg-amber-500"  },
+  { name: "FRED (연준)",      role: "미국 실시간 거시지표",            detail: "Fed 금리·10Y/2Y 국채수익률·장단기 스프레드·CPI·GDP·실업률 — 미국 주식 WACC Rf에 실시간 반영",                                                accent: "border-l-red-500",    dot: "bg-red-500"    },
 ];
 
 const DATA_SOURCES_EN = [
-  {
-    name: "Yahoo Finance",
-    role: "Financials · Core WACC inputs",
-    detail: "EPS, revenue, EBITDA, total debt, market cap, beta, shares outstanding — global financial data",
-    color: "bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800",
-    dot: "bg-purple-500",
-  },
-  {
-    name: "DART (FSS Korea)",
-    role: "Korean company balance sheets",
-    detail: "Consolidated & separate balance sheets (cash, assets, liabilities, equity, financial debt direct lookup) — takes precedence over Yahoo Finance",
-    color: "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800",
-    dot: "bg-blue-500",
-  },
-  {
-    name: "KRX (Korea Exchange)",
-    role: "KOSPI · KOSDAQ listings",
-    detail: "Accurate exchange and ticker mapping for 2,700+ listed stocks — auto-corrects AI symbol errors",
-    color: "bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-800",
-    dot: "bg-teal-500",
-  },
-  {
-    name: "ECOS (Bank of Korea)",
-    role: "Korean real-time macro data",
-    detail: "Base rate, CPI, USD/KRW, GDP growth — live inputs for WACC risk-free rate and FX conversion",
-    color: "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800",
-    dot: "bg-amber-500",
-  },
-  {
-    name: "FRED (Fed Reserve)",
-    role: "US real-time macro data",
-    detail: "Fed funds rate, 10Y/2Y Treasury yields, yield spread, CPI, GDP, unemployment — live Rf input for US stock WACC",
-    color: "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
-    dot: "bg-red-500",
-  },
+  { name: "Yahoo Finance",    role: "Financials · Core WACC inputs",      detail: "EPS, revenue, EBITDA, total debt, market cap, beta, shares outstanding — global financial data",                                              accent: "border-l-purple-500", dot: "bg-purple-500" },
+  { name: "DART (FSS Korea)", role: "Korean company balance sheets",       detail: "Consolidated & separate balance sheets (cash, assets, liabilities, equity, financial debt direct lookup) — takes precedence over Yahoo Finance", accent: "border-l-blue-500",   dot: "bg-blue-500"   },
+  { name: "KRX (Korea Exchange)", role: "KOSPI · KOSDAQ listings",         detail: "Accurate exchange and ticker mapping for 2,700+ listed stocks — auto-corrects AI symbol errors",                                                accent: "border-l-teal-500",   dot: "bg-teal-500"   },
+  { name: "ECOS (Bank of Korea)", role: "Korean real-time macro data",     detail: "Base rate, CPI, USD/KRW, GDP growth — live inputs for WACC risk-free rate and FX conversion",                                                  accent: "border-l-amber-500",  dot: "bg-amber-500"  },
+  { name: "FRED (Fed Reserve)",   role: "US real-time macro data",         detail: "Fed funds rate, 10Y/2Y Treasury yields, yield spread, CPI, GDP, unemployment — live Rf input for US stock WACC",                              accent: "border-l-red-500",    dot: "bg-red-500"    },
 ];
 
 type MethodTag = { label: string; color: string };
@@ -147,7 +87,7 @@ const sectorGroups: SectorGroup[] = [
   {
     market: "한국", marketEn: "Korea",
     subtitle: "KOSPI · KOSDAQ",
-    headerCls: "bg-blue-50 border-blue-200 dark:bg-blue-500/10 dark:border-blue-600/50",
+    headerCls: "bg-muted/40 border-border",
     borderCls: "border-l-blue-400",
     items: [
       { name: "일반기업",     nameEn: "General Corporates",    tags: [{ label: "DCF",         color: METHOD_COLORS.DCF   }, { label: "EV/EBITDA",  color: METHOD_COLORS.EV  }] },
@@ -164,7 +104,7 @@ const sectorGroups: SectorGroup[] = [
   {
     market: "미국 · 글로벌", marketEn: "US · Global",
     subtitle: "NYSE · NASDAQ",
-    headerCls: "bg-red-50 border-red-200 dark:bg-red-500/10 dark:border-red-600/50",
+    headerCls: "bg-muted/40 border-border",
     borderCls: "border-l-red-400",
     items: [
       { name: "리츠 (REIT)",      nameEn: "REIT",               tags: [{ label: "P/AFFO",     color: METHOD_COLORS.FFO    }, { label: "Cap Rate NAV", color: METHOD_COLORS.NAV  }] },
@@ -470,7 +410,7 @@ export default function AboutPage() {
         </h2>
         <div className="space-y-2.5">
           {dataSources.map((src) => (
-            <div key={src.name} className={cn("rounded-xl border px-4 py-3.5 flex gap-3", src.color)}>
+            <div key={src.name} className={cn("rounded-xl border border-border bg-card px-4 py-3.5 flex gap-3 border-l-4", src.accent)}>
               <div className={cn("w-2 h-2 rounded-full shrink-0 mt-1.5", src.dot)} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
