@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Loader2, Globe, Plus, Sparkles } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Loader2, Globe, Plus, Sparkles, Repeat } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
@@ -401,7 +401,7 @@ export default function SettingsPage() {
                   </motion.div>
                 )}
 
-                {/* 충전 패키지 */}
+                {/* 크레딧 패키지 */}
                 <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
                   <div className="px-4 py-3 border-b border-border/60">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -412,7 +412,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="p-3 space-y-2">
 
-                    {/* 패키지 A — 4개 990원 */}
+                    {/* 패키지 A — 5개 1,900원 */}
                     <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border border-border/60 bg-background hover:border-border transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
@@ -420,14 +420,14 @@ export default function SettingsPage() {
                         </div>
                         <div>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-[18px] font-black text-foreground tabular-nums">4</span>
+                            <span className="text-[18px] font-black text-foreground tabular-nums">5</span>
                             <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩248", "₩248 / credit")}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩380", "₩380 / credit")}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5">
-                        <span className="text-[17px] font-black text-foreground tabular-nums">₩990</span>
+                        <span className="text-[17px] font-black text-foreground tabular-nums">₩1,900</span>
                         <button
                           disabled
                           className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-muted-foreground/50 bg-muted/40 cursor-not-allowed border border-border/30"
@@ -438,9 +438,8 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
-                    {/* 패키지 B — 10개 1,990원 (인기) */}
+                    {/* 패키지 B — 15개 4,900원 (인기) */}
                     <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border-2 border-primary/40 bg-primary/5">
-                      {/* 인기 배지 */}
                       <div className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full bg-primary text-[10px] font-bold text-white">
                         {t("인기", "Popular")}
                       </div>
@@ -450,17 +449,17 @@ export default function SettingsPage() {
                         </div>
                         <div>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-[18px] font-black text-foreground tabular-nums">10</span>
+                            <span className="text-[18px] font-black text-foreground tabular-nums">15</span>
                             <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
-                            <span className="ml-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">20% {t("할인", "OFF")}</span>
+                            <span className="ml-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">14% {t("할인", "OFF")}</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩199", "₩199 / credit")}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩327", "₩327 / credit")}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5">
                         <div className="text-right">
-                          <p className="text-[17px] font-black text-foreground tabular-nums">₩1,990</p>
-                          <p className="text-[10px] text-muted-foreground/40 line-through tabular-nums">₩2,480</p>
+                          <p className="text-[17px] font-black text-foreground tabular-nums">₩4,900</p>
+                          <p className="text-[10px] text-muted-foreground/40 line-through tabular-nums">₩5,700</p>
                         </div>
                         <button
                           disabled
@@ -473,6 +472,51 @@ export default function SettingsPage() {
                     </div>
 
                     <p className="text-[10px] text-muted-foreground/40 text-center pt-0.5">{t("결제 기능은 곧 오픈될 예정입니다.", "Payment coming soon.")}</p>
+                  </div>
+                </div>
+
+                {/* 월정액 구독 */}
+                <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border/60">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Repeat className="w-3.5 h-3.5 text-violet-500" />
+                      <p className="text-[12px] font-semibold text-foreground">{t("월정액 구독", "Monthly Subscription")}</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/60">{t("구독 중엔 분석 횟수 제한이 없습니다.", "No analysis limit while subscribed.")}</p>
+                  </div>
+                  <div className="p-3">
+                    <div className="relative flex items-center justify-between px-4 py-4 rounded-xl border-2 border-violet-500/30 bg-violet-500/5">
+                      <div className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full bg-violet-500 text-[10px] font-bold text-white">
+                        {t("무제한", "Unlimited")}
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                          <span className="text-[11px] text-foreground/80">{t("일일 분석 제한 없음", "No daily analysis limit")}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                          <span className="text-[11px] text-foreground/80">{t("구독자 전용 배지", "Subscriber badge")}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                          <span className="text-[11px] text-foreground/80">{t("언제든 해지 가능", "Cancel anytime")}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-right">
+                          <p className="text-[22px] font-black text-foreground tabular-nums leading-none">₩30,000</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("/ 월", "/ month")}</p>
+                        </div>
+                        <button
+                          disabled
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-violet-400/50 bg-violet-500/10 cursor-not-allowed border border-violet-500/20"
+                        >
+                          {t("구독하기", "Subscribe")}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 text-center mt-2.5">{t("결제 기능은 곧 오픈될 예정입니다.", "Payment coming soon.")}</p>
                   </div>
                 </div>
 
