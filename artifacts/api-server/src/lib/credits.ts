@@ -41,9 +41,10 @@ export async function getOrCreateCredits(userId: string) {
   const today = getTodayKST();
   const client = await pool.connect();
   try {
+    // 신규 가입 시 10크레딧 지급 (bonus_credits = 10)
     await client.query(
-      `INSERT INTO user_credits (user_id, daily_reset_date)
-       VALUES ($1, $2)
+      `INSERT INTO user_credits (user_id, daily_reset_date, bonus_credits)
+       VALUES ($1, $2, 10)
        ON CONFLICT (user_id) DO NOTHING`,
       [userId, today]
     );
@@ -105,7 +106,7 @@ export async function checkAndDeductCredit(userId: string): Promise<{ ok: boolea
       );
       return { ok: true };
     } else {
-      return { ok: false, reason: "오늘 분석 횟수(3회)를 모두 사용했습니다. 내일 다시 이용해 주세요." };
+      return { ok: false, reason: "크레딧이 부족합니다. 설정 화면에서 크레딧을 충전해 주세요." };
     }
   } finally {
     client.release();

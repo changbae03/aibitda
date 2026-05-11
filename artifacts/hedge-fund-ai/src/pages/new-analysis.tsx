@@ -162,22 +162,32 @@ function useRelatedCompanies(
 
 function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null }) {
   const { isEn } = useLanguage();
+  const [, setLocation] = useLocation();
   if (!credits) return null;
 
-  const dailyRemaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
+  if (credits.remaining === 0) {
+    return (
+      <motion.button
+        onClick={() => setLocation("/settings")}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-red-400/50 bg-red-950/30 text-red-300 text-[12px] font-medium hover:border-red-400 transition-colors"
+      >
+        <Zap className="w-3 h-3 shrink-0" />
+        <span>{isEn ? "No credits · Charge 4 for ₩990 →" : "크레딧 소진 · 4개 ₩990 충전 →"}</span>
+      </motion.button>
+    );
+  }
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-        credits.remaining === 0
-          ? "dark:bg-red-950/40 border-red-400 dark:border-red-700 text-red-700 dark:text-red-300"
-          : credits.remaining <= 1
-          ? "dark:bg-amber-950/30 border-amber-400 dark:border-amber-700 text-amber-700 dark:text-amber-300"
-          : "dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
-      }`}>
-        <Zap className="w-3 h-3" />
-        {isEn ? `${dailyRemaining} left today` : `오늘 ${dailyRemaining}회 남음`}
-      </div>
+    <div className={cn(
+      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+      credits.remaining <= 2
+        ? "bg-amber-950/30 border-amber-700/50 text-amber-300"
+        : "bg-emerald-950/40 border-emerald-700/50 text-emerald-400"
+    )}>
+      <Zap className="w-3 h-3" />
+      {isEn ? `${credits.remaining} credits left` : `크레딧 ${credits.remaining}개 남음`}
     </div>
   );
 }

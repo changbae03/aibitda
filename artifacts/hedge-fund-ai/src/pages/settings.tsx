@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, Globe } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, Globe, Plus, Sparkles } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
@@ -384,46 +384,95 @@ export default function SettingsPage() {
         )}
       </Section>
 
-      {/* ── 오늘의 분석 현황 ── */}
+      {/* ── 크레딧 ── */}
       {user && credits && (
-        <Section title={t("오늘의 분석 현황", "Today's Usage")}>
-          <div className="px-4 py-4 space-y-3">
-            <div className="flex items-center justify-between">
+        <Section title={t("크레딧", "Credits")}>
+          <div className="px-4 py-4 space-y-4">
+            {isAdmin ? (
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[13px] font-medium text-foreground">
-                  {isAdmin
-                    ? t("무제한 (관리자)", "Unlimited (Admin)")
-                    : isEn ? `Used ${dailyUsed} / ${dailyLimit} today` : `오늘 ${dailyUsed}회 사용 / ${dailyLimit}회`}
-                </span>
+                <span className="text-[13px] font-medium text-foreground">{t("무제한 (관리자)", "Unlimited (Admin)")}</span>
               </div>
-              {!isAdmin && (
-                <span className={cn(
-                  "text-[12px] font-semibold",
-                  credits.remaining === 0 ? "text-red-500" : credits.remaining <= 1 ? "text-amber-500" : "text-emerald-600"
-                )}>
-                  {isEn ? `${credits.remaining} left` : `${credits.remaining}회 남음`}
-                </span>
-              )}
-            </div>
-            {!isAdmin && (
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <motion.div
-                  className={cn(
-                    "h-full rounded-full",
-                    usagePct >= 100 ? "bg-red-500" : usagePct >= 66 ? "bg-amber-400" : "bg-emerald-500"
-                  )}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${usagePct}%` }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
-                />
-              </div>
+            ) : (
+              <>
+                {/* 잔여 크레딧 표시 */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      credits.remaining === 0 ? "bg-red-500/10" : credits.remaining <= 2 ? "bg-amber-500/10" : "bg-emerald-500/10"
+                    )}>
+                      <Zap className={cn(
+                        "w-4 h-4",
+                        credits.remaining === 0 ? "text-red-500" : credits.remaining <= 2 ? "text-amber-500" : "text-emerald-500"
+                      )} />
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "text-[22px] font-black leading-none tabular-nums",
+                        credits.remaining === 0 ? "text-red-500" : credits.remaining <= 2 ? "text-amber-500" : "text-foreground"
+                      )}>
+                        {credits.remaining}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("잔여 크레딧", "credits remaining")}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] text-muted-foreground/60">{t("총 사용", "total used")}</p>
+                    <p className="text-[15px] font-bold tabular-nums text-foreground/70">{credits.dailyUsed}</p>
+                  </div>
+                </div>
+
+                {/* 크레딧 소진 시 경고 */}
+                {credits.remaining === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-950/30 border border-red-700/40 text-red-300 text-[12px]"
+                  >
+                    <Zap className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t("크레딧이 모두 소진됐습니다. 아래에서 충전하세요.", "No credits left. Recharge below to continue.")}</span>
+                  </motion.div>
+                )}
+
+                {/* 충전 카드 */}
+                <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border/60">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      <p className="text-[12px] font-semibold text-foreground">{t("크레딧 충전", "Recharge Credits")}</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/60">{t("크레딧은 분석 1회에 1개씩 사용됩니다.", "1 credit is used per analysis.")}</p>
+                  </div>
+                  <div className="p-3">
+                    <div className="flex items-center justify-between px-3 py-3 rounded-xl border-2 border-primary/30 bg-primary/5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5 text-primary" />
+                          <span className="text-[16px] font-black text-foreground">4</span>
+                          <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[16px] font-black text-foreground tabular-nums">₩990</span>
+                        <button
+                          disabled
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold text-white/60 bg-muted/60 cursor-not-allowed border border-border/40"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {t("충전", "Buy")}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 text-center mt-2.5">{t("결제 기능은 곧 오픈될 예정입니다.", "Payment coming soon.")}</p>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground/40">
+                  {t("신규 가입 시 10크레딧이 무료로 지급됩니다.", "New users receive 10 free credits on sign-up.")}
+                </p>
+              </>
             )}
-            <p className="text-[11px] text-muted-foreground/60">
-              {isAdmin
-                ? t("관리자 계정은 분석 횟수 제한이 없습니다.", "Admin accounts have unlimited analyses.")
-                : t("매일 자정(KST) 기준으로 횟수가 초기화됩니다.", "Resets daily at midnight KST.")}
-            </p>
           </div>
         </Section>
       )}
