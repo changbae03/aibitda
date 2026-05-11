@@ -401,7 +401,7 @@ export default function SettingsPage() {
                   </motion.div>
                 )}
 
-                {/* 충전 카드 */}
+                {/* 충전 패키지 */}
                 <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
                   <div className="px-4 py-3 border-b border-border/60">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -410,27 +410,69 @@ export default function SettingsPage() {
                     </div>
                     <p className="text-[11px] text-muted-foreground/60">{t("크레딧은 분석 1회에 1개씩 사용됩니다.", "1 credit is used per analysis.")}</p>
                   </div>
-                  <div className="p-3">
-                    <div className="flex items-center justify-between px-3 py-3 rounded-xl border-2 border-primary/30 bg-primary/5">
+                  <div className="p-3 space-y-2">
+
+                    {/* 패키지 A — 4개 990원 */}
+                    <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border border-border/60 bg-background hover:border-border transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5">
-                          <Zap className="w-3.5 h-3.5 text-primary" />
-                          <span className="text-[16px] font-black text-foreground">4</span>
-                          <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
+                        <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
+                          <Zap className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-[18px] font-black text-foreground tabular-nums">4</span>
+                            <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩248", "₩248 / credit")}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[16px] font-black text-foreground tabular-nums">₩990</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[17px] font-black text-foreground tabular-nums">₩990</span>
                         <button
                           disabled
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold text-white/60 bg-muted/60 cursor-not-allowed border border-border/40"
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-muted-foreground/50 bg-muted/40 cursor-not-allowed border border-border/30"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          {t("충전", "Buy")}
+                          {t("구매", "Buy")}
                         </button>
                       </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground/40 text-center mt-2.5">{t("결제 기능은 곧 오픈될 예정입니다.", "Payment coming soon.")}</p>
+
+                    {/* 패키지 B — 10개 1,990원 (인기) */}
+                    <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border-2 border-primary/40 bg-primary/5">
+                      {/* 인기 배지 */}
+                      <div className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full bg-primary text-[10px] font-bold text-white">
+                        {t("인기", "Popular")}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                          <Zap className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-[18px] font-black text-foreground tabular-nums">10</span>
+                            <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
+                            <span className="ml-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">20% {t("할인", "OFF")}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩199", "₩199 / credit")}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <div className="text-right">
+                          <p className="text-[17px] font-black text-foreground tabular-nums">₩1,990</p>
+                          <p className="text-[10px] text-muted-foreground/40 line-through tabular-nums">₩2,480</p>
+                        </div>
+                        <button
+                          disabled
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-primary/40 bg-primary/10 cursor-not-allowed border border-primary/20"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {t("구매", "Buy")}
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground/40 text-center pt-0.5">{t("결제 기능은 곧 오픈될 예정입니다.", "Payment coming soon.")}</p>
                   </div>
                 </div>
 
