@@ -21,7 +21,10 @@ interface ETFData {
   currency: string | null;
   expenseRatio: number | null;
   category: string | null;
+  nav?: number | null;
+  threeMonthReturn?: number | null;
   holdings: Holding[];
+  holdingsUnavailable?: boolean;
   equityHoldings: {
     priceToEarnings?: number;
     priceToBook?: number;
@@ -204,6 +207,16 @@ export default function ETFPage() {
                       {t("운용보수", "Expense ratio")} {fmtPct(etf.expenseRatio)}
                     </p>
                   )}
+                  {etf.nav != null && (
+                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                      NAV {etf.currency === "KRW" ? `₩${etf.nav.toLocaleString("ko-KR")}` : `$${etf.nav.toFixed(2)}`}
+                      {etf.threeMonthReturn != null && (
+                        <span className={cn("ml-2 font-semibold", etf.threeMonthReturn >= 0 ? "text-emerald-500" : "text-red-500")}>
+                          3M {etf.threeMonthReturn >= 0 ? "+" : ""}{etf.threeMonthReturn.toFixed(2)}%
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
                 {etf.price != null && (
                   <div className="text-right shrink-0">
@@ -291,6 +304,34 @@ export default function ETFPage() {
                         {t("분석", "Analyze")} <ArrowRight className="w-3 h-3" />
                       </button>
                     </motion.div>
+                  ))}
+                </div>
+              </div>
+            ) : etf.holdingsUnavailable ? (
+              <div className="rounded-xl border border-border bg-card p-6 flex flex-col items-center gap-3 text-center">
+                <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center">
+                  <PieChart className="w-5 h-5 text-muted-foreground/40" />
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground mb-1">
+                    {t("구성 종목 데이터 준비 중", "Holdings data unavailable")}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground/60 max-w-xs">
+                    {t(
+                      "한국 ETF 구성 종목은 현재 지원하지 않습니다. 미국 ETF(QQQ, SPY 등)는 바로 확인하실 수 있어요.",
+                      "Korean ETF constituent data is not yet supported. Try US ETFs like QQQ or SPY."
+                    )}
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  {US_ETFS.slice(0, 3).map(({ ticker, label }) => (
+                    <button
+                      key={ticker}
+                      onClick={() => submit(ticker)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+                    >
+                      {ticker}
+                    </button>
                   ))}
                 </div>
               </div>

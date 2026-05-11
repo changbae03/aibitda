@@ -1377,16 +1377,66 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
 
 // ── ETF 보유 종목 (반드시 /:ticker 와일드카드보다 앞에 위치) ──────────────────
 router.get("/etf/holdings", async (req, res) => {
-  const ticker = (req.query.ticker as string)?.toUpperCase()?.trim();
-  if (!ticker || !/^[A-Z0-9.\-]+$/.test(ticker)) {
+  const raw = (req.query.ticker as string)?.trim();
+  if (!raw || !/^[A-Za-z0-9.\-]+$/.test(raw)) {
     return res.status(400).json({ error: "유효하지 않은 티커입니다" });
   }
+
+  // 한국 ETF 감지: "069500.KS" / "069500.KQ" / 순수 6자리 숫자
+  const isKorean = /^\d{6}$/.test(raw) || /^\d{6}\.(KS|KQ)$/i.test(raw);
+  const krCode = isKorean ? raw.replace(/\.(KS|KQ)$/i, "") : null;
+  const ticker = isKorean ? `${krCode}.KS` : raw.toUpperCase();
 
   const cacheKey = `etf-holdings-${ticker}`;
   const cached = cache.get(cacheKey);
   if (cached) return res.json(cached);
 
   try {
+    // ── 한국 ETF → Naver Finance (가격) ─────────────────────────────────────
+    if (isKorean && krCode) {
+      const naverUrl = `https://finance.naver.com/api/sise/etfItemList.nhn?etfType=1&targetDate=&sortColumn=MARKET_SUM&sortType=DESC&itemCode=${krCode}`;
+      const naverRes = await fetch(naverUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/json",
+          "Referer": "https://finance.naver.com/",
+        },
+      });
+
+      if (!naverRes.ok) {
+        return res.status(502).json({ error: "Naver Finance에서 ETF 데이터를 가져오지 못했습니다" });
+      }
+
+      const naverData = await naverRes.json();
+      const item = naverData?.result?.etfItemList?.[0];
+      if (!item) {
+        return res.status(404).json({ error: "해당 ETF를 찾을 수 없습니다" });
+      }
+
+      const changeVal = item.changeVal ?? 0;
+      const prevClose = (item.nowVal ?? 0) - changeVal;
+
+      const result = {
+        ticker,
+        name: item.itemname ?? krCode,
+        price: item.nowVal,
+        change: changeVal,
+        changePercent: item.changeRate != null ? item.changeRate / 100 : null,
+        currency: "KRW",
+        nav: item.nav,
+        threeMonthReturn: item.threeMonthEarnRate,
+        expenseRatio: null,
+        category: null,
+        holdings: [],          // 한국 ETF 구성 종목은 현재 API 미지원
+        holdingsUnavailable: true,
+        equityHoldings: { priceToEarnings: null, priceToBook: null, priceToSales: null },
+      };
+
+      cache.set(cacheKey, result, 30 * 60 * 1000); // 30분 캐시 (가격 변동 반영)
+      return res.json(result);
+    }
+
+    // ── 미국 ETF → Yahoo Finance ──────────────────────────────────────────
     const data = await yahooFinance.quoteSummary(ticker, {
       modules: ["topHoldings", "fundProfile", "price"],
     });
