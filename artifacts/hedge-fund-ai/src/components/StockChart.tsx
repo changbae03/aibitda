@@ -58,20 +58,21 @@ interface StockChartProps {
   chartLevels?: ChartLevels;
   events?: ChartEvent[];
   currency?: "KRW" | "USD";
+  isEn?: boolean;
 }
 
-const PERIOD_OPTIONS: { value: Period; label: string }[] = [
-  { value: "3m", label: "3개월" },
-  { value: "6m", label: "6개월" },
-  { value: "1y", label: "1년" },
-  { value: "2y", label: "2년" },
-  { value: "5y", label: "5년" },
+const PERIOD_OPTIONS: { value: Period; label: string; labelEn: string }[] = [
+  { value: "3m", label: "3개월", labelEn: "3M" },
+  { value: "6m", label: "6개월", labelEn: "6M" },
+  { value: "1y", label: "1년",   labelEn: "1Y" },
+  { value: "2y", label: "2년",   labelEn: "2Y" },
+  { value: "5y", label: "5년",   labelEn: "5Y" },
 ];
 
-const INTERVAL_OPTIONS: { value: Interval; label: string }[] = [
-  { value: "1d", label: "일봉" },
-  { value: "1wk", label: "주봉" },
-  { value: "1mo", label: "월봉" },
+const INTERVAL_OPTIONS: { value: Interval; label: string; labelEn: string }[] = [
+  { value: "1d",  label: "일봉", labelEn: "Daily"   },
+  { value: "1wk", label: "주봉", labelEn: "Weekly"  },
+  { value: "1mo", label: "월봉", labelEn: "Monthly" },
 ];
 
 function formatPrice(v: number | null | undefined, currency: "KRW" | "USD" = "KRW") {
@@ -92,7 +93,7 @@ function formatVolume(v: number | null | undefined) {
   return v.toString();
 }
 
-const CustomTooltip = ({ active, payload, label, currency = "KRW" }: any) => {
+const CustomTooltip = ({ active, payload, label, currency = "KRW", isEn = false }: any) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   return (
@@ -101,27 +102,27 @@ const CustomTooltip = ({ active, payload, label, currency = "KRW" }: any) => {
       {d?.close != null && (
         <div className="space-y-1.5">
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">종가</span>
+            <span className="text-muted-foreground">{isEn ? "Close" : "종가"}</span>
             <span className="text-foreground font-bold font-mono">{priceLabel(d.close, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">고가</span>
+            <span className="text-muted-foreground">{isEn ? "High" : "고가"}</span>
             <span className="text-emerald-600 font-mono">{priceLabel(d.high, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">저가</span>
+            <span className="text-muted-foreground">{isEn ? "Low" : "저가"}</span>
             <span className="text-red-500 font-mono">{priceLabel(d.low, currency)}</span>
           </div>
           {d.volume != null && (
             <div className="flex justify-between gap-4 border-t border-border pt-1.5 mt-0.5">
-              <span className="text-muted-foreground">거래량</span>
+              <span className="text-muted-foreground">{isEn ? "Volume" : "거래량"}</span>
               <span className="text-foreground/70 font-mono">{formatVolume(d.volume)}</span>
             </div>
           )}
           {d._swingIdx != null && (
             <div className="border-t border-border pt-1.5 mt-0.5">
               <span className="font-bold" style={{ color: d._swingIsUp ? "#16a34a" : "#dc2626" }}>
-                {d._swingIsUp ? "▲" : "▼"} {d._swingIsUp ? "+" : ""}{d._swingPct?.toFixed(1)}% 급변
+                {d._swingIsUp ? "▲" : "▼"} {d._swingIsUp ? "+" : ""}{d._swingPct?.toFixed(1)}% {isEn ? "swing" : "급변"}
               </span>
             </div>
           )}
@@ -169,12 +170,10 @@ function detectPriceSwings(chartData: any[], minPct = 4, maxCount = 5): PriceSwi
       });
     }
   }
-  // 상위 N개 (절대값 기준, 시간순 정렬)
   swings.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
   const top = swings.slice(0, maxCount);
   top.sort((a, b) => a.index - b.index);
 
-  // 너무 가까운 날짜는 합치기 (7일 이내)
   const filtered: PriceSwing[] = [];
   for (const s of top) {
     const last = filtered[filtered.length - 1];
@@ -205,10 +204,9 @@ async function fetchPriceEvents(ticker: string, companyName: string | undefined,
   return res.json();
 }
 
-// 번호 뱃지 (①②...)
 const NUM_BADGES = ["①", "②", "③", "④", "⑤"];
 
-export default function StockChart({ ticker, companyName, chartLevels, events = [], currency = "KRW" }: StockChartProps) {
+export default function StockChart({ ticker, companyName, chartLevels, events = [], currency = "KRW", isEn = false }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
   const [showEvents, setShowEvents] = useState(true);
@@ -216,14 +214,13 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState(false);
 
-  // 다크모드 감지
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   useEffect(() => {
     const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains("dark")));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);
-  const lineColor = isDark ? "#e2e8f0" : "#0a0a0a";  // 다크: 밝은 회백색 / 라이트: 거의 검정
+  const lineColor = isDark ? "#e2e8f0" : "#0a0a0a";
 
   const { data, isLoading, error } = useGetMarketData(ticker, { period, interval });
 
@@ -231,7 +228,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const nxtInfo = (data as any)?.nxtInfo as { price: number; changePercent: number; compareToPrev: string; at: string; sessionType: string; status: string } | null | undefined;
   const nxtIsUp = (nxtInfo?.changePercent ?? 0) >= 0;
 
-  // 1년 이상은 연도 포함 YYYY-MM-DD로 저장 (같은 MM-DD가 연도 경계에서 중복되면 ReferenceDot 오작동)
   const useLongDate = period === "5y" || period === "2y" || period === "1y";
   const chartData = data?.candles?.map((c) => ({
     ...c,
@@ -239,11 +235,9 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
     dateLabel: useLongDate ? c.date.slice(0, 10) : c.date.slice(5),
   })) ?? [];
 
-  // 주가 급변 자동 감지
   const minSwingPct = period === "5y" ? 8 : period === "2y" ? 6 : 4;
   const swings = chartData.length > 1 ? detectPriceSwings(chartData, minSwingPct, 5) : [];
 
-  // 급변 데이터 차트에 합치기
   const swingDateSet = new Set(swings.map(s => s.dateLabel));
   const chartDataWithSwings = chartData.map((d, i) => {
     const swing = swings.find(s => s.dateLabel === d.dateLabel);
@@ -257,7 +251,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   });
 
   const currentPrice = data?.currentPrice ?? 0;
-  // 현재가 대비 50% 초과 차이나는 레벨은 차트에서 제외 (차트 가독성 보호)
   const MAX_LEVEL_RATIO = 1.5;
   const showTarget1OnChart = chartLevels?.target1 && currentPrice > 0 && chartLevels.target1 <= currentPrice * MAX_LEVEL_RATIO;
   const showTarget2OnChart = chartLevels?.target2 && currentPrice > 0 && chartLevels.target2 <= currentPrice * MAX_LEVEL_RATIO;
@@ -277,7 +270,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
   const volumeDomainMax = maxVolume * 5;
 
-  // 가격 급변 뉴스 조회 (데이터 로드 완료 + swings 감지 시 자동 실행)
   useEffect(() => {
     if (swings.length === 0) return;
     setPriceEventNews([]);
@@ -324,14 +316,16 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
               {nxtInfo && currency === "KRW" && (
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="text-[10px] font-bold text-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
-                    {nxtInfo.sessionType === "AFTER_MARKET" ? "NXT 장후" : "NXT 장전"}
-                    {nxtInfo.status === "OPEN" ? " 거래중" : ""}
+                    {nxtInfo.sessionType === "AFTER_MARKET"
+                      ? (isEn ? "NXT After-Mkt" : "NXT 장후")
+                      : (isEn ? "NXT Pre-Mkt" : "NXT 장전")}
+                    {nxtInfo.status === "OPEN" ? (isEn ? " Live" : " 거래중") : ""}
                   </span>
                   <span className="font-mono font-bold text-sm text-foreground">{formatPrice(nxtInfo.price)}</span>
                   <span className={cn("text-xs font-semibold", nxtIsUp ? "text-emerald-600" : "text-red-500")}>
                     {nxtIsUp ? "+" : ""}{nxtInfo.changePercent.toFixed(2)}%
                   </span>
-                  <span className="text-[10px] text-muted-foreground">({nxtInfo.compareToPrev}원)</span>
+                  <span className="text-[10px] text-muted-foreground">({nxtInfo.compareToPrev}{isEn ? "" : "원"})</span>
                   {nxtInfo.at && (
                     <span className="text-[10px] text-muted-foreground hidden sm:inline">
                       {nxtInfo.at.replace("T", " ").substring(0, 16)} KST
@@ -346,19 +340,26 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
         {data && (
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
             <div>
-              <div className="text-muted-foreground mb-0.5 text-[11px]">52주 고가</div>
-              <div className="text-emerald-600 font-mono font-bold">{formatPrice(data.yearHigh)}</div>
+              <div className="text-muted-foreground mb-0.5 text-[11px]">{isEn ? "52W High" : "52주 고가"}</div>
+              <div className="text-emerald-600 font-mono font-bold">{formatPrice(data.yearHigh, currency)}</div>
             </div>
             <div>
-              <div className="text-muted-foreground mb-0.5 text-[11px]">52주 저가</div>
-              <div className="text-red-500 font-mono font-bold">{formatPrice(data.yearLow)}</div>
+              <div className="text-muted-foreground mb-0.5 text-[11px]">{isEn ? "52W Low" : "52주 저가"}</div>
+              <div className="text-red-500 font-mono font-bold">{formatPrice(data.yearLow, currency)}</div>
             </div>
             {(data as any).quoteInfo?.marketCap != null && (
               <div>
-                <div className="text-muted-foreground mb-0.5 text-[11px]">시가총액</div>
+                <div className="text-muted-foreground mb-0.5 text-[11px]">{isEn ? "Mkt Cap" : "시가총액"}</div>
                 <div className="font-mono font-bold text-foreground">
                   {(() => {
                     const cap = (data as any).quoteInfo.marketCap as number;
+                    if (isEn) {
+                      const tril = cap / 1e12;
+                      if (tril >= 1) return `$${tril.toFixed(1)}T`;
+                      const bil = cap / 1e9;
+                      if (bil >= 1) return `$${bil.toFixed(1)}B`;
+                      return `$${Math.round(cap / 1e6)}M`;
+                    }
                     const tril = cap / 1e12;
                     if (tril >= 1) return `${tril.toFixed(1)}조`;
                     return `${Math.round(cap / 1e8)}억`;
@@ -375,7 +376,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
         <div className="flex gap-1">
           {PERIOD_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setPeriod(opt.value)} className={ctrlBtn(period === opt.value)}>
-              {opt.label}
+              {isEn ? opt.labelEn : opt.label}
             </button>
           ))}
         </div>
@@ -383,7 +384,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
         <div className="flex gap-1">
           {INTERVAL_OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setInterval(opt.value)} className={ctrlBtn(interval === opt.value)}>
-              {opt.label}
+              {isEn ? opt.labelEn : opt.label}
             </button>
           ))}
         </div>
@@ -395,7 +396,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
           <div className="h-80 flex items-center justify-center">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="animate-spin" size={16} />
-              <span className="text-sm">데이터 로딩 중...</span>
+              <span className="text-sm">{isEn ? "Loading data..." : "데이터 로딩 중..."}</span>
             </div>
           </div>
         )}
@@ -403,7 +404,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
           <div className="h-80 flex items-center justify-center">
             <div className="flex items-center gap-2 text-red-500">
               <AlertCircle size={16} />
-              <span className="text-sm">데이터를 불러올 수 없습니다: {ticker}</span>
+              <span className="text-sm">{isEn ? `Unable to load data: ${ticker}` : `데이터를 불러올 수 없습니다: ${ticker}`}</span>
             </div>
           </div>
         )}
@@ -419,13 +420,11 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   axisLine={false}
                   interval={Math.floor(chartData.length / 7)}
                   tickFormatter={(v: string) => {
-                    if (!useLongDate) return v; // "MM-DD" 그대로
-                    if (period === "1y") return v.slice(5, 10); // "YYYY-MM-DD" → "MM-DD"
-                    // "YYYY-MM-DD" → "YY.MM" 형식으로 축약 (2년/5년)
+                    if (!useLongDate) return v;
+                    if (period === "1y") return v.slice(5, 10);
                     return v.slice(2, 7).replace("-", ".");
                   }}
                 />
-                {/* 주가 Y축 (왼쪽) */}
                 <YAxis
                   yAxisId="price"
                   domain={[priceMin, priceMax]}
@@ -435,7 +434,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   tickFormatter={(v) => currency === "USD" ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : v.toLocaleString("ko-KR")}
                   width={currency === "USD" ? 64 : 72}
                 />
-                {/* 거래량 Y축 (오른쪽 숨김) */}
                 <YAxis
                   yAxisId="volume"
                   orientation="right"
@@ -445,9 +443,8 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   axisLine={false}
                   width={0}
                 />
-                <Tooltip content={<CustomTooltip currency={currency} />} />
+                <Tooltip content={<CustomTooltip currency={currency} isEn={isEn} />} />
 
-                {/* ── 구간 영역 ── */}
                 {chartLevels?.stopLoss && chartLevels?.entryMin && (
                   <ReferenceArea yAxisId="price" y1={chartLevels.stopLoss} y2={chartLevels.entryMin} fill="#ef4444" fillOpacity={0.04} strokeOpacity={0} />
                 )}
@@ -458,21 +455,18 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   <ReferenceArea yAxisId="price" y1={chartLevels.target1} y2={chartLevels.target2} fill="#16a34a" fillOpacity={0.06} strokeOpacity={0} />
                 )}
 
-                {/* 거래량 바 */}
-                <Bar yAxisId="volume" dataKey="volume" name="거래량" fill="#d4d4d4" opacity={0.5} radius={[1, 1, 0, 0]} isAnimationActive={false} />
+                <Bar yAxisId="volume" dataKey="volume" name={isEn ? "Volume" : "거래량"} fill="#d4d4d4" opacity={0.5} radius={[1, 1, 0, 0]} isAnimationActive={false} />
 
-                {/* 종가 라인 */}
                 <Line
                   yAxisId="price"
                   dataKey="close"
-                  name="주가"
+                  name={isEn ? "Price" : "주가"}
                   stroke={lineColor}
                   strokeWidth={1.8}
                   dot={false}
                   activeDot={{ r: 3, fill: lineColor }}
                 />
 
-                {/* ── 기준선 — 현재가 대비 50% 이내 레벨만 표시 ── */}
                 {showStopLossOnChart && (
                   <ReferenceLine yAxisId="price" y={chartLevels!.stopLoss!} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 2" />
                 )}
@@ -489,7 +483,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                   <ReferenceLine yAxisId="price" y={chartLevels!.target2!} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3" />
                 )}
 
-                {/* ── 주가 급변 마커 — 원형 닷 ── */}
                 {swings.map((swing, idx) => (
                   <ReferenceDot
                     key={`swing-${idx}`}
@@ -512,13 +505,15 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* ── 기준선 배지 (차트 바깥에서 레이블 표시) ── */}
+            {/* Level badges */}
             {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
               <div className="mt-3 flex flex-wrap gap-1.5 px-1">
-                {chartLevels.stopLoss && <LevelBadge label="손절선" value={chartLevels.stopLoss} color="#dc2626" currency={currency} />}
+                {chartLevels.stopLoss && (
+                  <LevelBadge label={isEn ? "Stop Loss" : "손절선"} value={chartLevels.stopLoss} color="#dc2626" currency={currency} />
+                )}
                 {chartLevels.entryMin && chartLevels.entryMax && (
                   <LevelBadge
-                    label="진입 구간"
+                    label={isEn ? "Entry Zone" : "진입 구간"}
                     value={currency === "USD"
                       ? `$${chartLevels.entryMin.toLocaleString("en-US", { minimumFractionDigits: 2 })} ~ $${chartLevels.entryMax.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
                       : `${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`
@@ -527,12 +522,16 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                     currency={currency}
                   />
                 )}
-                {chartLevels.target1 && <LevelBadge label="1차 적정주가" value={chartLevels.target1} color="#16a34a" currency={currency} />}
-                {chartLevels.target2 && <LevelBadge label="2차 목표" value={chartLevels.target2} color="#15803d" currency={currency} />}
+                {chartLevels.target1 && (
+                  <LevelBadge label={isEn ? "1st Target" : "1차 적정주가"} value={chartLevels.target1} color="#16a34a" currency={currency} />
+                )}
+                {chartLevels.target2 && (
+                  <LevelBadge label={isEn ? "2nd Target" : "2차 목표"} value={chartLevels.target2} color="#15803d" currency={currency} />
+                )}
               </div>
             )}
 
-            {/* ── 주가 급변 이슈 섹션 ── */}
+            {/* Price swing events */}
             {swings.length > 0 && (
               <div className="mt-3 pt-3 border-t border-border">
                 <button
@@ -541,10 +540,12 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                 >
                   <Sparkles size={12} className="text-amber-500 flex-shrink-0" />
                   <span className="text-[11px] font-semibold text-foreground/80 uppercase tracking-wider">
-                    주요 주가 급변 이슈
+                    {isEn ? "Key Price Events" : "주요 주가 급변 이슈"}
                   </span>
                   <span className="text-[10px] text-muted-foreground ml-1">
-                    ({minSwingPct}% 이상 급변 {swings.length}건)
+                    ({isEn
+                      ? `${swings.length} swing${swings.length > 1 ? "s" : ""} ≥${minSwingPct}%`
+                      : `${minSwingPct}% 이상 급변 ${swings.length}건`})
                   </span>
                   <span className="ml-auto text-muted-foreground">
                     {showEvents ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -561,7 +562,6 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                           key={idx}
                           className="flex gap-3 p-2.5 rounded-lg border border-border bg-muted/30"
                         >
-                          {/* 번호 뱃지 */}
                           <div
                             className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
                             style={{ backgroundColor: isPos ? "#16a34a" : "#dc2626" }}
@@ -581,14 +581,16 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                             {newsLoading && !news && (
                               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                                 <Loader2 size={10} className="animate-spin" />
-                                <span>이슈 분석 중...</span>
+                                <span>{isEn ? "Analyzing..." : "이슈 분석 중..."}</span>
                               </div>
                             )}
                             {news && (
                               <p className="text-[11px] text-foreground/80 leading-relaxed">{news.summary}</p>
                             )}
-                            {newsError && !news && (
-                              <p className="text-[11px] text-muted-foreground">{swing.date.slice(0, 7)} 이슈 조회 실패</p>
+                            {newsError && !news && !newsLoading && (
+                              <p className="text-[11px] text-muted-foreground/50 italic">
+                                {isEn ? "Failed to load event summary" : "이슈 조회 실패"}
+                              </p>
                             )}
                           </div>
                         </div>

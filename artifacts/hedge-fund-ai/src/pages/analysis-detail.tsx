@@ -913,7 +913,10 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
             </table>
           </div>
           <p className="px-4 py-2 text-[10px] text-muted-foreground border-t border-border/50">
-            실측 = Yahoo Finance 자동 수집 · <span className="sm:hidden">모바일: P/E Fwd·EV/Sales·시총은 PC에서 확인 · </span>EV/Sales = (시총+순차입금)÷매출
+            {isEn
+              ? <>Live data via Yahoo Finance · <span className="sm:hidden">Mobile: P/E Fwd, EV/Sales, Mkt Cap visible on desktop · </span>EV/Sales = (Mkt Cap + Net Debt) ÷ Revenue</>
+              : <>실측 = Yahoo Finance 자동 수집 · <span className="sm:hidden">모바일: P/E Fwd·EV/Sales·시총은 PC에서 확인 · </span>EV/Sales = (시총+순차입금)÷매출</>
+            }
           </p>
         </div>
       )}
@@ -1390,7 +1393,7 @@ export default function AnalysisDetail() {
               <p className="text-sm text-muted-foreground mt-0.5 mb-1 font-normal">{analysis.englishName}</p>
             )}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground mt-2">
-              <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {toKoreanIndustry(analysis.industry)}</span>
+              <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {isEn ? (analysis.industry ?? "—") : toKoreanIndustry(analysis.industry)}</span>
               <span className="flex items-center gap-1"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> {isEn ? format(new Date(analysis.createdAt), 'MMM d HH:mm') : format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
               {headerMarketCap != null && (
                 <span className="flex items-center gap-1">
@@ -3215,6 +3218,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               chartLevels={chartLevels ?? undefined}
               events={chartEvents}
               currency={priceCurrency}
+              isEn={isEn}
             />
           </div>
         )}
