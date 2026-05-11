@@ -846,7 +846,8 @@ export default function History() {
           <p className="text-[13px] text-muted-foreground/50">{isEn ? "Search for a company to start your first analysis" : "AI 기업분석 메뉴에서 종목을 검색해 분석을 시작해보세요"}</p>
           <button
             onClick={() => setLocation("/analysis/new")}
-            className="mt-2 px-4 py-2 rounded-md text-[13px] font-medium bg-[#1d4ed8] text-white hover:bg-blue-700 transition-colors"
+            className="mt-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-colors"
+            style={{ backgroundColor: "#FF8A7A" }}
           >
             {isEn ? "Start Analysis" : "분석 시작하기"}
           </button>
@@ -887,6 +888,14 @@ export default function History() {
                 return { label: isEn ? "— Flat" : "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
+              const verdictLeftBorder = (() => {
+                const v = (a.investmentVerdict ?? "").toLowerCase();
+                if (v.includes("buy")) return "border-l-emerald-500/50";
+                if (v.includes("sell")) return "border-l-blue-400/50";
+                if (v.includes("hold")) return "border-l-amber-400/50";
+                return "";
+              })();
+
               return (
                 <motion.div
                   key={a.id}
@@ -895,7 +904,10 @@ export default function History() {
                   animate={{ opacity: isThisDeleting ? 0.4 : 1, y: 0 }}
                   exit={{ opacity: 0, x: -24, transition: { duration: 0.22 } }}
                   transition={{ duration: 0.18 }}
-                  className="group relative flex flex-col px-5 py-4 rounded-xl border border-border hover:border-border hover:bg-muted/50 transition-all cursor-pointer"
+                  className={cn(
+                    "group relative flex flex-col px-5 py-4 rounded-xl border border-border/60 bg-card hover:bg-muted/30 transition-all cursor-pointer",
+                    verdictLeftBorder && `border-l-2 ${verdictLeftBorder}`
+                  )}
                   onClick={() => !isConfirming && !isThisDeleting && setLocation(`/analysis/${a.id}`)}
                 >
                   {/* ── 상단 행: 아이콘 + 종목정보 + 버튼 ── */}

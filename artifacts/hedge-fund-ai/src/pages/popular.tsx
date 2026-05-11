@@ -72,23 +72,36 @@ function TickerRow({ entry, rank, isEn }: { entry: TickerEntry; rank: number; is
     });
   }, [isEn, entry.ticker, entry.companyName, entry.englishName, isKorean]);
 
+  const isTop3 = rank <= 3;
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.25 + rank * 0.04 }}
-      className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border transition-colors"
+      className={cn(
+        "flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 bg-card transition-colors hover:bg-muted/30",
+        isTop3 && "border-l-2 border-l-primary/40"
+      )}
     >
-      <span className="text-[12px] font-bold text-muted-foreground/40 w-5 tabular-nums">{rank}</span>
+      <span className={cn(
+        "text-[12px] font-bold w-5 tabular-nums shrink-0",
+        rank === 1 ? "text-primary/70" : rank <= 3 ? "text-muted-foreground/50" : "text-muted-foreground/30"
+      )}>{rank}</span>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[14px] font-semibold text-foreground truncate">{displayName}</span>
-          <span className="text-[11px] font-mono text-muted-foreground">{entry.ticker}</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[13.5px] font-semibold text-foreground truncate">{displayName}</span>
+          <span className="text-[10px] font-mono text-muted-foreground/50">{entry.ticker}</span>
         </div>
       </div>
-      <span className="text-[12px] tabular-nums text-muted-foreground shrink-0">
-        {entry.count}{isEn ? "x" : "회"}
-      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={cn(
+          "text-[11px] tabular-nums font-medium",
+          isTop3 ? "text-foreground/70" : "text-muted-foreground/50"
+        )}>
+          {entry.count}{isEn ? "x" : "회"}
+        </span>
+      </div>
     </motion.div>
   );
 }
@@ -160,6 +173,7 @@ export default function Popular() {
             icon: BarChart3,
             color: "text-primary",
             bg: "bg-primary/10",
+            accentBorder: "border-t-[#FF8A7A]",
           },
           {
             label: t("종목 커버리지", "Stock Coverage"),
@@ -168,7 +182,8 @@ export default function Popular() {
                    `Unique stocks analyzed · KR ${krCount} · US ${usCount}`),
             icon: Target,
             color: "text-amber-500",
-            bg: "bg-amber-50",
+            bg: "bg-amber-500/10",
+            accentBorder: "border-t-amber-500",
           },
         ].map((m, i) => (
           <motion.div
@@ -176,14 +191,14 @@ export default function Popular() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06 }}
-            className="rounded-xl border border-border bg-background p-4"
+            className={cn("rounded-xl border border-border bg-card p-4 border-t-2", m.accentBorder)}
           >
             <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-3", m.bg)}>
               <m.icon className={cn("w-4 h-4", m.color)} />
             </div>
-            <p className={cn("text-[22px] font-black leading-none tabular-nums mb-1", m.color)}>{m.value}</p>
-            <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">{m.label}</p>
-            <p className="text-[10px] text-muted-foreground/60">{m.sub}</p>
+            <p className={cn("text-[26px] font-black leading-none tabular-nums mb-1", m.color)}>{m.value}</p>
+            <p className="text-[12px] font-semibold text-foreground/80 mb-0.5">{m.label}</p>
+            <p className="text-[10px] text-muted-foreground/50">{m.sub}</p>
           </motion.div>
         ))}
       </motion.div>

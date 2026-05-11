@@ -488,10 +488,10 @@ export default function NewAnalysis() {
         {/* Search */}
         <form onSubmit={onSubmit} className="w-full relative">
           <div
-            className={`flex items-center gap-3 bg-background border rounded-xl px-4 py-3 transition-all duration-150 ${
+            className={`flex items-center gap-3 bg-card border rounded-2xl px-4 py-3.5 shadow-sm transition-all duration-200 ${
               error
-                ? "border-red-400 ring-2 ring-red-100"
-                : "border-border focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/10"
+                ? "border-red-400 ring-2 ring-red-400/20"
+                : "border-border/60 focus-within:border-foreground/30 focus-within:shadow-md focus-within:ring-2 focus-within:ring-foreground/8"
             }`}
           >
             <Search className="w-4 h-4 text-muted-foreground/50 shrink-0" />
@@ -516,7 +516,8 @@ export default function NewAnalysis() {
             <button
               type="submit"
               disabled={isPending || !ticker.trim()}
-              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-foreground text-background text-[13px] font-semibold hover:bg-foreground/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ backgroundColor: "#FF8A7A", color: "white" }}
             >
               {isPending ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -706,12 +707,12 @@ export default function NewAnalysis() {
               className="flex flex-col gap-2"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-primary" />
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Recent Analyses" : "최근 분석 종목"}</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                  <span className="text-[11px] font-semibold text-muted-foreground/70 tracking-wide">{isEn ? "Recent" : "최근 분석"}</span>
                 </div>
-                <a href="/history" className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
-                  {isEn ? "All History" : "전체 기록"} <ChevronRight className="w-3 h-3" />
+                <a href="/history" className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground flex items-center gap-0.5 transition-colors">
+                  {isEn ? "All" : "전체"} <ChevronRight className="w-3 h-3" />
                 </a>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -746,25 +747,36 @@ export default function NewAnalysis() {
               transition={{ duration: 0.3, delay: 0.04 }}
               className="flex flex-col gap-2"
             >
-              <div className="flex items-center gap-1.5">
-                <Flame className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Trending" : "많이 찾는 종목"}</span>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                <span className="text-[11px] font-semibold text-muted-foreground/70 tracking-wide">{isEn ? "Trending" : "많이 찾는 종목"}</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {trending.map((t) => (
+                {trending.map((t, idx) => (
                   <motion.button
                     key={t.ticker}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => showConfirm(t.ticker, t.companyName ?? t.ticker)}
                     disabled={isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-40 group"
-                  >
-                    <span className="font-mono text-[10px] text-muted-foreground/50 group-hover:text-primary/60 transition-colors">{t.ticker}</span>
-                    <span className="text-[12.5px] text-foreground/80 font-medium">{t.companyName}</span>
-                    {t.count > 1 && (
-                      <span className="text-[9px] text-muted-foreground/40 tabular-nums">{t.count}회</span>
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-150 disabled:opacity-40 group",
+                      idx === 0
+                        ? "bg-primary/8 border-primary/30 hover:bg-primary/12 hover:border-primary/50"
+                        : "bg-card border-border/60 hover:border-primary/40 hover:bg-primary/5"
                     )}
+                  >
+                    {idx < 3 && (
+                      <span className={cn(
+                        "font-bold text-[9px] tabular-nums leading-none",
+                        idx === 0 ? "text-primary/70" : "text-muted-foreground/40"
+                      )}>{idx + 1}</span>
+                    )}
+                    <span className={cn(
+                      "text-[12.5px] font-medium transition-colors",
+                      idx === 0 ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"
+                    )}>{t.companyName}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground/40">{t.ticker}</span>
                   </motion.button>
                 ))}
               </div>
@@ -780,10 +792,10 @@ export default function NewAnalysis() {
             transition={{ duration: 0.3, delay: 0.08 }}
             className="flex flex-col gap-2"
           >
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3 h-3 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "You May Be Interested In" : "관심 있을 만한 기업"}</span>
-              <span className="text-[9px] text-muted-foreground/40">· {relatedCompanies[0].baseCompanyName} {isEn ? "peers" : "피어"}</span>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 shrink-0" />
+              <span className="text-[11px] font-semibold text-muted-foreground/60 tracking-wide">{isEn ? "You May Like" : "관심 있을 만한 기업"}</span>
+              <span className="text-[9px] text-muted-foreground/30">· {relatedCompanies[0].baseCompanyName}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {relatedCompanies.map((c) => (

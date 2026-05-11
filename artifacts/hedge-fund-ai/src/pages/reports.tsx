@@ -165,14 +165,14 @@ export default function Reports() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.06 }}
-                  className="rounded-xl border border-border bg-background p-4"
+                  className={cn("rounded-xl border border-border bg-card p-4 border-t-2", m.color === "text-primary" ? "border-t-[#FF8A7A]" : m.color === "text-emerald-600" ? "border-t-emerald-500" : m.color === "text-amber-500" ? "border-t-amber-500" : m.color === "text-red-500" ? "border-t-red-500" : m.color === "text-blue-500" ? "border-t-blue-500" : "border-t-border")}
                 >
                   <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-3", m.bg)}>
                     <m.icon className={cn("w-4 h-4", m.color)} />
                   </div>
                   <p className={cn("text-[22px] font-black leading-none tabular-nums mb-1", m.color)}>{m.value}</p>
-                  <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">{m.label}</p>
-                  <p className="text-[10px] text-muted-foreground/60">{m.sub}</p>
+                  <p className="text-[12px] font-semibold text-foreground/80 mb-0.5">{m.label}</p>
+                  <p className="text-[10px] text-muted-foreground/50">{m.sub}</p>
                 </motion.div>
               ))}
             </motion.div>
