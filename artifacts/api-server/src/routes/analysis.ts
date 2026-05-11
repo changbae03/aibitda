@@ -3371,13 +3371,6 @@ router.get("/public-stats", async (_req, res) => {
       verdictMap[v] = (verdictMap[v] ?? 0) + 1;
     }
 
-    let krCount = 0;
-    let usCount = 0;
-    for (const r of rows) {
-      if (/^\d{6}$/.test(r.ticker)) krCount++;
-      else usCount++;
-    }
-
     const tickerCount: Record<string, { count: number; companyName: string; englishName: string | null; latestVerdict: string | null; latestId: number }> = {};
     for (const r of rows) {
       if (!tickerCount[r.ticker]) {
@@ -3391,7 +3384,11 @@ router.get("/public-stats", async (_req, res) => {
         if (r.englishName) tickerCount[r.ticker].englishName = r.englishName;
       }
     }
-    const uniqueTickerCount = Object.keys(tickerCount).length;
+
+    const uniqueTickers = Object.keys(tickerCount);
+    const uniqueTickerCount = uniqueTickers.length;
+    const krCount = uniqueTickers.filter(t => /^\d{6}$/.test(t)).length;
+    const usCount = uniqueTickers.filter(t => !/^\d{6}$/.test(t)).length;
     const topTickers = Object.entries(tickerCount)
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 10)
