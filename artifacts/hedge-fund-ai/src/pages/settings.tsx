@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Tag, Loader2, Globe, Plus, Sparkles } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Loader2, Globe, Plus, Sparkles } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
@@ -107,9 +107,6 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = useState("");
   const deleteInputRef = useRef<HTMLInputElement>(null);
 
-  const [promoCode, setPromoCode] = useState("");
-  const [promoApplying, setPromoApplying] = useState(false);
-  const [promoResult, setPromoResult] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const { language, setLanguage: ctxSetLanguage, isEn } = useLanguage();
   const [langSaving, setLangSaving] = useState(false);
@@ -174,37 +171,6 @@ export default function SettingsPage() {
     }
   };
 
-  const applyPromo = async () => {
-    const code = promoCode.trim();
-    if (!code || promoApplying) return;
-    setPromoApplying(true);
-    setPromoResult(null);
-    try {
-      const r = await fetch(getApiUrl("/api/credits/promo"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const d = await r.json();
-      if (r.ok) {
-        setPromoResult({ type: "ok", text: d.message ?? "코드가 적용됐습니다!" });
-        setPromoCode("");
-        // 크레딧 갱신
-        fetch(getApiUrl("/api/credits"), { credentials: "include" })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => setCredits(data))
-          .catch(() => {});
-      } else {
-        setPromoResult({ type: "err", text: d.error ?? (isEn ? "Failed to apply code" : "코드 적용에 실패했습니다") });
-      }
-    } catch {
-      setPromoResult({ type: "err", text: "네트워크 오류가 발생했습니다" });
-    } finally {
-      setPromoApplying(false);
-      setTimeout(() => setPromoResult(null), 5000);
-    }
-  };
 
   const openDeleteModal = () => {
     setDeleteInput("");
@@ -477,64 +443,6 @@ export default function SettingsPage() {
         </Section>
       )}
 
-      {/* ── 프로모 코드 ── */}
-      {user && (
-        <Section title={t("프로모 코드", "Promo Code")}>
-          <div className="px-4 py-4 space-y-3">
-            <p className="text-[12px] text-muted-foreground">
-              {t("프로모 코드를 입력하면 크레딧 추가 또는 등급 업그레이드 혜택을 받을 수 있습니다.", "Enter a promo code to receive bonus credits or a tier upgrade.")}
-            </p>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={promoCode}
-                  onChange={e => setPromoCode(e.target.value.toUpperCase())}
-                  onKeyDown={e => e.key === "Enter" && applyPromo()}
-                  placeholder={t("코드 입력 (예: AIVIT2026)", "Enter code (e.g. AIVIT2026)")}
-                  className="w-full pl-9 pr-3 py-2.5 text-[13px] font-mono rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 placeholder:text-muted-foreground/40 uppercase tracking-widest"
-                />
-              </div>
-              <button
-                onClick={applyPromo}
-                disabled={!promoCode.trim() || promoApplying}
-                className={cn(
-                  "px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-all shrink-0",
-                  promoCode.trim() && !promoApplying
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "bg-muted text-muted-foreground cursor-not-allowed"
-                )}
-              >
-                {promoApplying ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : t("적용", "Apply")}
-              </button>
-            </div>
-            <AnimatePresence>
-              {promoResult && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className={cn(
-                    "flex items-center gap-2 text-[12px] font-medium px-3 py-2 rounded-lg",
-                    promoResult.type === "ok"
-                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                      : "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
-                  )}
-                >
-                  {promoResult.type === "ok"
-                    ? <Check className="w-3.5 h-3.5 shrink-0" />
-                    : <span className="shrink-0">✕</span>
-                  }
-                  {promoResult.text}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </Section>
-      )}
 
       {/* ── 언어 / Language ── */}
       <Section title="언어 / Language">
