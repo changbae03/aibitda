@@ -1375,6 +1375,54 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
   }
 });
 
+// ── ETF 보유 종목 (반드시 /:ticker 와일드카드보다 앞에 위치) ──────────────────
+router.get("/etf/holdings", async (req, res) => {
+  const ticker = (req.query.ticker as string)?.toUpperCase()?.trim();
+  if (!ticker || !/^[A-Z0-9.\-]+$/.test(ticker)) {
+    return res.status(400).json({ error: "유효하지 않은 티커입니다" });
+  }
+
+  const cacheKey = `etf-holdings-${ticker}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
+  try {
+    const data = await yahooFinance.quoteSummary(ticker, {
+      modules: ["topHoldings", "fundProfile", "price"],
+    });
+
+    const holdings = (data.topHoldings as any)?.holdings ?? [];
+    const equityHoldings = (data.topHoldings as any)?.equityHoldings ?? {};
+    const profile = (data.fundProfile as any) ?? {};
+
+    const result = {
+      ticker,
+      name: (data.price as any)?.longName ?? ticker,
+      price: (data.price as any)?.regularMarketPrice,
+      change: (data.price as any)?.regularMarketChange,
+      changePercent: (data.price as any)?.regularMarketChangePercent,
+      currency: (data.price as any)?.currency,
+      expenseRatio: profile?.feesExpensesInvestment?.annualReportExpenseRatio,
+      category: profile?.categoryName,
+      holdings: holdings.map((h: any) => ({
+        ticker: h.symbol,
+        name: h.holdingName,
+        weight: h.holdingPercent,
+      })),
+      equityHoldings: {
+        priceToEarnings: equityHoldings.priceToEarnings,
+        priceToBook: equityHoldings.priceToBook,
+        priceToSales: equityHoldings.priceToSales,
+      },
+    };
+
+    cache.set(cacheKey, result, 4 * 60 * 60 * 1000);
+    return res.json(result);
+  } catch (e: any) {
+    return res.status(500).json({ error: "ETF 데이터를 불러오지 못했습니다", detail: e.message });
+  }
+});
+
 router.get("/:ticker", async (req, res) => {
   const ticker = sanitizeTicker(req.params.ticker ?? "");
   if (!ticker) { res.status(400).json({ error: "Invalid ticker symbol" }); return; }

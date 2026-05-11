@@ -43,6 +43,7 @@ import TermsPage from "@/pages/terms";
 import DisclaimerPage from "@/pages/disclaimer";
 import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
+import ETFPage from "@/pages/etf";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -163,6 +164,7 @@ function Router() {
             <Route path="/admin/notices" component={AdminNoticesPage} />
             <Route path="/admin/calibration" component={AdminCalibration} />
             <Route path="/admin/quality" component={AdminQuality} />
+            <Route path="/etf" component={ETFPage} />
             <Route path="/disclaimer" component={DisclaimerPage} />
             <Route path="/support" component={SupportPage} />
             <Route path="/notices" component={NoticesPage} />
