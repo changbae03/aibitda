@@ -32,6 +32,43 @@ function upside(target: number | null, entry: number | null) {
   return ((target - entry) / entry) * 100;
 }
 
+function countTableCols(row: string): number { return row.split("|").length - 2; }
+function isSeparatorRow(row: string): boolean {
+  if (!/^\s*\|/.test(row)) return false;
+  const cells = row.split("|").slice(1, -1);
+  return cells.length > 0 && cells.every(c => /^[\s\-:]+$/.test(c)) && cells.some(c => c.includes("-"));
+}
+function mergeRowsToTarget(rows: string[], targetCols: number): string[] {
+  if (rows.length === 0) return rows;
+  const out: string[] = [];
+  let current = rows[0];
+  for (let i = 1; i < rows.length; i++) {
+    if (countTableCols(current) < targetCols) {
+      current = current.trimEnd().replace(/\|\s*$/, "") + rows[i].trimStart();
+    } else { out.push(current); current = rows[i]; }
+  }
+  out.push(current);
+  return out;
+}
+function fixSplitTableRows(md: string): string {
+  const lines = md.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!/^\s*\|/.test(line)) { out.push(line); i++; continue; }
+    const block: string[] = [];
+    while (i < lines.length && /^\s*\|/.test(lines[i])) { block.push(lines[i]); i++; }
+    const sepIdx = block.findIndex(l => isSeparatorRow(l));
+    if (sepIdx < 0) { out.push(...block); continue; }
+    const targetCols = countTableCols(block[sepIdx]);
+    out.push(...mergeRowsToTarget(block.slice(0, sepIdx), targetCols));
+    out.push(block[sepIdx]);
+    out.push(...mergeRowsToTarget(block.slice(sepIdx + 1), targetCols));
+  }
+  return out.join("\n");
+}
+
 const STEP_META: Record<string, { name: string; role: string; Icon: React.ElementType; accent: string }> = {
   company_intro:       { name: "브리핑",                role: "Lead Portfolio Strategist",     Icon: ShieldCheck, accent: "border-blue-500/30 bg-blue-500/5" },
   industry_analysis:   { name: "매크로 및 산업 분석",   role: "Macro & Industry Analyst",      Icon: Globe2,      accent: "border-sky-500/30 bg-sky-500/5" },
@@ -183,7 +220,7 @@ function MarkdownBody({ content }: { content: string }) {
           del: () => null,
         }}
       >
-        {stripInternalData(content)}
+        {fixSplitTableRows(stripInternalData(content))}
       </ReactMarkdown>
     </div>
   );

@@ -131,12 +131,53 @@ function addKrwCommas(text: string): string {
   );
 }
 
+// ── 테이블 행 분할 복구 헬퍼 ──────────────────────────────────────────────────
+function countTableCols(row: string): number {
+  return row.split("|").length - 2;
+}
+function isSeparatorRow(row: string): boolean {
+  if (!/^\s*\|/.test(row)) return false;
+  const cells = row.split("|").slice(1, -1);
+  return cells.length > 0 && cells.every(c => /^[\s\-:]+$/.test(c)) && cells.some(c => c.includes("-"));
+}
+function mergeRowsToTarget(rows: string[], targetCols: number): string[] {
+  if (rows.length === 0) return rows;
+  const out: string[] = [];
+  let current = rows[0];
+  for (let i = 1; i < rows.length; i++) {
+    if (countTableCols(current) < targetCols) {
+      current = current.trimEnd().replace(/\|\s*$/, "") + rows[i].trimStart();
+    } else {
+      out.push(current);
+      current = rows[i];
+    }
+  }
+  out.push(current);
+  return out;
+}
+function fixSplitTableRows(lines: string[]): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!/^\s*\|/.test(line)) { out.push(line); i++; continue; }
+    const block: string[] = [];
+    while (i < lines.length && /^\s*\|/.test(lines[i])) { block.push(lines[i]); i++; }
+    const sepIdx = block.findIndex(l => isSeparatorRow(l));
+    if (sepIdx < 0) { out.push(...block); continue; }
+    const targetCols = countTableCols(block[sepIdx]);
+    out.push(...mergeRowsToTarget(block.slice(0, sepIdx), targetCols));
+    out.push(block[sepIdx]);
+    out.push(...mergeRowsToTarget(block.slice(sepIdx + 1), targetCols));
+  }
+  return out;
+}
+
 function prepareMarkdown(md: string): string {
   if (!md) return md;
 
-  // 줄 단위로 처리해서 테이블 "첫 번째 행" 바로 앞에만 빈 줄을 삽입
-  // (헤더→구분선→데이터 사이에 빈 줄을 삽입하면 오히려 테이블이 깨짐)
-  const lines = md.split("\n");
+  // AI가 테이블 행을 여러 줄에 걸쳐 출력하는 경우 병합 후 remark-gfm에 전달
+  const lines = fixSplitTableRows(md.split("\n"));
   const out: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -146,11 +187,10 @@ function prepareMarkdown(md: string): string {
     const prevIsTableRow = /^\s*\|/.test(prev);
     const prevIsBlank = prev.trim() === "";
 
-    // 현재 줄이 테이블 행이고, 이전 줄이 테이블 행도 아니고 빈 줄도 아니면 → 빈 줄 삽입
+    // 테이블 첫 번째 행 바로 앞에만 빈 줄 삽입
     if (isTableRow && !prevIsTableRow && !prevIsBlank) {
       out.push("");
     }
-    // 한국 금융 단위 앞 숫자에 천단위 쉼표 삽입
     out.push(addKrwCommas(line));
   }
 
