@@ -44,6 +44,8 @@ import DisclaimerPage from "@/pages/disclaimer";
 import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
 import ETFPage from "@/pages/etf";
+import HomePage from "@/pages/home";
+import ScreenerPage from "@/pages/screener";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -140,6 +142,8 @@ function Router() {
       <Route>
         <AppLayout>
           <Switch>
+            <Route path="/home" component={HomePage} />
+            <Route path="/screener" component={ScreenerPage} />
             <Route path="/analysis/new" component={NewAnalysis} />
             <Route path="/analysis/:id" component={AnalysisDetail} />
             <Route path="/history" component={History} />
