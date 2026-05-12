@@ -475,21 +475,13 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     try {
       await loadKakaoSDK();
       if (!window.Kakao.isInitialized()) window.Kakao.init(key);
-      // 분석별 동적 OG 이미지 사용 (카카오톡 미리보기 카드용)
-      const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
-      const imageUrl = analysis?.id
-        ? `${base}/api/og/${analysis.id}`
-        : `${window.location.origin}${import.meta.env.BASE_URL}opengraph.jpg`;
+      const imageUrl = `${window.location.origin}${import.meta.env.BASE_URL}opengraph.jpg`;
       window.Kakao.Share.sendDefault({
         objectType: "feed",
         content: {
           title: shareText,
-          description: isEnModal
-            ? `${shareDateStr} · AI 7-step pipeline equity research`
-            : `${shareDateStr} · AI 7단계 파이프라인 기업가치 리포트`,
+          description: isEnModal ? `${shareDateStr} · AI 7-step pipeline equity research report` : `${shareDateStr} · AI 7단계 파이프라인이 분석한 기업가치 리포트`,
           imageUrl,
-          imageWidth: 1200,
-          imageHeight: 630,
           link: { mobileWebUrl: url, webUrl: url },
         },
         buttons: [{ title: isEnModal ? "View Report" : "리포트 보기", link: { mobileWebUrl: url, webUrl: url } }],
@@ -497,14 +489,9 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
     } catch { handleCopy(); }
   };
 
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: shareText, url });
-        return;
-      } catch {}
-    }
-    handleCopy();
+  const handleTelegram = () => {
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`;
+    window.open(tgUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleCopy = async () => {
@@ -622,16 +609,15 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 <span className="text-[11px] font-bold text-[#391B1B]">카카오톡</span>
               </button>
 
-              {/* 더 많은 앱 (Web Share API / 링크 복사 fallback) */}
+              {/* Telegram */}
               <button
-                onClick={handleNativeShare}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted hover:bg-muted/70 border border-border transition-colors"
+                onClick={handleTelegram}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1a8fc4] transition-colors"
               >
-                <svg className="w-4.5 h-4.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="white">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8.02c-.12.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.52.26l.18-2.65 4.74-4.28c.21-.18-.04-.28-.31-.1L7.5 14.97 4.96 14.2c-.56-.17-.57-.56.12-.83l8.9-3.44c.47-.17.88.11.72.87z"/>
                 </svg>
-                <span className="text-[11px] font-bold text-muted-foreground">{isEnModal ? "More" : "더 보내기"}</span>
+                <span className="text-[11px] font-bold text-white">텔레그램</span>
               </button>
             </div>
           </div>

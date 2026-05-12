@@ -260,13 +260,7 @@ app.get("/share/:id", async (req: Request, res: Response) => {
       .replace(/<meta name="twitter:title"[^>]*\/>/, `<meta name="twitter:title" content="${escapeAttr(ogTitle)}" />`)
       .replace(/<meta name="twitter:description"[^>]*\/>/, `<meta name="twitter:description" content="${escapeAttr(ogDesc)}" />`)
       .replace(/<meta name="twitter:image"[^>]*\/>/, `<meta name="twitter:image" content="${escapeAttr(ogImage)}" />`)
-      // og:url + image 사이즈를 </head> 바로 앞에 삽입 (head 안에 위치해야 카카오 크롤러가 인식)
-      .replace(/<\/head>/, [
-        `  <meta property="og:url" content="${safePageUrl}" />`,
-        `  <meta property="og:image:width" content="1200" />`,
-        `  <meta property="og:image:height" content="630" />`,
-        `</head>`,
-      ].join("\n"));
+      + `\n<!-- og:url --><meta property="og:url" content="${safePageUrl}" />`;
   } else {
     html = `<!DOCTYPE html>
 <html lang="ko">

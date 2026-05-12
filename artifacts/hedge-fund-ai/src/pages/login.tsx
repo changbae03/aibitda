@@ -85,31 +85,12 @@ export default function Login() {
 
         </div>
 
-        {/* 만 14세 이상 안내 */}
-        <div className="mt-5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-4 py-2.5">
-          <p className="text-center text-[11.5px] text-amber-600 dark:text-amber-400 leading-relaxed font-medium">
-            {isEn
-              ? "This service is available to users aged 14 and over. Users under 14 must obtain parental consent before use."
-              : "본 서비스는 만 14세 이상 이용 가능합니다. 만 14세 미만은 법정대리인의 동의가 필요합니다."}
-          </p>
-        </div>
-
         {/* Disclaimer */}
-        <p className="text-center text-[11.5px] text-muted-foreground mt-4 leading-relaxed">
+        <p className="text-center text-[11.5px] text-muted-foreground mt-8 leading-relaxed">
           {isEn ? (
-            <>By signing in, you agree to our{" "}
-              <a href={`${basePath}/terms`} className="underline hover:text-foreground transition-colors">Terms of Service</a>
-              {" "}and{" "}
-              <a href={`${basePath}/privacy`} className="underline hover:text-foreground transition-colors">Privacy Policy</a>,
-              {" "}including the overseas transfer of personal information to the US (Clerk, Replit, Google).
-            </>
+            <>By signing in, you agree to our <span className="underline cursor-pointer">Terms of Service</span> and{" "}<span className="underline cursor-pointer">Privacy Policy</span>.</>
           ) : (
-            <>로그인하면{" "}
-              <a href={`${basePath}/terms`} className="underline hover:text-foreground transition-colors">이용약관</a>
-              {" "}및{" "}
-              <a href={`${basePath}/privacy`} className="underline hover:text-foreground transition-colors">개인정보처리방침</a>에 동의하는 것으로 간주되며,
-              {" "}미국 소재 서비스(Clerk, Replit, Google)로의 개인정보 국외 이전에 동의하는 것으로 간주됩니다.
-            </>
+            <>로그인하면 <span className="underline cursor-pointer">이용약관</span> 및{" "}<span className="underline cursor-pointer">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.</>
           )}
         </p>
 

@@ -550,11 +550,6 @@ export function AppLayout({ children }: AppLayoutProps) {
               <p className="text-[11px] text-muted-foreground/50 mt-1.5">
                 © {new Date().getFullYear()} 애빛다 · CBST. {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다."}
               </p>
-              <p className="text-[10.5px] text-muted-foreground/40 mt-1 leading-relaxed">
-                {isEn
-                  ? "CBST · Business registration in progress · Contact: support@cbst.kr · This service uses session cookies for login state. By using this service, you agree to our cookie use."
-                  : "CBST · 사업자 등록 신청 중 · 문의: support@cbst.kr · 본 서비스는 로그인 상태 유지를 위해 세션 쿠키를 사용합니다. 서비스 이용 시 쿠키 사용에 동의한 것으로 간주됩니다."}
-              </p>
             </div>
           </footer>
         </div>

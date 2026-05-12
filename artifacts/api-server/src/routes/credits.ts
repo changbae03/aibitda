@@ -5,7 +5,6 @@ import {
   getCreditStatus,
   getOrCreateReferralCode,
   registerReferral,
-  awardShareCredit,
 } from "../lib/credits.js";
 import { pool } from "@workspace/db";
 
@@ -111,27 +110,6 @@ router.delete("/profile/account", async (req, res) => {
     path: "/",
   }));
   res.json({ ok: true });
-});
-
-// ─── POST /credits/share-viewed ─── 공유 리포트 조회 크레딧 적립 ───────────
-router.post("/credits/share-viewed", async (req, res) => {
-  const { analysisId, viewerKey } = req.body as { analysisId?: number; viewerKey?: string };
-  if (!analysisId || !viewerKey?.trim()) {
-    return res.status(400).json({ error: "analysisId, viewerKey 필드가 필요합니다" });
-  }
-
-  // 분석의 소유자(작성자) 조회
-  const { rows } = await pool.query(
-    `SELECT user_id FROM analyses WHERE id = $1 AND is_public = 'true'`,
-    [analysisId]
-  );
-  const sharerId = rows[0]?.user_id;
-  if (!sharerId) {
-    return res.status(404).json({ error: "공유 분석을 찾을 수 없습니다" });
-  }
-
-  const result = await awardShareCredit(analysisId, viewerKey.trim(), sharerId);
-  return res.json(result);
 });
 
 // ─── POST /credits/promo ─── 프로모 코드 적용 ─────────────────────────────

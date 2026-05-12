@@ -43,16 +43,16 @@ export default function TermsPage() {
       <Section title={isEn ? "Article 3 (Effect & Changes to Terms)" : "제3조 (약관의 효력 및 변경)"}>
         <p>
           {isEn
-            ? "These Terms take effect when posted on the Service screen or notified to users. The Company may amend these Terms in accordance with changes in law or service policy. Amendments that are favorable to users will be announced at least 7 days in advance. Amendments that are unfavorable to users will be announced at least 30 days in advance via the Notices page."
-            : "본 약관은 서비스 화면에 게시하거나 이용자에게 고지하는 방법으로 효력이 발생합니다. 회사는 법령 변경 또는 서비스 정책에 따라 본 약관을 변경할 수 있으며, 이용자에게 유리한 변경은 7일 전, 이용자에게 불리한 변경은 30일 전 공지사항을 통해 안내합니다."}
+            ? "These Terms take effect when posted on the Service screen or notified to users. The Company may amend these Terms in accordance with changes in law or service policy. Any amendments will be announced via the Notices page at least 7 days in advance."
+            : "본 약관은 서비스 화면에 게시하거나 이용자에게 고지하는 방법으로 효력이 발생합니다. 회사는 법령 변경 또는 서비스 정책에 따라 본 약관을 변경할 수 있으며, 변경 시 공지사항을 통해 7일 전에 안내합니다."}
         </p>
       </Section>
 
       <Section title={isEn ? "Article 4 (Use of Service)" : "제4조 (서비스 이용)"}>
         <p>
           {isEn
-            ? "Users may register and use the Service through Kakao or Google social login. Users are responsible for managing their account information, and are responsible for any security incidents related to their account. Users must be at least 14 years of age. Users under 14 must obtain consent from their legal guardian before using the Service."
-            : "이용자는 카카오 또는 Google 소셜 로그인을 통해 서비스에 가입하고 이용할 수 있습니다. 이용자는 자신의 계정 정보를 관리할 책임이 있으며, 계정 보안 사고에 대한 책임은 이용자에게 있습니다. 이용자는 만 14세 이상이어야 하며, 만 14세 미만의 경우 법정대리인의 동의를 받아야 합니다."}
+            ? "Users may register and use the Service through Kakao or Google social login. Users are responsible for managing their account information, and are responsible for any security incidents related to their account."
+            : "이용자는 카카오 소셜 로그인을 통해 서비스에 가입하고 이용할 수 있습니다. 이용자는 자신의 계정 정보를 관리할 책임이 있으며, 계정 보안 사고에 대한 책임은 이용자에게 있습니다."}
         </p>
       </Section>
 

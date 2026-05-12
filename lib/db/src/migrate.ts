@@ -241,21 +241,6 @@ export async function runMigrations() {
       );
     `);
 
-    // 공유 크레딧 추적
-    await client.query(`
-      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS share_credits_month TEXT NOT NULL DEFAULT '';
-      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS share_credits_this_month INTEGER NOT NULL DEFAULT 0;
-
-      CREATE TABLE IF NOT EXISTS share_credit_log (
-        id SERIAL PRIMARY KEY,
-        analysis_id INTEGER NOT NULL,
-        viewer_key TEXT NOT NULL,
-        sharer_id TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        UNIQUE(analysis_id, viewer_key)
-      );
-    `);
-
     // 캘리브레이션 히스토리
     await client.query(`
       CREATE TABLE IF NOT EXISTS calibration_history (
