@@ -1375,6 +1375,103 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
   }
 });
 
+// ── ETF 역방향 조회: 종목이 포함된 ETF 목록 ───────────────────────────────────
+const MAJOR_US_ETFS = [
+  { ticker: "SPY",  name: "SPDR S&P 500" },
+  { ticker: "QQQ",  name: "Invesco QQQ" },
+  { ticker: "VOO",  name: "Vanguard S&P 500" },
+  { ticker: "VTI",  name: "Vanguard Total Market" },
+  { ticker: "IWM",  name: "iShares Russell 2000" },
+  { ticker: "DIA",  name: "SPDR Dow Jones" },
+  { ticker: "MDY",  name: "SPDR S&P MidCap 400" },
+  { ticker: "VUG",  name: "Vanguard Growth" },
+  { ticker: "VTV",  name: "Vanguard Value" },
+  { ticker: "SCHD", name: "Schwab Dividend" },
+  { ticker: "VIG",  name: "Vanguard Dividend Appreciation" },
+  { ticker: "VGT",  name: "Vanguard IT" },
+  { ticker: "XLK",  name: "Technology Select SPDR" },
+  { ticker: "XLF",  name: "Financial Select SPDR" },
+  { ticker: "XLV",  name: "Health Care Select SPDR" },
+  { ticker: "XLE",  name: "Energy Select SPDR" },
+  { ticker: "XLI",  name: "Industrial Select SPDR" },
+  { ticker: "XLC",  name: "Communication Services SPDR" },
+  { ticker: "XLP",  name: "Consumer Staples SPDR" },
+  { ticker: "XLY",  name: "Consumer Discretionary SPDR" },
+  { ticker: "XLB",  name: "Materials Select SPDR" },
+  { ticker: "XLU",  name: "Utilities Select SPDR" },
+  { ticker: "XLRE", name: "Real Estate SPDR" },
+  { ticker: "SOXX", name: "iShares Semiconductor" },
+  { ticker: "SMH",  name: "VanEck Semiconductor" },
+  { ticker: "ARKK", name: "ARK Innovation" },
+  { ticker: "ARKG", name: "ARK Genomic Revolution" },
+  { ticker: "ARKF", name: "ARK Fintech Innovation" },
+  { ticker: "EFA",  name: "iShares MSCI EAFE" },
+  { ticker: "EEM",  name: "iShares MSCI Emerging" },
+  { ticker: "VEA",  name: "Vanguard Developed Markets" },
+  { ticker: "GLD",  name: "SPDR Gold" },
+  { ticker: "TLT",  name: "iShares 20+ Year Treasury" },
+  { ticker: "HYG",  name: "iShares High Yield Corporate" },
+  { ticker: "IBIT", name: "iShares Bitcoin Trust" },
+  { ticker: "CQQQ", name: "Invesco China Technology" },
+  { ticker: "VWO",  name: "Vanguard Emerging Markets" },
+  { ticker: "SPDW", name: "SPDR Portfolio Developed World" },
+  { ticker: "QUAL", name: "iShares MSCI USA Quality" },
+  { ticker: "MTUM", name: "iShares MSCI USA Momentum" },
+];
+
+type ReverseIndexEntry = { etf: string; etfName: string; weight: number };
+type ReverseIndex = Record<string, ReverseIndexEntry[]>;
+
+async function buildETFReverseIndex(): Promise<ReverseIndex> {
+  const index: ReverseIndex = {};
+  const results = await Promise.allSettled(
+    MAJOR_US_ETFS.map(async ({ ticker, name }) => {
+      try {
+        const data = await yahooFinance.quoteSummary(ticker, { modules: ["topHoldings"] });
+        const holdings = (data.topHoldings as any)?.holdings ?? [];
+        for (const h of holdings) {
+          const sym = (h.symbol as string)?.toUpperCase();
+          if (!sym) continue;
+          if (!index[sym]) index[sym] = [];
+          index[sym].push({ etf: ticker, etfName: name, weight: h.holdingPercent ?? 0 });
+        }
+        return ticker;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const ok = results.filter(r => r.status === "fulfilled" && r.value).length;
+  console.log(`[etf-reverse-index] 완성: ${ok}/${MAJOR_US_ETFS.length}개 ETF 로드됨`);
+  return index;
+}
+
+router.get("/etf/containing", async (req, res) => {
+  const stockTicker = (req.query.ticker as string)?.toUpperCase()?.trim();
+  if (!stockTicker || !/^[A-Z0-9.\-]+$/.test(stockTicker)) {
+    return res.status(400).json({ error: "유효하지 않은 티커입니다" });
+  }
+
+  const indexKey = "etf-reverse-index";
+  let reverseIndex = cache.get<ReverseIndex>(indexKey);
+
+  if (!reverseIndex) {
+    console.log("[etf-reverse-index] 인덱스 없음 — 빌드 시작");
+    reverseIndex = await buildETFReverseIndex();
+    cache.set(indexKey, reverseIndex, 4 * 60 * 60 * 1000);
+  }
+
+  const matches = (reverseIndex[stockTicker] ?? [])
+    .sort((a, b) => b.weight - a.weight);
+
+  return res.json({
+    ticker: stockTicker,
+    etfs: matches,
+    totalETFs: MAJOR_US_ETFS.length,
+    indexedAt: new Date().toISOString(),
+  });
+});
+
 // ── ETF 보유 종목 (반드시 /:ticker 와일드카드보다 앞에 위치) ──────────────────
 router.get("/etf/holdings", async (req, res) => {
   const raw = (req.query.ticker as string)?.trim();
