@@ -11,6 +11,24 @@ const TTL_BATCH_PERFORMANCE = 60 * 60 * 1000;  // 60분 — 과거 성과 (불�
 
 const yahooFinance = new YahooFinance();
 
+async function batchProcess<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  batchSize = 10,
+  delayMs = 100,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const chunk = items.slice(i, i + batchSize);
+    const settled = await Promise.allSettled(chunk.map(fn));
+    results.push(...settled);
+    if (i + batchSize < items.length) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return results;
+}
+
 const router: IRouter = Router();
 
 function calculateRSI(closes: number[], window = 14): (number | null)[] {
@@ -660,17 +678,19 @@ router.post("/batch-quotes", async (req, res) => {
     }
   }
 
-  await Promise.all(
-    toFetch.map(async (ticker) => {
-      try {
-        const q = await resolveQuote(ticker);
-        cache.set(`bq:${ticker}`, q, TTL_BATCH_QUOTES);
-        results[ticker] = q;
-      } catch {
-        results[ticker] = { price: null, currency: "KRW", change: null };
-      }
-    })
-  );
+  const bqSettled = await batchProcess(toFetch, async (ticker) => {
+    const q = await resolveQuote(ticker);
+    cache.set(`bq:${ticker}`, q, TTL_BATCH_QUOTES);
+    return { ticker, q };
+  }, 10, 100);
+  for (const r of bqSettled) {
+    if (r.status === "fulfilled") {
+      results[r.value.ticker] = r.value.q;
+    } else {
+      const ticker = toFetch[bqSettled.indexOf(r)];
+      if (ticker) results[ticker] = { price: null, currency: "KRW", change: null };
+    }
+  }
 
   res.json(results);
 });
@@ -705,8 +725,7 @@ router.post("/batch-sparklines", async (req, res) => {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const p2 = tomorrow.toISOString().split("T")[0];
 
-  await Promise.allSettled(
-    toFetch.map(async (ticker) => {
+  await batchProcess(toFetch, async (ticker) => {
       const cacheKey = `bsp:${ticker}:${days}`;
       try {
         const isKoreanSix = /^\d{6}$/.test(ticker.split(".")[0]) && !ticker.includes(".");
@@ -738,8 +757,7 @@ router.post("/batch-sparklines", async (req, res) => {
       } catch {
         result[ticker] = { closes: [], change3m: null };
       }
-    })
-  );
+  }, 10, 100);
 
   res.json(result);
 });
@@ -800,8 +818,7 @@ router.post("/batch-performance", async (req, res) => {
     return (chart?.quotes ?? []).map((d: any) => ({ date: new Date(d.date), close: d.close ?? null }));
   }
 
-  await Promise.allSettled(
-    toFetch.slice(0, 30).map(async ({ id, ticker, analysisDate }) => {
+  await batchProcess(toFetch.slice(0, 30), async ({ id, ticker, analysisDate }) => {
       try {
         const fromDate = new Date(analysisDate);
         fromDate.setDate(fromDate.getDate() - 1);
@@ -834,8 +851,7 @@ router.post("/batch-performance", async (req, res) => {
       } catch {
         results[id] = { w1: null, m1: null, m3: null, entryClose: null };
       }
-    })
-  );
+  }, 10, 100);
 
   res.json(results);
 });
@@ -948,16 +964,14 @@ export async function warmupEarningsCache() {
       const toKSTDateStr = (d: Date) =>
         new Date(d.getTime() + KST_OFFSET_MS).toISOString().split("T")[0];
 
-      // YF 전체 병렬
-      const settled = await Promise.allSettled(
-        allTickers.map(async t => {
-          try {
-            const d = await yahooFinance.quoteSummary(t,
-              { modules: ["calendarEvents", "price"] }, { validateResult: false });
-            return { ticker: t, data: d as any };
-          } catch { return null; }
-        })
-      );
+      // YF 배치 처리 (5개씩, 100ms 딜레이)
+      const settled = await batchProcess(allTickers, async t => {
+        try {
+          const d = await yahooFinance.quoteSummary(t,
+            { modules: ["calendarEvents", "price"] }, { validateResult: false });
+          return { ticker: t, data: d as any };
+        } catch { return null; }
+      }, 5, 100);
 
       const raw: any[] = [];
       for (const r of settled) {
@@ -1194,19 +1208,17 @@ router.get("/earnings-calendar", async (req, res) => {
       _yfCache.set(yfCacheKey, { data: dbCached, expiresAt: yfNow + CALENDAR_YF_TTL_MS });
       console.log("[earnings-calendar] DB 캐시 HIT");
     } else {
-      // DB에도 없음 → Yahoo Finance 실시간 조회
+      // DB에도 없음 → Yahoo Finance 실시간 조회 (배치 5개씩, 100ms 딜레이)
       console.log("[earnings-calendar] 캐시 없음 — Yahoo Finance 실시간 조회 시작");
-      const settled = await Promise.allSettled(
-        allTickers.map(async t => {
-          try {
-            const d = await yahooFinance.quoteSummary(t,
-              { modules: ["calendarEvents", "price"] },
-              { validateResult: false }
-            );
-            return { ticker: t, data: d as any };
-          } catch { return null; }
-        })
-      );
+      const settled = await batchProcess(allTickers, async t => {
+        try {
+          const d = await yahooFinance.quoteSummary(t,
+            { modules: ["calendarEvents", "price"] },
+            { validateResult: false }
+          );
+          return { ticker: t, data: d as any };
+        } catch { return null; }
+      }, 5, 100);
 
       const raw: EarningsEntry[] = [];
       for (const r of settled) {
