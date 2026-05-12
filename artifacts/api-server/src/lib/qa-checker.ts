@@ -35,9 +35,11 @@ export function runQACheck(analysis: {
   entryPrice?: number | null;
   stopLoss?: number | null;
   riskRewardRatio?: number | null;
+  startPrice?: number | null;
+  ticker?: string | null;
   steps: Array<{ stepKey: string; content: string }>;
 }): QAResult {
-  const { investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, steps } = analysis;
+  const { investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, startPrice, ticker, steps } = analysis;
   const stepMap = new Map(steps.map(s => [s.stepKey, s.content ?? ""]));
   const checks: QACheck[] = [];
 
@@ -86,12 +88,46 @@ export function runQACheck(analysis: {
   add("has_scenarios", "Bull/Bear 시나리오 포함", 3, hasBullBear,
     !hasBullBear ? "투자 전략에 시나리오 분석 없음" : undefined);
 
+  // ── 밸류에이션 합리성 검사 (추가) ────────────────────────────────────────
+  if (targetPrice && targetPrice > 0 && startPrice && startPrice > 0) {
+    const upside = (targetPrice - startPrice) / startPrice * 100;
+    const isKR = ticker ? /^\d{6}$/.test(ticker) : false;
+
+    // 과도한 업사이드 체크: KR ≥100%, US ≥150%
+    const excessiveThreshold = isKR ? 100 : 150;
+    const isExcessiveUpside = upside > excessiveThreshold;
+    add(
+      "reasonable_upside",
+      `목표가 합리성 (업사이드 ${excessiveThreshold}% 이내)`,
+      0,
+      !isExcessiveUpside,
+      isExcessiveUpside
+        ? `업사이드 ${upside.toFixed(1)}% — 목표가가 현재가의 ${(targetPrice/startPrice).toFixed(2)}×. DCF 가정 재검토 필요.`
+        : undefined
+    );
+
+    // 극단적 다운사이드 체크: -70% 미만
+    const isExtremeDownside = upside < -70;
+    add(
+      "reasonable_downside",
+      "목표가 합리성 (다운사이드 -70% 이내)",
+      0,
+      !isExtremeDownside,
+      isExtremeDownside
+        ? `다운사이드 ${upside.toFixed(1)}% — 목표가가 현재가의 ${(targetPrice/startPrice).toFixed(2)}×. 계산 오류 의심.`
+        : undefined
+    );
+  }
+
   // ── 점수 계산 ─────────────────────────────────────────────────────────────
-  const earned = checks.reduce((s, c) => s + c.points, 0);
-  const total  = checks.reduce((s, c) => s + c.maxPoints, 0);
+  const scoringChecks = checks.filter(c => c.maxPoints > 0);
+  const earned = scoringChecks.reduce((s, c) => s + c.points, 0);
+  const total  = scoringChecks.reduce((s, c) => s + c.maxPoints, 0);
   const score  = Math.round((earned / total) * 100);
   const grade: QAResult["grade"] =
     score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : score >= 40 ? "D" : "F";
+
+  // 점수 미반영 체크도 플래그에는 포함
   const flags = checks.filter(c => !c.passed).map(c => c.key);
 
   return { score, grade, checks, flags };

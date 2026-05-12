@@ -4365,10 +4365,11 @@ async function executeStep(
         const isKR = /^\d{6}$/.test(savedTicker);
 
         if (savedStartPrice && savedStartPrice > 0) {
-          // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
-          // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
-          const TARGET_MAX_RATIO = isKR ? 3.5 : 4.5;
-          const TARGET_MIN_RATIO = isKR ? 0.15 : 0.12;
+          // ── 목표주가 하드캡: KR 2.5x / US 3.0x ─────────────────────────
+          // 프롬프트 HARD STOP(KR 2.5×)과 서버 캡을 일치시킴.
+          // 이전 3.5×/4.5× 캡은 과도한 업사이드(+150%~+480%)를 허용했음.
+          const TARGET_MAX_RATIO = isKR ? 2.5 : 3.0;
+          const TARGET_MIN_RATIO = isKR ? 0.20 : 0.15;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
             if (tRatio > TARGET_MAX_RATIO) {
@@ -4422,10 +4423,12 @@ async function executeStep(
         if (targetPrice && savedStartPrice && savedStartPrice > 0) {
           const upside = (targetPrice - savedStartPrice) / savedStartPrice * 100;
           let deterministicVerdict: string;
-          if (upside >= 30)        deterministicVerdict = "Strong Buy";
+          // 임계값 상향: Strong Buy ≥35%(기존 30%), Sell <-20%(기존 -25%), Strong Sell <-35%(기존 -25%)
+          // → Hold 구간(-10%~+35%)을 넓혀 과도한 매수 편향 완화
+          if (upside >= 35)        deterministicVerdict = "Strong Buy";
           else if (upside >= 15)   deterministicVerdict = "Buy";
           else if (upside >= -10)  deterministicVerdict = "Hold";
-          else if (upside >= -25)  deterministicVerdict = "Sell";
+          else if (upside >= -35)  deterministicVerdict = "Sell";
           else                     deterministicVerdict = "Strong Sell";
 
           if (investmentVerdict !== deterministicVerdict) {
@@ -4477,7 +4480,7 @@ async function executeStep(
           `);
           const [aRes, sRes] = await Promise.all([
             pool.query(
-              `SELECT investment_verdict, target_price, entry_price, stop_loss, risk_reward_ratio
+              `SELECT investment_verdict, target_price, entry_price, stop_loss, risk_reward_ratio, start_price, ticker
                FROM analyses WHERE id = $1`, [id]
             ),
             pool.query(
@@ -4492,6 +4495,8 @@ async function executeStep(
               entryPrice: a.entry_price,
               stopLoss: a.stop_loss,
               riskRewardRatio: a.risk_reward_ratio,
+              startPrice: a.start_price,
+              ticker: a.ticker,
               steps: sRes.rows.map((r: any) => ({ stepKey: r.step_key, content: r.content ?? "" })),
             });
             await pool.query(

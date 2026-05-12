@@ -4871,11 +4871,11 @@ ${COMMON_RULES}`,
 3. verdict 결정 기준 — Base case upside = (Base target_price - 현재가) / 현재가 × 100 를 먼저 계산하고, 아래 2단계 기준을 순서대로 적용:
 
    [1단계] 업사이드 기반 초안 판정:
-   - Strong Buy: Base upside ≥ 30%
-   - Buy: 15% ≤ Base upside < 30%
+   - Strong Buy: Base upside ≥ 35%
+   - Buy: 15% ≤ Base upside < 35%
    - Hold: -10% ≤ Base upside < 15%
-   - Sell: -25% ≤ Base upside < -10%
-   - Strong Sell: Base upside < -25%
+   - Sell: -35% ≤ Base upside < -10%
+   - Strong Sell: Base upside < -35%
 
    [2단계] 모멘텀 안전장치 — Sell/Strong Sell 초안 시 아래 항목을 반드시 확인하고 조정:
    ⚠️ 아래 조건 중 하나라도 해당되면 verdict를 한 단계 보수적으로 상향하세요 (Strong Sell → Sell, Sell → Hold):
@@ -4942,7 +4942,7 @@ ${COMMON_RULES}`,
 ⚠️ 응답 규칙: 아래 JSON 객체 하나만 출력하세요. 코드블록(\`\`\`)·설명 텍스트·마크다운 일절 금지. 첫 글자는 반드시 { 이어야 합니다.
 
 {
-  "verdict": "아래 기준에 따라 반드시 Base case upside(%) 수치로 결정. ※ upside = (Base target_price - 현재가) / 현재가 × 100: Strong Buy(Base upside ≥ 30%), Buy(15% ≤ upside < 30%), Hold(-10% ≤ upside < 15%), Sell(-25% ≤ upside < -10%), Strong Sell(upside < -25%). 예외 없음.",
+  "verdict": "아래 기준에 따라 반드시 Base case upside(%) 수치로 결정. ※ upside = (Base target_price - 현재가) / 현재가 × 100: Strong Buy(Base upside ≥ 35%), Buy(15% ≤ upside < 35%), Hold(-10% ≤ upside < 15%), Sell(-35% ≤ upside < -10%), Strong Sell(upside < -35%). 예외 없음.",
   "confidence": "높음 / 중간 / 낮음 중 하나",
   "investment_period": "단기 / 중기 / 장기",
   "risk_reward": "리스크/리워드 비율 (예: 1:3.5)",
