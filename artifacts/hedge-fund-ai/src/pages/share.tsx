@@ -421,6 +421,20 @@ function getOrCreateViewerKey(): string {
   return k;
 }
 
+declare global { interface Window { Kakao: any; } }
+
+async function loadKakaoSDK(): Promise<void> {
+  if (typeof window.Kakao !== "undefined") return;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => resolve();
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
 export default function SharePage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -454,6 +468,40 @@ export default function SharePage() {
     try { await navigator.clipboard.writeText(window.location.href); } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleKakaoShare = async () => {
+    const key = import.meta.env.VITE_KAKAO_JS_KEY;
+    if (!key || !analysis) { handleCopy(); return; }
+    try {
+      await loadKakaoSDK();
+      if (!window.Kakao.isInitialized()) window.Kakao.init(key);
+      const pageUrl = window.location.href;
+      const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
+      const imageUrl = `${base}/api/og/${analysis.id}`;
+      const company = analysis.companyName ?? analysis.ticker ?? "종목";
+      const effectiveVerdict = analysis.investmentVerdict ?? null;
+      const verdictMap: Record<string, string> = {
+        "Strong Buy": "높은 상승여력", "Buy": "상승여력",
+        "Hold": "적정 수준", "Sell": "하락여지", "Strong Sell": "높은 하락여지",
+      };
+      const verdictKo = effectiveVerdict ? verdictMap[effectiveVerdict] ?? effectiveVerdict : null;
+      const title = verdictKo
+        ? `${company} [${verdictKo}] · AI 기업가치 분석 | 애빛다`
+        : `${company} · AI 기업가치 분석 리포트 | 애빛다`;
+      window.Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: {
+          title,
+          description: "AI 7단계 파이프라인이 분석한 기업가치 리포트를 확인하세요.",
+          imageUrl,
+          imageWidth: 1200,
+          imageHeight: 630,
+          link: { mobileWebUrl: pageUrl, webUrl: pageUrl },
+        },
+        buttons: [{ title: "리포트 보기", link: { mobileWebUrl: pageUrl, webUrl: pageUrl } }],
+      });
+    } catch { handleCopy(); }
   };
 
 
@@ -514,6 +562,18 @@ export default function SharePage() {
           <span className="hidden sm:inline text-slate-500 text-[11px] font-medium">AI 기업 가치 분석</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* 카카오톡으로 공유 */}
+          {analysis && (
+            <button
+              onClick={handleKakaoShare}
+              className="flex items-center gap-1.5 text-[12px] font-bold px-3 py-1.5 rounded-lg bg-[#FEE500] hover:bg-[#F5DB00] transition-colors text-[#391B1B]"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.706 1.574 5.083 3.96 6.549L4.8 21l4.6-2.4A11.7 11.7 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" fill="#391B1B"/>
+              </svg>
+              카카오톡
+            </button>
+          )}
           <button
             onClick={handleCopy}
             className={cn(
