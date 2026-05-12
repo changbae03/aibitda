@@ -120,16 +120,29 @@ export default function PrivacyPage() {
                 <tr className="bg-muted text-left">
                   <th className="border border-border px-3 py-2">Vendor</th>
                   <th className="border border-border px-3 py-2">Purpose</th>
+                  <th className="border border-border px-3 py-2">Country</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td className="border border-border px-3 py-2">Kakao Corp.</td>
                   <td className="border border-border px-3 py-2">Social login authentication</td>
+                  <td className="border border-border px-3 py-2">Korea</td>
                 </tr>
                 <tr>
                   <td className="border border-border px-3 py-2">Google LLC (Gemini)</td>
                   <td className="border border-border px-3 py-2">AI analysis processing</td>
+                  <td className="border border-border px-3 py-2">USA</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Clerk, Inc.</td>
+                  <td className="border border-border px-3 py-2">User authentication & account management</td>
+                  <td className="border border-border px-3 py-2">USA</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Replit, Inc.</td>
+                  <td className="border border-border px-3 py-2">Cloud infrastructure & database hosting</td>
+                  <td className="border border-border px-3 py-2">USA</td>
                 </tr>
               </tbody>
             </table>
@@ -142,19 +155,114 @@ export default function PrivacyPage() {
                 <tr className="bg-muted text-left">
                   <th className="border border-border px-3 py-2">수탁 업체</th>
                   <th className="border border-border px-3 py-2">위탁 업무</th>
+                  <th className="border border-border px-3 py-2">국가</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td className="border border-border px-3 py-2">카카오(주)</td>
                   <td className="border border-border px-3 py-2">소셜 로그인 인증</td>
+                  <td className="border border-border px-3 py-2">대한민국</td>
                 </tr>
                 <tr>
                   <td className="border border-border px-3 py-2">Google LLC (Gemini)</td>
                   <td className="border border-border px-3 py-2">AI 분석 처리</td>
+                  <td className="border border-border px-3 py-2">미국</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Clerk, Inc.</td>
+                  <td className="border border-border px-3 py-2">회원 인증 및 계정 관리</td>
+                  <td className="border border-border px-3 py-2">미국</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Replit, Inc.</td>
+                  <td className="border border-border px-3 py-2">클라우드 인프라 및 데이터베이스 운영</td>
+                  <td className="border border-border px-3 py-2">미국</td>
                 </tr>
               </tbody>
             </table>
+          </>
+        )}
+      </Section>
+
+      <Section title={isEn ? "5-1. Overseas Transfer of Personal Information" : "5-1. 개인정보의 국외 이전"}>
+        {isEn ? (
+          <>
+            <p>The Company transfers personal information overseas to the following recipients for service operation (Article 28-8 of the Personal Information Protection Act).</p>
+            <table className="mt-3 w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-muted text-left">
+                  <th className="border border-border px-3 py-2">Recipient</th>
+                  <th className="border border-border px-3 py-2">Country</th>
+                  <th className="border border-border px-3 py-2">Transfer Date & Method</th>
+                  <th className="border border-border px-3 py-2">Items Transferred</th>
+                  <th className="border border-border px-3 py-2">Retention Period</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-border px-3 py-2">Google LLC</td>
+                  <td className="border border-border px-3 py-2">USA</td>
+                  <td className="border border-border px-3 py-2">Upon service use, via network</td>
+                  <td className="border border-border px-3 py-2">Analysis query text (no personal identifiers transmitted)</td>
+                  <td className="border border-border px-3 py-2">Deleted upon processing completion</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Clerk, Inc.</td>
+                  <td className="border border-border px-3 py-2">USA</td>
+                  <td className="border border-border px-3 py-2">Upon sign-up/login, via network</td>
+                  <td className="border border-border px-3 py-2">Account identifier, email, profile image URL</td>
+                  <td className="border border-border px-3 py-2">Until membership withdrawal</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Replit, Inc.</td>
+                  <td className="border border-border px-3 py-2">USA</td>
+                  <td className="border border-border px-3 py-2">Upon service use, via network</td>
+                  <td className="border border-border px-3 py-2">All information stored in service database</td>
+                  <td className="border border-border px-3 py-2">Until membership withdrawal or legal retention period</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-muted-foreground/70">By using this service, you consent to the overseas transfer of personal information as described above. If you do not consent, you may not be able to use the service.</p>
+          </>
+        ) : (
+          <>
+            <p>회사는 서비스 운영을 위해 아래와 같이 개인정보를 국외로 이전합니다 (개인정보보호법 제28조의8).</p>
+            <table className="mt-3 w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-muted text-left">
+                  <th className="border border-border px-3 py-2">이전받는 자</th>
+                  <th className="border border-border px-3 py-2">이전 국가</th>
+                  <th className="border border-border px-3 py-2">이전 일시 및 방법</th>
+                  <th className="border border-border px-3 py-2">이전 항목</th>
+                  <th className="border border-border px-3 py-2">보유·이용 기간</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-border px-3 py-2">Google LLC</td>
+                  <td className="border border-border px-3 py-2">미국</td>
+                  <td className="border border-border px-3 py-2">서비스 이용 시 네트워크를 통해 전송</td>
+                  <td className="border border-border px-3 py-2">분석 질의 텍스트 (개인 식별정보 미포함)</td>
+                  <td className="border border-border px-3 py-2">처리 완료 즉시 삭제</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Clerk, Inc.</td>
+                  <td className="border border-border px-3 py-2">미국</td>
+                  <td className="border border-border px-3 py-2">가입·로그인 시 네트워크를 통해 전송</td>
+                  <td className="border border-border px-3 py-2">계정 식별자, 이메일, 프로필 이미지 URL</td>
+                  <td className="border border-border px-3 py-2">회원 탈퇴 시까지</td>
+                </tr>
+                <tr>
+                  <td className="border border-border px-3 py-2">Replit, Inc.</td>
+                  <td className="border border-border px-3 py-2">미국</td>
+                  <td className="border border-border px-3 py-2">서비스 이용 시 네트워크를 통해 전송</td>
+                  <td className="border border-border px-3 py-2">서비스 데이터베이스에 저장된 모든 정보</td>
+                  <td className="border border-border px-3 py-2">회원 탈퇴 또는 법령 보존 기간까지</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-muted-foreground/70">서비스 이용 시 위 국외 이전에 동의한 것으로 간주됩니다. 동의하지 않을 경우 서비스 이용이 제한될 수 있습니다.</p>
           </>
         )}
       </Section>
@@ -196,16 +304,30 @@ export default function PrivacyPage() {
           <>
             <p>For privacy-related inquiries, complaints, or remediation, please contact us below.</p>
             <ul className="list-none mt-2 space-y-1">
-              <li>Officer: Privacy Officer (CBST)</li>
-              <li>Email: privacy@cbst.kr</li>
+              <li>Organization: CBST (애빛다 운영사)</li>
+              <li>Email: <a href="mailto:privacy@cbst.kr" className="underline">privacy@cbst.kr</a></li>
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground/70">※ The designated privacy officer's name will be disclosed upon completion of business registration. Until then, all privacy inquiries are handled by the operating organization (CBST).</p>
+            <p className="mt-2">If you are not satisfied with the Company's response, you may contact the following agencies.</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Personal Information Dispute Mediation Committee: <a href="https://www.kopico.go.kr" target="_blank" rel="noopener noreferrer" className="underline">kopico.go.kr</a> / 1833-6972</li>
+              <li>Personal Information Infringement Report Center (KISA): <a href="https://privacy.kisa.or.kr" target="_blank" rel="noopener noreferrer" className="underline">privacy.kisa.or.kr</a> / 118</li>
+              <li>Cyber Crime Investigation Unit (Police): <a href="https://ecrm.police.go.kr" target="_blank" rel="noopener noreferrer" className="underline">ecrm.police.go.kr</a> / 182</li>
             </ul>
           </>
         ) : (
           <>
             <p>개인정보 관련 문의·불만·피해구제 등은 아래로 연락주십시오.</p>
             <ul className="list-none mt-2 space-y-1">
-              <li>담당자: 개인정보 보호책임자 (CBST)</li>
-              <li>이메일: privacy@cbst.kr</li>
+              <li>운영사: CBST (애빛다 운영사)</li>
+              <li>이메일: <a href="mailto:privacy@cbst.kr" className="underline">privacy@cbst.kr</a></li>
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground/70">※ 개인정보 보호책임자 실명은 사업자 등록 완료 후 공개됩니다. 그 전까지 개인정보 관련 문의는 운영사(CBST)에서 처리합니다.</p>
+            <p className="mt-2">회사의 처리에 만족하지 못하시거나 추가 도움이 필요하신 경우 아래 기관에 문의하실 수 있습니다.</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>개인정보 분쟁조정위원회: <a href="https://www.kopico.go.kr" target="_blank" rel="noopener noreferrer" className="underline">kopico.go.kr</a> / 1833-6972</li>
+              <li>개인정보 침해신고센터 (한국인터넷진흥원): <a href="https://privacy.kisa.or.kr" target="_blank" rel="noopener noreferrer" className="underline">privacy.kisa.or.kr</a> / 118</li>
+              <li>사이버범죄 신고 (경찰청): <a href="https://ecrm.police.go.kr" target="_blank" rel="noopener noreferrer" className="underline">ecrm.police.go.kr</a> / 182</li>
             </ul>
           </>
         )}

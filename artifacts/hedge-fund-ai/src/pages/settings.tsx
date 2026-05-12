@@ -453,7 +453,6 @@ export default function SettingsPage() {
                             <span className="text-[11px] font-bold text-primary uppercase tracking-wide mr-1">{t("프로", "Pro")}</span>
                             <span className="text-[18px] font-black text-foreground tabular-nums">120</span>
                             <span className="text-[12px] text-muted-foreground font-medium">{t("크레딧", "credits")}</span>
-                            <span className="ml-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">27% {t("할인", "OFF")}</span>
                           </div>
                           <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩242", "₩242 / credit")}</p>
                         </div>
@@ -461,7 +460,6 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-2.5">
                         <div className="text-right">
                           <p className="text-[17px] font-black text-foreground tabular-nums">₩29,000</p>
-                          <p className="text-[10px] text-muted-foreground/40 line-through tabular-nums">₩39,600</p>
                         </div>
                         <button
                           disabled
