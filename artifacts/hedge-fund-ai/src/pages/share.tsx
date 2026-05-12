@@ -411,6 +411,16 @@ const STEP_ORDER = [
   "investment_strategy",
 ];
 
+function getOrCreateViewerKey(): string {
+  const KEY = "aibvda_viewer_key";
+  let k = localStorage.getItem(KEY);
+  if (!k) {
+    k = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    localStorage.setItem(KEY, k);
+  }
+  return k;
+}
+
 export default function SharePage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -424,7 +434,19 @@ export default function SharePage() {
     setLoading(true);
     fetch(getApiUrl(`/api/analysis/share/${id}`))
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => { setAnalysis(d); setLoading(false); })
+      .then((d) => {
+        setAnalysis(d);
+        setLoading(false);
+        // 공유 크레딧 적립 (분석 소유자에게)
+        if (d?.id) {
+          const viewerKey = getOrCreateViewerKey();
+          fetch(getApiUrl("/api/credits/share-viewed"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ analysisId: d.id, viewerKey }),
+          }).catch(() => {});
+        }
+      })
       .catch(() => { setError(true); setLoading(false); });
   }, [id]);
 

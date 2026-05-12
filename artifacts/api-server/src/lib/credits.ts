@@ -145,6 +145,55 @@ export async function getOrCreateReferralCode(userId: string): Promise<string> {
   }
 }
 
+export async function awardShareCredit(
+  analysisId: number,
+  viewerKey: string,
+  sharerId: string
+): Promise<{ awarded: boolean; reason?: string }> {
+  const thisMonth = getTodayKST().slice(0, 7); // "2026-05"
+  const client = await pool.connect();
+  try {
+    // 중복 뷰 확인 + 로그 삽입 (unique 제약으로 중복 방지)
+    const insert = await client.query(
+      `INSERT INTO share_credit_log (analysis_id, viewer_key, sharer_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (analysis_id, viewer_key) DO NOTHING
+       RETURNING id`,
+      [analysisId, viewerKey, sharerId]
+    );
+    if (insert.rowCount === 0) {
+      return { awarded: false, reason: "already_viewed" };
+    }
+
+    // 월 한도 확인 + 적립
+    const { rows } = await client.query(
+      `SELECT share_credits_month, share_credits_this_month FROM user_credits WHERE user_id = $1`,
+      [sharerId]
+    );
+    if (!rows[0]) return { awarded: false, reason: "sharer_not_found" };
+
+    const storedMonth = rows[0].share_credits_month ?? "";
+    const thisMonthCount = storedMonth === thisMonth ? (rows[0].share_credits_this_month ?? 0) : 0;
+
+    if (thisMonthCount >= 10) {
+      return { awarded: false, reason: "monthly_limit" };
+    }
+
+    // 크레딧 지급
+    await client.query(
+      `UPDATE user_credits
+       SET bonus_credits = bonus_credits + 1,
+           share_credits_month = $1,
+           share_credits_this_month = $2
+       WHERE user_id = $3`,
+      [thisMonth, thisMonthCount + 1, sharerId]
+    );
+    return { awarded: true };
+  } finally {
+    client.release();
+  }
+}
+
 export async function registerReferral(refereeId: string, code: string): Promise<{ success: boolean; message: string }> {
   const client = await pool.connect();
   try {
