@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "애빛다"
+version = "1.0.1"
+id = "artifacts/hedge-fund-ai"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 22315
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/hedge-fund-ai run dev"
+
+[services.env]
+PORT = "22315"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/hedge-fund-ai", "run", "build"]
+publicDir = "artifacts/hedge-fund-ai/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
