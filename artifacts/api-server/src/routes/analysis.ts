@@ -231,7 +231,10 @@ async function runQCCheck(
    - EBITDA = 영업이익 + D&A 원칙이 지켜지지 않아 EBITDA < 영업이익인 비바이오 흑자 기업이면: 불승인 (단, D&A 데이터 없는 경우 통과)
    - 발행주식수 출처가 명시되지 않으면(KRX/Naver/Yahoo/서버계산 중 어느 것인지 불분명): 감점(−2점)
    - 컨텍스트에 애널리스트 컨센서스(EPS 또는 매출 전망)가 있음에도 전망 섹션에서 컨센서스를 전혀 언급하지 않으면: 불승인
-   - 올해E 또는 내년E 영업이익률이 전년 실적 대비 +15%p 이상 점프했는데 전망 근거에 구체적 드라이버(원가 구조 변화·매출 레버리지·사업 믹스 개선 등) 없으면: 불승인` : isRelativeValuation ? `
+   - 올해E 또는 내년E 영업이익률이 전년 실적 대비 +15%p 이상 점프했는데 전망 근거에 구체적 드라이버(원가 구조 변화·매출 레버리지·사업 믹스 개선 등) 없으면: 불승인
+   - 컨텍스트에 이익 품질(현금전환율 OCF/순이익) 경고가 있음에도 순이익·EPS 추정에 이를 반영하지 않으면: 불승인
+   - 컨텍스트에 GPM(매출총이익률) 추세가 있음에도 GPM 추세에 역행하는 OPM 추정을 근거 없이 제시하면: 불승인
+   - 컨텍스트에 서프라이즈 보정 지침(Beat/Miss 패턴)이 있음에도 추정치에 해당 보정을 전혀 반영하지 않으면: 감점(−2점)` : isRelativeValuation ? `
 
 5. 목표가 산출 정합성 — 팀장 직접 조율 검수 (전용 필수 검증):
 
@@ -1202,6 +1205,8 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const dnaMap    = toYearMap("annualDepreciationAmortizationDepletion");
   const debtMap   = toYearMap("annualTotalDebt");
   const cashTsMap = toYearMap("annualCashAndCashEquivalentsAndShortTermInvestments");
+  const arMap     = toYearMap("annualAccountsReceivable");
+  const invMap    = toYearMap("annualInventory");
 
   const allYears = [...new Set([
     ...Object.keys(revMap), ...Object.keys(gpMap), ...Object.keys(opMap), ...Object.keys(niMap)
@@ -1318,6 +1323,90 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         lines.push(`  ⛔ DCF 장기 ROIC 가정이 역사적 평균(${avgRoic.toFixed(1)}%)의 2배를 초과하면 과낙관 — 재검토 필수`);
       }
     }
+    // ── 이익 품질(Earnings Quality) 분석 ─────────────────────────────────────────
+    // OCF/순이익 괴리, AR·재고 vs 매출 성장률 괴리 → 실적 추정 품질 판단
+    {
+      const sortedYrs = allYears.slice(0, 3); // 최근 3년
+      const ccRatios: Array<{year: string; cc: number}> = [];
+      for (const y of sortedYrs) {
+        const ocf = ocfMap[y];
+        const ni  = niMap[y];
+        if (ocf != null && ni != null && Math.abs(ni) > 0) {
+          ccRatios.push({ year: y, cc: ocf / ni });
+        }
+      }
+
+      // AR vs 매출 성장률 괴리 (최근 2년)
+      const arWarnings: string[] = [];
+      const yrsForAR = sortedYrs.slice(0, 2);
+      for (let i = 0; i < yrsForAR.length - 1; i++) {
+        const y1 = yrsForAR[i], y0 = yrsForAR[i + 1];
+        const revG = (revMap[y1] != null && revMap[y0] != null && revMap[y0] > 0)
+          ? (revMap[y1] - revMap[y0]) / revMap[y0] * 100 : null;
+        const arG  = (arMap[y1]  != null && arMap[y0]  != null && arMap[y0]  > 0)
+          ? (arMap[y1]  - arMap[y0])  / arMap[y0]  * 100 : null;
+        const invG = (invMap[y1] != null && invMap[y0] != null && invMap[y0] > 0)
+          ? (invMap[y1] - invMap[y0]) / invMap[y0] * 100 : null;
+        if (revG != null && arG != null && arG > revG + 15) {
+          arWarnings.push(`${y1}: 매출채권 증가율(${arG.toFixed(1)}%) >> 매출 증가율(${revG.toFixed(1)}%) → 현금 회수 지연·허수 매출 가능성`);
+        }
+        if (revG != null && invG != null && invG > revG + 20) {
+          arWarnings.push(`${y1}: 재고 증가율(${invG.toFixed(1)}%) >> 매출 증가율(${revG.toFixed(1)}%) → 수요 둔화·재고 부담 위험`);
+        }
+      }
+
+      if (ccRatios.length > 0 || arWarnings.length > 0) {
+        lines.push(`\n[🔬 이익 품질(Earnings Quality) 분석 — 실적 추정 신뢰도 핵심]`);
+        lines.push(`  ⚠️ 아래 지표를 실적 추정 시 반드시 반영하세요.`);
+
+        if (ccRatios.length > 0) {
+          lines.push(`  [현금전환율 OCF/순이익 — 1.0x=정상, 0.5x↓=이익 품질 의심]`);
+          for (const { year, cc } of ccRatios) {
+            const flag = cc < 0.5 ? ` ⚠️ 낮음 — 이익 품질 의심, 순이익 추정치 보수화 필수`
+              : cc < 0.8 ? ` 🟡 보통 — 일부 비현금 이익 포함, 주의 필요`
+              : ` ✅ 양호`;
+            lines.push(`    ${year}: ${cc.toFixed(2)}x${flag}`);
+          }
+          const avgCC = ccRatios.reduce((s, r) => s + r.cc, 0) / ccRatios.length;
+          if (avgCC < 0.5) {
+            lines.push(`  ⛔ 평균 현금전환율 ${avgCC.toFixed(2)}x — 순이익 기반 추정 신뢰도 낮음. EPS 추정치를 10~20% 하향 보수화 적용.`);
+          }
+        }
+
+        if (arWarnings.length > 0) {
+          lines.push(`  [매출채권·재고 이상 신호]`);
+          for (const w of arWarnings) lines.push(`    ⚠️ ${w}`);
+          lines.push(`    → 매출 추정 시 해당 연도 성장률을 5~10%p 추가 보수화 권장`);
+        }
+      }
+    }
+
+    // ── 매출총이익률(GPM) 추세 — 가격결정력 앵커 ───────────────────────────────
+    {
+      const gpmHistory: Array<{year: string; gpm: number}> = [];
+      for (const y of allYears) {
+        const rev = revMap[y];
+        const gp  = gpMap[y];
+        if (rev != null && gp != null && rev > 0) {
+          const gpm = gp / rev * 100;
+          if (gpm > 0 && gpm < 100) gpmHistory.push({ year: y, gpm });
+        }
+      }
+      if (gpmHistory.length >= 2) {
+        const sorted = gpmHistory.sort((a, b) => Number(a.year) - Number(b.year));
+        const first = sorted[0].gpm, last = sorted[sorted.length - 1].gpm;
+        const avgGpm = sorted.reduce((s, h) => s + h.gpm, 0) / sorted.length;
+        const trend = last > first + 3 ? "개선(가격결정력 강화)" : last < first - 3 ? "악화(원가 압박 또는 경쟁 심화)" : "안정적";
+        lines.push(`\n[📊 매출총이익률(GPM) 추세 — 가격결정력·원가구조 앵커]`);
+        lines.push(`  ${sorted.map(h => `${h.year}: ${h.gpm.toFixed(1)}%`).join(" → ")} [${trend}]`);
+        lines.push(`  평균 GPM: ${avgGpm.toFixed(1)}% | 최근 GPM: ${last.toFixed(1)}%`);
+        lines.push(`  ⛔ 실적 추정 시 GPM이 역사적 최고(${Math.max(...gpmHistory.map(h => h.gpm)).toFixed(1)}%)를 초과하는 시나리오는 근거 없이 사용 금지.`);
+        if (last < first - 5) {
+          lines.push(`  ⚠️ GPM ${(first - last).toFixed(1)}%p 하락 추세 — OPM 회복 가정 시 GPM 개선 근거 반드시 명시.`);
+        }
+      }
+    }
+
   } else {
     // Fallback: legacy incomeStatementHistory
     const incomeStmts: any[] = (result.incomeStatementHistory as any)?.incomeStatementHistory ?? [];
@@ -1860,6 +1949,15 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
             : beatCount >= total * 0.5 ? "🟡 보통 — 컨센서스를 그대로 사용하되 Bear 가중치 조금 확대"
             : "🔴 낮음 — 컨센서스 과낙관, DCF Year 2~3 성장률을 10~15% 추가 하향 보수화 필수";
           lines.push(`  Beat율: ${beatRate}% (${beatCount}/${total}건) | 컨센서스 신뢰도: ${quality}`);
+          // 서프라이즈 패턴 → 실적 추정 구체 보정 지침
+          const beatRateNum = beatCount / total;
+          if (beatRateNum >= 0.75) {
+            lines.push(`  📌 추정 보정 지침: Beat 패턴 강함 → 컨센서스 EPS Year1 +5~8%, Year2 +8~12% 상향 조정 후 추정 시작 권장.`);
+            lines.push(`     매출도 컨센서스 그대로 사용 시 실제보다 보수적일 가능성 높음. 상단 시나리오 가중치 확대.`);
+          } else if (beatRateNum < 0.4) {
+            lines.push(`  📌 추정 보정 지침: Miss 패턴 — 컨센서스 EPS Year1 −10%, Year2 −15% 추가 하향 후 추정 시작 필수.`);
+            lines.push(`     Bear 시나리오 가중치 최소 35%로 설정. 매출 성장률도 컨센서스 대비 보수적 적용.`);
+          }
         }
       }
     }
