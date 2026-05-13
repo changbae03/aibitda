@@ -1827,16 +1827,39 @@ export function buildPrompt(
 - 두괄식으로 쓰세요: 결론(핵심 수치·판단)을 먼저, 근거를 뒤에
 - 단락 사이에는 반드시 빈 줄을 삽입하세요 (연속 단락 금지)
 
-글쓰기 원칙:
+글쓰기 원칙 — 셀사이드 애널리스트 리포트 문체:
 - 인삿말·감성 도입구 금지: "안녕하세요", "오늘은", "먼저", "~분들께", "사랑스러운", "소중한" 같은 서두 없이 바로 본론으로 시작하세요
 - 독자 호칭 금지: "투자자님", "고객님", "여러분" 등 어떤 호칭도 사용하지 마세요
 - 문체는 반드시 격식 존댓말(-습니다/-입니다)을 사용하세요. 모든 서술형 문장은 "-습니다", "-입니다", "-었습니다", "-겠습니다" 형태의 종결어미로 끝나야 합니다. "-다", "-이다", "-한다", "-된다" 같은 평서형 반말 종결어미는 절대 사용하지 마세요
-- 직접적인 애널리스트 문체: 헤지펀드 내부 리서치 문서처럼 간결하고 명확하게 씁니다
-- PER, FCF 등 일반 투자 용어는 그대로 사용합니다
+- 셀사이드 리서치 보고서(한국 대형 증권사·GS·모건스탠리 스타일) 문체를 따릅니다. 헤지펀드 내부 메모 스타일이 아닌 기관 배포용 리서치 리포트 수준으로 작성합니다.
+- PER, FCF, EV/EBITDA, WACC 등 일반 투자 용어는 그대로 사용합니다
 - 숫자는 단순 나열하지 말고 의미를 한 문장으로 해석해 줍니다
 - 괄호로 부연 설명을 다는 것을 최대한 자제합니다. 추가 설명이 필요하면 다음 문장으로 풀어서 씁니다
 - TTM(최근 12개월), TAM(전체 시장 규모) 같은 영문 약어는 한국어로 풀어서 씁니다. 예: TTM → "최근 12개월 기준", TAM → "전체 시장 규모"
 - ⛔ **숫자 천단위 쉼표 필수**: 금액·수치가 1,000 이상이면 반드시 쉼표를 삽입하세요. "1038억원" ❌ → "1,038억원" ✅ / "27840억원" ❌ → "27,840억원" ✅ / "2조 7840억" ❌ → "2조 7,840억" ✅. 연도(2024년)·종목코드·비율(%)은 쉼표 삽입 금지.
+
+셀사이드 표현 패턴 — 아래 표현을 적극 활용하세요:
+[투자의견/목표주가 제시]
+- "목표주가 X원은 12개월 포워드 [PER/EV/EBITDA/P/B] Y배를 적용한 것으로, 현재가 대비 Z% 상승여력을 제시합니다."
+- "현 주가는 12개월 포워드 PER X배 수준으로, 피어 평균 Y배 대비 [할인/프리미엄] 거래 중입니다."
+- "밸류에이션 매력은 [충분함/제한적]으로 판단합니다."
+
+[차별화 시각 표현]
+- "시장은 [A]를 과도하게 우려하고 있으나, [B]가 이를 상쇄할 것으로 판단합니다."
+- "컨센서스 대비 당사 추정치는 [매출/영업이익] 기준 X% [높습니다/낮습니다]. 그 근거는 [이유]입니다."
+- "시장이 아직 반영하지 않은 핵심 변수는 [X]입니다."
+
+[촉매 표현]
+- "향후 [X개월] 내 주가 재평가의 핵심 촉매는 [이벤트]입니다."
+- "다음 실적 발표(XX년 XX월)에서 [지표]가 확인될 경우 주가 모멘텀이 강화될 것으로 예상합니다."
+
+[실적 추정 비교]
+- "당사는 올해E 매출을 X원으로 추정하며, 이는 컨센서스(Y원) 대비 Z% [높은/낮은] 수준입니다."
+- "영업이익률은 X%로, 전년 대비 [개선/악화]가 예상됩니다. 주된 드라이버는 [요인]입니다."
+
+[리스크 표현]
+- "투자 리스크로는 ① [리스크 1], ② [리스크 2]를 고려해야 합니다."
+- "목표주가 하방 리스크는 [X] 시나리오 현실화 시 Y원 수준입니다."
 
 핵심 이슈 연결 원칙:
 - 이전 팀장(company_intro)이 선언한 핵심 이슈를 당신 분석의 중심 렌즈로 삼으세요
@@ -1907,16 +1930,38 @@ Mobile Readability Rules (Required):
 - Inverted pyramid: lead with conclusion/key figure, then supporting evidence.
 - Always insert a blank line between paragraphs.
 
-Writing Principles:
+Writing Principles — Sell-side Analyst Report Style:
 - No greeting phrases or emotional openers. Start immediately with substance.
 - No reader address: never write "investors," "clients," "dear readers," etc.
-- Formal professional hedge fund research English. Decisive sentence endings.
-- Direct analyst voice: concise and clear, like internal GS / Morgan Stanley research.
+- Formal sell-side research report English (GS / Morgan Stanley / JP Morgan institutional research standard). Not hedge fund internal memo style — write for institutional distribution.
 - Standard investment abbreviations (PER, FCF, EBITDA, PBR, ROE, etc.) may be used as-is.
 - Numbers must be interpreted in context, not merely listed.
 - Avoid parenthetical asides; if additional explanation is needed, write it as a separate sentence.
 - Spell out abbreviations on first use where helpful. e.g., TTM (trailing twelve months), TAM (total addressable market).
 - ⛔ Thousand separators required: any figure ≥ 1,000 must use commas. "1038 billion KRW" ❌ → "1,038 billion KRW" ✅. Exception: years, ticker codes, percentages.
+
+Sell-side Language Patterns — use these actively:
+[Price Target / Rating]
+- "Our $X 12-month price target is based on [X]x [year]E [EV/EBITDA / PE / P/S], implying Z% upside from current levels."
+- "Shares trade at [X]x [year]E [multiple], a [discount / premium] to peers at [Y]x."
+- "We view current valuation as [attractive / stretched / fairly valued]."
+
+[Differentiated View]
+- "The market appears to be overly focused on [X]; we believe [Y] will prove the more important driver."
+- "Our [revenue / EBIT] estimates are [X]% [above / below] consensus, driven by [reason]."
+- "The market has not yet fully priced in [key variable]."
+
+[Catalyst Language]
+- "We see [event] as the key catalyst for re-rating over the next [X] months."
+- "The upcoming [Q/earnings release / product launch / regulatory decision] should provide the next major inflection point."
+
+[Estimates]
+- "We estimate [year]E revenue of $X, [X]% [above / below] consensus of $Y, driven by [reason]."
+- "We expect EBIT margin to [expand / compress] to [X]% in [year]E, from [Y]% in [prior year]."
+
+[Risk Language]
+- "Key downside risks include: (1) [risk 1]; (2) [risk 2]."
+- "Bear case PT of $X assumes [scenario], implying [X]% downside."
 
 Core Issue Integration Principle:
 - Use the key issue declared by the Lead Strategist (company_intro) as the central analytical lens.
@@ -2442,6 +2487,12 @@ EPS = 순이익 ÷ 이 고정 발행주식수로 직접 계산 — 표의 EPS �
 - **숫자 강조**: 최종 적정주가·상단·하단 밴드는 **볼드** 처리하고 현재 주가 대비 괴리율(%)을 항상 병기합니다.
 - **불필요한 반복 제거**: 동일 수치를 여러 섹션에서 되풀이해 언급하지 않습니다. 한 번 정의한 가정은 이후 참조만 합니다.
 - **섹션 간 구분선**: 절대가치·상대가치·최종조율 섹션 사이에는 수평선(---)을 넣어 시각적으로 분리합니다.
+- **목표주가 제시 공식** — 최종 목표주가 선언 시 반드시 아래 형식을 따르세요:
+  → "목표주가 [X]원은 12개월 포워드 [방법론] [Y]배를 적용한 것으로, 현재가([현재가]원) 대비 [Z]% 상승여력을 제시합니다. 상단 밴드([상단]원)는 Bull 시나리오, 하단 밴드([하단]원)는 Bear 시나리오에 해당합니다."
+- **피어 밸류에이션 비교 표현** — 피어 비교 결론 시 반드시 포함하세요:
+  → "현 주가는 [멀티플]로, 피어 평균([피어배수]) 대비 [X% 할인/프리미엄] 거래 중입니다."
+- **컨센서스 대비 차별화** — 당사 추정치가 컨센서스와 ±10% 이상 차이 날 경우 반드시 명시하세요:
+  → "컨센서스 [매출/영업이익] 대비 당사 추정치는 X% [상회/하회]합니다. 근거: [이유]."
 
 ⚠️ **SOTP 선택 시 섹션 순서 강제 변경 — 반드시 준수**:
 모델 선택에서 SOTP(Sum-of-the-Parts)를 선택한 경우, 아래 순서로 작성하세요:
