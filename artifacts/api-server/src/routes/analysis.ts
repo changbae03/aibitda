@@ -273,7 +273,12 @@ async function runQCCheck(
    - 최종 적정주가가 상단 밴드보다 높거나 하단 밴드보다 낮으면: 불승인
 
   [극단값 방어]
-   - 하단 밴드가 현재 주가의 20% 미만이면: 불승인` : "";
+   - 하단 밴드가 현재 주가의 20% 미만이면: 불승인
+   - 목표주가(Base)가 현재 주가의 30% 미만이면: 불승인 (단, 보고서 내 부도·상장폐지 위험이 명시된 경우 예외)
+   - EV/Sales 모델 적용 배수가 피어 평균 EV/Sales의 25% 미만이면(극단적 디스카운트): 불승인 — 반드시 배수 재검토
+   - 바이오/제약 기업(업종 키워드: 바이오, 제약, 헬스케어, 세포치료, 줄기세포, Biotech, Pharma)에 PBR을 30% 이상 가중했으면: 불승인 (PBR은 자산 기반 성숙 기업 전용, 바이오텍 부적합)
+   - FCF 음수이면서 매출성장률 30%+ 또는 EV/매출 10x+ 고성장 기업에 PBR을 30% 이상 가중했으면: 불승인
+   - 바이오/제약 파이프라인 rNPV 할인율이 15%를 초과하면: 불승인 (PoS가 이미 임상 위험 반영 — 이중 할인 금지)` : "";
 
   const prompt = `당신은 AI 헤지펀드 리서치 팀의 Lead Portfolio Strategist(팀장)입니다.
 아래는 ${agentName}가 ${companyName}(${ticker})에 대해 작성한 분석 보고서입니다.
@@ -1955,6 +1960,45 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     }
   }
 
+  // ── 시장 내재 멀티플 산출 — 목표주가 현실성 앵커 ────────────────────────────
+  // 현재 시장이 이 기업을 몇 배수로 평가 중인지 AI에게 명시 → 극단적 멀티플 축소 방지
+  {
+    const impliedEV: number | null = ks?.enterpriseValue ?? null;
+    const impliedRev: number | null = fd?.totalRevenue ?? null;
+    const impliedMcap: number | null = sd?.marketCap ?? ks?.marketCap ?? null;
+    const impliedCurPrice: number | null = sd?.regularMarketPrice ?? fd?.currentPrice ?? null;
+    const impliedEVSales: number | null = ks?.enterpriseToRevenue != null
+      ? ks.enterpriseToRevenue
+      : (impliedEV != null && impliedRev != null && impliedRev > 0 ? impliedEV / impliedRev : null);
+    const impliedEVEBITDA: number | null = ks?.enterpriseToEbitda ?? null;
+    const impliedPS: number | null = (impliedMcap != null && impliedRev != null && impliedRev > 0)
+      ? impliedMcap / impliedRev : null;
+    const impliedPB: number | null = ks?.priceToBook ?? null;
+    const impliedFCF: number | null = fd?.freeCashflow ?? null;
+    const impliedRevGrowth: number | null = fd?.revenueGrowth ?? null;
+
+    if (impliedCurPrice != null && (impliedEVSales != null || impliedPS != null || impliedPB != null)) {
+      lines.push(`\n[📐 서버 계산 시장 내재 멀티플 — 목표주가 현실성 필수 확인]`);
+      lines.push(`  ⚠️ 아래는 현재 주가 기준으로 시장이 이 기업을 평가 중인 배수입니다.`);
+      lines.push(`  목표주가 산출 시 아래 배수가 50% 이상 축소되면 반드시 그 근거를 명시하세요.`);
+      if (impliedEVSales != null) lines.push(`  현재 EV/Sales: ${impliedEVSales.toFixed(1)}x`);
+      if (impliedEVEBITDA != null && impliedEVEBITDA > 0 && impliedEVEBITDA < 500) lines.push(`  현재 EV/EBITDA: ${impliedEVEBITDA.toFixed(1)}x`);
+      if (impliedPS != null) lines.push(`  현재 P/S: ${impliedPS.toFixed(1)}x`);
+      if (impliedPB != null) lines.push(`  현재 P/B: ${impliedPB.toFixed(2)}x`);
+      if (impliedFCF != null && impliedFCF < 0) lines.push(`  FCF 상태: 음수 (${fmtNum(impliedFCF, currency)}) — DCF·DDM 부적합, EV/Sales 또는 rNPV 우선 고려`);
+      if (impliedRevGrowth != null && impliedRevGrowth > 0.3) {
+        lines.push(`  매출 성장률(YoY): ${pct(impliedRevGrowth)} — 고성장 기업. PBR 단독 사용 부적합.`);
+      }
+      if (impliedEVSales != null && impliedEVSales > 10) {
+        lines.push(`  ⛔ EV/Sales ${impliedEVSales.toFixed(1)}x 고배수 기업 — 목표가에 EV/Sales 10x 미만 배수를 쓸 경우 반드시 멀티플 축소 근거 필요.`);
+      }
+      // 모델 선택 가이드: FCF 음수 + 고성장 시 PBR 경고
+      if (impliedFCF != null && impliedFCF < 0 && impliedRevGrowth != null && impliedRevGrowth > 0.2) {
+        lines.push(`  ⛔ FCF 음수 + 고성장 기업 — PBR 가중 30% 이상 적용 금지. EV/Sales 또는 rNPV(바이오) 기반 모델만 사용하세요.`);
+      }
+    }
+  }
+
   // 섹터 벤치마크 멀티플 (밸류에이션 단계에서 피어 비교 시 사용)
   lines.push(KOREAN_SECTOR_MULTIPLES);
 
@@ -2083,6 +2127,21 @@ const US_PEER_MAP: Record<string, PeerEntry[]> = {
     { ticker: "BABA",  name: "Alibaba",     exchange: "NYSE",   reason: "글로벌 이커머스·클라우드" },
     { ticker: "WMT",   name: "Walmart",     exchange: "NYSE",   reason: "리테일 경쟁사" },
     { ticker: "SHOP",  name: "Shopify",     exchange: "NYSE",   reason: "이커머스 플랫폼 경쟁사" },
+  ],
+  // New Space / Aerospace & Defense
+  "RKLB": [
+    { ticker: "ASTS",  name: "AST SpaceMobile", exchange: "NASDAQ", reason: "뉴스페이스 위성·통신 초기 성장주, 유사 밸류에이션 프로파일" },
+    { ticker: "LUNR",  name: "Intuitive Machines", exchange: "NASDAQ", reason: "뉴스페이스 달 탐사·NASA 계약 초기 성장주" },
+    { ticker: "PL",    name: "Planet Labs",     exchange: "NYSE",   reason: "위성 운영·데이터 서비스, 유사 EV/Sales 고배수 성장주" },
+    { ticker: "SPCE",  name: "Virgin Galactic",  exchange: "NYSE",   reason: "민간 우주 초기 스타트업" },
+    { ticker: "KTOS",  name: "Kratos Defense",  exchange: "NASDAQ", reason: "방산·우주 인프라, 미국 정부 계약 유사 구조" },
+  ],
+  "ASTS": [
+    { ticker: "RKLB",  name: "Rocket Lab",      exchange: "NASDAQ", reason: "뉴스페이스 발사체·위성 동종" },
+    { ticker: "LUNR",  name: "Intuitive Machines", exchange: "NASDAQ", reason: "뉴스페이스 초기 성장주" },
+    { ticker: "PL",    name: "Planet Labs",     exchange: "NYSE",   reason: "위성 서비스 동종" },
+    { ticker: "VSAT",  name: "ViaSat",          exchange: "NASDAQ", reason: "위성통신 서비스" },
+    { ticker: "IRDM",  name: "Iridium",         exchange: "NASDAQ", reason: "위성통신, 단 수익성 있는 성숙 기업으로 배수 직접 적용 주의" },
   ],
   // EV / Auto
   "TSLA": [
@@ -4056,6 +4115,40 @@ async function executeStep(
         } else {
           console.warn(`[krx-peer] No KRX data found for ${tickerKrxCode} — using hardcoded benchmark`);
         }
+      }
+
+      // ── 밸류에이션 모델 선택 가이드라인 주입 ──────────────────────────────────
+      // 재무 데이터 기반으로 부적절한 모델 사용을 사전 차단
+      {
+        const guideLines: string[] = [];
+        const ind = (analysis.industry ?? "").toLowerCase();
+        const isBio = /바이오|제약|헬스케어|세포치료|줄기세포|biotech|pharma|healthcare/i.test(ind);
+        const isFinancial = /금융|은행|보험|증권|financ|bank|insur/i.test(ind);
+        const isNewSpace = /우주|항공|aerospace|space|defense|방위/i.test(ind);
+
+        guideLines.push(`\n[🎯 밸류에이션 모델 선택 필수 가이드라인]`);
+        guideLines.push(`⚠️ 아래 규칙을 반드시 준수하세요. 위반 시 QC 불승인.`);
+
+        if (isBio) {
+          guideLines.push(`· 업종(${analysis.industry}): 바이오/제약 → rNPV(SOTP) 우선 사용. PBR 가중 30% 이상 금지.`);
+          guideLines.push(`· rNPV 할인율: 8~12% 범위 (PoS가 이미 임상 위험 반영 — 15% 초과 이중할인 금지)`);
+          guideLines.push(`· 피어: 동일 임상 단계의 세포치료/바이오텍 기업 기준. 수익성 있는 대형 제약사와 직접 배수 비교 금지.`);
+        } else if (isFinancial) {
+          guideLines.push(`· 업종(${analysis.industry}): 금융 → PBR·ROE 기반 모델 우선. DCF 시 배당 포함 여부 확인.`);
+        } else if (isNewSpace) {
+          guideLines.push(`· 업종(${analysis.industry}): 우주/항공/방위 → EV/Sales 우선. 발사체·플랫폼 옵션가치 별도 반영.`);
+          guideLines.push(`· 뉴스페이스 섹터 EV/Sales: 시장 컨센서스 20~60x 범위 (SpaceX 비교군). 15x 미만 적용 시 근거 필수.`);
+          guideLines.push(`· PBR 가중 30% 이상 금지 (자산 기반 평가 부적합).`);
+        } else {
+          guideLines.push(`· FCF 음수 + 고성장 기업: EV/Sales 우선, PBR 30% 이상 가중 금지.`);
+          guideLines.push(`· FCF 양수 + 안정 성장: DCF 또는 PER 기반 모델 적합.`);
+        }
+        guideLines.push(`· 피어 배수 선택 시 현재 시장 내재 멀티플(위 컨텍스트 참조)의 25% 미만 배수 사용 금지.`);
+        guideLines.push(`· 최종 목표주가(Base)는 현재가의 30% 미만 산출 시 QC 불승인 — 가정 재검토 필수.`);
+
+        const guideBlock = guideLines.join("\n");
+        enrichedContext = enrichedContext ? enrichedContext + "\n" + guideBlock : guideBlock;
+        console.log(`[model-guide] 밸류에이션 모델 가이드라인 주입 (isBio=${isBio}, isNewSpace=${isNewSpace})`);
       }
 
       // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
