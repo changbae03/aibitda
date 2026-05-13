@@ -99,11 +99,10 @@ export default function Landing() {
 
       {/* 배경 그라디언트 */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#FF8A7A]/6 blur-[120px]" />
-        <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-[#FF8A7A]/5 blur-[80px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full bg-[#FF8A7A]/3 blur-[100px]" />
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-slate-400/5 blur-[140px]" />
+        <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-slate-500/4 blur-[100px]" />
         <div
-          className="absolute inset-0 opacity-[0.015] dark:opacity-[0.04]"
+          className="absolute inset-0 opacity-[0.018] dark:opacity-[0.045]"
           style={{
             backgroundImage: `linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)`,
             backgroundSize: "48px 48px",
