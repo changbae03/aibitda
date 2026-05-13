@@ -4,7 +4,7 @@ import { triggerModelReview } from "./routes/model-insights.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 
-console.log("[STARTUP] API Server v3 - last_login_at + krx_peer_data + www domain");
+console.log("[STARTUP] API Server v3 - last_login_at + krx_peer_data + www domain + cleanup");
 
 const rawPort = process.env["PORT"];
 
