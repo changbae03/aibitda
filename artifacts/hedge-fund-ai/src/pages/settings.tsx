@@ -738,8 +738,8 @@ export default function SettingsPage() {
           </span>
         </Row>
         <Row label={t("문의", "Contact")}>
-          <a href="mailto:support@cbst.ai" className="text-[13px] text-primary hover:underline">
-            support@cbst.ai
+          <a href="/support" className="text-[13px] text-primary hover:underline">
+            {t("고객센터 바로가기", "Go to Support Center")}
           </a>
         </Row>
       </Section>
