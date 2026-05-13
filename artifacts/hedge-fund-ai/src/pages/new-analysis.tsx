@@ -181,12 +181,12 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
 
   return (
     <div className={cn(
-      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium",
+      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border",
       credits.remaining <= 2
-        ? "text-amber-400"
-        : "text-muted-foreground"
+        ? "text-amber-400 border-amber-400/40 bg-amber-400/5"
+        : "text-muted-foreground border-border/50"
     )}>
-      <Zap className="w-3 h-3" />
+      <Zap className={cn("w-3 h-3", credits.remaining <= 2 ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
       {isEn ? `${credits.remaining} credits left` : `크레딧 ${credits.remaining}개 남음`}
     </div>
   );
