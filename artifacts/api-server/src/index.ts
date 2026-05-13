@@ -3,7 +3,6 @@ import { runMigrations } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
-import { setReady } from "./routes/health.js";
 
 console.log("[STARTUP] API Server v2 - SSL fix + auto migration enabled");
 
@@ -35,13 +34,11 @@ const server = app.listen(port, () => {
     })
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
-      setReady(true);
-      console.log("[STARTUP] 초기화 완료 — /api/healthz 200 응답 시작");
+      console.log("[STARTUP] 초기화 완료");
     })
     .catch((err) => {
       console.error("[MIGRATION/CACHE] 실패:", err?.message ?? err);
       if (err?.cause) console.error("[MIGRATION] 원인:", err.cause);
-      setReady(true);
     });
 
   setTimeout(() => {
@@ -86,7 +83,6 @@ const server = app.listen(port, () => {
 
 function gracefulShutdown(signal: string) {
   console.log(`[SHUTDOWN] ${signal} 수신 — graceful shutdown 시작`);
-  setReady(false);
   server.close((err) => {
     if (err) {
       console.error("[SHUTDOWN] 서버 종료 중 오류:", err.message);
