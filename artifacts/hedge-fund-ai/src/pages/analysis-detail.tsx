@@ -935,7 +935,7 @@ export default function AnalysisDetail() {
   const isSignedIn = isClerkSignedIn || !!kakaoAuth?.user;
   const { data: analysis, isLoading, error } = useGetAnalysis(id, {
     query: {
-      refetchInterval: (query) => query.state.data?.status === 'in_progress' ? 3000 : false
+      refetchInterval: (query) => (query.state.data?.status === 'in_progress' || query.state.data?.status === 'queued') ? 3000 : false
     }
   });
 
@@ -1376,11 +1376,17 @@ export default function AnalysisDetail() {
               </span>
               <span className={cn(
                 "px-2 py-0.5 text-xs font-semibold rounded border",
-                isComplete 
-                  ? "bg-success/10 text-success border-success/20" 
-                  : "bg-warning/10 text-warning border-warning/20 animate-pulse"
+                isComplete
+                  ? "bg-success/10 text-success border-success/20"
+                  : analysis.status === 'queued'
+                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse"
+                    : "bg-warning/10 text-warning border-warning/20 animate-pulse"
               )}>
-                {isComplete ? (isEn ? 'Analysis Complete' : '분석 완료') : (isEn ? 'In Progress' : '분석 진행중')}
+                {isComplete
+                  ? (isEn ? 'Analysis Complete' : '분석 완료')
+                  : analysis.status === 'queued'
+                    ? (isEn ? 'Queued' : '분석 대기 중')
+                    : (isEn ? 'In Progress' : '분석 진행중')}
               </span>
               <span className="px-2 py-0.5 text-[10px] font-medium rounded border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 flex items-center gap-1">
                 <span>⚡</span>{isEn ? 'AI Generated · For Reference' : 'AI 자동 생성 · 참고용'}
@@ -1599,8 +1605,34 @@ export default function AnalysisDetail() {
           </AnimatePresence>
         </div>
 
+        {/* 큐 대기 중 UI */}
+        {analysis.status === 'queued' && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="print:hidden bg-card border border-blue-500/20 rounded-xl p-5 flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {isEn ? 'Queued for Analysis' : '분석 대기 중'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isEn
+                  ? 'Server is busy — your analysis will start automatically when a slot opens.'
+                  : '현재 서버가 분석 중입니다. 슬롯이 열리면 자동으로 시작됩니다.'}
+              </p>
+            </div>
+            <div className="text-xs text-blue-400 font-mono animate-pulse shrink-0">
+              {isEn ? 'Waiting…' : '대기 중…'}
+            </div>
+          </motion.div>
+        )}
+
         {/* Pipeline running indicator */}
-        {!isComplete && (
+        {!isComplete && analysis.status !== 'queued' && (
           <div className="print:hidden">
             {/* 스트리밍 중: 단계 번호 인라인 표시 */}
             {isStreaming && (

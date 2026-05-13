@@ -311,17 +311,23 @@ ${excerpt}
 {"score": [1~10 정수], "approved": [7점 이상이면 true, 미만이면 false], "feedback": "미흡한 점 한 줄 요약 (approved이면 빈 문자열)"}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        maxOutputTokens: 256,
-        temperature: 0.1, // QC는 채점 로직 — 거의 결정론적으로
-        topP: 0.8,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
-    const raw = response.text ?? "";
+    await geminiSemaphore.acquire();
+    let raw = "";
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          maxOutputTokens: 256,
+          temperature: 0.1,
+          topP: 0.8,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      });
+      raw = response.text ?? "";
+    } finally {
+      geminiSemaphore.release();
+    }
     const parsed = extractJsonSafe(raw);
     if (parsed && typeof parsed.score === "number") {
       return {
@@ -386,17 +392,22 @@ ${excerpt}
 JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총 400-700자).`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
-      config: {
-        maxOutputTokens: 1024,
-        temperature: 0.6,
-        topP: 0.9,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
-    return response.text ?? "";
+    await geminiSemaphore.acquire();
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
+        config: {
+          maxOutputTokens: 1024,
+          temperature: 0.6,
+          topP: 0.9,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      });
+      return response.text ?? "";
+    } finally {
+      geminiSemaphore.release();
+    }
   } catch (err) {
     console.error(`[debate] challenger error (${stepKey}):`, err);
     return "";
@@ -410,6 +421,56 @@ const ai = new GoogleGenAI({
     httpOptions: { baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL! },
   }),
 });
+
+// ─── 동시성 제어 — Semaphore ─────────────────────────────────────────────────
+class Semaphore {
+  private _count: number;
+  private _queue: Array<() => void> = [];
+  constructor(private readonly max: number) { this._count = max; }
+  acquire(): Promise<void> {
+    if (this._count > 0) { this._count--; return Promise.resolve(); }
+    return new Promise(resolve => this._queue.push(resolve));
+  }
+  release(): void {
+    if (this._queue.length > 0) { this._queue.shift()!(); }
+    else { this._count++; }
+  }
+  get waiting() { return this._queue.length; }
+  get active() { return this.max - this._count; }
+}
+
+// Gemini API 동시 호출 제한: 429 Rate Limit 방지
+const MAX_CONCURRENT_GEMINI = 5;
+const geminiSemaphore = new Semaphore(MAX_CONCURRENT_GEMINI);
+
+// 분석 파이프라인 동시 실행 제한: 서버 과부하 방지
+const MAX_CONCURRENT_PIPELINES = 5;
+const pipelineSemaphore = new Semaphore(MAX_CONCURRENT_PIPELINES);
+
+// 파이프라인 큐 실행: 동시 실행 수 초과 시 DB 상태를 'queued'로 전환하고 대기
+async function enqueueAnalysis(id: number): Promise<void> {
+  const isAtCapacity = pipelineSemaphore.active >= MAX_CONCURRENT_PIPELINES || pipelineSemaphore.waiting > 0;
+  if (isAtCapacity) {
+    const pos = pipelineSemaphore.waiting + 1;
+    await rawQuery(
+      `UPDATE analyses SET status='queued', current_step=$1 WHERE id=$2 AND status='in_progress'`,
+      [`queue:${pos}`, id]
+    );
+    console.log(`[queue] Analysis ${id} queued (estimated position ~${pos})`);
+  }
+  await pipelineSemaphore.acquire();
+  try {
+    // 대기 후 실행 슬롯 확보 → 상태를 in_progress로 복원
+    await rawQuery(
+      `UPDATE analyses SET status='in_progress', current_step='company_intro' WHERE id=$1 AND status='queued'`,
+      [id]
+    );
+    await runPipelineBackground(id);
+  } finally {
+    pipelineSemaphore.release();
+    console.log(`[queue] Analysis ${id} pipeline done, released slot`);
+  }
+}
 
 // ─── Ticker resolution ────────────────────────────────────────────────────────
 
@@ -3810,6 +3871,22 @@ router.patch("/schedules/:scheduleId/toggle", async (req, res) => {
   }
 });
 
+// ─── GET /analyses/queue-status ──────────────────────────────────────────────
+router.get("/queue-status", (_req, res) => {
+  res.json({
+    pipelines: {
+      active: pipelineSemaphore.active,
+      waiting: pipelineSemaphore.waiting,
+      max: MAX_CONCURRENT_PIPELINES,
+    },
+    gemini: {
+      active: geminiSemaphore.active,
+      waiting: geminiSemaphore.waiting,
+      max: MAX_CONCURRENT_GEMINI,
+    },
+  });
+});
+
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
@@ -4335,93 +4412,105 @@ async function executeStep(
     const maxOutputTokens =
       (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
 
-    // 일시적 오류(503 UNAVAILABLE, 타임아웃) 여부 판별
+    // 일시적 오류(503 UNAVAILABLE, 타임아웃, 429 Rate Limit) 여부 판별
     const isTransient = (err: unknown) => {
       const msg = String(err);
-      return msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("timed out") || msg.includes("timeout");
+      return (
+        msg.includes("503") || msg.includes("UNAVAILABLE") ||
+        msg.includes("timed out") || msg.includes("timeout") ||
+        msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") ||
+        msg.includes("quota") || msg.includes("rate")
+      );
     };
 
-    const MAX_ATTEMPTS = 3;
+    const MAX_ATTEMPTS = 4;
     let lastErr: unknown = null;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         if (attempt > 1) {
-          const waitMs = (attempt - 1) * 3000; // 3s, 6s
-          console.warn(`[${stepKey}] Retry ${attempt}/${MAX_ATTEMPTS} after ${waitMs}ms…`);
+          // 429 Rate Limit은 더 긴 대기 (30s, 60s, 90s) — 일반 오류는 3s, 6s, 9s
+          const is429 = String(lastErr).includes("429") || String(lastErr).includes("RESOURCE_EXHAUSTED") || String(lastErr).includes("quota");
+          const waitMs = is429 ? attempt * 30_000 : (attempt - 1) * 3_000;
+          console.warn(`[${stepKey}] Retry ${attempt}/${MAX_ATTEMPTS} after ${waitMs}ms (is429=${is429})…`);
           onEvent?.({ t: "" }); // keep-alive
           await new Promise((r) => setTimeout(r, waitMs));
         }
 
         // 밸류에이션 단계는 수치 일관성을 위해 더 낮은 temperature 사용
-        // 비밸류에이션도 0.15로 낮춰 단계별 결론 일관성 향상
         const stepTemperature = isValuationStep ? 0.12 : 0.15;
-        const stream = await ai.models.generateContentStream({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          config: {
-            systemInstruction: systemPrompt,
-            maxOutputTokens,
-            temperature: stepTemperature,
-            topP: 0.9,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        });
-        let lastFinishReason: string | undefined;
-        let lastRepeatCheck = 0;
-        for await (const chunk of stream) {
-          const text = chunk.text ?? "";
-          if (text) {
-            content += text;
-            onEvent?.({ t: text });
-            // 500자마다 실시간 반복 루프 감지 — 감지 시 스트림 즉시 종료
-            if (content.length - lastRepeatCheck > 500) {
-              lastRepeatCheck = content.length;
-              const trimmed = trimRepetitionLoop(content);
-              if (trimmed.length < content.length) {
-                content = trimmed;
-                console.warn(`[${stepKey}] repetition loop detected mid-stream — breaking`);
-                break;
+
+        // Gemini 세마포어 획득 후 스트림 소비 완료까지 유지
+        await geminiSemaphore.acquire();
+        try {
+          const stream = await ai.models.generateContentStream({
+            model: "gemini-2.5-flash",
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+            config: {
+              systemInstruction: systemPrompt,
+              maxOutputTokens,
+              temperature: stepTemperature,
+              topP: 0.9,
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          });
+          let lastFinishReason: string | undefined;
+          let lastRepeatCheck = 0;
+          for await (const chunk of stream) {
+            const text = chunk.text ?? "";
+            if (text) {
+              content += text;
+              onEvent?.({ t: text });
+              if (content.length - lastRepeatCheck > 500) {
+                lastRepeatCheck = content.length;
+                const trimmed = trimRepetitionLoop(content);
+                if (trimmed.length < content.length) {
+                  content = trimmed;
+                  console.warn(`[${stepKey}] repetition loop detected mid-stream — breaking`);
+                  break;
+                }
+              }
+            }
+            const reason = chunk.candidates?.[0]?.finishReason;
+            if (reason) lastFinishReason = reason;
+          }
+          content = trimRepetitionLoop(content);
+
+          if (lastFinishReason === "MAX_TOKENS") {
+            console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림`);
+            if (stepKey === "relative_valuation" && !content.includes("FINAL_VALUATION_DATA")) {
+              try {
+                console.log(`[${stepKey}] FINAL_VALUATION_DATA 누락 — 복구 시도`);
+                const recoveryPrompt = (analysis as any).language === 'en'
+                  ? `The valuation report below was truncated due to token limits. Based on the target price and bands presented in this report, generate ONLY the FINAL_VALUATION_DATA JSON block. Output the JSON block only — no explanation.\n\n[Truncated report tail]\n${content.slice(-3000)}`
+                  : `아래는 밸류에이션 보고서가 토큰 한도로 잘린 내용입니다. 이 보고서에서 제시된 목표주가와 밴드를 기반으로 FINAL_VALUATION_DATA JSON 블록 하나만 생성하세요. 다른 설명 없이 JSON 블록만 출력하세요.\n\n[잘린 보고서 끝부분]\n${content.slice(-3000)}`;
+                const recoveryResp = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: [{ role: "user", parts: [{ text: recoveryPrompt }] }],
+                  config: { maxOutputTokens: 512, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
+                });
+                const recoveryText = recoveryResp.text ?? "";
+                if (recoveryText.includes("FINAL_VALUATION_DATA")) {
+                  content = content + "\n\n" + recoveryText;
+                  console.log(`[${stepKey}] FINAL_VALUATION_DATA 복구 성공`);
+                }
+              } catch (recoveryErr) {
+                console.warn(`[${stepKey}] FINAL_VALUATION_DATA 복구 실패:`, recoveryErr);
               }
             }
           }
-          const reason = chunk.candidates?.[0]?.finishReason;
-          if (reason) lastFinishReason = reason;
+          console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}, attempt: ${attempt}`);
+        } finally {
+          geminiSemaphore.release();
         }
-        // 스트림 종료 후 한 번 더 검사 (마지막 청크에서 완성된 루프 처리)
-        content = trimRepetitionLoop(content);
-        if (lastFinishReason === "MAX_TOKENS") {
-          console.warn(`[${stepKey}] 응답이 MAX_TOKENS(${maxOutputTokens})로 잘림`);
-          // relative_valuation: FINAL_VALUATION_DATA JSON이 없으면 복구 시도
-          if (stepKey === "relative_valuation" && !content.includes("FINAL_VALUATION_DATA")) {
-            try {
-              console.log(`[${stepKey}] FINAL_VALUATION_DATA 누락 — 복구 시도`);
-              const recoveryPrompt = (analysis as any).language === 'en'
-                ? `The valuation report below was truncated due to token limits. Based on the target price and bands presented in this report, generate ONLY the FINAL_VALUATION_DATA JSON block. Output the JSON block only — no explanation.\n\n[Truncated report tail]\n${content.slice(-3000)}`
-                : `아래는 밸류에이션 보고서가 토큰 한도로 잘린 내용입니다. 이 보고서에서 제시된 목표주가와 밴드를 기반으로 FINAL_VALUATION_DATA JSON 블록 하나만 생성하세요. 다른 설명 없이 JSON 블록만 출력하세요.\n\n[잘린 보고서 끝부분]\n${content.slice(-3000)}`;
-              const recoveryResp = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: [{ role: "user", parts: [{ text: recoveryPrompt }] }],
-                config: { maxOutputTokens: 512, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
-              });
-              const recoveryText = recoveryResp.text ?? "";
-              if (recoveryText.includes("FINAL_VALUATION_DATA")) {
-                content = content + "\n\n" + recoveryText;
-                console.log(`[${stepKey}] FINAL_VALUATION_DATA 복구 성공`);
-              }
-            } catch (recoveryErr) {
-              console.warn(`[${stepKey}] FINAL_VALUATION_DATA 복구 실패:`, recoveryErr);
-            }
-          }
-        }
-        console.log(`[${stepKey}] streamed length: ${content.length}, finishReason: ${lastFinishReason}, attempt: ${attempt}`);
+
         if (!content) content = "분석 결과를 생성하지 못했습니다.";
         lastErr = null;
-        break; // 성공 — 루프 탈출
+        break;
       } catch (err) {
         lastErr = err;
         console.error(`[${stepKey}] Gemini error (attempt ${attempt}):`, err);
-        if (!isTransient(err) || attempt === MAX_ATTEMPTS) break; // 비일시적 오류 or 마지막 시도
+        if (!isTransient(err) || attempt === MAX_ATTEMPTS) break;
       }
     }
 
@@ -4460,35 +4549,39 @@ async function executeStep(
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
           const synthesisMaxTokens = 24576; // Debate 합성: 24k (잘림 방지 + 비용 절감 절충)
 
-          const synthesisStream = await ai.models.generateContentStream({
-            model: "gemini-2.5-flash",
-            contents: [{ role: "user", parts: [{ text: synthesisUserPrompt }] }],
-            config: {
-              systemInstruction: systemPrompt,
-              maxOutputTokens: synthesisMaxTokens,
-              temperature: 0.12,
-              topP: 0.85,
-              thinkingConfig: { thinkingBudget: 0 },
-            },
-          });
-
+          await geminiSemaphore.acquire();
           let synthesizedContent = "";
-          let synthRepeatCheck = 0;
-          for await (const chunk of synthesisStream) {
-            const text = chunk.text ?? "";
-            if (text) {
-              synthesizedContent += text;
-              onEvent?.({ t: text, debateSynthesis: true });
-              if (synthesizedContent.length - synthRepeatCheck > 500) {
-                synthRepeatCheck = synthesizedContent.length;
-                const trimmed = trimRepetitionLoop(synthesizedContent);
-                if (trimmed.length < synthesizedContent.length) {
-                  synthesizedContent = trimmed;
-                  console.warn(`[debate] repetition loop detected — breaking synthesis stream`);
-                  break;
+          try {
+            const synthesisStream = await ai.models.generateContentStream({
+              model: "gemini-2.5-flash",
+              contents: [{ role: "user", parts: [{ text: synthesisUserPrompt }] }],
+              config: {
+                systemInstruction: systemPrompt,
+                maxOutputTokens: synthesisMaxTokens,
+                temperature: 0.12,
+                topP: 0.85,
+                thinkingConfig: { thinkingBudget: 0 },
+              },
+            });
+            let synthRepeatCheck = 0;
+            for await (const chunk of synthesisStream) {
+              const text = chunk.text ?? "";
+              if (text) {
+                synthesizedContent += text;
+                onEvent?.({ t: text, debateSynthesis: true });
+                if (synthesizedContent.length - synthRepeatCheck > 500) {
+                  synthRepeatCheck = synthesizedContent.length;
+                  const trimmed = trimRepetitionLoop(synthesizedContent);
+                  if (trimmed.length < synthesizedContent.length) {
+                    synthesizedContent = trimmed;
+                    console.warn(`[debate] repetition loop detected — breaking synthesis stream`);
+                    break;
+                  }
                 }
               }
             }
+          } finally {
+            geminiSemaphore.release();
           }
           synthesizedContent = trimRepetitionLoop(synthesizedContent);
           if (synthesizedContent) {
@@ -4520,34 +4613,39 @@ async function executeStep(
               ? `\n\n---\n[Lead Strategist Review — Mandatory Revision]\n${qcResult.feedback}\nAddress the above points clearly and rewrite the analysis to a higher standard of completeness. Write the ENTIRE revised report in English only.`
               : `\n\n---\n[팀장 재검토 지시 — 반드시 보완하세요]\n${qcResult.feedback}\n위 사항을 명확히 보완하여 더 완성도 높은 분석을 다시 작성하세요.`);
           const revisedMaxTokens = (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
-          const revisedStream = await ai.models.generateContentStream({
-            model: "gemini-2.5-flash",
-            contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
-            config: {
-              systemInstruction: systemPrompt,
-              maxOutputTokens: revisedMaxTokens,
-              temperature: 0.2,
-              topP: 0.85,
-              thinkingConfig: { thinkingBudget: 0 },
-            },
-          });
+          await geminiSemaphore.acquire();
           let revisedContent = "";
-          let revRepeatCheck = 0;
-          for await (const chunk of revisedStream) {
-            const text = chunk.text ?? "";
-            if (text) {
-              revisedContent += text;
-              onEvent?.({ t: text, revised: true });
-              if (revisedContent.length - revRepeatCheck > 500) {
-                revRepeatCheck = revisedContent.length;
-                const trimmed = trimRepetitionLoop(revisedContent);
-                if (trimmed.length < revisedContent.length) {
-                  revisedContent = trimmed;
-                  console.warn(`[QC] repetition loop detected — breaking revised stream`);
-                  break;
+          try {
+            const revisedStream = await ai.models.generateContentStream({
+              model: "gemini-2.5-flash",
+              contents: [{ role: "user", parts: [{ text: revisedUserPrompt }] }],
+              config: {
+                systemInstruction: systemPrompt,
+                maxOutputTokens: revisedMaxTokens,
+                temperature: 0.2,
+                topP: 0.85,
+                thinkingConfig: { thinkingBudget: 0 },
+              },
+            });
+            let revRepeatCheck = 0;
+            for await (const chunk of revisedStream) {
+              const text = chunk.text ?? "";
+              if (text) {
+                revisedContent += text;
+                onEvent?.({ t: text, revised: true });
+                if (revisedContent.length - revRepeatCheck > 500) {
+                  revRepeatCheck = revisedContent.length;
+                  const trimmed = trimRepetitionLoop(revisedContent);
+                  if (trimmed.length < revisedContent.length) {
+                    revisedContent = trimmed;
+                    console.warn(`[QC] repetition loop detected — breaking revised stream`);
+                    break;
+                  }
                 }
               }
             }
+          } finally {
+            geminiSemaphore.release();
           }
           revisedContent = trimRepetitionLoop(revisedContent);
           if (revisedContent) finalContent = revisedContent;
@@ -4914,9 +5012,16 @@ router.post("/:id/run-pipeline", async (req, res) => {
   const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
   const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
   if (!analysis) return res.status(404).json({ error: "Analysis not found" });
-  if (analysis.status !== "in_progress") return res.json({ ok: true, status: analysis.status });
+  // 이미 큐 대기 중이거나 완료/실패 상태면 재진입 방지
+  if (analysis.status !== "in_progress" && analysis.status !== "queued") {
+    return res.json({ ok: true, status: analysis.status });
+  }
+  // 이미 queued 상태라면 추가 enqueue 불필요 (semaphore 대기 중)
+  if (analysis.status === "queued") {
+    return res.json({ ok: true, status: "queued", queued: true });
+  }
 
-  runPipelineBackground(id).catch(console.error);
+  enqueueAnalysis(id).catch(console.error);
   res.json({ ok: true });
 });
 
