@@ -31,7 +31,7 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
-KAKAO_REDIRECT_URI = "https://aibitda.kr/api/auth/kakao/callback"
+KAKAO_REDIRECT_URI = "https://www.aibitda.kr/api/auth/kakao/callback"
 
 [userenv.shared]
 ECOS_API_KEY = "LMUYBHPGF1GS0YQQOEJW"
