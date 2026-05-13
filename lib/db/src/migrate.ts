@@ -230,6 +230,11 @@ export async function runMigrations() {
       ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS email TEXT;
     `);
 
+    // 마지막 로그인 시각
+    await client.query(`
+      ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
+    `);
+
     // 언어 설정 (영어 모드)
     await client.query(`
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS language VARCHAR(5) NOT NULL DEFAULT 'ko';

@@ -128,11 +128,12 @@ router.get("/auth/kakao/callback", async (req, res) => {
     const prefixedUserId = `kakao_${user.id}`;
     try {
       await pool.query(
-        `INSERT INTO user_credits (user_id, display_name, email)
-         VALUES ($1, $2, $3)
+        `INSERT INTO user_credits (user_id, display_name, email, last_login_at)
+         VALUES ($1, $2, $3, NOW())
          ON CONFLICT (user_id) DO UPDATE
            SET display_name = COALESCE(user_credits.display_name, EXCLUDED.display_name),
-               email = COALESCE(user_credits.email, EXCLUDED.email)`,
+               email = COALESCE(user_credits.email, EXCLUDED.email),
+               last_login_at = NOW()`,
         [prefixedUserId, user.nickname || null, user.email || null]
       );
     } catch (_) {}

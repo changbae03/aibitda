@@ -270,12 +270,13 @@ router.get("/user-list", async (req, res) => {
        uc.display_name,
        uc.email,
        uc.created_at,
+       uc.last_login_at,
        COUNT(a.id) FILTER (WHERE a.created_at >= NOW() - INTERVAL '7 days') AS recent_analyses,
        MAX(a.created_at) AS last_activity
      FROM user_credits uc
      LEFT JOIN analyses a ON a.user_id = uc.user_id
      ${whereClause}
-     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at
+     GROUP BY uc.user_id, uc.daily_used, uc.daily_limit, uc.bonus_credits, uc.tier, uc.admin_memo, uc.display_name, uc.email, uc.created_at, uc.last_login_at
      ORDER BY ${orderBy}
      LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
     listParams
@@ -299,6 +300,7 @@ router.get("/user-list", async (req, res) => {
       displayName: r.display_name ?? null,
       email: r.email ?? null,
       createdAt: r.created_at,
+      lastLoginAt: r.last_login_at ?? null,
       lastActivity: r.last_activity ?? null,
     })),
     total: parseInt(countResult.rows[0].count, 10),

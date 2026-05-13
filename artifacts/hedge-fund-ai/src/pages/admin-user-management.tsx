@@ -166,6 +166,7 @@ interface UserRow {
   displayName: string | null;
   email: string | null;
   createdAt: string | null;
+  lastLoginAt: string | null;
   lastActivity: string | null;
 }
 
@@ -628,6 +629,7 @@ export default function AdminUserManagement() {
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                 <span>가입 {fmt(selected.createdAt)}</span>
+                {selected.lastLoginAt && <span>로그인 {fmt(selected.lastLoginAt)}</span>}
                 <span>총 분석 <strong className="text-foreground">{selected.totalAnalyses}</strong>회</span>
                 <span>7일 <strong className="text-foreground">{selected.recentAnalyses}</strong>회</span>
               </div>
