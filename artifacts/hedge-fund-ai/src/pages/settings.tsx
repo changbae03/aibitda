@@ -412,7 +412,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="p-3 space-y-2">
 
-                    {/* 스탠다드 — 30개 9,900원 */}
+                    {/* 스탠다드 — 15개 9,900원 */}
                     <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border border-border/60 bg-background hover:border-border transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
@@ -421,9 +421,9 @@ export default function SettingsPage() {
                         <div>
                           <div className="flex items-baseline gap-1.5">
                             <span className="text-[13px] font-bold text-foreground">{t("스탠다드", "Standard")}</span>
-                            <span className="text-[11px] text-muted-foreground">· 30{t("개", " credits")}</span>
+                            <span className="text-[11px] text-muted-foreground">· 15{t("개", " credits")}</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩330", "₩330 / credit")}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩660", "₩660 / credit")}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5">
@@ -438,7 +438,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
-                    {/* 프로 — 120개 29,000원 */}
+                    {/* 프로 — 60개 29,000원 */}
                     <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border-2 border-amber-500/40 bg-amber-500/5">
                       <div className="absolute -top-2.5 left-4 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-[10px] font-bold text-white">
                         <Crown className="w-2.5 h-2.5" />
@@ -451,10 +451,10 @@ export default function SettingsPage() {
                         <div>
                           <div className="flex items-baseline gap-1.5">
                             <span className="text-[13px] font-bold text-foreground">{t("프로", "Pro")}</span>
-                            <span className="text-[11px] text-muted-foreground">· 120{t("개", " credits")}</span>
+                            <span className="text-[11px] text-muted-foreground">· 60{t("개", " credits")}</span>
                             <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">27% {t("할인", "OFF")}</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩241", "₩241 / credit")}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩483", "₩483 / credit")}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5">
