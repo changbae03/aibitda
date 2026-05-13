@@ -3,6 +3,7 @@ import { Resvg } from "@resvg/resvg-js";
 
 let _fontRegular: ArrayBuffer | null | undefined = undefined;
 let _fontBold: ArrayBuffer | null | undefined = undefined;
+let _resvgUnavailable = false;
 
 async function loadFont(weight: 400 | 700): Promise<ArrayBuffer | null> {
   try {
@@ -212,6 +213,8 @@ export async function generateOgPng(data: OgImageData): Promise<Buffer | null> {
     },
   };
 
+  if (_resvgUnavailable) return null;
+
   try {
     const svg = await satori(root, {
       width: 1200,
@@ -225,7 +228,13 @@ export async function generateOgPng(data: OgImageData): Promise<Buffer | null> {
     const resvg = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } });
     return Buffer.from(resvg.render().asPng());
   } catch (err: any) {
-    console.error("[og-image] 생성 실패:", err?.message);
+    const msg = err?.message ?? String(err);
+    if (msg.includes("is not a function") || msg.includes("is not a constructor")) {
+      _resvgUnavailable = true;
+      console.warn("[og-image] @resvg/resvg-js 네이티브 바이너리 사용 불가 — OG 이미지 생성 비활성화");
+    } else {
+      console.error("[og-image] 생성 실패:", msg);
+    }
     return null;
   }
 }

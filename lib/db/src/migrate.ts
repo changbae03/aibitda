@@ -235,6 +235,26 @@ export async function runMigrations() {
       ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
     `);
 
+    // KRX 업종 피어 데이터 (밸류에이션 비교용)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS krx_peer_data (
+        id            SERIAL PRIMARY KEY,
+        code          VARCHAR(10) NOT NULL,
+        name          VARCHAR(100) NOT NULL,
+        market        VARCHAR(10) NOT NULL,
+        sector        VARCHAR(50) NOT NULL,
+        pbr           NUMERIC(10,2),
+        per           NUMERIC(10,2),
+        bps           NUMERIC(14,2),
+        eps           NUMERIC(14,2),
+        mcap          BIGINT,
+        snapshot_date DATE NOT NULL,
+        created_at    TIMESTAMP DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS krx_peer_data_code_date_idx
+        ON krx_peer_data(code, snapshot_date);
+    `);
+
     // 언어 설정 (영어 모드)
     await client.query(`
       ALTER TABLE analyses ADD COLUMN IF NOT EXISTS language VARCHAR(5) NOT NULL DEFAULT 'ko';
