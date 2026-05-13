@@ -3906,6 +3906,56 @@ async function executeStep(
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      // ── Feature 3: 섹터별 편향 보정 주입 (밸류에이션 단계) ──────────────────
+      if (isValuationStep) {
+        try {
+          const sectorRows = await rawQuery(
+            `SELECT
+               COUNT(*) as sample_count,
+               ROUND(AVG(price_return)::numeric, 1) as avg_return,
+               ROUND((AVG(CASE WHEN direction_match = true THEN 1.0 ELSE 0.0 END) * 100)::numeric, 0) as direction_accuracy,
+               ROUND(AVG(target_achievement_pct)::numeric, 0) as avg_target_pct,
+               MODE() WITHIN GROUP (ORDER BY valuation_method) as top_method
+             FROM model_insights
+             WHERE industry = $1
+               AND outcome != 'pending'
+               AND price_return IS NOT NULL`,
+            [analysis.industry]
+          );
+          const sr = sectorRows[0];
+          const n = Number(sr?.sample_count ?? 0);
+          if (n >= 3) {
+            const avgRet = Number(sr.avg_return);
+            const dirAcc = sr.direction_accuracy !== null ? Number(sr.direction_accuracy) : null;
+            const avgTgtPct = sr.avg_target_pct !== null ? Number(sr.avg_target_pct) : null;
+            const topMethod = sr.top_method ?? null;
+            let calibBlock = `\n\n[🔬 AI 섹터 보정 데이터 — ${analysis.industry} 업종 (${n}건 누적)]\n`;
+            calibBlock += `⚠️ 아래는 이 업종에서의 AI 모델 과거 성과입니다. 밸류에이션 산출 시 아래 편향을 반드시 보정하세요.\n`;
+            calibBlock += `· 평균 수익률 편차: ${avgRet > 0 ? "+" : ""}${avgRet}%`;
+            if (avgRet > 8) calibBlock += ` → AI가 이 업종에서 과도하게 낙관적. 목표주가를 보수적으로 하향 조정하세요.`;
+            else if (avgRet < -8) calibBlock += ` → AI가 이 업종 하락을 과소평가. 리스크 프리미엄을 상향하세요.`;
+            else calibBlock += ` → 비교적 중립적 성과.`;
+            calibBlock += `\n`;
+            if (dirAcc !== null) {
+              calibBlock += `· 방향성 정확도: ${dirAcc}%`;
+              if (dirAcc < 55) calibBlock += ` → 방향 예측 신뢰도 낮음. 상·하단 시나리오 가중치를 균등하게 설정하세요.`;
+              calibBlock += `\n`;
+            }
+            if (avgTgtPct !== null) {
+              calibBlock += `· 평균 목표주가 달성도: ${avgTgtPct}% (100%=완전달성)`;
+              if (avgTgtPct < 50) calibBlock += ` → 목표주가 달성 빈도 낮음. 보수적으로 설정하세요.`;
+              calibBlock += `\n`;
+            }
+            if (topMethod) calibBlock += `· 이 업종 최다 적용 밸류에이션 방법론: ${topMethod}\n`;
+            enrichedContext = enrichedContext ? enrichedContext + calibBlock : calibBlock;
+            console.log(`[sector-calib] ${analysis.industry} 업종 보정 주입 (${n}건)`);
+          }
+        } catch {
+          // optional
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
       const allInsightRows = await rawQuery(
         `SELECT * FROM model_insights WHERE outcome != 'pending'`

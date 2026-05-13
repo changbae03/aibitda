@@ -89,6 +89,12 @@ export async function runMigrations() {
       ALTER TABLE model_insights ADD COLUMN IF NOT EXISTS direction_match BOOLEAN;
     `);
 
+    // model_insights: 밸류에이션 방법론 + 목표주가 달성도
+    await client.query(`
+      ALTER TABLE model_insights ADD COLUMN IF NOT EXISTS valuation_method TEXT;
+      ALTER TABLE model_insights ADD COLUMN IF NOT EXISTS target_achievement_pct REAL;
+    `);
+
     // analysis_steps UNIQUE 제약 (캐시 ON CONFLICT DO NOTHING 사용)
     await client.query(`
       DO $$ BEGIN

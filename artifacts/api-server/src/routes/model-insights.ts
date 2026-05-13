@@ -88,7 +88,9 @@ async function generateLesson(
   currentPrice: number,
   priceReturn: number,
   outcome: string,
-  daysElapsed: number
+  daysElapsed: number,
+  valuationMethod: string | null = null,
+  targetAchievementPct: number | null = null
 ): Promise<string> {
   const direction = priceReturn >= 0 ? "상승" : "하락";
   const successOrFail =
@@ -104,19 +106,65 @@ async function generateLesson(
 현재가: ${currentPrice}
 수익률: ${priceReturn.toFixed(1)}% (${daysElapsed}일 경과, ${direction})
 결과: ${successOrFail}
+밸류에이션 방법론: ${valuationMethod ?? "미상"}
+목표주가 달성도: ${targetAchievementPct !== null ? targetAchievementPct.toFixed(0) + "%" : "미상"} (100%=완전달성, 음수=역방향)
 
 위 성과를 바탕으로 다음에 같은 유형의 종목을 분석할 때 개선해야 할 핵심 교훈 1가지를 2-3문장으로 도출하세요.
+밸류에이션 방법론과 목표주가 달성도를 고려하여 방법론 적합성도 평가하세요.
 마크다운 볼드(**) 사용 금지. 간결하고 실용적으로 작성.`;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 200 },
+      config: { maxOutputTokens: 250 },
     });
     return response.text?.trim() ?? "";
   } catch {
     return `${companyName} 분석 ${daysElapsed}일 후 ${priceReturn.toFixed(1)}% ${direction}. 결과: ${successOrFail}.`;
+  }
+}
+
+async function extractValuationMethod(analysisId: number | null): Promise<string | null> {
+  if (!analysisId) return null;
+  try {
+    const rows = await rawQuery(
+      `SELECT content FROM analysis_steps WHERE analysis_id = $1 AND step_key = 'intrinsic_valuation' LIMIT 1`,
+      [analysisId]
+    );
+    if (!rows[0]?.content) return null;
+    const c: string = rows[0].content;
+    if (/rNPV|r-NPV/i.test(c)) return "rNPV";
+    if (/DCF/i.test(c)) return "DCF";
+    if (/DDM|배당할인모델/i.test(c)) return "DDM";
+    if (/EV\/EBITDA/i.test(c)) return "EV/EBITDA";
+    if (/EV\/Revenue|EV\/매출/i.test(c)) return "EV/Revenue";
+    if (/PSR|주가매출비율/i.test(c)) return "PSR";
+    if (/PBR|주가순자산/i.test(c)) return "PBR";
+    if (/PER|주가수익비율/i.test(c)) return "PER";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function computeTargetAchievementPct(
+  verdict: string | null,
+  entryPrice: number | null,
+  targetPrice: number | null,
+  currentPrice: number | null
+): number | null {
+  if (!entryPrice || !targetPrice || !currentPrice) return null;
+  if (targetPrice === entryPrice) return null;
+  const isBearish = verdict && /매도|Strong Sell|Sell/i.test(verdict) && !/Buy/i.test(verdict);
+  if (isBearish) {
+    const total = entryPrice - targetPrice;
+    if (total === 0) return null;
+    return Math.min(200, Math.max(-100, ((entryPrice - currentPrice) / total) * 100));
+  } else {
+    const total = targetPrice - entryPrice;
+    if (total === 0) return null;
+    return Math.min(200, Math.max(-100, ((currentPrice - entryPrice) / total) * 100));
   }
 }
 
@@ -201,6 +249,14 @@ export async function triggerModelReview(): Promise<void> {
         currentPrice
       );
 
+      const valuationMethod = await extractValuationMethod(analysis.id);
+      const targetAchievementPct = computeTargetAchievementPct(
+        analysis.investmentVerdict,
+        analysis.startPrice ?? analysis.entryPrice,
+        analysis.targetPrice,
+        currentPrice
+      );
+
       let lesson: string | null = null;
       if (daysElapsed >= 1) {
         lesson = await generateLesson(
@@ -213,26 +269,29 @@ export async function triggerModelReview(): Promise<void> {
           currentPrice,
           priceReturn,
           outcome,
-          daysElapsed
+          daysElapsed,
+          valuationMethod,
+          targetAchievementPct
         );
       }
 
       if (existing.length > 0) {
         await rawQuery(
-          `UPDATE model_insights SET price_at_review=$1, price_return=$2, days_elapsed=$3, outcome=$4, lesson=$5, direction_match=$6, reviewed_at=NOW() WHERE id=$7`,
-          [currentPrice, priceReturn, daysElapsed, outcome, lesson, directionMatch, existing[0].id]
+          `UPDATE model_insights SET price_at_review=$1, price_return=$2, days_elapsed=$3, outcome=$4, lesson=$5, direction_match=$6, valuation_method=$7, target_achievement_pct=$8, reviewed_at=NOW() WHERE id=$9`,
+          [currentPrice, priceReturn, daysElapsed, outcome, lesson, directionMatch, valuationMethod, targetAchievementPct, existing[0].id]
         );
       } else {
         await rawQuery(
-          `INSERT INTO model_insights (analysis_id, ticker, company_name, industry, verdict, entry_price, target_price, stop_loss, price_at_review, price_return, days_elapsed, outcome, lesson, direction_match, analysis_date, reviewed_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())`,
+          `INSERT INTO model_insights (analysis_id, ticker, company_name, industry, verdict, entry_price, target_price, stop_loss, price_at_review, price_return, days_elapsed, outcome, lesson, direction_match, valuation_method, target_achievement_pct, analysis_date, reviewed_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())`,
           [analysis.id, ticker, analysis.companyName, analysis.industry, analysis.investmentVerdict,
            analysis.entryPrice, analysis.targetPrice, analysis.stopLoss,
-           currentPrice, priceReturn, daysElapsed, outcome, lesson, directionMatch, analysis.createdAt]
+           currentPrice, priceReturn, daysElapsed, outcome, lesson, directionMatch,
+           valuationMethod, targetAchievementPct, analysis.createdAt]
         );
       }
 
-      console.log(`[direction-check] ${analysis.companyName}(${ticker}) ${daysElapsed}일 경과 | 수익률 ${priceReturn.toFixed(1)}% | 방향 ${directionMatch === true ? "✓ 일치" : directionMatch === false ? "✗ 불일치" : "정보 없음"}`);
+      console.log(`[direction-check] ${analysis.companyName}(${ticker}) ${daysElapsed}일 경과 | 수익률 ${priceReturn.toFixed(1)}% | 방향 ${directionMatch === true ? "✓ 일치" : directionMatch === false ? "✗ 불일치" : "정보 없음"} | 방법론: ${valuationMethod ?? "미상"} | 달성도: ${targetAchievementPct !== null ? targetAchievementPct.toFixed(0) + "%" : "미상"}`);
     }
   } catch (err) {
     console.error("[model-review] error:", err);
