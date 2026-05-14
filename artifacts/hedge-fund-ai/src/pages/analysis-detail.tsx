@@ -1587,7 +1587,7 @@ export default function AnalysisDetail() {
           {[...analysis.steps]
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
-            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} isEn={(analysis as any).language === 'en'} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} />
+            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} isEn={(analysis as any).language === 'en'} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} validatedVerdict={(analysis as any).investmentVerdict ?? undefined} />
           ))}
         </AnimatePresence>
 
@@ -2060,7 +2060,7 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(s.replace(/'/g, '"')); } catch { return null; }
 }
 
-function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false, validatedTargetPrice }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean, validatedTargetPrice?: number | null }) {
+function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
   const json = extractJson(step.content);
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
 
@@ -2098,7 +2098,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       </div>
 
       {json ? (() => {
-        const vm = verdictMeta(json.verdict ?? "");
+        const vm = verdictMeta(validatedVerdict ?? json.verdict ?? "");
         return (
           <div className="divide-y divide-border">
 
@@ -3112,7 +3112,7 @@ function ValuationScaleBar({
   );
 }
 
-function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice, isEn = false, validatedTargetPrice }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number, isEn?: boolean, validatedTargetPrice?: number | null }) {
+function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice, isEn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number, isEn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
@@ -3127,7 +3127,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   };
 
   if (step.stepKey === "investment_strategy") {
-    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} validatedTargetPrice={validatedTargetPrice} />;
+    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} validatedTargetPrice={validatedTargetPrice} validatedVerdict={validatedVerdict} />;
   }
 
   const isMarket = step.stepKey === "market_analysis";
