@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useRef } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
@@ -149,35 +149,47 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showIosHint, setShowIosHint] = useState(false);
-  const iosHintRef = useRef<HTMLDivElement>(null);
+  const [showBanner, setShowBanner] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
     setIsIos(ios);
     setIsStandalone(standalone);
+    if (standalone) return;
+
+    // 7일 이내 닫은 경우 배너 숨김
+    const dismissed = localStorage.getItem("pwa-banner-dismissed");
+    if (dismissed && Date.now() < Number(dismissed)) { setBannerDismissed(true); return; }
 
     const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+
+    // 3초 후 배너 표시
+    const timer = setTimeout(() => setShowBanner(true), 3000);
+    return () => { window.removeEventListener("beforeinstallprompt", handler); clearTimeout(timer); };
   }, []);
 
+  // iOS는 installPrompt 없이도 배너 표시
   useEffect(() => {
-    if (!showIosHint) return;
-    const handler = (e: MouseEvent) => {
-      if (iosHintRef.current && !iosHintRef.current.contains(e.target as Node)) setShowIosHint(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showIosHint]);
+    if (isStandalone || bannerDismissed) return;
+    if (isIos) { const t = setTimeout(() => setShowBanner(true), 3000); return () => clearTimeout(t); }
+  }, [isIos, isStandalone, bannerDismissed]);
+
+  const dismissBanner = () => {
+    setShowBanner(false);
+    localStorage.setItem("pwa-banner-dismissed", String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  };
 
   const handleInstall = async () => {
-    if (isIos || !installPrompt) { setShowIosHint(v => !v); return; }
+    if (isIos || !installPrompt) return; // iOS는 배너 내 안내로 처리
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
-    if (outcome === "accepted") setInstallPrompt(null);
+    if (outcome === "accepted") { setInstallPrompt(null); setShowBanner(false); }
   };
+
+  const handleFooterInstall = () => setShowBanner(true);
 
   const NavLinks = ({ onSelect, expanded }: { onSelect?: () => void; expanded?: boolean }) => (
     <>
@@ -562,40 +574,15 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <span className="text-border select-none">|</span>
                 <Link href="/support" className="hover:text-foreground transition-colors">{isEn ? "Support" : "고객센터"}</Link>
 
-                {/* PWA 설치 버튼 — 이미 설치된 경우 숨김 */}
+                {/* 푸터 앱 설치 링크 — 클릭 시 슬라이드업 배너 열기 */}
                 {!isStandalone && (
-                  <div className="relative" ref={iosHintRef}>
-                    <button
-                      onClick={handleInstall}
-                      className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors font-medium"
-                    >
-                      <Download className="w-3 h-3" />
-                      {isEn ? "Install App" : "앱 설치"}
-                    </button>
-
-                    {/* iOS 전용 안내 툴팁 */}
-                    {isIos && showIosHint && (
-                      <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-64 bg-popover border border-border rounded-xl shadow-xl p-3.5 text-xs text-foreground z-50">
-                        <p className="font-semibold mb-1.5">{isEn ? "Install on iPhone" : "아이폰에 설치하기"}</p>
-                        <ol className="space-y-1 text-muted-foreground leading-relaxed">
-                          <li className="flex items-start gap-1.5">
-                            <span className="shrink-0 font-bold text-primary">1</span>
-                            <span>{isEn ? "Tap the" : "Safari 하단"} <Share className="inline w-3 h-3 mx-0.5" /> {isEn ? "Share button below" : "공유 버튼 탭"}</span>
-                          </li>
-                          <li className="flex items-start gap-1.5">
-                            <span className="shrink-0 font-bold text-primary">2</span>
-                            <span>{isEn ? '"Add to Home Screen"' : '"홈 화면에 추가" 선택'}</span>
-                          </li>
-                          <li className="flex items-start gap-1.5">
-                            <span className="shrink-0 font-bold text-primary">3</span>
-                            <span>{isEn ? "Tap Add" : '"추가" 탭'}</span>
-                          </li>
-                        </ol>
-                        {/* 말풍선 꼬리 */}
-                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-popover border-r border-b border-border rotate-45" />
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    onClick={handleFooterInstall}
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
+                  >
+                    <Download className="w-3 h-3" />
+                    {isEn ? "Install App" : "앱 설치"}
+                  </button>
                 )}
               </nav>
               {isEn ? (
@@ -625,6 +612,96 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
       </main>
+
+      {/* PWA 하단 슬라이드업 배너 */}
+      <AnimatePresence>
+        {showBanner && (
+          <motion.div
+            initial={{ y: 120, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 120, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 30 }}
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm"
+          >
+            <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+              {/* 헤더 */}
+              <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                <img
+                  src="/pwa-192x192.png"
+                  alt="애빛다"
+                  className="w-12 h-12 rounded-xl shrink-0 shadow"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm text-foreground leading-tight">
+                    {isEn ? "Install AiBITDA" : "애빛다 앱 설치"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                    {isEn
+                      ? "Add to home screen for faster access & offline use"
+                      : "홈 화면 추가로 더 빠르게, 언제든지"}
+                  </p>
+                </div>
+                <button
+                  onClick={dismissBanner}
+                  className="shrink-0 p-1.5 -mr-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* iOS 안내 or 설치 버튼 */}
+              {isIos ? (
+                <div className="px-4 pb-4">
+                  <div className="bg-muted/40 rounded-xl p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      {isEn ? "How to install" : "설치 방법"}
+                    </p>
+                    <ol className="space-y-1.5">
+                      {[
+                        isEn
+                          ? ["Tap the Share button", "at the bottom of Safari"]
+                          : ["Safari 하단 공유 버튼", "(□↑) 탭"],
+                        isEn
+                          ? ['"Add to Home Screen"', ""]
+                          : ['"홈 화면에 추가"', "선택"],
+                        isEn
+                          ? ["Tap", '"Add"']
+                          : ['"추가"', "탭"],
+                      ].map(([a, b], i) => (
+                        <li key={i} className="flex items-center gap-2.5 text-xs text-foreground">
+                          <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {i + 1}
+                          </span>
+                          <span>{a} <span className="text-muted-foreground">{b}</span></span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  {/* 말풍선 꼬리 — 화면 하단 중앙 방향 */}
+                  <div className="flex justify-center mt-3">
+                    <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
+                      <Share className="w-3 h-3" />
+                      <span>{isEn ? "Look for this icon in Safari" : "Safari 하단에서 이 아이콘을 찾아요"}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pb-4">
+                  <button
+                    onClick={handleInstall}
+                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[.98] transition-all"
+                  >
+                    {isEn ? "Add to Home Screen" : "홈 화면에 추가"}
+                  </button>
+                  <p className="text-center text-[11px] text-muted-foreground mt-2">
+                    {isEn ? "No download required · Free forever" : "별도 다운로드 없음 · 무료"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
