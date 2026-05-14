@@ -3063,16 +3063,54 @@ function stripPromptInstructions(content: string): string {
     .split("\n")
     .filter(line => {
       const t = line.trim();
+
+      // ── 내부 STEP 레이블 ──────────────────────────────────────────
       if (/^\*?\*?\[STEP\s*\d+\]/.test(t)) return false;
+      if (/\[STEP\s*[A-Z]\]/.test(t)) return false;
+      if (/\[내부\s*계산/.test(t)) return false;
+
+      // ── 지시사항 종료 마커 ────────────────────────────────────────
       if (/^※\s*(다음\s*지시사항|지시사항\s*끝)/.test(t)) return false;
+
+      // ── upside 계산 내부 선언 ─────────────────────────────────────
       if (/^현재 종목의 Base upside:.*따라서.*전략을 작성합니다/.test(t)) return false;
-      // 체인 인계 선언 문장 제거
+
+      // ── 체인 인계 선언 문장 ───────────────────────────────────────
       if (/브리핑에서 확인된 핵심 이슈 .+을 중심으로/.test(t)) return false;
       if (/산업 分析에서 .+이 확인되었습니다\. 이를 배경으로/.test(t)) return false;
       if (/촉매 분析에서 도출된 핵심 이슈 .+의 재무 영향을 기반으로 실적을 전망합니다/.test(t)) return false;
       if (/^📌\s*\*?\*?\[체인 인계 규칙\]/.test(t)) return false;
       if (/^→\s*이 문장으로 리포트가 시작/.test(t)) return false;
       if (/^→\s*이 한 문장을 모든 소제목/.test(t)) return false;
+      if (/체인\s*인계/.test(t)) return false;
+
+      // ── 단계 범위 선언 ────────────────────────────────────────────
+      if (/이 단계의 담당 범위/.test(t)) return false;
+      if (/이 범위 밖 내용은 타 단계에서/.test(t)) return false;
+      if (/다른 단계 전담/.test(t)) return false;
+      if (/다음 분析 단계/.test(t)) return false;
+      if (/다음 에이전트에게/.test(t)) return false;
+
+      // ── 검증 결과 문구 ────────────────────────────────────────────
+      if (/논리 일관성 확인됨|논리 충돌 해소됨|검증 완료/.test(t)) return false;
+
+      // ── 상투어 마감 ───────────────────────────────────────────────
+      if (/이상으로 분析을 마칩니다|이로써 보고서를 마칩니다|이상으로 마칩니다/.test(t)) return false;
+
+      // ── 지시 잔재 (instruction leakage) ──────────────────────────
+      if (/^⚠️.*(선정 기준|자가 검증|담당 범위)/.test(t)) return false;
+      if (/^✅\s*올바른 이슈:/.test(t)) return false;
+      if (/^❌\s*제외 대상:/.test(t)) return false;
+      if (/절대 표\(table\) 사용 금지/.test(t)) return false;
+      if (/소제목은 이모지 \+ 제목만 사용하세요/.test(t)) return false;
+      if (/단락과 단락 사이에 반드시 빈 줄/.test(t)) return false;
+      if (/아래 구조 그대로 불릿으로 작성하세요/.test(t)) return false;
+
+      // ── 미채워진 템플릿 플레이스홀더 ──────────────────────────────
+      if (/^\- \[요인 이름\]:/.test(t)) return false;
+      if (/^\- \[취약점 이름\]:/.test(t)) return false;
+      if (/\(해당하면\)$/.test(t)) return false;
+
       return true;
     })
     .join("\n");
