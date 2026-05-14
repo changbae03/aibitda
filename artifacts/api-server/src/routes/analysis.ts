@@ -4843,7 +4843,6 @@ async function executeStep(
           // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
           // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
           const TARGET_MAX_RATIO = isKR ? 3.5 : 4.5;
-          const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
             if (tRatio > TARGET_MAX_RATIO) {
@@ -4852,12 +4851,6 @@ async function executeStep(
                 `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (>${TARGET_MAX_RATIO}x ${isKR ? "KR" : "US"} cap) — clamped to ${capped}`
               );
               targetPrice = capped;
-            } else if (tRatio < TARGET_MIN_RATIO) {
-              const floored = Math.round(savedStartPrice * TARGET_MIN_RATIO);
-              console.warn(
-                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (<${TARGET_MIN_RATIO}x ${isKR ? "KR" : "US"} floor) — clamped to ${floored}`
-              );
-              targetPrice = floored;
             }
           }
 
