@@ -661,31 +661,21 @@ export function AppLayout({ children }: AppLayoutProps) {
 
               {/* 케이스별 설치 안내 */}
               {isKakaoIos ? (
-                /* ── 카카오톡 iOS: Safari로 열어야 설치 가능 ── */
+                /* ── 카카오톡 iOS: Safari로 직접 이동 ── */
                 <div className="px-4 pb-4">
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-3">
-                    <p className="text-xs text-amber-400 font-medium leading-snug">
-                      카카오톡 브라우저에서는 바로 설치할 수 없어요.<br />
-                      <span className="text-amber-300">Safari에서 열면 한 번에 설치</span>할 수 있어요.
-                    </p>
-                  </div>
-                  <div className="bg-muted/40 rounded-xl p-3 space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Safari로 여는 방법</p>
-                    <ol className="space-y-1.5">
-                      {[
-                        ["오른쪽 위", "··· 버튼 탭"],
-                        ["메뉴에서", '"Safari로 열기" 선택'],
-                        ["배너에서", '"홈 화면에 추가" 탭'],
-                      ].map(([a, b], i) => (
-                        <li key={i} className="flex items-center gap-2.5 text-xs text-foreground">
-                          <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {i + 1}
-                          </span>
-                          <span>{a} <span className="text-muted-foreground">{b}</span></span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
+                  <button
+                    onClick={() => {
+                      // safari- 스킴: iOS에서 Safari로 URL 직접 오픈
+                      window.location.href = "safari-" + window.location.href;
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[.98] transition-all flex items-center justify-center gap-2"
+                  >
+                    <Share className="w-4 h-4" />
+                    Safari에서 열고 설치하기
+                  </button>
+                  <p className="text-center text-[11px] text-muted-foreground mt-2">
+                    Safari로 이동 후 하단 배너에서 설치할 수 있어요
+                  </p>
                 </div>
               ) : isSafariIos ? (
                 /* ── 일반 Safari iOS: 공유 버튼 안내 ── */
