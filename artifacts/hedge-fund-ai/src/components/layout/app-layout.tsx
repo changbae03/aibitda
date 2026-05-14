@@ -199,6 +199,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isKakaoIos = isKakao && isIos;
   const isSafariIos = isIos && !isKakao; // 순수 Safari
 
+  const [showKakaoGuide, setShowKakaoGuide] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.origin).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  };
+
   const handleFooterInstall = () => setShowBanner(true);
 
   const NavLinks = ({ onSelect, expanded }: { onSelect?: () => void; expanded?: boolean }) => (
@@ -661,21 +671,21 @@ export function AppLayout({ children }: AppLayoutProps) {
 
               {/* 케이스별 설치 안내 */}
               {isKakaoIos ? (
-                /* ── 카카오톡 iOS: Safari로 직접 이동 ── */
-                <div className="px-4 pb-4">
+                /* ── 카카오톡 iOS: 안내 오버레이 열기 ── */
+                <div className="px-4 pb-4 space-y-2">
                   <button
-                    onClick={() => {
-                      // safari- 스킴: iOS에서 Safari로 URL 직접 오픈
-                      window.location.href = "safari-" + window.location.href;
-                    }}
+                    onClick={() => { setShowBanner(false); setShowKakaoGuide(true); }}
                     className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[.98] transition-all flex items-center justify-center gap-2"
                   >
                     <Share className="w-4 h-4" />
                     Safari에서 열고 설치하기
                   </button>
-                  <p className="text-center text-[11px] text-muted-foreground mt-2">
-                    Safari로 이동 후 하단 배너에서 설치할 수 있어요
-                  </p>
+                  <button
+                    onClick={copyLink}
+                    className="w-full py-2 rounded-xl bg-muted/60 text-muted-foreground text-xs hover:bg-muted transition-all"
+                  >
+                    {linkCopied ? "✓ 링크 복사됨 — Safari 주소창에 붙여넣기" : "링크 복사하기"}
+                  </button>
                 </div>
               ) : isSafariIos ? (
                 /* ── 일반 Safari iOS: 공유 버튼 안내 ── */
@@ -718,6 +728,93 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </p>
                 </div>
               )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 카카오톡 iOS 전용 — Safari로 여는 방법 전체화면 가이드 */}
+      <AnimatePresence>
+        {showKakaoGuide && (
+          <motion.div
+            key="kakao-guide"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex flex-col"
+            onClick={() => setShowKakaoGuide(false)}
+          >
+            {/* 우상단 ··· 화살표 영역 */}
+            <div className="flex justify-end pt-3 pr-4">
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.35, ease: "easeOut" }}
+                className="flex flex-col items-center gap-1"
+              >
+                {/* 위를 향한 화살표 */}
+                <svg width="28" height="36" viewBox="0 0 28 36" fill="none">
+                  <path d="M14 34 L14 4 M14 4 L5 14 M14 4 L23 14"
+                    stroke="#FF8A7A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="text-xs text-primary font-bold">여기 ···</span>
+              </motion.div>
+            </div>
+
+            {/* 중앙 안내 카드 */}
+            <div className="flex-1 flex items-center justify-center px-8" onClick={e => e.stopPropagation()}>
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ delay: 0.1, duration: 0.3, ease: "easeOut" }}
+                className="w-full max-w-xs bg-card border border-border rounded-2xl shadow-2xl p-5"
+              >
+                <p className="font-bold text-base text-foreground mb-1">Safari에서 열기</p>
+                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                  카카오톡 브라우저에서는 앱 설치가 불가해요.<br/>
+                  아래 순서대로 Safari에서 열어주세요.
+                </p>
+                <ol className="space-y-3 mb-4">
+                  {[
+                    ["오른쪽 상단 ···", "탭"],
+                    ['"외부 브라우저로 열기"', "또는 \"Safari로 열기\" 선택"],
+                    ["배너에서", '"홈 화면에 추가" 탭'],
+                  ].map(([a, b], i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm">
+                      <span className="w-6 h-6 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="text-foreground leading-snug">
+                        <span className="font-medium">{a}</span>{" "}
+                        <span className="text-muted-foreground">{b}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+
+                {/* 링크 복사 대안 */}
+                <div className="border-t border-border pt-3">
+                  <p className="text-[11px] text-muted-foreground mb-2 text-center">또는 링크를 복사해서 Safari 주소창에 붙여넣기</p>
+                  <button
+                    onClick={copyLink}
+                    className="w-full py-2 rounded-xl bg-muted/60 text-xs font-medium text-foreground hover:bg-muted transition-all"
+                  >
+                    {linkCopied ? "✓ 복사됨!" : "링크 복사하기"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* 하단 닫기 */}
+            <div className="pb-10 flex justify-center">
+              <button
+                onClick={() => setShowKakaoGuide(false)}
+                className="text-white/60 text-sm"
+              >
+                닫기
+              </button>
             </div>
           </motion.div>
         )}
