@@ -1,9 +1,9 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
   Sparkles, BookOpen, CalendarDays, BarChart2,
-  User, Search, ChevronRight,
+  User, Search, ChevronRight, Download, Share,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -144,6 +144,41 @@ export function AppLayout({ children }: AppLayoutProps) {
       .then(d => { if (d?.isAdmin) setIsAdmin(true); })
       .catch(() => {});
   }, []);
+
+  // PWA 설치 프롬프트
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isIos, setIsIos] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showIosHint, setShowIosHint] = useState(false);
+  const iosHintRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+    setIsIos(ios);
+    setIsStandalone(standalone);
+
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  useEffect(() => {
+    if (!showIosHint) return;
+    const handler = (e: MouseEvent) => {
+      if (iosHintRef.current && !iosHintRef.current.contains(e.target as Node)) setShowIosHint(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showIosHint]);
+
+  const handleInstall = async () => {
+    if (isIos) { setShowIosHint(v => !v); return; }
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") setInstallPrompt(null);
+  };
 
   const NavLinks = ({ onSelect, expanded }: { onSelect?: () => void; expanded?: boolean }) => (
     <>
@@ -527,6 +562,42 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Link href="/disclaimer" className="hover:text-foreground transition-colors">{isEn ? "Disclaimer" : "투자유의사항"}</Link>
                 <span className="text-border select-none">|</span>
                 <Link href="/support" className="hover:text-foreground transition-colors">{isEn ? "Support" : "고객센터"}</Link>
+
+                {/* PWA 설치 버튼 — 이미 설치된 경우 숨김 */}
+                {!isStandalone && (isIos || installPrompt) && (
+                  <div className="relative" ref={iosHintRef}>
+                    <button
+                      onClick={handleInstall}
+                      className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors font-medium"
+                    >
+                      <Download className="w-3 h-3" />
+                      {isEn ? "Install App" : "앱 설치"}
+                    </button>
+
+                    {/* iOS 전용 안내 툴팁 */}
+                    {isIos && showIosHint && (
+                      <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-64 bg-popover border border-border rounded-xl shadow-xl p-3.5 text-xs text-foreground z-50">
+                        <p className="font-semibold mb-1.5">{isEn ? "Install on iPhone" : "아이폰에 설치하기"}</p>
+                        <ol className="space-y-1 text-muted-foreground leading-relaxed">
+                          <li className="flex items-start gap-1.5">
+                            <span className="shrink-0 font-bold text-primary">1</span>
+                            <span>{isEn ? "Tap the" : "Safari 하단"} <Share className="inline w-3 h-3 mx-0.5" /> {isEn ? "Share button below" : "공유 버튼 탭"}</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="shrink-0 font-bold text-primary">2</span>
+                            <span>{isEn ? '"Add to Home Screen"' : '"홈 화면에 추가" 선택'}</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="shrink-0 font-bold text-primary">3</span>
+                            <span>{isEn ? "Tap Add" : '"추가" 탭'}</span>
+                          </li>
+                        </ol>
+                        {/* 말풍선 꼬리 */}
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-popover border-r border-b border-border rotate-45" />
+                      </div>
+                    )}
+                  </div>
+                )}
               </nav>
               {isEn ? (
                 <>
