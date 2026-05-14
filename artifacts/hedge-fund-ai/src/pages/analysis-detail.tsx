@@ -290,24 +290,24 @@ function RoadmapTbody({ children }: { children: React.ReactNode }) {
 
 const MD_TABLE_COMPONENTS = {
   table: ({ children }: any) => (
-    <div className="table-wrap">
-      <table>{children}</table>
+    <div className="overflow-x-auto my-4 rounded-lg border border-border/50">
+      <table className="w-full text-[12.5px] border-collapse">{children}</table>
     </div>
   ),
-  thead: ({ children }: any) => <thead>{children}</thead>,
+  thead: ({ children }: any) => <thead className="bg-muted/60 border-b border-border/60">{children}</thead>,
   tbody: ({ children }: any) => <RoadmapTbody>{children}</RoadmapTbody>,
   tr: ({ children, ...props }: any) => {
     const firstCell = Array.isArray(children) ? children[0] : children;
     const cellText = firstCell?.props?.children ?? "";
     const isSubRow = typeof cellText === "string" && cellText.startsWith("↳");
     return (
-      <tr className={isSubRow ? "sub-metric-row" : ""} {...props}>
+      <tr className={cn("border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors", isSubRow ? "sub-metric-row" : "")} {...props}>
         {children}
       </tr>
     );
   },
-  th: ({ children }: any) => <th>{children}</th>,
-  td: ({ children }: any) => <td>{children}</td>,
+  th: ({ children }: any) => <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{children}</th>,
+  td: ({ children }: any) => <td className="px-3 py-2.5 text-foreground/80 leading-[1.7] align-top">{children}</td>,
 };
 
 // 야후 파이낸스 영문 업종명 → 한국어 변환
@@ -2134,8 +2134,11 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
             {/* ── ③ 투자 논거 요약 ── */}
             {json.summary && (
-              <div className="px-4 sm:px-6 py-4">
-                <p className="text-sm text-foreground/70 leading-[1.8]">{json.summary}</p>
+              <div className="px-4 sm:px-6 py-5 bg-muted/25 border-b border-border">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2.5">
+                  {isEn ? "Investment Thesis" : "투자 논거"}
+                </p>
+                <p className="text-[13.5px] text-foreground/88 leading-[1.95]">{json.summary}</p>
               </div>
             )}
 
@@ -3158,6 +3161,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   )), [isMarket, isFundamental, isRelativeVal, content]);
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
+
+  // 리드 문장 — 첫 번째 ## 소제목 이전의 텍스트
+  const leadIdx = useMemo(() => displayContent.search(/(?:^|\n)## /), [displayContent]);
+  const leadPara = useMemo(() => (leadIdx > 0 ? displayContent.slice(0, leadIdx).trim() : ""), [displayContent, leadIdx]);
+  const bodyContent = useMemo(() => (leadIdx >= 0 ? displayContent.slice(leadIdx) : displayContent), [displayContent, leadIdx]);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -3197,6 +3205,16 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
         {/* Market & Technical Analyst: 기술적 신호 칩 */}
         {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} isEn={isEn} />}
 
+        {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
+        {leadPara && (
+          <div
+            className="mb-4 px-4 py-3.5 rounded-lg border-l-[3px] text-[13.5px] leading-[1.9] text-foreground/90 whitespace-pre-line"
+            style={{ background: `${color}0d`, borderLeftColor: color }}
+          >
+            {leadPara}
+          </div>
+        )}
+
         <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -3221,10 +3239,15 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                 }
                 return <p className="mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]">{children}</p>;
               },
-              ul: ({ children }) => <ul>{children}</ul>,
-              ol: ({ children }) => <ol>{children}</ol>,
-              li: ({ children }) => <li>{children}</li>,
-              strong: ({ children }) => <strong>{children}</strong>,
+              ul: ({ children }) => <ul className="my-3 pl-0 space-y-1.5 list-none">{children}</ul>,
+              ol: ({ children }) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
+              li: ({ children }) => (
+                <li className="flex items-start gap-2 text-[13.5px] leading-[1.85] text-foreground/80">
+                  <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.68em]" />
+                  <span className="flex-1 min-w-0">{children}</span>
+                </li>
+              ),
+              strong: ({ children }) => <strong className="font-semibold text-foreground/95">{children}</strong>,
               em: ({ children }) => <em className="text-foreground/70 not-italic">{children}</em>,
               blockquote: ({ children }) => (
                 <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
@@ -3235,7 +3258,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               ...MD_TABLE_COMPONENTS,
             }}
           >
-            {prepareMarkdown(displayContent)}
+            {prepareMarkdown(bodyContent)}
           </ReactMarkdown>
         </div>
 
