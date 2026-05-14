@@ -1800,7 +1800,10 @@ router.post("/price-events", async (req, res) => {
     .map((e, i) => `${i + 1}. ${e.date.slice(0, 10)} (${e.changePercent > 0 ? "+" : ""}${e.changePercent.toFixed(1)}%)`)
     .join("\n");
 
-  const prompt = `한국 주식 종목 "${stockId}"의 주가가 아래 날짜에 크게 변동했습니다.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const prompt = `오늘 날짜: ${todayStr}. 아래 날짜들은 모두 과거 날짜입니다.
+
+한국 주식 종목 "${stockId}"의 주가가 아래 날짜에 크게 변동했습니다.
 각 날짜에 이 종목(${companyName ?? ticker})에 직접 영향을 미친 실제 뉴스·공시·이벤트를 Google에서 검색하여 한국어로 간결하게 요약하세요.
 
 ${eventList}
