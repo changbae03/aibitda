@@ -4082,6 +4082,43 @@ async function executeStep(
         // ─────────────────────────────────────────────────────────────────
       }
 
+      // ── 중복 방지: 이미 완료된 단계의 담당 영역을 AI에게 고지 ──────────────
+      // 각 단계가 이미 다룬 영역을 명시 → AI가 같은 내용을 반복 작성하지 않도록 방지
+      if (stepKey !== "company_intro" && existingSteps.length > 0) {
+        const STEP_OWNERSHIP: Record<string, string> = {
+          company_intro:        "기업 소개, 핵심 이슈 선언",
+          industry_analysis:    "산업 구조·수익 모델, 시장 규모·성장률, 경쟁사 점유율·수익성 비교, 기업의 업계 내 경쟁 포지션(유리/불리), 정책·규제 환경",
+          catalyst_analysis:    "핵심 이슈의 주가 반영도 판단, 투자 촉매·역촉매 이벤트(날짜·조건·주가영향), 이슈 전개 로드맵(단/중/장기), 수급 동향(외국인·기관 순매수)",
+          company_analysis:     "이 기업 재무 수치(매출·영업이익·순이익·EPS·마진율·ROE·FCF) 과거 이력·전망, 재무 건전성(부채비율·순현금), 실적 드라이버",
+          intrinsic_valuation:  "절대가치 밸류에이션(DCF·rNPV·SOTP·DDM) 계산, 적정주가 밴드 산출",
+          relative_valuation:   "피어 멀티플(EV/EBITDA·PER·PBR·EV/GWh 등) 비교, 최종 목표주가 결론",
+          market_analysis:      "기술적 분析(지지선·저항선·이동평균·모멘텀), 최적 진입·손절 구간",
+          investment_strategy:  "최종 투자 판정, 포지션 전략, 시나리오별 목표가·수익률",
+        };
+        const STEP_LABEL: Record<string, string> = {
+          company_intro: "팀장 브리핑",
+          industry_analysis: "산업 분析",
+          catalyst_analysis: "투자 촉매",
+          company_analysis: "기업 재무 분析",
+          intrinsic_valuation: "절대가치 밸류에이션",
+          relative_valuation: "상대가치 밸류에이션",
+          market_analysis: "기술적 분析",
+          investment_strategy: "투자 전략",
+        };
+        const completedLines = existingSteps
+          .filter(s => STEP_OWNERSHIP[s.stepKey])
+          .map(s => `- [${STEP_LABEL[s.stepKey] ?? s.stepKey}] 이미 다룬 영역: ${STEP_OWNERSHIP[s.stepKey]}`)
+          .join("\n");
+        if (completedLines) {
+          const dedupBlock = `\n\n[⛔ 중복 작성 금지 — 이미 완료된 단계에서 다룬 영역]\n`
+            + `아래 영역은 각 담당 단계에서 이미 상세히 분析됨. 이 단계에서 같은 내용을 다시 설명하는 것은 금지됩니다.\n`
+            + `꼭 필요한 경우(현재 단계 논리 전개에 필수적인 수치 1개 인용 등) 1문장 이내로만 참조하고, 재분析·재설명은 하지 마세요.\n\n`
+            + completedLines;
+          enrichedContext = enrichedContext ? enrichedContext + dedupBlock : dedupBlock;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       // ── 투자 판정 일관성 앵커 (investment_strategy 전용) ────────────────────
       // ⚠️ 단, 아래 [서버 검증 목표주가] 블록이 주입되면 목표가·판정 제한은 해제됨
       if (stepKey === "investment_strategy") {
