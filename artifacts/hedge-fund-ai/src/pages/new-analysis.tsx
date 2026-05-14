@@ -169,7 +169,6 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
     return (
       <motion.button
         onClick={() => setLocation("/settings")}
-        whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.97 }}
         className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-red-400/50 bg-red-950/30 text-red-300 text-[12px] font-medium hover:border-red-400 transition-colors"
       >
@@ -585,7 +584,6 @@ export default function NewAnalysis() {
                       onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol, s.shortname); }}
                       onTouchEnd={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol, s.shortname); }}
                       animate={isHighlighted ? { backgroundColor: "hsl(var(--accent))" } : { backgroundColor: "transparent" }}
-                      whileHover={{ backgroundColor: "hsl(var(--accent))" }}
                       whileTap={{ scale: 0.99 }}
                       className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left border-b border-border/60 last:border-0 cursor-pointer"
                     >
@@ -765,7 +763,6 @@ export default function NewAnalysis() {
                 {trending.map((t, idx) => (
                   <motion.button
                     key={t.ticker}
-                    whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => showConfirm(t.ticker, t.companyName ?? t.ticker)}
                     disabled={isPending}

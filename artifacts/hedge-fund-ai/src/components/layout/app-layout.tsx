@@ -576,7 +576,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Scrollable Content */}
         <div id="print-scroll" className="flex-1 overflow-y-auto">
-          <div className="container max-w-5xl mx-auto px-3 py-4 md:p-10 animate-fade-in">
+          <div className="container max-w-5xl mx-auto px-3 py-4 md:p-10">
             {children}
           </div>
 
@@ -671,20 +671,21 @@ export function AppLayout({ children }: AppLayoutProps) {
 
               {/* 케이스별 설치 안내 */}
               {isKakaoIos ? (
-                /* ── 카카오톡 iOS: 안내 오버레이 열기 ── */
+                /* ── 카카오톡 iOS: 링크 복사 + 안내 오버레이 ── */
                 <div className="px-4 pb-4 space-y-2">
                   <button
-                    onClick={() => { setShowBanner(false); setShowKakaoGuide(true); }}
-                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[.98] transition-all flex items-center justify-center gap-2"
+                    onClick={() => {
+                      // 링크 자동 복사
+                      navigator.clipboard.writeText(window.location.origin).catch(() => {});
+                      // window.open 시도 (일부 카카오 버전에서 외부 브라우저로 열림)
+                      window.open(window.location.href, "_blank");
+                      setShowBanner(false);
+                      setShowKakaoGuide(true);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:scale-[.98] transition-all flex items-center justify-center gap-2"
                   >
                     <Share className="w-4 h-4" />
                     Safari에서 열고 설치하기
-                  </button>
-                  <button
-                    onClick={copyLink}
-                    className="w-full py-2 rounded-xl bg-muted/60 text-muted-foreground text-xs hover:bg-muted transition-all"
-                  >
-                    {linkCopied ? "✓ 링크 복사됨 — Safari 주소창에 붙여넣기" : "링크 복사하기"}
                   </button>
                 </div>
               ) : isSafariIos ? (
@@ -771,14 +772,20 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="w-full max-w-xs bg-card border border-border rounded-2xl shadow-2xl p-5"
               >
                 <p className="font-bold text-base text-foreground mb-1">Safari에서 열기</p>
-                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                  카카오톡 브라우저에서는 앱 설치가 불가해요.<br/>
-                  아래 순서대로 Safari에서 열어주세요.
-                </p>
+
+                {/* 링크 자동 복사 안내 */}
+                <div className="bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 mb-4 flex items-center gap-2">
+                  <span className="text-primary text-base">✓</span>
+                  <p className="text-xs text-primary font-medium leading-snug">
+                    링크가 복사됐어요! Safari 주소창에 붙여넣기 해주세요.
+                  </p>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground mb-3 font-medium">또는 ··· 메뉴로 바로 열기</p>
                 <ol className="space-y-3 mb-4">
                   {[
                     ["오른쪽 상단 ···", "탭"],
-                    ['"외부 브라우저로 열기"', "또는 \"Safari로 열기\" 선택"],
+                    ['"외부 브라우저로 열기"', '또는 "Safari로 열기" 선택'],
                     ["배너에서", '"홈 화면에 추가" 탭'],
                   ].map(([a, b], i) => (
                     <li key={i} className="flex items-start gap-3 text-sm">
@@ -792,17 +799,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </li>
                   ))}
                 </ol>
-
-                {/* 링크 복사 대안 */}
-                <div className="border-t border-border pt-3">
-                  <p className="text-[11px] text-muted-foreground mb-2 text-center">또는 링크를 복사해서 Safari 주소창에 붙여넣기</p>
-                  <button
-                    onClick={copyLink}
-                    className="w-full py-2 rounded-xl bg-muted/60 text-xs font-medium text-foreground hover:bg-muted transition-all"
-                  >
-                    {linkCopied ? "✓ 복사됨!" : "링크 복사하기"}
-                  </button>
-                </div>
               </motion.div>
             </div>
 
