@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CHARS = ["애", "빛", "다"];
-const CHAR_DELAY = 0.22; // 글자 간 간격(초)
+const CHAR_DELAY = 0.14; // 글자 간 간격(초)
 
 function AnimatedChar({ char, index }: { char: string; index: number }) {
   return (
