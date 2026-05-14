@@ -743,9 +743,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
             className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex flex-col"
-            onClick={() => setShowKakaoGuide(false)}
           >
-            {/* 우상단 ··· 화살표 영역 */}
+            {/* 우상단 ··· 화살표 영역 — 탭해도 안내 유지 */}
             <div className="flex justify-end pt-3 pr-4">
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
@@ -763,7 +762,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
 
             {/* 중앙 안내 카드 */}
-            <div className="flex-1 flex items-center justify-center px-8" onClick={e => e.stopPropagation()}>
+            <div className="flex-1 flex items-center justify-center px-8">
               <motion.div
                 initial={{ scale: 0.92, opacity: 0, y: 12 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
