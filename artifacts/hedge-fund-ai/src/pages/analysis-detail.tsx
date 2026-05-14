@@ -924,62 +924,6 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
   );
 }
 
-// ── CompanyLogo 컴포넌트 ────────────────────────────────────────────────────
-const LOGO_PALETTE = [
-  { bg: "rgba(255,138,122,0.15)", border: "rgba(255,138,122,0.3)", color: "#FF8A7A" },
-  { bg: "rgba(99,179,237,0.15)", border: "rgba(99,179,237,0.3)", color: "#63B3ED" },
-  { bg: "rgba(104,211,145,0.15)", border: "rgba(104,211,145,0.3)", color: "#68D391" },
-  { bg: "rgba(246,173,85,0.15)", border: "rgba(246,173,85,0.3)", color: "#F6AD55" },
-  { bg: "rgba(159,122,234,0.15)", border: "rgba(159,122,234,0.3)", color: "#9F7AEA" },
-  { bg: "rgba(237,100,166,0.15)", border: "rgba(237,100,166,0.3)", color: "#ED64A6" },
-  { bg: "rgba(56,178,172,0.15)", border: "rgba(56,178,172,0.3)", color: "#38B2AC" },
-  { bg: "rgba(237,137,54,0.15)", border: "rgba(237,137,54,0.3)", color: "#ED8936" },
-];
-function tickerColor(ticker: string) {
-  let h = 0;
-  for (let i = 0; i < ticker.length; i++) h = (h * 31 + ticker.charCodeAt(i)) >>> 0;
-  return LOGO_PALETTE[h % LOGO_PALETTE.length];
-}
-function CompanyLogo({ ticker, companyName, size = 52 }: { ticker: string; companyName: string; size?: number }) {
-  const [failed, setFailed] = useState(false);
-  const isKorean = /^\d{6}/.test(ticker);
-  const initials = companyName
-    .replace(/[^\w\s가-힣]/g, "")
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || ticker.slice(0, 2).toUpperCase();
-  const palette = tickerColor(ticker);
-  const badge = (
-    <div
-      className="rounded-2xl flex items-center justify-center font-bold shrink-0"
-      style={{
-        width: size, height: size,
-        fontSize: Math.round(size * 0.33),
-        background: palette.bg,
-        border: `1.5px solid ${palette.border}`,
-        color: palette.color,
-        letterSpacing: "-0.02em",
-      }}
-    >
-      {initials}
-    </div>
-  );
-  if (isKorean || failed) return badge;
-  return (
-    <img
-      src={`https://logo.clearbit.com/${ticker.toLowerCase()}.com`}
-      alt={companyName}
-      width={size}
-      height={size}
-      className="rounded-2xl object-contain shrink-0 border border-border bg-white"
-      style={{ width: size, height: size, padding: "4px" }}
-      onError={() => setFailed(true)}
-    />
-  );
-}
 
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
@@ -1445,17 +1389,14 @@ export default function AnalysisDetail() {
       <div ref={headerRef} className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-6">
           <div className="flex-1 min-w-0">
-            {/* 로고 + 회사명 */}
-            <div className="flex items-center gap-3 mb-3">
-              <CompanyLogo ticker={analysis.ticker} companyName={analysis.companyName} size={52} />
-              <div className="min-w-0">
-                <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
-                  {analysis.companyName}
-                </h1>
-                {analysis.englishName && (
-                  <p className="text-xs text-muted-foreground font-normal truncate">{analysis.englishName}</p>
-                )}
-              </div>
+            {/* 회사명 */}
+            <div className="mb-3">
+              <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
+                {analysis.companyName}
+              </h1>
+              {analysis.englishName && (
+                <p className="text-xs text-muted-foreground font-normal">{analysis.englishName}</p>
+              )}
             </div>
 
             {/* 현재가 + 등락률 */}
