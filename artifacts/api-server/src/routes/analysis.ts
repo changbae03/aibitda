@@ -2364,8 +2364,13 @@ async function selectPeerTickers(
     const prompt = `Company: ${companyName}, Industry: ${industry}.
 
 Based on the context below, identify 4-5 publicly traded peer companies for valuation comparison.
-Select peers based on: similar business model, competitive relationship, or meaningful valuation comparison.
-Prefer peers that are well-covered on Yahoo Finance (major Korean listed companies and global companies).
+
+PEER QUALITY SCORING — for each candidate, mentally score these 3 axes and only include peers that score ≥2/3:
+1. Business model match: same revenue model (product / service / subscription / royalty) and similar value chain position (upstream material / component / OEM / brand / platform)
+2. Margin profile similarity: gross margin within ±15pp of subject company, or if margin data unavailable, same structural cost driver (e.g., both fab-heavy, both asset-light)
+3. Growth stage match: same phase (pre-revenue pipeline / early commercial / mature growth / declining) — mixing stages severely distorts multiples
+
+Flag any peer that fails one axis with a brief note in the reason field (e.g., "마진 프로파일 상이 — EV/Sales만 유효").
 ${previousContext ? `\nContext:\n${previousContext.slice(0, 1500)}` : ""}
 
 PEER SELECTION RULES (strictly enforce):
@@ -4060,13 +4065,18 @@ async function executeStep(
           enrichedContext = enrichedContext ? enrichedContext + prevAnalysisBlock : prevAnalysisBlock;
         }
 
-        // ── auto_learning 누적 통계 주입 ──────────────────────────────────
+        // ── auto_learning 누적 통계 주입 (#3 강화: 방향 정확도 + 실제 수익률) ──
         try {
           const learningRows = await rawQuery(
             `SELECT auto_learning FROM ticker_notes WHERE ticker = $1`,
             [analysis.ticker]
           );
-          const learningData = learningRows[0]?.auto_learning as { history?: Array<{ date: string; verdict: string; targetPrice: number; entryPrice: number; upsidePct: number }> } | null;
+          type LearningEntry = {
+            date: string; verdict: string; targetPrice: number;
+            entryPrice: number; upsidePct: number;
+            priceAtAnalysis?: number; predictedEps?: number | null;
+          };
+          const learningData = learningRows[0]?.auto_learning as { history?: LearningEntry[] } | null;
           if (learningData?.history && learningData.history.length >= 2) {
             const hist = learningData.history;
             const avgUpside = hist.reduce((s, h) => s + h.upsidePct, 0) / hist.length;
@@ -4074,10 +4084,55 @@ async function executeStep(
             const bullishPct = Math.round((bullishCount / hist.length) * 100);
             const upsides = hist.map(h => `${h.date.slice(0, 7)}: ${h.upsidePct > 0 ? "+" : ""}${h.upsidePct}%`).join(", ");
 
+            // ① 방향 정확도: 연속 두 항목에서 entry가 상승했을 때 이전 판정이 매수였는지
+            let dirCorrect = 0, dirTotal = 0;
+            for (let i = 1; i < hist.length; i++) {
+              const prev = hist[i - 1];
+              const curr = hist[i];
+              const prevPrice = prev.priceAtAnalysis ?? prev.entryPrice;
+              const currPrice = curr.priceAtAnalysis ?? curr.entryPrice;
+              if (!prevPrice || !currPrice) continue;
+              const actualUp = currPrice > prevPrice;
+              const predictedUp = ["Strong Buy", "Buy"].includes(prev.verdict);
+              if (actualUp === predictedUp) dirCorrect++;
+              dirTotal++;
+            }
+            const dirAccuracyStr = dirTotal >= 2
+              ? `방향 정확도: ${dirCorrect}/${dirTotal}회 일치 (${Math.round((dirCorrect / dirTotal) * 100)}%)`
+              : "";
+
+            // ② 실제 수익률: priceAtAnalysis가 있는 항목에서 다음 항목의 price와 비교
+            const actualReturns: string[] = [];
+            for (let i = 0; i + 1 < hist.length; i++) {
+              const p0 = hist[i].priceAtAnalysis ?? hist[i].entryPrice;
+              const p1 = hist[i + 1].priceAtAnalysis ?? hist[i + 1].entryPrice;
+              if (!p0 || !p1) continue;
+              const actualRet = ((p1 - p0) / p0) * 100;
+              const predicted = hist[i].upsidePct;
+              actualReturns.push(`${hist[i].date.slice(0, 7)}: 예측 ${predicted > 0 ? "+" : ""}${predicted}% → 실제 ${actualRet > 0 ? "+" : ""}${actualRet.toFixed(1)}%`);
+            }
+
+            // ③ EPS 예측 정확도 추적 (predictedEps가 있는 항목)
+            const epsEntries = hist.filter(h => h.predictedEps != null);
+            const epsNote = epsEntries.length > 0
+              ? `\n- 직전 EPS 예측값: ${epsEntries.map(e => `${e.date.slice(0, 7)}: ${e.predictedEps}`).join(", ")} (실제 실적 발표 후 정확도 검증 참고)`
+              : "";
+
+            // ④ 낙관/비관 편향 감지
+            const biasNote = avgUpside > 40
+              ? "\n⚠️ 낙관 편향 감지: 과거 평균 upside가 +40%를 초과합니다. 이번 분석에서는 보수적 가정을 의식적으로 점검하세요."
+              : avgUpside < -20
+              ? "\n⚠️ 비관 편향 감지: 과거 평균 upside가 -20%를 하회합니다. 이번 분석에서 상방 촉매를 충분히 반영했는지 재검토하세요."
+              : "";
+
             const statsBlock = `\n\n[📊 ${analysis.ticker} 밸류에이션 누적 통계 — ${hist.length}회 분석 기반]`
               + `\n- 평균 upside: ${avgUpside > 0 ? "+" : ""}${avgUpside.toFixed(1)}% | 매수 판정 비율: ${bullishPct}%`
               + `\n- 회차별 upside: ${upsides}`
-              + `\n- 이 통계를 참고해 지나치게 낙관적/비관적인 편향이 있었는지 자기검토 후 이번 분석에 반영하세요.`;
+              + (actualReturns.length > 0 ? `\n- 예측 vs 실제: ${actualReturns.join(" / ")}` : "")
+              + (dirAccuracyStr ? `\n- ${dirAccuracyStr}` : "")
+              + epsNote
+              + biasNote
+              + `\n- 위 통계를 바탕으로 낙관/비관 편향이 있었다면 이번 분석에서 의식적으로 보정하세요.`;
             enrichedContext = enrichedContext ? enrichedContext + statsBlock : statsBlock;
           }
         } catch {
@@ -4973,11 +5028,29 @@ async function executeStep(
         }
       })();
 
-      // ── 종목별 자동 학습 데이터 저장 ─────────────────────────────────────
-      // 분석 완료 시마다 ticker_notes.auto_learning 업데이트 (누적)
+      // ── 종목별 자동 학습 데이터 저장 (#3/#5: priceAtAnalysis + predictedEps 추가) ──
       if (targetPrice && entryPrice && investmentVerdict) {
         try {
           const upsidePct = ((targetPrice - entryPrice) / entryPrice) * 100;
+
+          // 분석 시점 실제 주가 = start_price (DB에서 이미 읽어온 savedStartPrice 재사용)
+          const priceAtAnalysis: number | null = savedStartPrice ?? null;
+
+          // 예측 EPS 추출: company_analysis 단계 본문에서 "EPS: X" 또는 "EPS __원" 패턴 파싱 (#5)
+          let predictedEps: number | null = null;
+          try {
+            const caStep = existingSteps.find(s => s.stepKey === "company_analysis");
+            if (caStep?.content) {
+              const epsMatch = caStep.content.match(
+                /(?:EPS|주당순이익)[^\d\-]*([\-]?\d[\d,]*\.?\d*)\s*(?:원|₩|\$|달러)?/i
+              );
+              if (epsMatch) {
+                const raw = parseFloat(epsMatch[1].replace(/,/g, ""));
+                if (!isNaN(raw)) predictedEps = raw;
+              }
+            }
+          } catch { /* EPS 파싱 실패는 무시 */ }
+
           const newEntry = {
             analysisId: id,
             date: new Date().toISOString().slice(0, 10),
@@ -4985,17 +5058,19 @@ async function executeStep(
             targetPrice,
             entryPrice,
             upsidePct: Math.round(upsidePct * 10) / 10,
+            priceAtAnalysis,
+            predictedEps,
           };
 
           // 기존 학습 데이터 가져오기
-          const existingRows = await rawQuery(
+          const existingLearningRows = await rawQuery(
             `SELECT auto_learning FROM ticker_notes WHERE ticker = $1`,
             [analysis.ticker]
           );
 
           let existing: { history?: typeof newEntry[] } = {};
-          if (existingRows[0]?.auto_learning) {
-            existing = existingRows[0].auto_learning as typeof existing;
+          if (existingLearningRows[0]?.auto_learning) {
+            existing = existingLearningRows[0].auto_learning as typeof existing;
           }
           const history = (existing.history ?? []).slice(-9); // 최대 10건 유지
           history.push(newEntry);
@@ -5006,7 +5081,7 @@ async function executeStep(
              ON CONFLICT (ticker) DO UPDATE SET auto_learning = $2, updated_at = NOW()`,
             [analysis.ticker, JSON.stringify({ history })]
           );
-          console.log(`[learning] Updated auto_learning for ${analysis.ticker} (${history.length} entries)`);
+          console.log(`[learning] Updated auto_learning for ${analysis.ticker} — priceAtAnalysis=${priceAtAnalysis}, predictedEps=${predictedEps} (${history.length} entries)`);
         } catch (e) {
           console.error("[learning] Failed to save auto_learning:", e);
         }
