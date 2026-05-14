@@ -148,14 +148,18 @@ export function AppLayout({ children }: AppLayoutProps) {
   // PWA 설치 프롬프트
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isIos, setIsIos] = useState(false);
+  const [isKakao, setIsKakao] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const ua = navigator.userAgent;
+    const ios = /iphone|ipad|ipod/i.test(ua);
+    const kakao = /KAKAOTALK/i.test(ua);
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
     setIsIos(ios);
+    setIsKakao(kakao);
     setIsStandalone(standalone);
     if (standalone) return;
 
@@ -171,7 +175,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => { window.removeEventListener("beforeinstallprompt", handler); clearTimeout(timer); };
   }, []);
 
-  // iOS는 installPrompt 없이도 배너 표시
+  // iOS(카카오 포함)는 installPrompt 없이도 배너 표시
   useEffect(() => {
     if (isStandalone || bannerDismissed) return;
     if (isIos) { const t = setTimeout(() => setShowBanner(true), 3000); return () => clearTimeout(t); }
@@ -183,11 +187,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const handleInstall = async () => {
-    if (isIos || !installPrompt) return; // iOS는 배너 내 안내로 처리
+    if (!installPrompt) return;
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === "accepted") { setInstallPrompt(null); setShowBanner(false); }
   };
+
+  // 카카오톡 iOS: Safari에서 열기 유도
+  // 카카오톡 Android / 일반 Chrome: beforeinstallprompt 직접 설치
+  // 일반 iOS Safari: 공유 버튼 안내
+  const isKakaoIos = isKakao && isIos;
+  const isSafariIos = isIos && !isKakao; // 순수 Safari
 
   const handleFooterInstall = () => setShowBanner(true);
 
@@ -649,24 +659,23 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </button>
               </div>
 
-              {/* iOS 안내 or 설치 버튼 */}
-              {isIos ? (
+              {/* 케이스별 설치 안내 */}
+              {isKakaoIos ? (
+                /* ── 카카오톡 iOS: Safari로 열어야 설치 가능 ── */
                 <div className="px-4 pb-4">
-                  <div className="bg-muted/40 rounded-xl p-3 space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                      {isEn ? "How to install" : "설치 방법"}
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-3">
+                    <p className="text-xs text-amber-400 font-medium leading-snug">
+                      카카오톡 브라우저에서는 바로 설치할 수 없어요.<br />
+                      <span className="text-amber-300">Safari에서 열면 한 번에 설치</span>할 수 있어요.
                     </p>
+                  </div>
+                  <div className="bg-muted/40 rounded-xl p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Safari로 여는 방법</p>
                     <ol className="space-y-1.5">
                       {[
-                        isEn
-                          ? ["Tap the Share button", "at the bottom of Safari"]
-                          : ["Safari 하단 공유 버튼", "(□↑) 탭"],
-                        isEn
-                          ? ['"Add to Home Screen"', ""]
-                          : ['"홈 화면에 추가"', "선택"],
-                        isEn
-                          ? ["Tap", '"Add"']
-                          : ['"추가"', "탭"],
+                        ["오른쪽 위", "··· 버튼 탭"],
+                        ["메뉴에서", '"Safari로 열기" 선택'],
+                        ["배너에서", '"홈 화면에 추가" 탭'],
                       ].map(([a, b], i) => (
                         <li key={i} className="flex items-center gap-2.5 text-xs text-foreground">
                           <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -677,15 +686,36 @@ export function AppLayout({ children }: AppLayoutProps) {
                       ))}
                     </ol>
                   </div>
-                  {/* 말풍선 꼬리 — 화면 하단 중앙 방향 */}
-                  <div className="flex justify-center mt-3">
+                </div>
+              ) : isSafariIos ? (
+                /* ── 일반 Safari iOS: 공유 버튼 안내 ── */
+                <div className="px-4 pb-4">
+                  <div className="bg-muted/40 rounded-xl p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">설치 방법</p>
+                    <ol className="space-y-1.5">
+                      {[
+                        ["하단 공유 버튼", "(□↑) 탭"],
+                        ['"홈 화면에 추가"', "선택"],
+                        ['"추가"', "탭"],
+                      ].map(([a, b], i) => (
+                        <li key={i} className="flex items-center gap-2.5 text-xs text-foreground">
+                          <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {i + 1}
+                          </span>
+                          <span>{a} <span className="text-muted-foreground">{b}</span></span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  <div className="flex justify-center mt-2.5">
                     <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
                       <Share className="w-3 h-3" />
-                      <span>{isEn ? "Look for this icon in Safari" : "Safari 하단에서 이 아이콘을 찾아요"}</span>
+                      <span>Safari 하단 공유 아이콘을 찾아요</span>
                     </div>
                   </div>
                 </div>
               ) : (
+                /* ── Android / Chrome / 카카오 Android: 직접 설치 ── */
                 <div className="px-4 pb-4">
                   <button
                     onClick={handleInstall}
