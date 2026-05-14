@@ -79,6 +79,7 @@
     "@vitejs/plugin-react": "catalog:",
     "pg": "^8.20.0",
     "tailwindcss": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

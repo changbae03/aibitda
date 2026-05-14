@@ -5,6 +5,7 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { ogSharePlugin } from "./vite-plugin-og-share";
 import { readFileSync } from "fs";
+import { VitePWA } from "vite-plugin-pwa";
 
 const port = Number(process.env.PORT ?? "22315");
 const basePath = process.env.BASE_PATH ?? "/";
@@ -25,6 +26,43 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     ogSharePlugin(),
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "auto",
+      devOptions: { enabled: false },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com/,
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "google-fonts-stylesheets" },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com/,
+            handler: "CacheFirst",
+            options: { cacheName: "google-fonts-webfonts" },
+          },
+        ],
+      },
+      manifest: {
+        name: "애빛다 · AI 주식 리서치",
+        short_name: "애빛다",
+        description: "AI로 기업가치를 밝히다 — 코스피·코스닥·미국 주식 7단계 심층 분석",
+        theme_color: "#0f0f0f",
+        background_color: "#0f0f0f",
+        display: "standalone",
+        orientation: "portrait",
+        scope: "/",
+        start_url: "/",
+        lang: "ko",
+        icons: [
+          { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        ],
+      },
+    }),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
