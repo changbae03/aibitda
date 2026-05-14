@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "ji4N2WUPjSa5cVuo2pvIg"
@@ -24,3 +23,9 @@ id = "QRzIS6Hm_wplR0EfLZ6C9"
 uri = "file://artifacts/hedge-fund-ai/public/opengraph.png"
 type = "image"
 title = "aibitda og card"
+
+[[outputs]]
+id = "PpFX1Gbi2vvjgCMqPoTmA"
+uri = "file://artifacts/hedge-fund-ai/public/pwa-512x512.png"
+type = "image"
+title = "애빛다 앱 아이콘 (512×512)"
