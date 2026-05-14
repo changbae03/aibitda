@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, Children, isValidElement, cloneElement } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, Children, isValidElement, cloneElement } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useGetAnalysis, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -3133,20 +3133,22 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   const isMarket = step.stepKey === "market_analysis";
   const isFundamental = step.stepKey === "company_analysis";
   const isRelativeVal = step.stepKey === "relative_valuation";
-  const chartLevels = isMarket ? parseChartLevels(step.content ?? "") : null;
-  const chartEvents = isMarket ? parseChartEvents(step.content ?? "") : [];
-  const marketSignals = isMarket ? parseMarketSignals(step.content ?? "") : null;
-  const valuationData = isFundamental ? parseValuationData(step.content ?? "") : null;
-  const finalValuationData = isRelativeVal ? parseFinalValuationData(step.content ?? "") : null;
-  const displayContent = stripPromptInstructions(stripEstimationLabels(
+  const content = step.content ?? "";
+
+  const chartLevels = useMemo(() => isMarket ? parseChartLevels(content) : null, [isMarket, content]);
+  const chartEvents = useMemo(() => isMarket ? parseChartEvents(content) : [], [isMarket, content]);
+  const marketSignals = useMemo(() => isMarket ? parseMarketSignals(content) : null, [isMarket, content]);
+  const valuationData = useMemo(() => isFundamental ? parseValuationData(content) : null, [isFundamental, content]);
+  const finalValuationData = useMemo(() => isRelativeVal ? parseFinalValuationData(content) : null, [isRelativeVal, content]);
+  const displayContent = useMemo(() => stripPromptInstructions(stripEstimationLabels(
     isMarket
-      ? stripChartData(step.content ?? "")
+      ? stripChartData(content)
       : isFundamental
-        ? stripValuationData(step.content ?? "")
+        ? stripValuationData(content)
         : isRelativeVal
-          ? stripFinalValuationData(step.content ?? "")
-          : (step.content ?? "")
-  ));
+          ? stripFinalValuationData(content)
+          : content
+  )), [isMarket, isFundamental, isRelativeVal, content]);
 
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
   const [collapsed, setCollapsed] = useState(false);

@@ -3133,12 +3133,6 @@ router.delete("/mine", async (req, res) => {
   }
 });
 
-router.delete("/", async (_req, res) => {
-  await rawQuery(`DELETE FROM analysis_steps`);
-  await rawQuery(`DELETE FROM analyses`);
-  res.json({ success: true });
-});
-
 router.delete("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
