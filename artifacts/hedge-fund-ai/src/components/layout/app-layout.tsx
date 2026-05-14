@@ -173,8 +173,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [showIosHint]);
 
   const handleInstall = async () => {
-    if (isIos) { setShowIosHint(v => !v); return; }
-    if (!installPrompt) return;
+    if (isIos || !installPrompt) { setShowIosHint(v => !v); return; }
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === "accepted") setInstallPrompt(null);
@@ -564,7 +563,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Link href="/support" className="hover:text-foreground transition-colors">{isEn ? "Support" : "고객센터"}</Link>
 
                 {/* PWA 설치 버튼 — 이미 설치된 경우 숨김 */}
-                {!isStandalone && (isIos || installPrompt) && (
+                {!isStandalone && (
                   <div className="relative" ref={iosHintRef}>
                     <button
                       onClick={handleInstall}
