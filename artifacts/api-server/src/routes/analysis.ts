@@ -4318,6 +4318,8 @@ async function executeStep(
         const isBio = /바이오|제약|헬스케어|세포치료|줄기세포|biotech|pharma|healthcare/i.test(ind);
         const isFinancial = /금융|은행|보험|증권|financ|bank|insur/i.test(ind);
         const isNewSpace = /우주|항공|aerospace|space|defense|방위/i.test(ind);
+        const isBattery = /2차전지|배터리|battery|lges|lg에너지|삼성sdi|sk이노베이션|sk온|catl|파나소닉 에너지|에코프로비엠|포스코퓨처엠/i.test(ind) ||
+          /2차전지|배터리|battery|lges|lg에너지|삼성sdi|sk이노베이션|sk온|catl|파나소닉 에너지|에코프로비엠|포스코퓨처엠/i.test(analysis.companyName ?? "");
 
         guideLines.push(`\n[🎯 밸류에이션 모델 선택 필수 가이드라인]`);
         guideLines.push(`⚠️ 아래 규칙을 반드시 준수하세요. 위반 시 QC 불승인.`);
@@ -4326,6 +4328,12 @@ async function executeStep(
           guideLines.push(`· 업종(${analysis.industry}): 바이오/제약 → rNPV(SOTP) 우선 사용. PBR 가중 30% 이상 금지.`);
           guideLines.push(`· rNPV 할인율: 8~12% 범위 (PoS가 이미 임상 위험 반영 — 15% 초과 이중할인 금지)`);
           guideLines.push(`· 피어: 동일 임상 단계의 세포치료/바이오텍 기업 기준. 수익성 있는 대형 제약사와 직접 배수 비교 금지.`);
+        } else if (isBattery) {
+          guideLines.push(`· 업종(${analysis.industry}): 2차전지/배터리 → EV/GWh + EV/EBITDA 피어 비교를 주 모델(70% 가중). DCF는 보조(30%)로만 사용.`);
+          guideLines.push(`· ⛔ STEP 0 Q1.5=YES(배터리 셀 제조사) 강제 적용 — EV/GWh 및 EV/EBITDA 피어 비교로 시작하세요. DCF 단독 사용은 치명적 오류.`);
+          guideLines.push(`· GWh 용량 데이터 없으면: EV/EBITDA 피어 배수(삼성SDI, SK이노베이션, CATL 기준)를 주 모델로 대체 사용.`);
+          guideLines.push(`· ⛔ 단위 오류 경고: 발행주식수 단위(주/천주)·기업가치 단위(원/억원/조원) 혼동 시 목표가가 1/10~1/1000 수준으로 오산됨. 주당가치 = 총기업가치(원) ÷ 발행주식수(주).`);
+          guideLines.push(`· 피어 비교 의무: 삼성SDI, SK이노베이션을 기준 피어로 항상 포함하고, 반도체 기업(삼성전자·SK하이닉스)은 피어 대상에서 완전 제외.`);
         } else if (isFinancial) {
           guideLines.push(`· 업종(${analysis.industry}): 금융 → PBR·ROE 기반 모델 우선. DCF 시 배당 포함 여부 확인.`);
         } else if (isNewSpace) {
@@ -4341,7 +4349,7 @@ async function executeStep(
 
         const guideBlock = guideLines.join("\n");
         enrichedContext = enrichedContext ? enrichedContext + "\n" + guideBlock : guideBlock;
-        console.log(`[model-guide] 밸류에이션 모델 가이드라인 주입 (isBio=${isBio}, isNewSpace=${isNewSpace})`);
+        console.log(`[model-guide] 밸류에이션 모델 가이드라인 주입 (isBio=${isBio}, isBattery=${isBattery}, isNewSpace=${isNewSpace})`);
       }
 
       // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
@@ -4720,6 +4728,25 @@ async function executeStep(
         const savedStartPrice: number | null = startPriceRow[0]?.start_price ?? null;
         const savedTicker: string = startPriceRow[0]?.ticker ?? "";
         const isKR = /^\d{6}$/.test(savedTicker);
+
+        // ── FINAL_VALUATION_DATA current price 검증 (AI가 wrong price 사용 시 조기 경보) ──
+        if (savedStartPrice && savedStartPrice > 0) {
+          const fvdMatch = content.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/);
+          if (fvdMatch) {
+            try {
+              const fvd = JSON.parse(fvdMatch[1]);
+              const fvdCurrent = parseFloat(String(fvd.current ?? fvd.current_price ?? "0").replace(/[^0-9.]/g, ""));
+              if (fvdCurrent > 0) {
+                const drift = Math.abs(fvdCurrent - savedStartPrice) / savedStartPrice;
+                if (drift > 0.2) {
+                  console.warn(
+                    `[analysis ${id}] FINAL_VALUATION_DATA current=${fvdCurrent} vs start_price=${savedStartPrice} (drift=${(drift * 100).toFixed(1)}%) — AI may have used wrong current price → target prices likely invalid`
+                  );
+                }
+              }
+            } catch (_) { /* JSON parse fail — ignore */ }
+          }
+        }
 
         if (savedStartPrice && savedStartPrice > 0) {
           // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
