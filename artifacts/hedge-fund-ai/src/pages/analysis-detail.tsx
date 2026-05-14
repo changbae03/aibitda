@@ -1273,6 +1273,10 @@ export default function AnalysisDetail() {
 
   // investment_strategy 스텝 JSON을 1차 소스로 → DB값 불일치 방지
   const effectiveVerdict: string | null = (() => {
+    // DB값(서버 verdict-override 결과)이 존재하면 최우선 사용
+    const dbVerdict = (analysis as any).investmentVerdict as string | null ?? null;
+    if (dbVerdict) return dbVerdict;
+    // 분析 진행 중(완료 전)에만 step JSON에서 임시로 파싱
     const stratStep = analysis.steps.find((s: any) => s.stepKey === "investment_strategy");
     if (stratStep?.content) {
       try {
@@ -1283,7 +1287,7 @@ export default function AnalysisDetail() {
         if (j?.verdict) return j.verdict as string;
       } catch { /* fall through */ }
     }
-    return (analysis as any).investmentVerdict ?? null;
+    return null;
   })();
 
   const handleRunNextStep = () => {
