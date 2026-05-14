@@ -387,6 +387,9 @@ const KEYWORD_MAP = new Map<string, string[]>(
   KOREAN_COMPANY_MAP.map(c => [c.symbol, c.keywords])
 );
 
+// 우선주 판별: 종목명이 "우", "우B", "우C" 등으로 끝나는 경우
+const isPreferredStock = (name: string): boolean => /우[A-Z0-9]?$/.test(name.trim());
+
 function searchKorean(query: string): ReturnType<typeof toResult>[] {
   const q = query.toLowerCase().replace(/\s/g, "");
   const krxCache = getKRXCache();
@@ -399,6 +402,7 @@ function searchKorean(query: string): ReturnType<typeof toResult>[] {
   if (krxCache.length > 0) {
     const seen = new Set<string>();
     for (const e of krxCache) {
+      if (isPreferredStock(e.name)) continue; // 우선주 제외
       const krxName = e.name.toLowerCase().replace(/\s/g, "");
       const keywords = KEYWORD_MAP.get(e.symbol) ?? [];
       const matchName = krxName.includes(q);
@@ -445,12 +449,12 @@ function searchByCode(digits: string): ReturnType<typeof toResult>[] {
   const krxCache = getKRXCache();
   if (krxCache.length > 0) {
     return krxCache
-      .filter(e => e.code.startsWith(digits))
+      .filter(e => e.code.startsWith(digits) && !isPreferredStock(e.name))
       .slice(0, 8)
       .map(toResult);
   }
   return KOREAN_COMPANY_MAP
-    .filter(c => c.symbol.startsWith(digits))
+    .filter(c => c.symbol.startsWith(digits) && !isPreferredStock(c.name))
     .slice(0, 8)
     .map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
 }
