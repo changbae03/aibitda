@@ -519,7 +519,6 @@ export default function NewAnalysis() {
               onKeyDown={handleKeyDown}
               placeholder="삼성전자, NVDA, 005930, AAPL..."
               className="flex-1 min-w-0 bg-transparent border-none outline-none text-foreground text-[15px] placeholder:text-muted-foreground/40 placeholder:text-sm"
-              autoFocus
               disabled={isPending}
               autoComplete="off"
             />
