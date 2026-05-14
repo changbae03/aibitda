@@ -4082,6 +4082,44 @@ async function executeStep(
         // ─────────────────────────────────────────────────────────────────
       }
 
+      // ── investment_strategy 전용: 검증된 목표주가 하드 주입 ─────────────────
+      // relative_valuation FINAL_VALUATION_DATA에서 AI 원본 목표가를 추출 →
+      // 서버 클램핑(0.45x~3.5x KR / 0.25x~4.5x US) 적용 후 하드 제약으로 주입.
+      // 이렇게 하면 investment_strategy 결론 텍스트와 DB 저장값이 일치함.
+      if (stepKey === "investment_strategy") {
+        try {
+          const rvStep = existingSteps.find(s => s.stepKey === "relative_valuation");
+          const rvContent = rvStep?.content ?? "";
+          const fvdRaw = rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
+          if (fvdRaw) {
+            const fvd = JSON.parse(fvdRaw);
+            const rawTp = parseFloat(String(fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
+            const spRow = await rawQuery(`SELECT start_price, ticker FROM analyses WHERE id=$1`, [id]);
+            const sp: number = spRow[0]?.start_price ?? 0;
+            const tkr: string = spRow[0]?.ticker ?? "";
+            const isKRtk = /^\d{6}$/.test(tkr);
+            if (rawTp > 0 && sp > 0) {
+              const MAX_R = isKRtk ? 3.5 : 4.5;
+              const MIN_R = isKRtk ? 0.45 : 0.25;
+              const ratio = rawTp / sp;
+              const validated = ratio > MAX_R ? Math.round(sp * MAX_R)
+                             : ratio < MIN_R ? Math.round(sp * MIN_R)
+                             : Math.round(rawTp);
+              const corrected = validated !== Math.round(rawTp);
+              const tpBlock = `\n\n[⛔ 서버 검증 목표주가 — 반드시 준수]\n`
+                + `밸류에이션 단계에서 산출 후 서버 합리성 검증을 통과한 목표주가: **${validated.toLocaleString()}원**\n`
+                + (corrected ? `(AI 원산출값 ${Math.round(rawTp).toLocaleString()}원이 현재가 대비 ${(ratio * 100).toFixed(0)}% 수준으로 과도하여 ${(ratio > MAX_R ? MAX_R : MIN_R)}x 한도로 보정됨)\n` : "")
+                + `⛔ FINAL_JSON의 target_price는 반드시 ${validated.toLocaleString()}을 사용하세요. 이 숫자를 임의로 바꾸면 안 됩니다.\n`
+                + `⛔ entry_price·stop_loss도 이 목표가와 논리적으로 일관되어야 합니다.`;
+              enrichedContext = enrichedContext ? enrichedContext + tpBlock : tpBlock;
+              console.log(`[tp-inject] investment_strategy for ${tkr} — validated target=${validated} (raw=${Math.round(rawTp)}, corrected=${corrected})`);
+            }
+          }
+        } catch (e) {
+          console.warn("[tp-inject] failed:", e);
+        }
+      }
+
       // ── 투자 판정 일관성 앵커 (investment_strategy 전용) ────────────────────
       // 7일 이내: 동일 판정 유지 강제 / 8~30일: 변경 시 근거 요구
       if (stepKey === "investment_strategy") {

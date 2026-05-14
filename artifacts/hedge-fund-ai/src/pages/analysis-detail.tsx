@@ -1583,7 +1583,7 @@ export default function AnalysisDetail() {
           {[...analysis.steps]
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
-            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} isEn={(analysis as any).language === 'en'} />
+            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} startPrice={(analysis as any).startPrice ?? undefined} isEn={(analysis as any).language === 'en'} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} />
           ))}
         </AnimatePresence>
 
@@ -2056,7 +2056,7 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(s.replace(/'/g, '"')); } catch { return null; }
 }
 
-function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean }) {
+function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false, validatedTargetPrice }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean, validatedTargetPrice?: number | null }) {
   const json = extractJson(step.content);
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
 
@@ -2140,7 +2140,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               // 현재가: json.current_price (신규) 또는 Base 시나리오 역산
               const cp = parseFloat(String(json.current_price ?? "").replace(/[^0-9.]/g, "")) || null;
               const ep = parseFloat(String(json.entry_price ?? "").replace(/[^0-9.]/g, "")) || null;
-              const tp = parseFloat(String(json.target_price ?? "").replace(/[^0-9.]/g, "")) || null;
+              // ⭐ validatedTargetPrice(서버 검증값)가 있으면 AI 원본값 대신 사용 — 상단 카드와 일치
+              const tpRaw = parseFloat(String(json.target_price ?? "").replace(/[^0-9.]/g, "")) || null;
+              const tp: number | null = validatedTargetPrice ?? tpRaw;
               const sl = parseFloat(String(json.stop_loss ?? "").replace(/[^0-9.]/g, "")) || null;
 
               // 적정주가 ↔ 현재가 기준 upside: Base 시나리오 upside 우선, 없으면 직접 계산
@@ -2149,7 +2151,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               // parseFloat은 "+15.2%" → 15.2, "-63.3%" → -63.3 자동 처리
               const baseUpsideNum = parseFloat(baseUpsideStr);
               const upsideFromCurrent: number | null =
-                !isNaN(baseUpsideNum) ? baseUpsideNum
+                // validatedTargetPrice가 있으면 서버 검증 기준 upside 직접 계산
+                (validatedTargetPrice && cp && cp > 0) ? (validatedTargetPrice - cp) / cp * 100
+                : !isNaN(baseUpsideNum) ? baseUpsideNum
                 : (cp && tp && cp > 0) ? (tp - cp) / cp * 100
                 : null;
 
@@ -2205,7 +2209,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className={`w-1.5 h-1.5 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
                         <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>{isEn ? "Fair Value" : "적정주가"} <span className="font-normal opacity-70">(12M)</span></p>
                       </div>
-                      <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{formatPrice(json.target_price, priceCurrency)}</p>
+                      <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{tp ? formatPrice(String(tp), priceCurrency) : formatPrice(json.target_price, priceCurrency)}</p>
                       {upsideFromCurrent !== null ? (
                         <p className={`text-[10px] sm:text-[11px] font-bold ${targetCardStyle.pctColor} mt-1`}>
                           {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
@@ -3104,7 +3108,7 @@ function ValuationScaleBar({
   );
 }
 
-function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice, isEn = false }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number, isEn?: boolean }) {
+function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice, isEn = false, validatedTargetPrice }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number, isEn?: boolean, validatedTargetPrice?: number | null }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
     id: step.stepKey,
@@ -3119,7 +3123,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   };
 
   if (step.stepKey === "investment_strategy") {
-    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} />;
+    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} validatedTargetPrice={validatedTargetPrice} />;
   }
 
   const isMarket = step.stepKey === "market_analysis";
