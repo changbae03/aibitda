@@ -3063,6 +3063,13 @@ function stripPromptInstructions(content: string): string {
       if (/^\*?\*?\[STEP\s*\d+\]/.test(t)) return false;
       if (/^※\s*(다음\s*지시사항|지시사항\s*끝)/.test(t)) return false;
       if (/^현재 종목의 Base upside:.*따라서.*전략을 작성합니다/.test(t)) return false;
+      // 체인 인계 선언 문장 제거
+      if (/브리핑에서 확인된 핵심 이슈 .+을 중심으로/.test(t)) return false;
+      if (/산업 分析에서 .+이 확인되었습니다\. 이를 배경으로/.test(t)) return false;
+      if (/촉매 분析에서 도출된 핵심 이슈 .+의 재무 영향을 기반으로 실적을 전망합니다/.test(t)) return false;
+      if (/^📌\s*\*?\*?\[체인 인계 규칙\]/.test(t)) return false;
+      if (/^→\s*이 문장으로 리포트가 시작/.test(t)) return false;
+      if (/^→\s*이 한 문장을 모든 소제목/.test(t)) return false;
       return true;
     })
     .join("\n");
