@@ -3160,6 +3160,50 @@ function ValuationScaleBar({
   );
 }
 
+function getReactNodeText(node: React.ReactNode): string {
+  if (!node) return '';
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getReactNodeText).join('');
+  if (isValidElement(node)) return getReactNodeText((node.props as any).children);
+  return '';
+}
+
+function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const childArray = Children.toArray(children);
+  const firstChildText = getReactNodeText(childArray[0]);
+  const isCollapsible = firstChildText.includes('핵심 지표') || firstChildText.includes('Key Metrics');
+
+  if (!isCollapsible) {
+    return (
+      <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
+        {children}
+      </blockquote>
+    );
+  }
+
+  const title = firstChildText.replace(/\(.*?\)/g, '').trim();
+  const restChildren = childArray.slice(1);
+
+  return (
+    <div className="my-3 rounded-lg border border-border/50 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-muted/20 hover:bg-muted/35 transition-colors text-left"
+      >
+        <span className="text-[12px] font-semibold text-muted-foreground">{title}</span>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="px-3 py-2.5 text-[12.5px] text-foreground/65 space-y-1 border-t border-border/40">
+          {restChildren}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPrice, isEn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, startPrice?: number, isEn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -3287,11 +3331,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               ),
               strong: ({ children }) => <strong className="font-semibold text-foreground/95">{children}</strong>,
               em: ({ children }) => <em className="text-foreground/70 not-italic">{children}</em>,
-              blockquote: ({ children }) => (
-                <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
-                  {children}
-                </blockquote>
-              ),
+              blockquote: ({ children }) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
               hr: () => <hr className="my-4 border-border/60" />,
               ...MD_TABLE_COMPONENTS,
             }}
