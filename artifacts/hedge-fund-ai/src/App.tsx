@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/ui/command-palette";
 import { LanguageProvider } from "@/lib/language-context";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SplashScreen } from "@/components/splash-screen";
 import NotFound from "@/pages/not-found";
 
 // Pages
@@ -196,8 +197,24 @@ function ClerkProviderWithRoutes() {
 }
 
 function App() {
+  // PWA 스플래시: standalone 모드 + 세션당 한 번만
+  const [showSplash, setShowSplash] = useState(() => {
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as any).standalone === true;
+    if (!isStandalone) return false;
+    if (sessionStorage.getItem("splash-shown")) return false;
+    return true;
+  });
+
+  const handleSplashDone = () => {
+    sessionStorage.setItem("splash-shown", "1");
+    setShowSplash(false);
+  };
+
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      {showSplash && <SplashScreen onDone={handleSplashDone} />}
       <WouterRouter base={basePath}>
         <LanguageProvider>
           <ClerkProviderWithRoutes />
