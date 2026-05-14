@@ -369,16 +369,16 @@ export default function NewAnalysis() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       setLocation(`/analysis/${result.id}`);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 402) {
-        const msg = (err.data as any)?.error ?? "오늘 분석 횟수를 모두 사용했습니다.";
-        setError(msg);
-      } else if (err instanceof ApiError && err.status === 429) {
+      const errStatus = (err as any)?.status as number | undefined;
+      const errMsg = (err as any)?.data?.error as string | undefined;
+      if (errStatus === 402) {
+        setError(errMsg ?? "오늘 분석 횟수를 모두 사용했습니다.");
+      } else if (errStatus === 429) {
         setError("분석 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
-      } else if (err instanceof ApiError && err.status === 400) {
-        const msg = (err.data as any)?.error ?? "유효하지 않은 종목코드입니다.";
-        setError(msg);
+      } else if (errStatus === 400) {
+        setError(errMsg ?? "유효하지 않은 종목코드입니다.");
       } else {
-        setError("분석을 시작할 수 없습니다. 올바른 종목코드를 확인해주세요.");
+        setError(errMsg ?? "분석을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.");
       }
     }
   };

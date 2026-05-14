@@ -57,7 +57,7 @@ const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
   /\.riker\.replit\.dev$/,
   /\.worf\.replit\.dev$/,
   /^https:\/\/[\w-]+\.repl\.co$/,
-  /^https:\/\/aibitda\.kr$/,
+  /^https:\/\/(www\.)?aibitda\.kr$/,
 ];
 
 app.use(

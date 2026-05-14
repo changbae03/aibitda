@@ -2837,6 +2837,8 @@ router.delete("/cache", (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
+  const reqUserId = getUserId(req);
+  console.log(`[analysis-create] POST from user=${reqUserId ?? "anonymous"} ip=${req.ip} ticker=${req.body?.ticker}`);
   const { ticker, companyName: rawCompanyName, industry: rawIndustry, additionalContext } = req.body as {
     ticker: string;
     companyName?: string;
@@ -2871,13 +2873,15 @@ router.post("/", async (req, res) => {
       const qType = (q as any)?.quoteType as string | undefined;
       const qExchange = (q as any)?.exchange as string | undefined ?? "";
       if (qType === "ETF" || qType === "MUTUALFUND" || qType === "INDEX") {
+        console.log(`[analysis-create] 400 ETF/펀드 차단: ${validatedTicker} qType=${qType}`);
         res.status(400).json({ error: "ETF·인덱스펀드는 분석 대상이 아닙니다. 개별 주식 종목코드를 입력해주세요." });
         return;
       }
       // 비지원 US 거래소(OTC 핑크, 회색 시장 등) 추가 차단
       const US_ALLOWED = new Set(["NMS", "NGM", "NCM", "NYQ", "NYS", "NYE", "ASE", "AMX", "PCX", "CBOE", "PNK", ""]);
       if (qExchange && !US_ALLOWED.has(qExchange)) {
-        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분석 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
+        console.log(`[analysis-create] 400 비지원 거래소 차단: ${validatedTicker} exchange=${qExchange}`);
+        res.status(400).json({ error: "한국(KOSPI·KOSDAQ) 및 미국(NYSE·NASDAQ·AMEX) 상장 주식만 분析 가능합니다. 해당 종목은 지원하지 않는 거래소에 상장되어 있습니다." });
         return;
       }
     } catch { /* Yahoo 조회 실패 시 무시하고 진행 */ }

@@ -157,7 +157,7 @@ router.get("/auth/me", async (req, res) => {
     const user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
     const { rows } = await pool.query(
       `SELECT display_name FROM user_credits WHERE user_id = $1`,
-      [user.id]
+      [`kakao_${user.id}`]
     ).catch(() => ({ rows: [] }));
     const displayName = rows[0]?.display_name ?? null;
     res.json({ user: { ...user, displayName } });
