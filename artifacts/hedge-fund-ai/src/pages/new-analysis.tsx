@@ -389,6 +389,7 @@ export default function NewAnalysis() {
     setTicker(tickerVal);
     setSuggestions([]);
     setShowDropdown(false);
+    inputRef.current?.blur();
     setConfirmModal({ ticker: tickerVal, companyName });
   };
 
