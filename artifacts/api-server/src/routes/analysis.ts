@@ -4082,46 +4082,8 @@ async function executeStep(
         // ─────────────────────────────────────────────────────────────────
       }
 
-      // ── investment_strategy 전용: 검증된 목표주가 하드 주입 ─────────────────
-      // relative_valuation FINAL_VALUATION_DATA에서 AI 원본 목표가를 추출 →
-      // 서버 클램핑(0.45x~3.5x KR / 0.25x~4.5x US) 적용 후 하드 제약으로 주입.
-      // 이렇게 하면 investment_strategy 결론 텍스트와 DB 저장값이 일치함.
-      if (stepKey === "investment_strategy") {
-        try {
-          const rvStep = existingSteps.find(s => s.stepKey === "relative_valuation");
-          const rvContent = rvStep?.content ?? "";
-          const fvdRaw = rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
-          if (fvdRaw) {
-            const fvd = JSON.parse(fvdRaw);
-            const rawTp = parseFloat(String(fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
-            const spRow = await rawQuery(`SELECT start_price, ticker FROM analyses WHERE id=$1`, [id]);
-            const sp: number = spRow[0]?.start_price ?? 0;
-            const tkr: string = spRow[0]?.ticker ?? "";
-            const isKRtk = /^\d{6}$/.test(tkr);
-            if (rawTp > 0 && sp > 0) {
-              const MAX_R = isKRtk ? 3.5 : 4.5;
-              const MIN_R = isKRtk ? 0.45 : 0.25;
-              const ratio = rawTp / sp;
-              const validated = ratio > MAX_R ? Math.round(sp * MAX_R)
-                             : ratio < MIN_R ? Math.round(sp * MIN_R)
-                             : Math.round(rawTp);
-              const corrected = validated !== Math.round(rawTp);
-              const tpBlock = `\n\n[⛔ 서버 검증 목표주가 — 반드시 준수]\n`
-                + `밸류에이션 단계에서 산출 후 서버 합리성 검증을 통과한 목표주가: **${validated.toLocaleString()}원**\n`
-                + (corrected ? `(AI 원산출값 ${Math.round(rawTp).toLocaleString()}원이 현재가 대비 ${(ratio * 100).toFixed(0)}% 수준으로 과도하여 ${(ratio > MAX_R ? MAX_R : MIN_R)}x 한도로 보정됨)\n` : "")
-                + `⛔ FINAL_JSON의 target_price는 반드시 ${validated.toLocaleString()}을 사용하세요. 이 숫자를 임의로 바꾸면 안 됩니다.\n`
-                + `⛔ entry_price·stop_loss도 이 목표가와 논리적으로 일관되어야 합니다.`;
-              enrichedContext = enrichedContext ? enrichedContext + tpBlock : tpBlock;
-              console.log(`[tp-inject] investment_strategy for ${tkr} — validated target=${validated} (raw=${Math.round(rawTp)}, corrected=${corrected})`);
-            }
-          }
-        } catch (e) {
-          console.warn("[tp-inject] failed:", e);
-        }
-      }
-
       // ── 투자 판정 일관성 앵커 (investment_strategy 전용) ────────────────────
-      // 7일 이내: 동일 판정 유지 강제 / 8~30일: 변경 시 근거 요구
+      // ⚠️ 단, 아래 [서버 검증 목표주가] 블록이 주입되면 목표가·판정 제한은 해제됨
       if (stepKey === "investment_strategy") {
         const recentRow = await rawQuery(
           `SELECT investment_verdict, target_price, entry_price, created_at
@@ -4139,26 +4101,76 @@ async function executeStep(
           const fmt = (n: number | null) => n == null ? "N/A" : n.toLocaleString();
 
           if (daysAgo <= 7) {
-            // 7일 이내: 강한 앵커 — 동일 판정 유지 의무
-            const anchorBlock = `\n\n[🔒 투자 판정 일관성 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
-              + `⛔ 중요: ${daysAgo}일 전 이 종목 분석에서 아래 판정이 내려졌습니다.\n`
-              + `  판정: ${rec.investment_verdict} | 목표가: ${fmt(rec.target_price)}원 | 진입가: ${fmt(rec.entry_price)}원\n`
-              + `📌 지시 사항:\n`
-              + `- 명백한 시장 변화(어닝 서프라이즈, 급락/급등, 업황 전환 등)가 없는 한 동일 판정(${rec.investment_verdict})을 유지하세요.\n`
-              + `- 목표가는 직전 분석 대비 ±15% 이내로 제한하세요.\n`
-              + `- 판정을 바꿀 경우 반드시 "판정 변경 근거:" 항목을 별도 문단으로 명시하세요.\n`
-              + `- 위 지시를 무시하고 임의로 반대 판정을 내리는 것은 금지됩니다.`;
+            const anchorBlock = `\n\n[\uD83D\uDD12 투자 판정 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
+              + `  이전 판정: ${rec.investment_verdict} | 이전 목표가: ${fmt(rec.target_price)}원 | 이전 진입가: ${fmt(rec.entry_price)}원\n`
+              + `📌 참고 지시:\n`
+              + `- 아래 [서버 검증 목표주가]가 있으면 그 수치와 판정 방향을 최우선으로 따르세요. 이 앵커는 보조 참고용입니다.\n`
+              + `- [서버 검증 목표주가]가 없는 경우에만: 명백한 시장 변화가 없는 한 동일 판정(${rec.investment_verdict})을 유지하세요.\n`
+              + `- 판정을 바꿀 경우 "판정 변경 근거:" 항목을 별도 문단으로 명시하세요.`;
             enrichedContext = enrichedContext ? enrichedContext + anchorBlock : anchorBlock;
-            console.log(`[verdict-anchor] 강한 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
+            console.log(`[verdict-anchor] 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
           } else if (daysAgo <= 30) {
-            // 8~30일: 소프트 앵커 — 판정 변경 시 설명 요구
             const softBlock = `\n\n[📌 투자 판정 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${daysAgo}일 전 분석]\n`
-              + `  판정: ${rec.investment_verdict} | 목표가: ${fmt(rec.target_price)}원 | 진입가: ${fmt(rec.entry_price)}원\n`
-              + `- 위 판정과 다른 결론을 낼 경우 판정 섹션에 변경 이유를 반드시 명시하세요.\n`
-              + `- 목표가는 직전 분석 대비 ±20% 이내가 되도록 노력하세요.`;
+              + `  이전 판정: ${rec.investment_verdict} | 이전 목표가: ${fmt(rec.target_price)}원 | 이전 진입가: ${fmt(rec.entry_price)}원\n`
+              + `- [서버 검증 목표주가]가 있는 경우 그 수치가 이 앵커보다 우선합니다.\n`
+              + `- 위 판정과 다른 결론을 낼 경우 판정 섹션에 변경 이유를 반드시 명시하세요.`;
             enrichedContext = enrichedContext ? enrichedContext + softBlock : softBlock;
             console.log(`[verdict-anchor] 소프트 앵커 주입 — ${analysis.ticker} (${daysAgo}일 전: ${rec.investment_verdict})`);
           }
+        }
+      }
+
+      // ── investment_strategy 전용: 검증된 목표주가 하드 주입 ─────────────────
+      // ⚠️ 반드시 verdict-anchor 이후 실행 — AI 컨텍스트에서 마지막 지시가 최우선됨
+      // relative_valuation FINAL_VALUATION_DATA 추출 → 클램핑 → 판정 방향까지 주입
+      if (stepKey === "investment_strategy") {
+        try {
+          const rvStep = existingSteps.find(s => s.stepKey === "relative_valuation");
+          const rvContent = rvStep?.content ?? "";
+          // 한 줄 / 여러 줄 JSON 형식 모두 대응
+          const fvdMatch = rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[\s\S]*?\})/);
+          const fvdRaw = fvdMatch?.[1] ?? rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
+          if (fvdRaw) {
+            const fvd = JSON.parse(fvdRaw.replace(/[\r\n\t]/g, " "));
+            const rawTp = parseFloat(String(fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
+            const spRow = await rawQuery(`SELECT start_price, ticker FROM analyses WHERE id=$1`, [id]);
+            const sp: number = spRow[0]?.start_price ?? 0;
+            const tkr: string = spRow[0]?.ticker ?? "";
+            const isKRtk = /^\d{6}$/.test(tkr);
+            if (rawTp > 0 && sp > 0) {
+              const MAX_R = isKRtk ? 3.5 : 4.5;
+              const MIN_R = isKRtk ? 0.45 : 0.25;
+              const ratio = rawTp / sp;
+              const validated = ratio > MAX_R ? Math.round(sp * MAX_R)
+                             : ratio < MIN_R ? Math.round(sp * MIN_R)
+                             : Math.round(rawTp);
+              const corrected = validated !== Math.round(rawTp);
+              const valRatio = validated / sp;
+              const impliedVerdict = valRatio >= 1.15 ? "매수(BUY/Strong Buy)"
+                                   : valRatio >= 1.05 ? "매수(BUY)"
+                                   : valRatio <= 0.88 ? "매도(SELL)"
+                                   : "중립(HOLD)";
+              const upPct = ((valRatio - 1) * 100).toFixed(1);
+              const tpBlock = `\n\n[⛔ 서버 검증 목표주가 — 최우선 지시, 위 모든 앵커보다 우선]\n`
+                + `현재가(분석 시작 기준): ${sp.toLocaleString()}원\n`
+                + `서버 검증 목표주가(12M): **${validated.toLocaleString()}원** (현재가 대비 ${Number(upPct) >= 0 ? "+" : ""}${upPct}%)\n`
+                + (corrected ? `※ AI 원산출값 ${Math.round(rawTp).toLocaleString()}원이 합리성 한도 초과로 ${validated.toLocaleString()}원으로 자동 보정됨\n` : "")
+                + `\n⛔ 필수 준수 사항 (위반 금지):\n`
+                + `1. FINAL_JSON target_price = ${validated} (정수, 콤마 없이)\n`
+                + `2. 권고 판정: **${impliedVerdict}** — 목표가/현재가 괴리율 ${Number(upPct) >= 0 ? "+" : ""}${upPct}% 기준\n`
+                + `3. entry_price ≤ ${sp.toLocaleString()}원 (현재가 이하), stop_loss = 현재가의 88~93% 수준\n`
+                + `4. 시나리오 Base upside도 이 목표가 기준으로 재계산할 것\n`
+                + `5. 위의 [판정 일관성 앵커]의 판정·목표가 제한은 이 지시로 완전 해제됨`;
+              enrichedContext = enrichedContext ? enrichedContext + tpBlock : tpBlock;
+              console.log(`[tp-inject] ${tkr} validated=${validated} raw=${Math.round(rawTp)} ratio=${valRatio.toFixed(2)}x verdict=${impliedVerdict} corrected=${corrected}`);
+            } else {
+              console.log(`[tp-inject] ${id} — 조건 미충족: rawTp=${rawTp} sp=${sp}`);
+            }
+          } else {
+            console.log(`[tp-inject] ${id} — FINAL_VALUATION_DATA 미탐지 (rvContent.length=${rvContent.length})`);
+          }
+        } catch (e) {
+          console.warn("[tp-inject] failed:", e);
         }
       }
       // ─────────────────────────────────────────────────────────────────────
