@@ -925,13 +925,24 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
 }
 
 // ── CompanyLogo 컴포넌트 ────────────────────────────────────────────────────
+const LOGO_PALETTE = [
+  { bg: "rgba(255,138,122,0.15)", border: "rgba(255,138,122,0.3)", color: "#FF8A7A" },
+  { bg: "rgba(99,179,237,0.15)", border: "rgba(99,179,237,0.3)", color: "#63B3ED" },
+  { bg: "rgba(104,211,145,0.15)", border: "rgba(104,211,145,0.3)", color: "#68D391" },
+  { bg: "rgba(246,173,85,0.15)", border: "rgba(246,173,85,0.3)", color: "#F6AD55" },
+  { bg: "rgba(159,122,234,0.15)", border: "rgba(159,122,234,0.3)", color: "#9F7AEA" },
+  { bg: "rgba(237,100,166,0.15)", border: "rgba(237,100,166,0.3)", color: "#ED64A6" },
+  { bg: "rgba(56,178,172,0.15)", border: "rgba(56,178,172,0.3)", color: "#38B2AC" },
+  { bg: "rgba(237,137,54,0.15)", border: "rgba(237,137,54,0.3)", color: "#ED8936" },
+];
+function tickerColor(ticker: string) {
+  let h = 0;
+  for (let i = 0; i < ticker.length; i++) h = (h * 31 + ticker.charCodeAt(i)) >>> 0;
+  return LOGO_PALETTE[h % LOGO_PALETTE.length];
+}
 function CompanyLogo({ ticker, companyName, size = 52 }: { ticker: string; companyName: string; size?: number }) {
   const [failed, setFailed] = useState(false);
-  const koreanCode = ticker.match(/^(\d{6})/)?.[1] ?? null;
-  const isUS = !koreanCode;
-  const logoUrl = koreanCode
-    ? `https://ssl.pstatic.net/imgstock/logos/${koreanCode}.png`
-    : `https://logo.clearbit.com/${ticker.toLowerCase()}.com`;
+  const isKorean = /^\d{6}/.test(ticker);
   const initials = companyName
     .replace(/[^\w\s가-힣]/g, "")
     .split(/\s+/)
@@ -940,24 +951,31 @@ function CompanyLogo({ ticker, companyName, size = 52 }: { ticker: string; compa
     .join("")
     .toUpperCase()
     .slice(0, 2) || ticker.slice(0, 2).toUpperCase();
-  if (failed) {
-    return (
-      <div
-        className="rounded-2xl bg-primary/15 flex items-center justify-center text-primary font-bold shrink-0 border border-primary/20"
-        style={{ width: size, height: size, fontSize: Math.round(size * 0.35) }}
-      >
-        {initials}
-      </div>
-    );
-  }
+  const palette = tickerColor(ticker);
+  const badge = (
+    <div
+      className="rounded-2xl flex items-center justify-center font-bold shrink-0"
+      style={{
+        width: size, height: size,
+        fontSize: Math.round(size * 0.33),
+        background: palette.bg,
+        border: `1.5px solid ${palette.border}`,
+        color: palette.color,
+        letterSpacing: "-0.02em",
+      }}
+    >
+      {initials}
+    </div>
+  );
+  if (isKorean || failed) return badge;
   return (
     <img
-      src={logoUrl}
+      src={`https://logo.clearbit.com/${ticker.toLowerCase()}.com`}
       alt={companyName}
       width={size}
       height={size}
-      className="rounded-2xl object-contain shrink-0 border border-border"
-      style={{ width: size, height: size, background: isUS ? "white" : "transparent", padding: isUS ? "4px" : "0" }}
+      className="rounded-2xl object-contain shrink-0 border border-border bg-white"
+      style={{ width: size, height: size, padding: "4px" }}
       onError={() => setFailed(true)}
     />
   );
