@@ -2357,7 +2357,8 @@ const US_PEER_MAP: Record<string, PeerEntry[]> = {
 async function selectPeerTickers(
   companyName: string,
   industry: string,
-  previousContext: string
+  previousContext: string,
+  subjectTicker: string = ""
 ): Promise<Array<{ ticker: string; name: string; exchange: string; reason: string }>> {
   try {
     const prompt = `Company: ${companyName}, Industry: ${industry}.
@@ -2371,6 +2372,16 @@ PEER SELECTION RULES (strictly enforce):
 - Business model match is MANDATORY. Do NOT mix these types in the same peer group:
   * Pure pipeline biotech (파이프라인 바이오텍) vs CDMO/CMO (위탁생산기업, e.g., 삼성바이오로직스, 에스티팜, 바이넥스). EV/Sales comparison between them is invalid.
   * Drug discovery/royalty model vs self-commercialization model — flag if you must include a mixed model peer.
+
+- BATTERY / EV BATTERY COMPANY RULES (apply when subject is a battery cell/pack manufacturer like LG에너지솔루션, 삼성SDI, SK온, CATL, Panasonic Energy):
+  * PRIORITY 1 — Korean battery peers: 삼성SDI(006400.KS), SK이노베이션(096770.KS)
+  * PRIORITY 2 — Global battery peers: CATL is Shenzhen-listed (300750.SZ) — Yahoo Finance coverage may be limited; use 6752.T (Panasonic Holdings) as alternative
+  * PRIORITY 3 — Battery materials: 에코프로비엠(247540.KQ), 포스코퓨처엠(003670.KS) acceptable as supply-chain peers (flag as "배터리 소재 공급망 피어")
+  * FORBIDDEN PEERS for battery companies — DO NOT SELECT:
+    - 삼성전자(005930.KS): consumer electronics + semiconductor, NOT a battery company
+    - SK하이닉스(000660.KS): pure DRAM/HBM semiconductor, completely different business
+    - Any semiconductor fab or memory company → business model completely different
+  * DO NOT include the subject company itself as a peer
 
 - SEMICONDUCTOR COMPANY RULES (apply when subject is a memory/DRAM/HBM company like SK하이닉스, Samsung Electronics, Micron):
   * PRIORITY 1 — Korean domestic peers first: 삼성전자(005930.KS) is always a valid peer for Korean memory companies.
@@ -2464,10 +2475,15 @@ CRITICAL ticker format rules — Yahoo Finance tickers only:
     }
 
     if (parsed?.peers && Array.isArray(parsed.peers) && parsed.peers.length > 0) {
-      // 분석 대상 기업 자체가 피어에 포함된 경우 제거
+      // 분석 대상 기업 자체가 피어에 포함된 경우 제거 (ticker 또는 회사명 일치 모두 체크)
+      const subjectTickerUpper = subjectTicker.toUpperCase();
       const filtered = parsed.peers.filter((p: any) => {
         const t = (p.ticker ?? "").toUpperCase();
-        return t !== companyName.toUpperCase() && !p.reason?.includes("분석 대상");
+        const n = (p.name ?? "").toUpperCase();
+        if (subjectTickerUpper && t === subjectTickerUpper) return false;
+        if (n === companyName.toUpperCase()) return false;
+        if (p.reason?.includes("분석 대상")) return false;
+        return true;
       });
       const raw_final = (filtered.length > 0 ? filtered : parsed.peers).slice(0, 5);
 
@@ -4270,14 +4286,14 @@ async function executeStep(
       const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 5000);
       onEvent?.({ t: "" }); // keep connection alive
 
-      let peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext);
+      let peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext, analysis.ticker);
       console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
 
       // 피어 선정 실패 시 1회 재시도 (더 많은 컨텍스트)
       if (peers.length === 0) {
         console.warn("[peer-select] 1st attempt returned 0 peers — retrying with full context");
         const fullContext = existingSteps.map((s) => s.content).join("\n").slice(0, 3000);
-        peers = await selectPeerTickers(analysis.companyName, analysis.industry ?? "바이오/제약", fullContext);
+        peers = await selectPeerTickers(analysis.companyName, analysis.industry ?? "바이오/제약", fullContext, analysis.ticker);
         console.log(`[peer-select] Retry selected ${peers.length} peers`);
       }
 
@@ -4709,7 +4725,7 @@ async function executeStep(
           // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
           // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
           const TARGET_MAX_RATIO = isKR ? 3.5 : 4.5;
-          const TARGET_MIN_RATIO = isKR ? 0.15 : 0.12;
+          const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
             if (tRatio > TARGET_MAX_RATIO) {
