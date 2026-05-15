@@ -4351,6 +4351,81 @@ async function executeStep(
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      // ── Feature 4: 종목별 누적 정확도 주입 (밸류에이션 + 상대가치 단계) ──────
+      // 같은 종목을 2회 이상 분석한 경우, 과거 방향 정확도·목표달성도·수익률 편향을
+      // 구조화하여 AI에 직접 주입 → 종목 특화 보정 효과
+      if (isValuationStep || stepKey === "relative_valuation") {
+        try {
+          const tickerAccRows = await rawQuery(
+            `SELECT direction_match, price_return, target_achievement_pct, outcome, days_elapsed, reviewed_at
+             FROM model_insights
+             WHERE ticker = $1
+               AND outcome != 'pending'
+             ORDER BY reviewed_at DESC
+             LIMIT 10`,
+            [analysis.ticker]
+          );
+
+          if (tickerAccRows.length >= 2) {
+            const withDir = tickerAccRows.filter((r: any) => r.direction_match !== null);
+            const dirCorrect = withDir.filter((r: any) => r.direction_match === true).length;
+            const dirAcc = withDir.length > 0 ? Math.round(dirCorrect / withDir.length * 100) : null;
+
+            const withAch = tickerAccRows.filter((r: any) => r.target_achievement_pct !== null);
+            const avgAch = withAch.length > 0
+              ? Math.round(withAch.reduce((s: number, r: any) => s + Number(r.target_achievement_pct), 0) / withAch.length)
+              : null;
+
+            const withRet = tickerAccRows.filter((r: any) => r.price_return !== null);
+            const avgRet = withRet.length > 0
+              ? Math.round(withRet.reduce((s: number, r: any) => s + Number(r.price_return), 0) / withRet.length * 10) / 10
+              : null;
+
+            let tickerAccBlock = `\n\n[🎯 이 종목(${analysis.ticker}) AI 예측 누적 성과 — ${tickerAccRows.length}건 분석 기록]\n`;
+            tickerAccBlock += `⚠️ 이 종목에 대한 과거 AI 예측 성과입니다. 아래 편향을 반드시 이번 목표주가에 보정하세요.\n`;
+
+            if (dirAcc !== null) {
+              tickerAccBlock += `• 방향 예측 정확도: ${dirAcc}% (${withDir.length}건 기준)`;
+              if (dirAcc < 45) tickerAccBlock += ` → ⛔ 방향 신뢰도 매우 낮음. 투자의견 단정 금지, 중립 + 조건부 논리만 사용`;
+              else if (dirAcc < 60) tickerAccBlock += ` → ⚠️ 방향 신뢰도 보통. 상·하단 시나리오 가중치를 균등(50/50)으로 설정`;
+              else tickerAccBlock += ` → ✓ 방향 예측 양호`;
+              tickerAccBlock += `\n`;
+            }
+
+            if (avgAch !== null) {
+              tickerAccBlock += `• 목표주가 달성도: 평균 ${avgAch}% (100%=완전달성, 음수=역방향)`;
+              if (avgAch < 30) tickerAccBlock += ` → ⛔ 심각한 과대평가 경향. 이번 목표주가를 25~35% 하향 설정`;
+              else if (avgAch < 55) tickerAccBlock += ` → ⚠️ 목표주가 과대평가 경향. 이번 목표주가를 10~20% 보수적으로 하향`;
+              else if (avgAch < 80) tickerAccBlock += ` → ⚠️ 목표주가 달성 저조. 소폭(5~10%) 하향 권장`;
+              else if (avgAch > 150) tickerAccBlock += ` → ✓ 과소평가 경향 있음. 목표주가 상향 가능`;
+              tickerAccBlock += `\n`;
+            }
+
+            if (avgRet !== null) {
+              const retStr = avgRet >= 0 ? `+${avgRet}` : `${avgRet}`;
+              tickerAccBlock += `• 분석 이후 평균 실제 주가 수익률: ${retStr}% — 이 종목의 과거 실제 움직임 참고\n`;
+            }
+
+            // 최근 결과 요약 (2건)
+            const recentSummary = tickerAccRows.slice(0, 2).map((r: any) => {
+              const ret = r.price_return !== null ? `${Number(r.price_return) >= 0 ? "+" : ""}${Number(r.price_return).toFixed(1)}%` : "N/A";
+              const dir = r.direction_match === true ? "방향✓" : r.direction_match === false ? "방향✗" : "";
+              const days = r.days_elapsed ? `${r.days_elapsed}일` : "";
+              return `  · ${days} 경과, 실제 ${ret}${dir ? " " + dir : ""}`;
+            });
+            if (recentSummary.length > 0) {
+              tickerAccBlock += `• 최근 결과:\n${recentSummary.join("\n")}\n`;
+            }
+
+            enrichedContext = enrichedContext ? enrichedContext + tickerAccBlock : tickerAccBlock;
+            console.log(`[ticker-acc] ${analysis.ticker} 누적 성과 주입 — ${tickerAccRows.length}건, 방향정확도 ${dirAcc ?? "N/A"}%, 달성도 ${avgAch ?? "N/A"}%`);
+          }
+        } catch {
+          // optional — 오류 시 무시
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
       const allInsightRows = await rawQuery(
         `SELECT * FROM model_insights WHERE outcome != 'pending'`

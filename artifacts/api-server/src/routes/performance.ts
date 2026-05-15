@@ -76,6 +76,131 @@ function isBullishVerdict(verdict: string): boolean | null {
   return null;
 }
 
+// ── 자동 재보정 핵심 로직 (스케줄러 + 어드민 라우트 공용) ─────────────────────────
+export async function autoRecalibrate(): Promise<{
+  analysesProcessed: number;
+  sectorsUpdated: number;
+  sectors: Record<string, { directionAccuracy: number | null; avgPriceDeviation: number | null; sampleCount: number }>;
+}> {
+  // 30일 이상 된 완료 분석만 대상 (현재가와 비교 의미 있는 범위)
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const { rows: analyses } = await pool.query(
+    `SELECT id, ticker, industry, investment_verdict, start_price, target_price, created_at
+     FROM analyses
+     WHERE status = 'completed'
+       AND start_price IS NOT NULL
+       AND target_price IS NOT NULL
+       AND investment_verdict IS NOT NULL
+       AND created_at < $1
+     ORDER BY created_at DESC`,
+    [cutoff]
+  );
+
+  if (analyses.length === 0) {
+    return { analysesProcessed: 0, sectorsUpdated: 0, sectors: {} };
+  }
+
+  // 유니크 종목 현재가 일괄 조회
+  const uniqueTickers = [...new Set(analyses.map((r: any) => r.ticker as string))];
+  const priceMap = new Map<string, number | null>();
+  await Promise.all(
+    uniqueTickers.map(async (ticker) => {
+      const price = await fetchCurrentPrice(ticker);
+      priceMap.set(ticker, price);
+    })
+  );
+
+  const sectorStats = new Map<string, {
+    market: "KR" | "US";
+    directionCorrect: number;
+    directionTotal: number;
+    deviationSum: number;
+    deviationCount: number;
+  }>();
+
+  for (const row of analyses) {
+    const ticker = row.ticker as string;
+    const industry = row.industry as string;
+    const verdict = row.investment_verdict as string;
+    const startPrice = parseFloat(row.start_price);
+    const targetPrice = parseFloat(row.target_price);
+    const currentPrice = priceMap.get(ticker);
+
+    if (!currentPrice || isNaN(startPrice) || isNaN(targetPrice) || startPrice === 0) continue;
+
+    const market: "KR" | "US" = /^\d{6}$/.test(ticker) ? "KR" : "US";
+    const sector = classifySector(industry, market);
+
+    if (!sectorStats.has(sector)) {
+      sectorStats.set(sector, { market, directionCorrect: 0, directionTotal: 0, deviationSum: 0, deviationCount: 0 });
+    }
+    const stats = sectorStats.get(sector)!;
+
+    const bullish = isBullishVerdict(verdict);
+    if (bullish !== null) {
+      const actualUp = currentPrice > startPrice;
+      if ((bullish && actualUp) || (!bullish && !actualUp)) stats.directionCorrect++;
+      stats.directionTotal++;
+    }
+
+    const deviationPct = ((targetPrice - currentPrice) / startPrice) * 100;
+    stats.deviationSum += deviationPct;
+    stats.deviationCount++;
+  }
+
+  let updatedSectors = 0;
+  for (const [sector, stats] of sectorStats.entries()) {
+    const directionAccuracy = stats.directionTotal > 0
+      ? (stats.directionCorrect / stats.directionTotal) * 100
+      : null;
+    const avgPriceDeviation = stats.deviationCount > 0
+      ? stats.deviationSum / stats.deviationCount
+      : null;
+
+    await pool.query(
+      `INSERT INTO model_calibration (sector, market, direction_accuracy, avg_price_deviation, sample_count, last_recalc_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (sector) DO UPDATE SET
+         market = EXCLUDED.market,
+         direction_accuracy = EXCLUDED.direction_accuracy,
+         avg_price_deviation = EXCLUDED.avg_price_deviation,
+         sample_count = EXCLUDED.sample_count,
+         last_recalc_at = NOW()`,
+      [sector, stats.market, directionAccuracy, avgPriceDeviation, stats.deviationCount]
+    );
+    updatedSectors++;
+  }
+
+  // 히스토리 스냅샷 저장 (추세 추적용)
+  for (const [sector, stats] of sectorStats.entries()) {
+    const directionAccuracy = stats.directionTotal > 0
+      ? (stats.directionCorrect / stats.directionTotal) * 100
+      : null;
+    const avgPriceDeviation = stats.deviationCount > 0
+      ? stats.deviationSum / stats.deviationCount
+      : null;
+    await pool.query(
+      `INSERT INTO calibration_history (sector, market, direction_accuracy, avg_price_deviation, sample_count)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [sector, stats.market, directionAccuracy, avgPriceDeviation, stats.deviationCount]
+    );
+  }
+
+  const sectors = Object.fromEntries(
+    Array.from(sectorStats.entries()).map(([k, v]) => [
+      k,
+      {
+        directionAccuracy: v.directionTotal > 0 ? Math.round((v.directionCorrect / v.directionTotal) * 100) : null,
+        avgPriceDeviation: v.deviationCount > 0 ? Math.round((v.deviationSum / v.deviationCount) * 10) / 10 : null,
+        sampleCount: v.deviationCount,
+      }
+    ])
+  );
+
+  console.log(`[auto-recalibrate] 완료 — ${analyses.length}건 분석, ${updatedSectors}개 섹터 갱신`);
+  return { analysesProcessed: analyses.length, sectorsUpdated: updatedSectors, sectors };
+}
+
 router.post("/performance/recalculate", async (req, res) => {
   try {
     const adminCheck = await pool.query(
@@ -86,126 +211,11 @@ router.post("/performance/recalculate", async (req, res) => {
       return res.status(403).json({ error: "관리자 권한이 필요합니다" });
     }
 
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const { rows: analyses } = await pool.query(
-      `SELECT id, ticker, industry, investment_verdict, start_price, target_price, created_at
-       FROM analyses
-       WHERE status = 'completed'
-         AND start_price IS NOT NULL
-         AND target_price IS NOT NULL
-         AND investment_verdict IS NOT NULL
-         AND created_at < $1
-       ORDER BY created_at DESC`,
-      [cutoff]
-    );
-
-    if (analyses.length === 0) {
+    const result = await autoRecalibrate();
+    if (result.analysesProcessed === 0) {
       return res.json({ message: "보정 가능한 데이터가 없습니다. 30일 이상 된 분석이 필요합니다.", count: 0 });
     }
-
-    const uniqueTickers = [...new Set(analyses.map((r: any) => r.ticker as string))];
-    const priceMap = new Map<string, number | null>();
-    await Promise.all(
-      uniqueTickers.map(async (ticker) => {
-        const price = await fetchCurrentPrice(ticker);
-        priceMap.set(ticker, price);
-      })
-    );
-
-    const sectorStats = new Map<string, {
-      market: "KR" | "US";
-      directionCorrect: number;
-      directionTotal: number;
-      deviationSum: number;
-      deviationCount: number;
-    }>();
-
-    for (const row of analyses) {
-      const ticker = row.ticker as string;
-      const industry = row.industry as string;
-      const verdict = row.investment_verdict as string;
-      const startPrice = parseFloat(row.start_price);
-      const targetPrice = parseFloat(row.target_price);
-      const currentPrice = priceMap.get(ticker);
-
-      if (!currentPrice || isNaN(startPrice) || isNaN(targetPrice) || startPrice === 0) continue;
-
-      const market: "KR" | "US" = /^\d{6}$/.test(ticker) ? "KR" : "US";
-      const sector = classifySector(industry, market);
-
-      if (!sectorStats.has(sector)) {
-        sectorStats.set(sector, { market, directionCorrect: 0, directionTotal: 0, deviationSum: 0, deviationCount: 0 });
-      }
-      const stats = sectorStats.get(sector)!;
-
-      const bullish = isBullishVerdict(verdict);
-      if (bullish !== null) {
-        const actualUp = currentPrice > startPrice;
-        if ((bullish && actualUp) || (!bullish && !actualUp)) {
-          stats.directionCorrect++;
-        }
-        stats.directionTotal++;
-      }
-
-      const deviationPct = ((targetPrice - currentPrice) / startPrice) * 100;
-      stats.deviationSum += deviationPct;
-      stats.deviationCount++;
-    }
-
-    let updatedSectors = 0;
-    for (const [sector, stats] of sectorStats.entries()) {
-      const directionAccuracy = stats.directionTotal > 0
-        ? (stats.directionCorrect / stats.directionTotal) * 100
-        : null;
-      const avgPriceDeviation = stats.deviationCount > 0
-        ? stats.deviationSum / stats.deviationCount
-        : null;
-      const sampleCount = stats.deviationCount;
-
-      await pool.query(
-        `INSERT INTO model_calibration (sector, market, direction_accuracy, avg_price_deviation, sample_count, last_recalc_at, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-         ON CONFLICT (sector) DO UPDATE SET
-           market = EXCLUDED.market,
-           direction_accuracy = EXCLUDED.direction_accuracy,
-           avg_price_deviation = EXCLUDED.avg_price_deviation,
-           sample_count = EXCLUDED.sample_count,
-           last_recalc_at = NOW()`,
-        [sector, stats.market, directionAccuracy, avgPriceDeviation, sampleCount]
-      );
-      updatedSectors++;
-    }
-
-    // 히스토리 스냅샷 저장
-    for (const [sector, stats] of sectorStats.entries()) {
-      const directionAccuracy = stats.directionTotal > 0
-        ? (stats.directionCorrect / stats.directionTotal) * 100
-        : null;
-      const avgPriceDeviation = stats.deviationCount > 0
-        ? stats.deviationSum / stats.deviationCount
-        : null;
-      await pool.query(
-        `INSERT INTO calibration_history (sector, market, direction_accuracy, avg_price_deviation, sample_count)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [sector, stats.market, directionAccuracy, avgPriceDeviation, stats.deviationCount]
-      );
-    }
-
-    return res.json({
-      message: "모델 보정 완료",
-      analysesProcessed: analyses.length,
-      sectorsUpdated: updatedSectors,
-      sectors: Object.fromEntries(
-        Array.from(sectorStats.entries()).map(([k, v]) => [
-          k,
-          {
-            directionAccuracy: v.directionTotal > 0 ? Math.round((v.directionCorrect / v.directionTotal) * 100) : null,
-            avgPriceDeviation: v.deviationCount > 0 ? Math.round((v.deviationSum / v.deviationCount) * 10) / 10 : null,
-            sampleCount: v.deviationCount,
-          }
-        ])
-      ),
-    });
+    return res.json({ message: "모델 보정 완료", ...result });
   } catch (err) {
     console.error("[performance/recalculate] error:", err);
     return res.status(500).json({ error: String(err) });

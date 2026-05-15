@@ -1,6 +1,7 @@
 import app from "./app";
 import { runMigrations } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
+import { autoRecalibrate } from "./routes/performance.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
@@ -72,6 +73,22 @@ const server = app.listen(port, () => {
     console.log("[SCHEDULER] 실적 캘린더 일일 갱신 시작");
     warmupEarningsCache().catch((e) =>
       console.error("[SCHEDULER] 실적 캘린더 일일 갱신 실패:", e?.message ?? e)
+    );
+  }, ONE_DAY_MS);
+
+  // ── 일일 섹터 재보정 (model_calibration 자동 갱신) ─────────────────────────
+  // 6시간마다 model_insights 가격 갱신(triggerModelReview) + 하루 1회 섹터 통계 재계산
+  // 이 두 루프가 맞물려야 getCalibrationContext()가 항상 최신 편향 데이터를 반환함
+  setTimeout(() => {
+    autoRecalibrate().catch((e) =>
+      console.error("[SCHEDULER] 초기 섹터 재보정 실패:", e?.message ?? e)
+    );
+  }, 5 * 60 * 1000); // 서버 시작 5분 후 첫 실행
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 일일 섹터 재보정 시작");
+    autoRecalibrate().catch((e) =>
+      console.error("[SCHEDULER] 일일 섹터 재보정 실패:", e?.message ?? e)
     );
   }, ONE_DAY_MS);
 
