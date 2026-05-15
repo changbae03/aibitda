@@ -1564,11 +1564,6 @@ export default function AnalysisDetail() {
         </div>
       </div>
 
-      {/* 내 메모 */}
-      <div className="bg-amber-50/60 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-4 py-2.5 print:hidden">
-        <MemoSection analysisId={analysis.id} isEn={isEn} />
-      </div>
-
       {/* Financial Chart */}
       <div className="bg-card border border-border rounded-2xl p-3 sm:p-5">
         <FinancialChart ticker={analysis.ticker} isEn={isEn} />
