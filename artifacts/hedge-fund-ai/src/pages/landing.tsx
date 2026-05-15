@@ -1,6 +1,6 @@
 import { useUser } from "@clerk/react";
 import { useLocation, Link } from "wouter";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -144,6 +144,7 @@ export default function Landing() {
   const [activeStep, setActiveStep] = useState(0);
   const { isEn, language, setLanguage } = useLanguage();
   const [showSplash, setShowSplash] = useState(true);
+  const splashStartRef = useRef(Date.now());
 
   const STEPS = isEn ? STEPS_EN : STEPS_KO;
 
@@ -158,10 +159,13 @@ export default function Landing() {
     if (!kakaoLoading && kakaoAuth?.user) setLocation("/analysis/new");
   }, [isLoaded, isSignedIn, kakaoLoading, kakaoAuth, setLocation]);
 
-  // Clerk 로드 완료 시 스플래시 닫기 (최소 1.4초 보장)
+  // Clerk 로드 완료 시 스플래시 닫기 — 애니메이션 완주 보장 (최소 1800ms)
   useEffect(() => {
     if (!isLoaded) return;
-    const timer = setTimeout(() => setShowSplash(false), 200);
+    const MIN_MS = 1800;
+    const elapsed = Date.now() - splashStartRef.current;
+    const delay = Math.max(0, MIN_MS - elapsed);
+    const timer = setTimeout(() => setShowSplash(false), delay);
     return () => clearTimeout(timer);
   }, [isLoaded]);
 
