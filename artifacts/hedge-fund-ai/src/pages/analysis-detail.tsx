@@ -29,6 +29,7 @@ import {
   ChevronDown,
   TrendingUp,
   Building2,
+  BarChart2,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -3300,6 +3301,21 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   const leadIdx = useMemo(() => displayContent.search(/(?:^|\n)## /), [displayContent]);
   const leadPara = useMemo(() => (leadIdx > 0 ? displayContent.slice(0, leadIdx).trim() : ""), [displayContent, leadIdx]);
   const bodyContent = useMemo(() => (leadIdx >= 0 ? displayContent.slice(leadIdx) : displayContent), [displayContent, leadIdx]);
+
+  // 밸류에이션 핵심 지표 섹션 분리 (토글화)
+  const valuationMetricsIdx = useMemo(() => {
+    if (!isFundamental) return -1;
+    return bodyContent.search(/\n## 밸류에이션을 위한 핵심 지표/);
+  }, [isFundamental, bodyContent]);
+  const mainBodyContent = useMemo(() =>
+    valuationMetricsIdx >= 0 ? bodyContent.slice(0, valuationMetricsIdx) : bodyContent,
+    [bodyContent, valuationMetricsIdx]
+  );
+  const valuationMetricsContent = useMemo(() =>
+    valuationMetricsIdx >= 0 ? bodyContent.slice(valuationMetricsIdx + 1) : null,
+    [bodyContent, valuationMetricsIdx]
+  );
+  const [showValuationMetrics, setShowValuationMetrics] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -3388,9 +3404,65 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               ...MD_TABLE_COMPONENTS,
             }}
           >
-            {prepareMarkdown(bodyContent)}
+            {prepareMarkdown(mainBodyContent)}
           </ReactMarkdown>
         </div>
+
+        {/* 밸류에이션 핵심 지표 — 토글 섹션 */}
+        {valuationMetricsContent && (
+          <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowValuationMetrics(v => !v)}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+            >
+              <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+              <span className="text-[12px] font-semibold text-muted-foreground flex-1">밸류에이션 핵심 지표</span>
+              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showValuationMetrics && "rotate-180")} />
+            </button>
+            <AnimatePresence initial={false}>
+              {showValuationMetrics && (
+                <motion.div
+                  key="val-metrics"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h2: ({ children }) => (
+                          <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-[12px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>
+                        ),
+                        p: ({ children }) => (
+                          <p className="mb-3 last:mb-0 text-foreground/75 leading-[1.8]">{children}</p>
+                        ),
+                        ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
+                        li: ({ children }) => (
+                          <li className="flex items-start gap-2 text-[12.5px] leading-[1.8] text-foreground/75">
+                            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
+                            <span className="flex-1 min-w-0">{children}</span>
+                          </li>
+                        ),
+                        strong: ({ children }) => <strong className="font-semibold text-foreground/90">{children}</strong>,
+                        ...MD_TABLE_COMPONENTS,
+                      }}
+                    >
+                      {prepareMarkdown(valuationMetricsContent)}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* Market & Technical Analyst: 가격 구간 레이더 */}
         {isMarket && chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
