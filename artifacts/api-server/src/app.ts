@@ -125,8 +125,20 @@ app.use("/api/admin", adminLimiter);
 app.use("/api", router);
 
 // ─── OG 이미지 캐시 ────────────────────────────────────────────────────────
+const SHARE_OG_IMAGE_STATIC = "https://aibitda.kr/share-og.png";
 const ogImageCache = new Map<number, { png: Buffer; ts: number }>();
 const OG_CACHE_TTL = 1000 * 60 * 60 * 24; // 24시간
+
+let _staticOgPng: Buffer | null = null;
+async function getStaticOgPng(): Promise<Buffer | null> {
+  if (_staticOgPng) return _staticOgPng;
+  try {
+    const res = await fetch(SHARE_OG_IMAGE_STATIC);
+    if (!res.ok) return null;
+    _staticOgPng = Buffer.from(await res.arrayBuffer());
+    return _staticOgPng;
+  } catch { return null; }
+}
 
 // ─── 동적 OG 이미지 엔드포인트 ─────────────────────────────────────────────
 app.get("/api/og/:id", async (req: Request, res: Response) => {
@@ -160,19 +172,26 @@ app.get("/api/og/:id", async (req: Request, res: Response) => {
       createdAt: r.created_at ? new Date(r.created_at) : null,
     };
     const png = await generateOgPng(data);
-    if (!png) { res.status(503).end(); return; }
-    ogImageCache.set(id, { png, ts: Date.now() });
+    const imgBuf = png ?? await getStaticOgPng();
+    if (!imgBuf) { res.status(503).end(); return; }
+    if (png) ogImageCache.set(id, { png, ts: Date.now() });
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=86400");
-    res.send(png);
+    res.send(imgBuf);
   } catch (e: any) {
     console.error("[GET /api/og/:id] error:", e?.message);
-    res.status(500).end();
+    const fallback = await getStaticOgPng();
+    if (fallback) {
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(fallback);
+    } else {
+      res.status(500).end();
+    }
   }
 });
 
 // ─── 공유 페이지 OG 메타태그 핸들러 (/share/:id) ────────────────────────────
-const SHARE_OG_IMAGE_STATIC = "https://aibitda.kr/share-og.png";
 const FRONTEND_DIST = path.resolve(process.cwd(), "artifacts/hedge-fund-ai/dist/public/index.html");
 
 let _baseHtml: string | null = null;
