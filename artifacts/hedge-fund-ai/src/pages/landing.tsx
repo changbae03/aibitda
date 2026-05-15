@@ -222,9 +222,7 @@ export default function Landing() {
                 <Activity className="w-3 h-3" />
                 {isEn ? "AI Stock Research" : "AI 주식 리서치"}
               </div>
-              <h1 className="text-[52px] font-black tracking-tighter mb-1.5 leading-none" style={{ color: "#FF8A7A" }}>
-                {isEn ? "AiBITDA" : "애빛다"}
-              </h1>
+
               <p className="text-[14px] text-muted-foreground font-medium tracking-wide">
                 {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다"}
               </p>
