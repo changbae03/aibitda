@@ -2242,15 +2242,15 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       <div className="bg-foreground px-4 sm:px-6 py-4 flex items-center justify-between gap-3 rounded-t-2xl">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-background/10 flex items-center justify-center">
-            <agent.icon className="w-4 h-4 text-white" />
+            <agent.icon className="w-4 h-4 text-background" />
           </div>
           <div>
-            <p className="text-white font-display font-semibold text-sm leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
-            <p className="text-muted-foreground text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
+            <p className="text-background font-display font-semibold text-sm leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
+            <p className="text-background/50 text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
           </div>
         </div>
         {companyName && (
-          <span className="text-[11px] text-muted-foreground font-medium hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
+          <span className="text-[11px] text-background/60 font-medium hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
         )}
       </div>
 
