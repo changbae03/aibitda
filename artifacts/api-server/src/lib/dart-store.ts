@@ -335,15 +335,29 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
     }
 
     lines.push(`⭐ 위 시계열로 영업이익 성장 추세·마진 변화·재무 건전성을 반드시 분석에 활용하세요.`);
-    // 피어 비교 테이블 OPM override: 최신 연간 실적에서 OPM 추출 (period_label 형식: "2025 FY")
+    // 피어 비교 테이블 OPM·ROE override: 최신 연간 실적에서 추출 (period_label 형식: "2025 FY")
     const annualRows = r.rows.filter(row => row.period_label?.endsWith("FY"));
     const latestAnnual = annualRows[0]; // ORDER BY bsns_year DESC → 첫 번째가 최신 연간
     if (latestAnnual) {
       const rev = parseAmt(latestAnnual.revenue);
       const op  = parseAmt(latestAnnual.operating_income);
+      const ni  = parseAmt(latestAnnual.net_income);
+      const eq  = parseAmt(latestAnnual.equity);
+      const overrides: string[] = [];
       if (rev && op && rev !== 0) {
         const opmPct = (op / rev * 100).toFixed(1);
-        lines.push(`⭐⭐ [피어 멀티플 비교 OPM 지정] 대상 종목 영업이익률 = ${opmPct}% (${latestAnnual.period_label} DART 실측). Yahoo Finance 요약 operatingMargins 수치를 절대 사용하지 말고, 이 값을 피어 비교 테이블에 기재하세요.`);
+        overrides.push(`영업이익률(OPM) = ${opmPct}%`);
+      }
+      if (ni && eq && eq !== 0) {
+        const roePct = (ni / eq * 100).toFixed(1);
+        overrides.push(`ROE = ${roePct}%`);
+      }
+      if (overrides.length > 0) {
+        lines.push(
+          `⭐⭐ [피어 멀티플 비교 — 대상 종목 수치 지정 (${latestAnnual.period_label} DART 실측, 위반 시 수치 오염)] ` +
+          overrides.join(" / ") +
+          `. ⛔ Yahoo Finance·KIS·훈련 기억 수치로 교체 절대 금지. 피어 비교 테이블의 대상 종목 행에 위 값을 그대로 기재하세요.`
+        );
       }
     }
     return lines.join("\n");
