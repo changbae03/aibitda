@@ -21,6 +21,7 @@ import {
 import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
+import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -2940,7 +2941,7 @@ router.post("/", async (req, res) => {
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
   // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult] = await Promise.all([
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -2948,6 +2949,7 @@ router.post("/", async (req, res) => {
     !isKoreanTicker ? fetchFREDMacro() : Promise.resolve(null),
     yahooFinance.quote(resolvedSymbol).catch(() => null),
     isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
+    isKoreanTicker ? getDartHistoricalContext(krxCode).catch(() => null) : Promise.resolve(null),
   ]);
 
   // KIS 결과 분리 — 한국 종목은 KIS 현재가 우선, 없으면 Yahoo fallback
@@ -3013,6 +3015,7 @@ router.post("/", async (req, res) => {
     kisContext,          // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS) — 최우선 오버라이드
     financialData,
     dartBalanceContext,
+    dartHistorical,      // DART 시계열 재무 (DB 캐시 — 이전 분석에서 누적된 분기·연간 데이터)
     macroContext,
     newsData,
     userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
@@ -4994,6 +4997,20 @@ async function executeStep(
       }
 
       triggerModelReview().catch(console.error);
+
+      // ── DART 시계열 재무 데이터 백그라운드 수집 (한국 종목만) ─────────────────
+      // 분석 완료 후 비동기로 실행 — 다음 분석 시 풍부한 시계열 컨텍스트 제공
+      (async () => {
+        try {
+          const krxMatch = analysis.ticker?.match(/^(\d{6})/);
+          if (krxMatch) {
+            console.log(`[dart-store] ${krxMatch[1]} 백그라운드 수집 시작`);
+            await fetchAndStoreDartQuarterly(krxMatch[1]);
+          }
+        } catch (e) {
+          console.error("[dart-store] 백그라운드 수집 오류:", e);
+        }
+      })();
 
       // ── QA 자동 채점 (백그라운드) ──────────────────────────────────────────
       (async () => {
