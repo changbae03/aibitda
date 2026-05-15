@@ -179,23 +179,22 @@ function parseChartEvents(content: string): ChartEvent[] {
 function MarkdownBody({ content }: { content: string }) {
   return (
     <div className="
-      text-[13px] leading-relaxed text-slate-300
-      [&_h1]:text-[15px] [&_h1]:font-bold [&_h1]:text-slate-200 [&_h1]:mt-4 [&_h1]:mb-2
-      [&_h2]:text-[14px] [&_h2]:font-bold [&_h2]:text-slate-200 [&_h2]:mt-4 [&_h2]:mb-2
-      [&_h3]:text-[13px] [&_h3]:font-bold [&_h3]:text-slate-200 [&_h3]:mt-3 [&_h3]:mb-1.5
-      [&_h4]:text-[12px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-3 [&_h4]:mb-1
-      [&_p]:text-slate-300 [&_p]:leading-relaxed [&_p]:my-2
+      text-[15px] leading-[1.85] text-slate-300 break-keep
+      [&_h1]:text-[19px] [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-8 [&_h1]:mb-3 [&_h1]:pb-2 [&_h1]:border-b [&_h1]:border-slate-700/60
+      [&_h2]:text-[17px] [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-7 [&_h2]:mb-3 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-slate-700/40
+      [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-slate-100 [&_h3]:mt-6 [&_h3]:mb-2.5
+      [&_h4]:text-[14px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-5 [&_h4]:mb-2
+      [&_p]:text-slate-300 [&_p]:leading-[1.85] [&_p]:my-4
       [&_strong]:text-slate-100 [&_strong]:font-semibold
       [&_em]:text-slate-400 [&_em]:not-italic
-      [&_ul]:my-2 [&_ul]:pl-4 [&_ul]:list-disc [&_ul]:text-slate-300
-      [&_ol]:my-2 [&_ol]:pl-4 [&_ol]:list-decimal [&_ol]:text-slate-300
-      [&_li]:my-0.5 [&_li]:text-slate-300 [&_li]:leading-relaxed
-      [&_hr]:border-slate-700 [&_hr]:my-4
-      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-3 [&_blockquote]:text-slate-400 [&_blockquote]:my-3
-      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1 [&_code]:rounded [&_code]:text-[11px]
-      [&_pre]:bg-slate-800 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3
+      [&_ul]:my-4 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:text-slate-300
+      [&_ol]:my-4 [&_ol]:pl-5 [&_ol]:list-decimal [&_ol]:text-slate-300
+      [&_li]:my-2 [&_li]:text-slate-300 [&_li]:leading-[1.8]
+      [&_hr]:border-slate-700 [&_hr]:my-6
+      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-4 [&_blockquote]:text-slate-400 [&_blockquote]:my-4 [&_blockquote]:italic
+      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[13px]
+      [&_pre]:bg-slate-800 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-4
       [&_a]:text-blue-400 [&_a]:underline [&_a:hover]:text-blue-300
-      [&_word-break]:break-keep
     ">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -275,22 +274,22 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
     : cp && sl && cp > 0 ? Math.abs((sl - cp) / cp * 100).toFixed(1) : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* 판정 + 메타 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={cn("text-[22px] font-black leading-none", vm.color)}>{vm.label}</span>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className={cn("text-[26px] font-black leading-none", vm.color)}>{vm.label}</span>
         {json.confidence && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+          <span className="text-[12px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
             신뢰도 {json.confidence}
           </span>
         )}
         {json.investment_period && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+          <span className="text-[12px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
             {json.investment_period}
           </span>
         )}
         {json.risk_reward && (
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+          <span className="text-[12px] font-mono px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
             손익비(R/R) {json.risk_reward}
           </span>
         )}
@@ -298,52 +297,52 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
 
       {/* 핵심 이슈 */}
       {json.key_issue && (
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
-          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1">핵심 이슈</p>
-          <p className="text-[13px] text-slate-200 leading-relaxed font-medium">{json.key_issue}</p>
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3.5">
+          <p className="text-[11px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">핵심 이슈</p>
+          <p className="text-[15px] text-slate-200 leading-[1.8] font-medium break-keep">{json.key_issue}</p>
         </div>
       )}
 
       {/* 투자 논거 요약 */}
       {json.summary && (
-        <p className="text-[13px] text-slate-300 leading-relaxed">{json.summary}</p>
+        <p className="text-[15px] text-slate-300 leading-[1.85] break-keep">{json.summary}</p>
       )}
 
       {/* 가격 3박스 */}
       {(ep || tp || sl) && (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-2.5">
-            <p className="text-[9px] text-slate-500 mb-1 leading-tight">{isSell ? "재관심 기준가" : "진입가"}</p>
-            <p className="text-[13px] font-bold text-slate-200 font-mono leading-none">{fmtPrice(json.entry_price, currency)}</p>
+        <div className="grid grid-cols-3 gap-2.5">
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3">
+            <p className="text-[11px] text-slate-500 mb-1.5 leading-tight">{isSell ? "재관심 기준가" : "진입가"}</p>
+            <p className="text-[14px] font-bold text-slate-200 font-mono leading-none">{fmtPrice(json.entry_price, currency)}</p>
             {entryVsCurrent !== null && (
-              <p className={cn("text-[9px] font-bold mt-1", parseFloat(entryVsCurrent) < 0 ? "text-rose-400" : "text-emerald-400")}>
+              <p className={cn("text-[11px] font-bold mt-1.5", parseFloat(entryVsCurrent) < 0 ? "text-rose-400" : "text-emerald-400")}>
                 {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
               </p>
             )}
           </div>
           <div className={cn(
-            "rounded-xl border p-2.5",
+            "rounded-xl border p-3",
             upsideFromCurrent !== null && upsideFromCurrent < 0
               ? "border-red-500/30 bg-red-500/10"
               : "border-emerald-500/30 bg-emerald-500/10"
           )}>
-            <p className={cn("text-[9px] mb-1 leading-tight", upsideFromCurrent !== null && upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
+            <p className={cn("text-[11px] mb-1.5 leading-tight", upsideFromCurrent !== null && upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
               적정주가
             </p>
-            <p className={cn("text-[13px] font-bold font-mono leading-none", upsideFromCurrent !== null && upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
+            <p className={cn("text-[14px] font-bold font-mono leading-none", upsideFromCurrent !== null && upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
               {fmtPrice(json.target_price, currency)}
             </p>
             {upsideFromCurrent !== null && (
-              <p className={cn("text-[9px] font-bold mt-1", upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
+              <p className={cn("text-[11px] font-bold mt-1.5", upsideFromCurrent < 0 ? "text-red-400" : "text-emerald-400")}>
                 {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
               </p>
             )}
           </div>
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-2.5">
-            <p className="text-[9px] text-red-400 mb-1 leading-tight">{isSell ? "청산 우선 구간" : "손절가"}</p>
-            <p className="text-[13px] font-bold text-red-400 font-mono leading-none">{fmtPrice(json.stop_loss, currency)}</p>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+            <p className="text-[11px] text-red-400 mb-1.5 leading-tight">{isSell ? "청산 우선 구간" : "손절가"}</p>
+            <p className="text-[14px] font-bold text-red-400 font-mono leading-none">{fmtPrice(json.stop_loss, currency)}</p>
             {slPct !== null && (
-              <p className="text-[9px] font-bold text-red-400 mt-1">-{slPct}%</p>
+              <p className="text-[11px] font-bold text-red-400 mt-1.5">-{slPct}%</p>
             )}
           </div>
         </div>
@@ -352,8 +351,8 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
       {/* 시나리오 */}
       {json.scenarios?.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2">시나리오 분석</p>
-          <div className="space-y-2">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mb-3">시나리오 분석</p>
+          <div className="space-y-2.5">
             {json.scenarios.map((s: any, i: number) => {
               const isBear = s.case === "Bear";
               const isBull = s.case === "Bull";
@@ -364,31 +363,31 @@ function ShareInvestmentCard({ content, currency }: { content: string; currency:
               const tpStr = fmtPrice(s.target_price, currency);
               return (
                 <div key={i} className={cn(
-                  "rounded-xl border p-3 flex items-center gap-3",
+                  "rounded-xl border p-3.5 flex items-center gap-3",
                   isBear ? "border-red-500/25 bg-red-500/8" : isBull ? "border-emerald-500/25 bg-emerald-500/8" : "border-blue-500/20 bg-blue-500/5"
                 )}>
                   <div className="w-14 shrink-0">
-                    <p className={cn("text-[11px] font-bold", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-blue-400")}>
+                    <p className={cn("text-[12px] font-bold", isBear ? "text-red-400" : isBull ? "text-emerald-400" : "text-blue-400")}>
                       {isBear ? "▼ 약세" : isBull ? "▲ 강세" : "— 기본"}
                     </p>
-                    <p className="text-[9px] text-slate-500 mt-0.5">
+                    <p className="text-[10px] text-slate-500 mt-0.5">
                       {isBear ? "비관" : isBull ? "낙관" : "기본"}
                     </p>
                   </div>
                   <div className="flex-1 min-w-0">
                     {tpStr !== "—" && (
-                      <p className={cn("text-[14px] font-bold font-mono leading-none mb-0.5",
+                      <p className={cn("text-[15px] font-bold font-mono leading-none mb-0.5",
                         isBear ? "text-red-300" : isBull ? "text-emerald-300" : "text-slate-200"
                       )}>{tpStr}</p>
                     )}
-                    <p className={cn("text-[12px] font-semibold",
+                    <p className={cn("text-[13px] font-semibold",
                       uNum > 0 ? "text-emerald-400" : uNum < 0 ? "text-red-400" : "text-slate-400"
                     )}>{uDisplay}</p>
                   </div>
                   {!isNaN(pNum) && (
                     <div className="shrink-0 text-right">
-                      <p className="text-[9px] text-slate-500 mb-0.5">확률</p>
-                      <p className="text-[14px] font-bold text-slate-200 font-mono">{pNum}%</p>
+                      <p className="text-[10px] text-slate-500 mb-0.5">확률</p>
+                      <p className="text-[15px] font-bold text-slate-200 font-mono">{pNum}%</p>
                     </div>
                   )}
                 </div>
@@ -622,7 +621,7 @@ export default function SharePage() {
               <div className="flex-1 h-px bg-slate-800" />
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-5">
               {sortedSteps.map((step: any, i: number) => {
                 const meta = STEP_META[step.stepKey];
                 if (!meta || !step.content) return null;
@@ -636,21 +635,21 @@ export default function SharePage() {
                     className={cn("rounded-2xl border overflow-hidden", accent)}
                   >
                     {/* 스텝 헤더 */}
-                    <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/5">
-                      <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                        <Icon className="w-3.5 h-3.5 text-slate-300" />
+                    <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+                      <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-slate-300" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-white font-bold text-[13px] leading-tight">{name}</p>
-                        <p className="text-slate-500 text-[10px] truncate">{role}</p>
+                        <p className="text-white font-bold text-[15px] leading-tight">{name}</p>
+                        <p className="text-slate-500 text-[11px] truncate mt-0.5">{role}</p>
                       </div>
-                      <span className="text-slate-600 text-[10px] font-mono shrink-0">
+                      <span className="text-slate-600 text-[11px] font-mono shrink-0">
                         {String(i + 1).padStart(2, "0")} / {sortedSteps.length}
                       </span>
                     </div>
 
                     {/* 스텝 본문 */}
-                    <div className="px-4 py-4">
+                    <div className="px-5 py-5">
                       {step.stepKey === "investment_strategy" ? (
                         (() => {
                           const card = <ShareInvestmentCard content={step.content} currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"} />;
