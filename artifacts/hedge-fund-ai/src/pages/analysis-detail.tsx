@@ -2136,6 +2136,23 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { /* 계속 */ }
   // 시도 3: 제어 문자 제거
   try { return JSON.parse(s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")); } catch { /* 계속 */ }
+  // 시도 3-b: 문자열 값 안의 리터럴 개행(0x0a/0x0d) → 이스케이프 변환
+  //   AI가 key_issue 등 긴 텍스트 필드에 실제 줄바꿈을 그대로 삽입할 때 발생
+  try {
+    const fixedNl = s.replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner) =>
+      `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`
+    );
+    return JSON.parse(fixedNl);
+  } catch { /* 계속 */ }
+  // 시도 3-c: 개행 이스케이프 + trailing comma 복합
+  try {
+    const fixedNlComma = s
+      .replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner) =>
+        `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`
+      )
+      .replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixedNlComma);
+  } catch { /* 계속 */ }
   // 시도 4: 따옴표 없는 % 숫자 값 → 문자열로 변환
   //   AI가 "upside": 275.6%  로 출력하면 JSON 파싱 실패 → "275.6%"로 래핑
   try {
