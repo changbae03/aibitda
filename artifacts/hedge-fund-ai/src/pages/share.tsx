@@ -228,13 +228,44 @@ function MarkdownBody({ content }: { content: string }) {
 function extractJson(raw: string): any | null {
   if (!raw) return null;
   let s = raw.trim();
+
+  // 0) FINAL_VALUATION_DATA 제거 — lastIndexOf("}")가 이 블록 끝을 잡아 파싱 실패 유발
+  s = s.replace(/FINAL_VALUATION_DATA:\s*\{[^}]*(?:\{[^}]*\}[^}]*)?\}/g, "").trim();
+
+  // 1) 마크다운 코드블록 제거
   s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) s = s.slice(start, end + 1);
+
+  // 2) 첫 { 부터 매칭되는 } 까지만 추출 — 중괄호 카운팅 방식
+  const startIdx = s.indexOf("{");
+  if (startIdx === -1) return null;
+  let depth = 0, endIdx = -1, inString = false, escaped = false;
+  for (let i = startIdx; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") { depth--; if (depth === 0) { endIdx = i; break; } }
+  }
+  if (endIdx === -1) return null;
+  s = s.slice(startIdx, endIdx + 1);
+
   try { return JSON.parse(s); } catch { /* */ }
   try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { /* */ }
-  try { return JSON.parse(s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")); } catch { return null; }
+  try { return JSON.parse(s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")); } catch { /* */ }
+  try {
+    const fixedNl = s.replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner) =>
+      `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`);
+    return JSON.parse(fixedNl);
+  } catch { /* */ }
+  try {
+    const fixedNlComma = s
+      .replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner) =>
+        `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`)
+      .replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixedNlComma);
+  } catch { return null; }
 }
 
 function fmtPrice(v: any, currency: "KRW" | "USD"): string {
