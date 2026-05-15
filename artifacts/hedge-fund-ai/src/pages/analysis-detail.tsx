@@ -2760,6 +2760,8 @@ function stripChartData(content: string): string {
     .replace(/\nCHART_DATA:\{[^\n]+\}\s*(\nEVENTS_DATA:\[[^\n]*\])?\s*(\nMARKET_SIGNALS_DATA:\{[^\n]+\})?\s*$/, "")
     .replace(/\nEVENTS_DATA:\[[^\n]*\]\s*(\nMARKET_SIGNALS_DATA:\{[^\n]+\})?\s*$/, "")
     .replace(/\nMARKET_SIGNALS_DATA:\{[^\n]+\}\s*$/, "")
+    // 가격 구간 판정 섹션 숨김 (다음 ## 섹션 전까지 제거)
+    .replace(/\n##\s*🎯\s*가격 구간 판정[\s\S]*?(?=\n##\s|$)/, "")
     .trim();
 }
 
