@@ -3583,7 +3583,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
             return (
               <>
                 <MdBlock src={modelAssumptionsSplit.before} />
-                {/* 모델 가정 수립 — 토글 */}
+                {/* 모델 가정 수립 — 토글 (WACC 결과값은 항상 노출) */}
+                {(() => {
+                  const waccMatch = modelAssumptionsSplit.section.match(/→\s*WACC:\s*([\d.]+\s*%)/);
+                  const waccVal = waccMatch?.[1]?.trim();
+                  return (
                 <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
                   <button
                     onClick={() => setShowModelAssumptions(v => !v)}
@@ -3591,6 +3595,14 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                   >
                     <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
                     <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Model Assumptions" : "모델 가정 수립"}</span>
+                    {waccVal && (
+                      <span
+                        className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md mr-1 shrink-0"
+                        style={{ background: `${color}20`, color }}
+                      >
+                        WACC {waccVal}
+                      </span>
+                    )}
                     <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showModelAssumptions && "rotate-180")} />
                   </button>
                   <AnimatePresence initial={false}>
@@ -3625,6 +3637,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                     )}
                   </AnimatePresence>
                 </div>
+                  );
+                })()}
                 <MdBlock src={modelAssumptionsSplit.after} />
               </>
             );
