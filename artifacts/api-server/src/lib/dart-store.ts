@@ -201,7 +201,7 @@ export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<voi
 
     const corpCode = await lookupCorpCode(stockCode);
     if (!corpCode) {
-      console.log(`[dart-store] ${stockCode} corp_code 조회 실패`);
+      console.warn(`[dart-store] ${stockCode} corp_code 조회 실패`);
       return;
     }
 
@@ -215,7 +215,6 @@ export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<voi
 
       for (const year of years) {
         if (await isFresh(stockCode, year, code)) {
-          console.log(`[dart-store] ${stockCode} ${year} ${label} — 캐시 유효`);
           continue;
         }
 
@@ -228,7 +227,6 @@ export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<voi
           fsType = "OFS";
         }
         if (!rows) {
-          console.log(`[dart-store] ${stockCode} ${year} ${label} — 데이터 없음`);
           continue;
         }
 
@@ -247,7 +245,6 @@ export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<voi
           const periodLabel = `${storageYear} ${label}`;
           const fin = extractFinancials(rows, field);
           await upsertFinancial(stockCode, corpCode, storageYear, code, periodLabel, fsType, fin);
-          console.log(`[dart-store] ✓ ${stockCode} ${periodLabel}(${fsType}) 저장`);
         }
 
         await new Promise(r => setTimeout(r, 400)); // DART API 레이트 리밋 배려

@@ -436,7 +436,6 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
     // Yahoo Finance PBR이 없으면 Naver Finance에서 가져옴
     if (yahooData.pbr == null) {
       naverPbr = await fetchNaverPBR(stockCode(ticker));
-      if (naverPbr != null) console.log(`[peer-collector] Naver PBR for ${ticker}: ${naverPbr}`);
     }
   }
 
@@ -462,14 +461,12 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
     // 1) Yahoo bookValue 필드로 계산: PBR = price / bookValue
     if (regularMarketPrice != null && yahooData.bookValue != null && yahooData.bookValue > 0) {
       pbr = Math.round((regularMarketPrice / yahooData.bookValue) * 100) / 100;
-      console.log(`[peer-collector] Calculated PBR from bookValue for ${ticker}: ${pbr}`);
     }
     // 2) DART 자본 + Yahoo 발행주식수로 계산: PBR = price / (equity / shares)
     if (pbr == null && equity != null && sharesOutstanding != null && sharesOutstanding > 0 && regularMarketPrice != null) {
       const bvps = equity / sharesOutstanding;
       if (bvps > 0) {
         pbr = Math.round((regularMarketPrice / bvps) * 100) / 100;
-        console.log(`[peer-collector] Calculated PBR from DART equity for ${ticker}: ${pbr}`);
       }
     }
     // 3) DB 캐시에서 이전에 성공적으로 가져온 PBR 재활용
@@ -477,7 +474,6 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
       const cached = await readMetricCache(ticker);
       if (cached?.pbr != null) {
         pbr = cached.pbr;
-        console.log(`[peer-collector] PBR from DB cache for ${ticker}: ${pbr}`);
       }
     }
   }
@@ -489,12 +485,10 @@ async function collectPeer(ticker: string): Promise<PeerMultiples> {
     const ebitdaFromYahoo = yahooData.ebitda ?? null;
     if (ebitdaFromYahoo != null && ebitdaFromYahoo > 0) {
       ev_ebitda = Math.round((ev / ebitdaFromYahoo) * 10) / 10;
-      console.log(`[peer-collector] Calculated EV/EBITDA from Yahoo EBITDA for ${ticker}: ${ev_ebitda}`);
     }
     // 2) DART 영업이익으로 EBITDA 근사 (D&A 미포함이지만 폴백)
     if (ev_ebitda == null && operating_income != null && operating_income > 0) {
       ev_ebitda = Math.round((ev / operating_income) * 10) / 10;
-      console.log(`[peer-collector] Approximated EV/EBITDA from operating income for ${ticker}: ${ev_ebitda} (no D&A)`);
     }
   }
 
@@ -570,10 +564,8 @@ export async function collectPeers(
         console.log(`[peer-collector] Ticker corrected: ${rawTicker} → ${ticker}`);
       }
       try {
-        console.log(`[peer-collector] Collecting ${ticker}...`);
         const data = await collectPeer(ticker);
         results[ticker] = data;
-        console.log(`[peer-collector] Done ${ticker}: ${data.name}`);
       } catch (err) {
         console.warn(`[peer-collector] Skip ${ticker}:`, (err as Error).message);
       }

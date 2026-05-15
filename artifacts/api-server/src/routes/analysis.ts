@@ -535,10 +535,8 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
   const cacheKey = `naver:${code}`;
   const cached = cache.get<{ context: string; naverSharesCalc: number | null }>(cacheKey);
   if (cached) {
-    console.log(`[Cache HIT] ${cacheKey}`);
     return cached;
   }
-  console.log(`[Cache MISS] ${cacheKey} — fetching from Naver Finance`);
 
   const lines: string[] = [];
   let naverSharesCalc: number | null = null;
@@ -915,10 +913,8 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const fcCacheKey = `financial:${resolvedSymbol}`;
   const fcCached = cache.get<string>(fcCacheKey);
   if (fcCached) {
-    console.log(`[Cache HIT] ${fcCacheKey}`);
     return fcCached;
   }
-  console.log(`[Cache MISS] ${fcCacheKey} — fetching from Yahoo Finance`);
 
   let result: any;
   let tsResult: any = null;
@@ -1037,7 +1033,6 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   let tsRows: any[] = [];
   if (tsRes.status === "fulfilled" && tsRes.value) {
     tsRows = tsRes.value?.timeseries?.result ?? [];
-    console.log(`[financial-data] timeseries rows: ${tsRows.length}`);
   } else {
     console.warn(`[financial-data] timeseries fetch failed for ${resolvedSymbol}:`, (tsRes as any).reason?.message ?? "unknown");
   }
@@ -1109,7 +1104,6 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     let pbMain: number | null = ks.priceToBook ?? null;
     if (pbMain == null && koreanCodeEarly) {
       pbMain = await fetchNaverPBR(koreanCodeEarly).catch(() => null);
-      if (pbMain != null) console.log(`[financial-data] Naver PBR for ${resolvedSymbol}: ${pbMain}`);
     }
     if (pbMain != null) {
       lines.push(`P/B: ${pbMain.toFixed(2)}x`);
@@ -2165,7 +2159,6 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   lines.push(KOREAN_SECTOR_MULTIPLES);
 
   const text = lines.join("\n");
-  console.log(`[financial-data] Fetched ${text.length} chars for ${resolvedSymbol}`);
   cache.set(fcCacheKey, text, TTL.YAHOO_FINANCIAL);
   return text;
 }
@@ -2176,7 +2169,6 @@ async function fetchCompanyNews(companyName: string): Promise<string> {
   const newsCacheKey = `news:${companyName}`;
   const newsCached = cache.get<string>(newsCacheKey);
   if (newsCached) {
-    console.log(`[Cache HIT] ${newsCacheKey}`);
     return newsCached;
   }
   try {
@@ -2432,7 +2424,6 @@ CRITICAL ticker format rules — Yahoo Finance tickers only:
       },
     });
     const raw = resp.text ?? "";
-    console.log(`[peer-select] Raw response (${raw.length} chars, first 800): ${raw.slice(0, 800)}`);
 
     // 다중 폴백 JSON 추출
     let parsed: any = null;
@@ -2620,7 +2611,6 @@ async function fetchPeerFinancials(
         let trailPE: number | null = null;
         if (kis?.per != null && kis.per > 0 && kis.per < 500) {
           trailPE = kis.per;
-          console.log(`[peer-data] KIS PER for ${peer.ticker}: ${trailPE}`);
         } else {
           trailPE = sd.trailingPE ?? ks.trailingPE ?? (quote as any).trailingPE ?? null;
           if (trailPE == null && price != null) {
@@ -2636,7 +2626,6 @@ async function fetchPeerFinancials(
         let pbr: number | null = null;
         if (kis?.pbr != null && kis.pbr > 0) {
           pbr = kis.pbr;
-          console.log(`[peer-data] KIS PBR for ${peer.ticker}: ${pbr}`);
         } else {
           pbr = ks.priceToBook ?? (quote as any).priceToBook ?? null;
         }
@@ -2651,7 +2640,7 @@ async function fetchPeerFinancials(
               const raw = nb?.pbr;
               if (raw != null) {
                 const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
-                if (!isNaN(n) && n > 0) { pbr = n; console.log(`[peer-data] Naver PBR for ${peer.ticker}: ${n}`); }
+                if (!isNaN(n) && n > 0) { pbr = n; }
               }
             } catch { /* optional */ }
           }
@@ -5237,7 +5226,6 @@ async function runPipelineBackground(id: number): Promise<void> {
 
       runningStepsLock.set(lockKey, true);
       try {
-        console.log(`[pipeline-bg] Running step ${nextStepKey} for analysis ${id}`);
         await executeStep(id, nextStepKey, analysis, existingSteps);
       } finally {
         runningStepsLock.delete(lockKey);

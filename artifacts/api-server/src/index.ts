@@ -6,7 +6,7 @@ import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
 
-console.log("[STARTUP] API Server v3 - last_login_at + krx_peer_data + www domain + cleanup");
+console.log("[STARTUP] API Server 기동 중…");
 
 const rawPort = process.env["PORT"];
 
