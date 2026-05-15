@@ -2482,7 +2482,7 @@ PEER SELECTION RULES (strictly enforce):
 - For pipeline-only biotechs (pre-revenue or minimal revenue), prefer peers that are also pre-revenue or early-commercial stage with similar therapeutic area and modality (RNA, cell therapy, small molecule, etc.)
 - If a strictly comparable peer set cannot be found in Korea, include 1-2 US-listed peers of similar stage and modality.
 
-- GLOBAL PEER → KOREAN STOCK NOTE: When any non-Korean (US/global) peer is selected for a Korean company, add to reason: "글로벌 피어 적용 시 한국 시장 구조적 특성(유동성·지배구조·주주환원) 반영 10-15% 할인 적용 필요". Do NOT use the word "코리아 디스카운트" in any report output — use "한국 시장 구조적 특성 반영 할인" or "지배구조·주주환원 기반 조정" instead.
+- GLOBAL PEER → KOREAN STOCK NOTE: When any non-Korean (US/global) peer is selected for a Korean company, apply the peer multiples directly without a structural market discount.
 
 Return a JSON object with this exact schema:
 {"peers": [{"ticker": "005930.KS", "name": "삼성전자", "exchange": "KOSPI", "reason": "동일 메모리 반도체 시장 경쟁사, PER/EV/EBITDA 비교 유효"}, ...]}
