@@ -3303,17 +3303,27 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
   const bodyContent = useMemo(() => (leadIdx >= 0 ? displayContent.slice(leadIdx) : displayContent), [displayContent, leadIdx]);
 
   // 밸류에이션 핵심 지표 섹션 분리 (토글화)
-  const valuationMetricsIdx = useMemo(() => {
-    if (!isFundamental) return -1;
-    return bodyContent.search(/\n## 밸류에이션을 위한 핵심 지표/);
+  // 섹션이 bodyContent의 첫 번째 ## 제목일 경우 앞에 \n이 없으므로 두 경우 모두 처리
+  const valuationMetricsSplit = useMemo(() => {
+    if (!isFundamental) return null;
+    // Case 1: 중간에 등장 — \n## 앞에 newline 있음
+    const midIdx = bodyContent.search(/\n## 밸류에이션을 위한 핵심 지표/);
+    if (midIdx >= 0) {
+      return { before: bodyContent.slice(0, midIdx), section: bodyContent.slice(midIdx + 1) };
+    }
+    // Case 2: 맨 앞에 등장 — bodyContent 전체가 해당 섹션
+    if (/^## 밸류에이션을 위한 핵심 지표/.test(bodyContent)) {
+      return { before: '', section: bodyContent };
+    }
+    return null;
   }, [isFundamental, bodyContent]);
   const mainBodyContent = useMemo(() =>
-    valuationMetricsIdx >= 0 ? bodyContent.slice(0, valuationMetricsIdx) : bodyContent,
-    [bodyContent, valuationMetricsIdx]
+    valuationMetricsSplit ? valuationMetricsSplit.before : bodyContent,
+    [bodyContent, valuationMetricsSplit]
   );
   const valuationMetricsContent = useMemo(() =>
-    valuationMetricsIdx >= 0 ? bodyContent.slice(valuationMetricsIdx + 1) : null,
-    [bodyContent, valuationMetricsIdx]
+    valuationMetricsSplit ? valuationMetricsSplit.section : null,
+    [valuationMetricsSplit]
   );
   const [showValuationMetrics, setShowValuationMetrics] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
