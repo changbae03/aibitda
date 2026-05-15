@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, Activity } from "lucide-react";
 import { useLanguage } from "@/lib/language-context";
 
@@ -41,12 +41,109 @@ const STEPS_EN = [
   { num: 7, name: "Final Conclusion",       icon: ShieldCheck, desc: "Integrated review → final investment strategy" },
 ];
 
+const CORAL = "#FF8A7A";
+const CHARS_KO = ["애", "빛", "다"];
+const CHARS_EN = ["A", "i", "B", "I", "T", "D", "A"];
+
+function SplashScreen({ isEn }: { isEn: boolean }) {
+  const chars = isEn ? CHARS_EN : CHARS_KO;
+  return (
+    <motion.div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 1.06 }}
+      transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+    >
+      {/* 배경 코랄 글로우 */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${CORAL}18 0%, transparent 70%)`,
+        }}
+      />
+
+      {/* 글자 */}
+      <div className="relative flex items-end gap-[2px]">
+        {chars.map((ch, i) => (
+          <motion.span
+            key={i}
+            initial={{ opacity: 0, y: 28, scale: 0.7 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{
+              delay: 0.12 + i * 0.11,
+              type: "spring",
+              stiffness: 420,
+              damping: 22,
+            }}
+            style={{
+              fontFamily: "'Pretendard', sans-serif",
+              fontSize: isEn ? "52px" : "68px",
+              fontWeight: 900,
+              letterSpacing: isEn ? "-0.04em" : "-0.02em",
+              color: CORAL,
+              lineHeight: 1,
+              position: "relative",
+              display: "inline-block",
+            }}
+          >
+            {ch}
+          </motion.span>
+        ))}
+
+        {/* 빛 스윕 (shimmer) */}
+        <motion.div
+          initial={{ x: "-110%", opacity: 0.9 }}
+          animate={{ x: "210%", opacity: 0 }}
+          transition={{ delay: 0.65, duration: 0.7, ease: "easeOut" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%)`,
+            pointerEvents: "none",
+          }}
+        />
+      </div>
+
+      {/* 서브타이틀 */}
+      <motion.p
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.65, duration: 0.4 }}
+        style={{
+          marginTop: "12px",
+          fontSize: "13px",
+          fontWeight: 500,
+          letterSpacing: "0.06em",
+          color: "hsl(var(--muted-foreground))",
+          fontFamily: "'Pretendard', sans-serif",
+        }}
+      >
+        {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다"}
+      </motion.p>
+
+      {/* 하단 점 로딩 인디케이터 */}
+      <div className="absolute bottom-12 flex gap-1.5">
+        {[0, 1, 2].map(i => (
+          <motion.div
+            key={i}
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ background: CORAL }}
+            animate={{ opacity: [0.25, 1, 0.25] }}
+            transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Landing() {
   const { isSignedIn, isLoaded } = useUser();
   const [, setLocation] = useLocation();
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
   const { isEn, language, setLanguage } = useLanguage();
+  const [showSplash, setShowSplash] = useState(true);
 
   const STEPS = isEn ? STEPS_EN : STEPS_KO;
 
@@ -60,6 +157,13 @@ export default function Landing() {
     if (isLoaded && isSignedIn) { setLocation("/analysis/new"); return; }
     if (!kakaoLoading && kakaoAuth?.user) setLocation("/analysis/new");
   }, [isLoaded, isSignedIn, kakaoLoading, kakaoAuth, setLocation]);
+
+  // Clerk 로드 완료 시 스플래시 닫기 (최소 1.4초 보장)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timer = setTimeout(() => setShowSplash(false), 200);
+    return () => clearTimeout(timer);
+  }, [isLoaded]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -77,6 +181,11 @@ export default function Landing() {
 
 
   return (
+    <>
+      <AnimatePresence>
+        {showSplash && <SplashScreen isEn={isEn} />}
+      </AnimatePresence>
+
     <div
       className="min-h-screen flex flex-col items-center justify-center bg-background px-6 py-12 relative overflow-hidden"
       style={{ fontFamily: "'Pretendard', sans-serif" }}
@@ -315,5 +424,6 @@ export default function Landing() {
 
       </div>
     </div>
+    </>
   );
 }
