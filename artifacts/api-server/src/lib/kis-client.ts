@@ -254,8 +254,16 @@ async function fetchKISDailyPriceHistory(
   }
 }
 
-// ── 영어 종목명 인메모리 캐시 ────────────────────────────────────────────────
+// ── 영어 종목명 인메모리 캐시 (최대 500개 — 초과 시 오래된 항목 삭제) ───────────
 const _engNameCache = new Map<string, string | null>();
+const ENG_NAME_CACHE_MAX = 500;
+function _setEngNameCache(key: string, value: string | null) {
+  if (_engNameCache.size >= ENG_NAME_CACHE_MAX && !_engNameCache.has(key)) {
+    // Map은 삽입 순서를 보장하므로 첫 번째 항목이 가장 오래된 것
+    _engNameCache.delete(_engNameCache.keys().next().value!);
+  }
+  _engNameCache.set(key, value);
+}
 
 /**
  * KIS search-stock-info → prdt_eng_name (영문 상품명) 조회
@@ -283,16 +291,16 @@ export async function fetchKISEngName(code: string): Promise<string | null> {
       },
     });
 
-    if (!res.ok) { _engNameCache.set(normalized, null); return null; }
+    if (!res.ok) { _setEngNameCache(normalized, null); return null; }
 
     const json = await res.json();
-    if (json.rt_cd !== "0") { _engNameCache.set(normalized, null); return null; }
+    if (json.rt_cd !== "0") { _setEngNameCache(normalized, null); return null; }
 
     const raw = json.output?.prdt_eng_name?.trim() || null;
-    _engNameCache.set(normalized, raw);
+    _setEngNameCache(normalized, raw);
     return raw;
   } catch {
-    _engNameCache.set(normalized, null);
+    _setEngNameCache(normalized, null);
     return null;
   }
 }

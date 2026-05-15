@@ -386,6 +386,42 @@ export async function runMigrations() {
     `);
     // ─────────────────────────────────────────────────────────────────────────
 
+    // model_calibration 테이블 (섹터 재보정 통계)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS model_calibration (
+        id                   SERIAL PRIMARY KEY,
+        sector               TEXT NOT NULL,
+        market               TEXT NOT NULL DEFAULT 'KR',
+        direction_accuracy   REAL,
+        avg_price_deviation  REAL,
+        sample_count         INTEGER NOT NULL DEFAULT 0,
+        last_recalc_at       TIMESTAMPTZ DEFAULT NOW(),
+        created_at           TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        UNIQUE (sector, market)
+      );
+    `);
+
+    // ticker_financials 테이블 (DART 시계열 재무 데이터)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticker_financials (
+        id          SERIAL PRIMARY KEY,
+        ticker      TEXT NOT NULL,
+        bsns_year   TEXT NOT NULL,
+        reprt_code  TEXT NOT NULL,
+        fs_type     TEXT NOT NULL,
+        account_nm  TEXT NOT NULL,
+        thstrm_amount  BIGINT,
+        frmtrm_amount  BIGINT,
+        bfefrmtrm_amount BIGINT,
+        thstrm_add_amount BIGINT,
+        currency    TEXT DEFAULT 'KRW',
+        fetched_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        UNIQUE (ticker, bsns_year, reprt_code, fs_type, account_nm)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ticker_financials_ticker
+        ON ticker_financials (ticker, bsns_year DESC);
+    `);
+
     // ── 성능 인덱스 ─────────────────────────────────────────────────────────
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_analyses_user_id_created_at
@@ -393,6 +429,32 @@ export async function runMigrations() {
 
       CREATE INDEX IF NOT EXISTS idx_analysis_steps_analysis_id
         ON analysis_steps (analysis_id);
+
+      CREATE INDEX IF NOT EXISTS idx_analyses_ticker
+        ON analyses (ticker);
+
+      CREATE INDEX IF NOT EXISTS idx_analyses_status_created_at
+        ON analyses (status, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_analyses_public_status
+        ON analyses (is_public, status, created_at DESC)
+        WHERE status = 'completed';
+
+      CREATE INDEX IF NOT EXISTS idx_model_insights_ticker
+        ON model_insights (ticker, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_model_insights_outcome
+        ON model_insights (outcome);
+
+      CREATE INDEX IF NOT EXISTS idx_model_insights_industry_outcome
+        ON model_insights (industry, outcome);
+
+      CREATE INDEX IF NOT EXISTS idx_analysis_schedules_next_run
+        ON analysis_schedules (next_run_at ASC)
+        WHERE enabled = true;
+
+      CREATE INDEX IF NOT EXISTS idx_calibration_history_sector
+        ON calibration_history (sector, recorded_at DESC);
     `);
 
     console.log("Database migrations completed successfully");

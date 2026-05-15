@@ -128,6 +128,22 @@ app.use("/api", router);
 const SHARE_OG_IMAGE_STATIC = "https://aibitda.kr/share-og.png";
 const ogImageCache = new Map<number, { png: Buffer; ts: number }>();
 const OG_CACHE_TTL = 1000 * 60 * 60 * 24; // 24시간
+const OG_CACHE_MAX = 200; // 최대 항목 수 (메모리 누수 방지)
+
+// 만료·초과 항목 주기적 정리 (1시간마다)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of ogImageCache) {
+    if (now - entry.ts > OG_CACHE_TTL) ogImageCache.delete(id);
+  }
+  // 최대 항목 초과 시 가장 오래된 것부터 삭제
+  if (ogImageCache.size > OG_CACHE_MAX) {
+    const sorted = [...ogImageCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+    for (const [id] of sorted.slice(0, ogImageCache.size - OG_CACHE_MAX)) {
+      ogImageCache.delete(id);
+    }
+  }
+}, 1000 * 60 * 60).unref();
 
 let _staticOgPng: Buffer | null = null;
 async function getStaticOgPng(): Promise<Buffer | null> {

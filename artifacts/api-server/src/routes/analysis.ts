@@ -4515,11 +4515,16 @@ async function executeStep(
         console.log(`[peer-select] Retry selected ${peers.length} peers`);
       }
 
-      // 한국 주식: KRX 실데이터 기반 업종 PBR 주입
+      // 한국 주식: KRX 실데이터 기반 업종 PBR 주입 (1시간 캐시)
       const tickerKrxCode = analysis.ticker.split(".")[0];
       const isKoreanTicker = /^\d{6}$/.test(tickerKrxCode);
       if (isKoreanTicker) {
-        const krxCtx = await getKRXSectorPeerContext(tickerKrxCode);
+        const krxCacheKey = `krx_peer_ctx:${tickerKrxCode}`;
+        let krxCtx: string | null = cache.get<string>(krxCacheKey) ?? null;
+        if (!krxCtx) {
+          krxCtx = await getKRXSectorPeerContext(tickerKrxCode);
+          if (krxCtx) cache.set(krxCacheKey, krxCtx, TTL.HOUR);
+        }
         if (krxCtx) {
           enrichedContext = enrichedContext ? enrichedContext + "\n\n" + krxCtx : krxCtx;
           console.log(`[krx-peer] Injected KRX sector PBR context for ${tickerKrxCode}`);
@@ -5046,7 +5051,8 @@ async function executeStep(
       } else {
         await rawQuery(
           `UPDATE analyses SET status='completed', current_step=NULL, investment_verdict=$1,
-           target_price=$2, entry_price=$3, stop_loss=$4, risk_reward_ratio=$5, updated_at=NOW()
+           target_price=$2, entry_price=$3, stop_loss=$4, risk_reward_ratio=$5,
+           updated_at=NOW(), completed_at=NOW()
            WHERE id=$6`,
           [investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, id]
         );
