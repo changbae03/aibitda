@@ -157,6 +157,28 @@ function mergeRowsToTarget(rows: string[], targetCols: number): string[] {
   out.push(current);
   return out;
 }
+// 한 줄에 여러 행이 이어 붙어있는 경우 targetCols 단위로 잘라서 분리
+function splitOverflowRows(rows: string[], targetCols: number): string[] {
+  if (targetCols <= 0) return rows;
+  const out: string[] = [];
+  for (const row of rows) {
+    const cols = countTableCols(row);
+    if (cols <= targetCols * 1.5) {
+      out.push(row);
+      continue;
+    }
+    // 셀 단위로 분리 후 targetCols개씩 재조합
+    const parts = row.split("|");
+    // parts[0]은 앞 공백, parts[parts.length-1]은 뒤 공백
+    const cells = parts.slice(1, -1);
+    for (let start = 0; start < cells.length; start += targetCols) {
+      const chunk = cells.slice(start, start + targetCols);
+      if (chunk.length === 0) continue;
+      out.push("| " + chunk.map(c => c.trim()).join(" | ") + " |");
+    }
+  }
+  return out;
+}
 function fixSplitTableRows(lines: string[]): string[] {
   const out: string[] = [];
   let i = 0;
@@ -170,7 +192,8 @@ function fixSplitTableRows(lines: string[]): string[] {
     const targetCols = countTableCols(block[sepIdx]);
     out.push(...mergeRowsToTarget(block.slice(0, sepIdx), targetCols));
     out.push(block[sepIdx]);
-    out.push(...mergeRowsToTarget(block.slice(sepIdx + 1), targetCols));
+    const dataRows = mergeRowsToTarget(block.slice(sepIdx + 1), targetCols);
+    out.push(...splitOverflowRows(dataRows, targetCols));
   }
   return out;
 }
