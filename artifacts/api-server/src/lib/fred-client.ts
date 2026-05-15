@@ -171,13 +171,16 @@ export function buildFREDContext(macro: FredMacro | null): string {
   const fmt0 = (v: number | null, unit = "") =>
     v !== null ? `${v.toFixed(0)}${unit}` : "N/A";
 
-  // 금리 사이클 해석
+  // 금리 사이클 해석 — 단순 금리 레벨만이 아니라 CPI 동향을 함께 반영
+  const cpiHigh = macro.cpiYoY !== null && macro.cpiYoY >= 3.0;
   const rateCycle =
     macro.fedFundsRate !== null
       ? macro.fedFundsRate >= 5.0
         ? "고금리 긴축 국면 (밸류에이션 압박)"
         : macro.fedFundsRate >= 3.5
-        ? "금리 인하 사이클 초입"
+        ? cpiHigh
+          ? "금리 동결 또는 재인상 가능성 국면 — 인플레이션 재가속으로 추가 인하 제한"
+          : "금리 인하 사이클 초입 (물가 안정 조건부)"
         : macro.fedFundsRate >= 2.0
         ? "완화적 통화정책 국면"
         : "초완화 저금리 환경"

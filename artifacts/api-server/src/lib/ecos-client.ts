@@ -265,8 +265,16 @@ export function buildECOSContext(macro: EcosMacro | null): string {
     ? (macro.cpiYoY >= 3.0 ? "⚠️ 물가 상승 압력 지속" : macro.cpiYoY >= 2.0 ? "물가 안정권 상단" : "✅ 물가 안정")
     : "";
 
+  // 금리 사이클 해석 — 기준금리 레벨 + CPI 동향 복합 판단
+  const cpiPressure = macro.cpiYoY !== null && macro.cpiYoY >= 2.5;
   const rateCycle = macro.baseRate !== null
-    ? (macro.baseRate >= 3.5 ? "고금리 긴축 국면" : macro.baseRate >= 2.5 ? "금리 인하 사이클 진입" : "완화적 통화정책")
+    ? macro.baseRate >= 3.5
+      ? "고금리 긴축 국면"
+      : macro.baseRate >= 2.5
+      ? cpiPressure
+        ? "금리 동결 국면 — 물가 상승 압력으로 추가 인하 여력 제한"
+        : "금리 인하 사이클 진입 (물가 안정 조건부)"
+      : "완화적 통화정책"
     : "";
 
   // 국고채 스프레드 해석 (기준금리 대비 10년)
