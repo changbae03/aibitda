@@ -207,6 +207,10 @@ function prepareMarkdown(md: string): string {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // 백엔드 전용 검증 메시지 — 프론트 미표시
+    if (/Terminal Value 비중 확인/.test(line)) continue;
+
     const prev = i > 0 ? lines[i - 1] : "";
     const isTableRow = /^\s*\|/.test(line);
     const prevIsTableRow = /^\s*\|/.test(prev);
