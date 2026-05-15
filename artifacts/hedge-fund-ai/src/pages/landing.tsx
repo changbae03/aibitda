@@ -121,6 +121,7 @@ export default function Landing() {
   const [activeStep, setActiveStep] = useState(0);
   const { isEn, language, setLanguage } = useLanguage();
   const [showSplash, setShowSplash] = useState(true);
+  const [splashDone, setSplashDone] = useState(false);
   const splashStartRef = useRef(Date.now());
 
   const STEPS = isEn ? STEPS_EN : STEPS_KO;
@@ -163,13 +164,16 @@ export default function Landing() {
 
   return (
     <>
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => setSplashDone(true)}>
         {showSplash && <SplashScreen isEn={isEn} />}
       </AnimatePresence>
 
-    <div
+    <motion.div
       className="min-h-screen flex flex-col items-center justify-center bg-background px-6 py-12 relative overflow-hidden"
       style={{ fontFamily: "'Pretendard', sans-serif" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: splashDone ? 1 : 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
     >
       {/* 언어 토글 */}
       <div className="absolute top-5 right-5 z-20 flex items-center gap-1 bg-muted/60 border border-border rounded-full p-1">
@@ -404,7 +408,7 @@ export default function Landing() {
         </div>
 
       </div>
-    </div>
+    </motion.div>
     </>
   );
 }
