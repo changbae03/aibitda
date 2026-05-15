@@ -5317,6 +5317,32 @@ router.post("/:id/feedback", async (req, res) => {
   }
 });
 
+/**
+ * 프론트엔드 표시용 content 정제.
+ * DB에는 원본(체인 연결용) 보존, API 응답에서만 내부 섹션 제거.
+ */
+function stripDisplayContent(raw: string): string {
+  if (!raw) return raw;
+  return raw
+    // ── CHAIN-HANDOFF 전체 섹션 제거 (--- 구분선 포함) ─────────────────
+    .replace(/\n?---\n+##\s*📊\s*\[CHAIN-HANDOFF\][^\n]*\n[\s\S]*$/m, "")
+    .replace(/\n?##\s*📊\s*\[CHAIN-HANDOFF\][^\n]*\n[\s\S]*$/m, "")
+    // ── [CHAIN-HANDOFF] 레이블이 인라인으로 남은 경우 ────────────────────
+    .replace(/\[CHAIN-HANDOFF\][^\n]*/g, "")
+    // ── 체인 인계 규칙 선언 줄 ────────────────────────────────────────────
+    .replace(/^📌\s*\*{0,2}\[체인 인계 규칙[^\]]*\][^\n]*/gm, "")
+    .replace(/^→\s*이 문장으로 리포트가 시작[^\n]*/gm, "")
+    // ── 내부 STEP 레이블 ──────────────────────────────────────────────────
+    .replace(/^\[STEP\s*\d+\][^\n]*/gm, "")
+    .replace(/^\[STEP\s*[A-Z]\][^\n]*/gm, "")
+    .replace(/^\[내부\s*계산[^\]]*\][^\n]*/gm, "")
+    // ── 지시 잔재 ─────────────────────────────────────────────────────────
+    .replace(/^⛔\s*이 섹션은 다음 단계[^\n]*/gm, "")
+    // ── 연속 공백 정리 ────────────────────────────────────────────────────
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function formatStep(step: any) {
   return {
     id: step.id,
@@ -5324,7 +5350,7 @@ function formatStep(step: any) {
     stepKey: step.stepKey,
     agentName: step.agentName,
     agentRole: step.agentRole,
-    content: step.content,
+    content: stripDisplayContent(step.content),
     validationNotes: step.validationNotes,
     informationType: step.informationType,
     createdAt: step.createdAt?.toISOString?.() ?? step.createdAt,

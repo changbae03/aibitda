@@ -3104,7 +3104,14 @@ function stripEstimationLabels(content: string): string {
 }
 
 function stripPromptInstructions(content: string): string {
-  return content
+  // ── 섹션 단위 제거 (line 필터 전에 먼저 적용) ────────────────────────
+  let cleaned = content
+    .replace(/\n?---\n+##\s*📊\s*\[CHAIN-HANDOFF\][^\n]*\n[\s\S]*$/m, "")
+    .replace(/\n?##\s*📊\s*\[CHAIN-HANDOFF\][^\n]*\n[\s\S]*$/m, "")
+    .replace(/\[CHAIN-HANDOFF\][^\n]*/g, "")
+    .replace(/\n{3,}/g, "\n\n");
+
+  return cleaned
     .split("\n")
     .filter(line => {
       const t = line.trim();
