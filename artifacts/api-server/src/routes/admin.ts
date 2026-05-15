@@ -919,4 +919,75 @@ router.post("/qa-check-all", async (req, res) => {
   })().catch(console.error);
 });
 
+// GET /api/admin/analysis/:id/text — 리포트 전체를 plain text로 반환 (관리자 전용, Claude 검수용)
+router.get("/analysis/:id/text", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).send("관리자만 접근 가능합니다");
+    return;
+  }
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).send("Invalid id"); return; }
+
+  try {
+    const aRows = await pool.query(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+    if (!aRows.rows[0]) { res.status(404).send("Not found"); return; }
+    const a = aRows.rows[0];
+
+    const stepsRows = await pool.query(
+      `SELECT * FROM analysis_steps WHERE analysis_id = $1 ORDER BY id ASC`, [id]
+    );
+
+    const STEP_ORDER_LOCAL = [
+      "company_intro","industry_analysis","catalyst_analysis",
+      "company_analysis","relative_valuation","market_analysis","investment_strategy",
+    ];
+    const STEP_NAMES: Record<string, string> = {
+      company_intro:      "브리핑",
+      industry_analysis:  "매크로 및 산업 분석",
+      catalyst_analysis:  "투자 촉매 및 수급 분석",
+      company_analysis:   "실적 전망",
+      relative_valuation: "적정주가 산출",
+      market_analysis:    "기술적 분석",
+      investment_strategy:"최종 결론",
+    };
+
+    function cleanContent(raw: string): string {
+      return raw
+        .replace(/\nCHART_DATA:\{[^\n]+\}(\nEVENTS_DATA:\[[^\n]*\])?(\nVALUATION_DATA:\{[^\n]+\})?(\nFINAL_VALUATION_DATA:\{[^\n]+\})?\s*$/m, "")
+        .replace(/\nFINAL_VALUATION_DATA:\{[^\n]+\}\s*$/m, "")
+        .replace(/FINAL_VALUATION_DATA:\{[^}]+\}/g, "")
+        .replace(/```json[\s\S]*?```/g, "")
+        .replace(/\{[\s\S]*?"verdict"[\s\S]*?\}/g, "")
+        .replace(/^\[STEP \d+\][^\n]*/gm, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    const steps = stepsRows.rows
+      .filter((s: any) => s.status === "completed" && s.content)
+      .sort((a: any, b: any) => STEP_ORDER_LOCAL.indexOf(a.step_key) - STEP_ORDER_LOCAL.indexOf(b.step_key));
+
+    const lines: string[] = [];
+    lines.push(`# ${a.company_name} (${a.ticker}) 리서치 리포트`);
+    lines.push(`분석일: ${a.created_at ? new Date(a.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "—"}`);
+    if (a.investment_verdict) lines.push(`투자 판정: ${a.investment_verdict}`);
+    if (a.target_price) lines.push(`적정주가: ${Number(a.target_price).toLocaleString()}`);
+    lines.push(`\n${"=".repeat(60)}\n`);
+
+    for (const step of steps) {
+      const stepName = STEP_NAMES[step.step_key] ?? step.step_key;
+      lines.push(`## ${stepName}`);
+      lines.push(cleanContent(step.content ?? ""));
+      lines.push(`\n${"─".repeat(40)}\n`);
+    }
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(lines.join("\n"));
+  } catch (err: any) {
+    console.error("[admin/analysis/:id/text] error:", err?.message);
+    res.status(500).send("Server error");
+  }
+});
+
 export default router;
