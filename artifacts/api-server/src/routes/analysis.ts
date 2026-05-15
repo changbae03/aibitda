@@ -4700,6 +4700,57 @@ async function executeStep(
     }
   }
 
+  // ── 기술적 분석 전용: 주봉 이동평균(20주선·60주선) 계산 및 주입 ──────────────
+  if (stepKey === "market_analysis") {
+    try {
+      const wkStart = new Date();
+      wkStart.setFullYear(wkStart.getFullYear() - 2); // 60주선 = 약 15개월, 여유 있게 2년치
+      const wkPeriod1 = wkStart.toISOString().slice(0, 10);
+      const wkHistory = await yahooFinance
+        .historical(analysis.ticker, { period1: wkPeriod1, interval: "1wk" }, { validateResult: false })
+        .catch(() => null);
+
+      if (wkHistory && wkHistory.length >= 20) {
+        const closes = wkHistory
+          .map((q: any) => (q as any).adjClose ?? (q as any).close)
+          .filter((c: any) => c != null && c > 0) as number[];
+
+        const calcMA = (arr: number[], period: number): number | null => {
+          if (arr.length < period) return null;
+          const slice = arr.slice(-period);
+          return slice.reduce((a, b) => a + b, 0) / period;
+        };
+
+        const ma20w = calcMA(closes, 20);
+        const ma60w = calcMA(closes, 60);
+        const latestClose = closes[closes.length - 1];
+
+        const wkLines: string[] = ["\n[📊 주봉 이동평균 데이터 (서버 계산)]"];
+        wkLines.push(`현재가(최근 주봉 종가): ${latestClose?.toLocaleString()}원`);
+        if (ma20w != null) {
+          const diff20 = ((latestClose - ma20w) / ma20w * 100).toFixed(1);
+          wkLines.push(`20주 이동평균(20주선): ${Math.round(ma20w).toLocaleString()}원 (현재가 대비 ${parseFloat(diff20) >= 0 ? "+" : ""}${diff20}%)`);
+        }
+        if (ma60w != null) {
+          const diff60 = ((latestClose - ma60w) / ma60w * 100).toFixed(1);
+          wkLines.push(`60주 이동평균(60주선): ${Math.round(ma60w).toLocaleString()}원 (현재가 대비 ${parseFloat(diff60) >= 0 ? "+" : ""}${diff60}%)`);
+        }
+        if (ma20w != null && ma60w != null) {
+          wkLines.push(`주봉 추세 판단: 현재가가 20주선 ${latestClose > ma20w ? "위" : "아래"}, 60주선 ${latestClose > ma60w ? "위" : "아래"} — ${latestClose > ma20w && latestClose > ma60w ? "중기 상승 추세" : latestClose < ma20w && latestClose < ma60w ? "중기 하락 추세" : "혼조"}`);
+        }
+        wkLines.push(`(데이터 기준: 최근 ${closes.length}주 주봉 종가 기반 계산)`);
+        const wkBlock = wkLines.join("\n");
+        enrichedContext = enrichedContext ? enrichedContext + wkBlock : wkBlock;
+        console.log(`[weekly-ma] Injected 20w/60w MA for ${analysis.ticker}: ma20=${ma20w?.toFixed(0)}, ma60=${ma60w?.toFixed(0)}`);
+      } else {
+        console.warn(`[weekly-ma] 주봉 데이터 부족 (${wkHistory?.length ?? 0}주) — 주봉 MA 주입 생략`);
+      }
+    } catch (err: any) {
+      console.warn("[weekly-ma] 주봉 MA 계산 실패:", err?.message?.slice(0, 80));
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // 현재 단계 이전에 완료된 단계만 context로 전달 (순서 보장)
   const currentStepIndex = STEP_ORDER.indexOf(stepKey);
   const previousStepsForContext = existingSteps
