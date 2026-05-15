@@ -179,40 +179,40 @@ function parseChartEvents(content: string): ChartEvent[] {
 function MarkdownBody({ content }: { content: string }) {
   return (
     <div className="
-      text-[15px] leading-[1.85] text-slate-300 break-keep
-      [&_h1]:text-[19px] [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-8 [&_h1]:mb-3 [&_h1]:pb-2 [&_h1]:border-b [&_h1]:border-slate-700/60
-      [&_h2]:text-[17px] [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-7 [&_h2]:mb-3 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-slate-700/40
-      [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-slate-100 [&_h3]:mt-6 [&_h3]:mb-2.5
-      [&_h4]:text-[14px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-5 [&_h4]:mb-2
-      [&_p]:text-slate-300 [&_p]:leading-[1.85] [&_p]:my-4
+      text-[17px] leading-[2.05] text-slate-300 break-keep
+      [&_h1]:text-[21px] [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-10 [&_h1]:mb-4 [&_h1]:pb-3 [&_h1]:border-b [&_h1]:border-slate-700/60
+      [&_h2]:text-[19px] [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-9 [&_h2]:mb-4 [&_h2]:pb-3 [&_h2]:border-b [&_h2]:border-slate-700/40
+      [&_h3]:text-[17px] [&_h3]:font-semibold [&_h3]:text-slate-100 [&_h3]:mt-8 [&_h3]:mb-3
+      [&_h4]:text-[16px] [&_h4]:font-semibold [&_h4]:text-slate-200 [&_h4]:mt-6 [&_h4]:mb-3
+      [&_p]:text-slate-300 [&_p]:leading-[2.05] [&_p]:my-6
       [&_strong]:text-slate-100 [&_strong]:font-semibold
       [&_em]:text-slate-400 [&_em]:not-italic
-      [&_ul]:my-4 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:text-slate-300
-      [&_ol]:my-4 [&_ol]:pl-5 [&_ol]:list-decimal [&_ol]:text-slate-300
-      [&_li]:my-2 [&_li]:text-slate-300 [&_li]:leading-[1.8]
-      [&_hr]:border-slate-700 [&_hr]:my-6
-      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-4 [&_blockquote]:text-slate-400 [&_blockquote]:my-4 [&_blockquote]:italic
-      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[13px]
-      [&_pre]:bg-slate-800 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-4
+      [&_ul]:my-5 [&_ul]:pl-6 [&_ul]:list-disc [&_ul]:text-slate-300
+      [&_ol]:my-5 [&_ol]:pl-6 [&_ol]:list-decimal [&_ol]:text-slate-300
+      [&_li]:my-3 [&_li]:text-slate-300 [&_li]:leading-[1.95]
+      [&_hr]:border-slate-700 [&_hr]:my-8
+      [&_blockquote]:border-l-2 [&_blockquote]:border-slate-600 [&_blockquote]:pl-4 [&_blockquote]:text-slate-400 [&_blockquote]:my-6 [&_blockquote]:italic
+      [&_code]:text-slate-300 [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[14px]
+      [&_pre]:bg-slate-800 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-5
       [&_a]:text-blue-400 [&_a]:underline [&_a:hover]:text-blue-300
     ">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           table: ({ children }) => (
-            <div className="overflow-x-auto -mx-1 my-3">
-              <table className="w-full text-[12px] border-collapse">
+            <div className="overflow-x-auto -mx-1 my-5">
+              <table className="w-full text-[14px] border-collapse">
                 {children}
               </table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="text-slate-200 font-semibold border border-slate-700 px-3 py-2 text-left bg-slate-800/60 text-[11px] break-keep leading-snug">
+            <th className="text-slate-200 font-semibold border border-slate-700 px-4 py-3 text-left bg-slate-800/60 text-[13px] break-keep leading-snug">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="text-slate-300 border border-slate-800 px-3 py-2 text-[12px] break-keep leading-relaxed">
+            <td className="text-slate-300 border border-slate-800 px-4 py-3 text-[14px] break-keep leading-relaxed">
               {children}
             </td>
           ),
@@ -519,25 +519,25 @@ export default function SharePage() {
               isPositive ? "bg-emerald-500" : isNegative ? "bg-red-500" : "bg-amber-500"
             )} />
 
-            <div className="relative px-4 sm:px-6 pt-5 pb-4">
+            <div className="relative px-5 sm:px-7 pt-6 pb-5">
               <span className={cn(
-                "inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full border mb-3",
+                "inline-flex items-center text-[13px] font-bold px-3 py-1.5 rounded-full border mb-4",
                 vs.bg, vs.color
               )}>
                 {vs.label}
               </span>
 
-              <h1 className="text-white text-[22px] sm:text-[26px] font-black leading-tight mb-1">
+              <h1 className="text-white text-[26px] sm:text-[30px] font-black leading-tight mb-1.5">
                 {analysis.companyName}
               </h1>
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                <span className="text-slate-400 text-[12px] font-mono">{analysis.ticker}</span>
+              <div className="flex flex-wrap items-center gap-2 mb-5">
+                <span className="text-slate-400 text-[14px] font-mono">{analysis.ticker}</span>
                 {analysis.industry && (
                   <>
                     <span className="text-slate-700">·</span>
-                    <span className="text-slate-500 text-[11px] flex items-center gap-1">
-                      <Building2 className="w-3 h-3 shrink-0" />
-                      <span className="truncate max-w-[160px]">{analysis.industry}</span>
+                    <span className="text-slate-500 text-[13px] flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate max-w-[180px]">{analysis.industry}</span>
                     </span>
                   </>
                 )}
@@ -545,7 +545,7 @@ export default function SharePage() {
 
               {keyIssue && (
                 <div className={cn(
-                  "rounded-xl px-3.5 py-2.5 mb-4 border-l-2",
+                  "rounded-xl px-4 py-3.5 mb-5 border-l-2",
                   isPositive
                     ? "bg-emerald-500/8 border-emerald-500/50"
                     : isNegative
@@ -553,7 +553,7 @@ export default function SharePage() {
                     : "bg-amber-500/8 border-amber-500/50"
                 )}>
                   <p className={cn(
-                    "text-[12px] font-medium leading-snug",
+                    "text-[15px] font-medium leading-[1.75] break-keep",
                     isPositive ? "text-emerald-200" : isNegative ? "text-red-200" : "text-amber-200"
                   )}>
                     {keyIssue}
@@ -562,27 +562,27 @@ export default function SharePage() {
               )}
 
               {targetStr && (
-                <div className="flex items-end justify-between gap-3 pb-4 border-b border-slate-800">
+                <div className="flex items-end justify-between gap-3 pb-5 border-b border-slate-800">
                   <div>
-                    <p className="text-slate-400 text-[11px] font-medium mb-1 flex items-center gap-1">
-                      <Target className="w-3 h-3" />적정주가
+                    <p className="text-slate-400 text-[13px] font-medium mb-1.5 flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5" />적정주가
                     </p>
-                    <p className="text-white text-[28px] sm:text-[32px] font-black leading-none tabular-nums">
+                    <p className="text-white text-[32px] sm:text-[36px] font-black leading-none tabular-nums">
                       {targetStr}
                     </p>
                   </div>
                   {up != null && (
                     <div className={cn("text-right shrink-0", up >= 0 ? "text-emerald-400" : "text-red-400")}>
-                      <div className="flex items-center justify-end gap-1 mb-0.5">
+                      <div className="flex items-center justify-end gap-1 mb-1">
                         {up >= 0
-                          ? <TrendingUp className="w-4 h-4 shrink-0" />
-                          : <TrendingDown className="w-4 h-4 shrink-0" />
+                          ? <TrendingUp className="w-5 h-5 shrink-0" />
+                          : <TrendingDown className="w-5 h-5 shrink-0" />
                         }
-                        <span className="text-[20px] sm:text-[22px] font-black tabular-nums">
+                        <span className="text-[24px] sm:text-[26px] font-black tabular-nums">
                           {up >= 0 ? "+" : ""}{up.toFixed(1)}%
                         </span>
                       </div>
-                      <p className="text-slate-500 text-[10px]">분석 당시 대비</p>
+                      <p className="text-slate-500 text-[12px]">분석 당시 대비</p>
                     </div>
                   )}
                 </div>
@@ -591,21 +591,21 @@ export default function SharePage() {
               {startPriceStr && (
                 <div className="flex gap-4 pt-4">
                   <div>
-                    <p className="text-slate-500 text-[10px] mb-0.5">분석 당시 현재가</p>
-                    <p className="text-slate-200 text-[14px] font-bold tabular-nums">{startPriceStr}</p>
+                    <p className="text-slate-500 text-[12px] mb-1">분석 당시 현재가</p>
+                    <p className="text-slate-200 text-[16px] font-bold tabular-nums">{startPriceStr}</p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="px-4 sm:px-6 py-3 bg-slate-800/50 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded bg-white/10 flex items-center justify-center shrink-0">
-                  <span className="text-white text-[8px] font-black">AI</span>
+            <div className="px-5 sm:px-7 py-3.5 bg-slate-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded bg-white/10 flex items-center justify-center shrink-0">
+                  <span className="text-white text-[9px] font-black">AI</span>
                 </span>
-                <span className="text-slate-400 text-[11px]">애빛다 7단계 AI 분석</span>
+                <span className="text-slate-400 text-[13px]">애빛다 7단계 AI 분석</span>
               </div>
-              {createdAt && <span className="text-slate-600 text-[10px]">{createdAt}</span>}
+              {createdAt && <span className="text-slate-500 text-[12px]">{createdAt}</span>}
             </div>
           </div>
         </motion.div>
@@ -649,7 +649,7 @@ export default function SharePage() {
                     </div>
 
                     {/* 스텝 본문 */}
-                    <div className="px-5 py-5">
+                    <div className="px-5 py-7">
                       {step.stepKey === "investment_strategy" ? (
                         (() => {
                           const card = <ShareInvestmentCard content={step.content} currency={isUSTicker(analysis.ticker) ? "USD" : "KRW"} />;
