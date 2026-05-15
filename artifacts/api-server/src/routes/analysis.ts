@@ -4956,12 +4956,22 @@ async function executeStep(
         // JSON parse failed
       }
 
-      await rawQuery(
-        `UPDATE analyses SET status='completed', current_step=NULL, investment_verdict=$1,
-         target_price=$2, entry_price=$3, stop_loss=$4, risk_reward_ratio=$5, updated_at=NOW()
-         WHERE id=$6`,
-        [investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, id]
-      );
+      // AI API 실패로 오류 문자열이 저장된 경우 → status='error' (completed 아님)
+      const stepHasApiError = content.startsWith("분석 오류:") || content.startsWith("분석 결과를 생성하지 못했습니다");
+      if (stepHasApiError) {
+        console.warn(`[analysis ${id}] investment_strategy API error — marking analysis as 'error'`);
+        await rawQuery(
+          `UPDATE analyses SET status='error', current_step=NULL, updated_at=NOW() WHERE id=$1`,
+          [id]
+        );
+      } else {
+        await rawQuery(
+          `UPDATE analyses SET status='completed', current_step=NULL, investment_verdict=$1,
+           target_price=$2, entry_price=$3, stop_loss=$4, risk_reward_ratio=$5, updated_at=NOW()
+           WHERE id=$6`,
+          [investmentVerdict, targetPrice, entryPrice, stopLoss, riskRewardRatio, id]
+        );
+      }
 
       // ── 토큰 비용 추정 저장 ────────────────────────────────────────────────
       try {

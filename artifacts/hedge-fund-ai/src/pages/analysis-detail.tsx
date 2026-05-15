@@ -1286,6 +1286,7 @@ export default function AnalysisDetail() {
 
   const currentStepCount = analysis.steps.length;
   const isComplete = analysis.status === 'completed';
+  const isError = analysis.status === 'error';
   const isEn = (analysis as any).language === 'en';
 
   // investment_strategy 스텝 JSON을 1차 소스로 → DB값 불일치 방지
@@ -1308,7 +1309,7 @@ export default function AnalysisDetail() {
   })();
 
   const handleRunNextStep = () => {
-    if (isComplete || isStreaming || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
+    if (isComplete || isError || isStreaming || currentStepCount >= ANALYSIS_STEPS_ORDER.length) return;
     const nextStepKey = ANALYSIS_STEPS_ORDER[currentStepCount];
     // 이전에 auto-chain이 실패했을 수 있으므로 triggeredSteps 체크를 제거하고 항상 재실행 허용
     triggeredSteps.current.delete(nextStepKey);
@@ -1429,15 +1430,19 @@ export default function AnalysisDetail() {
                 "px-2.5 py-0.5 text-xs font-semibold rounded-full border",
                 isComplete
                   ? "bg-success/10 text-success border-success/20"
-                  : analysis.status === 'queued'
-                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse"
-                    : "bg-warning/10 text-warning border-warning/20 animate-pulse"
+                  : isError
+                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    : analysis.status === 'queued'
+                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse"
+                      : "bg-warning/10 text-warning border-warning/20 animate-pulse"
               )}>
                 {isComplete
                   ? (isEn ? 'Analysis Complete' : '분석 완료')
-                  : analysis.status === 'queued'
-                    ? (isEn ? 'Queued' : '분석 대기 중')
-                    : (isEn ? 'In Progress' : '분석 진행중')}
+                  : isError
+                    ? (isEn ? 'Analysis Failed' : '분석 실패')
+                    : analysis.status === 'queued'
+                      ? (isEn ? 'Queued' : '분석 대기 중')
+                      : (isEn ? 'In Progress' : '분석 진행중')}
               </span>
               <span className="px-2 py-0.5 text-[10px] font-medium rounded-full border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 flex items-center gap-1">
                 <span>⚡</span>{isEn ? 'AI · For Reference' : 'AI 자동생성 · 참고용'}
@@ -1677,8 +1682,31 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
 
+        {/* AI API 오류로 분석 실패 UI */}
+        {isError && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="print:hidden bg-card border border-red-500/20 rounded-xl p-5 flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {isEn ? 'Analysis Failed' : '분석 생성 실패'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isEn
+                  ? 'AI service connection failed during analysis. Please re-run.'
+                  : 'AI 서비스 연결 오류로 분석을 완료하지 못했습니다. 분석을 다시 실행해 주세요.'}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         {/* Pipeline running indicator */}
-        {!isComplete && analysis.status !== 'queued' && (
+        {!isComplete && !isError && analysis.status !== 'queued' && (
           <div className="print:hidden">
             {/* 스트리밍 중: 단계 번호 인라인 표시 */}
             {isStreaming && (
@@ -2394,12 +2422,24 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
           </div>
         );
-      })() : (
-        <div className="p-6 text-sm text-foreground/60 leading-relaxed">
-          <p className="text-amber-600 font-medium mb-2 text-xs uppercase tracking-widest">{isEn ? "Error loading analysis" : "분석 결과 로드 중 오류"}</p>
-          <p>{isEn ? "Failed to load strategy data. Please re-run the analysis." : "최종 투자 전략 데이터를 불러오지 못했습니다. 분석을 다시 실행해 주세요."}</p>
-        </div>
-      )}
+      })() : (() => {
+        const isApiErr = step.content?.startsWith("분석 오류:") || step.content?.startsWith("분석 결과를 생성하지 못했습니다");
+        return (
+          <div className="p-6 text-sm text-foreground/60 leading-relaxed">
+            {isApiErr ? (
+              <>
+                <p className="text-red-500 font-medium mb-2 text-xs uppercase tracking-widest">{isEn ? "AI Service Error" : "AI 서비스 연결 오류"}</p>
+                <p>{isEn ? "Failed to connect to AI service. Please re-run the analysis." : "AI 서비스 연결 실패로 최종 전략을 생성하지 못했습니다. 분석을 다시 실행해 주세요."}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-amber-600 font-medium mb-2 text-xs uppercase tracking-widest">{isEn ? "Error loading analysis" : "분석 결과 로드 중 오류"}</p>
+                <p>{isEn ? "Failed to load strategy data. Please re-run the analysis." : "최종 투자 전략 데이터를 불러오지 못했습니다. 분석을 다시 실행해 주세요."}</p>
+              </>
+            )}
+          </div>
+        );
+      })()}
     </motion.div>
   );
 }
