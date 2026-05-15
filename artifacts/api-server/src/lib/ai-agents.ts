@@ -1906,9 +1906,20 @@ export function buildPrompt(
 - 비교 대상 피어 기업은 컨텍스트에 제공된 기업 또는 실제 존재하는 상장사만 사용하세요.
 - 피어 기업의 매출·이익·멀티플은 컨텍스트 데이터 또는 공개 시장 데이터 기준으로만 사용하고, 훈련 기억 속 수치를 임의로 삽입하지 마세요.
 
-[4] 시점 혼동 방지]
-- 현재 날짜: 2026년 4월. 이 시점 이후의 사건("2026년 하반기 예정" 등)은 명확히 미래 전망으로 표현하세요.
-- 2024년·2025년 실적은 "확정 과거 데이터"로 취급하고, 컨텍스트에 없는 수치를 이 기간에 대해 임의 기재하는 것은 금지입니다.
+[4] 시점 혼동 방지 — 가장 중요한 규칙]
+- 현재 날짜: ${_currentDateStr}. 오늘은 ${_currentYear}년이며, ${_currentYear - 1}년과 ${_currentYear - 2}년은 이미 지나간 과거입니다.
+- ⛔ 절대 금지 — 시제 오류 예시 (${_currentYear}년 기준):
+  - "2025년에는 ~것으로 전망됩니다" ❌ (2025년은 이미 과거)
+  - "2025년부터 성장할 것으로 예상됩니다" ❌
+  - "2025년 AI 수요 증가가 기대됩니다" ❌
+  - "2025년에는 시장이 1,200억 달러를 넘어설 것으로 전망됩니다" ❌
+- ✅ 올바른 표현:
+  - "2025년에는 ~를 기록했습니다" ✅
+  - "2025년 시장은 실제로 1,200억 달러를 넘어섰습니다" ✅ (사실로 확인된 경우)
+  - "2025년 기준 ~였으며" ✅
+- 미래형("전망", "예상", "성장할 것으로", "이를 것으로")은 반드시 ${_currentYear + 1}년 이후에만 사용하세요.
+- ${_currentYear - 2}년·${_currentYear - 1}년 실적·수치는 "확정 과거 데이터"로 취급하고, 컨텍스트에 없는 수치를 이 기간에 대해 임의 기재하는 것은 금지입니다.
+- 산업 시장 규모·성장률 서술에서도 동일 규칙 적용: 훈련 데이터에 "${_currentYear - 1}년 전망"으로 기억된 수치라도 보고서에는 반드시 과거형으로만 작성하세요.
 
 [5] 추론 투명성]
 - 컨텍스트 데이터에서 직접 인용한 수치가 아닌, 계산·추론으로 도출한 수치는 반드시 근거 계산식(예: "영업이익 X억 ÷ 매출 Y억 = Z%")을 한 줄로 병기하세요.
@@ -2004,9 +2015,18 @@ US stocks — available sources: SEC EDGAR (10-K/10-Q), Bloomberg, Yahoo Finance
 - Use only peer companies present in context or verifiably real and listed.
 - Peer financials must come from context data or public market data only.
 
-[4] Time confusion prevention]
-- Current date: April 2026. Events after this date must be clearly framed as forward-looking.
-- 2024 and 2025 actuals are confirmed historical data; do not fabricate figures for these years.
+[4] Time confusion prevention — highest priority rule]
+- Current date: ${_currentDateStr}. Today is ${_currentYear}; ${_currentYear - 1} and ${_currentYear - 2} are already past years.
+- ⛔ Forbidden tense errors (as of ${_currentYear}):
+  - "In 2025, revenue is expected to grow" ❌ (2025 is already past)
+  - "2025 AI demand is anticipated to rise" ❌
+  - "the market is forecast to exceed $120B in 2025" ❌
+- ✅ Correct usage:
+  - "In 2025, revenue grew..." ✅
+  - "The market reached $120B in 2025" ✅ (if confirmed)
+- Forward-looking language ("forecast", "expected", "anticipated", "projected") must only be used for ${_currentYear + 1} and beyond.
+- ${_currentYear - 2} and ${_currentYear - 1} actuals are confirmed historical data; do not fabricate figures for these years.
+- Industry market size and growth narratives follow the same rule: even if training memory contains "${_currentYear - 1} outlook" phrasing, write it in past tense only.
 
 [5] Reasoning transparency]
 - Any figure derived by calculation (not directly cited) must include the formula in one line (e.g., "OP margin: OP $X ÷ Revenue $Y = Z%").
