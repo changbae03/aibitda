@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
@@ -6,8 +6,9 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/ui/command-palette";
-import { LanguageProvider } from "@/lib/language-context";
+import { LanguageProvider, useLanguage } from "@/lib/language-context";
 import { AppLayout } from "@/components/layout/app-layout";
+import { motion, AnimatePresence } from "framer-motion";
 import NotFound from "@/pages/not-found";
 
 // Pages
@@ -43,6 +44,86 @@ import TermsPage from "@/pages/terms";
 import DisclaimerPage from "@/pages/disclaimer";
 import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
+
+const CORAL = "#FF8A7A";
+const CHARS_KO = ["애", "빛", "다"];
+const CHARS_EN = ["A", "i", "B", "I", "T", "D", "A"];
+
+function GlobalSplash() {
+  const { isEn } = useLanguage();
+  const chars = isEn ? CHARS_EN : CHARS_KO;
+  const [visible, setVisible] = useState(true);
+  const startRef = useRef(Date.now());
+
+  useEffect(() => {
+    const MIN_MS = 1800;
+    const elapsed = Date.now() - startRef.current;
+    const delay = Math.max(0, MIN_MS - elapsed);
+    const timer = setTimeout(() => setVisible(false), delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+        >
+          <div className="flex items-end gap-[2px]">
+            {chars.map((ch, i) => (
+              <motion.span
+                key={i}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + i * 0.09, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                style={{
+                  fontFamily: "'Pretendard', sans-serif",
+                  fontSize: isEn ? "52px" : "68px",
+                  fontWeight: 900,
+                  letterSpacing: isEn ? "-0.04em" : "-0.02em",
+                  color: CORAL,
+                  lineHeight: 1,
+                  display: "inline-block",
+                }}
+              >
+                {ch}
+              </motion.span>
+            ))}
+          </div>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5, ease: "easeOut" }}
+            style={{
+              marginTop: "10px",
+              fontSize: "13px",
+              fontWeight: 500,
+              letterSpacing: "0.05em",
+              color: "hsl(var(--muted-foreground))",
+              fontFamily: "'Pretendard', sans-serif",
+            }}
+          >
+            {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다"}
+          </motion.p>
+          <div className="absolute bottom-12 flex gap-1.5">
+            {[0, 1, 2].map(i => (
+              <motion.div
+                key={i}
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: CORAL }}
+                animate={{ opacity: [0.2, 0.8, 0.2] }}
+                transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.22, ease: "easeInOut" }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -200,6 +281,7 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <WouterRouter base={basePath}>
         <LanguageProvider>
+          <GlobalSplash />
           <ClerkProviderWithRoutes />
           <CommandPalette />
         </LanguageProvider>
