@@ -3437,13 +3437,14 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
     return null;
   }, [isFundamental, bodyContent]);
   // 적정주가 산출 카드: 핵심 밸류에이션 가정 요약 섹션 분리 (토글화)
+  // 이모지가 다양하게 출력될 수 있으므로 "핵심 밸류에이션 가정" 텍스트로만 탐지
   const keyAssumptionsSplit = useMemo(() => {
     if (!isRelativeVal) return null;
-    const midIdx = bodyContent.search(/\n## 📌 핵심 밸류에이션 가정/);
+    const midIdx = bodyContent.search(/\n## [^\n]*핵심 밸류에이션 가정/);
     if (midIdx >= 0) {
       return { before: bodyContent.slice(0, midIdx), section: bodyContent.slice(midIdx + 1) };
     }
-    if (/^## 📌 핵심 밸류에이션 가정/.test(bodyContent)) {
+    if (/^## [^\n]*핵심 밸류에이션 가정/.test(bodyContent)) {
       return { before: '', section: bodyContent };
     }
     return null;
