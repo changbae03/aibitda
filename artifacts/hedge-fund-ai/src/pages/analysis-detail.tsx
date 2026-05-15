@@ -3505,6 +3505,59 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           const gMax = Math.max(fv.abs_bull, fv.rel_bull, fv.bull) * 1.04;
           const isUp = fv.base >= fv.current;
           const upside = fv.current > 0 ? ((fv.base - fv.current) / fv.current * 100) : 0;
+          const absUp = fv.current > 0 ? ((fv.abs_base - fv.current) / fv.current * 100) : 0;
+          const relUp = fv.current > 0 ? ((fv.rel_base - fv.current) / fv.current * 100) : 0;
+          const absModelDescMap: Record<string, string> = {
+            "DCF":       isEn ? "Discounted Cash Flow" : "미래 현금흐름 할인",
+            "rNPV":      isEn ? "Risk-adjusted NPV"    : "위험조정 순현가",
+            "SOTP":      isEn ? "Sum-of-the-Parts"     : "사업부별 합산",
+            "rNPV+SOTP": isEn ? "rNPV + SOTP"          : "rNPV + 사업부 합산",
+            "DDM":       isEn ? "Dividend Discount"    : "배당할인 모델",
+            "P/B-ROE":   isEn ? "Book Value × ROE"     : "자기자본 기반",
+            "NAV":       isEn ? "Net Asset Value"      : "순자산가치",
+            "EV/Sales":  isEn ? "EV / Revenue"         : "매출 기준 EV",
+            "AFFO":      isEn ? "Adj. Funds From Ops"  : "조정 영업현금흐름",
+          };
+          const absModelDesc = absModelDescMap[absModel] ?? (isEn ? "Intrinsic Value Model" : "절대가치 모델");
+
+          const stepCards = [
+            {
+              n: 1,
+              title: isEn ? "Model" : "모델 선택",
+              sub: absModelDesc,
+              value: absModel,
+              badge: null,
+              highlight: false,
+            },
+            {
+              n: 2,
+              title: isEn ? "Absolute" : "절대가치",
+              sub: isEn ? `${absModel} intrinsic` : `${absModel} 내재가치`,
+              value: formatPrice(fv.abs_base, priceCurrency),
+              badge: `${absUp >= 0 ? "+" : ""}${absUp.toFixed(1)}%`,
+              badgeUp: absUp >= 0,
+              highlight: false,
+            },
+            {
+              n: 3,
+              title: isEn ? "Relative" : "상대가치",
+              sub: isEn ? "Peer multiples" : "피어 멀티플 비교",
+              value: formatPrice(fv.rel_base, priceCurrency),
+              badge: `${relUp >= 0 ? "+" : ""}${relUp.toFixed(1)}%`,
+              badgeUp: relUp >= 0,
+              highlight: false,
+            },
+            {
+              n: 4,
+              title: isEn ? "Blended" : "최종 조율",
+              sub: isEn ? "Abs. × Rel. blend" : "절대 + 상대 조율",
+              value: formatPrice(fv.base, priceCurrency),
+              badge: `${isUp ? "+" : ""}${upside.toFixed(1)}%`,
+              badgeUp: isUp,
+              highlight: true,
+            },
+          ];
+
           return (
             <div className="mt-5 pt-4 border-t border-border">
               {/* 섹션 헤더 */}
@@ -3512,6 +3565,51 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                 <div className="w-1 h-4 rounded-full" style={{ background: color }} />
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Final Blended Target" : "최종 조율 적정주가"}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>{isEn ? "Absolute × Relative Blend" : "절대가치 × 상대가치 조율"}</span>
+              </div>
+
+              {/* 밸류에이션 4단계 프로세스 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+                {stepCards.map((s) => (
+                  <div
+                    key={s.n}
+                    className="relative rounded-xl border p-3 flex flex-col gap-1"
+                    style={s.highlight
+                      ? { borderColor: `${color}50`, background: `${color}0a` }
+                      : { borderColor: "hsl(var(--border) / 0.5)", background: "hsl(var(--muted) / 0.12)" }
+                    }
+                  >
+                    {/* 단계 번호 + 제목 */}
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="flex items-center justify-center w-[18px] h-[18px] rounded-full text-[9px] font-bold shrink-0"
+                        style={{ background: s.highlight ? color : `${color}30`, color: s.highlight ? "white" : color }}
+                      >
+                        {s.n}
+                      </span>
+                      <span className={cn("text-[10px] font-semibold uppercase tracking-wide truncate", s.highlight ? "" : "text-muted-foreground")}
+                        style={s.highlight ? { color } : {}}
+                      >
+                        {s.title}
+                      </span>
+                    </div>
+                    {/* 산출 값 */}
+                    <span className="text-[14px] font-bold font-mono text-foreground leading-tight">{s.value}</span>
+                    {/* 업사이드 뱃지 */}
+                    {s.badge && (
+                      <span className={cn("text-[11px] font-bold leading-none", (s as any).badgeUp ? "text-emerald-500" : "text-rose-500")}>
+                        {s.badge}
+                      </span>
+                    )}
+                    {/* 설명 */}
+                    <span className="text-[10px] text-muted-foreground/70 leading-tight">{s.sub}</span>
+                    {/* 연결 화살표 (마지막 카드 제외, sm 이상) */}
+                    {s.n < 4 && (
+                      <span className="hidden sm:flex absolute -right-[9px] top-1/2 -translate-y-1/2 z-10 w-[18px] h-[18px] items-center justify-center text-muted-foreground/30 text-xs">
+                        →
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* 현재가 + 조율 업사이드 칩 */}
