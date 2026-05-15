@@ -63,7 +63,7 @@ function SplashScreen({ isEn }: { isEn: boolean }) {
       />
 
       {/* 글자 */}
-      <div className="relative flex items-end gap-[2px]">
+      <div className="relative flex items-end gap-[2px] overflow-hidden">
         {chars.map((ch, i) => (
           <motion.span
             key={i}
@@ -92,13 +92,16 @@ function SplashScreen({ isEn }: { isEn: boolean }) {
 
         {/* 빛 스윕 (shimmer) */}
         <motion.div
-          initial={{ x: "-110%", opacity: 0.9 }}
-          animate={{ x: "210%", opacity: 0 }}
-          transition={{ delay: 0.65, duration: 0.7, ease: "easeOut" }}
+          initial={{ x: "-100%" }}
+          animate={{ x: "200%" }}
+          transition={{ delay: 0.6, duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
           style={{
             position: "absolute",
-            inset: 0,
-            background: `linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%)`,
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: "60%",
+            background: `linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.15) 40%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.15) 60%, transparent 100%)`,
             pointerEvents: "none",
           }}
         />
