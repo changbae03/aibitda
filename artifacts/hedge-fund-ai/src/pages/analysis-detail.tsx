@@ -2130,14 +2130,34 @@ function formatPrice(val: string | number | undefined | null, currency: "KRW" | 
 function extractJson(raw: string): any | null {
   if (!raw) return null;
   let s = raw.trim();
+
+  // 0) FINAL_VALUATION_DATA 제거 — 서버가 검증용으로 주입한 메타데이터 JSON
+  //    이 블록이 남아 있으면 lastIndexOf("}")가 이 블록 끝을 잡아 파싱 실패 원인이 됨
+  s = s.replace(/FINAL_VALUATION_DATA:\s*\{[^}]*(?:\{[^}]*\}[^}]*)?\}/g, "").trim();
+
   // 1) 마크다운 코드블록 제거 (```json ... ``` 또는 ``` ... ```)
   s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  // 2) 앞뒤 설명 텍스트 제거 — 첫 { 부터 마지막 } 까지만 추출
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
-    s = s.slice(start, end + 1);
+
+  // 2) 첫 { 부터 매칭되는 } 까지만 추출 — 중괄호 카운팅 방식
+  //    (lastIndexOf는 뒤쪽 별도 JSON 블록까지 포함해버려 파싱 실패 유발)
+  const startIdx = s.indexOf("{");
+  if (startIdx === -1) return null;
+  let depth = 0;
+  let endIdx = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = startIdx; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") { depth--; if (depth === 0) { endIdx = i; break; } }
   }
+  if (endIdx === -1) return null;
+  s = s.slice(startIdx, endIdx + 1);
+
   // 시도 1: 원본 그대로
   try { return JSON.parse(s); } catch { /* 계속 */ }
   // 시도 2: trailing comma 제거 (AI가 자주 실수)
