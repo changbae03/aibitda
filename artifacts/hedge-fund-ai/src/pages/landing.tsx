@@ -51,29 +51,20 @@ function SplashScreen({ isEn }: { isEn: boolean }) {
     <motion.div
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background"
       initial={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.06 }}
-      transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4, ease: "easeInOut" }}
     >
-      {/* 배경 코랄 글로우 */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${CORAL}18 0%, transparent 70%)`,
-        }}
-      />
-
       {/* 글자 */}
-      <div className="relative flex items-end gap-[2px] overflow-hidden">
+      <div className="flex items-end gap-[2px]">
         {chars.map((ch, i) => (
           <motion.span
             key={i}
-            initial={{ opacity: 0, y: 28, scale: 0.7 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{
-              delay: 0.12 + i * 0.11,
-              type: "spring",
-              stiffness: 420,
-              damping: 22,
+              delay: 0.1 + i * 0.09,
+              duration: 0.5,
+              ease: [0.22, 1, 0.36, 1],
             }}
             style={{
               fontFamily: "'Pretendard', sans-serif",
@@ -82,41 +73,24 @@ function SplashScreen({ isEn }: { isEn: boolean }) {
               letterSpacing: isEn ? "-0.04em" : "-0.02em",
               color: CORAL,
               lineHeight: 1,
-              position: "relative",
               display: "inline-block",
             }}
           >
             {ch}
           </motion.span>
         ))}
-
-        {/* 빛 스윕 (shimmer) */}
-        <motion.div
-          initial={{ x: "-100%" }}
-          animate={{ x: "200%" }}
-          transition={{ delay: 0.6, duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            width: "60%",
-            background: `linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.15) 40%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.15) 60%, transparent 100%)`,
-            pointerEvents: "none",
-          }}
-        />
       </div>
 
       {/* 서브타이틀 */}
       <motion.p
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.65, duration: 0.4 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5, duration: 0.5, ease: "easeOut" }}
         style={{
-          marginTop: "12px",
+          marginTop: "10px",
           fontSize: "13px",
           fontWeight: 500,
-          letterSpacing: "0.06em",
+          letterSpacing: "0.05em",
           color: "hsl(var(--muted-foreground))",
           fontFamily: "'Pretendard', sans-serif",
         }}
@@ -131,8 +105,8 @@ function SplashScreen({ isEn }: { isEn: boolean }) {
             key={i}
             className="w-1.5 h-1.5 rounded-full"
             style={{ background: CORAL }}
-            animate={{ opacity: [0.25, 1, 0.25] }}
-            transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+            animate={{ opacity: [0.2, 0.8, 0.2] }}
+            transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.22, ease: "easeInOut" }}
           />
         ))}
       </div>
