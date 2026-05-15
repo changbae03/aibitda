@@ -395,10 +395,17 @@ export async function runMigrations() {
         direction_accuracy   REAL,
         avg_price_deviation  REAL,
         sample_count         INTEGER NOT NULL DEFAULT 0,
+        sector_benchmarks    JSONB,
         last_recalc_at       TIMESTAMPTZ DEFAULT NOW(),
         created_at           TIMESTAMPTZ DEFAULT NOW() NOT NULL,
         UNIQUE (sector, market)
       );
+    `);
+
+    // sector_benchmarks 컬럼 — 기존 테이블에 없으면 추가
+    await client.query(`
+      ALTER TABLE model_calibration
+        ADD COLUMN IF NOT EXISTS sector_benchmarks JSONB;
     `);
 
     // ticker_financials 테이블 (DART 시계열 재무 데이터)

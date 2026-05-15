@@ -5,6 +5,7 @@ import { autoRecalibrate } from "./routes/performance.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
+import { harvestMarketData } from "./lib/market-harvester.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -24,6 +25,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 const SIX_HOURS_MS  = 6 * 60 * 60 * 1000;
 const ONE_DAY_MS    = 24 * 60 * 60 * 1000;
+const ONE_WEEK_MS   = 7 * 24 * 60 * 60 * 1000;
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
 const server = app.listen(port, () => {
@@ -103,6 +105,22 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] 재실행 스케줄 실패:", e?.message ?? e)
     );
   }, THIRTY_MIN_MS);
+
+  // ── 주간 시장 데이터 수집 (KRX 종목 재무지표 → sector_benchmarks) ─────────
+  // AI 호출 없이 Yahoo Finance 재무 데이터만 수집. 비용 거의 0.
+  // KRX 2719종목을 200개씩 배치(~14주 1순환). 서버 시작 10분 후 첫 실행.
+  setTimeout(() => {
+    harvestMarketData().catch((e) =>
+      console.error("[SCHEDULER] 시장 데이터 수집 첫 실행 실패:", e?.message ?? e)
+    );
+  }, 10 * 60 * 1000);
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 주간 시장 데이터 수집 시작");
+    harvestMarketData().catch((e) =>
+      console.error("[SCHEDULER] 주간 시장 데이터 수집 실패:", e?.message ?? e)
+    );
+  }, ONE_WEEK_MS);
 });
 
 function gracefulShutdown(signal: string) {

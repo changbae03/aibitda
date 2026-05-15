@@ -459,7 +459,7 @@ export async function getCalibrationContext(sector: string): Promise<string | nu
 
     // ── Part 2: 실적 데이터 기반 편향 보정 (3건 이상 있을 때) ──────────────
     const { rows } = await pool.query(
-      `SELECT direction_accuracy, avg_price_deviation, sample_count
+      `SELECT direction_accuracy, avg_price_deviation, sample_count, sector_benchmarks
        FROM model_calibration
        WHERE sector = $1`,
       [sector]
@@ -471,8 +471,21 @@ export async function getCalibrationContext(sector: string): Promise<string | nu
     const dev = cal ? (cal.avg_price_deviation as number | null) : null;
     const n = cal ? (cal.sample_count as number) : 0;
 
-    // 사전 지식도, 데이터도 없으면 null
-    if (!prior && !hasStat) return null;
+    // sector_benchmarks: market-harvester가 수집한 실시장 중간값
+    const benchRow = rows[0]?.sector_benchmarks ?? null;
+    const bm = benchRow as {
+      medianPer: number | null;
+      medianPbr: number | null;
+      medianRoe: number | null;
+      medianOpm: number | null;
+      medianRevGrowth: number | null;
+      sampleCount: number;
+      updatedAt: string;
+    } | null;
+    const hasBenchmark = bm != null && bm.sampleCount >= 5;
+
+    // 사전 지식도, 데이터도, 시장 벤치마크도 없으면 null
+    if (!prior && !hasStat && !hasBenchmark) return null;
 
     const lines: string[] = [];
 
@@ -515,6 +528,25 @@ export async function getCalibrationContext(sector: string): Promise<string | nu
         const leverLines = biasToLeverGuidance(devRounded, sector);
         lines.push(...leverLines);
       }
+    }
+
+    // ── Part 3: 시장 실데이터 벤치마크 (market-harvester 수집, 주 1회 갱신) ──
+    if (hasBenchmark && bm) {
+      const fmt = (v: number | null, decimals = 1) =>
+        v != null ? v.toFixed(decimals) : "N/A";
+      const updatedDate = bm.updatedAt
+        ? new Date(bm.updatedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })
+        : "최근";
+      lines.push(`\n[📈 시장 실데이터 섹터 벤치마크 — ${bm.sampleCount}개 종목 중간값, ${updatedDate} 기준]`);
+      lines.push(`이 수치는 하드코딩이 아닌 KRX 실시장 데이터에서 주 1회 자동 수집됩니다. 피어 멀티플 평가 시 아래 기준값을 우선 참조하세요.`);
+      lines.push(`• 섹터 중간 PER: ${fmt(bm.medianPer)}배`);
+      lines.push(`• 섹터 중간 PBR: ${fmt(bm.medianPbr)}배`);
+      lines.push(`• 섹터 중간 ROE: ${fmt(bm.medianRoe)}%`);
+      lines.push(`• 섹터 중간 영업이익률: ${bm.medianOpm != null ? fmt(bm.medianOpm) + "%" : "N/A (흑자 기업 기준)"}`);
+      if (bm.medianRevGrowth != null) {
+        lines.push(`• 섹터 중간 매출성장률(YoY): ${bm.medianRevGrowth >= 0 ? "+" : ""}${fmt(bm.medianRevGrowth)}%`);
+      }
+      lines.push(`→ 분석 대상 종목의 PER·PBR·ROE가 위 중간값 대비 크게 벗어날 경우 프리미엄/디스카운트 사유를 명시하세요.`);
     }
 
     return lines.join("\n");
