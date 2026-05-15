@@ -229,18 +229,6 @@
     margin-bottom: 0.7rem;
   }
 }
-.markdown-body ul > li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.68em;
-  display: block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background-color: #9ca3af;
-  flex-shrink: 0;
-}
 .markdown-body li > p {
   margin-bottom: 0.2rem;
 }
