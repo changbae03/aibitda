@@ -1738,22 +1738,31 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const waccEstPct = parseFloat((waccEst * 100).toFixed(2));
         const CoEPct     = parseFloat((CoE * 100).toFixed(2));
 
-        let waccTag = "";
-        if (waccEstPct < 8) {
-          waccTag = " ⚠️ [과소 가능성] AI는 최소 8%로 하향 조정 필요 여부 검토";
-        } else if (waccEstPct > 16) {
-          waccTag = " ⚠️ [과대 가능성] AI는 재검토 필요";
+        const waccInRange = waccEstPct >= 8 && waccEstPct <= 16;
+
+        if (waccInRange) {
+          // 정상 범위: 서버 값을 출발점으로 사용하도록 지시
+          waccLines.push(
+            `\n[🧮 서버 계산 WACC 추정값 — 반드시 이 값을 출발점으로 사용]` +
+            `\n  Beta(${betaSrc}): ${beta.toFixed(2)} | Rf: ${(Rf*100).toFixed(1)}% | ERP: ${(ERP*100).toFixed(1)}%` +
+            `\n  CoE = ${(Rf*100).toFixed(1)}% + ${beta.toFixed(2)}×${(ERP*100).toFixed(1)}% = ${CoEPct}%` +
+            `\n  D/(D+E) = ${(DoverEplusD*100).toFixed(1)}%  |  E/(D+E) = ${(EoverEplusD*100).toFixed(1)}%` +
+            `\n  CoD(after-tax) = ${(codAfterTax*100).toFixed(2)}%` +
+            `\n  ➡️ 서버 WACC 추정값: ${waccEstPct}% ✅ 정상 범위 (8~16%)` +
+            `\n  ⚠️ 이 값에서 ±1~2%p 내에서만 조정 허용. 벗어나려면 구체적 근거 필수.`
+          );
         } else {
-          waccTag = " ✅ 정상 범위 — AI는 이 값을 WACC 출발점으로 사용 (가드레일 내 조정 허용)";
+          // 비정상 범위: 서버 값 폐기, AI 직접 산출 지시
+          const rangeLabel = waccEstPct < 8 ? "과소(8% 미만)" : "과대(16% 초과)";
+          waccLines.push(
+            `\n[🧮 서버 계산 WACC 참고값 — ⛔ 신뢰 불가, 아래 값 사용 금지]` +
+            `\n  서버 추정값: ${waccEstPct}% (${rangeLabel} — 데이터 품질 문제로 신뢰 불가)` +
+            `\n  Beta(${betaSrc}): ${beta.toFixed(2)} | Rf: ${(Rf*100).toFixed(1)}% | ERP: ${(ERP*100).toFixed(1)}%` +
+            `\n  ⚠️ [AI 지시] 위 서버 추정값(${waccEstPct}%)은 절대 사용하지 마세요.` +
+            `\n     아래 가드레일 기준에 따라 Rf·β·ERP를 직접 입력해 WACC를 새로 산출하고,` +
+            `\n     산출된 단일 값 하나만 보고서에 명시하세요. 두 개의 WACC 수치가 공존하면 안 됩니다.`
+          );
         }
-        waccLines.push(
-          `\n[🧮 서버 계산 WACC 추정값 — 반드시 출발점으로 사용]` +
-          `\n  Beta(${betaSrc}): ${beta.toFixed(2)} | Rf: ${(Rf*100).toFixed(1)}% | ERP: ${(ERP*100).toFixed(1)}%` +
-          `\n  CoE = ${(Rf*100).toFixed(1)}% + ${beta.toFixed(2)}×${(ERP*100).toFixed(1)}% = ${CoEPct}%` +
-          `\n  D/(D+E) = ${(DoverEplusD*100).toFixed(1)}%  |  E/(D+E) = ${(EoverEplusD*100).toFixed(1)}%` +
-          `\n  CoD(after-tax) = ${(codAfterTax*100).toFixed(2)}%` +
-          `\n  ➡️ 서버 WACC 추정값: ${waccEstPct}%${waccTag}`
-        );
       } else {
         waccLines.push(
           `\n[🧮 서버 계산 WACC 추정값] Beta 또는 시가총액 미확보 — AI가 가드레일 기준으로 직접 산출 필요`
