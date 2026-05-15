@@ -3489,6 +3489,16 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
     return null;
   }, [isRelativeVal, mainBodyContent]);
 
+  // WACC 토글에서 "선택 모델별 가정" 표 제거 — Part A에서 더 상세히 보여주므로 중복 제거
+  const waccOnlySection = useMemo(() => {
+    if (!modelAssumptionsSplit) return "";
+    return modelAssumptionsSplit.section
+      .replace(/\n+---\s*\n+###\s+선택 모델별 가정[\s\S]*/m, "") // --- + 선택 모델별 가정 이하 전부 제거
+      .replace(/\n+###\s+선택 모델별 가정[\s\S]*/m, "")           // --- 없이 바로 나오는 경우
+      .replace(/\n+---\s*$/m, "")                                  // 남은 trailing --- 제거
+      .trimEnd();
+  }, [modelAssumptionsSplit]);
+
   const [showValuationMetrics, setShowValuationMetrics] = useState(false);
   const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
   const [showModelAssumptions, setShowModelAssumptions] = useState(false);
@@ -3630,7 +3640,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                             strong: ({ children }: any) => <strong className="font-semibold text-foreground/90">{children}</strong>,
                             ...MD_TABLE_COMPONENTS,
                           }}>
-                            {prepareMarkdown(modelAssumptionsSplit.section)}
+                            {prepareMarkdown(waccOnlySection)}
                           </ReactMarkdown>
                         </div>
                       </motion.div>
