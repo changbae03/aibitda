@@ -4070,32 +4070,52 @@ async function executeStep(
             const bullishPct = Math.round((bullishCount / hist.length) * 100);
             const upsides = hist.map(h => `${h.date.slice(0, 7)}: ${h.upsidePct > 0 ? "+" : ""}${h.upsidePct}%`).join(", ");
 
-            // ① 방향 정확도: 연속 두 항목에서 entry가 상승했을 때 이전 판정이 매수였는지
+            // ① 방향 정확도
+            // 우선순위: model_insights 역주입 directionMatch → 연속 분석 주가 비교(폴백)
             let dirCorrect = 0, dirTotal = 0;
-            for (let i = 1; i < hist.length; i++) {
-              const prev = hist[i - 1];
-              const curr = hist[i];
-              const prevPrice = prev.priceAtAnalysis ?? prev.entryPrice;
-              const currPrice = curr.priceAtAnalysis ?? curr.entryPrice;
-              if (!prevPrice || !currPrice) continue;
-              const actualUp = currPrice > prevPrice;
-              const predictedUp = ["Strong Buy", "Buy"].includes(prev.verdict);
-              if (actualUp === predictedUp) dirCorrect++;
-              dirTotal++;
+            for (let i = 0; i < hist.length; i++) {
+              const entry = hist[i];
+              if (entry.directionMatch !== undefined && entry.directionMatch !== null) {
+                // model_insights에서 역주입된 실제 방향 일치 여부 (가장 정확)
+                if (entry.directionMatch === true) dirCorrect++;
+                dirTotal++;
+              } else if (i + 1 < hist.length) {
+                // 폴백: 다음 분석 시점 주가로 추정
+                const prevPrice = entry.priceAtAnalysis ?? entry.entryPrice;
+                const currPrice = hist[i + 1].priceAtAnalysis ?? hist[i + 1].entryPrice;
+                if (!prevPrice || !currPrice) continue;
+                const actualUp = currPrice > prevPrice;
+                const predictedUp = ["Strong Buy", "Buy"].includes(entry.verdict);
+                if (actualUp === predictedUp) dirCorrect++;
+                dirTotal++;
+              }
             }
-            const dirAccuracyStr = dirTotal >= 2
+            const dirAccuracyStr = dirTotal >= 1
               ? `방향 정확도: ${dirCorrect}/${dirTotal}회 일치 (${Math.round((dirCorrect / dirTotal) * 100)}%)`
               : "";
 
-            // ② 실제 수익률: priceAtAnalysis가 있는 항목에서 다음 항목의 price와 비교
+            // ② 실제 수익률
+            // 우선순위: model_insights 역주입 actualReturn → 연속 분석 주가 비교(폴백)
             const actualReturns: string[] = [];
-            for (let i = 0; i + 1 < hist.length; i++) {
-              const p0 = hist[i].priceAtAnalysis ?? hist[i].entryPrice;
-              const p1 = hist[i + 1].priceAtAnalysis ?? hist[i + 1].entryPrice;
-              if (!p0 || !p1) continue;
-              const actualRet = ((p1 - p0) / p0) * 100;
-              const predicted = hist[i].upsidePct;
-              actualReturns.push(`${hist[i].date.slice(0, 7)}: 예측 ${predicted > 0 ? "+" : ""}${predicted}% → 실제 ${actualRet > 0 ? "+" : ""}${actualRet.toFixed(1)}%`);
+            for (let i = 0; i < hist.length; i++) {
+              const entry = hist[i];
+              if (entry.actualReturn !== undefined) {
+                // model_insights 6시간 갱신 현재가 기반 실제 수익률 (정확)
+                const predicted = entry.upsidePct;
+                const label = entry.daysElapsed ? `(${entry.daysElapsed}일 경과)` : "";
+                actualReturns.push(
+                  `${entry.date.slice(0, 7)}${label}: 예측 ${predicted > 0 ? "+" : ""}${predicted}% → 실제 ${entry.actualReturn >= 0 ? "+" : ""}${entry.actualReturn}%`
+                );
+              } else if (i + 1 < hist.length) {
+                // 폴백: 다음 분석 시점 주가로 추정
+                const p0 = entry.priceAtAnalysis ?? entry.entryPrice;
+                const p1 = hist[i + 1].priceAtAnalysis ?? hist[i + 1].entryPrice;
+                if (!p0 || !p1) continue;
+                const actualRet = ((p1 - p0) / p0) * 100;
+                actualReturns.push(
+                  `${entry.date.slice(0, 7)}: 예측 ${entry.upsidePct > 0 ? "+" : ""}${entry.upsidePct}% → 실제(추정) ${actualRet > 0 ? "+" : ""}${actualRet.toFixed(1)}%`
+                );
+              }
             }
 
             // ③ EPS 예측 정확도 추적 (predictedEps가 있는 항목)

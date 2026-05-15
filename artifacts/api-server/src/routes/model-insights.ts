@@ -291,6 +291,48 @@ export async function triggerModelReview(): Promise<void> {
         );
       }
 
+      // ── auto_learning 역주입: model_insights의 실제 수익률·방향을 auto_learning history에 반영 ──
+      // auto_learning은 분석 시점에 "다음 분석 시점 주가"로 실제 수익률을 추정하는데,
+      // 재분석을 안 하면 실제 수익률이 영원히 비어 있음.
+      // triggerModelReview가 6시간마다 현재가를 조회하므로 이 정확한 값을 역주입.
+      try {
+        const noteRows = await rawQuery(
+          `SELECT auto_learning FROM ticker_notes WHERE ticker = $1`,
+          [analysis.ticker]
+        );
+        if (noteRows[0]?.auto_learning) {
+          const learningData = noteRows[0].auto_learning as { history?: any[] };
+          if (learningData?.history) {
+            let changed = false;
+            const updated = learningData.history.map((entry: any) => {
+              if (entry.analysisId === analysis.id) {
+                const newEntry = {
+                  ...entry,
+                  actualReturn: Math.round(priceReturn * 10) / 10,
+                  directionMatch,
+                  daysElapsed,
+                };
+                // 값이 실제로 달라졌을 때만 플래그
+                if (
+                  entry.actualReturn !== newEntry.actualReturn ||
+                  entry.directionMatch !== newEntry.directionMatch
+                ) changed = true;
+                return newEntry;
+              }
+              return entry;
+            });
+            if (changed) {
+              await rawQuery(
+                `UPDATE ticker_notes SET auto_learning = $1, updated_at = NOW() WHERE ticker = $2`,
+                [JSON.stringify({ history: updated }), analysis.ticker]
+              );
+            }
+          }
+        }
+      } catch {
+        // optional — auto_learning 백필 실패는 분석 흐름에 영향 없음
+      }
+
       console.log(`[direction-check] ${analysis.companyName}(${ticker}) ${daysElapsed}일 경과 | 수익률 ${priceReturn.toFixed(1)}% | 방향 ${directionMatch === true ? "✓ 일치" : directionMatch === false ? "✗ 불일치" : "정보 없음"} | 방법론: ${valuationMethod ?? "미상"} | 달성도: ${targetAchievementPct !== null ? targetAchievementPct.toFixed(0) + "%" : "미상"}`);
     }
   } catch (err) {
