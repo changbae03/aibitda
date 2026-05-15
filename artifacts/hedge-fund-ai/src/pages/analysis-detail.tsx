@@ -3345,8 +3345,35 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
     keyAssumptionsSplit ? keyAssumptionsSplit.section : null,
     [keyAssumptionsSplit]
   );
+
+  // 적정주가 산출 카드: 모델 가정 수립 섹션 (중간 위치) — 앞/섹션/뒤 3분할
+  const modelAssumptionsSplit = useMemo(() => {
+    if (!isRelativeVal) return null;
+    const src = mainBodyContent;
+    const midIdx = src.search(/\n## 🔢 모델 가정 수립/);
+    if (midIdx >= 0) {
+      const afterStart = src.slice(midIdx + 1); // starts with "## 🔢 모델 가정..."
+      const nextMatch = afterStart.search(/\n## /);
+      return {
+        before: src.slice(0, midIdx),
+        section: nextMatch >= 0 ? afterStart.slice(0, nextMatch) : afterStart,
+        after: nextMatch >= 0 ? afterStart.slice(nextMatch) : '',
+      };
+    }
+    if (/^## 🔢 모델 가정 수립/.test(src)) {
+      const nextMatch = src.search(/\n## /);
+      return {
+        before: '',
+        section: nextMatch >= 0 ? src.slice(0, nextMatch) : src,
+        after: nextMatch >= 0 ? src.slice(nextMatch) : '',
+      };
+    }
+    return null;
+  }, [isRelativeVal, mainBodyContent]);
+
   const [showValuationMetrics, setShowValuationMetrics] = useState(false);
   const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
+  const [showModelAssumptions, setShowModelAssumptions] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -3396,48 +3423,96 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           </div>
         )}
 
-        <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              h2: ({ children }) => (
-                <h2 className="text-base font-bold text-foreground mt-6 mb-3 first:mt-0 pb-1.5 border-b border-border/60">
-                  {children}
-                </h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-sm font-semibold text-foreground mt-5 mb-2 flex items-center gap-1.5">
-                  {children}
-                </h3>
-              ),
-              h4: ({ children }) => (
-                <h4 className="text-[13px] font-semibold text-foreground/80 mt-3 mb-1.5">{children}</h4>
-              ),
-              p: ({ children }) => {
-                const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
-                if (text.startsWith("출처:") || text.startsWith("출처 :")) {
-                  return <p className="mt-5 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
-                }
-                return <p className="mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]">{children}</p>;
-              },
-              ul: ({ children }) => <ul className="my-3 pl-0 space-y-1.5 list-none">{children}</ul>,
-              ol: ({ children }) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
-              li: ({ children }) => (
-                <li className="flex items-start gap-2 text-[13.5px] leading-[1.85] text-foreground/80">
-                  <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.68em]" />
-                  <span className="flex-1 min-w-0">{children}</span>
-                </li>
-              ),
-              strong: ({ children }) => <strong className="font-semibold text-foreground/95">{children}</strong>,
-              em: ({ children }) => <em className="text-foreground/70 not-italic">{children}</em>,
-              blockquote: ({ children }) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
-              hr: () => <hr className="my-4 border-border/60" />,
-              ...MD_TABLE_COMPONENTS,
-            }}
-          >
-            {prepareMarkdown(mainBodyContent)}
-          </ReactMarkdown>
-        </div>
+        {(() => {
+          const mdComponents = {
+            h2: ({ children }: any) => (
+              <h2 className="text-base font-bold text-foreground mt-6 mb-3 first:mt-0 pb-1.5 border-b border-border/60">{children}</h2>
+            ),
+            h3: ({ children }: any) => (
+              <h3 className="text-sm font-semibold text-foreground mt-5 mb-2 flex items-center gap-1.5">{children}</h3>
+            ),
+            h4: ({ children }: any) => (
+              <h4 className="text-[13px] font-semibold text-foreground/80 mt-3 mb-1.5">{children}</h4>
+            ),
+            p: ({ children }: any) => {
+              const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
+              if (text.startsWith("출처:") || text.startsWith("출처 :")) {
+                return <p className="mt-5 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
+              }
+              return <p className="mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]">{children}</p>;
+            },
+            ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-1.5 list-none">{children}</ul>,
+            ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
+            li: ({ children }: any) => (
+              <li className="flex items-start gap-2 text-[13.5px] leading-[1.85] text-foreground/80">
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.68em]" />
+                <span className="flex-1 min-w-0">{children}</span>
+              </li>
+            ),
+            strong: ({ children }: any) => <strong className="font-semibold text-foreground/95">{children}</strong>,
+            em: ({ children }: any) => <em className="text-foreground/70 not-italic">{children}</em>,
+            blockquote: ({ children }: any) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
+            hr: () => <hr className="my-4 border-border/60" />,
+            ...MD_TABLE_COMPONENTS,
+          };
+          const MdBlock = ({ src }: { src: string }) => src.trim() ? (
+            <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareMarkdown(src)}</ReactMarkdown>
+            </div>
+          ) : null;
+
+          if (modelAssumptionsSplit) {
+            return (
+              <>
+                <MdBlock src={modelAssumptionsSplit.before} />
+                {/* 모델 가정 수립 — 토글 */}
+                <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setShowModelAssumptions(v => !v)}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+                    <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Model Assumptions" : "모델 가정 수립"}</span>
+                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showModelAssumptions && "rotate-180")} />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {showModelAssumptions && (
+                      <motion.div
+                        key="model-assumptions"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        style={{ overflow: "hidden" }}
+                      >
+                        <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                            h2: ({ children }: any) => <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="text-[12px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>,
+                            p: ({ children }: any) => <p className="mb-3 last:mb-0 text-foreground/75 leading-[1.8]">{children}</p>,
+                            ul: ({ children }: any) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
+                            li: ({ children }: any) => (
+                              <li className="flex items-start gap-2 text-[12.5px] leading-[1.8] text-foreground/75">
+                                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
+                                <span className="flex-1 min-w-0">{children}</span>
+                              </li>
+                            ),
+                            strong: ({ children }: any) => <strong className="font-semibold text-foreground/90">{children}</strong>,
+                            ...MD_TABLE_COMPONENTS,
+                          }}>
+                            {prepareMarkdown(modelAssumptionsSplit.section)}
+                          </ReactMarkdown>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <MdBlock src={modelAssumptionsSplit.after} />
+              </>
+            );
+          }
+          return <MdBlock src={mainBodyContent} />;
+        })()}
 
         {/* 밸류에이션 핵심 지표 — 토글 섹션 */}
         {valuationMetricsContent && (
