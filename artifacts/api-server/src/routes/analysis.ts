@@ -4956,14 +4956,15 @@ async function executeStep(
         // JSON parse failed
       }
 
-      // AI API 실패로 오류 문자열이 저장된 경우 → status='error' (completed 아님)
+      // AI API 실패로 오류 문자열이 저장된 경우 → 실패한 스텝 삭제 후 in_progress 유지 (재시도 가능)
       const stepHasApiError = content.startsWith("분석 오류:") || content.startsWith("분석 결과를 생성하지 못했습니다");
       if (stepHasApiError) {
-        console.warn(`[analysis ${id}] investment_strategy API error — marking analysis as 'error'`);
+        console.warn(`[analysis ${id}] investment_strategy API error — deleting failed step, keeping in_progress for retry`);
         await rawQuery(
-          `UPDATE analyses SET status='error', current_step=NULL, updated_at=NOW() WHERE id=$1`,
+          `DELETE FROM analysis_steps WHERE analysis_id = $1 AND step_key = 'investment_strategy'`,
           [id]
         );
+        // in_progress 상태 유지 — run-pipeline 또는 background가 재시도
       } else {
         await rawQuery(
           `UPDATE analyses SET status='completed', current_step=NULL, investment_verdict=$1,
@@ -5218,7 +5219,28 @@ router.post("/:id/run-pipeline", async (req, res) => {
   const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
   const analysis = aRows[0] ? mapAnalysisRow(aRows[0]) : null;
   if (!analysis) return res.status(404).json({ error: "Analysis not found" });
-  // 이미 큐 대기 중이거나 완료/실패 상태면 재진입 방지
+
+  // error 상태지만 미완료 스텝이 있으면 in_progress로 복원 후 재시도
+  if (analysis.status === "error") {
+    const stepsRaw = await rawQuery(
+      `SELECT step_key FROM analysis_steps WHERE analysis_id = $1`,
+      [id]
+    );
+    const completedKeys = new Set(stepsRaw.map((r: any) => r.step_key));
+    const hasIncompleteSteps = STEP_ORDER.some(s => !completedKeys.has(s));
+    if (hasIncompleteSteps) {
+      console.log(`[run-pipeline] Analysis ${id} in error state with incomplete steps — resetting to in_progress`);
+      await rawQuery(
+        `UPDATE analyses SET status='in_progress', current_step=NULL, error_message=NULL, updated_at=NOW() WHERE id=$1`,
+        [id]
+      );
+      enqueueAnalysis(id).catch(console.error);
+      return res.json({ ok: true, resumed: true });
+    }
+    return res.json({ ok: true, status: "error" });
+  }
+
+  // 이미 큐 대기 중이거나 완료 상태면 재진입 방지
   if (analysis.status !== "in_progress" && analysis.status !== "queued") {
     return res.json({ ok: true, status: analysis.status });
   }
@@ -5230,6 +5252,29 @@ router.post("/:id/run-pipeline", async (req, res) => {
   enqueueAnalysis(id).catch(console.error);
   res.json({ ok: true });
 });
+
+// ─── 서버 시작 시 미완료 분석 복구 ────────────────────────────────────────────
+export async function resumeInProgressAnalyses(): Promise<void> {
+  try {
+    const rows = await rawQuery(
+      `SELECT id FROM analyses WHERE status = 'in_progress' ORDER BY updated_at ASC LIMIT 10`
+    );
+    if (rows.length === 0) {
+      console.log("[STARTUP] 미완료 분석 없음 — 복구 불필요");
+      return;
+    }
+    console.log(`[STARTUP] 미완료 분석 ${rows.length}개 발견 — 백그라운드 재개`);
+    for (const row of rows) {
+      // 각 분석 사이 2초 딜레이로 thundering herd 방지
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      enqueueAnalysis(row.id).catch(err =>
+        console.error(`[STARTUP] analysis ${row.id} 재개 실패:`, err?.message)
+      );
+    }
+  } catch (err: any) {
+    console.error("[STARTUP] resumeInProgressAnalyses 오류:", err?.message);
+  }
+}
 
 // ─── PATCH /analyses/:id/memo ────────────────────────────────────────────────
 router.patch("/:id/memo", async (req, res) => {

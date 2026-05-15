@@ -3,6 +3,7 @@ import { runMigrations } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
+import { resumeInProgressAnalyses } from "./routes/analysis.js";
 
 console.log("[STARTUP] API Server v3 - last_login_at + krx_peer_data + www domain + cleanup");
 
@@ -34,6 +35,12 @@ const server = app.listen(port, () => {
     })
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
+      // 서버 재시작 시 미완료 분석 자동 복구 (30초 후 — 다른 초기화 완료 이후)
+      setTimeout(() => {
+        resumeInProgressAnalyses().catch(e =>
+          console.error("[STARTUP] 미완료 분석 복구 실패:", e?.message)
+        );
+      }, 30_000);
       console.log("[STARTUP] 초기화 완료");
     })
     .catch((err) => {

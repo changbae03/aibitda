@@ -1236,13 +1236,21 @@ export default function AnalysisDetail() {
   runStreamingStepRef.current = runStreamingStep;
 
   // On mount / resume: start from the first pending step if analysis is already in_progress
+  // error 상태지만 미완료 스텝이 있는 경우에도 run-pipeline으로 자동 재시도
   useEffect(() => {
-    if (!analysis || analysis.status !== "in_progress") return;
+    if (!analysis) return;
+
+    const isResumable =
+      analysis.status === "in_progress" ||
+      (analysis.status === "error" && analysis.steps.length < ANALYSIS_STEPS_ORDER.length);
+
+    if (!isResumable) return;
 
     // 백그라운드 파이프라인이 실행 중인지 확인/보장 (클라이언트 이탈 후 재진입 시 안전망)
     fetch(getApiUrl(`/api/analysis/${id}/run-pipeline`), { method: "POST", headers: { "Content-Type": "application/json" } })
       .catch(console.error);
 
+    if (analysis.status !== "in_progress") return; // error 상태는 서버 백그라운드에 위임
     if (hasInitiatedRef.current) return;
     const nextIndex = analysis.steps.length;
     if (nextIndex >= ANALYSIS_STEPS_ORDER.length) return;
