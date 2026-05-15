@@ -675,8 +675,11 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
         const rev = revenues[i] ? fmtNum(Number(revenues[i]) * 1e8, "KRW") : "-";
         const op = opIncomes[i] ? fmtNum(Number(opIncomes[i]) * 1e8, "KRW") : "-";
         const net = netIncomes[i] ? fmtNum(Number(netIncomes[i]) * 1e8, "KRW") : "-";
-        const margin = (revenues[i] && opIncomes[i] && Number(revenues[i]) > 0)
-          ? ` (영업이익률 ${((Number(opIncomes[i]) / Number(revenues[i])) * 100).toFixed(1)}%)`
+        const marginVal = (revenues[i] && opIncomes[i] && Number(revenues[i]) > 0)
+          ? (Number(opIncomes[i]) / Number(revenues[i])) * 100
+          : null;
+        const margin = marginVal !== null
+          ? ` (영업이익률 ${marginVal < 0 ? "적자" : `${marginVal.toFixed(1)}%`})`
           : "";
         lines.push(`  ${isE}${period}: 매출 ${rev} | 영업이익 ${op}${margin} | 순이익 ${net}`);
       });
@@ -814,6 +817,13 @@ function fmtNum(val: number | undefined | null, currency?: string): string {
 
 function pct(val: number | undefined | null): string {
   if (val == null || isNaN(val)) return "-";
+  return `${(val * 100).toFixed(1)}%`;
+}
+
+/** 영업이익률 전용: 음수이면 "적자"로 표기 */
+function opm(val: number | undefined | null): string {
+  if (val == null || isNaN(val)) return "-";
+  if (val < 0) return "적자";
   return `${(val * 100).toFixed(1)}%`;
 }
 
@@ -1083,7 +1093,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (fd.revenueGrowth != null) lines.push(`매출 성장률(YoY): ${pct(fd.revenueGrowth)}`);
     if (fd.earningsGrowth != null) lines.push(`이익 성장률(YoY): ${pct(fd.earningsGrowth)}`);
     if (fd.grossMargins != null)    lines.push(`매출총이익률: ${pct(fd.grossMargins)}`);
-    if (fd.operatingMargins != null) lines.push(`영업이익률: ${pct(fd.operatingMargins)}`);
+    if (fd.operatingMargins != null) lines.push(`영업이익률: ${opm(fd.operatingMargins)}`);
     if (fd.profitMargins != null)   lines.push(`순이익률: ${pct(fd.profitMargins)}`);
     if (fd.returnOnEquity != null)  lines.push(`ROE: ${pct(fd.returnOnEquity)}`);
     if (fd.returnOnAssets != null)  lines.push(`ROA: ${pct(fd.returnOnAssets)}`);
@@ -2690,7 +2700,7 @@ async function fetchPeerFinancials(
             peer.reason ? `  선정 이유: ${peer.reason}` : null,
             `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
             `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
-            `  ROE: ${pct(roe)} | 영업이익률: ${pct(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
+            `  ROE: ${pct(roe)} | 영업이익률: ${opm(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
             `  매출(TTM): ${fmtAbs(totalRevenue, isKrw)} | 영업이익: ${fmtAbs(opIncome, isKrw)} | 순이익: ${fmtAbs(netIncome, isKrw)} | EBITDA: ${fmtAbs(ebitda, isKrw)}`,
             `  자본총계: ${fmtAbs(totalEquity, isKrw)} | 총부채: ${fmtAbs(totalDebt, isKrw)} | 현금: ${fmtAbs(cash, isKrw)}`,
           ].filter(Boolean).join("\n"),
