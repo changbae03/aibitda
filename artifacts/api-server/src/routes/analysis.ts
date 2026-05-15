@@ -1161,7 +1161,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     if (fd.revenueGrowth != null) lines.push(`매출 성장률(YoY): ${pct(fd.revenueGrowth)}`);
     if (fd.earningsGrowth != null) lines.push(`이익 성장률(YoY): ${pct(fd.earningsGrowth)}`);
     if (fd.grossMargins != null)    lines.push(`매출총이익률: ${pct(fd.grossMargins)}`);
-    if (fd.operatingMargins != null) lines.push(`영업이익률: ${opm(fd.operatingMargins)}`);
+    if (fd.operatingMargins != null) lines.push(`영업이익률(Yahoo Finance TTM): ${opm(fd.operatingMargins)} ← ⚠️ 한국 종목은 TTM 계산 방식 차이로 부정확할 수 있음. 피어 멀티플 비교 테이블 작성 시 이 수치 대신 아래 [📊 DART 시계열] 최신 연간 OPM을 사용하세요.`);
     if (fd.profitMargins != null)   lines.push(`순이익률: ${pct(fd.profitMargins)}`);
     if (fd.returnOnEquity != null)  lines.push(`ROE: ${pct(fd.returnOnEquity)}`);
     if (fd.returnOnAssets != null)  lines.push(`ROA: ${pct(fd.returnOnAssets)}`);
