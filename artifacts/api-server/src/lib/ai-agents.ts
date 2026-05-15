@@ -1783,8 +1783,11 @@ export function buildPrompt(
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
-  //   - 직전 단계(마지막): 결론·수치가 뒷부분에 있으므로 끝 2,000자 우선 전달
+  //   - 직전 단계(마지막): 결론·수치가 뒷부분에 있으므로 앞 500자 + 끝 2,500자 전달
+  //   - investment_strategy 단계의 company_analysis / relative_valuation:
+  //     CHAIN-HANDOFF(실적·적정주가 수치)가 끝에 있으므로 앞 400자 + 끝 1,800자 전달
   //   - 그 외 단계: 앞 700자 (맥락·방향성만)
+  const CRITICAL_STEPS_FOR_STRATEGY = ["company_analysis", "relative_valuation"];
   const previousContext =
     previousSteps.length > 0
       ? `\n\n${"=".repeat(60)}\n📋 이전 단계 분석 결과 — 반드시 읽고 당신의 분석에 명시적으로 반영하세요\n${"=".repeat(60)}\n\n${previousSteps
@@ -1792,16 +1795,28 @@ export function buildPrompt(
             const stepNum = STEP_ORDER.indexOf(s.stepKey as AgentKey);
             const label = stepNum === 0 ? "팀장 브리핑" : s.agentName;
             const isLastStep = i === previousSteps.length - 1;
+            // investment_strategy 단계에서 company_analysis·relative_valuation은
+            // CHAIN-HANDOFF 수치(실적·적정주가)가 끝에 있으므로 tail도 포함
+            const isCriticalForStrategy =
+              stepKey === "investment_strategy" &&
+              CRITICAL_STEPS_FOR_STRATEGY.includes(s.stepKey);
             let trimmed: string;
             if (isLastStep) {
-              // 직전 단계: 앞 500자(개요) + 뒤 1,800자(최종 수치·결론) 합쳐서 전달
+              // 직전 단계: 앞 500자(개요) + 뒤 2,500자(최종 수치·결론)
               const head = s.content.slice(0, 500);
               const tail = s.content.length > 500 + 2500
                 ? "…[중략]…\n" + s.content.slice(-2500)
                 : s.content.slice(500);
               trimmed = head + tail;
+            } else if (isCriticalForStrategy) {
+              // 핵심 수치 스텝: 앞 400자(맥락) + 뒤 1,800자(CHAIN-HANDOFF·결론)
+              const head = s.content.slice(0, 400);
+              const tail = s.content.length > 400 + 1800
+                ? "…[중략]…\n" + s.content.slice(-1800)
+                : s.content.slice(400);
+              trimmed = head + tail;
             } else {
-              // 이전 단계: 앞 700자만 (맥락·방향성)
+              // 일반 이전 단계: 앞 700자만 (맥락·방향성)
               trimmed = s.content.length > 700
                 ? s.content.slice(0, 700) + "…[이하 생략]"
                 : s.content;
@@ -5107,6 +5122,16 @@ ${COMMON_RULES}`,
 
 → 이 수치를 그대로 JSON 필드에 채웁니다. (단, 아래 한국 심리 보정이 적용된 경우 보정 후 수치 사용)
 → 수치를 못 찾겠다면 "목표가", "적정가", "밸류에이션", "TP" 단서를 재탐색하세요.
+
+[내부 계산 1-B — 실적 수치 추출 (summary 작성 필수)]
+위 컨텍스트의 【Financial Analyst / company_analysis】 단계 끝부분(CHAIN-HANDOFF 섹션)에서 아래 수치를 찾아 기억하세요:
+  ⑥ 매출 전망 (현재 연도 / 다음 연도)
+  ⑦ 영업이익 전망 (현재 연도 / 다음 연도)
+  ⑧ EPS 전망 (현재 연도 / 다음 연도)
+  ⑨ 영업이익률 전망
+
+→ summary [단락2 — 실적·밸류에이션] 작성 시 위 ⑥~⑨ 수치를 그대로 인용하세요. 컨텍스트에 없는 수치를 임의로 생성하는 것은 절대 금지입니다.
+→ 찾지 못할 경우: "실적 전망", "영업이익", "매출", "CHAIN-HANDOFF" 키워드로 재탐색 후, 그래도 없으면 "—"으로 표기하세요.
 
 [내부 계산 2 — 한국 주식 전용 수급·심리 보정, 미국·글로벌 주식은 건너뜀]
 한국 주식 시장에서는 펀더멘털 이외에 수급·투자자 심리가 단기~중기 주가에 유의미한 영향을 줍니다.
