@@ -2195,7 +2195,18 @@ function extractJson(raw: string): any | null {
     return JSON.parse(fixedBoth);
   } catch { /* 계속 */ }
   // 시도 6: 단일 따옴표 → 이중 따옴표 변환 후 재시도
-  try { return JSON.parse(s.replace(/'/g, '"')); } catch { return null; }
+  try { return JSON.parse(s.replace(/'/g, '"')); } catch { /* 계속 */ }
+  // 시도 7: 전체 복합 수정 (개행 이스케이프 + 따옴표 없는 % + trailing comma 동시 처리)
+  //   위 시도들은 각 문제를 개별 처리 — 세 가지 동시 발생 시 이 시도가 유일하게 성공
+  try {
+    const fixedAll = s
+      .replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner) =>
+        `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`
+      )
+      .replace(/:\s*([+-]?\d+\.?\d*)%/g, (_, n) => `: "${n}%"`)
+      .replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixedAll);
+  } catch { return null; }
 }
 
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
@@ -3047,10 +3058,12 @@ function detectAbsModelFromContent(content: string): string {
 }
 
 function parseFinalValuationData(content: string): FinalValuationData | null {
-  const match = content.match(/FINAL_VALUATION_DATA:(\{[^\n]+\})/);
-  if (!match) return null;
+  // 멀티라인 JSON 우선 시도 (서버 analysis.ts와 동일한 패턴)
+  const mlMatch = content.match(/FINAL_VALUATION_DATA:\s*(\{[\s\S]*?\})/);
+  const raw = mlMatch?.[1] ?? content.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(match[1]) as FinalValuationData;
+    const parsed = JSON.parse(raw.replace(/[\r\n\t]/g, " ")) as FinalValuationData;
     if (!parsed.base) return null;
     return parsed;
   } catch { return null; }

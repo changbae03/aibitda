@@ -185,10 +185,80 @@ function extractJsonSafe(raw: string): any | null {
   if (!raw) return null;
   let s = raw.trim();
   s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) s = s.slice(start, end + 1);
-  try { return JSON.parse(s); } catch { return null; }
+  // 괄호 카운팅으로 첫 JSON 객체 범위 추출 (lastIndexOf보다 안전)
+  const startIdx = s.indexOf("{");
+  if (startIdx === -1) return null;
+  let depth = 0, endIdx = -1, inString = false, escaped = false;
+  for (let i = startIdx; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") { depth--; if (depth === 0) { endIdx = i; break; } }
+  }
+  if (endIdx === -1) return null;
+  s = s.slice(startIdx, endIdx + 1);
+  // 시도 1: 원본 그대로
+  try { return JSON.parse(s); } catch { /* 계속 */ }
+  // 시도 2: trailing comma 제거
+  try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { /* 계속 */ }
+  // 시도 3: 문자열 내 실제 개행 → 이스케이프
+  try {
+    const fixedNl = s.replace(/"((?:[^"\\]|\\.)*)"/gs, (_m: string, inner: string) =>
+      `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`
+    );
+    return JSON.parse(fixedNl);
+  } catch { /* 계속 */ }
+  // 시도 4: 따옴표 없는 % 숫자값 → 문자열로 변환
+  try { return JSON.parse(s.replace(/:\s*([+-]?\d+\.?\d*)%/g, (_: string, n: string) => `: "${n}%"`)); } catch { /* 계속 */ }
+  // 시도 5: 전체 복합 수정 (개행 이스케이프 + 미따옴표 % + trailing comma)
+  try {
+    const fixedAll = s
+      .replace(/"((?:[^"\\]|\\.)*)"/gs, (_m: string, inner: string) =>
+        `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`
+      )
+      .replace(/:\s*([+-]?\d+\.?\d*)%/g, (_: string, n: string) => `: "${n}%"`)
+      .replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixedAll);
+  } catch { return null; }
+}
+
+/** investment_strategy JSON이 파싱 불가인 경우 복구된 문자열 반환, 이미 정상이면 원본 반환 */
+function repairInvestmentStrategyContent(raw: string): string {
+  if (!raw) return raw;
+  if (extractJsonSafe(raw)) return raw; // 이미 정상
+  let s = raw.trim();
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const startIdx = s.indexOf("{");
+  if (startIdx === -1) return raw;
+  let depth = 0, endIdx = -1, inString = false, escaped = false;
+  for (let i = startIdx; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") { depth--; if (depth === 0) { endIdx = i; break; } }
+  }
+  if (endIdx === -1) return raw;
+  const jsonPart = s.slice(startIdx, endIdx + 1);
+  try {
+    const fixedAll = jsonPart
+      .replace(/"((?:[^"\\]|\\.)*)"/gs, (_m: string, inner: string) =>
+        `"${inner.replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`
+      )
+      .replace(/:\s*([+-]?\d+\.?\d*)%/g, (_: string, n: string) => `: "${n}%"`)
+      .replace(/,\s*([}\]])/g, "$1");
+    JSON.parse(fixedAll); // 검증
+    console.log("[repair] investment_strategy JSON 복구 성공");
+    return fixedAll;
+  } catch {
+    console.warn("[repair] investment_strategy JSON 복구 실패 — 원본 저장");
+    return raw;
+  }
 }
 
 // Prevent concurrent duplicate step execution
@@ -4872,7 +4942,9 @@ async function executeStep(
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Lead Portfolio Strategist QC ──────────────────────────────────────────
-    let finalContent = content;
+    let finalContent = stepKey === "investment_strategy"
+      ? repairInvestmentStrategyContent(content)
+      : content;
     let validationNotes: string | null = null;
 
     if (QC_STEPS.has(stepKey) && content && !content.startsWith("분석 오류")) {
