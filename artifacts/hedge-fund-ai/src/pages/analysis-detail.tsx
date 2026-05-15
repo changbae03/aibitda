@@ -30,6 +30,7 @@ import {
   TrendingUp,
   Building2,
   BarChart2,
+  Table2,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -3317,15 +3318,35 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
     }
     return null;
   }, [isFundamental, bodyContent]);
-  const mainBodyContent = useMemo(() =>
-    valuationMetricsSplit ? valuationMetricsSplit.before : bodyContent,
-    [bodyContent, valuationMetricsSplit]
-  );
+  // 적정주가 산출 카드: 핵심 밸류에이션 가정 요약 섹션 분리 (토글화)
+  const keyAssumptionsSplit = useMemo(() => {
+    if (!isRelativeVal) return null;
+    const midIdx = bodyContent.search(/\n## 📌 핵심 밸류에이션 가정/);
+    if (midIdx >= 0) {
+      return { before: bodyContent.slice(0, midIdx), section: bodyContent.slice(midIdx + 1) };
+    }
+    if (/^## 📌 핵심 밸류에이션 가정/.test(bodyContent)) {
+      return { before: '', section: bodyContent };
+    }
+    return null;
+  }, [isRelativeVal, bodyContent]);
+
+  const mainBodyContent = useMemo(() => {
+    if (valuationMetricsSplit) return valuationMetricsSplit.before;
+    if (keyAssumptionsSplit) return keyAssumptionsSplit.before;
+    return bodyContent;
+  }, [bodyContent, valuationMetricsSplit, keyAssumptionsSplit]);
+
   const valuationMetricsContent = useMemo(() =>
     valuationMetricsSplit ? valuationMetricsSplit.section : null,
     [valuationMetricsSplit]
   );
+  const keyAssumptionsContent = useMemo(() =>
+    keyAssumptionsSplit ? keyAssumptionsSplit.section : null,
+    [keyAssumptionsSplit]
+  );
   const [showValuationMetrics, setShowValuationMetrics] = useState(false);
+  const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -3466,6 +3487,59 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                       }}
                     >
                       {prepareMarkdown(valuationMetricsContent)}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* 적정주가 산출: 핵심 밸류에이션 가정 요약 — 토글 섹션 */}
+        {keyAssumptionsContent && (
+          <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowKeyAssumptions(v => !v)}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+            >
+              <Table2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+              <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Assumptions" : "핵심 밸류에이션 가정 요약"}</span>
+              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showKeyAssumptions && "rotate-180")} />
+            </button>
+            <AnimatePresence initial={false}>
+              {showKeyAssumptions && (
+                <motion.div
+                  key="key-assumptions"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h2: ({ children }) => (
+                          <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
+                            {children}
+                          </h2>
+                        ),
+                        p: ({ children }) => (
+                          <p className="mb-3 last:mb-0 text-foreground/75 leading-[1.8]">{children}</p>
+                        ),
+                        ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
+                        li: ({ children }) => (
+                          <li className="flex items-start gap-2 text-[12.5px] leading-[1.8] text-foreground/75">
+                            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
+                            <span className="flex-1 min-w-0">{children}</span>
+                          </li>
+                        ),
+                        strong: ({ children }) => <strong className="font-semibold text-foreground/90">{children}</strong>,
+                        ...MD_TABLE_COMPONENTS,
+                      }}
+                    >
+                      {prepareMarkdown(keyAssumptionsContent)}
                     </ReactMarkdown>
                   </div>
                 </motion.div>
