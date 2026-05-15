@@ -112,6 +112,8 @@
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     overflow-x: hidden;
+    /* 스크롤바 출현 시 레이아웃 시프트 방지 */
+    scrollbar-gutter: stable;
   }
   body {
     @apply bg-background text-foreground antialiased;

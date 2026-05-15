@@ -1634,7 +1634,7 @@ export default function AnalysisDetail() {
         </AnimatePresence>
 
         {/* Streaming card — live typewriter while AI writes */}
-        <div className="print:hidden" style={{ contain: "layout" }}>
+        <div className="print:hidden" style={{ contain: "layout", overflowAnchor: "none" }}>
           <AnimatePresence>
             {streamingStep && (
               <StreamingCard
