@@ -264,7 +264,7 @@ app.get("/share/:id", async (req: Request, res: Response) => {
 
   const pageUrl = `https://aibitda.kr/share/${id}`;
   const safePageUrl = escapeAttr(pageUrl);
-  const ogImage = `https://aibitda.kr/api/og/${id}`;
+  const ogImage = `https://aibitda.kr/opengraph.jpg`;
 
   const baseHtml = getBaseHtml();
   let html: string;
