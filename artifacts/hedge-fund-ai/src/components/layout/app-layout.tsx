@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
-  Sparkles, BookOpen, CalendarDays, BarChart2,
+  Sparkles, BookOpen, CalendarDays, BarChart2, ScanLine,
   User, Search, ChevronRight, Download, Share,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
@@ -91,9 +91,10 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
 
 const NAV_ITEMS = [
   { href: "/analysis/new", label: "AI 기업분석",  labelEn: "AI Analysis",     Icon: Sparkles },
-  { href: "/history",       label: "내가 본 자료", labelEn: "My Reports",      Icon: BookOpen },
-  { href: "/calendar",      label: "마켓 캘린더",  labelEn: "Market Calendar", Icon: CalendarDays },
-  { href: "/popular",       label: "애빛다 통계",  labelEn: "Statistics",      Icon: BarChart2 },
+  { href: "/screening",    label: "종목 스크리닝", labelEn: "Screening",       Icon: ScanLine },
+  { href: "/history",      label: "내가 본 자료",  labelEn: "My Reports",      Icon: BookOpen },
+  { href: "/calendar",     label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
+  { href: "/popular",      label: "애빛다 통계",   labelEn: "Statistics",      Icon: BarChart2 },
 ];
 
 const ADMIN_ITEMS = [
