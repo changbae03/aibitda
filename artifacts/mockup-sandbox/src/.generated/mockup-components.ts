@@ -4,5 +4,7 @@ export const modules: ModuleMap = {
   "./components/mockups/design-variants/DarkTerminal.tsx": () => import("../components/mockups/design-variants/DarkTerminal.tsx"),
   "./components/mockups/design-variants/ModernMinimal.tsx": () => import("../components/mockups/design-variants/ModernMinimal.tsx"),
   "./components/mockups/design-variants/PremiumNavy.tsx": () => import("../components/mockups/design-variants/PremiumNavy.tsx"),
-  "./components/mockups/landing-island/IslandLogin.tsx": () => import("../components/mockups/landing-island/IslandLogin.tsx")
+  "./components/mockups/landing-island/IslandLogin.tsx": () => import("../components/mockups/landing-island/IslandLogin.tsx"),
+  "./components/mockups/summary-cards/VariantA.tsx": () => import("../components/mockups/summary-cards/VariantA.tsx"),
+  "./components/mockups/summary-cards/VariantB.tsx": () => import("../components/mockups/summary-cards/VariantB.tsx")
 };
