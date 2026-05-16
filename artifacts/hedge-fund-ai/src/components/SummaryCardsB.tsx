@@ -45,7 +45,16 @@ function extractBullets(content: string, max = 3): string[] {
 }
 
 // 실적 전망 테이블에서 2026E / 2027E 핵심 지표 파싱
-function parseForecastTable(content: string) {
+type ForecastRow = { e26: string; e27: string };
+interface ForecastTable {
+  revenue?: ForecastRow;
+  growth?: ForecastRow;
+  opMargin?: ForecastRow;
+  eps?: ForecastRow;
+  revUnit: string;
+}
+
+function parseForecastTable(content: string): ForecastTable | null {
   const lines = content.split("\n");
   const headerIdx = lines.findIndex(
     l => l.includes("|") && l.includes("2026E") && l.includes("2027E")
@@ -57,9 +66,7 @@ function parseForecastTable(content: string) {
   const c27 = hCells.findIndex(c => c === "2027E");
   if (c26 === -1 || c27 === -1) return null;
 
-  type Row = { e26: string; e27: string };
-  const rows: Record<string, Row> = {};
-  let revUnit = "";
+  const result: ForecastTable = { revUnit: "" };
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -72,17 +79,17 @@ function parseForecastTable(content: string) {
     const e27 = cells[c27] ?? "—";
     const unitM = label.match(/[（(]([^)）]+)[)）]/);
     if (/^매출\s*[（(]/.test(label) && !/성장|률/.test(label)) {
-      rows.revenue = { e26, e27 };
-      revUnit = unitM?.[1] ?? "";
+      result.revenue = { e26, e27 };
+      result.revUnit = unitM?.[1] ?? "";
     } else if (/성장률/.test(label)) {
-      rows.growth = { e26, e27 };
+      result.growth = { e26, e27 };
     } else if (/영업이익률/.test(label)) {
-      rows.opMargin = { e26, e27 };
+      result.opMargin = { e26, e27 };
     } else if (/^EPS/.test(label)) {
-      rows.eps = { e26, e27 };
+      result.eps = { e26, e27 };
     }
   }
-  return Object.keys(rows).length > 0 ? { ...rows, revUnit } : null;
+  return (result.revenue || result.opMargin || result.eps) ? result : null;
 }
 
 // 전망 해설에서 촉매 영향 첫 문장 추출
@@ -113,6 +120,148 @@ function extractLeadText(content: string, maxLen = 120): string {
     .trim();
   const firstPara = clean.split("\n").find(l => l.trim().length > 20) ?? "";
   return firstPara.trim().slice(0, maxLen) + (firstPara.length > maxLen ? "…" : "");
+}
+
+// 핵심 이슈 문장 추출 ("핵심 이슈는 X" or "핵심 이슈: X")
+function extractKeyIssue(content: string, maxLen = 120): string {
+  const lines = content.split("\n");
+  for (const line of lines) {
+    const m = line.match(/핵심 이슈[는은이]?\s*['"]?([^.。\n]{10,})/);
+    if (m) return m[1].replace(/\*\*/g, "").trim().slice(0, maxLen);
+  }
+  return "";
+}
+
+// 굵은 텍스트 (**...**) 추출 — 산업 분석 구조적 트렌드용
+function extractBoldPoints(content: string, max = 3): string[] {
+  const out: string[] = [];
+  const re = /\*\*([^*]{6,80})\*\*/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const t = m[1].trim();
+    // 헤더성 짧은 라벨(## 포함 줄) 제외
+    if (t.length < 6 || /^(분석|개요|현황|요약|결론|Part|Step)/.test(t)) continue;
+    if (!out.includes(t)) out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+// 촉매 분석 — 핵심 이슈 상세 + 실현/미실현 시나리오 추출
+function parseCatalystCard(content: string) {
+  const lines = content.split("\n");
+
+  // 핵심 이슈 제목 (## 🎯 핵심 이슈 섹션 바로 아래)
+  let issueDesc = "";
+  const issueIdx = lines.findIndex(l => l.includes("핵심 이슈"));
+  if (issueIdx !== -1) {
+    for (let i = issueIdx + 1; i < Math.min(issueIdx + 6, lines.length); i++) {
+      const l = lines[i].trim();
+      if (l.length > 15 && !l.startsWith("#") && !l.startsWith("|")) {
+        issueDesc = l.replace(/\*\*/g, "").slice(0, 110);
+        break;
+      }
+    }
+  }
+
+  // "이슈가 실현되면" / "반대로 미실현 시" 문장 — 같은 줄에 있을 수 있음
+  let bullCase = "";
+  let bearCase = "";
+  const bullIdx = lines.findIndex(l => l.includes("실현되면") || l.includes("실현 시"));
+  if (bullIdx !== -1) {
+    const raw = lines[bullIdx].replace(/\*\*/g, "").trim();
+    // 같은 줄에 "반대로"가 포함된 경우 분리
+    const splitAt = raw.search(/반대로\s/);
+    if (splitAt !== -1) {
+      bullCase = raw.slice(0, splitAt).trim().slice(0, 90);
+      bearCase = raw.slice(splitAt).trim().slice(0, 90) + (raw.slice(splitAt).length > 90 ? "…" : "");
+    } else {
+      bullCase = raw.slice(0, 90) + (raw.length > 90 ? "…" : "");
+    }
+  }
+  // bearCase를 못 찾았으면 별도 줄 탐색
+  if (!bearCase) {
+    const bearIdx = lines.findIndex(l => l.includes("미실현") || (l.includes("반대로") && l.length > 20));
+    if (bearIdx !== -1 && bearIdx !== bullIdx) {
+      const l = lines[bearIdx].replace(/\*\*/g, "").trim();
+      bearCase = l.slice(0, 90) + (l.length > 90 ? "…" : "");
+    }
+  }
+
+  // 이슈 단계 (가속/초기/성숙 등)
+  let phase = "";
+  const phaseIdx = lines.findIndex(l => /본격|가속|초기|성숙|전환|단계에 있/.test(l));
+  if (phaseIdx !== -1) {
+    const m = lines[phaseIdx].match(/(본격 가속|초기 단계|성숙 단계|전환 단계|가속 단계)/);
+    if (m) phase = m[1];
+  }
+
+  return { issueDesc, bullCase, bearCase, phase };
+}
+
+// 기술적 분석 — 지지/저항 테이블 + 추세 파싱
+function parseTechnicalCard(content: string) {
+  const lines = content.split("\n");
+
+  // 추세 테이블 (장기/중기/단기)
+  const trends: { label: string; value: string }[] = [];
+  const trendIdx = lines.findIndex(l => l.includes("추세 요약") || (l.includes("장기 추세") && l.includes("|")));
+  if (trendIdx !== -1) {
+    for (let i = trendIdx; i < Math.min(trendIdx + 10, lines.length); i++) {
+      const l = lines[i];
+      if (!l.includes("|")) continue;
+      const cells = l.split("|").map(c => c.trim()).filter(Boolean);
+      if (cells.length >= 2 && /장기|중기|단기/.test(cells[0])) {
+        const label = cells[0].replace(/장기 추세.*|중기 추세.*|단기 추세.*/, m => m.split(" ")[0]);
+        const value = cells[1].replace(/\*\*/g, "").slice(0, 50);
+        if (value.length > 4) trends.push({ label, value });
+      }
+      if (trends.length >= 3) break;
+    }
+  }
+
+  // 지지/저항 테이블 — 섹션 헤더(지지·저항선 표) 또는 테이블 행에서 감지
+  const levels: { label: string; price: string; basis: string }[] = [];
+  // 섹션 헤더 또는 테이블 헤더 행 위치 찾기
+  const levelSectionIdx = lines.findIndex(l =>
+    l.includes("지지·저항") || l.includes("지지/저항") || l.includes("지지선") && l.includes("저항선")
+  );
+  const levelStartIdx = levelSectionIdx !== -1 ? levelSectionIdx : -1;
+  if (levelStartIdx !== -1) {
+    for (let i = levelStartIdx; i < Math.min(levelStartIdx + 20, lines.length); i++) {
+      const l = lines[i];
+      if (!l.includes("|")) continue;
+      if (l.includes("---")) continue;
+      const cells = l.split("|").map(c => c.trim().replace(/\*\*/g, "")).filter(Boolean);
+      if (cells.length >= 2 && /지지|저항/.test(cells[0])) {
+        levels.push({ label: cells[0], price: cells[1] ?? "", basis: cells[2] ?? "" });
+      }
+      if (levels.length >= 4) break;
+    }
+  }
+
+  // 매매 신호 테이블 (📡 핵심 매매 신호) — 추가된 섹션
+  const signals: { emoji: string; type: string; text: string }[] = [];
+  const sigIdx = lines.findIndex(l => l.includes("핵심 매매 신호") || l.includes("매매 신호"));
+  if (sigIdx !== -1) {
+    for (let i = sigIdx; i < Math.min(sigIdx + 15, lines.length); i++) {
+      const l = lines[i];
+      if (!l.includes("|")) continue;
+      const cells = l.split("|").map(c => c.trim()).filter(Boolean);
+      if (cells.length < 2) continue;
+      const raw = cells[0];
+      if (raw.includes("🔴") || raw.includes("매도")) {
+        signals.push({ emoji: "🔴", type: "매도", text: (cells[1] ?? "").replace(/\*\*/g, "").slice(0, 60) });
+      } else if (raw.includes("📈") || raw.includes("재진입")) {
+        signals.push({ emoji: "📈", type: "재진입", text: (cells[1] ?? "").replace(/\*\*/g, "").slice(0, 60) });
+      } else if (raw.includes("🛑") || raw.includes("손절")) {
+        signals.push({ emoji: "🛑", type: "손절", text: (cells[1] ?? "").replace(/\*\*/g, "").slice(0, 60) });
+      }
+      if (signals.length >= 3) break;
+    }
+  }
+
+  return { trends, levels, signals };
 }
 
 // ── 스텝별 설정 ───────────────────────────────────────────────────────────────
@@ -334,7 +483,217 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
     );
   }
 
-  // 범용 카드: 불릿 + 리드 텍스트
+  // ── 브리핑 카드 ─────────────────────────────────────────────────────────────
+  if (stepKey === "company_intro") {
+    const cfg = STEP_CFG.company_intro;
+    // 첫 문단에서 기업 설명 (1~2문장)
+    const firstPara = extractLeadText(content, 130);
+    // 핵심 이슈 문장
+    const keyIssue = extractKeyIssue(content);
+    // 불릿 fallback
+    const bullets = extractBullets(content, 3);
+    return (
+      <div className="flex flex-col gap-3">
+        {firstPara && (
+          <p className="text-[12.5px] text-white/70 leading-relaxed">{firstPara}</p>
+        )}
+        {keyIssue && (
+          <div className="rounded-xl px-3 py-2.5 flex items-start gap-2.5"
+            style={{ background: ab(cfg.rgb, 0.1), border: bd(cfg.rgb, 0.25) }}>
+            <span className="text-base shrink-0">🎯</span>
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: cfg.hex }}>
+                {isEn ? "Key Issue" : "핵심 이슈"}
+              </div>
+              <div className="text-[12px] text-white/85 leading-snug">{keyIssue}</div>
+            </div>
+          </div>
+        )}
+        {!keyIssue && bullets.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {bullets.map((b, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-xl p-2.5"
+                style={{ background: "rgba(255,255,255,0.04)" }}>
+                <div className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
+                  style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
+                <div className="text-white/75 text-[12px] leading-snug">{b}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 산업 분석 카드 ───────────────────────────────────────────────────────────
+  if (stepKey === "industry_analysis") {
+    const cfg = STEP_CFG.industry_analysis;
+    const boldPoints = extractBoldPoints(content, 3);
+    const lead = extractLeadText(content, 110);
+    const bullets = boldPoints.length === 0 ? extractBullets(content, 3) : [];
+    const items = boldPoints.length > 0 ? boldPoints : bullets;
+    return (
+      <div className="flex flex-col gap-3">
+        {lead && (
+          <p className="text-[12px] text-white/60 leading-relaxed">{lead}</p>
+        )}
+        {items.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {items.map((b, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
+                style={{
+                  background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)",
+                  border: i === 0 ? bd(cfg.rgb, 0.2) : "1px solid transparent",
+                }}>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
+                  style={{ background: ab(cfg.rgb, 0.18), color: cfg.hex }}>{i + 1}</div>
+                <div className="text-white/80 text-[12.5px] leading-snug">{b}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {items.length === 0 && (
+          <div className="text-sm text-white/30 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 촉매 분석 카드 ───────────────────────────────────────────────────────────
+  if (stepKey === "catalyst_analysis") {
+    const cfg = STEP_CFG.catalyst_analysis;
+    const { issueDesc, bullCase, bearCase, phase } = parseCatalystCard(content);
+    const bullets = extractBullets(content, 3);
+    return (
+      <div className="flex flex-col gap-3">
+        {issueDesc ? (
+          <>
+            <div className="rounded-xl px-3 py-2.5" style={{ background: ab(cfg.rgb, 0.1), border: bd(cfg.rgb, 0.25) }}>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color: cfg.hex }}>
+                  {isEn ? "Core Issue" : "핵심 이슈"}
+                </div>
+                {phase && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
+                    style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{phase}</span>
+                )}
+              </div>
+              <p className="text-[12px] text-white/85 leading-snug">{issueDesc}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {bullCase && (
+                <div className="rounded-xl p-2.5" style={{ background: "rgba(122,232,180,0.06)", border: "1px solid rgba(122,232,180,0.15)" }}>
+                  <div className="text-[9px] font-bold text-emerald-400 mb-1">✅ {isEn ? "If realized" : "실현 시"}</div>
+                  <p className="text-[11px] text-white/70 leading-snug">{bullCase}</p>
+                </div>
+              )}
+              {bearCase && (
+                <div className="rounded-xl p-2.5" style={{ background: "rgba(255,138,122,0.06)", border: "1px solid rgba(255,138,122,0.15)" }}>
+                  <div className="text-[9px] font-bold text-[#FF8A7A] mb-1">⚠️ {isEn ? "If not realized" : "미실현 시"}</div>
+                  <p className="text-[11px] text-white/70 leading-snug">{bearCase}</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {bullets.map((b, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
+                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
+                  style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
+                <div className="text-white/80 text-[12.5px] leading-snug">{b}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 기술적 분석 카드 ─────────────────────────────────────────────────────────
+  if (stepKey === "market_analysis") {
+    const cfg = STEP_CFG.market_analysis;
+    const { trends, levels, signals } = parseTechnicalCard(content);
+    const bullets = (signals.length === 0 && trends.length === 0 && levels.length === 0)
+      ? extractBullets(content, 3) : [];
+
+    return (
+      <div className="flex flex-col gap-3">
+        {/* 📡 매매 신호 테이블 — 우선 표시 */}
+        {signals.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-0.5">
+              {isEn ? "Key Signals" : "📡 핵심 매매 신호"}
+            </div>
+            {signals.map(s => (
+              <div key={s.type} className="flex items-start gap-2 rounded-lg px-3 py-2"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <span className="text-sm shrink-0">{s.emoji}</span>
+                <div>
+                  <span className="text-[9px] font-bold text-white/40 mr-1.5">{s.type}</span>
+                  <span className="text-[11.5px] text-white/80">{s.text}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 지지/저항 레벨 테이블 */}
+        {levels.length > 0 && (
+          <div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-1.5">
+              {isEn ? "Key Levels" : "지지 · 저항 레벨"}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {levels.slice(0, 4).map((lv, i) => {
+                const isSupport = lv.label.includes("지지");
+                const color = isSupport ? "#7AE8B4" : "#FF8A7A";
+                return (
+                  <div key={i} className="rounded-xl px-2.5 py-2 flex items-center justify-between gap-1"
+                    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid rgba(255,255,255,0.07)` }}>
+                    <div>
+                      <div className="text-[8.5px] text-white/35 mb-0.5">{lv.label}</div>
+                      <div className="text-xs font-bold text-white tabular-nums">{lv.price}</div>
+                    </div>
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 추세 요약 (신호/레벨 없을 때 또는 보완용) */}
+        {trends.length > 0 && signals.length === 0 && (
+          <div className="flex flex-col gap-1.5">
+            {trends.map(tr => (
+              <div key={tr.label} className="flex items-start gap-2.5 text-[11.5px]">
+                <span className="text-white/30 shrink-0 w-10 text-right text-[10px]">{tr.label}</span>
+                <span className="text-white/75 leading-snug">{tr.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* fallback */}
+        {bullets.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {bullets.map((b, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
+                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
+                  style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
+                <div className="text-white/80 text-sm leading-snug">{b}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 범용 카드 (fallback) ──────────────────────────────────────────────────────
   const cfg = STEP_CFG[stepKey];
   const bullets = extractBullets(content, 4);
   const lead = bullets.length === 0 ? extractLeadText(content, 160) : "";
