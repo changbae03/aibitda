@@ -335,9 +335,20 @@ const MD_TABLE_COMPONENTS = {
   tr: ({ children, ...props }: any) => {
     const firstCell = Array.isArray(children) ? children[0] : children;
     const cellText = firstCell?.props?.children ?? "";
-    const isSubRow = typeof cellText === "string" && cellText.startsWith("↳");
+    const cellStr = typeof cellText === "string" ? cellText : Array.isArray(cellText) ? cellText.join("") : String(cellText ?? "");
+    const isSubRow = cellStr.startsWith("↳");
+    // 매매 신호 행 색상 강조
+    const isBuySignal  = /^🟢/.test(cellStr);
+    const isSellSignal = /^🔴/.test(cellStr);
+    const isStopSignal = /^🛑/.test(cellStr);
+    const isReSignal   = /^📈/.test(cellStr);
+    const signalClass  = isBuySignal  ? "bg-emerald-500/8 dark:bg-emerald-500/10 hover:bg-emerald-500/15"
+                       : isSellSignal ? "bg-rose-500/8 dark:bg-rose-500/10 hover:bg-rose-500/15"
+                       : isStopSignal ? "bg-orange-500/8 dark:bg-orange-500/10 hover:bg-orange-500/15"
+                       : isReSignal   ? "bg-blue-500/8 dark:bg-blue-500/10 hover:bg-blue-500/15"
+                       : "hover:bg-muted/20";
     return (
-      <tr className={cn("border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors", isSubRow ? "sub-metric-row" : "")} {...props}>
+      <tr className={cn("border-b border-border/30 last:border-0 transition-colors", isSubRow ? "sub-metric-row" : "", signalClass)} {...props}>
         {children}
       </tr>
     );
