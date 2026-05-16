@@ -213,9 +213,9 @@ function prepareMarkdown(md: string): string {
     // 백엔드 전용 검증 메시지 — 프론트 미표시
     if (/Terminal Value 비중 확인/.test(line)) continue;
 
-    // remark-gfm이 숫자 사이 ~ 를 subscript/strikethrough로 파싱하는 문제 방지
-    // 예: "8~14%" → "\~" 이스케이프 → 화면에 "~" 로 정상 출력
-    line = line.replace(/(\d)\s*~\s*(\d)/g, '$1\\~$2');
+    // remark-gfm이 단독 ~ 를 strikethrough/subscript로 파싱하는 문제 방지
+    // ~~ (취소선) 은 유지, 나머지 단독 ~ 는 모두 이스케이프
+    line = line.replace(/(?<!~)~(?!~)/g, '\\~');
 
     const prev = i > 0 ? lines[i - 1] : "";
     const isTableRow = /^\s*\|/.test(line);

@@ -176,7 +176,13 @@ function parseChartEvents(content: string): ChartEvent[] {
   } catch { return []; }
 }
 
+function escapeTildes(md: string): string {
+  if (!md) return md;
+  return md.split("\n").map(line => line.replace(/(?<!~)~(?!~)/g, '\\~')).join("\n");
+}
+
 function MarkdownBody({ content }: { content: string }) {
+  const escaped = escapeTildes(content);
   return (
     <div className="
       text-[15px] leading-[1.95] text-slate-300 break-keep
@@ -219,7 +225,7 @@ function MarkdownBody({ content }: { content: string }) {
           del: () => null,
         }}
       >
-        {fixSplitTableRows(stripInternalData(content))}
+        {fixSplitTableRows(stripInternalData(escaped))}
       </ReactMarkdown>
     </div>
   );
