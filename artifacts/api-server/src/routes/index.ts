@@ -17,7 +17,6 @@ import noticesRouter from "./notices.js";
 import macroRouter from "./macro.js";
 import { performanceRouter } from "./performance.js";
 import userSettingsRouter from "./user-settings.js";
-import screeningRouter from "./screening.js";
 
 const router: IRouter = Router();
 
@@ -39,6 +38,5 @@ router.use(noticesRouter);
 router.use(macroRouter);
 router.use(performanceRouter);
 router.use(userSettingsRouter);
-router.use(screeningRouter);
 
 export default router;

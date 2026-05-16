@@ -44,7 +44,6 @@ import TermsPage from "@/pages/terms";
 import DisclaimerPage from "@/pages/disclaimer";
 import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
-import ScreeningPage from "@/pages/screening";
 
 const CORAL = "#FF8A7A";
 const CHARS_KO = ["애", "빛", "다"];
@@ -230,7 +229,6 @@ function Router() {
             <Route path="/stats" component={Stats} />
             <Route path="/tracker" component={Tracker} />
             <Route path="/popular" component={Popular} />
-            <Route path="/screening" component={ScreeningPage} />
             <Route path="/admin/live" component={AdminLive} />
             <Route path="/admin/analyses" component={AdminAnalyses} />
             <Route path="/admin/ticker-notes" component={AdminTickerNotes} />
