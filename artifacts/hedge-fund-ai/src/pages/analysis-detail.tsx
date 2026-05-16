@@ -1629,7 +1629,7 @@ export default function AnalysisDetail() {
             {(analysis as any).language === 'en' ? 'AI Analysis Pipeline' : 'AI 분석 파이프라인'}
           </h3>
           <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-            {isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length} {(analysis as any).language === 'en' ? 'steps' : '단계'}
+            {isComplete ? ANALYSIS_STEPS_ORDER.length : isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length} {(analysis as any).language === 'en' ? 'steps' : '단계'}
           </span>
         </div>
         
@@ -1638,12 +1638,12 @@ export default function AnalysisDetail() {
             <div className="absolute top-4 left-4 right-4 h-0.5 bg-border z-0" />
             <div 
               className="absolute top-4 left-4 h-0.5 bg-primary z-0 transition-all duration-700 ease-out"
-              style={{ width: `calc(${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}% - 2rem)` }}
+              style={{ width: isComplete ? 'calc(100% - 2rem)' : `calc(${(currentStepCount / ANALYSIS_STEPS_ORDER.length) * 100}% - 2rem)` }}
             />
             <div className="relative z-10 flex justify-between">
               {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
-                const isDone = idx < currentStepCount;
-                const isCurrent = idx === currentStepCount;
+                const isDone = isComplete || idx < currentStepCount;
+                const isCurrent = !isComplete && idx === currentStepCount;
                 const agent = AGENTS[stepKey];
                 return (
                   <div key={stepKey} className="flex flex-col items-center gap-1.5">
