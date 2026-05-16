@@ -44,6 +44,64 @@ function extractBullets(content: string, max = 3): string[] {
   return out;
 }
 
+// 실적 전망 테이블에서 2026E / 2027E 핵심 지표 파싱
+function parseForecastTable(content: string) {
+  const lines = content.split("\n");
+  const headerIdx = lines.findIndex(
+    l => l.includes("|") && l.includes("2026E") && l.includes("2027E")
+  );
+  if (headerIdx === -1) return null;
+
+  const hCells = lines[headerIdx].split("|").map(c => c.trim());
+  const c26 = hCells.findIndex(c => c === "2026E");
+  const c27 = hCells.findIndex(c => c === "2027E");
+  if (c26 === -1 || c27 === -1) return null;
+
+  type Row = { e26: string; e27: string };
+  const rows: Record<string, Row> = {};
+  let revUnit = "";
+
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line.startsWith("|")) break;
+    if (line.includes("---")) continue;
+    const cells = line.split("|").map(c => c.trim().replace(/\*\*/g, ""));
+    if (cells.length <= Math.max(c26, c27)) continue;
+    const label = cells[1] ?? "";
+    const e26 = cells[c26] ?? "—";
+    const e27 = cells[c27] ?? "—";
+    const unitM = label.match(/[（(]([^)）]+)[)）]/);
+    if (/^매출\s*[（(]/.test(label) && !/성장|률/.test(label)) {
+      rows.revenue = { e26, e27 };
+      revUnit = unitM?.[1] ?? "";
+    } else if (/성장률/.test(label)) {
+      rows.growth = { e26, e27 };
+    } else if (/영업이익률/.test(label)) {
+      rows.opMargin = { e26, e27 };
+    } else if (/^EPS/.test(label)) {
+      rows.eps = { e26, e27 };
+    }
+  }
+  return Object.keys(rows).length > 0 ? { ...rows, revUnit } : null;
+}
+
+// 전망 해설에서 촉매 영향 첫 문장 추출
+function extractForecastNarrative(content: string, maxLen = 160): string {
+  const lines = content.split("\n");
+  const idx = lines.findIndex(l => l.includes("전망 해설") || l.includes("Forecast Commentary"));
+  const start = idx !== -1 ? idx + 1 : 0;
+  for (let i = start; i < Math.min(start + 15, lines.length); i++) {
+    const l = lines[i].trim();
+    if (l.length > 20 && !l.startsWith("#") && !l.startsWith("|") && !l.startsWith("-")) {
+      // 첫 1~2문장만
+      const sentences = l.split(/(?<=[.。])\s+/);
+      const text = sentences.slice(0, 2).join(" ");
+      return text.slice(0, maxLen) + (text.length > maxLen ? "…" : "");
+    }
+  }
+  return "";
+}
+
 function extractLeadText(content: string, maxLen = 120): string {
   const clean = content
     .replace(/```[\s\S]*?```/g, "")
@@ -203,6 +261,75 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           ))}
         </div>
         {!base && <div className="text-sm text-white/40">{extractLeadText(content)}</div>}
+      </div>
+    );
+  }
+
+  // 실적 전망 카드: 촉매 → 2026E/2027E 핵심 지표
+  if (stepKey === "company_analysis") {
+    const cfg = STEP_CFG.company_analysis;
+    const fc = parseForecastTable(content);
+    const narrative = extractForecastNarrative(content);
+    const years = [
+      { label: isEn ? "2026E" : "2026E", rev: fc?.revenue?.e26, growth: fc?.growth?.e26, opm: fc?.opMargin?.e26, eps: fc?.eps?.e26 },
+      { label: isEn ? "2027E" : "2027E", rev: fc?.revenue?.e27, growth: fc?.growth?.e27, opm: fc?.opMargin?.e27, eps: fc?.eps?.e27 },
+    ];
+    const hasTable = fc && (fc.revenue || fc.opMargin || fc.eps);
+    return (
+      <div className="flex flex-col gap-3">
+        {narrative && (
+          <p className="text-[12px] text-white/60 leading-relaxed">{narrative}</p>
+        )}
+        {hasTable ? (
+          <div className="grid grid-cols-2 gap-2">
+            {years.map(({ label, rev, growth, opm, eps }) => (
+              <div key={label} className="rounded-xl p-3 flex flex-col gap-1.5"
+                style={{ background: ab(cfg.rgb, 0.07), border: bd(cfg.rgb, 0.18) }}>
+                <div className="text-[11px] font-bold mb-0.5" style={{ color: cfg.hex }}>{label}</div>
+                {rev && (
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span className="text-[10px] text-white/35 shrink-0">{isEn ? "Rev" : "매출"}</span>
+                    <span className="text-xs font-semibold text-white text-right">
+                      {rev}
+                      {growth && growth !== "—" && (
+                        <span className="ml-1 text-[10px] font-normal" style={{ color: cfg.hex }}>
+                          {growth.startsWith("-") ? "" : "+"}{growth}%
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {opm && (
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span className="text-[10px] text-white/35 shrink-0">{isEn ? "OPM" : "영업이익률"}</span>
+                    <span className="text-xs font-semibold text-white">{opm}%</span>
+                  </div>
+                )}
+                {eps && (
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span className="text-[10px] text-white/35 shrink-0">EPS</span>
+                    <span className="text-xs font-semibold text-white">{eps}{isEn ? "" : "원"}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          // 테이블 파싱 실패 시 범용 불릿 fallback
+          <div className="flex flex-col gap-2">
+            {extractBullets(content, 3).map((b, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
+                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
+                  style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
+                <div className="text-white/80 text-sm leading-snug">{b}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {fc?.revUnit && (
+          <div className="text-[10px] text-white/25 text-right">단위: {fc.revUnit}</div>
+        )}
       </div>
     );
   }
