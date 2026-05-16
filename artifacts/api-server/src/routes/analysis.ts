@@ -4321,11 +4321,44 @@ async function executeStep(
           const fvdRaw = fvdMatch?.[1] ?? rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
           if (fvdRaw) {
             const fvd = JSON.parse(fvdRaw.replace(/[\r\n\t]/g, " "));
-            const rawTp = parseFloat(String(fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
+            // FIX: FINAL_VALUATION_DATA uses 'base' as the base-case target key,
+            // not 'target' or 'target_price'. Check all three to avoid rawTp=0.
+            let rawTp = parseFloat(String(fvd.target ?? fvd.target_price ?? fvd.base ?? "0").replace(/[^0-9.]/g, ""));
             const spRow = await rawQuery(`SELECT start_price, ticker FROM analyses WHERE id=$1`, [id]);
             const sp: number = spRow[0]?.start_price ?? 0;
             const tkr: string = spRow[0]?.ticker ?? "";
             const isKRtk = /^\d{6}$/.test(tkr);
+
+            // FIX: Median consistency guard — if rawTp deviates >40% from the
+            // median of recent analyses for the same ticker, clamp to median ±35%.
+            // This prevents a single wild DCF run from dominating the verdict.
+            if (rawTp > 0 && tkr) {
+              try {
+                const recentTpRows = await rawQuery(
+                  `SELECT target_price FROM analyses
+                   WHERE ticker = $1 AND status = 'completed' AND id != $2
+                     AND target_price IS NOT NULL AND target_price > 0
+                   ORDER BY created_at DESC LIMIT 7`,
+                  [tkr, id]
+                );
+                if (recentTpRows.length >= 3) {
+                  const sorted = recentTpRows.map((r: any) => Number(r.target_price)).sort((a: number, b: number) => a - b);
+                  const mid = Math.floor(sorted.length / 2);
+                  const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+                  const deviation = Math.abs(rawTp - median) / median;
+                  if (deviation > 0.4) {
+                    const clamped = Math.round(Math.max(median * 0.65, Math.min(median * 1.35, rawTp)));
+                    console.warn(
+                      `[tp-inject] ${tkr} rawTp=${Math.round(rawTp)} deviates ${(deviation * 100).toFixed(0)}% from median=${Math.round(median)} (n=${sorted.length}) → clamped to ${clamped}`
+                    );
+                    rawTp = clamped;
+                  }
+                }
+              } catch (medErr) {
+                console.warn("[tp-inject] median guard error:", medErr);
+              }
+            }
+
             if (rawTp > 0 && sp > 0) {
               const MAX_R = isKRtk ? 3.5 : 4.5;
               const MIN_R = isKRtk ? 0.45 : 0.25;
