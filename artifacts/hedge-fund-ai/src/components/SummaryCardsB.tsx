@@ -311,13 +311,25 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
       transition={{ duration: 0.35 }}
       className="print:hidden"
     >
-      {/* 섹션 라벨 */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="h-px flex-1 bg-border/50" />
-        <span className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-widest px-2">
-          {isEn ? "Step Summary" : "단계별 요약"} · {completedCount}/{total}
-        </span>
-        <div className="h-px flex-1 bg-border/50" />
+      {/* 섹션 헤더 */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2.5 mb-1">
+          <span className="text-base font-semibold text-foreground">
+            {isEn ? "Key Takeaways" : "바쁜 분들을 위한 핵심 요약"}
+          </span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border/50 text-muted-foreground/60 bg-white/[0.03]">
+            {completedCount}/{total}
+          </span>
+        </div>
+        <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
+          {streamingStepKey
+            ? (isEn
+                ? "Report is being written. Check the key points of each step so far."
+                : "보고서가 작성되는 동안 지금까지 완료된 단계의 핵심을 미리 확인해보세요.")
+            : (isEn
+                ? "Here are the key takeaways from each step of the analysis."
+                : "분석 각 단계의 핵심 내용만 추려 정리했습니다.")}
+        </p>
       </div>
 
       <div className="rounded-2xl overflow-hidden"
