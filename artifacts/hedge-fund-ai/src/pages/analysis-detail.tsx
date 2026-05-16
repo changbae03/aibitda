@@ -31,6 +31,8 @@ import {
   Building2,
   BarChart2,
   Table2,
+  Home,
+  Search,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -1951,6 +1953,45 @@ export default function AnalysisDetail() {
                   </AnimatePresence>
                 </div>
               )}
+            </div>
+
+            {/* 분석 완료 후 행동 유도 CTA */}
+            <div className="mt-4 print:hidden">
+              <div className="rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 px-5 py-5 space-y-3.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+                  {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
+                </p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    onClick={() => setLocation("/")}
+                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 px-4 py-4 transition-all duration-200 group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                      <Home className="w-4.5 h-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                    <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-primary transition-colors leading-tight text-center">
+                      {isEn ? "Home" : "홈으로"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground leading-tight text-center">
+                      {isEn ? "Back to dashboard" : "대시보드로 돌아가기"}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setLocation("/")}
+                    className="flex flex-col items-center gap-2 rounded-xl border border-primary/40 bg-primary/5 hover:bg-primary/10 hover:border-primary/60 px-4 py-4 transition-all duration-200 group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                      <Search className="w-4.5 h-4.5 text-primary transition-colors" />
+                    </div>
+                    <span className="text-[13px] font-semibold text-primary leading-tight text-center">
+                      {isEn ? "New Analysis" : "다른 종목 분석"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground leading-tight text-center">
+                      {isEn ? "Analyze another stock" : "새로운 종목 검색하기"}
+                    </span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* 관리자 종목 보정 메모 — 관리자에게만 표시 */}
