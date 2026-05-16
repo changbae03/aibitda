@@ -1671,7 +1671,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* 빠른 요약 카드 — 데이터가 있는 만큼 표시 (진행 중에도 노출) */}
-      <SummaryCardsB analysis={analysis} isEn={isEn} />
+      <SummaryCardsB analysis={analysis} isEn={isEn} streamingStepKey={streamingStep?.key ?? null} />
 
       {/* Analysis Steps Feed */}
       <div className="space-y-4">
