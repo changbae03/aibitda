@@ -40,6 +40,7 @@ import { useAuth as useKakaoAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
+import SummaryCardsB from "@/components/SummaryCardsB";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -1668,6 +1669,11 @@ export default function AnalysisDetail() {
           </div>
         </div>
       </div>
+
+      {/* 빠른 요약 카드 — 분석 완료 시에만 표시 */}
+      {isComplete && (
+        <SummaryCardsB analysis={analysis} isEn={isEn} />
+      )}
 
       {/* Analysis Steps Feed */}
       <div className="space-y-4">
