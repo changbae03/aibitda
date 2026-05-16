@@ -113,7 +113,7 @@ export function CommandPalette() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: -10 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed top-[14vh] left-1/2 -translate-x-1/2 w-full max-w-lg z-[101] px-4"
+            className="fixed top-3 sm:top-[14vh] left-1/2 -translate-x-1/2 w-full max-w-lg z-[101] px-4"
           >
             <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
@@ -124,7 +124,8 @@ export function CommandPalette() {
                   onChange={e => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="종목명 또는 티커로 검색..."
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                  className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
+                  style={{ fontSize: '16px' }}
                 />
                 <button
                   onClick={() => setOpen(false)}

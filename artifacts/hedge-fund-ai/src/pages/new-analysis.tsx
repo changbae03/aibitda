@@ -470,7 +470,7 @@ export default function NewAnalysis() {
 
   return (
     <>
-    <div className="min-h-[75vh] flex flex-col items-center justify-center">
+    <div className="min-h-[75dvh] flex flex-col items-center justify-start pt-14 sm:justify-center sm:pt-0">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -517,7 +517,8 @@ export default function NewAnalysis() {
               }}
               onKeyDown={handleKeyDown}
               placeholder="삼성전자, NVDA, 005930, AAPL..."
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-foreground text-[15px] placeholder:text-muted-foreground/40 placeholder:text-sm"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-foreground text-base placeholder:text-muted-foreground/40 placeholder:text-sm"
+              style={{ fontSize: '16px' }}
               disabled={isPending}
               autoComplete="off"
             />
