@@ -1670,10 +1670,8 @@ export default function AnalysisDetail() {
         </div>
       </div>
 
-      {/* 빠른 요약 카드 — 분석 완료 시에만 표시 */}
-      {isComplete && (
-        <SummaryCardsB analysis={analysis} isEn={isEn} />
-      )}
+      {/* 빠른 요약 카드 — 데이터가 있는 만큼 표시 (진행 중에도 노출) */}
+      <SummaryCardsB analysis={analysis} isEn={isEn} />
 
       {/* Analysis Steps Feed */}
       <div className="space-y-4">
