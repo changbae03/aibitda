@@ -15,6 +15,7 @@
 
 import { pool } from "@workspace/db";
 import { SCHEDULER_TOKEN } from "./schedule-runner.js";
+import { sendTelegram } from "./telegram.js";
 
 const DAILY_BATCH_KR       = 25;
 const DAILY_BATCH_US       = 15;
