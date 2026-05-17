@@ -44,6 +44,38 @@ async function setLastBatchDate(dateStr: string): Promise<void> {
   );
 }
 
+// ─── 동시 실행 방지 Lock ──────────────────────────────────────────────────────
+// system_cache의 atomic INSERT를 이용해 분산 Lock 구현.
+// 서버가 여러 번 재시작되어도 하나의 인스턴스만 배치를 실행할 수 있다.
+const BATCH_LOCK_KEY = "auto_batch_lock";
+const BATCH_LOCK_TTL_MS = 4 * 60 * 60 * 1000; // 4시간 (배치 최대 소요 약 3.3시간)
+
+async function tryAcquireLock(): Promise<boolean> {
+  try {
+    const expiresAt = new Date(Date.now() + BATCH_LOCK_TTL_MS).toISOString();
+    // 잠금이 없거나 만료된 경우에만 INSERT/UPDATE 성공 → rowCount > 0
+    const r = await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, '{"locked":true}'::jsonb, $2)
+       ON CONFLICT (key) DO UPDATE
+         SET data = '{"locked":true}'::jsonb, expires_at = $2
+         WHERE system_cache.expires_at < NOW()
+       RETURNING key`,
+      [BATCH_LOCK_KEY, expiresAt]
+    );
+    return (r.rowCount ?? 0) > 0;
+  } catch (e: any) {
+    console.warn("[auto-batch] lock 획득 중 오류:", e?.message);
+    return false;
+  }
+}
+
+async function releaseLock(): Promise<void> {
+  try {
+    await pool.query(`DELETE FROM system_cache WHERE key = $1`, [BATCH_LOCK_KEY]);
+  } catch { /* 무시 */ }
+}
+
 // ─── DB 기반 종목 선택 ────────────────────────────────────────────────────────
 interface BatchStock {
   ticker: string;
@@ -106,6 +138,22 @@ export async function runDailyAutoBatch(port: number): Promise<void> {
   const lastRun = await getLastBatchDate();
   if (lastRun === todayKST) {
     console.log(`[auto-batch] 오늘(${todayKST}) 이미 실행됨 — 스킵`);
+    return;
+  }
+
+  // ── 동시 실행 방지: DB 분산 Lock 획득 ─────────────────────────────────────
+  // 서버가 여러 번 재시작되어도 하나의 인스턴스만 배치를 실행한다.
+  const locked = await tryAcquireLock();
+  if (!locked) {
+    console.log(`[auto-batch] 다른 인스턴스가 이미 실행 중 — 스킵 (lock 획득 실패)`);
+    return;
+  }
+
+  // Lock 획득 후 날짜를 다시 확인 (race condition 방지)
+  const lastRunAfterLock = await getLastBatchDate();
+  if (lastRunAfterLock === todayKST) {
+    console.log(`[auto-batch] Lock 획득 후 날짜 재확인: 오늘 이미 실행됨 — 스킵`);
+    await releaseLock();
     return;
   }
 
@@ -196,4 +244,11 @@ export async function runDailyAutoBatch(port: number): Promise<void> {
   console.log(
     `[auto-batch] ${batch.length}개 큐잉 완료 — 약 ${totalMinutes}분에 걸쳐 순차 실행`
   );
+
+  // 마지막 종목 완료 예상 시간 이후에 Lock 해제
+  // (totalMinutes + 10분 여유)
+  setTimeout(async () => {
+    await releaseLock();
+    console.log("[auto-batch] 배치 Lock 해제 완료");
+  }, (totalMinutes + 10) * 60_000);
 }

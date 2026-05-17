@@ -191,26 +191,14 @@ export default function Browse() {
         limit: String(LIMIT),
         sort: "latest",
       });
-      if (market)   params.set("market", market);
-      if (verdict)  params.set("verdict", verdict);
-      if (industry) params.set("industry", industry);
+      if (market)          params.set("market", market);
+      if (verdict)         params.set("verdict", verdict);
+      if (industry)        params.set("industry", industry);
+      if (debouncedSearch) params.set("search", debouncedSearch);
 
       const res = await fetch(getApiUrl(`/api/analysis/browse?${params}`));
       if (!res.ok) throw new Error("Failed to load");
       const json: BrowseResponse = await res.json();
-
-      // 클라이언트 사이드 텍스트 검색 (회사명/티커)
-      if (debouncedSearch.trim()) {
-        const q = debouncedSearch.toLowerCase();
-        json.items = json.items.filter(
-          (it) =>
-            it.companyName.toLowerCase().includes(q) ||
-            it.ticker.toLowerCase().includes(q) ||
-            (it.englishName ?? "").toLowerCase().includes(q)
-        );
-        json.total = json.items.length;
-      }
-
       setData(json);
     } catch (e: any) {
       setError(e.message);

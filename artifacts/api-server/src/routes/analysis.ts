@@ -3623,6 +3623,7 @@ router.get("/browse", async (req, res) => {
     const industry = req.query.industry ? String(req.query.industry) : null;
     const market   = req.query.market   ? String(req.query.market)   : null; // KR | US
     const sort     = String(req.query.sort ?? "latest"); // latest | oldest
+    const search   = req.query.search   ? String(req.query.search).trim() : null; // 종목명/티커 검색
 
     const conditions: string[] = [
       `status = 'completed'`,
@@ -3643,6 +3644,12 @@ router.get("/browse", async (req, res) => {
       conditions.push(`(ticker ~ '^[0-9]' OR ticker LIKE '%.KQ' OR ticker LIKE '%.KS')`);
     } else if (market === "US") {
       conditions.push(`NOT (ticker ~ '^[0-9]' OR ticker LIKE '%.KQ' OR ticker LIKE '%.KS')`);
+    }
+    if (search) {
+      const q = `%${search}%`;
+      params.push(q);
+      const n = params.length;
+      conditions.push(`(company_name ILIKE $${n} OR ticker ILIKE $${n} OR english_name ILIKE $${n})`);
     }
 
     const where = `WHERE ${conditions.join(" AND ")}`;
@@ -5364,6 +5371,17 @@ async function executeStep(
               stopLoss = null;
             }
           }
+
+          // ── entry_price null → start_price fallback ──────────────────
+          // AI가 entry_price를 누락하거나 가드에 걸려 null이 된 경우,
+          // 분석 시점 시장가(start_price)를 진입가 기준으로 사용한다.
+          if (entryPrice === null) {
+            entryPrice = savedStartPrice;
+            console.log(`[analysis ${id}] entry_price null → fallback to start_price: ${savedStartPrice}`);
+          }
+        } else if (entryPrice === null) {
+          // savedStartPrice 자체가 null인 경우에도 기록
+          console.warn(`[analysis ${id}] entry_price null, start_price도 null — 가격 조회 실패`);
         }
 
         if (targetPrice && entryPrice && stopLoss && entryPrice !== stopLoss) {
