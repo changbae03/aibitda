@@ -1037,6 +1037,98 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
 }
 
 
+// ── 포트폴리오 추가 CTA (분석 완료 후) ──────────────────────────────────────
+function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyName: string; isEn: boolean }) {
+  const [, setLocation] = useLocation();
+  const [status, setStatus] = useState<"idle" | "checking" | "adding" | "added" | "exists">("checking");
+
+  useEffect(() => {
+    fetch(getApiUrl(`/api/portfolio/check/${encodeURIComponent(ticker)}`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setStatus(d?.inPortfolio ? "exists" : "idle"))
+      .catch(() => setStatus("idle"));
+  }, [ticker]);
+
+  async function addToPortfolio() {
+    setStatus("adding");
+    const currency = /^\d{5,6}$/.test(ticker) ? "KRW" : "USD";
+    try {
+      const r = await fetch(getApiUrl("/api/portfolio"), {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker, companyName, currency }),
+      });
+      if (r.ok) setStatus("added");
+      else setStatus("idle");
+    } catch { setStatus("idle"); }
+  }
+
+  return (
+    <div className="mt-4 print:hidden">
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-[#1a1a1a] to-[#141414] px-5 py-5 space-y-3.5">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+          {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {/* 홈으로 */}
+          <button
+            onClick={() => setLocation("/")}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/20 hover:border-muted hover:bg-muted/40 px-4 py-4 transition-all duration-200 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center group-hover:bg-muted transition-colors">
+              <Home className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            </div>
+            <span className="text-[13px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">
+              {isEn ? "Home" : "홈으로"}
+            </span>
+            <span className="text-[11px] text-muted-foreground/60 leading-tight text-center">
+              {isEn ? "Back to dashboard" : "대시보드로 돌아가기"}
+            </span>
+          </button>
+
+          {/* 포트폴리오 추가 / 보기 */}
+          {status === "exists" || status === "added" ? (
+            <button
+              onClick={() => setLocation("/portfolio")}
+              className="relative flex flex-col items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15 px-4 py-4 transition-all duration-200 group overflow-hidden"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
+                <Check className="w-5 h-5 text-emerald-400" />
+              </div>
+              <span className="text-[13px] font-bold text-emerald-400 leading-tight text-center">
+                {status === "added" ? (isEn ? "Added!" : "추가 완료!") : (isEn ? "In Portfolio" : "포트폴리오에 있음")}
+              </span>
+              <span className="text-[11px] text-emerald-400/60 leading-tight text-center">
+                {isEn ? "View portfolio →" : "포트폴리오 보기 →"}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={addToPortfolio}
+              disabled={status === "adding" || status === "checking"}
+              className="relative flex flex-col items-center gap-2 rounded-xl border border-primary/50 bg-gradient-to-br from-primary/15 to-primary/5 hover:from-primary/25 hover:to-primary/10 hover:border-primary/70 px-4 py-4 transition-all duration-200 group overflow-hidden disabled:opacity-60"
+            >
+              <div className="absolute inset-0 rounded-xl bg-primary/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors relative">
+                {status === "adding" || status === "checking"
+                  ? <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                  : <Briefcase className="w-5 h-5 text-primary" />
+                }
+              </div>
+              <span className="text-[13px] font-bold text-primary leading-tight text-center relative">
+                {isEn ? "Add to Portfolio" : "포트폴리오에 추가"}
+              </span>
+              <span className="text-[11px] text-primary/60 leading-tight text-center relative">
+                {isEn ? "Track this stock" : "이 종목 바로 편입하기"}
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
   const [, setLocation] = useLocation();
@@ -2036,48 +2128,7 @@ export default function AnalysisDetail() {
             </div>
 
             {/* 분석 완료 후 행동 유도 CTA */}
-            <div className="mt-4 print:hidden">
-              <div className="rounded-2xl border border-border bg-gradient-to-br from-[#1a1a1a] to-[#141414] px-5 py-5 space-y-3.5">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                  {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* 홈으로 */}
-                  <button
-                    onClick={() => setLocation("/")}
-                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/20 hover:border-muted hover:bg-muted/40 px-4 py-4 transition-all duration-200 group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center group-hover:bg-muted transition-colors">
-                      <Home className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    </div>
-                    <span className="text-[13px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">
-                      {isEn ? "Home" : "홈으로"}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground/60 leading-tight text-center">
-                      {isEn ? "Back to dashboard" : "대시보드로 돌아가기"}
-                    </span>
-                  </button>
-
-                  {/* 내 포트폴리오 — 강조 */}
-                  <button
-                    onClick={() => setLocation("/portfolio")}
-                    className="relative flex flex-col items-center gap-2 rounded-xl border border-primary/50 bg-gradient-to-br from-primary/15 to-primary/5 hover:from-primary/25 hover:to-primary/10 hover:border-primary/70 px-4 py-4 transition-all duration-200 group overflow-hidden"
-                  >
-                    {/* 배경 글로우 */}
-                    <div className="absolute inset-0 rounded-xl bg-primary/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                    <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors relative">
-                      <Briefcase className="w-5 h-5 text-primary transition-colors" />
-                    </div>
-                    <span className="text-[13px] font-bold text-primary leading-tight text-center relative">
-                      {isEn ? "My Portfolio" : "내 포트폴리오"}
-                    </span>
-                    <span className="text-[11px] text-primary/60 leading-tight text-center relative">
-                      {isEn ? "Track this stock" : "이 종목 수익률 관리하기"}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            {isComplete && <PortfolioCTA ticker={analysis.ticker} companyName={analysis.companyName} isEn={isEn} />}
 
             {/* 관리자 종목 보정 메모 — 관리자에게만 표시 */}
             {isComplete && isAdmin && (

@@ -6,7 +6,8 @@ import {
   ChevronDown, ChevronUp, RefreshCw,
   ShieldAlert, ExternalLink,
   Briefcase, PencilLine, Check, X as XIcon,
-  Search, Building2,
+  Search, Building2, ArrowUpRight, ArrowDownRight,
+  Zap, AlertTriangle, Bell,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -339,13 +340,37 @@ function InlineEdit({
   );
 }
 
+// ── 변화 감지 타입 ────────────────────────────────────────────────────────────
+interface ChangeItem {
+  type: "verdict" | "target_price" | "catalyst" | "risk";
+  label: string;
+  detail: string;
+  direction: "up" | "down" | "neutral";
+}
+interface ChangesResult {
+  hasChanges: boolean;
+  analysisCount: number;
+  latestDate?: string;
+  prevDate?: string;
+  changes: ChangeItem[];
+}
+
 // ── 보유 종목 카드 ────────────────────────────────────────────────────────────
 function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDelete: (id: number) => void; onRefresh: () => void }) {
   const [, setLocation] = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [changes, setChanges] = useState<ChangesResult | null>(null);
+  const [changesExpanded, setChangesExpanded] = useState(false);
 
   const a = holding.analysis;
+
+  useEffect(() => {
+    fetch(getApiUrl(`/api/portfolio/changes/${encodeURIComponent(holding.ticker)}`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setChanges(d); })
+      .catch(() => {});
+  }, [holding.ticker]);
   const isKR = isKRTicker(holding.ticker);
 
   async function handleDelete() {
@@ -474,6 +499,89 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             )}
           </div>
         </div>
+
+        {/* 변화 감지 섹션 */}
+        {changes && changes.changes.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => setChangesExpanded(v => !v)}
+              className="w-full flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <Bell className={cn(
+                "w-3 h-3 shrink-0",
+                changes.hasChanges ? "text-amber-400" : "text-muted-foreground"
+              )} />
+              <span className={changes.hasChanges ? "text-amber-400 font-medium" : ""}>
+                {changes.hasChanges
+                  ? `AI 판정·목표가 변경 감지 (${changes.analysisCount}회 분석)`
+                  : `분석 요약 (${changes.analysisCount}회 분석)`
+                }
+              </span>
+              {changes.latestDate && (
+                <span className="text-muted-foreground/50">
+                  · 최신 {format(new Date(changes.latestDate), "M/d")}
+                </span>
+              )}
+              <span className="ml-auto">
+                {changesExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </span>
+            </button>
+
+            <AnimatePresence>
+              {changesExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-2 space-y-1.5">
+                    {changes.changes.map((c, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "rounded-lg px-3 py-2 flex gap-2",
+                          c.type === "verdict" && c.direction === "up" && "bg-emerald-500/10 border border-emerald-500/20",
+                          c.type === "verdict" && c.direction === "down" && "bg-red-500/10 border border-red-500/20",
+                          c.type === "verdict" && c.direction === "neutral" && "bg-muted/30 border border-border",
+                          c.type === "target_price" && c.direction === "up" && "bg-emerald-500/8 border border-emerald-500/15",
+                          c.type === "target_price" && c.direction === "down" && "bg-red-500/8 border border-red-500/15",
+                          c.type === "catalyst" && "bg-blue-500/8 border border-blue-500/15",
+                          c.type === "risk" && "bg-amber-500/8 border border-amber-500/15",
+                        )}
+                      >
+                        <div className="shrink-0 mt-0.5">
+                          {c.type === "verdict" && c.direction === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />}
+                          {c.type === "verdict" && c.direction === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
+                          {c.type === "verdict" && c.direction === "neutral" && <Bell className="w-3.5 h-3.5 text-muted-foreground" />}
+                          {c.type === "target_price" && c.direction === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />}
+                          {c.type === "target_price" && c.direction === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
+                          {c.type === "catalyst" && <Zap className="w-3.5 h-3.5 text-blue-400" />}
+                          {c.type === "risk" && <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={cn(
+                            "text-[10px] font-semibold uppercase tracking-wide mb-0.5",
+                            c.type === "verdict" && c.direction === "up" && "text-emerald-400",
+                            c.type === "verdict" && c.direction === "down" && "text-red-400",
+                            c.type === "target_price" && c.direction === "up" && "text-emerald-400",
+                            c.type === "target_price" && c.direction === "down" && "text-red-400",
+                            c.type === "catalyst" && "text-blue-400",
+                            c.type === "risk" && "text-amber-400",
+                          )}>
+                            {c.label}
+                          </p>
+                          <p className="text-[11px] text-foreground/80 leading-snug">{c.detail}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* 하단 액션 */}
         <div className="mt-3 flex items-center gap-2 flex-wrap">

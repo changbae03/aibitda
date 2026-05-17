@@ -197,6 +197,127 @@ router.put("/portfolio/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── GET /api/portfolio/check/:ticker — 포트폴리오 포함 여부 확인 ───────────────
+router.get("/portfolio/check/:ticker", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.json({ inPortfolio: false }); return; }
+
+  await ensureTable();
+  const ticker = String(req.params.ticker).trim().toUpperCase();
+  const { rows } = await pool.query(
+    `SELECT id FROM portfolio_holdings WHERE user_id = $1 AND ticker = $2`,
+    [userId, ticker]
+  );
+  res.json({ inPortfolio: rows.length > 0, holdingId: rows[0]?.id ?? null });
+});
+
+// ── GET /api/portfolio/changes/:ticker — 분석 이력 변화 감지 ────────────────
+router.get("/portfolio/changes/:ticker", async (req, res) => {
+  const ticker = String(req.params.ticker).trim().toUpperCase();
+
+  // 최근 완료된 분석 3개 조회 (비교용)
+  const { rows } = await pool.query(`
+    SELECT
+      a.id, a.investment_verdict, a.target_price, a.created_at,
+      (SELECT content FROM analysis_steps
+       WHERE analysis_id = a.id AND step_key = 'key_catalysts' LIMIT 1) AS catalysts,
+      (SELECT content FROM analysis_steps
+       WHERE analysis_id = a.id AND step_key = 'risk_factors' LIMIT 1) AS risks
+    FROM analyses a
+    WHERE a.ticker = $1 AND a.status = 'completed'
+    ORDER BY a.created_at DESC
+    LIMIT 3
+  `, [ticker]);
+
+  if (rows.length < 2) {
+    res.json({ hasChanges: false, analysisCount: rows.length, latest: rows[0] ?? null });
+    return;
+  }
+
+  const latest = rows[0];
+  const prev   = rows[1];
+
+  // ── 판정 변화 ────────────────────────────────────────────────────────────
+  const verdictChanged = latest.investment_verdict !== prev.investment_verdict;
+
+  // ── 목표가 변화 ──────────────────────────────────────────────────────────
+  const latestTP = latest.target_price ? parseFloat(latest.target_price) : null;
+  const prevTP   = prev.target_price   ? parseFloat(prev.target_price)   : null;
+  const targetPricePct = (latestTP && prevTP && prevTP > 0)
+    ? ((latestTP - prevTP) / prevTP) * 100
+    : null;
+  const targetPriceChanged = targetPricePct != null && Math.abs(targetPricePct) >= 3;
+
+  // ── 촉매/리스크 핵심 문장 추출 (첫 2문장) ────────────────────────────────
+  function extractSnippet(text: string | null): string | null {
+    if (!text) return null;
+    const clean = text
+      .replace(/^#{1,4}[^\n]*\n/gm, "")  // 마크다운 제목 제거
+      .replace(/\*\*/g, "")
+      .trim();
+    const sentences = clean.split(/(?<=[.!?。])\s+/).filter(s => s.trim().length > 15);
+    return sentences.slice(0, 2).join(" ").slice(0, 200) || null;
+  }
+
+  const changes: Array<{
+    type: "verdict" | "target_price" | "catalyst" | "risk";
+    label: string;
+    detail: string;
+    direction: "up" | "down" | "neutral";
+  }> = [];
+
+  if (verdictChanged) {
+    const verdictOrder = ["Strong Sell", "Sell", "Hold", "Buy", "Strong Buy"];
+    const prevIdx   = verdictOrder.indexOf(prev.investment_verdict ?? "");
+    const latestIdx = verdictOrder.indexOf(latest.investment_verdict ?? "");
+    const dir = latestIdx > prevIdx ? "up" : latestIdx < prevIdx ? "down" : "neutral";
+    changes.push({
+      type: "verdict",
+      label: "AI 판정 변경",
+      detail: `${prev.investment_verdict ?? "??"} → ${latest.investment_verdict ?? "??"}`,
+      direction: dir,
+    });
+  }
+
+  if (targetPriceChanged && targetPricePct != null) {
+    changes.push({
+      type: "target_price",
+      label: "목표가 변경",
+      detail: `${targetPricePct > 0 ? "+" : ""}${targetPricePct.toFixed(1)}% (이전 대비)`,
+      direction: targetPricePct > 0 ? "up" : "down",
+    });
+  }
+
+  // 최신 분석의 핵심 촉매/리스크 스니펫도 함께 반환
+  const catalystSnippet = extractSnippet(latest.catalysts);
+  const riskSnippet     = extractSnippet(latest.risks);
+
+  if (catalystSnippet) {
+    changes.push({
+      type: "catalyst",
+      label: "핵심 촉매",
+      detail: catalystSnippet,
+      direction: "up",
+    });
+  }
+  if (riskSnippet) {
+    changes.push({
+      type: "risk",
+      label: "주요 리스크",
+      detail: riskSnippet,
+      direction: "down",
+    });
+  }
+
+  res.json({
+    hasChanges: verdictChanged || targetPriceChanged,
+    analysisCount: rows.length,
+    latestDate: latest.created_at,
+    prevDate: prev.created_at,
+    changes,
+  });
+});
+
 // ── DELETE /api/portfolio/:id — 종목 삭제 ────────────────────────────────────
 router.delete("/portfolio/:id", async (req, res) => {
   const userId = getUserId(req);
