@@ -55,13 +55,22 @@ interface Holding {
 interface StockUpdate {
   ticker: string;
   companyName: string;
+  sentiment: "bullish" | "neutral" | "bearish";
+  thesisStatus: "유효" | "일부변화" | "훼손";
+  keyEvent: string;
   update: string;
+}
+interface SectorRecommendation {
+  sector: string;
+  reason: string;
+  exampleTickers: string[];
 }
 interface PortfolioReviewResult {
   stockUpdates: StockUpdate[];
   portfolioView: string;
   concentration: string;
   rebalancing: string;
+  sectorRecommendations: SectorRecommendation[];
   generatedAt: string;
 }
 
@@ -1115,21 +1124,52 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                 <div className="divide-y divide-border/20">
 
                   {/* ① 종목별 뉴스 & thesis 점검 */}
-                  <div className="px-4 pt-3 pb-1">
-                    <div className="flex items-center gap-1.5 mb-2">
+                  <div className="px-4 pt-3 pb-2">
+                    <div className="flex items-center gap-1.5 mb-3">
                       <Newspaper className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                       <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">종목별 뉴스 & Thesis 점검</span>
                     </div>
-                    <div className="space-y-3">
-                      {review.stockUpdates.map(s => (
-                        <div key={s.ticker} className="pl-2 border-l-2 border-border/40">
-                          <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">
-                            {s.companyName}
-                            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground/50">{s.ticker}</span>
-                          </p>
-                          <p className="text-[12px] text-foreground/70 leading-relaxed">{s.update}</p>
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      {review.stockUpdates.map(s => {
+                        const sentimentCfg = s.sentiment === "bullish"
+                          ? { label: "강세", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" }
+                          : s.sentiment === "bearish"
+                          ? { label: "약세", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
+                          : { label: "중립", cls: "bg-muted text-muted-foreground border-border/40" };
+                        const thesisCfg = s.thesisStatus === "훼손"
+                          ? { cls: "bg-red-500/10 text-red-400 border-red-500/20" }
+                          : s.thesisStatus === "일부변화"
+                          ? { cls: "bg-amber-500/10 text-amber-400 border-amber-500/20" }
+                          : { cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" };
+                        return (
+                          <div key={s.ticker} className="rounded-xl border border-border/30 bg-background/30 overflow-hidden">
+                            {/* 헤더 */}
+                            <div className="px-3 py-2 flex items-center gap-2 border-b border-border/20">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[12px] font-semibold text-foreground/90">{s.companyName}</span>
+                                <span className="ml-1.5 text-[10px] text-muted-foreground/50">{s.ticker}</span>
+                              </div>
+                              <span className={cn("px-1.5 py-0.5 rounded-md text-[10px] font-semibold border", sentimentCfg.cls)}>
+                                {sentimentCfg.label}
+                              </span>
+                              <span className={cn("px-1.5 py-0.5 rounded-md text-[10px] font-medium border", thesisCfg.cls)}>
+                                thesis {s.thesisStatus}
+                              </span>
+                            </div>
+                            {/* 핵심 이벤트 */}
+                            {s.keyEvent && (
+                              <div className="px-3 py-1.5 bg-sky-500/[0.04] border-b border-sky-500/10 flex items-start gap-1.5">
+                                <Bell className="w-3 h-3 text-sky-400 shrink-0 mt-0.5" />
+                                <p className="text-[11px] text-sky-300/80 leading-snug">{s.keyEvent}</p>
+                              </div>
+                            )}
+                            {/* 상세 업데이트 */}
+                            <div className="px-3 py-2">
+                              <p className="text-[12px] text-foreground/70 leading-relaxed">{s.update}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1159,6 +1199,35 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                     </div>
                     <p className="text-[12px] text-foreground/75 leading-relaxed">{review.rebalancing}</p>
                   </div>
+
+                  {/* ⑤ 미보유 섹터 추천 */}
+                  {review.sectorRecommendations.length > 0 && (
+                    <div className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <Lightbulb className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                        <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider">포트폴리오 보완 섹터 추천</span>
+                      </div>
+                      <div className="space-y-2.5">
+                        {review.sectorRecommendations.map((rec, i) => (
+                          <div key={i} className="rounded-xl border border-violet-500/15 bg-violet-500/[0.04] p-3">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-[12px] font-bold text-violet-300">{rec.sector}</span>
+                              {rec.exampleTickers.length > 0 && (
+                                <div className="flex gap-1 flex-wrap">
+                                  {rec.exampleTickers.map((t, j) => (
+                                    <span key={j} className="px-1.5 py-0.5 rounded-md bg-violet-500/10 border border-violet-500/20 text-[10px] text-violet-400 font-medium">
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[12px] text-foreground/70 leading-relaxed">{rec.reason}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 푸터 */}
                   <div className="px-4 py-2.5 flex items-center justify-between">

@@ -1112,7 +1112,12 @@ router.post("/portfolio/review", async (req, res) => {
 ${h.recentNews}`;
     }).join("\n\n---\n\n");
 
-    // 4) Gemini 호출 — 종목별 + 포트폴리오 종합 분석
+    // 현재 포트폴리오 섹터 목록 (Gemini에 전달)
+    const sectorList = holdingDetails
+      .map(h => h.verdict ? `${h.companyName}` : h.companyName)
+      .join(", ");
+
+    // 4) Gemini 호출 — 종목별 + 포트폴리오 종합 분석 + 섹터 추천
     const prompt = `당신은 시니어 포트폴리오 매니저입니다. 오늘은 ${today}입니다.
 
 아래는 투자자의 포트폴리오 전체 보유 종목에 대한 상세 정보입니다.
@@ -1121,7 +1126,7 @@ ${h.recentNews}`;
 ${holdingsSummary}
 
 위 정보를 바탕으로 다음 JSON 형식으로 포트폴리오 리뷰를 작성하세요.
-stockUpdates는 보유 중인 모든 종목을 포함해야 합니다.
+stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니다.
 
 **출력 형식 (JSON만 출력, 다른 텍스트 없이):**
 {
@@ -1129,23 +1134,34 @@ stockUpdates는 보유 중인 모든 종목을 포함해야 합니다.
     {
       "ticker": "종목코드",
       "companyName": "회사명",
-      "update": "① 분석 이후 발생한 주요 뉴스 요약 ② 이 뉴스가 기존 thesis(촉매/리스크)에 어떤 영향을 주는지 ③ thesis가 여전히 유효한지 또는 훼손됐는지 판단 — 모두 2-4문장으로"
+      "sentiment": "bullish 또는 neutral 또는 bearish — 뉴스와 현재 상황을 종합한 단기 sentiment",
+      "thesisStatus": "유효 또는 일부변화 또는 훼손 — 분석 당시 thesis가 현재도 유효한지",
+      "keyEvent": "분석 이후 발생한 가장 중요한 단일 뉴스/이벤트를 1문장으로 (없으면 빈 문자열)",
+      "update": "① 분석 이후 주요 뉴스 흐름 요약 ② 이 뉴스가 thesis(촉매/리스크)에 미친 영향 ③ 현재 시점에서 주목해야 할 포인트 — 3-4문장으로"
     }
   ],
   "portfolioView": "전체 포트폴리오 종합 평가 — 현재 시장 환경, 섹터 노출, 전체적인 방향성 (3-4문장)",
   "concentration": "종목·섹터 집중도 분석, 상관관계 리스크, 분산 수준 평가 (2-3문장)",
-  "rebalancing": "구체적 행동 제안 — 비중 조절, 손절 검토, 추가매수 기회, 우선순위 순 (3-4문장)"
+  "rebalancing": "구체적 행동 제안 — 비중 조절, 손절 검토, 추가매수 기회, 우선순위 순 (3-4문장)",
+  "sectorRecommendations": [
+    {
+      "sector": "추천 섹터명 (예: 방산, 헬스케어, 금융, 에너지 등)",
+      "reason": "현재 포트폴리오와 보완 관계가 있는 이유 + 현재 시장 환경에서 매력적인 이유 (2-3문장)",
+      "exampleTickers": ["대표 종목 1 (종목명+코드)", "대표 종목 2 (종목명+코드)"]
+    }
+  ]
 }
 
 주의사항:
-- update 필드는 뉴스가 없으면 '최근 주요 뉴스 없음, thesis 변화 없음'으로 작성
-- 모든 내용은 한국어, 투자자에게 직접 말하듯 구체적으로`;
+- sectorRecommendations는 현재 포트폴리오(${sectorList})에 없는 섹터를 2-3개 추천
+- keyEvent가 없으면 빈 문자열("")로 작성
+- 모든 내용은 한국어, 투자자에게 직접 말하듯 구체적이고 실용적으로`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
-        maxOutputTokens: 4000,
+        maxOutputTokens: 5000,
         temperature: 0.5,
         thinkingConfig: { thinkingBudget: 0 },
       },
@@ -1162,10 +1178,26 @@ stockUpdates는 보유 중인 모든 종목을 포함해야 합니다.
 
     const parsed = JSON.parse(match[0]);
     res.json({
-      stockUpdates: Array.isArray(parsed.stockUpdates) ? parsed.stockUpdates : [],
+      stockUpdates: Array.isArray(parsed.stockUpdates)
+        ? parsed.stockUpdates.map((s: any) => ({
+            ticker: s.ticker ?? "",
+            companyName: s.companyName ?? "",
+            sentiment: s.sentiment ?? "neutral",
+            thesisStatus: s.thesisStatus ?? "유효",
+            keyEvent: s.keyEvent ?? "",
+            update: s.update ?? "",
+          }))
+        : [],
       portfolioView: parsed.portfolioView ?? "",
       concentration: parsed.concentration ?? "",
       rebalancing: parsed.rebalancing ?? "",
+      sectorRecommendations: Array.isArray(parsed.sectorRecommendations)
+        ? parsed.sectorRecommendations.map((r: any) => ({
+            sector: r.sector ?? "",
+            reason: r.reason ?? "",
+            exampleTickers: Array.isArray(r.exampleTickers) ? r.exampleTickers : [],
+          }))
+        : [],
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
