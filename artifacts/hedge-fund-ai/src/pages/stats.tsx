@@ -15,6 +15,7 @@ interface PublicStats {
   winRate: number | null;
   avgReturn: number | null;
   byIndustry: Record<string, { total: number; hitTarget: number; avgReturn: number | null }>;
+  topTickers: { ticker: string; companyName: string; count: number; winRate: number | null }[];
   recentCases: {
     ticker: string;
     companyName: string;
@@ -155,6 +156,58 @@ export default function Stats() {
           rawValue={stats.ongoingCount}
         />
       </div>
+
+      {/* 많이 분석된 종목 */}
+      {stats.topTickers.length > 0 && (
+        <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
+          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">
+            {t("많이 분석된 종목", "Most Analyzed")}
+          </h2>
+          <div className="space-y-2">
+            {stats.topTickers.map((tk, idx) => (
+              <motion.div
+                key={tk.ticker}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.04 }}
+                className="flex items-center gap-3"
+              >
+                {/* 순위 */}
+                <span className={cn(
+                  "w-5 text-center text-[11px] font-bold tabular-nums shrink-0",
+                  idx === 0 ? "text-amber-400" : idx === 1 ? "text-neutral-400" : idx === 2 ? "text-orange-700" : "text-muted-foreground/50"
+                )}>
+                  {idx + 1}
+                </span>
+
+                {/* 로고 */}
+                <StockLogo ticker={tk.ticker} companyName={tk.companyName} size="sm" />
+
+                {/* 종목 정보 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-semibold text-foreground truncate">{tk.companyName}</span>
+                    <span className="text-[11px] text-muted-foreground font-mono shrink-0">{tk.ticker}</span>
+                  </div>
+                </div>
+
+                {/* 분석 횟수 + 달성률 */}
+                <div className="shrink-0 text-right">
+                  <span className="text-[12px] font-bold text-foreground tabular-nums">{tk.count}{t("회", "x")}</span>
+                  {tk.winRate != null && (
+                    <span className={cn(
+                      "ml-1.5 text-[11px] tabular-nums",
+                      tk.winRate >= 60 ? "text-emerald-500" : tk.winRate >= 40 ? "text-amber-500" : "text-red-400"
+                    )}>
+                      {tk.winRate.toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 결과 분포 */}
       {stats.reviewedCount > 0 && (

@@ -373,6 +373,23 @@ router.get("/public-stats", async (_req, res) => {
       : null;
   }
 
+  // 많이 분석된 종목 Top 10 (전체 분석 기준)
+  const tickerCountMap: Record<string, { companyName: string; count: number; winRate: number | null }> = {};
+  for (const item of all) {
+    const key = item.ticker;
+    if (!tickerCountMap[key]) tickerCountMap[key] = { companyName: item.company_name ?? key, count: 0, winRate: null };
+    tickerCountMap[key].count++;
+  }
+  for (const ticker of Object.keys(tickerCountMap)) {
+    const tickerReviewed = reviewed.filter((i) => i.ticker === ticker && i.outcome !== "ongoing");
+    const tickerHit = tickerReviewed.filter((i) => i.outcome === "hit_target");
+    tickerCountMap[ticker].winRate = tickerReviewed.length > 0 ? (tickerHit.length / tickerReviewed.length) * 100 : null;
+  }
+  const topTickers = Object.entries(tickerCountMap)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([ticker, data]) => ({ ticker, companyName: data.companyName, count: data.count, winRate: data.winRate }));
+
   // 최근 방향 일치/손절 사례 (10건)
   const recentCases = reviewed
     .filter((i) => i.outcome !== "ongoing")
@@ -397,6 +414,7 @@ router.get("/public-stats", async (_req, res) => {
     winRate: reviewed.length ? (hitTarget.length / reviewed.length) * 100 : null,
     avgReturn,
     byIndustry,
+    topTickers,
     recentCases,
   });
 });
