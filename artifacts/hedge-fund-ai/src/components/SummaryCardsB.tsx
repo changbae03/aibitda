@@ -146,6 +146,42 @@ function extractBoldPoints(content: string, max = 3): string[] {
   }
   return out;
 }
+// 산업 분석 핵심 포인트 추출 — **레이블:** 뒤의 실제 설명 내용까지 함께 캡처
+function extractIndustryPoints(content: string, max = 3): string[] {
+  const out: string[] = [];
+  const lines = content.split("\n");
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    // 패턴 1: **레이블:** 또는 **레이블** 뒤에 설명이 이어지는 경우
+    const m1 = trimmed.match(/\*\*([^*]{2,50})\*\*[\u{FF1A}:\s]+(.{15,})/u);
+    if (m1) {
+      const label = m1[1].trim();
+      if (/^(분析|개요|현황|요약|결론|Part|Step|Industry|Market|구조|경쟁)/.test(label)) continue;
+      const desc = m1[2].replace(/\*\*/g, "").trim().slice(0, 120);
+      const point = desc.length > 15 ? desc : label + ": " + desc;
+      if (!out.includes(point)) out.push(point);
+      if (out.length >= max) break;
+      continue;
+    }
+
+    // 패턴 2: 불릿 라인에 볼드가 포함된 경우 — 전체 라인이 핵심
+    const m2 = trimmed.match(/^[-*\u2022]\s+(.{20,})/u);
+    if (m2 && trimmed.includes("**")) {
+      const text = m2[1].replace(/\*\*/g, "").trim().slice(0, 120);
+      if (text.length > 18 && !/^(분析|개요|현황|요약|결론)/.test(text)) {
+        if (!out.includes(text)) out.push(text);
+        if (out.length >= max) break;
+      }
+    }
+  }
+
+  return out;
+}
+
+
 
 // 촉매 분석 — 핵심 이슈 상세 + 실현/미실현 시나리오 추출
 function parseCatalystCard(content: string) {
@@ -528,31 +564,28 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
   // ── 산업 분석 카드 ───────────────────────────────────────────────────────────
   if (stepKey === "industry_analysis") {
     const cfg = STEP_CFG.industry_analysis;
-    const boldPoints = extractBoldPoints(content, 3);
-    const lead = extractLeadText(content, 110);
-    const bullets = boldPoints.length === 0 ? extractBullets(content, 3) : [];
-    const items = boldPoints.length > 0 ? boldPoints : bullets;
+    const industryItems = (() => {
+      const pts = extractIndustryPoints(content, 3);
+      if (pts.length > 0) return pts;
+      const bold = extractBoldPoints(content, 3);
+      if (bold.length > 0) return bold;
+      return extractBullets(content, 3);
+    })();
     return (
-      <div className="flex flex-col gap-3">
-        {lead && (
-          <p className="text-[12px] text-white/60 leading-relaxed">{lead}</p>
-        )}
-        {items.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {items.map((b, i) => (
-              <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
-                style={{
-                  background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)",
-                  border: i === 0 ? bd(cfg.rgb, 0.2) : "1px solid transparent",
-                }}>
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
-                  style={{ background: ab(cfg.rgb, 0.18), color: cfg.hex }}>{i + 1}</div>
-                <div className="text-white/80 text-[12.5px] leading-snug">{b}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {items.length === 0 && (
+      <div className="flex flex-col gap-2">
+        {industryItems.length > 0 ? (
+          industryItems.map((b, i) => (
+            <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
+              style={{
+                background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)",
+                border: i === 0 ? bd(cfg.rgb, 0.2) : "1px solid transparent",
+              }}>
+              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
+                style={{ background: ab(cfg.rgb, 0.18), color: cfg.hex }}>{i + 1}</div>
+              <div className="text-white/80 text-[12.5px] leading-snug">{b}</div>
+            </div>
+          ))
+        ) : (
           <div className="text-sm text-white/30 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>
         )}
       </div>
