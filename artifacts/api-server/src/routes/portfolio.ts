@@ -428,21 +428,36 @@ function extractSentences(raw: string, n = 2): string {
   return sentences.slice(0, n).join(" ");
 }
 
-async function buildBriefSummary(ticker: string): Promise<{ summary: string; source: "analysis" | "ai"; analysisId?: number }> {
+async function buildBriefSummary(ticker: string): Promise<{
+  summary: string;
+  source: "analysis" | "ai";
+  analysisId?: number;
+  analysisDate?: string;
+  contributorCount?: number;
+}> {
   const today = new Date().toISOString().slice(0, 10);
 
-  // 최신 완성 분석 (14일 이내, 어떤 유저든)
+  // 집단지성: 기간 제한 없이 가장 최신 완성 분석 (어떤 유저든)
   const { rows: aRows } = await pool.query(`
     SELECT a.id, a.company_name, a.industry, a.investment_verdict, a.target_price,
+      a.created_at,
       (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'key_catalysts'       LIMIT 1) AS catalysts,
       (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'risk_factors'        LIMIT 1) AS risks,
       (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'investment_strategy' LIMIT 1) AS strategy
     FROM analyses a
     WHERE a.ticker = $1 AND a.status = 'completed'
-      AND a.created_at >= NOW() - INTERVAL '14 days'
     ORDER BY a.created_at DESC
     LIMIT 1
   `, [ticker]);
+
+  // 집단지성: 이 종목을 분석한 총 기여자 수 (최근 90일)
+  const { rows: contribRows } = await pool.query(`
+    SELECT COUNT(DISTINCT user_id) AS contributor_count
+    FROM analyses
+    WHERE ticker = $1 AND status = 'completed'
+      AND created_at >= NOW() - INTERVAL '90 days'
+  `, [ticker]);
+  const contributorCount = Number(contribRows[0]?.contributor_count ?? 0);
 
   const analysis = aRows[0];
 
@@ -465,9 +480,10 @@ async function buildBriefSummary(ticker: string): Promise<{ summary: string; sou
     const catalyst = extractSentences(analysis.catalysts ?? "", 3)
       || "현재 등록된 투자 아이디어 정보가 없습니다.";
 
+    const analysisDate = (analysis.created_at as Date).toISOString().slice(0, 10);
     const summary = `[오늘의핵심]\n${core}\n\n[리스크]\n${risk}\n\n[투자아이디어]\n${catalyst}`;
-    console.log(`[portfolio-brief] ${ticker} — 분석 DB 직접 추출 (analysis #${analysis.id}, Gemini 미사용)`);
-    return { summary, source: "analysis", analysisId: analysis.id };
+    console.log(`[portfolio-brief] ${ticker} — 집단지성 분석 DB 추출 (analysis #${analysis.id}, 기여자 ${contributorCount}명, Gemini 미사용)`);
+    return { summary, source: "analysis", analysisId: analysis.id, analysisDate, contributorCount };
   }
 
   // ── 경로 B: 분석 없을 때만 Gemini 호출 ────────────────────────────────────
@@ -586,7 +602,22 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
     if (rows.length > 0) {
       const ageHours = (Date.now() - new Date(rows[0].created_at).getTime()) / 3600000;
       if (ageHours < 6) {
-        res.json({ ticker, date: today, summary: rows[0].summary, source: rows[0].source, cached: true });
+        // 집단지성 메타 — 실시간 기여자 수
+        const { rows: cRows } = await pool.query(
+          `SELECT COUNT(DISTINCT user_id) AS cnt FROM analyses
+           WHERE ticker=$1 AND status='completed' AND created_at >= NOW() - INTERVAL '90 days'`,
+          [ticker]
+        );
+        const { rows: aRows } = await pool.query(
+          `SELECT created_at FROM analyses WHERE ticker=$1 AND status='completed'
+           ORDER BY created_at DESC LIMIT 1`, [ticker]
+        );
+        res.json({
+          ticker, date: today,
+          summary: rows[0].summary, source: rows[0].source, cached: true,
+          contributorCount: Number(cRows[0]?.cnt ?? 0),
+          analysisDate: aRows[0]?.created_at ? (aRows[0].created_at as Date).toISOString().slice(0, 10) : null,
+        });
         return;
       }
       // 6시간 경과 → 삭제 후 재생성
@@ -604,7 +635,7 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
   }
 
   try {
-    const { summary, source, analysisId } = await buildBriefSummary(ticker);
+    const { summary, source, analysisId, analysisDate, contributorCount } = await buildBriefSummary(ticker);
     if (summary) {
       await pool.query(
         `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary, source, analysis_id)
@@ -613,7 +644,7 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
         [ticker, today, summary, source, analysisId ?? null]
       );
     }
-    res.json({ ticker, date: today, summary, source, cached: false });
+    res.json({ ticker, date: today, summary, source, cached: false, analysisDate: analysisDate ?? null, contributorCount: contributorCount ?? 0 });
   } catch (e: any) {
     res.status(500).json({ error: "브리핑 생성 실패", detail: e?.message });
   }

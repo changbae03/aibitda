@@ -9,7 +9,7 @@ import {
   Search, Building2, ArrowUpRight, ArrowDownRight,
   Zap, AlertTriangle, Bell, Brain, PieChart,
   Activity, Target, Lightbulb, ChevronsRight,
-  Newspaper, Clock, Compass,
+  Newspaper, Clock, Compass, Users,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -601,6 +601,9 @@ interface DailyBrief {
   summary: string;
   date: string;
   cached: boolean;
+  source?: "analysis" | "ai";
+  contributorCount?: number;
+  analysisDate?: string | null;
 }
 
 /** analysis_steps content가 JSON 문자열일 수 있어 파싱 후 읽기 좋은 텍스트 추출 */
@@ -897,6 +900,12 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   {headlineText}
                 </p>
               )}
+              {/* 집단지성 배지 */}
+              {brief && !briefLoading && brief.source === "analysis" && (brief.contributorCount ?? 0) > 0 && (
+                <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-400">
+                  <Users className="w-2.5 h-2.5" />{brief.contributorCount}
+                </span>
+              )}
               {brief && !briefLoading && (
                 briefExpanded
                   ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
@@ -937,14 +946,33 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         </div>
                       </div>
                     ))}
-                    {/* 새로고침 */}
-                    <div className="flex justify-end pt-0.5">
+                    {/* 푸터: 집단지성 출처 + 새로고침 */}
+                    <div className="flex items-center justify-between pt-0.5">
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/40">
+                        {brief.source === "analysis" ? (
+                          <>
+                            <Users className="w-2.5 h-2.5 text-emerald-400/60" />
+                            <span className="text-emerald-400/60">
+                              집단지성 기반
+                              {(brief.contributorCount ?? 0) > 0 && ` · ${brief.contributorCount}명 분석`}
+                            </span>
+                            {brief.analysisDate && (
+                              <span>· {brief.analysisDate}</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="w-2.5 h-2.5" />
+                            <span>AI 생성 · {brief.date}</span>
+                          </>
+                        )}
+                      </div>
                       <button
                         onClick={e => { e.stopPropagation(); refreshBrief(); }}
                         className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
-                        {brief.date} · 새로고침
+                        새로고침
                       </button>
                     </div>
                   </div>
