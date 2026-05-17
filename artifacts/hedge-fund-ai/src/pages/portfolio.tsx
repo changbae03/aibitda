@@ -26,6 +26,7 @@ interface AnalysisSummary {
   upsidePct: number | null;
   catalysts: string | null;
   risks: string | null;
+  strategy: string | null;
 }
 
 interface Holding {
@@ -664,8 +665,26 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   </p>
                 </div>
               )}
-              {!a.catalysts && !a.risks && (
-                <p className="text-[12px] text-muted-foreground text-center py-2">분석 상세 내용 없음</p>
+              {!a.catalysts && !a.risks && a.strategy && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary mb-1">
+                    <TrendingUp className="w-3.5 h-3.5" /> 투자 전략 요약
+                  </div>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-5 whitespace-pre-wrap">
+                    {a.strategy.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 600)}
+                  </p>
+                </div>
+              )}
+              {!a.catalysts && !a.risks && !a.strategy && (
+                <div className="text-center py-3">
+                  <p className="text-[12px] text-muted-foreground mb-2">분석 데이터가 없습니다</p>
+                  <button
+                    onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
+                    className="text-[11px] text-primary hover:underline"
+                  >
+                    새 분석 요청하기 →
+                  </button>
+                </div>
               )}
             </div>
           </motion.div>

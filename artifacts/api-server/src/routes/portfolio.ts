@@ -48,8 +48,8 @@ async function fetchPrice(ticker: string): Promise<{ price: number | null; curre
   }
 }
 
-// ── 최신 분석 조회 ────────────────────────────────────────────────────────────
-async function fetchLatestAnalysis(ticker: string) {
+// ── 최신 분석 조회 (현재 유저 본인 분석만) ────────────────────────────────────
+async function fetchLatestAnalysis(ticker: string, userId: string) {
   const { rows } = await pool.query(`
     SELECT id, target_price, entry_price, stop_loss, investment_verdict,
            qa_score, created_at, risk_reward_ratio,
@@ -58,12 +58,15 @@ async function fetchLatestAnalysis(ticker: string) {
             LIMIT 1) AS catalysts,
            (SELECT content FROM analysis_steps
             WHERE analysis_id = analyses.id AND step_key = 'risk_factors'
-            LIMIT 1) AS risks
+            LIMIT 1) AS risks,
+           (SELECT content FROM analysis_steps
+            WHERE analysis_id = analyses.id AND step_key = 'investment_strategy'
+            LIMIT 1) AS strategy
     FROM analyses
-    WHERE ticker = $1 AND status = 'completed'
+    WHERE ticker = $1 AND user_id = $2 AND status = 'completed'
     ORDER BY created_at DESC
     LIMIT 1
-  `, [ticker]);
+  `, [ticker, userId]);
   return rows[0] ?? null;
 }
 
@@ -86,7 +89,7 @@ router.get("/portfolio", async (req, res) => {
   const enriched = await Promise.all(rows.map(async (row) => {
     const [priceData, analysis] = await Promise.all([
       fetchPrice(row.ticker),
-      fetchLatestAnalysis(row.ticker),
+      fetchLatestAnalysis(row.ticker, userId),
     ]);
 
     const currentPrice = priceData.price;
@@ -131,6 +134,7 @@ router.get("/portfolio", async (req, res) => {
         upsidePct,
         catalysts: analysis.catalysts ?? null,
         risks: analysis.risks ?? null,
+        strategy: analysis.strategy ?? null,
       } : null,
     };
   }));
@@ -211,11 +215,14 @@ router.get("/portfolio/check/:ticker", async (req, res) => {
   res.json({ inPortfolio: rows.length > 0, holdingId: rows[0]?.id ?? null });
 });
 
-// ── GET /api/portfolio/changes/:ticker — 분석 이력 변화 감지 ────────────────
+// ── GET /api/portfolio/changes/:ticker — 분석 이력 변화 감지 (본인 분석만) ──
 router.get("/portfolio/changes/:ticker", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.json({ hasChanges: false, analysisCount: 0, changes: [] }); return; }
+
   const ticker = String(req.params.ticker).trim().toUpperCase();
 
-  // 최근 완료된 분석 3개 조회 (비교용)
+  // 최근 완료된 분석 3개 조회 (비교용, 본인 분석만)
   const { rows } = await pool.query(`
     SELECT
       a.id, a.investment_verdict, a.target_price, a.created_at,
@@ -224,10 +231,10 @@ router.get("/portfolio/changes/:ticker", async (req, res) => {
       (SELECT content FROM analysis_steps
        WHERE analysis_id = a.id AND step_key = 'risk_factors' LIMIT 1) AS risks
     FROM analyses a
-    WHERE a.ticker = $1 AND a.status = 'completed'
+    WHERE a.ticker = $1 AND a.user_id = $2 AND a.status = 'completed'
     ORDER BY a.created_at DESC
     LIMIT 3
-  `, [ticker]);
+  `, [ticker, userId]);
 
   if (rows.length < 2) {
     res.json({ hasChanges: false, analysisCount: rows.length, latest: rows[0] ?? null });
