@@ -562,7 +562,8 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [changes, setChanges] = useState<ChangesResult | null>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
-  const [briefExpanded, setBriefExpanded] = useState(false);
+  const [briefExpanded, setBriefExpanded] = useState(true);
+  const [briefLoading, setBriefLoading] = useState(false);
 
   const a = holding.analysis;
 
@@ -575,11 +576,24 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
   // 마운트 시 브리핑 자동 로드
   useEffect(() => {
+    setBriefLoading(true);
     fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}`), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.summary) setBrief(d); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setBriefLoading(false));
   }, [holding.ticker]);
+
+  async function refreshBrief() {
+    setBriefLoading(true);
+    setBrief(null);
+    try {
+      const r = await fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}?force=true`), { credentials: "include" });
+      const d = r.ok ? await r.json() : null;
+      if (d?.summary) setBrief(d);
+    } catch {}
+    setBriefLoading(false);
+  }
 
   async function handleDelete() {
     if (!confirm(`${holding.ticker}를 포트폴리오에서 제거할까요?`)) return;
@@ -772,22 +786,45 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       </div>
 
       {/* ── AI 데일리 이슈 브리핑 ─────────────────────────────── */}
-      {brief && (
+      {(brief || briefLoading) && (
         <div className="mx-3 mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
-          <button
-            onClick={() => setBriefExpanded(v => !v)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-left"
-          >
-            <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-[11px] font-semibold text-amber-300 flex-1">오늘의 이슈 브리핑</span>
-            <span className="text-[10px] text-muted-foreground/50 flex items-center gap-0.5">
-              <Clock className="w-2.5 h-2.5" />{brief.date}
-            </span>
-            {briefExpanded
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+          <div className="w-full flex items-center gap-2 px-3 py-2">
+            {briefLoading
+              ? <Loader2 className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
+              : <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             }
-          </button>
+            <button
+              onClick={() => setBriefExpanded(v => !v)}
+              className="flex items-center gap-1.5 flex-1 text-left"
+            >
+              <span className="text-[11px] font-semibold text-amber-300">오늘의 핵심</span>
+              {brief && !briefLoading && (
+                <span className="text-[10px] text-muted-foreground/40 flex items-center gap-0.5">
+                  <Clock className="w-2.5 h-2.5" />{brief.date}
+                </span>
+              )}
+              {briefLoading && (
+                <span className="text-[10px] text-muted-foreground/40">생성 중…</span>
+              )}
+            </button>
+            {brief && !briefLoading && (
+              <button
+                onClick={refreshBrief}
+                className="p-1 rounded hover:bg-amber-500/10 text-muted-foreground/40 hover:text-amber-400 transition-colors"
+                title="브리핑 새로고침"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            )}
+            {brief && !briefLoading && (
+              <button onClick={() => setBriefExpanded(v => !v)} className="text-muted-foreground/40">
+                {briefExpanded
+                  ? <ChevronUp className="w-3.5 h-3.5" />
+                  : <ChevronDown className="w-3.5 h-3.5" />
+                }
+              </button>
+            )}
+          </div>
           <AnimatePresence initial={false}>
             {briefExpanded && (
               <motion.div

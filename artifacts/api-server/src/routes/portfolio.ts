@@ -351,7 +351,7 @@ export async function runDailyPortfolioBriefs(): Promise<void> {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 400 },
+        config: { maxOutputTokens: 700 },
       });
       const text = response.text?.trim() ?? "";
       if (!text) continue;
@@ -385,14 +385,24 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
     )
   `);
 
-  // 오늘 브리핑 조회
-  const { rows } = await pool.query(
-    `SELECT summary, created_at FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
-    [ticker, today]
-  );
-  if (rows.length > 0) {
-    res.json({ ticker, date: today, summary: rows[0].summary, cached: true });
-    return;
+  const force = req.query.force === "true";
+
+  // 오늘 브리핑 조회 (force=true이면 건너뜀)
+  if (!force) {
+    const { rows } = await pool.query(
+      `SELECT summary, created_at FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+      [ticker, today]
+    );
+    if (rows.length > 0) {
+      res.json({ ticker, date: today, summary: rows[0].summary, cached: true });
+      return;
+    }
+  } else {
+    // 기존 오늘 브리핑 삭제
+    await pool.query(
+      `DELETE FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+      [ticker, today]
+    );
   }
 
   // 없으면 즉석 생성 (company_name 조회)
@@ -423,7 +433,7 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 400 },
+      config: { maxOutputTokens: 700 },
     });
     const summary = response.text?.trim() ?? "";
 
