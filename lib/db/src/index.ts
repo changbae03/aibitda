@@ -28,6 +28,9 @@ const connectionString = rawUrl
 export const pool = new Pool({
   connectionString,
   ssl: sslDisabled ? false : { rejectUnauthorized: false },
+  max: 20,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
 });
 export const db = drizzle(pool, { schema });
 

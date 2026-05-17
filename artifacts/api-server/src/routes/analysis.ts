@@ -509,15 +509,27 @@ class Semaphore {
 }
 
 // Gemini API 동시 호출 제한: 429 Rate Limit 방지
-const MAX_CONCURRENT_GEMINI = 5;
+const MAX_CONCURRENT_GEMINI = 10;
 const geminiSemaphore = new Semaphore(MAX_CONCURRENT_GEMINI);
 
 // 분석 파이프라인 동시 실행 제한: 서버 과부하 방지
-const MAX_CONCURRENT_PIPELINES = 5;
+const MAX_CONCURRENT_PIPELINES = 10;
 const pipelineSemaphore = new Semaphore(MAX_CONCURRENT_PIPELINES);
+
+// 큐 최대 대기 크기: 초과 시 신규 요청을 즉시 거절
+const MAX_QUEUE_SIZE = 25;
 
 // 파이프라인 큐 실행: 동시 실행 수 초과 시 DB 상태를 'queued'로 전환하고 대기
 async function enqueueAnalysis(id: number): Promise<void> {
+  // 큐 최대 크기 초과 시 즉시 오류 처리 (POST 엔드포인트의 1차 방어 후 안전망)
+  if (pipelineSemaphore.waiting >= MAX_QUEUE_SIZE) {
+    await rawQuery(
+      `UPDATE analyses SET status='error', error_message='서버 과부하로 분석이 취소되었습니다. 잠시 후 다시 시도해주세요.' WHERE id=$1`,
+      [id]
+    );
+    console.warn(`[queue] Analysis ${id} rejected — queue full (${pipelineSemaphore.waiting} waiting)`);
+    return;
+  }
   const isAtCapacity = pipelineSemaphore.active >= MAX_CONCURRENT_PIPELINES || pipelineSemaphore.waiting > 0;
   if (isAtCapacity) {
     const pos = pipelineSemaphore.waiting + 1;
@@ -529,7 +541,7 @@ async function enqueueAnalysis(id: number): Promise<void> {
   }
   await pipelineSemaphore.acquire();
   try {
-    // 대기 후 실행 슬롯 확보 → 상태를 in_progress로 복원
+    // 대기 후 실행 슬롯 확보 → 상태를 in_progress로 복원 (watchdog이 이미 오류 처리한 경우 스킵)
     await rawQuery(
       `UPDATE analyses SET status='in_progress', current_step='company_intro' WHERE id=$1 AND status='queued'`,
       [id]
@@ -540,6 +552,25 @@ async function enqueueAnalysis(id: number): Promise<void> {
     console.log(`[queue] Analysis ${id} pipeline done, released slot`);
   }
 }
+
+// ─── 큐 타임아웃 감시 ─────────────────────────────────────────────────────────
+// 20분 이상 대기 중인 분석을 자동 오류 처리 (5분마다 실행)
+setInterval(async () => {
+  try {
+    const staleRows = await rawQuery(
+      `UPDATE analyses
+       SET status='error', error_message='서버 혼잡으로 인해 분석이 취소되었습니다. 잠시 후 다시 시도해주세요.',
+           updated_at=NOW()
+       WHERE status='queued' AND updated_at < NOW() - INTERVAL '20 minutes'
+       RETURNING id`
+    );
+    if (staleRows.length > 0) {
+      console.warn(`[queue-watchdog] 큐 타임아웃 ${staleRows.length}개:`, staleRows.map((r: any) => r.id));
+    }
+  } catch (err) {
+    console.error("[queue-watchdog] 오류:", err);
+  }
+}, 5 * 60 * 1000);
 
 // ─── Ticker resolution ────────────────────────────────────────────────────────
 
@@ -2983,6 +3014,31 @@ router.post("/", async (req, res) => {
 
   const userId = schedulerUserId ?? getUserId(req);
 
+  if (!isSchedulerCall) {
+    // ── 서버 과부하 방어: 큐 용량 초과 시 크레딧 차감 전 즉시 거절 ──────────
+    if (pipelineSemaphore.waiting >= MAX_QUEUE_SIZE) {
+      res.status(503).json({
+        error: `현재 서버가 혼잡합니다 (대기 ${pipelineSemaphore.waiting}개). 잠시 후 다시 시도해주세요.`,
+      });
+      return;
+    }
+
+    // ── 사용자별 동시 분석 제한: 로그인 사용자는 최대 2개까지 ───────────────
+    if (userId) {
+      const activeRows = await rawQuery(
+        `SELECT COUNT(*) AS cnt FROM analyses WHERE user_id = $1 AND status IN ('in_progress', 'queued')`,
+        [userId]
+      );
+      const activeCount = parseInt((activeRows[0] as any)?.cnt ?? "0", 10);
+      if (activeCount >= 2) {
+        res.status(429).json({
+          error: `이미 ${activeCount}개의 분석이 진행 중입니다. 현재 분석이 완료된 후 새 분석을 요청해주세요.`,
+        });
+        return;
+      }
+    }
+  }
+
   if (!isSchedulerCall && userId) {
     const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [userId]);
     const isUserAdmin = (adminCheck.rowCount ?? 0) > 0;
@@ -3971,11 +4027,14 @@ router.patch("/schedules/:scheduleId/toggle", async (req, res) => {
 
 // ─── GET /analyses/queue-status ──────────────────────────────────────────────
 router.get("/queue-status", (_req, res) => {
+  const queueFull = pipelineSemaphore.waiting >= MAX_QUEUE_SIZE;
   res.json({
     pipelines: {
       active: pipelineSemaphore.active,
       waiting: pipelineSemaphore.waiting,
       max: MAX_CONCURRENT_PIPELINES,
+      maxQueue: MAX_QUEUE_SIZE,
+      queueFull,
     },
     gemini: {
       active: geminiSemaphore.active,
