@@ -373,22 +373,35 @@ router.get("/public-stats", async (_req, res) => {
       : null;
   }
 
-  // 많이 분석된 종목 Top 10 (전체 분석 기준)
-  const tickerCountMap: Record<string, { companyName: string; count: number; winRate: number | null }> = {};
-  for (const item of all) {
-    const key = item.ticker;
-    if (!tickerCountMap[key]) tickerCountMap[key] = { companyName: item.company_name ?? key, count: 0, winRate: null };
-    tickerCountMap[key].count++;
+  // 많이 분석된 종목 Top 10 — 기간별 집계
+  function buildTopTickers(subset: any[]) {
+    const map: Record<string, { companyName: string; count: number; winRate: number | null }> = {};
+    for (const item of subset) {
+      const key = item.ticker;
+      if (!map[key]) map[key] = { companyName: item.company_name ?? key, count: 0, winRate: null };
+      map[key].count++;
+    }
+    for (const ticker of Object.keys(map)) {
+      const tr = reviewed.filter((i) => i.ticker === ticker && i.outcome !== "ongoing");
+      const th = tr.filter((i) => i.outcome === "hit_target");
+      map[ticker].winRate = tr.length > 0 ? (th.length / tr.length) * 100 : null;
+    }
+    return Object.entries(map)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 10)
+      .map(([ticker, data]) => ({ ticker, companyName: data.companyName, count: data.count, winRate: data.winRate }));
   }
-  for (const ticker of Object.keys(tickerCountMap)) {
-    const tickerReviewed = reviewed.filter((i) => i.ticker === ticker && i.outcome !== "ongoing");
-    const tickerHit = tickerReviewed.filter((i) => i.outcome === "hit_target");
-    tickerCountMap[ticker].winRate = tickerReviewed.length > 0 ? (tickerHit.length / tickerReviewed.length) * 100 : null;
-  }
-  const topTickers = Object.entries(tickerCountMap)
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 10)
-    .map(([ticker, data]) => ({ ticker, companyName: data.companyName, count: data.count, winRate: data.winRate }));
+  const now = Date.now();
+  const DAY  = 1000 * 60 * 60 * 24;
+  const filterByDays = (days: number) =>
+    all.filter((i) => i.created_at && new Date(i.created_at).getTime() >= now - days * DAY);
+  const topTickersByPeriod = {
+    day:   buildTopTickers(filterByDays(1)),
+    week:  buildTopTickers(filterByDays(7)),
+    month: buildTopTickers(filterByDays(30)),
+    all:   buildTopTickers(all),
+  };
+  const topTickers = topTickersByPeriod.all;
 
   // 최근 방향 일치/손절 사례 (10건)
   const recentCases = reviewed
@@ -415,6 +428,7 @@ router.get("/public-stats", async (_req, res) => {
     avgReturn,
     byIndustry,
     topTickers,
+    topTickersByPeriod,
     recentCases,
   });
 });
