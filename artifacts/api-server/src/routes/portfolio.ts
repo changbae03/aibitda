@@ -975,33 +975,31 @@ ${newsText || "(뉴스 없음)"}
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.4, maxOutputTokens: 2000 },
+      config: {
+        temperature: 0.4,
+        maxOutputTokens: 3000,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     });
 
-    // thinking 모델: thought=true 파트 제외하고 나머지 텍스트 합치기
-    const allParts = response.candidates?.[0]?.content?.parts ?? [];
-    const raw = allParts
-      .filter((p: any) => !p.thought)
-      .map((p: any) => p.text ?? "")
-      .join("");
+    // SDK의 response.text 사용 (thinking 파트 자동 제외)
+    const raw = (response.text ?? "").trim();
 
     // 마크다운 코드펜스 제거
-    const stripped = raw.trim()
+    const stripped = raw
       .replace(/^```(?:json)?\s*/im, "")
       .replace(/\s*```\s*$/m, "")
       .trim();
 
-    // JSON 파싱 — stripped가 {로 시작하면 직접, 아니면 regex로 추출
+    // JSON 추출 — stripped가 {로 시작하면 직접 파싱, 아니면 regex로 추출
     let parsed: { changed: string; priceAction: string; thesisCheck: string; action: string };
     try {
-      const jsonStr = stripped.startsWith("{")
-        ? stripped
-        : (stripped.match(/\{[\s\S]*\}/) ?? [""])[0];
-      if (!jsonStr) throw new Error("no json");
-      parsed = JSON.parse(jsonStr);
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("no json block");
+      parsed = JSON.parse(jsonMatch[0]);
       if (!parsed.changed || !parsed.action) throw new Error("missing fields");
     } catch (parseErr) {
-      console.error("[deep-update] parse failed, raw:", raw.slice(0, 500));
+      console.error("[deep-update] parse failed, raw:", raw.slice(0, 600));
       res.status(500).json({ error: "AI 응답을 파싱할 수 없습니다" });
       return;
     }
