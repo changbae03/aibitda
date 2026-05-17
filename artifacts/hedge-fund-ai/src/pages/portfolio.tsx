@@ -52,10 +52,15 @@ interface Holding {
 }
 
 // ── 포트폴리오 전체 리뷰 결과 타입 ─────────────────────────────────────────
+interface StockUpdate {
+  ticker: string;
+  companyName: string;
+  update: string;
+}
 interface PortfolioReviewResult {
-  marketContext: string;
+  stockUpdates: StockUpdate[];
+  portfolioView: string;
   concentration: string;
-  spotlight: string;
   rebalancing: string;
   generatedAt: string;
 }
@@ -1044,13 +1049,6 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
     setLoading(false);
   }
 
-  const SECTIONS: { key: keyof PortfolioReviewResult; label: string; icon: React.ReactNode; color: string }[] = [
-    { key: "marketContext",  label: "시장 환경 & 포트폴리오 방향성", icon: <Compass className="w-3.5 h-3.5" />,      color: "text-sky-400" },
-    { key: "concentration",  label: "집중도 & 분산 리스크",           icon: <PieChart className="w-3.5 h-3.5" />,     color: "text-amber-400" },
-    { key: "spotlight",      label: "주목할 종목",                    icon: <Sparkles className="w-3.5 h-3.5" />,    color: "text-emerald-400" },
-    { key: "rebalancing",    label: "리밸런싱 & 행동 제안",           icon: <MoveRight className="w-3.5 h-3.5" />,   color: "text-primary" },
-  ];
-
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
       {/* 헤더 */}
@@ -1061,7 +1059,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-foreground">AI 포트폴리오 전체 리뷰</p>
           <p className="text-[11px] text-muted-foreground">
-            보유 {holdings.length}종목 전체를 한 번에 분석합니다
+            종목별 최신 뉴스 수집 → thesis 점검 → 포트폴리오 종합 판단
           </p>
         </div>
         <button
@@ -1093,9 +1091,14 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
             <div className="border-t border-amber-500/15 bg-amber-500/[0.03]">
               {/* 로딩 */}
               {loading && (
-                <div className="px-4 py-5 flex items-center gap-2.5 text-[12px] text-muted-foreground/60">
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  보유 종목 분석 중… 최신 시장 데이터를 수집하고 있습니다
+                <div className="px-4 py-5 space-y-1.5">
+                  <div className="flex items-center gap-2.5 text-[12px] text-muted-foreground/60">
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                    종목별 최신 뉴스 수집 &amp; thesis 점검 중…
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/40 pl-6">
+                    보유 {holdings.length}개 종목 뉴스를 가져오고 있습니다. 잠시 기다려 주세요.
+                  </p>
                 </div>
               )}
 
@@ -1107,26 +1110,61 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                 </div>
               )}
 
-              {/* 결과 섹션들 */}
+              {/* 결과 */}
               {review && !loading && (
-                <div className="divide-y divide-border/30">
-                  {SECTIONS.map(({ key, label, icon, color }) => (
-                    <div key={key} className="px-4 py-3">
-                      <div className={cn("flex items-center gap-1.5 mb-1.5", color)}>
-                        {icon}
-                        <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-                      </div>
-                      <p className="text-[12px] text-foreground/75 leading-relaxed">
-                        {review[key] as string}
-                      </p>
+                <div className="divide-y divide-border/20">
+
+                  {/* ① 종목별 뉴스 & thesis 점검 */}
+                  <div className="px-4 pt-3 pb-1">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Newspaper className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">종목별 뉴스 & Thesis 점검</span>
                     </div>
-                  ))}
+                    <div className="space-y-3">
+                      {review.stockUpdates.map(s => (
+                        <div key={s.ticker} className="pl-2 border-l-2 border-border/40">
+                          <p className="text-[11px] font-semibold text-foreground/80 mb-0.5">
+                            {s.companyName}
+                            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground/50">{s.ticker}</span>
+                          </p>
+                          <p className="text-[12px] text-foreground/70 leading-relaxed">{s.update}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ② 포트폴리오 종합 평가 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Compass className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">포트폴리오 종합 평가</span>
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{review.portfolioView}</p>
+                  </div>
+
+                  {/* ③ 집중도 & 분산 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <PieChart className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">집중도 & 분산 리스크</span>
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{review.concentration}</p>
+                  </div>
+
+                  {/* ④ 리밸런싱 & 행동 제안 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <MoveRight className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">리밸런싱 & 행동 제안</span>
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{review.rebalancing}</p>
+                  </div>
 
                   {/* 푸터 */}
                   <div className="px-4 py-2.5 flex items-center justify-between">
                     <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
                       <Brain className="w-2.5 h-2.5" />
-                      Gemini AI · {new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 생성
+                      Gemini AI · 실시간 뉴스 기반 · {new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 생성
                     </span>
                     <button
                       onClick={runReview}

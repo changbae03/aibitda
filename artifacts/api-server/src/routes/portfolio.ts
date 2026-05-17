@@ -1044,81 +1044,109 @@ router.post("/portfolio/review", async (req, res) => {
       return;
     }
 
-    // 2) 각 종목 분석 + 현재가 병렬 조회
+    // 2) 각 종목: 분석 + 현재가 + 최신 뉴스 병렬 조회
     const holdingDetails = await Promise.all(
       holdingRows.map(async (h: any) => {
-        const [analysis, priceData] = await Promise.all([
+        const companyName: string = h.company_name || h.ticker;
+        const [analysis, priceData, newsText] = await Promise.all([
           fetchLatestAnalysis(h.ticker, userId).then(a => a ?? fetchBestAnalysis(h.ticker)),
           fetchPrice(h.ticker),
+          fetchRecentNews(companyName),
         ]);
-        const returnPct = h.avg_price && priceData.price
-          ? ((priceData.price - parseFloat(h.avg_price)) / parseFloat(h.avg_price)) * 100
+        const avgPrice = h.avg_price ? parseFloat(h.avg_price) : null;
+        const returnPct = avgPrice && priceData.price
+          ? ((priceData.price - avgPrice) / avgPrice) * 100
+          : null;
+        const upsidePct = analysis?.target_price && priceData.price
+          ? ((analysis.target_price - priceData.price) / priceData.price) * 100
+          : null;
+        // 분석일 기준 경과 일수 계산
+        const daysSinceAnalysis = analysis?.created_at
+          ? Math.floor((Date.now() - new Date(analysis.created_at).getTime()) / (1000 * 60 * 60 * 24))
           : null;
         return {
           ticker: h.ticker,
-          companyName: h.company_name || h.ticker,
+          companyName,
           currentPrice: priceData.price,
-          avgPrice: h.avg_price ? parseFloat(h.avg_price) : null,
-          quantity: h.quantity ? parseFloat(h.quantity) : null,
+          avgPrice,
           currency: priceData.currency,
           returnPct,
           verdict: analysis?.investment_verdict ?? null,
           targetPrice: analysis?.target_price ?? null,
-          upsidePct: analysis?.target_price && priceData.price
-            ? ((analysis.target_price - priceData.price) / priceData.price) * 100
-            : null,
-          catalysts: analysis?.catalysts ?? null,
-          risks: analysis?.risks ?? null,
+          upsidePct,
+          catalysts: analysis?.catalysts ? String(analysis.catalysts).slice(0, 300) : null,
+          risks: analysis?.risks ? String(analysis.risks).slice(0, 300) : null,
+          strategy: analysis?.strategy ? String(analysis.strategy).slice(0, 300) : null,
           analysisDate: analysis?.created_at
             ? new Date(analysis.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
             : null,
+          daysSinceAnalysis,
+          recentNews: newsText || "(뉴스 없음)",
         };
       })
     );
 
-    // 3) 포트폴리오 컨텍스트 문자열 생성
+    // 3) 프롬프트 컨텍스트 생성 — 종목별 뉴스 + 분석 thesis 포함
     const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
-    const holdingsSummary = holdingDetails.map(h => {
-      const lines = [
-        `### ${h.companyName} (${h.ticker})`,
-        `- 현재가: ${h.currentPrice != null ? h.currentPrice.toLocaleString("ko-KR") + " " + h.currency : "조회 불가"}`,
-        `- 평균매입가: ${h.avgPrice != null ? h.avgPrice.toLocaleString("ko-KR") : "미기록"}`,
-        `- 수익률: ${h.returnPct != null ? h.returnPct.toFixed(1) + "%" : "미기록"}`,
-        `- AI 판정: ${h.verdict ?? "분석 없음"}`,
-        `- 목표주가: ${h.targetPrice != null ? h.targetPrice.toLocaleString("ko-KR") : "없음"}`,
-        `- 업사이드: ${h.upsidePct != null ? h.upsidePct.toFixed(1) + "%" : "—"}`,
-        h.catalysts ? `- 핵심 촉매: ${String(h.catalysts).slice(0, 200)}` : null,
-        h.risks ? `- 주요 위험: ${String(h.risks).slice(0, 200)}` : null,
-        h.analysisDate ? `- 분석일: ${h.analysisDate}` : null,
-      ].filter(Boolean);
-      return lines.join("\n");
-    }).join("\n\n");
 
-    // 4) Gemini 호출
+    const holdingsSummary = holdingDetails.map(h => {
+      const priceStr = h.currentPrice != null
+        ? `${h.currentPrice.toLocaleString("ko-KR")} ${h.currency}`
+        : "조회 불가";
+      const returnStr = h.returnPct != null ? `${h.returnPct >= 0 ? "+" : ""}${h.returnPct.toFixed(1)}%` : "미기록";
+      const upsideStr = h.upsidePct != null ? `${h.upsidePct >= 0 ? "+" : ""}${h.upsidePct.toFixed(1)}%` : "—";
+      const daysStr = h.daysSinceAnalysis != null ? `(분석 후 ${h.daysSinceAnalysis}일 경과)` : "";
+
+      return `### ${h.companyName} (${h.ticker})
+[현황]
+- 현재가: ${priceStr} | 매입 대비 수익률: ${returnStr}
+- AI 판정: ${h.verdict ?? "없음"} | 목표가 대비 업사이드: ${upsideStr}
+- 마지막 분석일: ${h.analysisDate ?? "없음"} ${daysStr}
+
+[분석 당시 투자 thesis]
+- 핵심 촉매: ${h.catalysts ?? "없음"}
+- 주요 리스크: ${h.risks ?? "없음"}
+- 투자 전략: ${h.strategy ?? "없음"}
+
+[분석 이후 최신 뉴스 헤드라인]
+${h.recentNews}`;
+    }).join("\n\n---\n\n");
+
+    // 4) Gemini 호출 — 종목별 + 포트폴리오 종합 분석
     const prompt = `당신은 시니어 포트폴리오 매니저입니다. 오늘은 ${today}입니다.
 
-아래는 투자자의 포트폴리오 전체 보유 현황입니다:
+아래는 투자자의 포트폴리오 전체 보유 종목에 대한 상세 정보입니다.
+각 종목별로 분석 당시 thesis(촉매·리스크·전략)와 그 이후 실제 발생한 뉴스가 함께 제공됩니다.
 
 ${holdingsSummary}
 
-위 정보를 바탕으로 포트폴리오 전체 리뷰를 JSON으로 작성하세요.
+위 정보를 바탕으로 다음 JSON 형식으로 포트폴리오 리뷰를 작성하세요.
+stockUpdates는 보유 중인 모든 종목을 포함해야 합니다.
 
 **출력 형식 (JSON만 출력, 다른 텍스트 없이):**
 {
-  "marketContext": "현재 시장 환경이 이 포트폴리오에 미치는 영향 및 전체 방향성 평가 (3-4문장)",
-  "concentration": "종목/섹터 집중도 분석, 분산 수준 평가, 상관관계 리스크 (3-4문장)",
-  "spotlight": "현재 가장 주목해야 할 1-2개 종목과 그 이유 — 수익률·업사이드·뉴스 기준 (3-4문장)",
-  "rebalancing": "구체적 리밸런싱·행동 제안 — 비중 조절, 손절 검토, 추가매수 기회 등 (3-4문장)"
+  "stockUpdates": [
+    {
+      "ticker": "종목코드",
+      "companyName": "회사명",
+      "update": "① 분석 이후 발생한 주요 뉴스 요약 ② 이 뉴스가 기존 thesis(촉매/리스크)에 어떤 영향을 주는지 ③ thesis가 여전히 유효한지 또는 훼손됐는지 판단 — 모두 2-4문장으로"
+    }
+  ],
+  "portfolioView": "전체 포트폴리오 종합 평가 — 현재 시장 환경, 섹터 노출, 전체적인 방향성 (3-4문장)",
+  "concentration": "종목·섹터 집중도 분석, 상관관계 리스크, 분산 수준 평가 (2-3문장)",
+  "rebalancing": "구체적 행동 제안 — 비중 조절, 손절 검토, 추가매수 기회, 우선순위 순 (3-4문장)"
 }
 
-모든 내용은 한국어로 작성하며, 투자자에게 직접 말하듯 구체적이고 실용적으로 작성하세요.`;
+주의사항:
+- update 필드는 뉴스가 없으면 '최근 주요 뉴스 없음, thesis 변화 없음'으로 작성
+- 모든 내용은 한국어, 투자자에게 직접 말하듯 구체적으로`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
-        maxOutputTokens: 2500,
-        temperature: 0.6,
+        maxOutputTokens: 4000,
+        temperature: 0.5,
         thinkingConfig: { thinkingBudget: 0 },
       },
     });
@@ -1134,9 +1162,9 @@ ${holdingsSummary}
 
     const parsed = JSON.parse(match[0]);
     res.json({
-      marketContext: parsed.marketContext ?? "",
+      stockUpdates: Array.isArray(parsed.stockUpdates) ? parsed.stockUpdates : [],
+      portfolioView: parsed.portfolioView ?? "",
       concentration: parsed.concentration ?? "",
-      spotlight: parsed.spotlight ?? "",
       rebalancing: parsed.rebalancing ?? "",
       generatedAt: new Date().toISOString(),
     });
