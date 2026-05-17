@@ -563,7 +563,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [changesExpanded, setChangesExpanded] = useState(false);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [briefExpanded, setBriefExpanded] = useState(false);
-  const [briefLoading, setBriefLoading] = useState(false);
 
   const a = holding.analysis;
 
@@ -574,16 +573,13 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       .catch(() => {});
   }, [holding.ticker]);
 
-  function fetchBrief() {
-    if (briefLoading) return;
-    setBriefLoading(true);
+  // 마운트 시 브리핑 자동 로드
+  useEffect(() => {
     fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}`), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.summary) { setBrief(d); setBriefExpanded(true); } })
-      .catch(() => {})
-      .finally(() => setBriefLoading(false));
-  }
-  const isKR = isKRTicker(holding.ticker);
+      .then(d => { if (d?.summary) setBrief(d); })
+      .catch(() => {});
+  }, [holding.ticker]);
 
   async function handleDelete() {
     if (!confirm(`${holding.ticker}를 포트폴리오에서 제거할까요?`)) return;
@@ -592,15 +588,24 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
     onDelete(holding.id);
   }
 
-  const returnColor = holding.returnPct == null ? "text-muted-foreground"
-    : holding.returnPct > 0 ? "text-emerald-400"
-    : holding.returnPct < 0 ? "text-red-400"
-    : "text-muted-foreground";
-
   const changeColor = holding.change1d == null ? "text-muted-foreground"
     : holding.change1d > 0 ? "text-emerald-400"
     : holding.change1d < 0 ? "text-red-400"
     : "text-muted-foreground";
+
+  // 현재가 vs 목표가 진행 바 (0~200% 범위에서 100% = 목표가)
+  const priceBarPct = (() => {
+    if (!holding.currentPrice || !a?.targetPrice) return null;
+    const lo = Math.min(holding.currentPrice, a.targetPrice) * 0.85;
+    const hi = Math.max(holding.currentPrice, a.targetPrice) * 1.05;
+    return Math.round(((holding.currentPrice - lo) / (hi - lo)) * 100);
+  })();
+  const targetBarPct = (() => {
+    if (!holding.currentPrice || !a?.targetPrice) return null;
+    const lo = Math.min(holding.currentPrice, a.targetPrice) * 0.85;
+    const hi = Math.max(holding.currentPrice, a.targetPrice) * 1.05;
+    return Math.round(((a.targetPrice - lo) / (hi - lo)) * 100);
+  })();
 
   return (
     <motion.div
@@ -610,307 +615,227 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       exit={{ opacity: 0, y: -8 }}
       className="rounded-2xl border border-border bg-[#141414] overflow-hidden"
     >
-      {/* 메인 행 */}
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          {/* 종목 정보 */}
+      {/* ── 헤더 ──────────────────────────────────────────────── */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs text-muted-foreground">{holding.ticker}</span>
-              <span className="text-sm font-semibold text-foreground truncate">{holding.companyName}</span>
+              <span className="font-mono text-[11px] text-muted-foreground/70">{holding.ticker}</span>
+              <span className="text-[15px] font-bold text-foreground truncate">{holding.companyName}</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {a && (
                 <span className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded border font-medium",
+                  "text-[10px] px-1.5 py-0.5 rounded-md border font-semibold",
                   verdictBg(a.verdict), verdictColor(a.verdict)
                 )}>
                   {VERDICT_KO[a.verdict] ?? a.verdict}
                 </span>
               )}
               {a?.industry && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border/60">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground border border-border/50">
                   {a.industry}
                 </span>
               )}
+              {holding.note && (
+                <span className="text-[10px] text-muted-foreground/60 truncate max-w-[140px]">{holding.note}</span>
+              )}
             </div>
-            {holding.note && (
-              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{holding.note}</p>
-            )}
           </div>
+          {/* 편집 · 삭제 */}
+          <div className="flex items-center gap-1 shrink-0">
+            <InlineEdit
+              holdingId={holding.id}
+              avgPrice={holding.avgPrice}
+              quantity={holding.quantity}
+              note={holding.note}
+              onSaved={onRefresh}
+            />
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-400 transition-colors"
+            >
+              {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
 
+        {/* ── 현재가 · 적정주가 ───────────────────────────────── */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
           {/* 현재가 */}
-          <div className="text-right shrink-0">
+          <div className="rounded-xl bg-muted/20 border border-border/60 px-3 py-2.5">
+            <p className="text-[10px] text-muted-foreground mb-1">현재가</p>
             {holding.currentPrice != null ? (
               <>
-                <p className="text-sm font-semibold text-foreground tabular-nums">
+                <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
                   {fmtPrice(holding.currentPrice, holding.priceCurrency)}
                 </p>
                 {holding.change1d != null && (
-                  <p className={cn("text-xs tabular-nums", changeColor)}>
-                    {fmtPct(holding.change1d)} (1일)
+                  <p className={cn("text-[11px] tabular-nums mt-1 font-medium", changeColor)}>
+                    {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""} {fmtPct(Math.abs(holding.change1d))} 오늘
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-xs text-muted-foreground">현재가 없음</p>
-            )}
-          </div>
-        </div>
-
-        {/* 지표 행 */}
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {/* 수익률 */}
-          <div className="rounded-lg bg-muted/30 px-3 py-2">
-            <p className="text-[10px] text-muted-foreground mb-0.5">수익률</p>
-            {holding.returnPct != null ? (
-              <p className={cn("text-sm font-bold tabular-nums", returnColor)}>
-                {fmtPct(holding.returnPct)}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-            {holding.avgPrice != null && (
-              <p className="text-[10px] text-muted-foreground">매수 {fmtPrice(holding.avgPrice, holding.currency)}</p>
+              <p className="text-[15px] text-muted-foreground/40 mt-1">—</p>
             )}
           </div>
 
-          {/* 목표가 */}
-          <div className="rounded-lg bg-muted/30 px-3 py-2">
-            <p className="text-[10px] text-muted-foreground mb-0.5">AI 목표가</p>
+          {/* AI 적정주가 */}
+          <div className={cn(
+            "rounded-xl border px-3 py-2.5",
+            a?.upsidePct != null && a.upsidePct > 0
+              ? "bg-emerald-500/5 border-emerald-500/20"
+              : a?.upsidePct != null && a.upsidePct < 0
+              ? "bg-red-500/5 border-red-500/20"
+              : "bg-muted/20 border-border/60"
+          )}>
+            <p className="text-[10px] text-muted-foreground mb-1">AI 적정주가</p>
             {a?.targetPrice != null ? (
               <>
-                <p className="text-sm font-bold text-foreground tabular-nums">
+                <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
                   {fmtPrice(a.targetPrice, holding.priceCurrency)}
                 </p>
                 {a.upsidePct != null && (
-                  <p className={cn("text-[10px] tabular-nums", a.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                    {fmtPct(a.upsidePct)} 여력
+                  <p className={cn(
+                    "text-[11px] tabular-nums mt-1 font-semibold",
+                    a.upsidePct >= 0 ? "text-emerald-400" : "text-red-400"
+                  )}>
+                    {a.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a.upsidePct))} 여력
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-          </div>
-
-          {/* 손절가 */}
-          <div className="rounded-lg bg-muted/30 px-3 py-2">
-            <p className="text-[10px] text-muted-foreground mb-0.5">AI 손절가</p>
-            {a?.stopLoss != null ? (
-              <p className="text-sm font-bold text-foreground tabular-nums">
-                {fmtPrice(a.stopLoss, holding.priceCurrency)}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-          </div>
-
-          {/* 위험보상비율 */}
-          <div className="rounded-lg bg-muted/30 px-3 py-2">
-            <p className="text-[10px] text-muted-foreground mb-0.5">위험보상비율</p>
-            {a?.riskRewardRatio != null ? (
-              <p className="text-sm font-bold text-foreground tabular-nums">
-                1 : {a.riskRewardRatio.toFixed(1)}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
+              <p className="text-[15px] text-muted-foreground/40 mt-1">—</p>
             )}
           </div>
         </div>
 
-        {/* 변화 감지 섹션 */}
-        {changes && changes.changes.length > 0 && (
-          <div className="mt-3">
-            <button
-              onClick={() => setChangesExpanded(v => !v)}
-              className="w-full flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors group"
-            >
-              <Bell className={cn(
-                "w-3 h-3 shrink-0",
-                changes.hasChanges ? "text-amber-400" : "text-muted-foreground"
-              )} />
-              <span className={changes.hasChanges ? "text-amber-400 font-medium" : ""}>
-                {changes.hasChanges
-                  ? `AI 판정·목표가 변경 감지 (${changes.analysisCount}회 분석)`
-                  : `분석 요약 (${changes.analysisCount}회 분석)`
-                }
-              </span>
-              {changes.latestDate && (
-                <span className="text-muted-foreground/50">
-                  · 최신 {format(new Date(changes.latestDate), "M/d")}
-                </span>
-              )}
-              <span className="ml-auto">
-                {changesExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </span>
-            </button>
-
-            <AnimatePresence>
-              {changesExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-2 space-y-1.5">
-                    {changes.changes.map((c, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          "rounded-lg px-3 py-2 flex gap-2",
-                          c.type === "verdict" && c.direction === "up" && "bg-emerald-500/10 border border-emerald-500/20",
-                          c.type === "verdict" && c.direction === "down" && "bg-red-500/10 border border-red-500/20",
-                          c.type === "verdict" && c.direction === "neutral" && "bg-muted/30 border border-border",
-                          c.type === "target_price" && c.direction === "up" && "bg-emerald-500/8 border border-emerald-500/15",
-                          c.type === "target_price" && c.direction === "down" && "bg-red-500/8 border border-red-500/15",
-                          c.type === "catalyst" && "bg-blue-500/8 border border-blue-500/15",
-                          c.type === "risk" && "bg-amber-500/8 border border-amber-500/15",
-                        )}
-                      >
-                        <div className="shrink-0 mt-0.5">
-                          {c.type === "verdict" && c.direction === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />}
-                          {c.type === "verdict" && c.direction === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
-                          {c.type === "verdict" && c.direction === "neutral" && <Bell className="w-3.5 h-3.5 text-muted-foreground" />}
-                          {c.type === "target_price" && c.direction === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />}
-                          {c.type === "target_price" && c.direction === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
-                          {c.type === "catalyst" && <Zap className="w-3.5 h-3.5 text-blue-400" />}
-                          {c.type === "risk" && <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className={cn(
-                            "text-[10px] font-semibold uppercase tracking-wide mb-0.5",
-                            c.type === "verdict" && c.direction === "up" && "text-emerald-400",
-                            c.type === "verdict" && c.direction === "down" && "text-red-400",
-                            c.type === "target_price" && c.direction === "up" && "text-emerald-400",
-                            c.type === "target_price" && c.direction === "down" && "text-red-400",
-                            c.type === "catalyst" && "text-blue-400",
-                            c.type === "risk" && "text-amber-400",
-                          )}>
-                            {c.label}
-                          </p>
-                          <p className="text-[11px] text-foreground/80 leading-snug">{c.detail}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+        {/* 현재가 vs 목표가 바 */}
+        {priceBarPct != null && targetBarPct != null && (
+          <div className="mt-2.5 px-0.5">
+            <div className="relative h-1.5 bg-muted/40 rounded-full overflow-visible">
+              {/* 목표가 위치 마커 */}
+              <div
+                className={cn(
+                  "absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-background z-10",
+                  a?.upsidePct != null && a.upsidePct >= 0 ? "bg-emerald-400" : "bg-red-400"
+                )}
+                style={{ left: `clamp(0%, ${targetBarPct}%, 98%)` }}
+              />
+              {/* 현재가 위치 */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-foreground border-2 border-background z-20"
+                style={{ left: `clamp(0%, ${priceBarPct}%, 98%)` }}
+              />
+              {/* 채워진 구간 */}
+              <div
+                className="absolute inset-y-0 left-0 rounded-full bg-primary/30"
+                style={{ width: `${priceBarPct}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[9px] text-muted-foreground/50">현재가</span>
+              <span className="text-[9px] text-muted-foreground/50">적정주가</span>
+            </div>
           </div>
         )}
-
-        {/* 하단 액션 */}
-        <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <InlineEdit
-            holdingId={holding.id}
-            avgPrice={holding.avgPrice}
-            quantity={holding.quantity}
-            note={holding.note}
-            onSaved={onRefresh}
-          />
-          {a && (
-            <button
-              onClick={() => setLocation(`/analysis/${a.id}`)}
-              className="flex items-center gap-1 text-[11px] text-primary hover:underline"
-            >
-              <ExternalLink className="w-3 h-3" />
-              최신 분석 보기
-              <span className="text-muted-foreground ml-0.5">
-                ({format(new Date(a.createdAt), "M/d", { locale: ko })})
-              </span>
-            </button>
-          )}
-          {!a && (
-            <button
-              onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary"
-            >
-              <Plus className="w-3 h-3" /> 분석 요청
-            </button>
-          )}
-
-          <div className="flex-1" />
-
-          {/* AI 데일리 브리핑 버튼 */}
-          <button
-            onClick={brief ? () => setBriefExpanded(v => !v) : fetchBrief}
-            disabled={briefLoading}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-amber-400 transition-colors"
-            title="오늘의 AI 이슈 브리핑"
-          >
-            {briefLoading
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Newspaper className="w-3.5 h-3.5" />
-            }
-            {brief
-              ? (briefExpanded ? "브리핑 접기" : "브리핑 보기")
-              : "오늘 이슈"
-            }
-          </button>
-
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-          >
-            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {expanded ? "접기" : "AI 리서치 요약"}
-          </button>
-
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
-          >
-            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-          </button>
-        </div>
       </div>
 
-      {/* AI 데일리 브리핑 패널 */}
-      <AnimatePresence>
-        {brief && briefExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="overflow-hidden"
+      {/* ── AI 데일리 이슈 브리핑 ─────────────────────────────── */}
+      {brief && (
+        <div className="mx-3 mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+          <button
+            onClick={() => setBriefExpanded(v => !v)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left"
           >
-            <div className="border-t border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
-                <Newspaper className="w-3.5 h-3.5" />
-                AI 데일리 브리핑
-                <span className="ml-auto text-[10px] font-normal text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" />{brief.date}
-                  {!brief.cached && <span className="text-amber-400/60">· 방금 생성</span>}
-                </span>
-              </div>
-              {parseBrief(brief.summary).map((sec, i) => (
-                <div key={i} className="flex gap-2">
-                  <div className="shrink-0 mt-0.5">
-                    {sec.icon === "core"     && <Activity    className="w-3.5 h-3.5 text-amber-400" />}
-                    {sec.icon === "risk"     && <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
-                    {sec.icon === "catalyst" && <Zap          className="w-3.5 h-3.5 text-emerald-400" />}
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "text-[10px] font-semibold uppercase tracking-wide mb-0.5",
-                      sec.icon === "core"     && "text-amber-400",
-                      sec.icon === "risk"     && "text-red-400",
-                      sec.icon === "catalyst" && "text-emerald-400",
-                    )}>{sec.label}</p>
-                    <p className="text-[12px] text-foreground/80 leading-relaxed">{sec.text}</p>
-                  </div>
+            <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[11px] font-semibold text-amber-300 flex-1">오늘의 이슈 브리핑</span>
+            <span className="text-[10px] text-muted-foreground/50 flex items-center gap-0.5">
+              <Clock className="w-2.5 h-2.5" />{brief.date}
+            </span>
+            {briefExpanded
+              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+            }
+          </button>
+          <AnimatePresence initial={false}>
+            {briefExpanded && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: "auto" }}
+                exit={{ height: 0 }}
+                transition={{ duration: 0.18 }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 pb-3 space-y-2.5 border-t border-amber-500/15">
+                  {parseBrief(brief.summary).map((sec, i) => (
+                    <div key={i} className="flex gap-2 pt-2">
+                      <div className="shrink-0 mt-0.5">
+                        {sec.icon === "core"     && <Activity      className="w-3.5 h-3.5 text-amber-400" />}
+                        {sec.icon === "risk"     && <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
+                        {sec.icon === "catalyst" && <Zap           className="w-3.5 h-3.5 text-emerald-400" />}
+                      </div>
+                      <div>
+                        <p className={cn(
+                          "text-[10px] font-bold uppercase tracking-wider mb-0.5",
+                          sec.icon === "core"     && "text-amber-400/80",
+                          sec.icon === "risk"     && "text-red-400/80",
+                          sec.icon === "catalyst" && "text-emerald-400/80",
+                        )}>{sec.label}</p>
+                        <p className="text-[12px] text-foreground/75 leading-relaxed">{sec.text}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
-      {/* 확장: AI 리서치 요약 */}
-      <AnimatePresence>
+      {/* ── 하단 액션 바 ──────────────────────────────────────── */}
+      <div className="border-t border-border/60 px-4 py-2.5 flex items-center gap-3">
+        {a ? (
+          <button
+            onClick={() => setLocation(`/analysis/${a.id}`)}
+            className="flex items-center gap-1.5 text-[11px] text-primary/80 hover:text-primary font-medium transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            리서치 보고서
+            <span className="text-muted-foreground/50 font-normal">
+              {format(new Date(a.createdAt), "M/d", { locale: ko })}
+            </span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+          >
+            <Brain className="w-3 h-3" /> AI 분석 요청
+          </button>
+        )}
+
+        <div className="flex-1" />
+
+        {/* AI 리서치 요약 토글 */}
+        {a && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className={cn(
+              "flex items-center gap-1 text-[11px] transition-colors",
+              expanded ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            요약 {expanded ? "접기" : "보기"}
+          </button>
+        )}
+      </div>
+
+      {/* ── 확장: AI 리서치 요약 ─────────────────────────────── */}
+      <AnimatePresence initial={false}>
         {expanded && a && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
@@ -919,46 +844,94 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-border px-4 py-4 space-y-3 bg-[#111]">
+            <div className="border-t border-border/60 bg-[#0f0f0f] divide-y divide-border/40">
+              {/* 분석 메타 */}
+              <div className="px-4 py-3 flex items-center gap-3">
+                <Brain className="w-4 h-4 text-primary shrink-0" />
+                <div>
+                  <p className="text-[11px] font-semibold text-foreground">AI 리서치 요약</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {format(new Date(a.createdAt), "yyyy년 M월 d일", { locale: ko })} 분석
+                    {a.qaScore != null && ` · 신뢰도 ${a.qaScore}점`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLocation(`/analysis/${a.id}`)}
+                  className="ml-auto text-[10px] text-primary hover:underline flex items-center gap-0.5"
+                >
+                  전체 보기 <ExternalLink className="w-2.5 h-2.5" />
+                </button>
+              </div>
+
+              {/* 핵심 촉매 */}
               {a.catalysts && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 mb-1">
-                    <TrendingUp className="w-3.5 h-3.5" /> 핵심 촉매
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">핵심 촉매</span>
                   </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-4 whitespace-pre-wrap">
-                    {a.catalysts.replace(/^#{1,4}\s*/gm, "").slice(0, 500)}
+                  <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                    {a.catalysts.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 400)}
                   </p>
                 </div>
               )}
+
+              {/* 주요 리스크 */}
               {a.risks && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-red-400 mb-1">
-                    <ShieldAlert className="w-3.5 h-3.5" /> 주요 리스크
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">주요 리스크</span>
                   </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-4 whitespace-pre-wrap">
-                    {a.risks.replace(/^#{1,4}\s*/gm, "").slice(0, 500)}
+                  <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                    {a.risks.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 400)}
                   </p>
                 </div>
               )}
+
+              {/* 전략 요약 (촉매·리스크 없을 때) */}
               {!a.catalysts && !a.risks && a.strategy && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary mb-1">
-                    <TrendingUp className="w-3.5 h-3.5" /> 투자 전략 요약
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Target className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">투자 전략</span>
                   </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-5 whitespace-pre-wrap">
-                    {a.strategy.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 600)}
+                  <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                    {a.strategy.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 500)}
                   </p>
                 </div>
               )}
+
+              {/* 분석 없을 때 */}
               {!a.catalysts && !a.risks && !a.strategy && (
-                <div className="text-center py-3">
-                  <p className="text-[12px] text-muted-foreground mb-2">분석 데이터가 없습니다</p>
+                <div className="px-4 py-6 text-center">
+                  <p className="text-[12px] text-muted-foreground mb-2">세부 분석 데이터가 없습니다</p>
                   <button
                     onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
                     className="text-[11px] text-primary hover:underline"
-                  >
-                    새 분석 요청하기 →
-                  </button>
+                  >새 분석 요청하기 →</button>
+                </div>
+              )}
+
+              {/* 손절가 · 위험보상 - 작게 표시 */}
+              {(a.stopLoss != null || a.riskRewardRatio != null) && (
+                <div className="px-4 py-2.5 flex gap-4">
+                  {a.stopLoss != null && (
+                    <div>
+                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">손절가</p>
+                      <p className="text-[12px] font-medium text-foreground/70 tabular-nums">
+                        {fmtPrice(a.stopLoss, holding.priceCurrency)}
+                      </p>
+                    </div>
+                  )}
+                  {a.riskRewardRatio != null && (
+                    <div>
+                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">위험보상</p>
+                      <p className="text-[12px] font-medium text-foreground/70 tabular-nums">
+                        1 : {a.riskRewardRatio.toFixed(1)}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
