@@ -3858,6 +3858,34 @@ router.get("/public-stats", async (_req, res) => {
       .slice(0, 10)
       .map(([ticker, d]) => ({ ticker, companyName: d.companyName, englishName: d.englishName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
 
+    // ── 기간별 topTickers ──────────────────────────────────────────────────────
+    const nowMs = Date.now();
+    const DAY_MS = 1000 * 60 * 60 * 24;
+    function buildPeriodTopTickers(minusMs: number | null) {
+      const filtered = minusMs == null ? rows : rows.filter(r => r.createdAt && new Date(r.createdAt).getTime() >= nowMs - minusMs);
+      const map: Record<string, { count: number; companyName: string; englishName: string | null; latestVerdict: string | null; latestId: number }> = {};
+      for (const r of filtered) {
+        if (!map[r.ticker]) map[r.ticker] = { count: 0, companyName: r.companyName, englishName: r.englishName ?? null, latestVerdict: null, latestId: r.id };
+        map[r.ticker].count++;
+        if (r.id > map[r.ticker].latestId) {
+          map[r.ticker].latestId = r.id;
+          map[r.ticker].latestVerdict = r.investmentVerdict ?? null;
+          map[r.ticker].companyName = r.companyName;
+          if (r.englishName) map[r.ticker].englishName = r.englishName;
+        }
+      }
+      return Object.entries(map)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10)
+        .map(([ticker, d]) => ({ ticker, companyName: d.companyName, englishName: d.englishName, count: d.count, latestVerdict: d.latestVerdict, latestId: d.latestId }));
+    }
+    const topTickersByPeriod = {
+      day:   buildPeriodTopTickers(DAY_MS),
+      week:  buildPeriodTopTickers(7 * DAY_MS),
+      month: buildPeriodTopTickers(30 * DAY_MS),
+      all:   buildPeriodTopTickers(null),
+    };
+
     // ── 최근 14일 일별 분석 추이 ──────────────────────────────────────────────
     const recentTrend: { date: string; count: number }[] = [];
     const today = new Date();
@@ -3883,7 +3911,7 @@ router.get("/public-stats", async (_req, res) => {
     const repeatTickerCount = Object.values(tickerCount).filter(d => d.count >= 2).length;
     const repeatRate = uniqueTickerCount > 0 ? Math.round((repeatTickerCount / uniqueTickerCount) * 100) : null;
 
-    res.json({ total, verdictMap, krCount, usCount, topTickers, uniqueTickerCount, recentTrend, weekdayDist, bullRate, repeatRate, repeatTickerCount });
+    res.json({ total, verdictMap, krCount, usCount, topTickers, topTickersByPeriod, uniqueTickerCount, recentTrend, weekdayDist, bullRate, repeatRate, repeatTickerCount });
   } catch (err) {
     console.error("[GET /analysis/public-stats]", err);
     res.status(500).json({ error: "Failed to fetch stats" });

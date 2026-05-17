@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useLanguage } from "@/lib/language-context";
 import { getKrEngName } from "@/lib/kr-eng-names";
+import StockLogo from "@/components/ui/stock-logo";
 
 const VERDICT_ORDER = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"];
 const VERDICT_LABELS_KO: Record<string, string> = {
@@ -33,6 +34,12 @@ interface PublicStats {
   usCount: number;
   uniqueTickerCount: number;
   topTickers: { ticker: string; companyName: string; englishName: string | null; count: number; latestVerdict: string | null; latestId: number }[];
+  topTickersByPeriod: {
+    day:   { ticker: string; companyName: string; englishName: string | null; count: number; latestVerdict: string | null; latestId: number }[];
+    week:  { ticker: string; companyName: string; englishName: string | null; count: number; latestVerdict: string | null; latestId: number }[];
+    month: { ticker: string; companyName: string; englishName: string | null; count: number; latestVerdict: string | null; latestId: number }[];
+    all:   { ticker: string; companyName: string; englishName: string | null; count: number; latestVerdict: string | null; latestId: number }[];
+  };
 }
 
 interface PeriodBucket {
@@ -57,7 +64,7 @@ interface TickerEntry {
   count: number;
 }
 
-function TickerRow({ entry, rank, isEn }: { entry: TickerEntry; rank: number; isEn: boolean }) {
+function TickerRow({ entry, rank, isEn, periodKey }: { entry: TickerEntry; rank: number; isEn: boolean; periodKey: string }) {
   const isKorean = /^\d{6}/.test(entry.ticker.split(".")[0]);
   const [displayName, setDisplayName] = useState(
     isEn && entry.englishName ? entry.englishName : entry.companyName
@@ -73,35 +80,38 @@ function TickerRow({ entry, rank, isEn }: { entry: TickerEntry; rank: number; is
   }, [isEn, entry.ticker, entry.companyName, entry.englishName, isKorean]);
 
   const isTop3 = rank <= 3;
+  const MEDAL = ["🥇", "🥈", "🥉"];
 
   return (
     <motion.div
+      key={`${periodKey}-${entry.ticker}`}
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.25 + rank * 0.04 }}
+      transition={{ delay: 0.05 + rank * 0.04 }}
       className={cn(
-        "flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 bg-card transition-colors hover:bg-muted/30",
+        "flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 bg-card transition-colors hover:bg-muted/30",
         isTop3 && "border-l-2 border-l-primary/40"
       )}
     >
       <span className={cn(
-        "text-[12px] font-bold w-5 tabular-nums shrink-0",
-        rank === 1 ? "text-primary/70" : rank <= 3 ? "text-muted-foreground/50" : "text-muted-foreground/30"
-      )}>{rank}</span>
+        "text-[13px] w-5 text-center shrink-0",
+        rank <= 3 ? "" : "text-[11px] font-bold tabular-nums text-muted-foreground/30"
+      )}>
+        {rank <= 3 ? MEDAL[rank - 1] : rank}
+      </span>
+      <StockLogo ticker={entry.ticker} companyName={entry.companyName} size="sm" />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[13.5px] font-semibold text-foreground truncate">{displayName}</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[13px] font-semibold text-foreground truncate">{displayName}</span>
           <span className="text-[10px] font-mono text-muted-foreground/50">{entry.ticker}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className={cn(
-          "text-[11px] tabular-nums font-medium",
-          isTop3 ? "text-foreground/70" : "text-muted-foreground/50"
-        )}>
-          {entry.count}{isEn ? "x" : "회"}
-        </span>
-      </div>
+      <span className={cn(
+        "text-[11px] tabular-nums font-medium shrink-0",
+        isTop3 ? "text-foreground/70" : "text-muted-foreground/50"
+      )}>
+        {entry.count}{isEn ? "x" : "회"}
+      </span>
     </motion.div>
   );
 }
@@ -114,6 +124,7 @@ export default function Popular() {
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [periods, setPeriods] = useState<PeriodBucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [topPeriod, setTopPeriod] = useState<"day" | "week" | "month" | "all">("all");
 
   useEffect(() => {
     Promise.all([
@@ -371,21 +382,49 @@ export default function Popular() {
         transition={{ delay: 0.2 }}
         className="rounded-xl border border-border bg-background p-5"
       >
-        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">
-          {t("많이 분석된 종목", "Most Analyzed Stocks")}
-        </p>
-
-        {topTickers.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground/50 text-center py-6">
-            {t("아직 누적된 분석 데이터가 없습니다.", "No accumulated analysis data yet.")}
+        {/* 헤더 + 기간 탭 */}
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+            {t("많이 분석된 종목", "Most Analyzed Stocks")}
           </p>
-        ) : (
-          <div className="space-y-2">
-            {topTickers.map((entry, i) => (
-              <TickerRow key={entry.ticker} entry={entry} rank={i + 1} isEn={isEn} />
+          <div className="flex items-center gap-0.5 bg-muted/60 rounded-xl p-0.5">
+            {([
+              { key: "day"   as const, ko: "일간", en: "Today"   },
+              { key: "week"  as const, ko: "주간", en: "Weekly"  },
+              { key: "month" as const, ko: "월간", en: "Monthly" },
+              { key: "all"   as const, ko: "전체", en: "All"     },
+            ]).map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setTopPeriod(p.key)}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all",
+                  topPeriod === p.key
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {isEn ? p.en : p.ko}
+              </button>
             ))}
           </div>
-        )}
+        </div>
+
+        {(() => {
+          const tickers = stats?.topTickersByPeriod?.[topPeriod] ?? topTickers;
+          if (tickers.length === 0) return (
+            <p className="text-[13px] text-muted-foreground/50 text-center py-6">
+              {t("해당 기간에 분석된 종목이 없습니다.", "No analyses in this period.")}
+            </p>
+          );
+          return (
+            <div className="space-y-2">
+              {tickers.map((entry, i) => (
+                <TickerRow key={`${topPeriod}-${entry.ticker}`} entry={entry} rank={i + 1} isEn={isEn} periodKey={topPeriod} />
+              ))}
+            </div>
+          );
+        })()}
       </motion.div>
 
       {/* 기간별 성과 */}
