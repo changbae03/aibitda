@@ -2037,37 +2037,42 @@ export default function AnalysisDetail() {
 
             {/* 분석 완료 후 행동 유도 CTA */}
             <div className="mt-4 print:hidden">
-              <div className="rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 px-5 py-5 space-y-3.5">
+              <div className="rounded-2xl border border-border bg-gradient-to-br from-[#1a1a1a] to-[#141414] px-5 py-5 space-y-3.5">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
                   {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
                 </p>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 홈으로 */}
                   <button
                     onClick={() => setLocation("/")}
-                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 px-4 py-4 transition-all duration-200 group"
+                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/20 hover:border-muted hover:bg-muted/40 px-4 py-4 transition-all duration-200 group"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                      <Home className="w-4.5 h-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center group-hover:bg-muted transition-colors">
+                      <Home className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
                     </div>
-                    <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-primary transition-colors leading-tight text-center">
+                    <span className="text-[13px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">
                       {isEn ? "Home" : "홈으로"}
                     </span>
-                    <span className="text-[11px] text-muted-foreground leading-tight text-center">
+                    <span className="text-[11px] text-muted-foreground/60 leading-tight text-center">
                       {isEn ? "Back to dashboard" : "대시보드로 돌아가기"}
                     </span>
                   </button>
+
+                  {/* 내 포트폴리오 — 강조 */}
                   <button
-                    onClick={() => setLocation("/")}
-                    className="flex flex-col items-center gap-2 rounded-xl border border-primary/40 bg-primary/5 hover:bg-primary/10 hover:border-primary/60 px-4 py-4 transition-all duration-200 group"
+                    onClick={() => setLocation("/portfolio")}
+                    className="relative flex flex-col items-center gap-2 rounded-xl border border-primary/50 bg-gradient-to-br from-primary/15 to-primary/5 hover:from-primary/25 hover:to-primary/10 hover:border-primary/70 px-4 py-4 transition-all duration-200 group overflow-hidden"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <Search className="w-4.5 h-4.5 text-primary transition-colors" />
+                    {/* 배경 글로우 */}
+                    <div className="absolute inset-0 rounded-xl bg-primary/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors relative">
+                      <Briefcase className="w-5 h-5 text-primary transition-colors" />
                     </div>
-                    <span className="text-[13px] font-semibold text-primary leading-tight text-center">
-                      {isEn ? "New Analysis" : "다른 종목 분석"}
+                    <span className="text-[13px] font-bold text-primary leading-tight text-center relative">
+                      {isEn ? "My Portfolio" : "내 포트폴리오"}
                     </span>
-                    <span className="text-[11px] text-muted-foreground leading-tight text-center">
-                      {isEn ? "Analyze another stock" : "새로운 종목 검색하기"}
+                    <span className="text-[11px] text-primary/60 leading-tight text-center relative">
+                      {isEn ? "Track this stock" : "이 종목 수익률 관리하기"}
                     </span>
                   </button>
                 </div>
