@@ -82,8 +82,8 @@ async function fetchLatestAnalysis(ticker: string, userId: string) {
 // ── 집단지성 분석 조회 (모든 유저, 최신 완성 분석 우선) ───────────────────────
 async function fetchBestAnalysis(ticker: string) {
   const { rows } = await pool.query(`
-    SELECT id, target_price, investment_verdict, risk_reward_ratio, industry,
-           company_name,
+    SELECT id, target_price, entry_price, stop_loss, investment_verdict,
+           risk_reward_ratio, industry, company_name, qa_score, created_at,
            (SELECT content FROM analysis_steps
             WHERE analysis_id = analyses.id AND step_key = 'key_catalysts'
             LIMIT 1) AS catalysts,
@@ -143,11 +143,12 @@ router.get("/portfolio", async (req, res) => {
     [userId]
   );
 
-  // 현재가 + 최신 분석을 병렬로 조회
+  // 현재가 + 내 분석 + 집단지성 분석을 병렬로 조회
   const enriched = await Promise.all(rows.map(async (row) => {
-    const [priceData, analysis] = await Promise.all([
+    const [priceData, analysis, bestAnalysis] = await Promise.all([
       fetchPrice(row.ticker),
       fetchLatestAnalysis(row.ticker, userId),
+      fetchBestAnalysis(row.ticker),
     ]);
 
     const currentPrice = priceData.price;
@@ -159,10 +160,26 @@ router.get("/portfolio", async (req, res) => {
       ? ((currentPrice - avgPrice) / avgPrice) * 100
       : null;
 
-    // 목표가 대비 상승여력
+    // 내 분석 목표가 대비 상승여력
     const upsidePct = (currentPrice && targetPrice)
       ? ((targetPrice - currentPrice) / currentPrice) * 100
       : null;
+
+    // 집단지성 목표가 (내 분석과 다른 경우에만)
+    const collectiveRaw = bestAnalysis?.target_price ? parseFloat(bestAnalysis.target_price) : null;
+    const isSameAnalysis = bestAnalysis?.id === analysis?.id;
+    const collectiveTargetPrice = (!isSameAnalysis && collectiveRaw) ? collectiveRaw : null;
+    const collectiveUpsidePct = (currentPrice && collectiveTargetPrice)
+      ? ((collectiveTargetPrice - currentPrice) / currentPrice) * 100
+      : null;
+
+    // 분석이 없을 때 집단지성을 기본 목표가로 사용
+    const effectiveTargetPrice = targetPrice ?? collectiveRaw;
+    const effectiveUpsidePct = (currentPrice && effectiveTargetPrice)
+      ? ((effectiveTargetPrice - currentPrice) / currentPrice) * 100
+      : null;
+
+    const baseAnalysis = analysis ?? bestAnalysis;
 
     return {
       id: row.id,
@@ -179,21 +196,23 @@ router.get("/portfolio", async (req, res) => {
       priceCurrency: priceData.currency,
       // 수익률
       returnPct,
-      // 최신 분석
-      analysis: analysis ? {
-        id: analysis.id,
+      // 분석
+      analysis: baseAnalysis ? {
+        id: baseAnalysis.id,
         targetPrice,
-        entryPrice: analysis.entry_price ? parseFloat(analysis.entry_price) : null,
-        stopLoss: analysis.stop_loss ? parseFloat(analysis.stop_loss) : null,
-        verdict: analysis.investment_verdict,
-        qaScore: analysis.qa_score,
-        createdAt: analysis.created_at,
-        riskRewardRatio: analysis.risk_reward_ratio ? parseFloat(analysis.risk_reward_ratio) : null,
-        upsidePct,
-        catalysts: analysis.catalysts ?? null,
-        risks: analysis.risks ?? null,
-        strategy: analysis.strategy ?? null,
-        industry: analysis.industry ?? null,
+        collectiveTargetPrice,
+        entryPrice: baseAnalysis.entry_price ? parseFloat(baseAnalysis.entry_price) : null,
+        stopLoss: baseAnalysis.stop_loss ? parseFloat(baseAnalysis.stop_loss) : null,
+        verdict: baseAnalysis.investment_verdict,
+        qaScore: baseAnalysis.qa_score ?? null,
+        createdAt: baseAnalysis.created_at,
+        riskRewardRatio: baseAnalysis.risk_reward_ratio ? parseFloat(baseAnalysis.risk_reward_ratio) : null,
+        upsidePct: upsidePct ?? effectiveUpsidePct,
+        collectiveUpsidePct,
+        catalysts: baseAnalysis.catalysts ?? null,
+        risks: baseAnalysis.risks ?? null,
+        strategy: baseAnalysis.strategy ?? null,
+        industry: baseAnalysis.industry ?? null,
       } : null,
     };
   }));

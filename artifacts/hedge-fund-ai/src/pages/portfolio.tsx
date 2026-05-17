@@ -19,6 +19,7 @@ import { ko } from "date-fns/locale";
 interface AnalysisSummary {
   id: number;
   targetPrice: number | null;
+  collectiveTargetPrice: number | null;
   entryPrice: number | null;
   stopLoss: number | null;
   verdict: string;
@@ -26,6 +27,7 @@ interface AnalysisSummary {
   createdAt: string;
   riskRewardRatio: number | null;
   upsidePct: number | null;
+  collectiveUpsidePct: number | null;
   catalysts: string | null;
   risks: string | null;
   strategy: string | null;
@@ -701,18 +703,20 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
     : holding.change1d < 0 ? "text-red-400"
     : "text-muted-foreground";
 
+  // 진행 바에 쓸 "대표" 목표가 — 내 분석 우선, 없으면 집단지성
+  const barTarget = a?.targetPrice ?? a?.collectiveTargetPrice ?? null;
   // 현재가 vs 목표가 진행 바 (0~200% 범위에서 100% = 목표가)
   const priceBarPct = (() => {
-    if (!holding.currentPrice || !a?.targetPrice) return null;
-    const lo = Math.min(holding.currentPrice, a.targetPrice) * 0.85;
-    const hi = Math.max(holding.currentPrice, a.targetPrice) * 1.05;
+    if (!holding.currentPrice || !barTarget) return null;
+    const lo = Math.min(holding.currentPrice, barTarget) * 0.85;
+    const hi = Math.max(holding.currentPrice, barTarget) * 1.05;
     return Math.round(((holding.currentPrice - lo) / (hi - lo)) * 100);
   })();
   const targetBarPct = (() => {
-    if (!holding.currentPrice || !a?.targetPrice) return null;
-    const lo = Math.min(holding.currentPrice, a.targetPrice) * 0.85;
-    const hi = Math.max(holding.currentPrice, a.targetPrice) * 1.05;
-    return Math.round(((a.targetPrice - lo) / (hi - lo)) * 100);
+    if (!holding.currentPrice || !barTarget) return null;
+    const lo = Math.min(holding.currentPrice, barTarget) * 0.85;
+    const hi = Math.max(holding.currentPrice, barTarget) * 1.05;
+    return Math.round(((barTarget - lo) / (hi - lo)) * 100);
   })();
 
   // 종목 이니셜 배지 색상 — 회사명 첫 글자 기준으로 고정 색상
@@ -818,34 +822,90 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             )}
           </div>
 
-          {/* AI 적정주가 */}
-          <div className={cn(
-            "rounded-xl border px-3 py-2.5",
-            a?.upsidePct != null && a.upsidePct > 0
+          {/* AI 적정주가 — 내 분석 + 집단지성 */}
+          {(() => {
+            const myTP = a?.targetPrice ?? null;
+            const colTP = a?.collectiveTargetPrice ?? null;
+            const hasBoth = myTP != null && colTP != null;
+            // 대표 upside (카드 배경색 판단용)
+            const primaryUpside = a?.upsidePct ?? null;
+            const bgCls = primaryUpside != null && primaryUpside > 0
               ? "bg-emerald-500/5 border-emerald-500/20"
-              : a?.upsidePct != null && a.upsidePct < 0
+              : primaryUpside != null && primaryUpside < 0
               ? "bg-red-500/5 border-red-500/20"
-              : "bg-muted/20 border-border/60"
-          )}>
-            <p className="text-[10px] text-muted-foreground mb-1">AI 적정주가</p>
-            {a?.targetPrice != null ? (
-              <>
-                <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                  {fmtPrice(a.targetPrice, holding.priceCurrency)}
-                </p>
-                {a.upsidePct != null && (
-                  <p className={cn(
-                    "text-[11px] tabular-nums mt-1 font-semibold",
-                    a.upsidePct >= 0 ? "text-emerald-400" : "text-red-400"
-                  )}>
-                    {a.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a.upsidePct))} 여력
-                  </p>
+              : "bg-muted/20 border-border/60";
+
+            return (
+              <div className={cn("rounded-xl border px-3 py-2.5", bgCls)}>
+                <p className="text-[10px] text-muted-foreground mb-1.5">AI 적정주가</p>
+
+                {hasBoth ? (
+                  /* ── 두 목표가 나란히 표시 ── */
+                  <div className="grid grid-cols-2 gap-x-2">
+                    {/* 내 분석 */}
+                    <div>
+                      <p className="text-[9px] text-muted-foreground/60 mb-0.5">내 분석</p>
+                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground">
+                        {fmtPrice(myTP!, holding.priceCurrency)}
+                      </p>
+                      {a!.upsidePct != null && (
+                        <p className={cn("text-[10px] tabular-nums mt-0.5 font-semibold",
+                          a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                          {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))}
+                        </p>
+                      )}
+                    </div>
+                    {/* 집단지성 */}
+                    <div>
+                      <p className="text-[9px] text-muted-foreground/60 mb-0.5 flex items-center gap-0.5">
+                        <Users className="w-2.5 h-2.5" />집단지성
+                      </p>
+                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground">
+                        {fmtPrice(colTP!, holding.priceCurrency)}
+                      </p>
+                      {a!.collectiveUpsidePct != null && (
+                        <p className={cn("text-[10px] tabular-nums mt-0.5 font-semibold",
+                          a!.collectiveUpsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                          {a!.collectiveUpsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.collectiveUpsidePct))}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : myTP != null ? (
+                  /* ── 내 분석만 있을 때 ── */
+                  <>
+                    <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
+                      {fmtPrice(myTP, holding.priceCurrency)}
+                    </p>
+                    {a!.upsidePct != null && (
+                      <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
+                        a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} 여력
+                      </p>
+                    )}
+                  </>
+                ) : colTP != null ? (
+                  /* ── 집단지성만 있을 때 ── */
+                  <>
+                    <p className="text-[9px] text-muted-foreground/60 -mt-0.5 mb-0.5 flex items-center gap-0.5">
+                      <Users className="w-2.5 h-2.5" />집단지성
+                    </p>
+                    <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
+                      {fmtPrice(colTP, holding.priceCurrency)}
+                    </p>
+                    {a!.upsidePct != null && (
+                      <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
+                        a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} 여력
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[15px] text-muted-foreground/40 mt-1">—</p>
                 )}
-              </>
-            ) : (
-              <p className="text-[15px] text-muted-foreground/40 mt-1">—</p>
-            )}
-          </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 현재가 vs 목표가 바 */}
