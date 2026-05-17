@@ -158,56 +158,112 @@ export default function Stats() {
       </div>
 
       {/* 많이 분석된 종목 */}
-      {stats.topTickers.length > 0 && (
-        <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-foreground/90 mb-4">
-            {t("많이 분석된 종목", "Most Analyzed")}
-          </h2>
-          <div className="space-y-2">
-            {stats.topTickers.map((tk, idx) => (
-              <motion.div
-                key={tk.ticker}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.04 }}
-                className="flex items-center gap-3"
-              >
-                {/* 순위 */}
-                <span className={cn(
-                  "w-5 text-center text-[11px] font-bold tabular-nums shrink-0",
-                  idx === 0 ? "text-amber-400" : idx === 1 ? "text-neutral-400" : idx === 2 ? "text-orange-700" : "text-muted-foreground/50"
-                )}>
-                  {idx + 1}
-                </span>
+      {stats.topTickers.length > 0 && (() => {
+        const maxCount = stats.topTickers[0]?.count ?? 1;
+        const MEDAL = ["🥇", "🥈", "🥉"];
+        const TOP3_BG = [
+          "from-amber-500/10 to-amber-500/5 border-amber-500/20",
+          "from-neutral-400/10 to-neutral-400/5 border-neutral-400/20",
+          "from-orange-700/10 to-orange-700/5 border-orange-700/20",
+        ];
+        return (
+          <div className="bg-background border border-border rounded-2xl p-5 shadow-sm">
+            <h2 className="text-[14px] font-bold text-foreground/90 mb-4">
+              {t("많이 분석된 종목", "Most Analyzed")}
+            </h2>
 
-                {/* 로고 */}
-                <StockLogo ticker={tk.ticker} companyName={tk.companyName} size="sm" />
-
-                {/* 종목 정보 */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-semibold text-foreground truncate">{tk.companyName}</span>
-                    <span className="text-[11px] text-muted-foreground font-mono shrink-0">{tk.ticker}</span>
-                  </div>
-                </div>
-
-                {/* 분석 횟수 + 달성률 */}
-                <div className="shrink-0 text-right">
-                  <span className="text-[12px] font-bold text-foreground tabular-nums">{tk.count}{t("회", "x")}</span>
-                  {tk.winRate != null && (
-                    <span className={cn(
-                      "ml-1.5 text-[11px] tabular-nums",
-                      tk.winRate >= 60 ? "text-emerald-600 dark:text-emerald-500" : tk.winRate >= 40 ? "text-amber-600 dark:text-amber-500" : "text-red-500 dark:text-red-400"
-                    )}>
-                      {tk.winRate.toFixed(0)}%
-                    </span>
+            {/* Top 3 카드 */}
+            <div className="grid grid-cols-3 gap-2 mb-5">
+              {stats.topTickers.slice(0, 3).map((tk, idx) => (
+                <motion.div
+                  key={tk.ticker}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.07 }}
+                  className={cn(
+                    "relative rounded-2xl border bg-gradient-to-b p-3 flex flex-col items-center gap-2 text-center overflow-hidden",
+                    TOP3_BG[idx]
                   )}
-                </div>
-              </motion.div>
-            ))}
+                >
+                  <span className="text-[18px] leading-none">{MEDAL[idx]}</span>
+                  <StockLogo ticker={tk.ticker} companyName={tk.companyName} size="md" />
+                  <div className="w-full min-w-0">
+                    <p className="text-[11px] font-bold text-foreground truncate">{tk.companyName}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">{tk.ticker}</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-[15px] font-black text-foreground tabular-nums leading-none">
+                      {tk.count}<span className="text-[10px] font-semibold text-muted-foreground ml-0.5">{t("회", "x")}</span>
+                    </span>
+                    {tk.winRate != null && (
+                      <span className={cn(
+                        "text-[10px] font-semibold tabular-nums",
+                        tk.winRate >= 60 ? "text-emerald-600 dark:text-emerald-500" : tk.winRate >= 40 ? "text-amber-600 dark:text-amber-500" : "text-red-500 dark:text-red-400"
+                      )}>
+                        달성률 {tk.winRate.toFixed(0)}%
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* 4위~ 목록 + 바 차트 */}
+            <div className="space-y-2">
+              {stats.topTickers.slice(3).map((tk, i) => {
+                const idx = i + 3;
+                const barPct = (tk.count / maxCount) * 100;
+                return (
+                  <motion.div
+                    key={tk.ticker}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.21 + i * 0.04 }}
+                    className="flex items-center gap-3 group"
+                  >
+                    {/* 순위 */}
+                    <span className="w-4 text-center text-[11px] text-muted-foreground/40 font-bold tabular-nums shrink-0">
+                      {idx + 1}
+                    </span>
+
+                    {/* 로고 */}
+                    <StockLogo ticker={tk.ticker} companyName={tk.companyName} size="sm" />
+
+                    {/* 이름 + 바 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[12px] font-semibold text-foreground truncate">{tk.companyName}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono shrink-0">{tk.ticker}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full bg-primary/50"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${barPct}%` }}
+                          transition={{ duration: 0.6, delay: 0.25 + i * 0.04, ease: "easeOut" }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 횟수 */}
+                    <div className="shrink-0 text-right w-12">
+                      <span className="text-[12px] font-bold text-foreground tabular-nums">{tk.count}{t("회", "x")}</span>
+                      {tk.winRate != null && (
+                        <p className={cn(
+                          "text-[10px] tabular-nums",
+                          tk.winRate >= 60 ? "text-emerald-600 dark:text-emerald-500" : tk.winRate >= 40 ? "text-amber-600 dark:text-amber-500" : "text-red-500 dark:text-red-400"
+                        )}>
+                          {tk.winRate.toFixed(0)}%
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 결과 분포 */}
       {stats.reviewedCount > 0 && (
