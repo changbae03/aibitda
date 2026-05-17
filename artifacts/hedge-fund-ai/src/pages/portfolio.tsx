@@ -10,6 +10,7 @@ import {
   Zap, AlertTriangle, Bell, Brain, PieChart,
   Activity, Target, Lightbulb, ChevronsRight,
   Newspaper, Clock, Compass, Users,
+  Sparkles, TrendingDown, CheckCircle2, MoveRight,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency, isUSTicker } from "@/lib/utils";
 import { format } from "date-fns";
@@ -48,6 +49,21 @@ interface Holding {
   priceCurrency: string;
   returnPct: number | null;
   analysis: AnalysisSummary | null;
+}
+
+// ── 심층 업데이트 결과 타입 ──────────────────────────────────────────────────
+interface DeepUpdateResult {
+  ticker: string;
+  companyName: string;
+  analysisDate: string | null;
+  currentPrice: number | null;
+  targetPrice: number | null;
+  verdict: string | null;
+  changed: string;
+  priceAction: string;
+  thesisCheck: string;
+  action: string;
+  generatedAt: string;
 }
 
 // ── 판정 헬퍼 ───────────────────────────────────────────────────────────────
@@ -463,6 +479,10 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [briefExpanded, setBriefExpanded] = useState(true);
   const [briefLoading, setBriefLoading] = useState(false);
+  const [deepUpdate, setDeepUpdate] = useState<DeepUpdateResult | null>(null);
+  const [deepUpdateLoading, setDeepUpdateLoading] = useState(false);
+  const [deepUpdateVisible, setDeepUpdateVisible] = useState(false);
+  const [deepUpdateError, setDeepUpdateError] = useState<string | null>(null);
 
   const a = holding.analysis;
 
@@ -492,6 +512,31 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       if (d?.summary) setBrief(d);
     } catch {}
     setBriefLoading(false);
+  }
+
+  async function runDeepUpdate() {
+    if (deepUpdateLoading) return;
+    setDeepUpdateLoading(true);
+    setDeepUpdateError(null);
+    setDeepUpdateVisible(true);
+    setDeepUpdate(null);
+    try {
+      const r = await fetch(getApiUrl(`/api/portfolio/deep-update/${encodeURIComponent(holding.ticker)}`), {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        setDeepUpdateError((err as any).error ?? "업데이트 생성 실패");
+        setDeepUpdateLoading(false);
+        return;
+      }
+      const d = await r.json() as DeepUpdateResult;
+      setDeepUpdate(d);
+    } catch {
+      setDeepUpdateError("네트워크 오류가 발생했습니다");
+    }
+    setDeepUpdateLoading(false);
   }
 
   async function handleDelete() {
@@ -876,6 +921,30 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           </button>
         )}
 
+        {/* 심층 업데이트 버튼 */}
+        <button
+          onClick={runDeepUpdate}
+          disabled={deepUpdateLoading}
+          className={cn(
+            "flex items-center gap-1 text-[11px] font-medium transition-colors",
+            deepUpdateLoading
+              ? "text-muted-foreground/40 cursor-not-allowed"
+              : deepUpdateVisible
+              ? "text-amber-400 hover:text-amber-300"
+              : "text-muted-foreground hover:text-amber-400"
+          )}
+          title="마지막 분석 이후 변한 것들을 AI가 요약합니다 (크레딧 1개)"
+        >
+          {deepUpdateLoading
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <Sparkles className="w-3 h-3" />
+          }
+          현황 업데이트
+          {!deepUpdateLoading && (
+            <span className="text-[9px] text-muted-foreground/40 font-normal">-1</span>
+          )}
+        </button>
+
         <div className="flex-1" />
 
         {/* AI 리서치 요약 토글 */}
@@ -991,6 +1060,116 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                       </p>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 심층 현황 업데이트 패널 ──────────────────────────── */}
+      <AnimatePresence initial={false}>
+        {deepUpdateVisible && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-amber-500/20 bg-amber-500/[0.04]">
+              {/* 헤더 */}
+              <div className="px-4 py-2.5 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] font-semibold text-amber-400 flex-1">심층 현황 업데이트</span>
+                {deepUpdate && (
+                  <span className="text-[9px] text-muted-foreground/40">
+                    {new Date(deepUpdate.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+                <button
+                  onClick={() => setDeepUpdateVisible(false)}
+                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors ml-1"
+                >
+                  <XIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* 로딩 */}
+              {deepUpdateLoading && (
+                <div className="px-4 pb-4 flex items-center gap-2.5 text-[12px] text-muted-foreground/60">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                  최신 뉴스를 분석하고 있습니다…
+                </div>
+              )}
+
+              {/* 에러 */}
+              {deepUpdateError && !deepUpdateLoading && (
+                <div className="px-4 pb-4 text-[12px] text-red-400/80">{deepUpdateError}</div>
+              )}
+
+              {/* 결과 */}
+              {deepUpdate && !deepUpdateLoading && (
+                <div className="divide-y divide-border/30">
+                  {/* 달라진 것들 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Bell className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wider">마지막 분석 이후 변화</span>
+                      {deepUpdate.analysisDate && (
+                        <span className="text-[9px] text-muted-foreground/40">({deepUpdate.analysisDate} 기준)</span>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.changed}</p>
+                  </div>
+
+                  {/* 주가 흐름 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-sky-400/80 uppercase tracking-wider">주가 흐름</span>
+                      {deepUpdate.currentPrice && (
+                        <span className="text-[9px] text-muted-foreground/60 ml-auto tabular-nums">
+                          현재 {deepUpdate.currentPrice.toLocaleString("ko-KR")}원
+                          {deepUpdate.targetPrice && ` / 목표 ${deepUpdate.targetPrice.toLocaleString("ko-KR")}원`}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.priceAction}</p>
+                  </div>
+
+                  {/* Thesis 유효성 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">분석 thesis 점검</span>
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.thesisCheck}</p>
+                  </div>
+
+                  {/* 행동 제안 */}
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <MoveRight className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">지금 할 행동</span>
+                    </div>
+                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.action}</p>
+                  </div>
+
+                  {/* 푸터: 재실행 */}
+                  <div className="px-4 py-2 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
+                      <Brain className="w-2.5 h-2.5" /> Gemini AI · 최신 뉴스 기반
+                    </span>
+                    <button
+                      onClick={runDeepUpdate}
+                      disabled={deepUpdateLoading}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-amber-400 transition-colors"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      다시 실행 (-1 크레딧)
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

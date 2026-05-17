@@ -9,7 +9,7 @@
 
 import { Router } from "express";
 import { pool } from "@workspace/db";
-import { getUserId } from "../lib/credits.js";
+import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
 
@@ -862,6 +862,150 @@ router.get("/portfolio/changes/:ticker", async (req, res) => {
     prevDate: prev.created_at,
     changes,
   });
+});
+
+// ── Google News RSS 뉴스 fetch (심층 업데이트용) ──────────────────────────────
+async function fetchRecentNews(companyName: string): Promise<string> {
+  try {
+    const query = encodeURIComponent(companyName);
+    const rssUrl = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`;
+    const res = await fetch(rssUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return "";
+    const xml = await res.text();
+
+    const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+    if (items.length === 0) return "";
+
+    const lines: string[] = [];
+    for (const item of items.slice(0, 12)) {
+      const cdataTitle = item.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/)?.[1];
+      const plainTitle = item.match(/<title>([^<]+)<\/title>/)?.[1];
+      const title = (cdataTitle ?? plainTitle ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+      const pubDate = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] ?? "";
+      const source = item.match(/<source[^>]*>(?:<!\[CDATA\[)?([^\]<]+)(?:\]\]>)?<\/source>/)?.[1] ?? "";
+      if (!title) continue;
+      const dateStr = pubDate
+        ? new Date(pubDate).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })
+        : "";
+      lines.push(`[${dateStr}] ${title}${source ? ` (${source})` : ""}`);
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+// ── POST /api/portfolio/deep-update/:ticker — 심층 현황 업데이트 브리핑 ──────
+router.post("/portfolio/deep-update/:ticker", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
+
+  const ticker = decodeURIComponent(req.params.ticker);
+
+  // 크레딧 차감
+  const credit = await checkAndDeductCredit(userId);
+  if (!credit.ok) {
+    res.status(402).json({ error: credit.reason ?? "크레딧이 부족합니다" });
+    return;
+  }
+
+  try {
+    // 1) 포트폴리오에서 회사명 조회
+    const holdingRes = await pool.query(
+      `SELECT company_name FROM portfolio_holdings WHERE user_id = $1 AND ticker = $2`,
+      [userId, ticker]
+    );
+    const companyName: string = holdingRes.rows[0]?.company_name ?? ticker;
+
+    // 2) 유저 본인 분석 (없으면 집단지성 최신)
+    let analysis = await fetchLatestAnalysis(ticker, userId);
+    if (!analysis) analysis = await fetchBestAnalysis(ticker);
+
+    // 3) 현재가
+    const priceData = await fetchPrice(ticker);
+    const currentPrice = priceData.price;
+
+    // 4) 최신 뉴스
+    const newsText = await fetchRecentNews(companyName);
+
+    // 5) Gemini 프롬프트 구성
+    const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+    const analysisDate = analysis
+      ? new Date(analysis.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+      : null;
+    const targetPrice = analysis?.target_price ?? null;
+    const verdict = analysis?.investment_verdict ?? null;
+    const catalysts = analysis?.catalysts ?? null;
+    const risks = analysis?.risks ?? null;
+
+    const priceLine = currentPrice && targetPrice
+      ? `현재가: ${currentPrice.toLocaleString("ko-KR")}원 / 목표가: ${targetPrice.toLocaleString("ko-KR")}원 (현재가 기준 괴리 ${((currentPrice / targetPrice - 1) * 100).toFixed(1)}%)`
+      : currentPrice
+      ? `현재가: ${currentPrice.toLocaleString("ko-KR")}원 (목표가 미설정)`
+      : "현재가 조회 불가";
+
+    const prompt = `당신은 한국 주식 투자 분석가입니다. 오늘은 ${today}입니다.
+아래 정보를 바탕으로 **${companyName}(${ticker})** 심층 현황 업데이트 브리핑을 작성해주세요.
+
+## 마지막 분석 정보${analysisDate ? ` (${analysisDate})` : " (분석 없음)"}
+- 투자 의견: ${verdict ?? "없음"}
+- ${priceLine}
+- 주요 촉매: ${catalysts ? catalysts.slice(0, 300) : "없음"}
+- 주요 리스크: ${risks ? risks.slice(0, 300) : "없음"}
+
+## 최근 뉴스 헤드라인
+${newsText || "(뉴스 없음)"}
+
+## 작성 지침
+- 각 섹션은 2~4문장으로 간결하게 작성
+- 구체적인 사실(날짜, 수치, 이름)을 반드시 포함
+- 투자자 관점에서 실질적으로 유용한 내용만 작성
+- 반드시 아래 JSON 형식으로만 응답 (다른 텍스트 없이)
+
+{
+  "changed": "마지막 분석 이후 달라진 핵심 사항들 (실적, 이벤트, 업계 변화 등)",
+  "priceAction": "현재 주가 흐름과 목표가 대비 상황 평가",
+  "thesisCheck": "원래 분석의 핵심 thesis가 여전히 유효한지 검토",
+  "action": "현 시점에서 투자자가 취해야 할 행동 제안"
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { temperature: 0.4, maxOutputTokens: 800 },
+    });
+
+    const raw = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      res.status(500).json({ error: "AI 응답을 파싱할 수 없습니다" });
+      return;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      changed: string;
+      priceAction: string;
+      thesisCheck: string;
+      action: string;
+    };
+
+    res.json({
+      ticker,
+      companyName,
+      analysisDate,
+      currentPrice,
+      targetPrice,
+      verdict,
+      ...parsed,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[deep-update] error:", err);
+    res.status(500).json({ error: "업데이트 생성 중 오류가 발생했습니다" });
+  }
 });
 
 // ── DELETE /api/portfolio/:id — 종목 삭제 ────────────────────────────────────
