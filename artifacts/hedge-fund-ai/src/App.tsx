@@ -30,6 +30,7 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import Stats from "@/pages/stats";
 import Tracker from "@/pages/tracker";
 import Popular from "@/pages/popular";
+import Browse from "@/pages/browse";
 import SettingsPage from "@/pages/settings";
 import AboutPage from "@/pages/about";
 import SharePage from "@/pages/share";
@@ -222,6 +223,7 @@ function Router() {
           <Switch>
             <Route path="/analysis/new" component={NewAnalysis} />
             <Route path="/analysis/:id" component={AnalysisDetail} />
+            <Route path="/browse" component={Browse} />
             <Route path="/history" component={History} />
             <Route path="/reports" component={Reports} />
             <Route path="/model-insights" component={ModelInsights} />

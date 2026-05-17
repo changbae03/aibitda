@@ -3612,6 +3612,87 @@ router.get("/popular", async (_req, res) => {
   }
 });
 
+// ─── 공개 보고서 탐색 (인증 불필요) ──────────────────────────────────────────
+router.get("/browse", async (req, res) => {
+  try {
+    const page   = Math.max(1, parseInt(String(req.query.page  ?? "1")) || 1);
+    const limit  = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20")) || 20));
+    const offset = (page - 1) * limit;
+
+    const verdict  = req.query.verdict  ? String(req.query.verdict)  : null;
+    const industry = req.query.industry ? String(req.query.industry) : null;
+    const market   = req.query.market   ? String(req.query.market)   : null; // KR | US
+    const sort     = String(req.query.sort ?? "latest"); // latest | oldest
+
+    const conditions: string[] = [
+      `status = 'completed'`,
+      `is_public = 'true'`,
+      `investment_verdict IS NOT NULL`,
+    ];
+    const params: any[] = [];
+
+    if (verdict) {
+      params.push(verdict);
+      conditions.push(`investment_verdict = $${params.length}`);
+    }
+    if (industry) {
+      params.push(industry);
+      conditions.push(`industry = $${params.length}`);
+    }
+    if (market === "KR") {
+      conditions.push(`(ticker ~ '^[0-9]' OR ticker LIKE '%.KQ' OR ticker LIKE '%.KS')`);
+    } else if (market === "US") {
+      conditions.push(`NOT (ticker ~ '^[0-9]' OR ticker LIKE '%.KQ' OR ticker LIKE '%.KS')`);
+    }
+
+    const where = `WHERE ${conditions.join(" AND ")}`;
+    const orderBy = sort === "oldest" ? "ORDER BY created_at ASC" : "ORDER BY created_at DESC";
+
+    const countRows = await rawQuery(
+      `SELECT COUNT(*) AS cnt FROM analyses ${where}`,
+      params
+    );
+    const total = parseInt(countRows[0]?.cnt ?? "0");
+
+    params.push(limit);
+    params.push(offset);
+    const dataRows = await rawQuery(
+      `SELECT id, ticker, company_name, english_name, industry, investment_verdict,
+              target_price, entry_price, language, created_at
+       FROM analyses ${where} ${orderBy} LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    const items = dataRows.map((r: any) => ({
+      id: r.id as number,
+      ticker: r.ticker as string,
+      companyName: r.company_name as string,
+      englishName: (r.english_name ?? null) as string | null,
+      industry: (r.industry ?? null) as string | null,
+      investmentVerdict: r.investment_verdict as string,
+      targetPrice: (r.target_price ?? null) as number | null,
+      entryPrice: (r.entry_price ?? null) as number | null,
+      language: (r.language ?? "ko") as string,
+      createdAt: r.created_at,
+    }));
+
+    // 필터용 업종/판정 목록
+    const metaRows = await rawQuery(
+      `SELECT DISTINCT industry, investment_verdict
+       FROM analyses WHERE status='completed' AND is_public='true' AND investment_verdict IS NOT NULL`
+    );
+    const industries = [...new Set(metaRows.map((r: any) => r.industry).filter(Boolean))].sort() as string[];
+    const verdicts   = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"].filter(
+      (v) => metaRows.some((r: any) => r.investment_verdict === v)
+    );
+
+    res.json({ total, page, limit, items, meta: { industries, verdicts } });
+  } catch (err: any) {
+    console.error("[GET /analysis/browse]", err?.message);
+    res.status(500).json({ error: "DB error", detail: err?.message });
+  }
+});
+
 // ─── 실시간 트래커: 적정주가 있는 완료 분석 목록 ──────────────────────────────
 router.get("/tracker", async (_req, res) => {
   try {
