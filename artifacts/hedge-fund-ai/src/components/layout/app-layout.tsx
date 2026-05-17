@@ -384,13 +384,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                 애빛다
               </span>
             </Link>
-            <button
-              onClick={openCommandPalette}
-              title="검색 (⌘K)"
-              className="ml-auto mr-2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-            >
-              <Search className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
 
@@ -558,13 +551,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             애빛다
           </span>
           <div className="flex items-center gap-1">
-            <button
-              onClick={openCommandPalette}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              title="검색"
-            >
-              <Search className="w-4 h-4" />
-            </button>
             <button
               onClick={() => setMenuOpen(true)}
               className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
