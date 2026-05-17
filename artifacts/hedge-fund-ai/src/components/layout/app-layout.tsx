@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
   Sparkles, BookOpen, CalendarDays, BarChart2,
-  User, Search, ChevronRight, Download, Share,
+  User, Search, ChevronRight, Download, Share, Briefcase,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -90,10 +90,11 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
 }
 
 const NAV_ITEMS = [
-  { href: "/analysis/new", label: "AI 기업분석",  labelEn: "AI Analysis",     Icon: Sparkles },
-  { href: "/history",      label: "내가 본 자료",  labelEn: "My Reports",      Icon: BookOpen },
-  { href: "/calendar",     label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
-  { href: "/popular",      label: "애빛다 통계",   labelEn: "Statistics",      Icon: BarChart2 },
+  { href: "/analysis/new", label: "AI 기업분석",     labelEn: "AI Analysis",     Icon: Sparkles },
+  { href: "/portfolio",    label: "내 포트폴리오",   labelEn: "Portfolio",        Icon: Briefcase },
+  { href: "/history",      label: "내가 본 자료",    labelEn: "My Reports",      Icon: BookOpen },
+  { href: "/calendar",     label: "마켓 캘린더",     labelEn: "Market Calendar", Icon: CalendarDays },
+  { href: "/popular",      label: "애빛다 통계",     labelEn: "Statistics",      Icon: BarChart2 },
 ];
 
 const ADMIN_ITEMS = [
