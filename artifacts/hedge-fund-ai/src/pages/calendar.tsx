@@ -6,6 +6,7 @@ import {
   ChevronRight, Building2, AlertCircle, Sparkles, Globe, X,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
+import StockLogo from "@/components/ui/stock-logo";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/lib/language-context";
@@ -289,9 +290,7 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
       onClick={() => onSelect(entry)}
       className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent/40 active:scale-[0.99] transition-all cursor-pointer"
     >
-      <div className="mt-0.5 w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-        <Building2 className="w-4 h-4 text-muted-foreground" />
-      </div>
+      <StockLogo ticker={entry.ticker} companyName={entry.companyName} size="sm" className="mt-0.5" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">

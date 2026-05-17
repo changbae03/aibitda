@@ -10,6 +10,7 @@ import {
   ChevronDown, AlertTriangle, SlidersHorizontal, Timer,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
+import StockLogo from "@/components/ui/stock-logo";
 import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -910,17 +911,17 @@ export default function History() {
                   )}
                   onClick={() => !isConfirming && !isThisDeleting && setLocation(`/analysis/${a.id}`)}
                 >
-                  {/* ── 상단 행: 아이콘 + 종목정보 + 버튼 ── */}
+                  {/* ── 상단 행: 로고 + 종목정보 + 버튼 ── */}
                   <div className="flex items-start gap-3">
-                    {/* Status icon */}
-                    <div className="shrink-0 pt-0.5">
-                      {isThisDeleting ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
-                      ) : a.status === "completed" ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Clock className="w-4 h-4 text-amber-400" />
-                      )}
+                    {/* 회사 로고 + 상태 오버레이 */}
+                    <div className="relative shrink-0">
+                      <StockLogo ticker={a.ticker} companyName={a.companyName ?? a.ticker} size="sm" />
+                      <span className={cn(
+                        "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background flex items-center justify-center",
+                        isThisDeleting ? "bg-muted" : a.status === "completed" ? "bg-green-500" : "bg-amber-400"
+                      )}>
+                        {isThisDeleting && <Loader2 className="w-2 h-2 animate-spin text-white" />}
+                      </span>
                     </div>
 
                     {/* 종목명 + 배지 */}

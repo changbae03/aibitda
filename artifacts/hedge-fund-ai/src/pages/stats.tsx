@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { TrendingUp, TrendingDown, Target, BarChart3, Loader2, ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
+import StockLogo from "@/components/ui/stock-logo";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/lib/language-context";
 
@@ -257,11 +258,12 @@ export default function Stats() {
                   )}
                   onClick={() => c.analysisId && setLocation(`/analysis/${c.analysisId}`)}
                 >
-                  <div className="shrink-0">
-                    {isHit
-                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      : <XCircle className="w-4 h-4 text-red-400" />
-                    }
+                  <div className="relative shrink-0">
+                    <StockLogo ticker={c.ticker} companyName={c.companyName} size="sm" />
+                    <span className={cn(
+                      "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background",
+                      isHit ? "bg-emerald-500" : "bg-red-400"
+                    )} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
