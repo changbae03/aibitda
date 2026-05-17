@@ -60,11 +60,11 @@ const VERDICT_KO: Record<string, string> = {
 };
 
 function verdictColor(v: string) {
-  if (v === "Strong Buy")  return "text-emerald-400";
-  if (v === "Buy")         return "text-green-400";
-  if (v === "Hold")        return "text-amber-400";
-  if (v === "Sell")        return "text-red-400";
-  if (v === "Strong Sell") return "text-red-500";
+  if (v === "Strong Buy")  return "text-emerald-600 dark:text-emerald-400";
+  if (v === "Buy")         return "text-green-600 dark:text-green-400";
+  if (v === "Hold")        return "text-amber-600 dark:text-amber-400";
+  if (v === "Sell")        return "text-red-500 dark:text-red-400";
+  if (v === "Strong Sell") return "text-red-600 dark:text-red-500";
   return "text-muted-foreground";
 }
 
@@ -193,7 +193,7 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 16 }}
         transition={{ duration: 0.18 }}
-        className="w-full max-w-md rounded-2xl bg-[#1a1a1a] border border-border shadow-2xl overflow-hidden"
+        className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl overflow-hidden"
       >
         {/* 헤더 */}
         <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
@@ -520,7 +520,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="rounded-2xl border border-border/70 bg-[#161616] overflow-hidden"
+      className="rounded-2xl border border-border bg-card overflow-hidden"
     >
       {/* ── 헤더 ──────────────────────────────────────────────── */}
       <div className="px-4 pt-4 pb-3">
@@ -528,7 +528,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           {/* 회사 로고 */}
           <div className={cn(
             "w-11 h-11 rounded-xl flex items-center justify-center text-[18px] font-bold shrink-0 overflow-hidden",
-            logoErr ? badgeColorClass : "bg-white/5 border border-white/10"
+            logoErr ? badgeColorClass : "bg-muted/60 border border-border"
           )}>
             {!logoErr ? (
               <img
@@ -734,11 +734,11 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
         const detailSections = sections.filter(s => s.icon !== "core");
         const headlineText = coreSection?.text ?? (sections[0]?.text ?? "");
         return (
-          <div className="mx-3 mb-3 rounded-xl border border-white/[0.08] bg-white/[0.03] overflow-hidden">
+          <div className="mx-3 mb-3 rounded-xl border border-border bg-muted/30 overflow-hidden">
             {/* 한 줄 헤더 — 항상 보임 */}
             <button
               onClick={() => setBriefExpanded(v => !v)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
             >
               {briefLoading
                 ? <Loader2 className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
@@ -883,7 +883,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-border/60 bg-[#0f0f0f] divide-y divide-border/40">
+            <div className="border-t border-border/60 bg-muted/40 divide-y divide-border/40">
               {/* 분석 메타 */}
               <div className="px-4 py-3 flex items-center gap-3">
                 <Brain className="w-4 h-4 text-primary shrink-0" />
@@ -1012,7 +1012,7 @@ function PortfolioHero({
   const sellCount = holdings.filter(h => /sell/i.test(h.analysis?.verdict ?? "")).length;
 
   return (
-    <div className="rounded-2xl bg-[#1c1c1c] border border-border/60 overflow-hidden">
+    <div className="rounded-2xl bg-card border border-border overflow-hidden">
       {/* 상단: 주요 수치 */}
       <div className="px-5 pt-5 pb-4">
         <p className="text-[12px] text-muted-foreground mb-1">내 포트폴리오</p>
@@ -1064,7 +1064,7 @@ function PortfolioHero({
           <div className="px-4 border-l border-border/40">
             <p className="text-[11px] text-muted-foreground mb-2">AI 분석</p>
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-full rounded-full bg-primary transition-all duration-500"
                   style={{ width: `${analysedPct}%` }}

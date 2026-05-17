@@ -2004,14 +2004,14 @@ export default function AnalysisDetail() {
                   initial={{ y: 80, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 1.2, type: "spring", damping: 25 }}
-                  className="pointer-events-auto w-full max-w-lg rounded-2xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl px-5 py-4 flex items-center gap-4"
+                  className="pointer-events-auto w-full max-w-lg rounded-2xl bg-card/95 backdrop-blur-md border border-border shadow-2xl px-5 py-4 flex items-center gap-4"
                 >
                   <div className="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
                     <BrainCircuit className="w-5 h-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-[13px] font-bold leading-tight">{isEn ? "Did you find this analysis useful?" : "이 분석이 마음에 드셨나요?"}</p>
-                    <p className="text-white/50 text-[11px] mt-0.5">{isEn ? "Sign up and start your own AI analysis" : "가입하고 직접 AI 분석을 시작해 보세요"}</p>
+                    <p className="text-foreground text-[13px] font-bold leading-tight">{isEn ? "Did you find this analysis useful?" : "이 분석이 마음에 드셨나요?"}</p>
+                    <p className="text-muted-foreground text-[11px] mt-0.5">{isEn ? "Sign up and start your own AI analysis" : "가입하고 직접 AI 분석을 시작해 보세요"}</p>
                   </div>
                   <a
                     href="/sign-in"

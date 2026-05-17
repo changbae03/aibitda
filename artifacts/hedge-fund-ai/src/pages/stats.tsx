@@ -197,7 +197,7 @@ export default function Stats() {
                   {tk.winRate != null && (
                     <span className={cn(
                       "ml-1.5 text-[11px] tabular-nums",
-                      tk.winRate >= 60 ? "text-emerald-500" : tk.winRate >= 40 ? "text-amber-500" : "text-red-400"
+                      tk.winRate >= 60 ? "text-emerald-600 dark:text-emerald-500" : tk.winRate >= 40 ? "text-amber-600 dark:text-amber-500" : "text-red-500 dark:text-red-400"
                     )}>
                       {tk.winRate.toFixed(0)}%
                     </span>
@@ -365,7 +365,7 @@ export default function Stats() {
                     </span>
                     {data.avgReturn != null && (
                       <span className={cn("ml-2 text-[11px]",
-                        data.avgReturn > 0 ? "text-emerald-500" : "text-red-400"
+                        data.avgReturn > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-red-500 dark:text-red-400"
                       )}>
                         ({data.avgReturn >= 0 ? "+" : ""}{data.avgReturn.toFixed(1)}%)
                       </span>

@@ -891,7 +891,7 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
           <span className="text-base font-semibold text-foreground">
             {isEn ? "Key Takeaways" : "바쁜 분들을 위한 핵심 요약"}
           </span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border/50 text-muted-foreground/60 bg-white/[0.03]">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border/50 text-muted-foreground/60 bg-muted/50">
             {completedCount}/{total}
           </span>
         </div>
@@ -906,8 +906,7 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
         </p>
       </div>
 
-      <div className="rounded-2xl overflow-hidden"
-        style={{ background: "#111111", border: "1px solid rgba(255,255,255,0.06)" }}
+      <div className="dark rounded-2xl overflow-hidden bg-neutral-950 border border-white/[0.06]"
         onTouchStart={handleTouchStart}
         onTouchEnd={(e) => handleTouchEnd(e, total)}>
         <div className="p-4 sm:p-5">
