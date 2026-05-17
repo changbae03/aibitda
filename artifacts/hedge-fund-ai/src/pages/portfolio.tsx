@@ -1086,7 +1086,7 @@ export default function Portfolio() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [sortKey, setSortKey] = useState<"added" | "return" | "upside">("added");
+  const [sortKey, setSortKey] = useState<"added" | "upside">("added");
   const [lastPriceUpdate, setLastPriceUpdate] = useState<Date | null>(null);
   const [priceUpdating, setPriceUpdating] = useState(false);
   const holdingsRef = useRef<Holding[]>([]);
@@ -1159,7 +1159,6 @@ export default function Portfolio() {
   }
 
   const sorted = [...holdings].sort((a, b) => {
-    if (sortKey === "return") return (b.returnPct ?? -Infinity) - (a.returnPct ?? -Infinity);
     if (sortKey === "upside") return ((b.analysis?.upsidePct) ?? -Infinity) - ((a.analysis?.upsidePct) ?? -Infinity);
     return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
   });
