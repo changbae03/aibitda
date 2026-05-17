@@ -51,18 +51,12 @@ interface Holding {
   analysis: AnalysisSummary | null;
 }
 
-// ── 심층 업데이트 결과 타입 ──────────────────────────────────────────────────
-interface DeepUpdateResult {
-  ticker: string;
-  companyName: string;
-  analysisDate: string | null;
-  currentPrice: number | null;
-  targetPrice: number | null;
-  verdict: string | null;
-  changed: string;
-  priceAction: string;
-  thesisCheck: string;
-  action: string;
+// ── 포트폴리오 전체 리뷰 결과 타입 ─────────────────────────────────────────
+interface PortfolioReviewResult {
+  marketContext: string;
+  concentration: string;
+  spotlight: string;
+  rebalancing: string;
   generatedAt: string;
 }
 
@@ -479,10 +473,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [briefExpanded, setBriefExpanded] = useState(true);
   const [briefLoading, setBriefLoading] = useState(false);
-  const [deepUpdate, setDeepUpdate] = useState<DeepUpdateResult | null>(null);
-  const [deepUpdateLoading, setDeepUpdateLoading] = useState(false);
-  const [deepUpdateVisible, setDeepUpdateVisible] = useState(false);
-  const [deepUpdateError, setDeepUpdateError] = useState<string | null>(null);
 
   const a = holding.analysis;
 
@@ -512,31 +502,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       if (d?.summary) setBrief(d);
     } catch {}
     setBriefLoading(false);
-  }
-
-  async function runDeepUpdate() {
-    if (deepUpdateLoading) return;
-    setDeepUpdateLoading(true);
-    setDeepUpdateError(null);
-    setDeepUpdateVisible(true);
-    setDeepUpdate(null);
-    try {
-      const r = await fetch(getApiUrl(`/api/portfolio/deep-update/${encodeURIComponent(holding.ticker)}`), {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        setDeepUpdateError((err as any).error ?? "업데이트 생성 실패");
-        setDeepUpdateLoading(false);
-        return;
-      }
-      const d = await r.json() as DeepUpdateResult;
-      setDeepUpdate(d);
-    } catch {
-      setDeepUpdateError("네트워크 오류가 발생했습니다");
-    }
-    setDeepUpdateLoading(false);
   }
 
   async function handleDelete() {
@@ -921,30 +886,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           </button>
         )}
 
-        {/* 심층 업데이트 버튼 */}
-        <button
-          onClick={runDeepUpdate}
-          disabled={deepUpdateLoading}
-          className={cn(
-            "flex items-center gap-1 text-[11px] font-medium transition-colors",
-            deepUpdateLoading
-              ? "text-muted-foreground/40 cursor-not-allowed"
-              : deepUpdateVisible
-              ? "text-amber-400 hover:text-amber-300"
-              : "text-muted-foreground hover:text-amber-400"
-          )}
-          title="마지막 분석 이후 변한 것들을 AI가 요약합니다 (크레딧 1개)"
-        >
-          {deepUpdateLoading
-            ? <Loader2 className="w-3 h-3 animate-spin" />
-            : <Sparkles className="w-3 h-3" />
-          }
-          현황 업데이트
-          {!deepUpdateLoading && (
-            <span className="text-[9px] text-muted-foreground/40 font-normal">-1</span>
-          )}
-        </button>
-
         <div className="flex-1" />
 
         {/* AI 리서치 요약 토글 */}
@@ -1067,103 +1008,129 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
         )}
       </AnimatePresence>
 
-      {/* ── 심층 현황 업데이트 패널 ──────────────────────────── */}
+    </motion.div>
+  );
+}
+
+
+// ── 포트폴리오 전체 리뷰 컴포넌트 ──────────────────────────────────────────
+function PortfolioReview({ holdings }: { holdings: Holding[] }) {
+  const [review, setReview] = useState<PortfolioReviewResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  async function runReview() {
+    setLoading(true);
+    setError(null);
+    setOpen(true);
+    setReview(null);
+    try {
+      const r = await fetch(getApiUrl("/api/portfolio/review"), {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        setError((err as any).error ?? "리뷰 생성 실패");
+        setLoading(false);
+        return;
+      }
+      const d = await r.json() as PortfolioReviewResult;
+      setReview(d);
+    } catch {
+      setError("네트워크 오류가 발생했습니다");
+    }
+    setLoading(false);
+  }
+
+  const SECTIONS: { key: keyof PortfolioReviewResult; label: string; icon: React.ReactNode; color: string }[] = [
+    { key: "marketContext",  label: "시장 환경 & 포트폴리오 방향성", icon: <Compass className="w-3.5 h-3.5" />,      color: "text-sky-400" },
+    { key: "concentration",  label: "집중도 & 분산 리스크",           icon: <PieChart className="w-3.5 h-3.5" />,     color: "text-amber-400" },
+    { key: "spotlight",      label: "주목할 종목",                    icon: <Sparkles className="w-3.5 h-3.5" />,    color: "text-emerald-400" },
+    { key: "rebalancing",    label: "리밸런싱 & 행동 제안",           icon: <MoveRight className="w-3.5 h-3.5" />,   color: "text-primary" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      {/* 헤더 */}
+      <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-foreground">AI 포트폴리오 전체 리뷰</p>
+          <p className="text-[11px] text-muted-foreground">
+            보유 {holdings.length}종목 전체를 한 번에 분석합니다
+          </p>
+        </div>
+        <button
+          onClick={runReview}
+          disabled={loading}
+          className={cn(
+            "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors",
+            loading
+              ? "bg-muted text-muted-foreground cursor-not-allowed"
+              : "bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+          )}
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          {loading ? "분석 중…" : "리뷰 시작"}
+          {!loading && <span className="text-[10px] text-amber-400/60 font-normal">크레딧 1</span>}
+        </button>
+      </div>
+
+      {/* 결과 패널 */}
       <AnimatePresence initial={false}>
-        {deepUpdateVisible && (
+        {open && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.22 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-amber-500/20 bg-amber-500/[0.04]">
-              {/* 헤더 */}
-              <div className="px-4 py-2.5 flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-[11px] font-semibold text-amber-400 flex-1">심층 현황 업데이트</span>
-                {deepUpdate && (
-                  <span className="text-[9px] text-muted-foreground/40">
-                    {new Date(deepUpdate.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                )}
-                <button
-                  onClick={() => setDeepUpdateVisible(false)}
-                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors ml-1"
-                >
-                  <XIcon className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
+            <div className="border-t border-amber-500/15 bg-amber-500/[0.03]">
               {/* 로딩 */}
-              {deepUpdateLoading && (
-                <div className="px-4 pb-4 flex items-center gap-2.5 text-[12px] text-muted-foreground/60">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  최신 뉴스를 분석하고 있습니다…
+              {loading && (
+                <div className="px-4 py-5 flex items-center gap-2.5 text-[12px] text-muted-foreground/60">
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                  보유 종목 분석 중… 최신 시장 데이터를 수집하고 있습니다
                 </div>
               )}
 
               {/* 에러 */}
-              {deepUpdateError && !deepUpdateLoading && (
-                <div className="px-4 pb-4 text-[12px] text-red-400/80">{deepUpdateError}</div>
+              {error && !loading && (
+                <div className="px-4 py-4 flex items-center gap-2 text-[12px] text-red-400/80">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  {error}
+                </div>
               )}
 
-              {/* 결과 */}
-              {deepUpdate && !deepUpdateLoading && (
+              {/* 결과 섹션들 */}
+              {review && !loading && (
                 <div className="divide-y divide-border/30">
-                  {/* 달라진 것들 */}
-                  <div className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <Bell className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wider">마지막 분석 이후 변화</span>
-                      {deepUpdate.analysisDate && (
-                        <span className="text-[9px] text-muted-foreground/40">({deepUpdate.analysisDate} 기준)</span>
-                      )}
+                  {SECTIONS.map(({ key, label, icon, color }) => (
+                    <div key={key} className="px-4 py-3">
+                      <div className={cn("flex items-center gap-1.5 mb-1.5", color)}>
+                        {icon}
+                        <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+                      </div>
+                      <p className="text-[12px] text-foreground/75 leading-relaxed">
+                        {review[key] as string}
+                      </p>
                     </div>
-                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.changed}</p>
-                  </div>
+                  ))}
 
-                  {/* 주가 흐름 */}
-                  <div className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-sky-400/80 uppercase tracking-wider">주가 흐름</span>
-                      {deepUpdate.currentPrice && (
-                        <span className="text-[9px] text-muted-foreground/60 ml-auto tabular-nums">
-                          현재 {deepUpdate.currentPrice.toLocaleString("ko-KR")}원
-                          {deepUpdate.targetPrice && ` / 목표 ${deepUpdate.targetPrice.toLocaleString("ko-KR")}원`}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.priceAction}</p>
-                  </div>
-
-                  {/* Thesis 유효성 */}
-                  <div className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">분석 thesis 점검</span>
-                    </div>
-                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.thesisCheck}</p>
-                  </div>
-
-                  {/* 행동 제안 */}
-                  <div className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <MoveRight className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">지금 할 행동</span>
-                    </div>
-                    <p className="text-[12px] text-foreground/75 leading-relaxed">{deepUpdate.action}</p>
-                  </div>
-
-                  {/* 푸터: 재실행 */}
-                  <div className="px-4 py-2 flex items-center justify-between">
+                  {/* 푸터 */}
+                  <div className="px-4 py-2.5 flex items-center justify-between">
                     <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
-                      <Brain className="w-2.5 h-2.5" /> Gemini AI · 최신 뉴스 기반
+                      <Brain className="w-2.5 h-2.5" />
+                      Gemini AI · {new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 생성
                     </span>
                     <button
-                      onClick={runDeepUpdate}
-                      disabled={deepUpdateLoading}
+                      onClick={runReview}
+                      disabled={loading}
                       className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-amber-400 transition-colors"
                     >
                       <RefreshCw className="w-2.5 h-2.5" />
@@ -1176,10 +1143,9 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
-
 
 // ── 포트폴리오 히어로 배너 (삼쩜삼 스타일) ────────────────────────────────────
 function heroRelativeTime(date: Date): string {
@@ -1466,6 +1432,9 @@ export default function Portfolio() {
               ))}
             </AnimatePresence>
           </div>
+
+          {/* ── 포트폴리오 전체 리뷰 ── */}
+          <PortfolioReview holdings={holdings} />
 
         </>
       )}

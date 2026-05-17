@@ -1020,6 +1020,132 @@ ${newsText || "(뉴스 없음)"}
   }
 });
 
+// ── POST /api/portfolio/review — 포트폴리오 전체 리뷰 ─────────────────────────
+router.post("/portfolio/review", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
+
+  // 크레딧 차감
+  const credit = await checkAndDeductCredit(userId);
+  if (!credit.ok) {
+    res.status(402).json({ error: credit.reason ?? "크레딧이 부족합니다" });
+    return;
+  }
+
+  try {
+    // 1) 보유 종목 전체 조회
+    const { rows: holdingRows } = await pool.query(
+      `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (holdingRows.length === 0) {
+      res.status(400).json({ error: "포트폴리오에 종목이 없습니다" });
+      return;
+    }
+
+    // 2) 각 종목 분석 + 현재가 병렬 조회
+    const holdingDetails = await Promise.all(
+      holdingRows.map(async (h: any) => {
+        const [analysis, priceData] = await Promise.all([
+          fetchLatestAnalysis(h.ticker, userId).then(a => a ?? fetchBestAnalysis(h.ticker)),
+          fetchPrice(h.ticker),
+        ]);
+        const returnPct = h.avg_price && priceData.price
+          ? ((priceData.price - parseFloat(h.avg_price)) / parseFloat(h.avg_price)) * 100
+          : null;
+        return {
+          ticker: h.ticker,
+          companyName: h.company_name || h.ticker,
+          currentPrice: priceData.price,
+          avgPrice: h.avg_price ? parseFloat(h.avg_price) : null,
+          quantity: h.quantity ? parseFloat(h.quantity) : null,
+          currency: priceData.currency,
+          returnPct,
+          verdict: analysis?.investment_verdict ?? null,
+          targetPrice: analysis?.target_price ?? null,
+          upsidePct: analysis?.target_price && priceData.price
+            ? ((analysis.target_price - priceData.price) / priceData.price) * 100
+            : null,
+          catalysts: analysis?.catalysts ?? null,
+          risks: analysis?.risks ?? null,
+          analysisDate: analysis?.created_at
+            ? new Date(analysis.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+            : null,
+        };
+      })
+    );
+
+    // 3) 포트폴리오 컨텍스트 문자열 생성
+    const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+    const holdingsSummary = holdingDetails.map(h => {
+      const lines = [
+        `### ${h.companyName} (${h.ticker})`,
+        `- 현재가: ${h.currentPrice != null ? h.currentPrice.toLocaleString("ko-KR") + " " + h.currency : "조회 불가"}`,
+        `- 평균매입가: ${h.avgPrice != null ? h.avgPrice.toLocaleString("ko-KR") : "미기록"}`,
+        `- 수익률: ${h.returnPct != null ? h.returnPct.toFixed(1) + "%" : "미기록"}`,
+        `- AI 판정: ${h.verdict ?? "분석 없음"}`,
+        `- 목표주가: ${h.targetPrice != null ? h.targetPrice.toLocaleString("ko-KR") : "없음"}`,
+        `- 업사이드: ${h.upsidePct != null ? h.upsidePct.toFixed(1) + "%" : "—"}`,
+        h.catalysts ? `- 핵심 촉매: ${String(h.catalysts).slice(0, 200)}` : null,
+        h.risks ? `- 주요 위험: ${String(h.risks).slice(0, 200)}` : null,
+        h.analysisDate ? `- 분석일: ${h.analysisDate}` : null,
+      ].filter(Boolean);
+      return lines.join("\n");
+    }).join("\n\n");
+
+    // 4) Gemini 호출
+    const prompt = `당신은 시니어 포트폴리오 매니저입니다. 오늘은 ${today}입니다.
+
+아래는 투자자의 포트폴리오 전체 보유 현황입니다:
+
+${holdingsSummary}
+
+위 정보를 바탕으로 포트폴리오 전체 리뷰를 JSON으로 작성하세요.
+
+**출력 형식 (JSON만 출력, 다른 텍스트 없이):**
+{
+  "marketContext": "현재 시장 환경이 이 포트폴리오에 미치는 영향 및 전체 방향성 평가 (3-4문장)",
+  "concentration": "종목/섹터 집중도 분석, 분산 수준 평가, 상관관계 리스크 (3-4문장)",
+  "spotlight": "현재 가장 주목해야 할 1-2개 종목과 그 이유 — 수익률·업사이드·뉴스 기준 (3-4문장)",
+  "rebalancing": "구체적 리밸런싱·행동 제안 — 비중 조절, 손절 검토, 추가매수 기회 등 (3-4문장)"
+}
+
+모든 내용은 한국어로 작성하며, 투자자에게 직접 말하듯 구체적이고 실용적으로 작성하세요.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        maxOutputTokens: 2500,
+        temperature: 0.6,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    const raw = response.text ?? "";
+    const cleaned = raw.replace(/```(?:json)?/g, "").replace(/```/g, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) {
+      console.error("[portfolio-review] parse failed, raw:", raw.slice(0, 600));
+      res.status(500).json({ error: "AI 응답 파싱 실패. 다시 시도해주세요." });
+      return;
+    }
+
+    const parsed = JSON.parse(match[0]);
+    res.json({
+      marketContext: parsed.marketContext ?? "",
+      concentration: parsed.concentration ?? "",
+      spotlight: parsed.spotlight ?? "",
+      rebalancing: parsed.rebalancing ?? "",
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[portfolio-review] error:", err);
+    res.status(500).json({ error: "리뷰 생성 중 오류가 발생했습니다" });
+  }
+});
+
 // ── DELETE /api/portfolio/:id — 종목 삭제 ────────────────────────────────────
 router.delete("/portfolio/:id", async (req, res) => {
   const userId = getUserId(req);
