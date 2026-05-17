@@ -471,6 +471,44 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS share_pending_at TIMESTAMPTZ;
     `);
 
+    // ── krx_stocks: 한국 전체 상장 종목 마스터 테이블 ────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS krx_stocks (
+        code              VARCHAR(6) PRIMARY KEY,
+        name              TEXT NOT NULL,
+        exchange          VARCHAR(10) NOT NULL,
+        symbol            TEXT,
+        sector            TEXT,
+        industry          TEXT,
+        market_cap        BIGINT,
+        current_price     REAL,
+        per               REAL,
+        pbr               REAL,
+        roe               REAL,
+        opm               REAL,
+        rev_growth        REAL,
+        revenue           BIGINT,
+        net_income        BIGINT,
+        shares_out        BIGINT,
+        beta              REAL,
+        week52_high       REAL,
+        week52_low        REAL,
+        data_fetched      BOOLEAN NOT NULL DEFAULT false,
+        fetch_error       TEXT,
+        last_updated      TIMESTAMPTZ,
+        created_at        TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_krx_stocks_exchange
+        ON krx_stocks (exchange);
+
+      CREATE INDEX IF NOT EXISTS idx_krx_stocks_sector
+        ON krx_stocks (sector);
+
+      CREATE INDEX IF NOT EXISTS idx_krx_stocks_data_fetched
+        ON krx_stocks (data_fetched, last_updated ASC);
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
