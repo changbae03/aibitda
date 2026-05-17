@@ -747,7 +747,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
               {briefLoading ? (
                 <span className="flex-1 text-[12px] text-muted-foreground/50">브리핑 생성 중…</span>
               ) : (
-                <p className="flex-1 text-[12px] text-foreground/70 leading-snug line-clamp-1 min-w-0">
+                <p className={cn("flex-1 text-[12px] text-foreground/70 leading-snug min-w-0", !briefExpanded && "line-clamp-1")}>
                   {headlineText}
                 </p>
               )}
@@ -775,13 +775,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   className="overflow-hidden"
                 >
                   <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2.5">
-                    {/* 핵심 전문 (헤더가 잘렸을 수 있으므로) */}
-                    {coreSection && (
-                      <div className="flex gap-2">
-                        <Activity className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                        <p className="text-[12px] text-foreground/75 leading-relaxed">{coreSection.text}</p>
-                      </div>
-                    )}
                     {/* 나머지 섹션 (촉매·리스크) */}
                     {detailSections.map((sec, i) => (
                       <div key={i} className="flex gap-2">
