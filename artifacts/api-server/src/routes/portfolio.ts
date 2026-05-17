@@ -472,17 +472,6 @@ function extractInvestmentIdea(strategyRaw: string): string {
       parts.push(`모니터링 포인트: ${monitors}`);
     }
 
-    // 3) 기본 시나리오 목표가 (어디까지 갈 수 있는가)
-    const baseScenario = Array.isArray(obj.scenarios)
-      ? (obj.scenarios as any[]).find(s => String(s.case).toLowerCase() === "base")
-      : null;
-    const targetPrice = baseScenario?.target_price ?? obj.target_price;
-    const upside = baseScenario?.upside ?? null;
-    if (targetPrice) {
-      const priceStr = Number(targetPrice).toLocaleString("ko-KR");
-      parts.push(`기본 목표가 ${priceStr}원${upside ? ` (${upside})` : ""}`);
-    }
-
     if (parts.length > 0) return parts.join(". ");
   } catch { /* fall through */ }
   return "";
