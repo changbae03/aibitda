@@ -2026,6 +2026,109 @@ router.get("/debug-price/:ticker", async (req, res) => {
   res.json(result);
 });
 
+// ─── GET /api/market-data/us-stocks/stats ────────────────────────────────────
+router.get("/us-stocks/stats", async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        COUNT(*)                                        AS total,
+        COUNT(*) FILTER (WHERE data_fetched = true)     AS fetched,
+        COUNT(*) FILTER (WHERE fetch_error IS NOT NULL AND fetch_error != 'yahoo_no_data') AS errors,
+        COUNT(*) FILTER (WHERE fetch_error = 'yahoo_no_data') AS no_data,
+        COUNT(*) FILTER (WHERE exchange = 'NASDAQ')     AS nasdaq,
+        COUNT(*) FILTER (WHERE exchange = 'NYSE')       AS nyse,
+        COUNT(*) FILTER (WHERE sector IS NOT NULL)      AS with_sector,
+        COUNT(*) FILTER (WHERE market_cap IS NOT NULL)  AS with_mcap,
+        MIN(last_updated)                               AS oldest_update,
+        MAX(last_updated)                               AS latest_update
+      FROM us_stocks
+    `);
+    const r = rows[0];
+    const total   = Number(r.total);
+    const fetched = Number(r.fetched);
+    res.json({
+      total,
+      fetched,
+      pending:     total - fetched,
+      errors:      Number(r.errors),
+      no_data:     Number(r.no_data),
+      nasdaq:      Number(r.nasdaq),
+      nyse:        Number(r.nyse),
+      with_sector: Number(r.with_sector),
+      with_mcap:   Number(r.with_mcap),
+      progress_pct: total > 0 ? Math.round((fetched / total) * 100) : 0,
+      oldest_update: r.oldest_update,
+      latest_update: r.latest_update,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
+  }
+});
+
+// ─── GET /api/market-data/us-stocks ──────────────────────────────────────────
+router.get("/us-stocks", async (req, res) => {
+  try {
+    const {
+      exchange, sector, search,
+      limit = "50", offset = "0",
+      sort = "market_cap", order = "desc",
+    } = req.query as Record<string, string>;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (exchange) {
+      params.push(exchange.toUpperCase());
+      conditions.push(`exchange = $${params.length}`);
+    }
+    if (sector) {
+      params.push(sector);
+      conditions.push(`sector = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(name ILIKE $${params.length} OR ticker ILIKE $${params.length})`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const allowedSort  = ["market_cap", "per", "pbr", "roe", "opm", "name", "ticker", "last_updated"];
+    const allowedOrder = ["asc", "desc"];
+    const safeSort  = allowedSort.includes(sort)  ? sort  : "market_cap";
+    const safeOrder = allowedOrder.includes(order) ? order : "desc";
+
+    const limitN  = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const offsetN = Math.max(Number(offset) || 0, 0);
+
+    params.push(limitN, offsetN);
+
+    const { rows } = await pool.query(
+      `SELECT ticker, name, exchange, sector, industry,
+              market_cap, current_price, per, pbr, roe, opm, rev_growth,
+              beta, week52_high, week52_low, last_updated
+       FROM us_stocks
+       ${where}
+       ORDER BY ${safeSort} ${safeOrder} NULLS LAST
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM us_stocks ${where}`,
+      params.slice(0, -2)
+    );
+
+    res.json({
+      stocks: rows,
+      total: Number(countRows[0].cnt),
+      limit: limitN,
+      offset: offsetN,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
+  }
+});
+
 // ─── GET /api/market-data/krx-stocks/stats ────────────────────────────────────
 // KRX 전체 종목 DB 구축 진행률
 router.get("/krx-stocks/stats", async (_req, res) => {

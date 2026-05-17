@@ -509,6 +509,43 @@ export async function runMigrations() {
         ON krx_stocks (data_fetched, last_updated ASC);
     `);
 
+    // ── us_stocks: 미국 주요 상장 종목 마스터 테이블 ─────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS us_stocks (
+        ticker            TEXT PRIMARY KEY,
+        name              TEXT NOT NULL,
+        exchange          VARCHAR(10),
+        sector            TEXT,
+        industry          TEXT,
+        market_cap        BIGINT,
+        current_price     REAL,
+        per               REAL,
+        pbr               REAL,
+        roe               REAL,
+        opm               REAL,
+        rev_growth        REAL,
+        revenue           BIGINT,
+        net_income        BIGINT,
+        shares_out        BIGINT,
+        beta              REAL,
+        week52_high       REAL,
+        week52_low        REAL,
+        data_fetched      BOOLEAN NOT NULL DEFAULT false,
+        fetch_error       TEXT,
+        last_updated      TIMESTAMPTZ,
+        created_at        TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_us_stocks_sector
+        ON us_stocks (sector);
+
+      CREATE INDEX IF NOT EXISTS idx_us_stocks_exchange
+        ON us_stocks (exchange);
+
+      CREATE INDEX IF NOT EXISTS idx_us_stocks_data_fetched
+        ON us_stocks (data_fetched, last_updated ASC);
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();

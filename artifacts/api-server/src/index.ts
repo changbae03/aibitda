@@ -8,6 +8,7 @@ import { resumeInProgressAnalyses } from "./routes/analysis.js";
 import { harvestMarketData } from "./lib/market-harvester.js";
 import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
 import { runKrxFullHarvest } from "./lib/krx-full-harvester.js";
+import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -154,6 +155,23 @@ const server = app.listen(port, () => {
     console.log("[SCHEDULER] KRX 전체 종목 DB 갱신 시작");
     runKrxFullHarvest().catch((e) =>
       console.error("[SCHEDULER] KRX DB 갱신 실패:", e?.message ?? e)
+    );
+  }, 12 * 60 * 60 * 1000);
+
+  // ── 미국 주요 종목 DB 구축 (~600개 재무 데이터 증분 수집) ──────────────────
+  // 서버 시작 4분 후 목록 동기화 + 미수집 300개 처리 → 이후 12시간마다 반복
+  // KRX보다 종목 수가 적어 2-3회 실행이면 전체 완성
+  setTimeout(() => {
+    console.log("[SCHEDULER] US 전체 종목 DB 구축 첫 실행");
+    runUsFullHarvest().catch((e) =>
+      console.error("[SCHEDULER] US DB 구축 첫 실행 실패:", e?.message ?? e)
+    );
+  }, 4 * 60 * 1000);
+
+  setInterval(() => {
+    console.log("[SCHEDULER] US 전체 종목 DB 갱신 시작");
+    runUsFullHarvest().catch((e) =>
+      console.error("[SCHEDULER] US DB 갱신 실패:", e?.message ?? e)
     );
   }, 12 * 60 * 60 * 1000);
 });
