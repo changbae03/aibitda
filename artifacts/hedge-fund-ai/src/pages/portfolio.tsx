@@ -607,57 +607,85 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
     return Math.round(((a.targetPrice - lo) / (hi - lo)) * 100);
   })();
 
+  // 종목 이니셜 배지 색상 — 회사명 첫 글자 기준으로 고정 색상
+  const BADGE_COLORS = [
+    "bg-rose-500/20 text-rose-300",
+    "bg-orange-500/20 text-orange-300",
+    "bg-amber-500/20 text-amber-300",
+    "bg-emerald-500/20 text-emerald-300",
+    "bg-cyan-500/20 text-cyan-300",
+    "bg-blue-500/20 text-blue-300",
+    "bg-violet-500/20 text-violet-300",
+    "bg-pink-500/20 text-pink-300",
+  ];
+  const badgeColorClass = BADGE_COLORS[(holding.companyName.charCodeAt(0) ?? 0) % BADGE_COLORS.length];
+  const initial = holding.companyName.charAt(0) || holding.ticker.charAt(0);
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="rounded-2xl border border-border bg-[#141414] overflow-hidden"
+      className="rounded-2xl border border-border/70 bg-[#161616] overflow-hidden"
     >
       {/* ── 헤더 ──────────────────────────────────────────────── */}
       <div className="px-4 pt-4 pb-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          {/* 이니셜 배지 */}
+          <div className={cn(
+            "w-11 h-11 rounded-xl flex items-center justify-center text-[18px] font-bold shrink-0",
+            badgeColorClass
+          )}>
+            {initial}
+          </div>
+
+          {/* 종목 정보 */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[11px] text-muted-foreground/70">{holding.ticker}</span>
-              <span className="text-[15px] font-bold text-foreground truncate">{holding.companyName}</span>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[15px] font-bold text-foreground leading-tight truncate">
+                  {holding.companyName}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="font-mono text-[11px] text-muted-foreground/60">{holding.ticker}</span>
+                  {a?.industry && (
+                    <span className="text-[10px] text-muted-foreground/50">· {a.industry}</span>
+                  )}
+                </div>
+              </div>
+              {/* 편집 · 삭제 */}
+              <div className="flex items-center gap-0.5 shrink-0">
+                <InlineEdit
+                  holdingId={holding.id}
+                  avgPrice={holding.avgPrice}
+                  quantity={holding.quantity}
+                  note={holding.note}
+                  onSaved={onRefresh}
+                />
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-400 transition-colors"
+                >
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              {a && (
+            {/* 판정 배지 */}
+            {a && (
+              <div className="mt-1.5">
                 <span className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded-md border font-semibold",
+                  "inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border font-semibold",
                   verdictBg(a.verdict), verdictColor(a.verdict)
                 )}>
                   {VERDICT_KO[a.verdict] ?? a.verdict}
                 </span>
-              )}
-              {a?.industry && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground border border-border/50">
-                  {a.industry}
-                </span>
-              )}
-              {holding.note && (
-                <span className="text-[10px] text-muted-foreground/60 truncate max-w-[140px]">{holding.note}</span>
-              )}
-            </div>
-          </div>
-          {/* 편집 · 삭제 */}
-          <div className="flex items-center gap-1 shrink-0">
-            <InlineEdit
-              holdingId={holding.id}
-              avgPrice={holding.avgPrice}
-              quantity={holding.quantity}
-              note={holding.note}
-              onSaved={onRefresh}
-            />
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-400 transition-colors"
-            >
-              {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-            </button>
+                {holding.note && (
+                  <span className="ml-2 text-[11px] text-muted-foreground/50 truncate">{holding.note}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -942,62 +970,112 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   );
 }
 
-// ── 포트폴리오 요약 ──────────────────────────────────────────────────────────
-function PortfolioSummary({ holdings }: { holdings: Holding[] }) {
-  const withReturn = holdings.filter(h => h.returnPct != null);
-  const withUpside = holdings.filter(h => h.analysis?.upsidePct != null);
+// ── 분석 도구 패널 (섹터 도넛 + AI 진단 — 접힘 기본) ─────────────────────────
+function AnalyticsPanel({ holdings }: { holdings: Holding[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-border/60 bg-[#161616] overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-muted/10 transition-colors"
+      >
+        <Brain className="w-4 h-4 text-primary/70" />
+        <span className="text-[13px] font-semibold text-foreground/80">포트폴리오 분석 도구</span>
+        <span className="ml-auto text-[11px] text-muted-foreground">섹터 분포 · AI 진단</span>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-border/40 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <SectorDonut holdings={holdings} />
+              <AIDiagnosis holdings={holdings} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
-  const avgReturn = withReturn.length > 0
-    ? withReturn.reduce((s, h) => s + (h.returnPct ?? 0), 0) / withReturn.length
+// ── 포트폴리오 히어로 배너 (삼쩜삼 스타일) ────────────────────────────────────
+function PortfolioHero({
+  holdings, lastPriceUpdate, priceUpdating, onAdd,
+}: {
+  holdings: Holding[];
+  lastPriceUpdate: Date | null;
+  priceUpdating: boolean;
+  onAdd: () => void;
+}) {
+  const withUpside   = holdings.filter(h => h.analysis?.upsidePct != null);
+  const avgUpside    = withUpside.length > 0
+    ? withUpside.reduce((s, h) => s + (h.analysis!.upsidePct!), 0) / withUpside.length
     : null;
-  const avgUpside = withUpside.length > 0
-    ? withUpside.reduce((s, h) => s + (h.analysis?.upsidePct ?? 0), 0) / withUpside.length
-    : null;
-
-  const buyCount = holdings.filter(h => h.analysis?.verdict?.toLowerCase().includes("buy")).length;
-  const sellCount = holdings.filter(h => h.analysis?.verdict?.toLowerCase().includes("sell")).length;
-  const holdCount = holdings.filter(h => h.analysis?.verdict === "Hold").length;
+  const buyCount     = holdings.filter(h => h.analysis?.verdict?.toLowerCase().includes("buy")).length;
+  const analysedCount = holdings.filter(h => h.analysis).length;
+  const hasPositive  = avgUpside != null && avgUpside > 0;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <div className="rounded-xl bg-muted/30 border border-border px-3 py-3">
-        <p className="text-[10px] text-muted-foreground">보유 종목</p>
-        <p className="text-2xl font-bold text-foreground tabular-nums mt-0.5">{holdings.length}</p>
-        <p className="text-[10px] text-muted-foreground">매수 {buyCount} · 홀드 {holdCount} · 매도 {sellCount}</p>
-      </div>
-      <div className="rounded-xl bg-muted/30 border border-border px-3 py-3">
-        <p className="text-[10px] text-muted-foreground">평균 수익률</p>
-        {avgReturn != null ? (
-          <>
-            <p className={cn("text-2xl font-bold tabular-nums mt-0.5", avgReturn >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {fmtPct(avgReturn)}
+    <div className="rounded-2xl bg-[#1c1c1c] border border-border/60 overflow-hidden">
+      {/* 상단: 주요 수치 */}
+      <div className="px-5 pt-5 pb-4">
+        <p className="text-[12px] text-muted-foreground mb-1">내 포트폴리오</p>
+        <div className="flex items-end gap-3">
+          <div>
+            <span className="text-[40px] font-bold text-foreground tabular-nums leading-none">
+              {holdings.length}
+            </span>
+            <span className="text-[16px] text-muted-foreground ml-1.5">개 종목</span>
+          </div>
+          {avgUpside != null && (
+            <div className={cn(
+              "mb-1.5 flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] font-semibold",
+              hasPositive
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "bg-red-500/15 text-red-400"
+            )}>
+              {hasPositive ? "▲" : "▼"} 평균 {Math.abs(avgUpside).toFixed(1)}% 여력
+            </div>
+          )}
+        </div>
+
+        {/* 구분선 */}
+        <div className="mt-4 pt-4 border-t border-border/40 grid grid-cols-3 gap-0">
+          <div className="pr-4">
+            <p className="text-[11px] text-muted-foreground">AI 매수 의견</p>
+            <p className="text-[20px] font-bold text-foreground tabular-nums mt-0.5">{buyCount}종목</p>
+          </div>
+          <div className="px-4 border-l border-border/40">
+            <p className="text-[11px] text-muted-foreground">AI 분석 완료</p>
+            <p className="text-[20px] font-bold text-foreground tabular-nums mt-0.5">{analysedCount}/{holdings.length}</p>
+          </div>
+          <div className="pl-4 border-l border-border/40">
+            <p className="text-[11px] text-muted-foreground">가격 업데이트</p>
+            <p className="text-[13px] font-medium text-muted-foreground mt-1 flex items-center gap-1">
+              {priceUpdating
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> 갱신 중</>
+                : lastPriceUpdate
+                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />{format(lastPriceUpdate, "HH:mm")}</>
+                : "—"
+              }
             </p>
-            <p className="text-[10px] text-muted-foreground">평단가 입력된 {withReturn.length}종목 기준</p>
-          </>
-        ) : (
-          <p className="text-2xl font-bold text-muted-foreground mt-0.5">—</p>
-        )}
+          </div>
+        </div>
       </div>
-      <div className="rounded-xl bg-muted/30 border border-border px-3 py-3">
-        <p className="text-[10px] text-muted-foreground">평균 AI 상승여력</p>
-        {avgUpside != null ? (
-          <>
-            <p className={cn("text-2xl font-bold tabular-nums mt-0.5", avgUpside >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {fmtPct(avgUpside)}
-            </p>
-            <p className="text-[10px] text-muted-foreground">분석된 {withUpside.length}종목 기준</p>
-          </>
-        ) : (
-          <p className="text-2xl font-bold text-muted-foreground mt-0.5">—</p>
-        )}
-      </div>
-      <div className="rounded-xl bg-muted/30 border border-border px-3 py-3">
-        <p className="text-[10px] text-muted-foreground">AI 분석 연결률</p>
-        <p className="text-2xl font-bold text-foreground tabular-nums mt-0.5">
-          {holdings.length > 0 ? Math.round((holdings.filter(h => h.analysis).length / holdings.length) * 100) : 0}%
-        </p>
-        <p className="text-[10px] text-muted-foreground">{holdings.filter(h => h.analysis).length}/{holdings.length} 종목 분석 완료</p>
-      </div>
+
+      {/* 하단 CTA */}
+      <button
+        onClick={onAdd}
+        className="w-full flex items-center justify-center gap-2 py-3 bg-primary/10 hover:bg-primary/15 transition-colors border-t border-primary/20 text-primary text-[13px] font-semibold"
+      >
+        <Plus className="w-4 h-4" /> 종목 추가하기
+      </button>
     </div>
   );
 }
@@ -1088,92 +1166,75 @@ export default function Portfolio() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      {/* 헤더 */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-primary" /> 내 포트폴리오
-          </h1>
-          <p className="text-[13px] text-muted-foreground mt-1">
-            보유 종목의 AI 목표가, 수익률, 리서치 요약을 한눈에.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {lastPriceUpdate && (
-            <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 hidden sm:flex">
-              {priceUpdating
-                ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> 가격 갱신 중</>
-                : <><Clock className="w-2.5 h-2.5" /> {format(lastPriceUpdate, "HH:mm:ss")} 업데이트</>
-              }
-            </span>
-          )}
-          <button
-            onClick={() => load(true)}
-            disabled={refreshing}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
-            title="새로고침"
-          >
-            <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
-          </button>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> 종목 추가
-          </button>
-        </div>
+      {/* 상단 헤더: 새로고침만 */}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={() => load(true)}
+          disabled={refreshing}
+          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground"
+          title="새로고침"
+        >
+          <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
+        </button>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center py-36">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-7 h-7 animate-spin text-primary/60" />
+            <p className="text-[13px] text-muted-foreground">포트폴리오 불러오는 중…</p>
+          </div>
         </div>
       ) : holdings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-32 space-y-4 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center">
-            <Briefcase className="w-7 h-7 text-muted-foreground" />
+        /* ── 빈 상태 ── */
+        <div className="flex flex-col items-center justify-center py-32 space-y-5 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Briefcase className="w-8 h-8 text-primary/60" />
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">아직 보유 종목이 없어요</p>
-            <p className="text-xs text-muted-foreground mt-1">종목을 추가하면 AI 분석 데이터와 수익률을 한눈에 볼 수 있어요.</p>
+            <p className="text-[16px] font-bold text-foreground">보유 종목이 없어요</p>
+            <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+              종목을 추가하면 AI가 현재가, 적정주가,<br/>오늘의 이슈를 한눈에 보여드려요.
+            </p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-[14px] font-semibold hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-4 h-4" /> 첫 종목 추가하기
           </button>
         </div>
       ) : (
         <>
-          <PortfolioSummary holdings={holdings} />
+          {/* ── 히어로 배너 ── */}
+          <PortfolioHero
+            holdings={holdings}
+            lastPriceUpdate={lastPriceUpdate}
+            priceUpdating={priceUpdating}
+            onAdd={() => setShowAdd(true)}
+          />
 
-          {/* 섹터 분포 + AI 진단 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <SectorDonut holdings={holdings} />
-            <AIDiagnosis holdings={holdings} />
-          </div>
-
-          {/* 정렬 */}
-          <div className="flex items-center gap-1">
-            {(["added", "return", "upside"] as const).map(k => (
+          {/* ── 정렬 탭 ── */}
+          <div className="flex items-center gap-1 pt-1">
+            <span className="text-[11px] text-muted-foreground mr-1">정렬</span>
+            {(["added", "upside"] as const).map(k => (
               <button
                 key={k}
                 onClick={() => setSortKey(k)}
                 className={cn(
-                  "px-3 py-1 text-xs rounded-lg transition-colors",
+                  "px-3 py-1.5 text-[11px] rounded-full transition-colors",
                   sortKey === k
-                    ? "bg-primary/20 text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    ? "bg-foreground/10 text-foreground font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {{ added: "최근 추가순", return: "수익률순", upside: "상승여력순" }[k]}
+                {{ added: "최근 추가순", upside: "상승여력순" }[k]}
               </button>
             ))}
           </div>
 
-          {/* 보유 종목 목록 */}
-          <div className="space-y-3">
+          {/* ── 보유 종목 목록 ── */}
+          <div className="space-y-2.5">
             <AnimatePresence mode="popLayout">
               {sorted.map(h => (
                 <HoldingCard
@@ -1185,6 +1246,9 @@ export default function Portfolio() {
               ))}
             </AnimatePresence>
           </div>
+
+          {/* ── 분석 도구 (접힌 상태) ── */}
+          <AnalyticsPanel holdings={holdings} />
         </>
       )}
 
