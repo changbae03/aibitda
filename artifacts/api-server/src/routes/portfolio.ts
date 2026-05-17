@@ -293,130 +293,89 @@ ${portfolioLines}
   }
 });
 
-// ── GET /api/portfolio/brief/:ticker — AI 데일리 브리핑 ────────────────────
-export async function runDailyPortfolioBriefs(): Promise<void> {
-  // portfolio_stock_briefs 테이블 보장
+// ── 브리핑 테이블 보장 ───────────────────────────────────────────────────────
+async function ensureBriefTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS portfolio_stock_briefs (
       id          SERIAL PRIMARY KEY,
       ticker      TEXT NOT NULL,
       brief_date  DATE NOT NULL DEFAULT CURRENT_DATE,
       summary     TEXT NOT NULL,
+      source      TEXT NOT NULL DEFAULT 'ai',  -- 'analysis' | 'ai'
+      analysis_id INTEGER,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (ticker, brief_date)
     )
   `);
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  // 오늘 포트폴리오에 있는 모든 고유 ticker 수집
-  const { rows: tickers } = await pool.query(`
-    SELECT DISTINCT ph.ticker, ph.company_name,
-      a.industry, a.investment_verdict, a.target_price
-    FROM portfolio_holdings ph
-    LEFT JOIN LATERAL (
-      SELECT industry, investment_verdict, target_price
-      FROM analyses
-      WHERE ticker = ph.ticker AND status = 'completed'
-      ORDER BY created_at DESC LIMIT 1
-    ) a ON true
-  `);
-
-  let generated = 0;
-  for (const row of tickers) {
-    // 오늘 이미 있으면 스킵
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
-      [row.ticker, today]
-    );
-    if (existing.length > 0) continue;
-
-    const verdict = row.investment_verdict ?? "미분석";
-    const industry = row.industry ?? "업종미상";
-    const prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${row.company_name}(${row.ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
-
-최근 AI 판정: ${verdict}
-다음 3가지를 각각 1-2문장으로 작성하세요. 마크다운 볼드(**) 금지. 각 항목은 정확히 아래 헤더로 구분:
-
-[오늘의핵심]
-현재 이 종목에서 가장 중요한 투자 포인트 또는 모니터링 사항.
-
-[리스크]
-단기적으로 주의해야 할 리스크 또는 모멘텀 변화 가능성.
-
-[촉매]
-향후 주가에 긍정적 영향을 줄 수 있는 잠재 촉매 또는 이벤트.`;
-
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 700 },
-      });
-      const text = response.text?.trim() ?? "";
-      if (!text) continue;
-
-      await pool.query(
-        `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary)
-         VALUES ($1, $2, $3) ON CONFLICT (ticker, brief_date) DO NOTHING`,
-        [row.ticker, today, text]
-      );
-      generated++;
-      // Gemini 과부하 방지
-      await new Promise(r => setTimeout(r, 1500));
-    } catch (e: any) {
-      console.error(`[portfolio-brief] ${row.ticker} 실패:`, e?.message);
-    }
-  }
-  console.log(`[portfolio-brief] 브리핑 생성 완료: ${generated}개`);
 }
 
-router.get("/portfolio/brief/:ticker", async (req, res) => {
-  const ticker = String(req.params.ticker).trim().toUpperCase();
+// ── 핵심 헬퍼: 종목 브리핑 생성 (분석 DB 우선 → Gemini 폴백) ────────────────
+/**
+ * 1순위: analyses + analysis_steps DB에서 최신 내용을 추출해 Gemini로 요약
+ *        (어떤 유저가 생성했든 최신 분석을 공유 — "집단지성")
+ * 2순위: 분석 없을 때만 일반 Gemini 프롬프트 사용
+ */
+async function buildBriefSummary(ticker: string): Promise<{ summary: string; source: "analysis" | "ai"; analysisId?: number }> {
   const today = new Date().toISOString().slice(0, 10);
 
-  // 테이블 보장
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS portfolio_stock_briefs (
-      id SERIAL PRIMARY KEY, ticker TEXT NOT NULL,
-      brief_date DATE NOT NULL DEFAULT CURRENT_DATE,
-      summary TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (ticker, brief_date)
-    )
-  `);
+  // 최신 완성 분석 (14일 이내, 어떤 유저든)
+  const { rows: aRows } = await pool.query(`
+    SELECT a.id, a.company_name, a.industry, a.investment_verdict, a.target_price,
+      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'key_catalysts'      LIMIT 1) AS catalysts,
+      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'risk_factors'       LIMIT 1) AS risks,
+      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'investment_strategy' LIMIT 1) AS strategy
+    FROM analyses a
+    WHERE a.ticker = $1 AND a.status = 'completed'
+      AND a.created_at >= NOW() - INTERVAL '14 days'
+    ORDER BY a.created_at DESC
+    LIMIT 1
+  `, [ticker]);
 
-  const force = req.query.force === "true";
+  const analysis = aRows[0];
 
-  // 오늘 브리핑 조회 (force=true이면 건너뜀)
-  if (!force) {
-    const { rows } = await pool.query(
-      `SELECT summary, created_at FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
-      [ticker, today]
-    );
-    if (rows.length > 0) {
-      res.json({ ticker, date: today, summary: rows[0].summary, cached: true });
-      return;
-    }
+  let prompt: string;
+  if (analysis?.catalysts || analysis?.risks || analysis?.strategy) {
+    // ── 분석 DB 기반 압축 요약 (집단지성 경로) ──
+    const companyName = analysis.company_name ?? ticker;
+    const industry    = analysis.industry ?? "업종미상";
+    const verdict     = analysis.investment_verdict ?? "미분석";
+    const targetPrice = analysis.target_price ? `목표주가 ${Number(analysis.target_price).toLocaleString()}원` : "";
+
+    const sections: string[] = [];
+    if (analysis.strategy)  sections.push(`[전략/판정]\n${analysis.strategy.slice(0, 600)}`);
+    if (analysis.catalysts) sections.push(`[핵심촉매]\n${analysis.catalysts.slice(0, 600)}`);
+    if (analysis.risks)     sections.push(`[리스크]\n${analysis.risks.slice(0, 600)}`);
+
+    prompt = `당신은 주식 리서치 애널리스트입니다. 아래는 ${companyName}(${ticker}, ${industry})에 대한 최신 AI 리서치 내용입니다.
+AI 판정: ${verdict}${targetPrice ? " / " + targetPrice : ""}
+
+${sections.join("\n\n")}
+
+위 내용을 바탕으로 ${today} 기준 포트폴리오 투자자를 위한 핵심 요약을 작성하세요.
+마크다운 볼드(**) 금지. 정확히 아래 3개 헤더로만 구분. 각 항목 1-2문장.
+
+[오늘의핵심]
+현재 이 종목에서 가장 중요한 투자 포인트.
+
+[리스크]
+단기 주의 리스크 또는 모멘텀 변화.
+
+[촉매]
+향후 주가 상승을 이끌 수 있는 잠재 촉매.`;
+
+    console.log(`[portfolio-brief] ${ticker} — 분석 DB 기반 브리핑 생성 (analysis #${analysis.id})`);
   } else {
-    // 기존 오늘 브리핑 삭제
-    await pool.query(
-      `DELETE FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
-      [ticker, today]
+    // ── 분석 없을 때 일반 Gemini ──
+    const { rows: info } = await pool.query(
+      `SELECT company_name, industry, investment_verdict FROM analyses
+       WHERE ticker=$1 AND status='completed' ORDER BY created_at DESC LIMIT 1`,
+      [ticker]
     );
-  }
+    const companyName = info[0]?.company_name ?? ticker;
+    const industry    = info[0]?.industry ?? "업종미상";
+    const verdict     = info[0]?.investment_verdict ?? "미분석";
 
-  // 없으면 즉석 생성 (company_name 조회)
-  const { rows: info } = await pool.query(
-    `SELECT company_name, industry, investment_verdict
-     FROM analyses WHERE ticker=$1 AND status='completed'
-     ORDER BY created_at DESC LIMIT 1`,
-    [ticker]
-  );
-  const companyName = info[0]?.company_name ?? ticker;
-  const industry = info[0]?.industry ?? "업종미상";
-  const verdict = info[0]?.investment_verdict ?? "미분석";
-
-  const prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
+    prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
 최근 AI 판정: ${verdict}
 다음 3가지를 각각 1-2문장으로 작성. 마크다운 볼드(**) 금지. 정확히 아래 헤더로 구분:
 
@@ -429,22 +388,120 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
 [촉매]
 향후 주가에 긍정적 영향을 줄 수 있는 잠재 촉매 또는 이벤트.`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 700 },
-    });
-    const summary = response.text?.trim() ?? "";
+    console.log(`[portfolio-brief] ${ticker} — 일반 AI 브리핑 생성 (분석 DB 없음)`);
+  }
 
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: { maxOutputTokens: 700 },
+  });
+  const summary = response.text?.trim() ?? "";
+  return {
+    summary,
+    source: analysis?.catalysts || analysis?.risks ? "analysis" : "ai",
+    analysisId: analysis?.id,
+  };
+}
+
+// ── 외부에서 호출 가능한 브리핑 갱신 함수 (분석 완료 시 훅용) ────────────────
+export async function refreshBriefForTicker(ticker: string): Promise<void> {
+  await ensureBriefTable();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 오늘 기존 브리핑 삭제 후 재생성
+  await pool.query(
+    `DELETE FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+    [ticker, today]
+  );
+
+  try {
+    const { summary, source, analysisId } = await buildBriefSummary(ticker);
+    if (!summary) return;
+    await pool.query(
+      `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary, source, analysis_id)
+       VALUES ($1, $2, $3, $4, $5) ON CONFLICT (ticker, brief_date) DO UPDATE
+       SET summary = EXCLUDED.summary, source = EXCLUDED.source, analysis_id = EXCLUDED.analysis_id`,
+      [ticker, today, summary, source, analysisId ?? null]
+    );
+    console.log(`[portfolio-brief] ${ticker} 브리핑 갱신 완료 (source=${source})`);
+  } catch (e: any) {
+    console.error(`[portfolio-brief] ${ticker} 갱신 실패:`, e?.message);
+  }
+}
+
+// ── 스케줄러: 매일 포트폴리오 종목 브리핑 일괄 생성 ─────────────────────────
+export async function runDailyPortfolioBriefs(): Promise<void> {
+  await ensureBriefTable();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 오늘 포트폴리오에 있는 모든 고유 ticker 수집
+  const { rows: tickers } = await pool.query(`
+    SELECT DISTINCT ph.ticker FROM portfolio_holdings ph
+  `);
+
+  let generated = 0;
+  for (const row of tickers) {
+    // 오늘 이미 있으면 스킵
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+      [row.ticker, today]
+    );
+    if (existing.length > 0) continue;
+
+    try {
+      const { summary, source, analysisId } = await buildBriefSummary(row.ticker);
+      if (!summary) continue;
+      await pool.query(
+        `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary, source, analysis_id)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (ticker, brief_date) DO NOTHING`,
+        [row.ticker, today, summary, source, analysisId ?? null]
+      );
+      generated++;
+      await new Promise(r => setTimeout(r, 1500));
+    } catch (e: any) {
+      console.error(`[portfolio-brief] ${row.ticker} 실패:`, e?.message);
+    }
+  }
+  console.log(`[portfolio-brief] 브리핑 생성 완료: ${generated}개`);
+}
+
+// ── GET /api/portfolio/brief/:ticker — AI 데일리 브리핑 ────────────────────
+router.get("/portfolio/brief/:ticker", async (req, res) => {
+  const ticker = String(req.params.ticker).trim().toUpperCase();
+  const today = new Date().toISOString().slice(0, 10);
+  await ensureBriefTable();
+
+  const force = req.query.force === "true";
+
+  // 오늘 브리핑 조회 (force=true이면 건너뜀)
+  if (!force) {
+    const { rows } = await pool.query(
+      `SELECT summary, source, created_at FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+      [ticker, today]
+    );
+    if (rows.length > 0) {
+      res.json({ ticker, date: today, summary: rows[0].summary, source: rows[0].source, cached: true });
+      return;
+    }
+  } else {
+    await pool.query(
+      `DELETE FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+      [ticker, today]
+    );
+  }
+
+  try {
+    const { summary, source, analysisId } = await buildBriefSummary(ticker);
     if (summary) {
       await pool.query(
-        `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary)
-         VALUES ($1, $2, $3) ON CONFLICT (ticker, brief_date) DO NOTHING`,
-        [ticker, today, summary]
+        `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary, source, analysis_id)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (ticker, brief_date) DO UPDATE
+         SET summary = EXCLUDED.summary, source = EXCLUDED.source, analysis_id = EXCLUDED.analysis_id`,
+        [ticker, today, summary, source, analysisId ?? null]
       );
     }
-    res.json({ ticker, date: today, summary, cached: false });
+    res.json({ ticker, date: today, summary, source, cached: false });
   } catch (e: any) {
     res.status(500).json({ error: "브리핑 생성 실패", detail: e?.message });
   }

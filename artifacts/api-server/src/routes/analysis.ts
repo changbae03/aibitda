@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { refreshBriefForTicker } from "./portfolio.js";
 import { db, pool } from "@workspace/db";
 import { validateTicker } from "../lib/sanitize.js";
 import { analysesTable, analysisStepsTable, modelInsightsTable } from "@workspace/db";
@@ -5660,6 +5661,17 @@ async function runPipelineBackground(id: number): Promise<void> {
   } finally {
     runningPipelineIds.delete(id);
     console.log(`[pipeline-bg] Background pipeline complete for analysis ${id}`);
+
+    // 집단지성: 분석 완료 시 해당 종목을 포트폴리오에 담은 모든 유저의 브리핑 갱신
+    try {
+      const { rows } = await pool.query(
+        `SELECT ticker FROM analyses WHERE id = $1 LIMIT 1`, [id]
+      );
+      if (rows[0]?.ticker) {
+        refreshBriefForTicker(rows[0].ticker).catch(console.error);
+        console.log(`[pipeline-bg] ${rows[0].ticker} 포트폴리오 브리핑 갱신 트리거`);
+      }
+    } catch {}
   }
 }
 
