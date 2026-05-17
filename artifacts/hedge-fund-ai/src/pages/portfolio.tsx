@@ -835,7 +835,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 className="overflow-hidden"
               >
                 <div className="px-3 pb-3 space-y-2.5 border-t border-amber-500/15">
-                  {parseBrief(brief.summary).map((sec, i) => (
+                  {brief && parseBrief(brief.summary).map((sec, i) => (
                     <div key={i} className="flex gap-2 pt-2">
                       <div className="shrink-0 mt-0.5">
                         {sec.icon === "core"     && <Activity      className="w-3.5 h-3.5 text-amber-400" />}
