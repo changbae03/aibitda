@@ -1,8 +1,23 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Loader2, Clock } from "lucide-react";
 import { cn, isUSTicker } from "@/lib/utils";
 import { ANALYSIS_STEPS_ORDER } from "@/lib/agents";
+
+// ── 문장 경계 자르기 헬퍼 ────────────────────────────────────────────────────
+/** maxLen 이상이면 가장 가까운 문장 끝(. ! ? 。)에서 자름. 문장 끝이 없으면 하드 컷. */
+function truncateAtSentence(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const search = text.slice(0, maxLen + 120);
+  let lastEnd = -1;
+  const re = /[.!?。](?:\s|$)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(search)) !== null) {
+    if (m.index + m[0].length <= maxLen + 80) lastEnd = m.index + m[0].length;
+  }
+  if (lastEnd > 20) return text.slice(0, lastEnd).trim();
+  return text.slice(0, maxLen) + "…";
+}
 
 // ── 파싱 헬퍼 ─────────────────────────────────────────────────────────────────
 
@@ -93,7 +108,7 @@ function parseForecastTable(content: string): ForecastTable | null {
 }
 
 // 전망 해설에서 촉매 영향 첫 2문장 추출
-function extractForecastNarrative(content: string, maxLen = 300): string {
+function extractForecastNarrative(content: string, maxLen = 320): string {
   const lines = content.split("\n");
   const idx = lines.findIndex(l => l.includes("전망 해설") || l.includes("Forecast Commentary"));
   const start = idx !== -1 ? idx + 1 : 0;
@@ -101,14 +116,14 @@ function extractForecastNarrative(content: string, maxLen = 300): string {
     const l = lines[i].trim();
     if (l.length > 20 && !l.startsWith("#") && !l.startsWith("|") && !l.startsWith("-")) {
       const sentences = l.split(/(?<=[.。])\s+/);
-      const text = sentences.slice(0, 3).join(" ");
-      return text.slice(0, maxLen) + (text.length > maxLen ? "…" : "");
+      const text = sentences.slice(0, 4).join(" ");
+      return truncateAtSentence(text, maxLen);
     }
   }
   return "";
 }
 
-function extractLeadText(content: string, maxLen = 280): string {
+function extractLeadText(content: string, maxLen = 320): string {
   const clean = content
     .replace(/```[\s\S]*?```/g, "")
     .replace(/^#+\s.+$/gm, "")
@@ -120,7 +135,7 @@ function extractLeadText(content: string, maxLen = 280): string {
   // 충분히 긴 첫 두 문단을 합침
   const paras = clean.split("\n").filter(l => l.trim().length > 20);
   const text = paras.slice(0, 2).join(" ");
-  return text.trim().slice(0, maxLen) + (text.length > maxLen ? "…" : "");
+  return truncateAtSentence(text.trim(), maxLen);
 }
 
 // 핵심 이슈 문장 추출 ("핵심 이슈는 X" or "핵심 이슈: X")
@@ -830,6 +845,19 @@ function StepSummaryCard({ stepKey, step, analysis, isEn, isStreaming }: {
 
 export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey }: Props) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+  }
+  function handleTouchEnd(e: React.TouchEvent, total: number) {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    if (dx < 0) setActiveIdx(i => Math.min(total - 1, i + 1));
+    else setActiveIdx(i => Math.max(0, i - 1));
+  }
 
   const stepMap = useMemo(() => {
     const map: Record<string, any> = {};
@@ -879,7 +907,9 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
       </div>
 
       <div className="rounded-2xl overflow-hidden"
-        style={{ background: "#111111", border: "1px solid rgba(255,255,255,0.06)" }}>
+        style={{ background: "#111111", border: "1px solid rgba(255,255,255,0.06)" }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={(e) => handleTouchEnd(e, total)}>
         <div className="p-4 sm:p-5">
 
           {/* 카드 본문 슬라이드 */}
