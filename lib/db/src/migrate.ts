@@ -464,6 +464,13 @@ export async function runMigrations() {
         ON calibration_history (sector, recorded_at DESC);
     `);
 
+    // share_pending: 공유 대기 컬럼 추가 (자기 자신 공유 방지)
+    await client.query(`
+      ALTER TABLE user_credits
+        ADD COLUMN IF NOT EXISTS share_pending_analysis_id INTEGER,
+        ADD COLUMN IF NOT EXISTS share_pending_at TIMESTAMPTZ;
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();

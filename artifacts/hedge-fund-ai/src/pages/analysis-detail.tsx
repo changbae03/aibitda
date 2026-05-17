@@ -495,7 +495,7 @@ function loadKakaoSDK(): Promise<void> {
 
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const [shareCredit, setShareCredit] = useState<'idle' | 'loading' | 'earned' | 'already'>('idle');
+  const [shareCredit, setShareCredit] = useState<'idle' | 'loading' | 'pending' | 'already'>('idle');
   const isEnModal = analysis?.language === 'en';
   const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
   const url = analysis?.id ? `${base}/share/${analysis.id}` : window.location.href;
@@ -525,10 +525,12 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
       const r = await fetch(getApiUrl("/api/credits/share"), {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analysisId: analysis?.id }),
       });
       const d = await r.json();
       if (!r.ok) { setShareCredit('idle'); return; }
-      setShareCredit(d.credited ? 'earned' : 'already');
+      setShareCredit(d.registered ? 'pending' : 'already');
     } catch {
       setShareCredit('idle');
     }
@@ -690,7 +692,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
 
           {/* ── 카카오 공유 크레딧 피드백 ── */}
           <AnimatePresence>
-            {shareCredit === 'earned' && (
+            {shareCredit === 'pending' && (
               <motion.div
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -699,7 +701,9 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               >
                 <Zap className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 <span className="text-[12px] font-semibold text-emerald-500">
-                  {isEnModal ? "Credit +1 earned for sharing!" : "공유 크레딧 +1 적립됐습니다!"}
+                  {isEnModal
+                    ? "Shared! Credit +1 will be awarded when someone else opens the link."
+                    : "공유됐습니다! 다른 사람이 링크를 열면 크레딧 +1이 자동 적립됩니다."}
                 </span>
               </motion.div>
             )}
@@ -712,7 +716,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               >
                 <Zap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <span className="text-[12px] text-muted-foreground">
-                  {isEnModal ? "Share credit already claimed today" : "오늘 공유 크레딧은 이미 받으셨습니다"}
+                  {isEnModal ? "Share credit already registered today" : "오늘 공유 크레딧은 이미 등록됐습니다"}
                 </span>
               </motion.div>
             )}
@@ -723,7 +727,9 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
             <div className="mx-5 mb-4 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/8 border border-amber-500/20">
               <Zap className="w-3 h-3 text-amber-500 shrink-0" />
               <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                {isEnModal ? "Share via KakaoTalk to earn +1 credit (once daily)" : "카카오톡으로 공유하면 크레딧 +1 적립 (하루 1회)"}
+                {isEnModal
+                  ? "Share via KakaoTalk · +1 credit when someone else opens the link (once daily)"
+                  : "카카오톡으로 공유하면 다른 사람이 링크를 열었을 때 크레딧 +1 적립 (하루 1회)"}
               </span>
             </div>
           )}

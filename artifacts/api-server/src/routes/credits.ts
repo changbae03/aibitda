@@ -183,10 +183,15 @@ router.post("/credits/promo", async (req, res) => {
   }
 });
 
-// ─── POST /credits/share ─── 카카오톡 공유 크레딧 (하루 1회) ─────────────────
+// ─── POST /credits/share ─── 카카오톡 공유 크레딧 — 대기 등록 (하루 1회) ────
+// 즉시 크레딧을 주지 않고 share_pending_analysis_id 에 저장.
+// 다른 사람이 /share/:id 를 열었을 때 POST /credits/share/viewed 에서 지급.
 router.post("/credits/share", async (req, res) => {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+
+  const { analysisId } = req.body as { analysisId?: number };
+  if (!analysisId) return res.status(400).json({ error: "analysisId가 필요합니다" });
 
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
@@ -199,15 +204,65 @@ router.post("/credits/share", async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: "유저를 찾을 수 없습니다" });
 
   if (rows[0].share_credit_date === today) {
-    return res.json({ ok: true, credited: false, alreadyUsed: true });
+    return res.json({ ok: true, registered: false, alreadyUsed: true });
   }
 
+  // 대기 상태 저장 (기존 pending 덮어쓰기)
   await pool.query(
-    `UPDATE user_credits SET bonus_credits = bonus_credits + 1, share_credit_date = $1 WHERE user_id = $2`,
-    [today, userId]
+    `UPDATE user_credits SET share_pending_analysis_id = $1, share_pending_at = NOW() WHERE user_id = $2`,
+    [analysisId, userId]
   );
 
-  res.json({ ok: true, credited: true });
+  res.json({ ok: true, registered: true });
+});
+
+// ─── POST /credits/share/viewed ─── 공유 링크 열림 감지 → 크레딧 지급 ──────
+// share.tsx 페이지 마운트 시 호출.
+// 뷰어가 공유자와 다른 사람이면 공유자에게 크레딧 +1 지급.
+router.post("/credits/share/viewed", async (req, res) => {
+  const viewerUserId = getUserId(req); // 비로그인이면 null
+  const { analysisId } = req.body as { analysisId?: number };
+  if (!analysisId) return res.status(400).json({ error: "analysisId가 필요합니다" });
+
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const today = kst.toISOString().slice(0, 10);
+
+  // 이 analysisId 로 pending 중인 공유자 조회
+  // — 뷰어가 로그인 상태면 공유자와 다른 사람인지 확인
+  // — 7일 이내 pending 만 유효
+  const { rows } = await pool.query(
+    `SELECT user_id, share_credit_date FROM user_credits
+     WHERE share_pending_analysis_id = $1
+       AND ($2::text IS NULL OR user_id != $2)
+       AND share_pending_at > NOW() - INTERVAL '7 days'
+     LIMIT 1`,
+    [analysisId, viewerUserId ?? null]
+  );
+
+  if (!rows[0]) return res.json({ ok: true, credited: false });
+
+  const sharer = rows[0];
+
+  // 오늘 이미 크레딧 받은 경우 패스
+  if (sharer.share_credit_date === today) {
+    // pending 은 유지 (다음 날 다른 뷰어가 열면 받을 수 있음)
+    return res.json({ ok: true, credited: false });
+  }
+
+  // 크레딧 지급 + pending 초기화
+  await pool.query(
+    `UPDATE user_credits
+     SET bonus_credits = bonus_credits + 1,
+         share_credit_date = $1,
+         share_pending_analysis_id = NULL,
+         share_pending_at = NULL
+     WHERE user_id = $2`,
+    [today, sharer.user_id]
+  );
+
+  console.log(`[share-credit] +1 → ${sharer.user_id} | analysis=${analysisId} | viewer=${viewerUserId ?? "anonymous"}`);
+  return res.json({ ok: true, credited: true });
 });
 
 export default router;

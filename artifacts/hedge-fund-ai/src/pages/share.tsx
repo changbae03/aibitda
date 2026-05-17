@@ -462,6 +462,14 @@ export default function SharePage() {
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((d) => { setAnalysis(d); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
+
+    // 공유자 크레딧 지급 트리거 — 뷰어가 공유자와 다른 사람일 때만 백엔드에서 지급
+    fetch(getApiUrl("/api/credits/share/viewed"), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysisId: parseInt(id, 10) }),
+    }).catch(() => {});
   }, [id]);
 
   const handleCopy = async () => {
