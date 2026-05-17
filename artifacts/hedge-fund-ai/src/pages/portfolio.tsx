@@ -971,6 +971,13 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
 
 // ── 포트폴리오 히어로 배너 (삼쩜삼 스타일) ────────────────────────────────────
+function heroRelativeTime(date: Date): string {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (sec < 60)  return `${sec}초 전`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
+  return format(date, "HH:mm");
+}
+
 function PortfolioHero({
   holdings, lastPriceUpdate, priceUpdating, onAdd,
 }: {
@@ -979,13 +986,18 @@ function PortfolioHero({
   priceUpdating: boolean;
   onAdd: () => void;
 }) {
-  const withUpside   = holdings.filter(h => h.analysis?.upsidePct != null);
-  const avgUpside    = withUpside.length > 0
+  const withUpside    = holdings.filter(h => h.analysis?.upsidePct != null);
+  const avgUpside     = withUpside.length > 0
     ? withUpside.reduce((s, h) => s + (h.analysis!.upsidePct!), 0) / withUpside.length
     : null;
-  const buyCount     = holdings.filter(h => h.analysis?.verdict?.toLowerCase().includes("buy")).length;
+  const hasPositive   = avgUpside != null && avgUpside > 0;
   const analysedCount = holdings.filter(h => h.analysis).length;
-  const hasPositive  = avgUpside != null && avgUpside > 0;
+  const analysedPct   = holdings.length > 0 ? (analysedCount / holdings.length) * 100 : 0;
+
+  // Buy / Hold / Sell 분포
+  const buyCount  = holdings.filter(h => /buy/i.test(h.analysis?.verdict ?? "")).length;
+  const holdCount = holdings.filter(h => /hold/i.test(h.analysis?.verdict ?? "")).length;
+  const sellCount = holdings.filter(h => /sell/i.test(h.analysis?.verdict ?? "")).length;
 
   return (
     <div className="rounded-2xl bg-[#1c1c1c] border border-border/60 overflow-hidden">
@@ -1002,9 +1014,7 @@ function PortfolioHero({
           {avgUpside != null && (
             <div className={cn(
               "mb-1.5 flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] font-semibold",
-              hasPositive
-                ? "bg-emerald-500/15 text-emerald-400"
-                : "bg-red-500/15 text-red-400"
+              hasPositive ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
             )}>
               {hasPositive ? "▲" : "▼"} 평균 {Math.abs(avgUpside).toFixed(1)}% 여력
             </div>
@@ -1013,21 +1023,55 @@ function PortfolioHero({
 
         {/* 구분선 */}
         <div className="mt-4 pt-4 border-t border-border/40 grid grid-cols-3 gap-0">
+          {/* AI 판정 분포 */}
           <div className="pr-4">
-            <p className="text-[11px] text-muted-foreground">AI 매수 의견</p>
-            <p className="text-[20px] font-bold text-foreground tabular-nums mt-0.5">{buyCount}종목</p>
+            <p className="text-[11px] text-muted-foreground mb-2">AI 판정</p>
+            <div className="flex items-center gap-1.5">
+              {buyCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{buyCount}매수
+                </span>
+              )}
+              {holdCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />{holdCount}홀드
+                </span>
+              )}
+              {sellCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-red-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />{sellCount}매도
+                </span>
+              )}
+              {buyCount + holdCount + sellCount === 0 && (
+                <span className="text-[13px] font-bold text-muted-foreground/50">—</span>
+              )}
+            </div>
           </div>
+
+          {/* AI 분석 완료 — 프로그레스 바 */}
           <div className="px-4 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground">AI 분석 완료</p>
-            <p className="text-[20px] font-bold text-foreground tabular-nums mt-0.5">{analysedCount}/{holdings.length}</p>
+            <p className="text-[11px] text-muted-foreground mb-2">AI 분석</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${analysedPct}%` }}
+                />
+              </div>
+              <span className="text-[11px] font-semibold text-foreground tabular-nums shrink-0">
+                {analysedCount}/{holdings.length}
+              </span>
+            </div>
           </div>
+
+          {/* 가격 업데이트 — 상대 시간 */}
           <div className="pl-4 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground">가격 업데이트</p>
-            <p className="text-[13px] font-medium text-muted-foreground mt-1 flex items-center gap-1">
+            <p className="text-[11px] text-muted-foreground mb-2">가격 갱신</p>
+            <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               {priceUpdating
                 ? <><Loader2 className="w-3 h-3 animate-spin" /> 갱신 중</>
                 : lastPriceUpdate
-                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />{format(lastPriceUpdate, "HH:mm")}</>
+                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />{heroRelativeTime(lastPriceUpdate)}</>
                 : "—"
               }
             </p>
