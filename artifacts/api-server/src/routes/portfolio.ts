@@ -79,13 +79,16 @@ async function fetchLatestAnalysis(ticker: string, userId: string) {
   return rows[0] ?? null;
 }
 
-// ── 집단지성 평균 목표가 (모든 완성 분석의 평균) ──────────────────────────────
+// ── 멀티뷰 평균 목표가 (최근 30일 완성 분석의 평균) ──────────────────────────
 async function fetchCollectiveAvgTarget(ticker: string): Promise<{ avgTarget: number | null; analystCount: number }> {
   const { rows } = await pool.query(`
     SELECT ROUND(AVG(target_price::numeric)) AS avg_target,
            COUNT(DISTINCT user_id) AS analyst_count
     FROM analyses
-    WHERE ticker = $1 AND status = 'completed' AND target_price IS NOT NULL
+    WHERE ticker = $1
+      AND status = 'completed'
+      AND target_price IS NOT NULL
+      AND created_at >= NOW() - INTERVAL '30 days'
   `, [ticker]);
   const row = rows[0];
   return {

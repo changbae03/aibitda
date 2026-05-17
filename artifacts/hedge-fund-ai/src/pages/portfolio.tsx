@@ -1224,7 +1224,7 @@ export default function Portfolio() {
       <div className="mt-8 px-1 flex items-start gap-1.5 text-[10px] text-muted-foreground/35 leading-relaxed">
         <Users className="w-3 h-3 shrink-0 mt-0.5" />
         <p>
-          <span className="font-semibold text-muted-foreground/50">멀티뷰</span>는 이 종목을 분석한 여러 분석자의 AI 적정주가를 평균낸 값입니다. 분석자가 2명 이상일 때 표시됩니다.
+          <span className="font-semibold text-muted-foreground/50">멀티뷰</span>는 최근 30일 내 이 종목을 분석한 여러 분석자의 AI 적정주가를 평균낸 값입니다. 시점·이슈에 따라 적정주가가 달라질 수 있어 최신 분석만 반영합니다. 분석자가 2명 이상일 때 표시됩니다.
         </p>
       </div>
     </div>
