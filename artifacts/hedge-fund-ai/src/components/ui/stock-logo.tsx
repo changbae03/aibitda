@@ -12,11 +12,17 @@ const BADGE_COLORS = [
   "bg-pink-500/20 text-pink-300",
 ];
 
+// 특정 티커를 다른 티커의 로고로 대체
+const LOGO_TICKER_OVERRIDE: Record<string, string> = {
+  "064400": "003550", // LG씨엔에스 → LG
+};
+
 export function stockLogoUrl(ticker: string): string {
   const raw = ticker.replace(/\.(KS|KQ|KN)$/i, "");
+  const overridden = LOGO_TICKER_OVERRIDE[raw] ?? raw;
   return isUSTicker(ticker)
-    ? `https://file.alphasquare.co.kr/media/images/stock_logo/us/${raw}.png`
-    : `https://file.alphasquare.co.kr/media/images/stock_logo/kr/${raw.padStart(6, "0")}.png`;
+    ? `https://file.alphasquare.co.kr/media/images/stock_logo/us/${overridden}.png`
+    : `https://file.alphasquare.co.kr/media/images/stock_logo/kr/${overridden.padStart(6, "0")}.png`;
 }
 
 interface StockLogoProps {
