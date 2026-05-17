@@ -11,7 +11,7 @@ import {
   Activity, Target, Lightbulb, ChevronsRight,
   Newspaper, Clock, Compass, Users,
 } from "lucide-react";
-import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
+import { cn, getApiUrl, formatCurrency, isUSTicker } from "@/lib/utils";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 
@@ -508,6 +508,11 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   ];
   const badgeColorClass = BADGE_COLORS[(holding.companyName.charCodeAt(0) ?? 0) % BADGE_COLORS.length];
   const initial = holding.companyName.charAt(0) || holding.ticker.charAt(0);
+  const [logoErr, setLogoErr] = useState(false);
+  const rawTicker = holding.ticker.replace(/\.(KS|KQ|KN)$/i, "");
+  const logoUrl = isUSTicker(holding.ticker)
+    ? `https://file.alphasquare.co.kr/media/images/stock_logo/us/${rawTicker}.png`
+    : `https://file.alphasquare.co.kr/media/images/stock_logo/kr/${rawTicker.padStart(6, "0")}.png`;
 
   return (
     <motion.div
@@ -520,12 +525,19 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       {/* ── 헤더 ──────────────────────────────────────────────── */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start gap-3">
-          {/* 이니셜 배지 */}
+          {/* 회사 로고 */}
           <div className={cn(
-            "w-11 h-11 rounded-xl flex items-center justify-center text-[18px] font-bold shrink-0",
-            badgeColorClass
+            "w-11 h-11 rounded-xl flex items-center justify-center text-[18px] font-bold shrink-0 overflow-hidden",
+            logoErr ? badgeColorClass : "bg-white/5 border border-white/10"
           )}>
-            {initial}
+            {!logoErr ? (
+              <img
+                src={logoUrl}
+                alt={holding.companyName}
+                className="w-full h-full object-contain p-1"
+                onError={() => setLogoErr(true)}
+              />
+            ) : initial}
           </div>
 
           {/* 종목 정보 */}
