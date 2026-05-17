@@ -629,12 +629,16 @@ function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
 
 function parseBrief(summary: string) {
   const sections: { label: string; icon: "core" | "risk" | "catalyst"; text: string }[] = [];
-  const coreMatch = summary.match(/\[오늘의핵심\]\s*([\s\S]*?)(?=\[리스크\]|\[촉매\]|$)/);
-  const riskMatch  = summary.match(/\[리스크\]\s*([\s\S]*?)(?=\[오늘의핵심\]|\[촉매\]|$)/);
+  const ALL_TAGS = /\[오늘의핵심\]|\[리스크\]|\[투자아이디어\]|\[촉매\]/;
+  const coreMatch = summary.match(/\[오늘의핵심\]\s*([\s\S]*?)(?=\[리스크\]|\[투자아이디어\]|\[촉매\]|$)/);
+  const riskMatch  = summary.match(/\[리스크\]\s*([\s\S]*?)(?=\[오늘의핵심\]|\[투자아이디어\]|\[촉매\]|$)/);
+  const ideaMatch  = summary.match(/\[투자아이디어\]\s*([\s\S]*?)(?=\[오늘의핵심\]|\[리스크\]|$)/);
   const catalMatch = summary.match(/\[촉매\]\s*([\s\S]*?)(?=\[오늘의핵심\]|\[리스크\]|$)/);
-  if (coreMatch?.[1]?.trim()) sections.push({ label: "오늘의 핵심", icon: "core",     text: coreMatch[1].trim() });
-  if (riskMatch?.[1]?.trim())  sections.push({ label: "리스크",     icon: "risk",     text: riskMatch[1].trim() });
-  if (catalMatch?.[1]?.trim()) sections.push({ label: "촉매",       icon: "catalyst", text: catalMatch[1].trim() });
+  if (coreMatch?.[1]?.trim()) sections.push({ label: "오늘의 핵심",  icon: "core",     text: coreMatch[1].trim() });
+  if (riskMatch?.[1]?.trim())  sections.push({ label: "리스크",      icon: "risk",     text: riskMatch[1].trim() });
+  if (ideaMatch?.[1]?.trim())  sections.push({ label: "투자 아이디어", icon: "catalyst", text: ideaMatch[1].trim() });
+  else if (catalMatch?.[1]?.trim()) sections.push({ label: "투자 아이디어", icon: "catalyst", text: catalMatch[1].trim() });
+  void ALL_TAGS;
   return sections.length > 0 ? sections : [{ label: "브리핑", icon: "core" as const, text: summary }];
 }
 

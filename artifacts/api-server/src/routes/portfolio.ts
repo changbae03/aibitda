@@ -461,11 +461,11 @@ async function buildBriefSummary(ticker: string): Promise<{ summary: string; sou
     const risk = extractSentences(analysis.risks ?? "", 2)
       || "현재 등록된 리스크 정보가 없습니다.";
 
-    // key_catalysts → 촉매
-    const catalyst = extractSentences(analysis.catalysts ?? "", 2)
-      || "현재 등록된 촉매 정보가 없습니다.";
+    // key_catalysts → 투자 아이디어
+    const catalyst = extractSentences(analysis.catalysts ?? "", 3)
+      || "현재 등록된 투자 아이디어 정보가 없습니다.";
 
-    const summary = `[오늘의핵심]\n${core}\n\n[리스크]\n${risk}\n\n[촉매]\n${catalyst}`;
+    const summary = `[오늘의핵심]\n${core}\n\n[리스크]\n${risk}\n\n[투자아이디어]\n${catalyst}`;
     console.log(`[portfolio-brief] ${ticker} — 분석 DB 직접 추출 (analysis #${analysis.id}, Gemini 미사용)`);
     return { summary, source: "analysis", analysisId: analysis.id };
   }
@@ -480,24 +480,28 @@ async function buildBriefSummary(ticker: string): Promise<{ summary: string; sou
   const industry    = info[0]?.industry ?? "업종미상";
   const verdict     = info[0]?.investment_verdict ?? "미분석";
 
-  const prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
+  const prompt = `당신은 한국 주식 시장 전문 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry})에 대한 오늘의 투자 브리핑을 작성하세요.
 최근 AI 판정: ${verdict}
-다음 3가지를 각각 1-2문장으로 작성. 마크다운 볼드(**) 금지. 정확히 아래 헤더로 구분:
+
+규칙:
+- 각 섹션을 2-3문장으로 작성. 구체적 수치·일정·이벤트를 반드시 포함.
+- 마크다운 볼드(**), 번호매기기 금지.
+- 정확히 아래 헤더 3개만 사용. 다른 텍스트 없이 바로 내용 작성.
 
 [오늘의핵심]
-현재 이 종목에서 가장 중요한 투자 포인트 또는 모니터링 사항.
+오늘 이 종목을 보유 또는 매수하는 핵심 이유. 최신 업황·실적·수급 흐름을 반영해 구체적으로 서술.
 
 [리스크]
-단기적으로 주의해야 할 리스크 또는 모멘텀 변화 가능성.
+단기 2~4주 내 주가 하방 압력이 될 수 있는 리스크. 거시·업종·종목 특유 리스크를 구분해 서술.
 
-[촉매]
-향후 주가에 긍정적 영향을 줄 수 있는 잠재 촉매 또는 이벤트.`;
+[투자아이디어]
+지금 이 종목에서 실행 가능한 투자 아이디어. 구체적인 매수 근거(밸류에이션 근거, 예상 실적 반등 시점, 예정된 이벤트 일정 등)와 목표 주가 도달 시나리오를 포함.`;
 
   console.log(`[portfolio-brief] ${ticker} — Gemini 브리핑 생성 (분석 DB 없음)`);
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: { maxOutputTokens: 700 },
+    config: { maxOutputTokens: 900 },
   });
   const summary = response.text?.trim() ?? "";
   return { summary, source: "ai" };
@@ -573,15 +577,24 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
 
   const force = req.query.force === "true";
 
-  // 오늘 브리핑 조회 (force=true이면 건너뜀)
+  // 오늘 브리핑 조회 — 6시간 이내면 캐시 반환, 이후면 자동 갱신
   if (!force) {
     const { rows } = await pool.query(
       `SELECT summary, source, created_at FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
       [ticker, today]
     );
     if (rows.length > 0) {
-      res.json({ ticker, date: today, summary: rows[0].summary, source: rows[0].source, cached: true });
-      return;
+      const ageHours = (Date.now() - new Date(rows[0].created_at).getTime()) / 3600000;
+      if (ageHours < 6) {
+        res.json({ ticker, date: today, summary: rows[0].summary, source: rows[0].source, cached: true });
+        return;
+      }
+      // 6시간 경과 → 삭제 후 재생성
+      await pool.query(
+        `DELETE FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+        [ticker, today]
+      );
+      console.log(`[portfolio-brief] ${ticker} 브리핑 만료 (${ageHours.toFixed(1)}h) — 재생성`);
     }
   } else {
     await pool.query(
