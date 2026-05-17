@@ -6,6 +6,7 @@ import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
 import { harvestMarketData } from "./lib/market-harvester.js";
+import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -121,6 +122,22 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] 주간 시장 데이터 수집 실패:", e?.message ?? e)
     );
   }, ONE_WEEK_MS);
+
+  // ── 일일 자동 배치 분석 (KR 10 + US 10, 워치리스트 로테이션) ────────────────
+  // 서버 시작 3분 후 첫 실행 → 이후 24시간마다 반복
+  // 오늘 이미 실행된 경우 DB 체크 후 자동 스킵
+  setTimeout(() => {
+    runDailyAutoBatch(port).catch((e) =>
+      console.error("[SCHEDULER] 자동 배치 첫 실행 실패:", e?.message ?? e)
+    );
+  }, 3 * 60 * 1000);
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 일일 자동 배치 분석 시작");
+    runDailyAutoBatch(port).catch((e) =>
+      console.error("[SCHEDULER] 일일 자동 배치 실패:", e?.message ?? e)
+    );
+  }, ONE_DAY_MS);
 });
 
 function gracefulShutdown(signal: string) {
