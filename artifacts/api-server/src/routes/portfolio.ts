@@ -79,6 +79,21 @@ async function fetchLatestAnalysis(ticker: string, userId: string) {
   return rows[0] ?? null;
 }
 
+// ── 집단지성 평균 목표가 (모든 완성 분석의 평균) ──────────────────────────────
+async function fetchCollectiveAvgTarget(ticker: string): Promise<{ avgTarget: number | null; analystCount: number }> {
+  const { rows } = await pool.query(`
+    SELECT ROUND(AVG(target_price::numeric)) AS avg_target,
+           COUNT(DISTINCT user_id) AS analyst_count
+    FROM analyses
+    WHERE ticker = $1 AND status = 'completed' AND target_price IS NOT NULL
+  `, [ticker]);
+  const row = rows[0];
+  return {
+    avgTarget: row?.avg_target ? parseFloat(row.avg_target) : null,
+    analystCount: row?.analyst_count ? parseInt(row.analyst_count) : 0,
+  };
+}
+
 // ── 집단지성 분석 조회 (모든 유저, 최신 완성 분석 우선) ───────────────────────
 async function fetchBestAnalysis(ticker: string) {
   const { rows } = await pool.query(`
@@ -143,12 +158,13 @@ router.get("/portfolio", async (req, res) => {
     [userId]
   );
 
-  // 현재가 + 내 분석 + 집단지성 분석을 병렬로 조회
+  // 현재가 + 내 분석 + 집단지성 평균 목표가를 병렬로 조회
   const enriched = await Promise.all(rows.map(async (row) => {
-    const [priceData, analysis, bestAnalysis] = await Promise.all([
+    const [priceData, analysis, bestAnalysis, collective] = await Promise.all([
       fetchPrice(row.ticker),
       fetchLatestAnalysis(row.ticker, userId),
       fetchBestAnalysis(row.ticker),
+      fetchCollectiveAvgTarget(row.ticker),
     ]);
 
     const currentPrice = priceData.price;
@@ -165,16 +181,15 @@ router.get("/portfolio", async (req, res) => {
       ? ((targetPrice - currentPrice) / currentPrice) * 100
       : null;
 
-    // 집단지성 목표가 (내 분석과 다른 경우에만)
-    const collectiveRaw = bestAnalysis?.target_price ? parseFloat(bestAnalysis.target_price) : null;
-    const isSameAnalysis = bestAnalysis?.id === analysis?.id;
-    const collectiveTargetPrice = (!isSameAnalysis && collectiveRaw) ? collectiveRaw : null;
+    // 집단지성 평균 목표가 — 분석자 2명 이상일 때만 표시
+    const collectiveTargetPrice = (collective.analystCount >= 2 && collective.avgTarget)
+      ? collective.avgTarget : null;
     const collectiveUpsidePct = (currentPrice && collectiveTargetPrice)
       ? ((collectiveTargetPrice - currentPrice) / currentPrice) * 100
       : null;
 
-    // 분석이 없을 때 집단지성을 기본 목표가로 사용
-    const effectiveTargetPrice = targetPrice ?? collectiveRaw;
+    // 분석이 없을 때 집단지성 최신 분석을 기본 목표가로 사용
+    const effectiveTargetPrice = targetPrice ?? (bestAnalysis?.target_price ? parseFloat(bestAnalysis.target_price) : null);
     const effectiveUpsidePct = (currentPrice && effectiveTargetPrice)
       ? ((effectiveTargetPrice - currentPrice) / currentPrice) * 100
       : null;

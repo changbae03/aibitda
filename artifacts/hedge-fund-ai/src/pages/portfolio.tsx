@@ -633,20 +633,28 @@ function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
 }
 
 function parseBrief(summary: string) {
-  const sections: { label: string; icon: "core" | "risk" | "catalyst"; text: string }[] = [];
-  const ANY_TAG = /\[오늘의핵심\]|\[리스크\]|\[투자포인트\]|\[투자아이디어\]|\[촉매\]/;
-  void ANY_TAG;
-  const STOP = /\[리스크\]|\[투자포인트\]|\[투자아이디어\]|\[촉매\]/;
-  const RSTOP = /\[오늘의핵심\]|\[투자포인트\]|\[투자아이디어\]|\[촉매\]/;
-  const ISTOP = /\[오늘의핵심\]|\[리스크\]/;
-  const coreMatch = summary.match(new RegExp(`\\[오늘의핵심\\]\\s*([\\s\\S]*?)(?=${STOP.source}|$)`));
-  const riskMatch  = summary.match(new RegExp(`\\[리스크\\]\\s*([\\s\\S]*?)(?=${RSTOP.source}|$)`));
-  const ideaMatch  = summary.match(new RegExp(`\\[투자포인트\\]\\s*([\\s\\S]*?)(?=${ISTOP.source}|$)`));
-  const catalMatch = summary.match(new RegExp(`\\[(?:투자아이디어|촉매)\\]\\s*([\\s\\S]*?)(?=${ISTOP.source}|$)`));
-  if (coreMatch?.[1]?.trim()) sections.push({ label: "오늘의 핵심", icon: "core",     text: coreMatch[1].trim() });
-  if (riskMatch?.[1]?.trim())  sections.push({ label: "리스크",     icon: "risk",     text: riskMatch[1].trim() });
-  if (ideaMatch?.[1]?.trim())  sections.push({ label: "투자 포인트", icon: "catalyst", text: ideaMatch[1].trim() });
-  else if (catalMatch?.[1]?.trim()) sections.push({ label: "투자 포인트", icon: "catalyst", text: catalMatch[1].trim() });
+  type Icon = "core" | "risk" | "catalyst";
+  const sections: { label: string; icon: Icon; text: string }[] = [];
+
+  // 태그 기반 분할 — [오늘의핵심] [리스크] [투자포인트] (구: 투자아이디어, 촉매)
+  const tagRe = /\[(오늘의핵심|리스크|투자포인트|투자아이디어|촉매)\]/g;
+  const parts: { tag: string; text: string }[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(summary)) !== null) {
+    if (parts.length > 0) parts[parts.length - 1].text = summary.slice(lastIdx, m.index).trim();
+    parts.push({ tag: m[1], text: "" });
+    lastIdx = m.index + m[0].length;
+  }
+  if (parts.length > 0) parts[parts.length - 1].text = summary.slice(lastIdx).trim();
+
+  for (const { tag, text } of parts) {
+    if (!text) continue;
+    if (tag === "오늘의핵심")  sections.push({ label: "오늘의 핵심", icon: "core",     text });
+    else if (tag === "리스크") sections.push({ label: "리스크",     icon: "risk",     text });
+    else                       sections.push({ label: "투자 포인트", icon: "catalyst", text });
+  }
+
   return sections.length > 0 ? sections : [{ label: "브리핑", icon: "core" as const, text: summary }];
 }
 
