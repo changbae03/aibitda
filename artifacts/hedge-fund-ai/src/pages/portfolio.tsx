@@ -631,10 +631,10 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         </p>
                       )}
                     </div>
-                    {/* 집단지성 */}
+                    {/* 멀티뷰 */}
                     <div>
                       <p className="text-[9px] text-muted-foreground/60 mb-0.5 flex items-center gap-0.5">
-                        <Users className="w-2.5 h-2.5" />집단지성
+                        <Users className="w-2.5 h-2.5" />멀티뷰
                       </p>
                       <p className="text-[15px] font-bold tabular-nums leading-none text-foreground">
                         {fmtPrice(colTP!, holding.priceCurrency)}
@@ -661,10 +661,10 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     )}
                   </>
                 ) : colTP != null ? (
-                  /* ── 집단지성만 있을 때 ── */
+                  /* ── 멀티뷰만 있을 때 ── */
                   <>
                     <p className="text-[9px] text-muted-foreground/60 -mt-0.5 mb-0.5 flex items-center gap-0.5">
-                      <Users className="w-2.5 h-2.5" />집단지성
+                      <Users className="w-2.5 h-2.5" />멀티뷰
                     </p>
                     <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
                       {fmtPrice(colTP, holding.priceCurrency)}
@@ -739,7 +739,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   {headlineText}
                 </p>
               )}
-              {/* 집단지성 배지 */}
+              {/* 멀티뷰 배지 */}
               {brief && !briefLoading && brief.source === "analysis" && (brief.contributorCount ?? 0) > 0 && (
                 <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-400">
                   <Users className="w-2.5 h-2.5" />{brief.contributorCount}
@@ -785,14 +785,14 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         </div>
                       </div>
                     ))}
-                    {/* 푸터: 집단지성 출처 + 새로고침 */}
+                    {/* 푸터: 멀티뷰 출처 + 새로고침 */}
                     <div className="flex items-center justify-between pt-0.5">
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/40">
                         {brief.source === "analysis" ? (
                           <>
                             <Users className="w-2.5 h-2.5 text-emerald-400/60" />
                             <span className="text-emerald-400/60">
-                              집단지성 기반
+                              멀티뷰 기반
                               {(brief.contributorCount ?? 0) > 0 && ` · ${brief.contributorCount}명 분석`}
                             </span>
                             {brief.analysisDate && (
