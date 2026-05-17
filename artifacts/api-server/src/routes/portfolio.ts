@@ -975,12 +975,29 @@ ${newsText || "(뉴스 없음)"}
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.4, maxOutputTokens: 800 },
+      config: {
+        temperature: 0.4,
+        maxOutputTokens: 1200,
+        responseMimeType: "application/json",
+      },
     });
 
-    const raw = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    // thinking 모델은 parts 여러 개를 반환 — thought=true 파트 제외하고 텍스트 합치기
+    const allParts = response.candidates?.[0]?.content?.parts ?? [];
+    const raw = allParts
+      .filter((p: any) => !p.thought)
+      .map((p: any) => p.text ?? "")
+      .join("");
+
+    // 마크다운 코드펜스 제거 후 JSON 추출
+    const stripped = raw.trim()
+      .replace(/^```(?:json)?\s*/im, "")
+      .replace(/\s*```\s*$/m, "")
+      .trim();
+
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error("[deep-update] parse failed, raw:", raw.slice(0, 300));
       res.status(500).json({ error: "AI 응답을 파싱할 수 없습니다" });
       return;
     }
