@@ -109,7 +109,7 @@ function extractForecastNarrative(content: string, maxLen = 160): string {
   return "";
 }
 
-function extractLeadText(content: string, maxLen = 120): string {
+function extractLeadText(content: string, maxLen = 160): string {
   const clean = content
     .replace(/```[\s\S]*?```/g, "")
     .replace(/^#+\s.+$/gm, "")
@@ -158,7 +158,7 @@ function parseCatalystCard(content: string) {
     for (let i = issueIdx + 1; i < Math.min(issueIdx + 6, lines.length); i++) {
       const l = lines[i].trim();
       if (l.length > 15 && !l.startsWith("#") && !l.startsWith("|")) {
-        issueDesc = l.replace(/\*\*/g, "").slice(0, 110);
+        issueDesc = l.replace(/\*\*/g, "").slice(0, 160);
         break;
       }
     }
@@ -173,10 +173,10 @@ function parseCatalystCard(content: string) {
     // 같은 줄에 "반대로"가 포함된 경우 분리
     const splitAt = raw.search(/반대로\s/);
     if (splitAt !== -1) {
-      bullCase = raw.slice(0, splitAt).trim().slice(0, 90);
-      bearCase = raw.slice(splitAt).trim().slice(0, 90) + (raw.slice(splitAt).length > 90 ? "…" : "");
+      bullCase = raw.slice(0, splitAt).trim().slice(0, 140);
+      bearCase = raw.slice(splitAt).trim().slice(0, 140) + (raw.slice(splitAt).length > 140 ? "…" : "");
     } else {
-      bullCase = raw.slice(0, 90) + (raw.length > 90 ? "…" : "");
+      bullCase = raw.slice(0, 140) + (raw.length > 140 ? "…" : "");
     }
   }
   // bearCase를 못 찾았으면 별도 줄 탐색
@@ -184,7 +184,7 @@ function parseCatalystCard(content: string) {
     const bearIdx = lines.findIndex(l => l.includes("미실현") || (l.includes("반대로") && l.length > 20));
     if (bearIdx !== -1 && bearIdx !== bullIdx) {
       const l = lines[bearIdx].replace(/\*\*/g, "").trim();
-      bearCase = l.slice(0, 90) + (l.length > 90 ? "…" : "");
+      bearCase = l.slice(0, 140) + (l.length > 140 ? "…" : "");
     }
   }
 
@@ -487,7 +487,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
   if (stepKey === "company_intro") {
     const cfg = STEP_CFG.company_intro;
     // 첫 문단에서 기업 설명 (1~2문장)
-    const firstPara = extractLeadText(content, 130);
+    const firstPara = extractLeadText(content, 160);
     // 핵심 이슈 문장
     const keyIssue = extractKeyIssue(content);
     // 불릿 fallback
@@ -580,17 +580,17 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
               </div>
               <p className="text-[12px] text-white/85 leading-snug">{issueDesc}</p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-2">
               {bullCase && (
                 <div className="rounded-xl p-2.5" style={{ background: "rgba(122,232,180,0.06)", border: "1px solid rgba(122,232,180,0.15)" }}>
                   <div className="text-[9px] font-bold text-emerald-400 mb-1">✅ {isEn ? "If realized" : "실현 시"}</div>
-                  <p className="text-[11px] text-white/70 leading-snug">{bullCase}</p>
+                  <p className="text-[12px] text-white/70 leading-snug">{bullCase}</p>
                 </div>
               )}
               {bearCase && (
                 <div className="rounded-xl p-2.5" style={{ background: "rgba(255,138,122,0.06)", border: "1px solid rgba(255,138,122,0.15)" }}>
                   <div className="text-[9px] font-bold text-[#FF8A7A] mb-1">⚠️ {isEn ? "If not realized" : "미실현 시"}</div>
-                  <p className="text-[11px] text-white/70 leading-snug">{bearCase}</p>
+                  <p className="text-[12px] text-white/70 leading-snug">{bearCase}</p>
                 </div>
               )}
             </div>
@@ -730,7 +730,6 @@ function StepSummaryCard({ stepKey, step, analysis, isEn, isStreaming }: {
         ? `linear-gradient(145deg,${ab(cfg.rgb, 0.1)} 0%,rgba(255,255,255,0.02) 100%)`
         : "rgba(255,255,255,0.03)",
       border: isDone ? bd(cfg.rgb, 0.2) : "1px solid rgba(255,255,255,0.07)",
-      minHeight: "200px",
     }}>
       {/* 카드 헤더 */}
       <div className="flex items-center gap-2 mb-3">
@@ -897,7 +896,7 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
                     border: `1px solid ${active ? `rgba(${c.rgb},0.3)` : "transparent"}`,
                   }}>
                   {c.emoji}
-                  <span className="hidden sm:inline">{isEn ? c.labelEn : c.label}</span>
+                  <span className="text-[10px]">{isEn ? c.labelEn : c.label}</span>
                   {streaming && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
                 </button>
               );
