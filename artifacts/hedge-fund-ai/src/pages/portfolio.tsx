@@ -869,80 +869,87 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
         )}
       </div>
 
-      {/* ── AI 데일리 이슈 브리핑 ─────────────────────────────── */}
-      {(brief || briefLoading) && (
-        <div className="mx-3 mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
-          <div className="w-full flex items-center gap-2 px-3 py-2">
-            {briefLoading
-              ? <Loader2 className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
-              : <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            }
+      {/* ── AI 데일리 이슈 브리핑 (뉴스라인: 한 줄 + 확장) ─────── */}
+      {(brief || briefLoading) && (() => {
+        const sections = brief ? parseBrief(brief.summary) : [];
+        const coreSection = sections.find(s => s.icon === "core");
+        const detailSections = sections.filter(s => s.icon !== "core");
+        const headlineText = coreSection?.text ?? (sections[0]?.text ?? "");
+        return (
+          <div className="mx-3 mb-3 rounded-xl border border-white/[0.08] bg-white/[0.03] overflow-hidden">
+            {/* 한 줄 헤더 — 항상 보임 */}
             <button
               onClick={() => setBriefExpanded(v => !v)}
-              className="flex items-center gap-1.5 flex-1 text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors"
             >
-              <span className="text-[11px] font-semibold text-amber-300">오늘의 핵심</span>
-              {brief && !briefLoading && (
-                <span className="text-[10px] text-muted-foreground/40 flex items-center gap-0.5">
-                  <Clock className="w-2.5 h-2.5" />{brief.date}
-                </span>
+              {briefLoading
+                ? <Loader2 className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
+                : <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              }
+              {briefLoading ? (
+                <span className="flex-1 text-[12px] text-muted-foreground/50">브리핑 생성 중…</span>
+              ) : (
+                <p className="flex-1 text-[12px] text-foreground/70 leading-snug line-clamp-1 min-w-0">
+                  {headlineText}
+                </p>
               )}
-              {briefLoading && (
-                <span className="text-[10px] text-muted-foreground/40">생성 중…</span>
+              {brief && !briefLoading && (
+                briefExpanded
+                  ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                  : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
               )}
             </button>
-            {brief && !briefLoading && (
-              <button
-                onClick={refreshBrief}
-                className="p-1 rounded hover:bg-amber-500/10 text-muted-foreground/40 hover:text-amber-400 transition-colors"
-                title="브리핑 새로고침"
-              >
-                <RefreshCw className="w-3 h-3" />
-              </button>
-            )}
-            {brief && !briefLoading && (
-              <button onClick={() => setBriefExpanded(v => !v)} className="text-muted-foreground/40">
-                {briefExpanded
-                  ? <ChevronUp className="w-3.5 h-3.5" />
-                  : <ChevronDown className="w-3.5 h-3.5" />
-                }
-              </button>
-            )}
-          </div>
-          <AnimatePresence initial={false}>
-            {briefExpanded && (
-              <motion.div
-                initial={{ height: 0 }}
-                animate={{ height: "auto" }}
-                exit={{ height: 0 }}
-                transition={{ duration: 0.18 }}
-                className="overflow-hidden"
-              >
-                <div className="px-3 pb-3 space-y-2.5 border-t border-amber-500/15">
-                  {brief && parseBrief(brief.summary).map((sec, i) => (
-                    <div key={i} className="flex gap-2 pt-2">
-                      <div className="shrink-0 mt-0.5">
-                        {sec.icon === "core"     && <Activity      className="w-3.5 h-3.5 text-amber-400" />}
-                        {sec.icon === "risk"     && <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
-                        {sec.icon === "catalyst" && <Zap           className="w-3.5 h-3.5 text-emerald-400" />}
+
+            {/* 확장: 촉매 + 리스크 상세 */}
+            <AnimatePresence initial={false}>
+              {briefExpanded && brief && (
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: "auto" }}
+                  exit={{ height: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="overflow-hidden"
+                >
+                  <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2.5">
+                    {/* 핵심 전문 (헤더가 잘렸을 수 있으므로) */}
+                    {coreSection && (
+                      <div className="flex gap-2">
+                        <Activity className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-[12px] text-foreground/75 leading-relaxed">{coreSection.text}</p>
                       </div>
-                      <div>
-                        <p className={cn(
-                          "text-[10px] font-bold uppercase tracking-wider mb-0.5",
-                          sec.icon === "core"     && "text-amber-400/80",
-                          sec.icon === "risk"     && "text-red-400/80",
-                          sec.icon === "catalyst" && "text-emerald-400/80",
-                        )}>{sec.label}</p>
-                        <p className="text-[12px] text-foreground/75 leading-relaxed">{sec.text}</p>
+                    )}
+                    {/* 나머지 섹션 (촉매·리스크) */}
+                    {detailSections.map((sec, i) => (
+                      <div key={i} className="flex gap-2">
+                        {sec.icon === "risk"     && <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />}
+                        {sec.icon === "catalyst" && <Zap           className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />}
+                        <div>
+                          <p className={cn(
+                            "text-[10px] font-bold uppercase tracking-wider mb-0.5",
+                            sec.icon === "risk"     && "text-red-400/80",
+                            sec.icon === "catalyst" && "text-emerald-400/80",
+                          )}>{sec.label}</p>
+                          <p className="text-[12px] text-foreground/70 leading-relaxed">{sec.text}</p>
+                        </div>
                       </div>
+                    ))}
+                    {/* 새로고침 */}
+                    <div className="flex justify-end pt-0.5">
+                      <button
+                        onClick={e => { e.stopPropagation(); refreshBrief(); }}
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        {brief.date} · 새로고침
+                      </button>
                     </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })()}
 
       {/* ── 하단 액션 바 ──────────────────────────────────────── */}
       <div className="border-t border-border/60 px-4 py-2.5 flex items-center gap-3">
