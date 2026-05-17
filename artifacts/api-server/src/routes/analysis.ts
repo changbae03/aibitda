@@ -6,6 +6,7 @@ import { getUserId, checkAndDeductCredit } from "../lib/credits.js";
 import { loadKRXList, lookupKoreanName, correctKoreanTicker } from "../lib/krx-cache";
 import { cache, TTL } from "../lib/mem-cache.js";
 import { fetchDartSubjectBalance, fetchNaverPBR, writeMetricCache } from "../lib/peer-collector.js";
+import { validatePeers } from "../lib/peer-validator.js";
 import { fetchKISStockQuotes, buildKISStockContext } from "../lib/kis-client.js";
 import { fetchECOSMacro, buildECOSContext } from "../lib/ecos-client.js";
 import { fetchFREDMacro, buildFREDContext } from "../lib/fred-client.js";
@@ -5507,6 +5508,39 @@ async function executeStep(
           }
         } catch (e) {
           console.error(`[qa] #${id} 자동 채점 실패:`, e);
+        }
+      })();
+
+      // ── 피어 검증 (백그라운드) ──────────────────────────────────────────────
+      (async () => {
+        try {
+          await pool.query(`
+            ALTER TABLE analyses
+              ADD COLUMN IF NOT EXISTS peer_flags TEXT
+          `);
+          const aInfo = await pool.query(
+            `SELECT ticker, industry FROM analyses WHERE id = $1`, [id]
+          );
+          if (aInfo.rows[0]) {
+            const { ticker: aTicker, industry: aIndustry } = aInfo.rows[0];
+            const pvResult = await validatePeers(aTicker, aIndustry ?? null);
+            if (pvResult.issues.length > 0 || pvResult.totalPeerCount > 0) {
+              await pool.query(
+                `UPDATE analyses SET peer_flags=$1 WHERE id=$2`,
+                [JSON.stringify(pvResult), id]
+              );
+              if (pvResult.hasIssues) {
+                console.warn(
+                  `[peer-validator] #${id} ${aTicker} — ${pvResult.issues.length}개 이상 감지:`,
+                  pvResult.issues.map(i => i.type).join(", ")
+                );
+              } else {
+                console.log(`[peer-validator] #${id} ${aTicker} — 이상 없음 (유효 피어 ${pvResult.validPeerCount}개)`);
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`[peer-validator] #${id} 검증 실패:`, e);
         }
       })();
 

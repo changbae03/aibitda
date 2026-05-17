@@ -229,6 +229,117 @@ router.get("/batch-status", async (req, res) => {
   });
 });
 
+// GET /api/admin/peer-issues — 피어 이상 감지된 분석 목록
+router.get("/peer-issues", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  // 피어 검증 결과가 있고 이상이 있는 분석만 반환
+  const { rows } = await pool.query(`
+    SELECT id, ticker, company_name, industry, investment_verdict,
+           qa_score, peer_flags, created_at
+    FROM analyses
+    WHERE status = 'completed'
+      AND peer_flags IS NOT NULL
+      AND peer_flags::jsonb ->> 'hasIssues' = 'true'
+    ORDER BY created_at DESC
+    LIMIT 200
+  `);
+
+  const items = rows.map(r => {
+    let pv: any = {};
+    try { pv = JSON.parse(r.peer_flags); } catch { /* ignore */ }
+    return {
+      id: r.id,
+      ticker: r.ticker,
+      companyName: r.company_name,
+      industry: r.industry,
+      verdict: r.investment_verdict,
+      qaScore: r.qa_score,
+      createdAt: r.created_at,
+      validPeerCount: pv.validPeerCount ?? 0,
+      totalPeerCount: pv.totalPeerCount ?? 0,
+      issues: (pv.issues ?? []) as Array<{
+        type: string; ticker?: string; detail: string; severity: string;
+      }>,
+    };
+  });
+
+  // 이상 유형별 집계
+  const typeCounts: Record<string, number> = {};
+  for (const item of items) {
+    for (const issue of item.issues) {
+      typeCounts[issue.type] = (typeCounts[issue.type] ?? 0) + 1;
+    }
+  }
+
+  // 아직 피어 검증 안 된 분석 수
+  const { rows: uncheckedRows } = await pool.query(`
+    SELECT COUNT(*) FROM analyses
+    WHERE status = 'completed' AND peer_flags IS NULL
+  `);
+
+  res.json({
+    items,
+    typeCounts,
+    totalIssues: items.length,
+    uncheckedCount: parseInt(uncheckedRows[0].count, 10),
+  });
+});
+
+// POST /api/admin/peer-validate-all — 기존 완료 분석 피어 일괄 재검증
+router.post("/peer-validate-all", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  // peer_flags 없는 완료 분석만 (최대 100개씩 배치)
+  const { rows } = await pool.query(`
+    SELECT id, ticker, industry FROM analyses
+    WHERE status = 'completed' AND peer_flags IS NULL
+    LIMIT 100
+  `);
+
+  res.json({ queued: rows.length, message: `${rows.length}개 피어 검증 백그라운드 실행 중` });
+
+  // 백그라운드에서 비동기 실행
+  (async () => {
+    const { validatePeers } = await import("../lib/peer-validator.js");
+    await pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS peer_flags TEXT`);
+
+    let ok = 0, skip = 0;
+    for (const row of rows) {
+      try {
+        const pvResult = await validatePeers(row.ticker, row.industry ?? null);
+        if (pvResult.totalPeerCount > 0 || pvResult.issues.length > 0) {
+          await pool.query(
+            `UPDATE analyses SET peer_flags=$1 WHERE id=$2`,
+            [JSON.stringify(pvResult), row.id]
+          );
+          ok++;
+        } else {
+          // 피어 파일 없음 — NULL 대신 빈 결과 저장해 재실행 방지
+          await pool.query(
+            `UPDATE analyses SET peer_flags=$1 WHERE id=$2`,
+            [JSON.stringify({ issues: [], validPeerCount: 0, totalPeerCount: 0, hasIssues: false }), row.id]
+          );
+          skip++;
+        }
+      } catch (e: any) {
+        console.error(`[peer-validate-all] #${row.id} ${row.ticker} 실패:`, e?.message);
+      }
+      // 야후 API 부하 방지
+      await new Promise(r => setTimeout(r, 300));
+    }
+    console.log(`[peer-validate-all] 완료: ${ok}개 결과 저장, ${skip}개 피어 파일 없음`);
+  })();
+});
+
 // ─── 시스템 설정 ────────────────────────────────────────────────────────────────
 
 // GET /api/admin/settings — 시스템 설정 조회

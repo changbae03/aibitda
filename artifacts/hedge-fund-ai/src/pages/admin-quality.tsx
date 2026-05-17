@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Loader2, AlertTriangle, Clock, BarChart2, Plus, Edit3, Trash2,
   CheckCircle2, X, Save, ChevronDown, ChevronUp, Activity, FlaskConical,
-  ShieldCheck, RefreshCw, ExternalLink,
+  ShieldCheck, RefreshCw, ExternalLink, Users, XCircle,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import {
@@ -771,9 +771,211 @@ function QATab() {
   );
 }
 
+// ─── 피어 이상 탭 ────────────────────────────────────────────────────────────
+
+interface PeerIssueItem {
+  id: number;
+  ticker: string;
+  companyName: string;
+  industry: string | null;
+  verdict: string | null;
+  qaScore: number | null;
+  createdAt: string;
+  validPeerCount: number;
+  totalPeerCount: number;
+  issues: Array<{ type: string; ticker?: string; detail: string; severity: string }>;
+}
+interface PeerIssuesData {
+  items: PeerIssueItem[];
+  typeCounts: Record<string, number>;
+  totalIssues: number;
+  uncheckedCount: number;
+}
+
+const ISSUE_TYPE_LABEL: Record<string, string> = {
+  no_data:         "데이터 없는 티커",
+  count_low:       "피어 수 부족",
+  size_extreme:    "시총 규모 불일치",
+  sector_mismatch: "섹터 불일치",
+};
+
+function PeerIssuesTab() {
+  const [data, setData] = useState<PeerIssuesData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [validating, setValidating] = useState(false);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/peer-issues"), { credentials: "include" });
+      if (r.ok) setData(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runValidateAll = async () => {
+    setValidating(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/peer-validate-all"), {
+        method: "POST", credentials: "include",
+      });
+      if (r.ok) {
+        const d = await r.json();
+        alert(`${d.message}\n완료 후 새로고침하세요.`);
+      }
+    } finally { setValidating(false); }
+  };
+
+  const toggle = (id: number) => setExpanded(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <p className="text-[13px] text-muted-foreground">
+          AI가 오선정한 피어(동종 비교 기업) 자동 감지 결과입니다.
+          이상이 있는 보고서는 피어 비교 섹션의 신뢰도가 낮을 수 있습니다.
+        </p>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={load} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+          {(data?.uncheckedCount ?? 0) > 0 && (
+            <button
+              onClick={runValidateAll}
+              disabled={validating}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-white hover:bg-primary/90 disabled:opacity-40"
+            >
+              {validating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              기존 {data?.uncheckedCount}개 검증
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 요약 */}
+      {data && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="rounded-lg bg-muted/40 p-3">
+            <p className="text-[10px] text-muted-foreground mb-1">이상 감지 보고서</p>
+            <p className={cn("text-2xl font-bold tabular-nums", data.totalIssues > 0 ? "text-red-500" : "text-green-600")}>
+              {data.totalIssues}
+            </p>
+          </div>
+          <div className="rounded-lg bg-muted/40 p-3">
+            <p className="text-[10px] text-muted-foreground mb-1">미검증</p>
+            <p className={cn("text-2xl font-bold tabular-nums", data.uncheckedCount > 0 ? "text-amber-500" : "text-muted-foreground")}>
+              {data.uncheckedCount}
+            </p>
+          </div>
+          {Object.entries(data.typeCounts).map(([type, count]) => (
+            <div key={type} className="rounded-lg bg-muted/40 p-3">
+              <p className="text-[10px] text-muted-foreground mb-1">{ISSUE_TYPE_LABEL[type] ?? type}</p>
+              <p className="text-2xl font-bold tabular-nums text-orange-500">{count}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 이상 목록 */}
+      {data?.items.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-green-600 py-8 justify-center">
+          <CheckCircle2 className="w-4 h-4" /> 피어 이상 없음
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {data?.items.map(item => {
+            const isOpen = expanded.has(item.id);
+            const errorCount = item.issues.filter(i => i.severity === "error").length;
+            const warnCount = item.issues.filter(i => i.severity === "warning").length;
+            return (
+              <div key={item.id} className="rounded-xl border border-border overflow-hidden">
+                <button
+                  onClick={() => toggle(item.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                >
+                  <div className="shrink-0">
+                    {errorCount > 0
+                      ? <XCircle className="w-4 h-4 text-red-500" />
+                      : <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs text-muted-foreground">{item.ticker}</span>
+                      <span className="text-sm font-medium text-foreground truncate">{item.companyName}</span>
+                      {item.industry && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{item.industry}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                      <span>피어 {item.validPeerCount}/{item.totalPeerCount}개 유효</span>
+                      {item.qaScore != null && <span>QA {item.qaScore}점</span>}
+                      <span>{new Date(item.createdAt).toLocaleDateString("ko-KR")}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {errorCount > 0 && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600">오류 {errorCount}</span>
+                    )}
+                    {warnCount > 0 && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-600">경고 {warnCount}</span>
+                    )}
+                    {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-border px-4 py-3 space-y-1.5 bg-muted/20">
+                    {item.issues.map((issue, i) => (
+                      <div key={i} className={cn(
+                        "flex items-start gap-2 text-xs p-2 rounded-lg",
+                        issue.severity === "error" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
+                      )}>
+                        {issue.severity === "error"
+                          ? <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          : <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        }
+                        <div>
+                          <span className="font-semibold mr-1">[{ISSUE_TYPE_LABEL[issue.type] ?? issue.type}]</span>
+                          {issue.detail}
+                        </div>
+                      </div>
+                    ))}
+                    <a
+                      href={`/analysis/${item.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
+                    >
+                      <ExternalLink className="w-3 h-3" /> 보고서 보기
+                    </a>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
-type Tab = "monitoring" | "qa" | "prompts";
+type Tab = "monitoring" | "qa" | "prompts" | "peers";
 
 export default function AdminQuality() {
   const [tab, setTab] = useState<Tab>("monitoring");
@@ -781,6 +983,7 @@ export default function AdminQuality() {
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "monitoring", label: "분석 모니터링", icon: Activity },
     { key: "qa",         label: "QA 채점",       icon: ShieldCheck },
+    { key: "peers",      label: "피어 이상",      icon: Users },
     { key: "prompts",    label: "프롬프트 버전",  icon: FlaskConical },
   ];
 
@@ -820,6 +1023,7 @@ export default function AdminQuality() {
       <div>
         {tab === "monitoring" && <MonitoringTab />}
         {tab === "qa"         && <QATab />}
+        {tab === "peers"      && <PeerIssuesTab />}
         {tab === "prompts"    && <PromptVersionTab />}
       </div>
     </div>

@@ -140,6 +140,9 @@ export interface PeerMultiples {
   ev_sales: number | null;
   // Manual (수동 입력, 수집 시 null 유지)
   per_fwd: number | null;
+  // 섹터/업종 (피어 검증용 — Yahoo assetProfile)
+  sector?: string | null;
+  industry_yahoo?: string | null;
   // Source tracking
   _sources?: {
     yahoo: boolean;
@@ -181,7 +184,7 @@ async function fetchYahooData(ticker: string): Promise<{
   try {
     const [summaryResult, quoteResult] = await Promise.allSettled([
       yahooFinance.quoteSummary(ticker, {
-        modules: ["financialData", "defaultKeyStatistics", "summaryDetail", "price"] as any,
+        modules: ["financialData", "defaultKeyStatistics", "summaryDetail", "price", "assetProfile"] as any,
       }),
       yahooFinance.quote(ticker),
     ]);
@@ -193,6 +196,7 @@ async function fetchYahooData(ticker: string): Promise<{
     const ks = (summary as any).defaultKeyStatistics as any ?? {};
     const sd = (summary as any).summaryDetail as any ?? {};
     const pr = (summary as any).price as any ?? {};
+    const ap = (summary as any).assetProfile as any ?? {};
 
     const marketCap: number | null = q?.marketCap ?? pr?.marketCap ?? sd?.marketCap ?? null;
     const totalDebt: number | null = fd?.totalDebt ?? null;
@@ -234,6 +238,8 @@ async function fetchYahooData(ticker: string): Promise<{
         sharesOutstanding,
         regularMarketPrice,
         bookValue,
+        sector: ap?.sector ?? q?.sector ?? null,
+        industry_yahoo: ap?.industry ?? q?.industry ?? null,
       },
     };
   } catch (err) {
