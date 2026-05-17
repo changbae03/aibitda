@@ -424,9 +424,47 @@ function extractRisksFromStrategyJson(raw: string): string {
     if (Array.isArray(obj?.risks) && obj.risks.length > 0) {
       return (obj.risks as string[]).slice(0, 3).join(" ");
     }
-    if (Array.isArray(obj?.monitoring_indicators) && obj.monitoring_indicators.length > 0) {
-      return (obj.monitoring_indicators as string[]).slice(0, 2).join(" ");
+  } catch { /* fall through */ }
+  return "";
+}
+
+/**
+ * 투자 아이디어 추출:
+ * investment_strategy JSON의 key_issue(최신 이슈) + monitoring_indicators(모니터링 포인트)
+ * + 기본 시나리오 목표가 → 중복 없이 "현재 이슈 → 앞으로 무엇을 봐야 하는가"에 집중
+ */
+function extractInvestmentIdea(strategyRaw: string): string {
+  if (!strategyRaw) return "";
+  const stripped = strategyRaw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  try {
+    const obj = JSON.parse(stripped);
+    const parts: string[] = [];
+
+    // 1) 핵심 이슈 (최신 상황 한 문장)
+    if (typeof obj.key_issue === "string" && obj.key_issue.trim().length > 10) {
+      parts.push(obj.key_issue.trim());
     }
+
+    // 2) 핵심 모니터링 지표 (앞으로 봐야 할 것)
+    if (Array.isArray(obj.monitoring_indicators) && obj.monitoring_indicators.length > 0) {
+      const monitors = (obj.monitoring_indicators as string[])
+        .slice(0, 2)
+        .join(", ");
+      parts.push(`모니터링 포인트: ${monitors}`);
+    }
+
+    // 3) 기본 시나리오 목표가 (어디까지 갈 수 있는가)
+    const baseScenario = Array.isArray(obj.scenarios)
+      ? (obj.scenarios as any[]).find(s => String(s.case).toLowerCase() === "base")
+      : null;
+    const targetPrice = baseScenario?.target_price ?? obj.target_price;
+    const upside = baseScenario?.upside ?? null;
+    if (targetPrice) {
+      const priceStr = Number(targetPrice).toLocaleString("ko-KR");
+      parts.push(`기본 목표가 ${priceStr}원${upside ? ` (${upside})` : ""}`);
+    }
+
+    if (parts.length > 0) return parts.join(". ");
   } catch { /* fall through */ }
   return "";
 }
@@ -495,8 +533,9 @@ async function buildBriefSummary(ticker: string): Promise<{
       || extractSentences(analysis.catalysts ?? "", 1)
       || "현재 등록된 리스크 정보가 없습니다.";
 
-    // catalyst_analysis → 투자 아이디어 (핵심이슈·촉매 분석 전문)
-    const catalyst = extractSentences(analysis.catalysts ?? "", 3)
+    // investment_strategy JSON → 최신 이슈 + 모니터링 포인트 + 목표가 (중복 없는 투자 아이디어)
+    const catalyst = extractInvestmentIdea(analysis.strategy ?? "")
+      || extractSentences(analysis.catalysts ?? "", 2)
       || "현재 등록된 투자 아이디어 정보가 없습니다.";
 
     const analysisDate = (analysis.created_at as Date).toISOString().slice(0, 10);
