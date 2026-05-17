@@ -33,6 +33,7 @@ import {
   Table2,
   Home,
   Search,
+  Zap,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useUser } from "@clerk/react";
@@ -494,6 +495,7 @@ function loadKakaoSDK(): Promise<void> {
 
 function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [shareCredit, setShareCredit] = useState<'idle' | 'loading' | 'earned' | 'already'>('idle');
   const isEnModal = analysis?.language === 'en';
   const base = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}`;
   const url = analysis?.id ? `${base}/share/${analysis.id}` : window.location.href;
@@ -516,6 +518,22 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         ? `${analysis?.companyName ?? ""} · AI Equity Research Report | AiBITDA`
         : `${analysis?.companyName ?? ""} · AI 기업가치 분석 리포트 | 애빛다`);
 
+  const claimShareCredit = async () => {
+    if (shareCredit !== 'idle') return;
+    setShareCredit('loading');
+    try {
+      const r = await fetch(getApiUrl("/api/credits/share"), {
+        method: "POST",
+        credentials: "include",
+      });
+      const d = await r.json();
+      if (!r.ok) { setShareCredit('idle'); return; }
+      setShareCredit(d.credited ? 'earned' : 'already');
+    } catch {
+      setShareCredit('idle');
+    }
+  };
+
   const handleKakao = async () => {
     const key = import.meta.env.VITE_KAKAO_JS_KEY;
     if (!key) { handleCopy(); return; }
@@ -533,6 +551,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
         },
         buttons: [{ title: isEnModal ? "View Report" : "리포트 보기", link: { mobileWebUrl: url, webUrl: url } }],
       });
+      claimShareCredit();
     } catch { handleCopy(); }
   };
 
@@ -642,7 +661,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
           </div>
 
           {/* ── 소셜 공유 ── */}
-          <div className="px-5 mb-4">
+          <div className="px-5 mb-3">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isEnModal ? "Share via" : "소셜 공유"}</p>
             <div className="grid grid-cols-2 gap-2">
               {/* KakaoTalk */}
@@ -668,6 +687,46 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
               </button>
             </div>
           </div>
+
+          {/* ── 카카오 공유 크레딧 피드백 ── */}
+          <AnimatePresence>
+            {shareCredit === 'earned' && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25"
+              >
+                <Zap className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="text-[12px] font-semibold text-emerald-500">
+                  {isEnModal ? "Credit +1 earned for sharing!" : "공유 크레딧 +1 적립됐습니다!"}
+                </span>
+              </motion.div>
+            )}
+            {shareCredit === 'already' && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/60 border border-border"
+              >
+                <Zap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-[12px] text-muted-foreground">
+                  {isEnModal ? "Share credit already claimed today" : "오늘 공유 크레딧은 이미 받으셨습니다"}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── 카카오 공유 크레딧 안내 (idle 상태일 때만) ── */}
+          {shareCredit === 'idle' && (
+            <div className="mx-5 mb-4 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/8 border border-amber-500/20">
+              <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+              <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                {isEnModal ? "Share via KakaoTalk to earn +1 credit (once daily)" : "카카오톡으로 공유하면 크레딧 +1 적립 (하루 1회)"}
+              </span>
+            </div>
+          )}
 
         </motion.div>
       </motion.div>

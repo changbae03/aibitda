@@ -183,4 +183,31 @@ router.post("/credits/promo", async (req, res) => {
   }
 });
 
+// ─── POST /credits/share ─── 카카오톡 공유 크레딧 (하루 1회) ─────────────────
+router.post("/credits/share", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const today = kst.toISOString().slice(0, 10);
+
+  const { rows } = await pool.query(
+    `SELECT share_credit_date FROM user_credits WHERE user_id = $1`,
+    [userId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "유저를 찾을 수 없습니다" });
+
+  if (rows[0].share_credit_date === today) {
+    return res.json({ ok: true, credited: false, alreadyUsed: true });
+  }
+
+  await pool.query(
+    `UPDATE user_credits SET bonus_credits = bonus_credits + 1, share_credit_date = $1 WHERE user_id = $2`,
+    [today, userId]
+  );
+
+  res.json({ ok: true, credited: true });
+});
+
 export default router;
