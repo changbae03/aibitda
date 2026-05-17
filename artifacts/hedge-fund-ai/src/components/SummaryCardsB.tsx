@@ -613,7 +613,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         {/* 리드 텍스트: 항목이 있을 때는 짧게, 없을 때는 길게 */}
         {lead && (
           <p className="text-[12px] text-white/65 leading-relaxed mb-1">
-            {industryItems.length > 0 ? lead.slice(0, 160) + (lead.length > 160 ? "…" : "") : lead}
+            {industryItems.length > 0 ? truncateAtSentence(lead, 160) : lead}
           </p>
         )}
         {industryItems.length > 0 ? (
