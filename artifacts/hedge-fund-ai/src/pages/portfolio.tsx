@@ -7,7 +7,8 @@ import {
   ShieldAlert, ExternalLink,
   Briefcase, PencilLine, Check, X as XIcon,
   Search, Building2, ArrowUpRight, ArrowDownRight,
-  Zap, AlertTriangle, Bell,
+  Zap, AlertTriangle, Bell, Brain, PieChart,
+  Activity, Target, Lightbulb, ChevronsRight,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -27,6 +28,7 @@ interface AnalysisSummary {
   catalysts: string | null;
   risks: string | null;
   strategy: string | null;
+  industry: string | null;
 }
 
 interface Holding {
@@ -341,6 +343,184 @@ function InlineEdit({
   );
 }
 
+// ── 섹터 색상 팔레트 ──────────────────────────────────────────────────────────
+const SECTOR_COLORS = [
+  "#FF8A7A", "#60A5FA", "#34D399", "#FBBF24", "#A78BFA",
+  "#F472B6", "#38BDF8", "#FB923C", "#4ADE80", "#E879F9",
+];
+
+// ── 섹터 도넛 차트 ────────────────────────────────────────────────────────────
+function SectorDonut({ holdings }: { holdings: Holding[] }) {
+  const sectorMap = new Map<string, number>();
+  for (const h of holdings) {
+    const sec = h.analysis?.industry ?? "미분류";
+    sectorMap.set(sec, (sectorMap.get(sec) ?? 0) + 1);
+  }
+  const sectors = Array.from(sectorMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count], i) => ({ name, count, color: SECTOR_COLORS[i % SECTOR_COLORS.length] }));
+
+  if (sectors.length === 0) return null;
+
+  const total = holdings.length;
+  const R = 44, r = 28, CX = 56, CY = 56;
+  let angle = -Math.PI / 2;
+
+  function arcPath(start: number, end: number): string {
+    const x1 = CX + R * Math.cos(start), y1 = CY + R * Math.sin(start);
+    const x2 = CX + R * Math.cos(end),   y2 = CY + R * Math.sin(end);
+    const ix1 = CX + r * Math.cos(start), iy1 = CY + r * Math.sin(start);
+    const ix2 = CX + r * Math.cos(end),   iy2 = CY + r * Math.sin(end);
+    const large = end - start > Math.PI ? 1 : 0;
+    return `M${x1.toFixed(2)},${y1.toFixed(2)} A${R},${R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} L${ix2.toFixed(2)},${iy2.toFixed(2)} A${r},${r} 0 ${large} 0 ${ix1.toFixed(2)},${iy1.toFixed(2)} Z`;
+  }
+
+  const slices = sectors.map((s) => {
+    const sweep = (s.count / total) * 2 * Math.PI;
+    const path = total === 1
+      ? `M${CX},${CY - R} A${R},${R} 0 1 1 ${CX - 0.01},${CY - R} Z M${CX},${CY - r} A${r},${r} 0 1 0 ${CX - 0.01},${CY - r} Z`
+      : arcPath(angle, angle + sweep);
+    angle += sweep;
+    return { ...s, path };
+  });
+
+  return (
+    <div className="rounded-2xl border border-border bg-[#141414] px-5 py-4">
+      <div className="flex items-center gap-2 mb-3">
+        <PieChart className="w-4 h-4 text-primary" />
+        <span className="text-[12px] font-semibold text-foreground">섹터 분포</span>
+        <span className="text-[10px] text-muted-foreground ml-auto">{sectors.length}개 업종</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <svg width={112} height={112} viewBox="0 0 112 112" className="shrink-0">
+          {slices.map((s, i) => (
+            <path key={i} d={s.path} fill={s.color} opacity={0.9} />
+          ))}
+          <text x={CX} y={CY + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">
+            {total}
+          </text>
+          <text x={CX} y={CY + 16} textAnchor="middle" fontSize="7" fill="#9ca3af">종목</text>
+        </svg>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {slices.map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+              <span className="text-[11px] text-foreground/80 truncate flex-1">{s.name}</span>
+              <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                {s.count}종목 ({Math.round((s.count / total) * 100)}%)
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AI 포트폴리오 진단 ────────────────────────────────────────────────────────
+interface DiagnosisResult {
+  sections: { overall: string; risk: string; opportunity: string; action: string };
+  stats: { total: number; buyCount: number; holdCount: number; sellCount: number };
+}
+
+function AIDiagnosis({ holdings }: { holdings: Holding[] }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [result, setResult] = useState<DiagnosisResult | null>(null);
+  const [expanded, setExpanded] = useState(true);
+
+  async function runDiagnosis() {
+    setStatus("loading");
+    try {
+      const r = await fetch(getApiUrl("/api/portfolio/diagnose"), {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setResult(d);
+        setStatus("done");
+      } else { setStatus("error"); }
+    } catch { setStatus("error"); }
+  }
+
+  const sections = [
+    { key: "overall",     icon: Activity,   label: "종합 진단",    color: "text-primary" },
+    { key: "risk",        icon: AlertTriangle, label: "리스크 집중도", color: "text-amber-400" },
+    { key: "opportunity", icon: Target,      label: "기회 요인",   color: "text-emerald-400" },
+    { key: "action",      icon: ChevronsRight, label: "실행 권고",  color: "text-blue-400" },
+  ] as const;
+
+  return (
+    <div className="rounded-2xl border border-border bg-[#141414] overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4">
+        <Brain className="w-4 h-4 text-primary" />
+        <span className="text-[12px] font-semibold text-foreground">AI 포트폴리오 진단</span>
+        {status === "done" && result && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {expanded ? "접기" : "펼치기"}
+          </button>
+        )}
+        {status !== "done" && (
+          <button
+            onClick={runDiagnosis}
+            disabled={status === "loading" || holdings.length === 0}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary text-[12px] font-medium transition-all disabled:opacity-50"
+          >
+            {status === "loading"
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 분석 중…</>
+              : <><Brain className="w-3.5 h-3.5" /> 진단 시작</>
+            }
+          </button>
+        )}
+        {status === "done" && (
+          <button
+            onClick={runDiagnosis}
+            className="ml-1 p-1 rounded text-muted-foreground/50 hover:text-muted-foreground"
+            title="재진단"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+
+      {status === "error" && (
+        <div className="px-5 pb-4 text-[12px] text-red-400">진단 중 오류가 발생했습니다. 다시 시도해주세요.</div>
+      )}
+
+      <AnimatePresence>
+        {status === "done" && result && expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-border px-5 py-4 space-y-4">
+              {sections.map(({ key, icon: Icon, label, color }) => {
+                const text = result.sections[key];
+                if (!text) return null;
+                return (
+                  <div key={key}>
+                    <div className={cn("flex items-center gap-1.5 text-[11px] font-semibold mb-1.5", color)}>
+                      <Icon className="w-3.5 h-3.5" /> {label}
+                    </div>
+                    <p className="text-[12px] text-foreground/80 leading-relaxed">{text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ── 변화 감지 타입 ────────────────────────────────────────────────────────────
 interface ChangeItem {
   type: "verdict" | "target_price" | "catalyst" | "risk";
@@ -413,6 +593,11 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   verdictBg(a.verdict), verdictColor(a.verdict)
                 )}>
                   {VERDICT_KO[a.verdict] ?? a.verdict}
+                </span>
+              )}
+              {a?.industry && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border/60">
+                  {a.industry}
                 </span>
               )}
             </div>
@@ -842,6 +1027,12 @@ export default function Portfolio() {
       ) : (
         <>
           <PortfolioSummary holdings={holdings} />
+
+          {/* 섹터 분포 + AI 진단 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SectorDonut holdings={holdings} />
+            <AIDiagnosis holdings={holdings} />
+          </div>
 
           {/* 정렬 */}
           <div className="flex items-center gap-1">

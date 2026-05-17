@@ -11,6 +11,15 @@ import { Router } from "express";
 import { pool } from "@workspace/db";
 import { getUserId } from "../lib/credits.js";
 import YahooFinance from "yahoo-finance2";
+import { GoogleGenAI } from "@google/genai";
+
+const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!;
+const ai = new GoogleGenAI({
+  apiKey: geminiApiKey,
+  ...(process.env.GEMINI_API_KEY ? {} : {
+    httpOptions: { baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL! },
+  }),
+});
 
 const router = Router();
 
@@ -52,7 +61,7 @@ async function fetchPrice(ticker: string): Promise<{ price: number | null; curre
 async function fetchLatestAnalysis(ticker: string, userId: string) {
   const { rows } = await pool.query(`
     SELECT id, target_price, entry_price, stop_loss, investment_verdict,
-           qa_score, created_at, risk_reward_ratio,
+           qa_score, created_at, risk_reward_ratio, industry,
            (SELECT content FROM analysis_steps
             WHERE analysis_id = analyses.id AND step_key = 'key_catalysts'
             LIMIT 1) AS catalysts,
@@ -135,6 +144,7 @@ router.get("/portfolio", async (req, res) => {
         catalysts: analysis.catalysts ?? null,
         risks: analysis.risks ?? null,
         strategy: analysis.strategy ?? null,
+        industry: analysis.industry ?? null,
       } : null,
     };
   }));
@@ -199,6 +209,88 @@ router.put("/portfolio/:id", async (req, res) => {
   `, [avgPrice ?? null, quantity ?? null, note ?? null, id, userId]);
 
   res.json({ ok: true });
+});
+
+// ── POST /api/portfolio/diagnose — AI 포트폴리오 진단 ────────────────────────
+router.post("/portfolio/diagnose", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
+
+  await ensureTable();
+
+  // 보유 종목 + 최신 분석 수집
+  const { rows: holdings } = await pool.query(
+    `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1`,
+    [userId]
+  );
+  if (holdings.length === 0) {
+    res.json({ error: "보유 종목이 없습니다" }); return;
+  }
+
+  const analyses = await Promise.all(holdings.map((h: any) => fetchLatestAnalysis(h.ticker, userId)));
+
+  // 진단용 데이터 요약
+  const portfolioLines = holdings.map((h: any, i: number) => {
+    const a = analyses[i];
+    const verdict = a?.investment_verdict ?? "미분석";
+    const target = a?.target_price ? `목표가 ${parseFloat(a.target_price).toLocaleString()}` : "목표가없음";
+    const industry = a?.industry ?? "업종미상";
+    const rr = a?.risk_reward_ratio ? `리스크/리워드 1:${parseFloat(a.risk_reward_ratio).toFixed(1)}` : "";
+    return `- ${h.company_name}(${h.ticker}) | ${industry} | AI판정:${verdict} | ${target} | ${rr}`.trim();
+  }).join("\n");
+
+  const buyCount  = analyses.filter(a => a?.investment_verdict?.toLowerCase().includes("buy")).length;
+  const sellCount = analyses.filter(a => a?.investment_verdict?.toLowerCase().includes("sell")).length;
+  const holdCount = analyses.filter(a => a?.investment_verdict === "Hold").length;
+
+  const prompt = `당신은 전문 포트폴리오 매니저입니다. 아래 포트폴리오를 종합 분석하고 한국어로 진단해주세요.
+
+[포트폴리오 현황 — ${holdings.length}종목]
+${portfolioLines}
+
+[AI 판정 분포] 매수 ${buyCount}종목 / 홀드 ${holdCount}종목 / 매도${sellCount}종목
+
+다음 4가지 항목을 각각 2-4문장으로 작성하세요. 마크다운 볼드(**) 사용 금지. 각 항목은 정확히 아래 헤더로 구분하세요:
+
+[종합진단]
+전체 포트폴리오의 건강 상태와 균형에 대한 한줄 평가. 강점과 약점 요약.
+
+[리스크 집중도]
+업종·테마 쏠림, 상관관계 높은 종목 군집, 단일 종목 의존도 등 리스크 요인 분석.
+
+[기회 요인]
+현재 포트폴리오에서 가장 주목할 종목과 그 이유. 상승여력이 높거나 AI 판정이 긍정적인 종목 중심.
+
+[실행 권고]
+포트폴리오 개선을 위해 지금 당장 할 수 있는 1-2가지 구체적 행동 제안.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { maxOutputTokens: 800 },
+    });
+    const text = response.text?.trim() ?? "";
+
+    // 섹션별 파싱
+    function extractSection(raw: string, key: string): string {
+      const match = raw.match(new RegExp(`\\[${key}\\]([\\s\\S]*?)(?=\\[|$)`));
+      return match ? match[1].trim() : "";
+    }
+
+    res.json({
+      raw: text,
+      sections: {
+        overall:      extractSection(text, "종합진단"),
+        risk:         extractSection(text, "리스크 집중도"),
+        opportunity:  extractSection(text, "기회 요인"),
+        action:       extractSection(text, "실행 권고"),
+      },
+      stats: { total: holdings.length, buyCount, holdCount, sellCount },
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: "AI 진단 실패", detail: e?.message });
+  }
 });
 
 // ── GET /api/portfolio/check/:ticker — 포트폴리오 포함 여부 확인 ───────────────
