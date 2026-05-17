@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Loader2, Globe, Plus, Sparkles, Crown, Users } from "lucide-react";
+import { Monitor, Moon, Sun, Check, LogOut, User, Zap, Shield, MessageSquare, Send, ChevronDown, Trash2, Loader2, Globe, Users } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { motion, AnimatePresence } from "framer-motion";
@@ -397,84 +397,9 @@ export default function SettingsPage() {
                     className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-950/30 border border-red-700/40 text-red-300 text-[12px]"
                   >
                     <Zap className="w-3.5 h-3.5 shrink-0" />
-                    <span>{t("크레딧이 모두 소진됐습니다. 아래에서 충전하세요.", "No credits left. Recharge below to continue.")}</span>
+                    <span>{t("크레딧이 모두 소진됐습니다.", "No credits left.")}</span>
                   </motion.div>
                 )}
-
-                {/* 요금제 패키지 */}
-                <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
-                  <div className="px-4 py-3 border-b border-border/60">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <Sparkles className="w-3.5 h-3.5 text-primary" />
-                      <p className="text-[12px] font-semibold text-foreground">{t("크레딧 충전", "Recharge Credits")}</p>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground/60">{t("크레딧은 분석 1회에 1개씩 사용됩니다. 유효기간 6개월.", "1 credit per analysis. Valid for 6 months.")}</p>
-                  </div>
-                  <div className="p-3 space-y-2">
-
-                    {/* 스탠다드 — 15개 9,900원 */}
-                    <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border border-border/60 bg-background hover:border-border transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
-                          <Zap className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-[13px] font-bold text-foreground">{t("스탠다드", "Standard")}</span>
-                            <span className="text-[11px] text-muted-foreground">· 15{t("개", " credits")}</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩660", "₩660 / credit")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-[17px] font-black text-foreground tabular-nums">₩9,900</span>
-                        <button
-                          disabled
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-muted-foreground/50 bg-muted/40 cursor-not-allowed border border-border/30"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {t("구매", "Buy")}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 프로 — 60개 29,000원 */}
-                    <div className="relative flex items-center justify-between px-4 py-3.5 rounded-xl border-2 border-amber-500/40 bg-amber-500/5">
-                      <div className="absolute -top-2.5 left-4 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-[10px] font-bold text-white">
-                        <Crown className="w-2.5 h-2.5" />
-                        Pro
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-                          <Crown className="w-4 h-4 text-amber-500" />
-                        </div>
-                        <div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-[13px] font-bold text-foreground">{t("프로", "Pro")}</span>
-                            <span className="text-[11px] text-muted-foreground">· 60{t("개", " credits")}</span>
-                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">27% {t("할인", "OFF")}</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t("개당 ₩483", "₩483 / credit")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <div className="text-right">
-                          <p className="text-[17px] font-black text-foreground tabular-nums">₩29,000</p>
-                          <p className="text-[10px] text-muted-foreground/40 line-through tabular-nums">₩39,600</p>
-                        </div>
-                        <button
-                          disabled
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-amber-600/50 bg-amber-500/10 cursor-not-allowed border border-amber-500/20"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {t("구매", "Buy")}
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] text-muted-foreground/40 text-center pt-0.5">{t("결제 기능은 곧 오픈될 예정입니다.", "Payment coming soon.")}</p>
-                  </div>
-                </div>
 
                 {/* 크레딧 적립 안내 */}
                 <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
