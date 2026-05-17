@@ -293,6 +293,153 @@ ${portfolioLines}
   }
 });
 
+// ── GET /api/portfolio/brief/:ticker — AI 데일리 브리핑 ────────────────────
+export async function runDailyPortfolioBriefs(): Promise<void> {
+  // portfolio_stock_briefs 테이블 보장
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS portfolio_stock_briefs (
+      id          SERIAL PRIMARY KEY,
+      ticker      TEXT NOT NULL,
+      brief_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+      summary     TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (ticker, brief_date)
+    )
+  `);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 오늘 포트폴리오에 있는 모든 고유 ticker 수집
+  const { rows: tickers } = await pool.query(`
+    SELECT DISTINCT ph.ticker, ph.company_name,
+      a.industry, a.investment_verdict, a.target_price
+    FROM portfolio_holdings ph
+    LEFT JOIN LATERAL (
+      SELECT industry, investment_verdict, target_price
+      FROM analyses
+      WHERE ticker = ph.ticker AND status = 'completed'
+      ORDER BY created_at DESC LIMIT 1
+    ) a ON true
+  `);
+
+  let generated = 0;
+  for (const row of tickers) {
+    // 오늘 이미 있으면 스킵
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+      [row.ticker, today]
+    );
+    if (existing.length > 0) continue;
+
+    const verdict = row.investment_verdict ?? "미분석";
+    const industry = row.industry ?? "업종미상";
+    const prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${row.company_name}(${row.ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
+
+최근 AI 판정: ${verdict}
+다음 3가지를 각각 1-2문장으로 작성하세요. 마크다운 볼드(**) 금지. 각 항목은 정확히 아래 헤더로 구분:
+
+[오늘의핵심]
+현재 이 종목에서 가장 중요한 투자 포인트 또는 모니터링 사항.
+
+[리스크]
+단기적으로 주의해야 할 리스크 또는 모멘텀 변화 가능성.
+
+[촉매]
+향후 주가에 긍정적 영향을 줄 수 있는 잠재 촉매 또는 이벤트.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { maxOutputTokens: 400 },
+      });
+      const text = response.text?.trim() ?? "";
+      if (!text) continue;
+
+      await pool.query(
+        `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary)
+         VALUES ($1, $2, $3) ON CONFLICT (ticker, brief_date) DO NOTHING`,
+        [row.ticker, today, text]
+      );
+      generated++;
+      // Gemini 과부하 방지
+      await new Promise(r => setTimeout(r, 1500));
+    } catch (e: any) {
+      console.error(`[portfolio-brief] ${row.ticker} 실패:`, e?.message);
+    }
+  }
+  console.log(`[portfolio-brief] 브리핑 생성 완료: ${generated}개`);
+}
+
+router.get("/portfolio/brief/:ticker", async (req, res) => {
+  const ticker = String(req.params.ticker).trim().toUpperCase();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 테이블 보장
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS portfolio_stock_briefs (
+      id SERIAL PRIMARY KEY, ticker TEXT NOT NULL,
+      brief_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      summary TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (ticker, brief_date)
+    )
+  `);
+
+  // 오늘 브리핑 조회
+  const { rows } = await pool.query(
+    `SELECT summary, created_at FROM portfolio_stock_briefs WHERE ticker=$1 AND brief_date=$2`,
+    [ticker, today]
+  );
+  if (rows.length > 0) {
+    res.json({ ticker, date: today, summary: rows[0].summary, cached: true });
+    return;
+  }
+
+  // 없으면 즉석 생성 (company_name 조회)
+  const { rows: info } = await pool.query(
+    `SELECT company_name, industry, investment_verdict
+     FROM analyses WHERE ticker=$1 AND status='completed'
+     ORDER BY created_at DESC LIMIT 1`,
+    [ticker]
+  );
+  const companyName = info[0]?.company_name ?? ticker;
+  const industry = info[0]?.industry ?? "업종미상";
+  const verdict = info[0]?.investment_verdict ?? "미분석";
+
+  const prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
+최근 AI 판정: ${verdict}
+다음 3가지를 각각 1-2문장으로 작성. 마크다운 볼드(**) 금지. 정확히 아래 헤더로 구분:
+
+[오늘의핵심]
+현재 이 종목에서 가장 중요한 투자 포인트 또는 모니터링 사항.
+
+[리스크]
+단기적으로 주의해야 할 리스크 또는 모멘텀 변화 가능성.
+
+[촉매]
+향후 주가에 긍정적 영향을 줄 수 있는 잠재 촉매 또는 이벤트.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { maxOutputTokens: 400 },
+    });
+    const summary = response.text?.trim() ?? "";
+
+    if (summary) {
+      await pool.query(
+        `INSERT INTO portfolio_stock_briefs (ticker, brief_date, summary)
+         VALUES ($1, $2, $3) ON CONFLICT (ticker, brief_date) DO NOTHING`,
+        [ticker, today, summary]
+      );
+    }
+    res.json({ ticker, date: today, summary, cached: false });
+  } catch (e: any) {
+    res.status(500).json({ error: "브리핑 생성 실패", detail: e?.message });
+  }
+});
+
 // ── GET /api/portfolio/check/:ticker — 포트폴리오 포함 여부 확인 ───────────────
 router.get("/portfolio/check/:ticker", async (req, res) => {
   const userId = getUserId(req);

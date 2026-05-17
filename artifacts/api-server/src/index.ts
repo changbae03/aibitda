@@ -9,6 +9,7 @@ import { harvestMarketData } from "./lib/market-harvester.js";
 import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
 import { runKrxFullHarvest } from "./lib/krx-full-harvester.js";
 import { runUsFullHarvest } from "./lib/us-full-harvester.js";
+import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -174,6 +175,22 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] US DB 갱신 실패:", e?.message ?? e)
     );
   }, 12 * 60 * 60 * 1000);
+
+  // ── 포트폴리오 종목 일일 AI 브리핑 ──────────────────────────────────────────
+  // 매일 오전 8시(KST) 기준 재실행: 오늘 브리핑이 없는 종목만 생성, 중복 없음
+  setTimeout(() => {
+    console.log("[SCHEDULER] 포트폴리오 일일 브리핑 첫 실행");
+    runDailyPortfolioBriefs().catch((e) =>
+      console.error("[SCHEDULER] 포트폴리오 브리핑 첫 실행 실패:", e?.message ?? e)
+    );
+  }, 7 * 60 * 1000); // 서버 시작 7분 후
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 포트폴리오 일일 브리핑 시작");
+    runDailyPortfolioBriefs().catch((e) =>
+      console.error("[SCHEDULER] 포트폴리오 브리핑 실패:", e?.message ?? e)
+    );
+  }, ONE_DAY_MS);
 });
 
 function gracefulShutdown(signal: string) {

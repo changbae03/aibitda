@@ -9,6 +9,7 @@ import {
   Search, Building2, ArrowUpRight, ArrowDownRight,
   Zap, AlertTriangle, Bell, Brain, PieChart,
   Activity, Target, Lightbulb, ChevronsRight,
+  Newspaper, Clock,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -536,6 +537,23 @@ interface ChangesResult {
   changes: ChangeItem[];
 }
 
+interface DailyBrief {
+  summary: string;
+  date: string;
+  cached: boolean;
+}
+
+function parseBrief(summary: string) {
+  const sections: { label: string; icon: "core" | "risk" | "catalyst"; text: string }[] = [];
+  const coreMatch = summary.match(/\[오늘의핵심\]\s*([\s\S]*?)(?=\[리스크\]|\[촉매\]|$)/);
+  const riskMatch  = summary.match(/\[리스크\]\s*([\s\S]*?)(?=\[오늘의핵심\]|\[촉매\]|$)/);
+  const catalMatch = summary.match(/\[촉매\]\s*([\s\S]*?)(?=\[오늘의핵심\]|\[리스크\]|$)/);
+  if (coreMatch?.[1]?.trim()) sections.push({ label: "오늘의 핵심", icon: "core",     text: coreMatch[1].trim() });
+  if (riskMatch?.[1]?.trim())  sections.push({ label: "리스크",     icon: "risk",     text: riskMatch[1].trim() });
+  if (catalMatch?.[1]?.trim()) sections.push({ label: "촉매",       icon: "catalyst", text: catalMatch[1].trim() });
+  return sections.length > 0 ? sections : [{ label: "브리핑", icon: "core" as const, text: summary }];
+}
+
 // ── 보유 종목 카드 ────────────────────────────────────────────────────────────
 function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDelete: (id: number) => void; onRefresh: () => void }) {
   const [, setLocation] = useLocation();
@@ -543,6 +561,9 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [deleting, setDeleting] = useState(false);
   const [changes, setChanges] = useState<ChangesResult | null>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
+  const [brief, setBrief] = useState<DailyBrief | null>(null);
+  const [briefExpanded, setBriefExpanded] = useState(false);
+  const [briefLoading, setBriefLoading] = useState(false);
 
   const a = holding.analysis;
 
@@ -552,6 +573,16 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       .then(d => { if (d) setChanges(d); })
       .catch(() => {});
   }, [holding.ticker]);
+
+  function fetchBrief() {
+    if (briefLoading) return;
+    setBriefLoading(true);
+    fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.summary) { setBrief(d); setBriefExpanded(true); } })
+      .catch(() => {})
+      .finally(() => setBriefLoading(false));
+  }
   const isKR = isKRTicker(holding.ticker);
 
   async function handleDelete() {
@@ -801,6 +832,23 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
           <div className="flex-1" />
 
+          {/* AI 데일리 브리핑 버튼 */}
+          <button
+            onClick={brief ? () => setBriefExpanded(v => !v) : fetchBrief}
+            disabled={briefLoading}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-amber-400 transition-colors"
+            title="오늘의 AI 이슈 브리핑"
+          >
+            {briefLoading
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Newspaper className="w-3.5 h-3.5" />
+            }
+            {brief
+              ? (briefExpanded ? "브리핑 접기" : "브리핑 보기")
+              : "오늘 이슈"
+            }
+          </button>
+
           <button
             onClick={() => setExpanded(v => !v)}
             className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
@@ -818,6 +866,48 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           </button>
         </div>
       </div>
+
+      {/* AI 데일리 브리핑 패널 */}
+      <AnimatePresence>
+        {brief && briefExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                <Newspaper className="w-3.5 h-3.5" />
+                AI 데일리 브리핑
+                <span className="ml-auto text-[10px] font-normal text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" />{brief.date}
+                  {!brief.cached && <span className="text-amber-400/60">· 방금 생성</span>}
+                </span>
+              </div>
+              {parseBrief(brief.summary).map((sec, i) => (
+                <div key={i} className="flex gap-2">
+                  <div className="shrink-0 mt-0.5">
+                    {sec.icon === "core"     && <Activity    className="w-3.5 h-3.5 text-amber-400" />}
+                    {sec.icon === "risk"     && <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
+                    {sec.icon === "catalyst" && <Zap          className="w-3.5 h-3.5 text-emerald-400" />}
+                  </div>
+                  <div>
+                    <p className={cn(
+                      "text-[10px] font-semibold uppercase tracking-wide mb-0.5",
+                      sec.icon === "core"     && "text-amber-400",
+                      sec.icon === "risk"     && "text-red-400",
+                      sec.icon === "catalyst" && "text-emerald-400",
+                    )}>{sec.label}</p>
+                    <p className="text-[12px] text-foreground/80 leading-relaxed">{sec.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 확장: AI 리서치 요약 */}
       <AnimatePresence>
@@ -946,6 +1036,9 @@ export default function Portfolio() {
   const [showAdd, setShowAdd] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [sortKey, setSortKey] = useState<"added" | "return" | "upside">("added");
+  const [lastPriceUpdate, setLastPriceUpdate] = useState<Date | null>(null);
+  const [priceUpdating, setPriceUpdating] = useState(false);
+  const holdingsRef = useRef<Holding[]>([]);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -954,7 +1047,10 @@ export default function Portfolio() {
       const r = await fetch(getApiUrl("/api/portfolio"), { credentials: "include" });
       if (r.ok) {
         const d = await r.json();
-        setHoldings(d.holdings ?? []);
+        const h = d.holdings ?? [];
+        setHoldings(h);
+        holdingsRef.current = h;
+        setLastPriceUpdate(new Date());
       }
     } finally {
       setLoading(false);
@@ -962,7 +1058,50 @@ export default function Portfolio() {
     }
   }, []);
 
+  // 30초마다 현재가만 갱신 (batch-quotes)
+  const refreshPrices = useCallback(async () => {
+    const current = holdingsRef.current;
+    if (current.length === 0) return;
+    setPriceUpdating(true);
+    try {
+      const tickers = current.map(h => {
+        const t = h.ticker.trim();
+        return /^\d{5,6}$/.test(t.split(".")[0]) ? `${t}.KS` : t;
+      });
+      const r = await fetch(getApiUrl("/api/market-data/batch-quotes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ tickers }),
+      });
+      if (!r.ok) return;
+      const quotes: Record<string, { price: number | null; currency: string; change: number | null }> = await r.json();
+
+      setHoldings(prev => {
+        const next = prev.map(h => {
+          const yticker = /^\d{5,6}$/.test(h.ticker.split(".")[0]) ? `${h.ticker}.KS` : h.ticker;
+          const q = quotes[yticker] ?? quotes[h.ticker];
+          if (!q || q.price == null) return h;
+          const returnPct = h.avgPrice && h.avgPrice > 0
+            ? ((q.price - h.avgPrice) / h.avgPrice) * 100
+            : h.returnPct;
+          return { ...h, currentPrice: q.price, change1d: q.change, priceCurrency: q.currency, returnPct };
+        });
+        holdingsRef.current = next;
+        return next;
+      });
+      setLastPriceUpdate(new Date());
+    } catch { /* silently ignore */ }
+    finally { setPriceUpdating(false); }
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+
+  // 30초마다 가격 자동 갱신
+  useEffect(() => {
+    const id = setInterval(refreshPrices, 30_000);
+    return () => clearInterval(id);
+  }, [refreshPrices]);
 
   function handleDelete(id: number) {
     setHoldings(prev => prev.filter(h => h.id !== id));
@@ -987,6 +1126,14 @@ export default function Portfolio() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {lastPriceUpdate && (
+            <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 hidden sm:flex">
+              {priceUpdating
+                ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> 가격 갱신 중</>
+                : <><Clock className="w-2.5 h-2.5" /> {format(lastPriceUpdate, "HH:mm:ss")} 업데이트</>
+              }
+            </span>
+          )}
           <button
             onClick={() => load(true)}
             disabled={refreshing}
