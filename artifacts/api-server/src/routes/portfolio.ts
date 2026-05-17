@@ -539,7 +539,7 @@ async function buildBriefSummary(ticker: string): Promise<{
       || "현재 등록된 투자 아이디어 정보가 없습니다.";
 
     const analysisDate = (analysis.created_at as Date).toISOString().slice(0, 10);
-    const summary = `[오늘의핵심]\n${core}\n\n[리스크]\n${risk}\n\n[투자아이디어]\n${catalyst}`;
+    const summary = `[오늘의핵심]\n${core}\n\n[리스크]\n${risk}\n\n[투자포인트]\n${catalyst}`;
     console.log(`[portfolio-brief] ${ticker} — 집단지성 분석 DB 추출 (analysis #${analysis.id}, 기여자 ${contributorCount}명, Gemini 미사용)`);
     return { summary, source: "analysis", analysisId: analysis.id, analysisDate, contributorCount };
   }
@@ -568,8 +568,8 @@ async function buildBriefSummary(ticker: string): Promise<{
 [리스크]
 단기 2~4주 내 주가 하방 압력이 될 수 있는 리스크. 거시·업종·종목 특유 리스크를 구분해 서술.
 
-[투자아이디어]
-지금 이 종목에서 실행 가능한 투자 아이디어. 구체적인 매수 근거(밸류에이션 근거, 예상 실적 반등 시점, 예정된 이벤트 일정 등)와 목표 주가 도달 시나리오를 포함.`;
+[투자포인트]
+지금 이 종목의 핵심 투자 포인트. 구체적인 매수 근거(밸류에이션, 예상 실적 반등 시점, 예정된 이벤트 일정 등)와 목표 주가 도달 시나리오를 포함.`;
 
   console.log(`[portfolio-brief] ${ticker} — Gemini 브리핑 생성 (분석 DB 없음)`);
   const response = await ai.models.generateContent({
