@@ -315,14 +315,27 @@ async function ensureBriefTable() {
  *        (어떤 유저가 생성했든 최신 분석을 공유 — "집단지성")
  * 2순위: 분석 없을 때만 일반 Gemini 프롬프트 사용
  */
+/** 긴 텍스트에서 앞 N문장만 추출 */
+function extractSentences(text: string, n = 2): string {
+  if (!text) return "";
+  // 마크다운 헤더/볼드 제거
+  const clean = text.replace(/#{1,4}\s+[^\n]+\n?/g, "").replace(/\*\*/g, "").trim();
+  // 줄바꿈 기준으로 먼저 단락을 나누고, 이후 문장 부호 기준으로 자름
+  const sentences = clean
+    .split(/(?<=[.!?。])\s+|[\n]{2,}/)
+    .map(s => s.replace(/\n/g, " ").trim())
+    .filter(s => s.length > 10);
+  return sentences.slice(0, n).join(" ");
+}
+
 async function buildBriefSummary(ticker: string): Promise<{ summary: string; source: "analysis" | "ai"; analysisId?: number }> {
   const today = new Date().toISOString().slice(0, 10);
 
   // 최신 완성 분석 (14일 이내, 어떤 유저든)
   const { rows: aRows } = await pool.query(`
     SELECT a.id, a.company_name, a.industry, a.investment_verdict, a.target_price,
-      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'key_catalysts'      LIMIT 1) AS catalysts,
-      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'risk_factors'       LIMIT 1) AS risks,
+      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'key_catalysts'       LIMIT 1) AS catalysts,
+      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'risk_factors'        LIMIT 1) AS risks,
       (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'investment_strategy' LIMIT 1) AS strategy
     FROM analyses a
     WHERE a.ticker = $1 AND a.status = 'completed'
@@ -333,49 +346,41 @@ async function buildBriefSummary(ticker: string): Promise<{ summary: string; sou
 
   const analysis = aRows[0];
 
-  let prompt: string;
+  // ── 경로 A: 분석 DB 직접 추출 — Gemini 호출 없음 ─────────────────────────
   if (analysis?.catalysts || analysis?.risks || analysis?.strategy) {
-    // ── 분석 DB 기반 압축 요약 (집단지성 경로) ──
-    const companyName = analysis.company_name ?? ticker;
-    const industry    = analysis.industry ?? "업종미상";
     const verdict     = analysis.investment_verdict ?? "미분석";
-    const targetPrice = analysis.target_price ? `목표주가 ${Number(analysis.target_price).toLocaleString()}원` : "";
+    const targetPrice = analysis.target_price
+      ? ` (목표주가 ${Number(analysis.target_price).toLocaleString()}원)`
+      : "";
 
-    const sections: string[] = [];
-    if (analysis.strategy)  sections.push(`[전략/판정]\n${analysis.strategy.slice(0, 600)}`);
-    if (analysis.catalysts) sections.push(`[핵심촉매]\n${analysis.catalysts.slice(0, 600)}`);
-    if (analysis.risks)     sections.push(`[리스크]\n${analysis.risks.slice(0, 600)}`);
+    // investment_strategy → 오늘의 핵심
+    const core = extractSentences(analysis.strategy ?? "", 2)
+      || `AI 판정: ${verdict}${targetPrice}`;
 
-    prompt = `당신은 주식 리서치 애널리스트입니다. 아래는 ${companyName}(${ticker}, ${industry})에 대한 최신 AI 리서치 내용입니다.
-AI 판정: ${verdict}${targetPrice ? " / " + targetPrice : ""}
+    // risk_factors → 리스크
+    const risk = extractSentences(analysis.risks ?? "", 2)
+      || "현재 등록된 리스크 정보가 없습니다.";
 
-${sections.join("\n\n")}
+    // key_catalysts → 촉매
+    const catalyst = extractSentences(analysis.catalysts ?? "", 2)
+      || "현재 등록된 촉매 정보가 없습니다.";
 
-위 내용을 바탕으로 ${today} 기준 포트폴리오 투자자를 위한 핵심 요약을 작성하세요.
-마크다운 볼드(**) 금지. 정확히 아래 3개 헤더로만 구분. 각 항목 1-2문장.
+    const summary = `[오늘의핵심]\n${core}\n\n[리스크]\n${risk}\n\n[촉매]\n${catalyst}`;
+    console.log(`[portfolio-brief] ${ticker} — 분석 DB 직접 추출 (analysis #${analysis.id}, Gemini 미사용)`);
+    return { summary, source: "analysis", analysisId: analysis.id };
+  }
 
-[오늘의핵심]
-현재 이 종목에서 가장 중요한 투자 포인트.
+  // ── 경로 B: 분석 없을 때만 Gemini 호출 ────────────────────────────────────
+  const { rows: info } = await pool.query(
+    `SELECT company_name, industry, investment_verdict FROM analyses
+     WHERE ticker=$1 AND status='completed' ORDER BY created_at DESC LIMIT 1`,
+    [ticker]
+  );
+  const companyName = info[0]?.company_name ?? ticker;
+  const industry    = info[0]?.industry ?? "업종미상";
+  const verdict     = info[0]?.investment_verdict ?? "미분석";
 
-[리스크]
-단기 주의 리스크 또는 모멘텀 변화.
-
-[촉매]
-향후 주가 상승을 이끌 수 있는 잠재 촉매.`;
-
-    console.log(`[portfolio-brief] ${ticker} — 분석 DB 기반 브리핑 생성 (analysis #${analysis.id})`);
-  } else {
-    // ── 분석 없을 때 일반 Gemini ──
-    const { rows: info } = await pool.query(
-      `SELECT company_name, industry, investment_verdict FROM analyses
-       WHERE ticker=$1 AND status='completed' ORDER BY created_at DESC LIMIT 1`,
-      [ticker]
-    );
-    const companyName = info[0]?.company_name ?? ticker;
-    const industry    = info[0]?.industry ?? "업종미상";
-    const verdict     = info[0]?.investment_verdict ?? "미분석";
-
-    prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
+  const prompt = `당신은 주식 리서치 애널리스트입니다. ${today} 기준으로 ${companyName}(${ticker}, ${industry}) 에 대한 오늘의 투자 포인트를 간략히 브리핑해주세요.
 최근 AI 판정: ${verdict}
 다음 3가지를 각각 1-2문장으로 작성. 마크다운 볼드(**) 금지. 정확히 아래 헤더로 구분:
 
@@ -388,20 +393,14 @@ ${sections.join("\n\n")}
 [촉매]
 향후 주가에 긍정적 영향을 줄 수 있는 잠재 촉매 또는 이벤트.`;
 
-    console.log(`[portfolio-brief] ${ticker} — 일반 AI 브리핑 생성 (분석 DB 없음)`);
-  }
-
+  console.log(`[portfolio-brief] ${ticker} — Gemini 브리핑 생성 (분석 DB 없음)`);
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: { maxOutputTokens: 700 },
   });
   const summary = response.text?.trim() ?? "";
-  return {
-    summary,
-    source: analysis?.catalysts || analysis?.risks ? "analysis" : "ai",
-    analysisId: analysis?.id,
-  };
+  return { summary, source: "ai" };
 }
 
 // ── 외부에서 호출 가능한 브리핑 갱신 함수 (분석 완료 시 훅용) ────────────────
