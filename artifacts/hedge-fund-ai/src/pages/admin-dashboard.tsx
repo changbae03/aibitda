@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import {
   Loader2, Users, BarChart2, Activity, Crown, RefreshCw, Bell, BellOff, Save,
-  DollarSign, Cpu, TrendingUp, ArrowRight,
+  DollarSign, Cpu, TrendingUp, ArrowRight, Bot, CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -27,6 +27,25 @@ interface StatsData {
   tierCounts: Record<string, number>;
 }
 interface Settings { [key: string]: string }
+
+interface BatchItem {
+  id: number;
+  ticker: string;
+  companyName: string;
+  status: string;
+  verdict: string | null;
+  createdAt: string;
+}
+interface BatchStatus {
+  lastRun: string | null;
+  todayRan: boolean;
+  lockActive: boolean;
+  lockExpiresAt: string | null;
+  todayStats: { total: number; completed: number; failed: number; running: number };
+  todayItems: BatchItem[];
+  history: { day: string; completed: number; failed: number; total: number }[];
+  totalAutoAnalyses: number;
+}
 
 const TIER_LABEL: Record<string, { label: string; color: string }> = {
   free:    { label: "무료",    color: "text-slate-600 bg-slate-100 border-slate-200" },
@@ -94,6 +113,9 @@ export default function AdminDashboard() {
   const [revenue, setRevenue] = useState<RevenueStats | null>(null);
   const [revenueLoading, setRevenueLoading] = useState(true);
 
+  const [batch, setBatch] = useState<BatchStatus | null>(null);
+  const [batchLoading, setBatchLoading] = useState(true);
+
   const showMsg = (type: "ok" | "err", text: string) => {
     setMsg({ type, text });
     setTimeout(() => setMsg(null), 3000);
@@ -123,8 +145,16 @@ export default function AdminDashboard() {
     } finally { setRevenueLoading(false); }
   };
 
+  const loadBatch = async () => {
+    setBatchLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/batch-status"), { credentials: "include" });
+      if (r.ok) setBatch(await r.json());
+    } finally { setBatchLoading(false); }
+  };
+
   useEffect(() => { loadStats(); }, [days]);
-  useEffect(() => { loadSettings(); loadRevenue(); }, []);
+  useEffect(() => { loadSettings(); loadRevenue(); loadBatch(); }, []);
 
   const saveSettings = async () => {
     setSettingsSaving(true);
@@ -350,6 +380,119 @@ export default function AdminDashboard() {
           )}
         </>
       )}
+
+      {/* ── 자동 배치 현황 ── */}
+      <div className="rounded-xl border border-border p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bot className="w-3.5 h-3.5 text-muted-foreground" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">자동 배치 현황</p>
+          </div>
+          <button onClick={loadBatch} className="p-1 rounded-md hover:bg-muted text-muted-foreground">
+            <RefreshCw className={cn("w-3.5 h-3.5", batchLoading && "animate-spin")} />
+          </button>
+        </div>
+
+        {batchLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm py-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
+          </div>
+        ) : batch ? (
+          <>
+            {/* 요약 카드 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-[10px] text-muted-foreground mb-1">마지막 실행</p>
+                <p className="text-sm font-bold text-foreground">{batch.lastRun ?? "없음"}</p>
+                <p className={cn("text-[10px] mt-0.5 font-medium", batch.todayRan ? "text-green-600" : "text-amber-500")}>
+                  {batch.todayRan ? "✓ 오늘 실행됨" : "오늘 미실행"}
+                </p>
+              </div>
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-[10px] text-muted-foreground mb-1">오늘 완료</p>
+                <p className="text-2xl font-bold tabular-nums text-green-600">{batch.todayStats.completed}</p>
+                <p className="text-[10px] text-muted-foreground">/ {batch.todayStats.total}개</p>
+              </div>
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-[10px] text-muted-foreground mb-1">오늘 실패</p>
+                <p className={cn("text-2xl font-bold tabular-nums", batch.todayStats.failed > 0 ? "text-red-500" : "text-muted-foreground")}>
+                  {batch.todayStats.failed}
+                </p>
+                <p className="text-[10px] text-muted-foreground">진행중 {batch.todayStats.running}</p>
+              </div>
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-[10px] text-muted-foreground mb-1">누적 자동 분석</p>
+                <p className="text-2xl font-bold tabular-nums text-foreground">{batch.totalAutoAnalyses.toLocaleString()}</p>
+                <p className={cn("text-[10px] mt-0.5 font-medium", batch.lockActive ? "text-amber-500" : "text-muted-foreground")}>
+                  {batch.lockActive ? "🔒 배치 실행 중" : "대기 중"}
+                </p>
+              </div>
+            </div>
+
+            {/* 최근 14일 히스토리 */}
+            {batch.history.length > 0 && (
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium mb-2">최근 14일 일별 실행 현황</p>
+                <ResponsiveContainer width="100%" height={100}>
+                  <ComposedChart data={batch.history} margin={{ top: 2, right: 2, left: -28, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="day" tick={{ fontSize: 9 }} tickFormatter={d => `${parseInt(d.slice(5,7))}/${parseInt(d.slice(8,10))}`} />
+                    <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid hsl(var(--border))" }}
+                      formatter={(v: any, name: string) => [v, name === "completed" ? "완료" : name === "failed" ? "실패" : "전체"]}
+                    />
+                    <Bar dataKey="completed" name="completed" stackId="a" fill="hsl(var(--primary))" radius={[0,0,0,0]} />
+                    <Bar dataKey="failed" name="failed" stackId="a" fill="#ef4444" radius={[2,2,0,0]} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* 오늘 종목 목록 */}
+            {batch.todayItems.length > 0 && (
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium mb-2">오늘 분석 종목 ({batch.todayItems.length}개)</p>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {batch.todayItems.map(item => (
+                    <div key={item.id} className="flex items-center justify-between text-xs py-1 px-2 rounded-md hover:bg-muted/60 gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.status === "completed" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        ) : item.status === "error" || item.status === "failed" ? (
+                          <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        ) : (
+                          <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-pulse" />
+                        )}
+                        <span className="font-mono text-[11px] text-muted-foreground shrink-0">{item.ticker}</span>
+                        <span className="truncate text-foreground">{item.companyName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {item.verdict && (
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", {
+                            "bg-green-100 text-green-700": item.verdict === "Strong Buy",
+                            "bg-emerald-100 text-emerald-700": item.verdict === "Buy",
+                            "bg-slate-100 text-slate-600": item.verdict === "Hold",
+                            "bg-orange-100 text-orange-600": item.verdict === "Sell",
+                            "bg-red-100 text-red-600": item.verdict === "Strong Sell",
+                          })}>
+                            {item.verdict}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">데이터를 불러올 수 없습니다</p>
+        )}
+      </div>
 
       {/* ── 전체 유저 일일 한도 변경 ── */}
       <div className="rounded-xl border border-border p-4 space-y-3">

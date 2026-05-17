@@ -149,6 +149,86 @@ router.get("/stats", async (req, res) => {
   });
 });
 
+// ─── 자동 배치 현황 ──────────────────────────────────────────────────────────────
+
+// GET /api/admin/batch-status — 일일 자동 배치 실행 현황
+router.get("/batch-status", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const [cacheRows, lockRow, todayRows, historyRows, totalRow] = await Promise.all([
+    // 마지막 배치 실행일
+    pool.query(`SELECT data FROM system_cache WHERE key = 'auto_batch_last_run'`),
+    // 배치 lock 현황
+    pool.query(`SELECT expires_at FROM system_cache WHERE key = 'auto_batch_lock' AND expires_at > NOW()`),
+    // 오늘 자동 배치 분석 목록 (user_id IS NULL)
+    pool.query(`
+      SELECT id, ticker, company_name, status, investment_verdict, created_at
+      FROM analyses
+      WHERE user_id IS NULL
+        AND created_at >= CURRENT_DATE AT TIME ZONE 'Asia/Seoul'
+        AND created_at <  CURRENT_DATE AT TIME ZONE 'Asia/Seoul' + INTERVAL '1 day'
+      ORDER BY created_at ASC
+    `),
+    // 최근 14일 일별 자동 배치 분석 수
+    pool.query(`
+      SELECT
+        DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+        COUNT(*) FILTER (WHERE status IN ('error','failed')) AS failed,
+        COUNT(*) AS total
+      FROM analyses
+      WHERE user_id IS NULL
+        AND created_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day
+      ORDER BY day ASC
+    `),
+    // 누적 자동 배치 분석 수
+    pool.query(`SELECT COUNT(*) FROM analyses WHERE user_id IS NULL`),
+  ]);
+
+  const lastRun = cacheRows.rows[0]?.data?.date ?? null;
+  const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const lockActive = lockRow.rows.length > 0;
+  const lockExpiresAt = lockRow.rows[0]?.expires_at ?? null;
+
+  const todayItems = todayRows.rows.map(r => ({
+    id: r.id,
+    ticker: r.ticker,
+    companyName: r.company_name,
+    status: r.status,
+    verdict: r.investment_verdict,
+    createdAt: r.created_at,
+  }));
+  const todayStats = {
+    total: todayItems.length,
+    completed: todayItems.filter(r => r.status === "completed").length,
+    failed: todayItems.filter(r => ["error", "failed"].includes(r.status)).length,
+    running: todayItems.filter(r => ["pending", "running"].includes(r.status)).length,
+  };
+
+  const history = historyRows.rows.map(r => ({
+    day: String(r.day).slice(0, 10),
+    completed: parseInt(r.completed, 10),
+    failed: parseInt(r.failed, 10),
+    total: parseInt(r.total, 10),
+  }));
+
+  res.json({
+    lastRun,
+    todayRan: lastRun === todayKST,
+    lockActive,
+    lockExpiresAt,
+    todayStats,
+    todayItems,
+    history,
+    totalAutoAnalyses: parseInt(totalRow.rows[0].count, 10),
+  });
+});
+
 // ─── 시스템 설정 ────────────────────────────────────────────────────────────────
 
 // GET /api/admin/settings — 시스템 설정 조회
