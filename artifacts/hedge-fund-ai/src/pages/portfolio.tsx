@@ -9,7 +9,7 @@ import {
   Search, Building2, ArrowUpRight, ArrowDownRight,
   Zap, AlertTriangle, Bell, Brain, PieChart,
   Activity, Target, Lightbulb, ChevronsRight,
-  Newspaper, Clock,
+  Newspaper, Clock, Compass,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -420,14 +420,37 @@ function SectorDonut({ holdings }: { holdings: Holding[] }) {
 
 // ── AI 포트폴리오 진단 ────────────────────────────────────────────────────────
 interface DiagnosisResult {
-  sections: { overall: string; risk: string; opportunity: string; action: string };
+  sections: { overall: string; risk: string; opportunity: string; action: string; recommend: string };
   stats: { total: number; buyCount: number; holdCount: number; sellCount: number };
+  savedAt?: string;
+  fromCache?: boolean;
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}시간 전`;
+  return `${Math.floor(hrs / 24)}일 전`;
 }
 
 function AIDiagnosis({ holdings }: { holdings: Holding[] }) {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [expanded, setExpanded] = useState(true);
+
+  // 마운트 시 캐시된 진단 자동 로드
+  useEffect(() => {
+    if (holdings.length === 0) return;
+    fetch(getApiUrl("/api/portfolio/diagnose"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.sections) { setResult(d); setStatus("done"); }
+      })
+      .catch(() => {});
+  }, []);
 
   async function runDiagnosis() {
     setStatus("loading");
@@ -436,27 +459,37 @@ function AIDiagnosis({ holdings }: { holdings: Holding[] }) {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
       });
-      if (r.ok) {
-        const d = await r.json();
-        setResult(d);
-        setStatus("done");
-      } else { setStatus("error"); }
+      if (r.ok) { setResult(await r.json()); setStatus("done"); }
+      else { setStatus("error"); }
     } catch { setStatus("error"); }
   }
 
-  const sections = [
-    { key: "overall",     icon: Activity,   label: "종합 진단",    color: "text-primary" },
-    { key: "risk",        icon: AlertTriangle, label: "리스크 집중도", color: "text-amber-400" },
-    { key: "opportunity", icon: Target,      label: "기회 요인",   color: "text-emerald-400" },
-    { key: "action",      icon: ChevronsRight, label: "실행 권고",  color: "text-blue-400" },
+  const SECTIONS = [
+    { key: "overall",     icon: Activity,      label: "종합 진단",    color: "text-primary" },
+    { key: "risk",        icon: AlertTriangle,  label: "리스크 집중도", color: "text-amber-400" },
+    { key: "opportunity", icon: Target,         label: "기회 요인",    color: "text-emerald-400" },
+    { key: "action",      icon: ChevronsRight,  label: "실행 권고",    color: "text-blue-400" },
+    { key: "recommend",   icon: Compass,        label: "섹터 보완",    color: "text-violet-400" },
   ] as const;
+
+  const hasResult = status === "done" && result;
 
   return (
     <div className="rounded-2xl border border-border bg-[#141414] overflow-hidden">
+      {/* 헤더 */}
       <div className="flex items-center gap-2 px-5 py-4">
-        <Brain className="w-4 h-4 text-primary" />
+        <Brain className="w-4 h-4 text-primary shrink-0" />
         <span className="text-[12px] font-semibold text-foreground">AI 포트폴리오 진단</span>
-        {status === "done" && result && (
+
+        {/* 캐시 시각 */}
+        {result?.savedAt && (
+          <span className="text-[10px] text-muted-foreground/60 ml-1">
+            {result.fromCache ? "캐시" : "새로운"} · {relativeTime(result.savedAt)}
+          </span>
+        )}
+
+        {/* 접기/펼치기 */}
+        {hasResult && (
           <button
             onClick={() => setExpanded(v => !v)}
             className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
@@ -465,25 +498,32 @@ function AIDiagnosis({ holdings }: { holdings: Holding[] }) {
             {expanded ? "접기" : "펼치기"}
           </button>
         )}
-        {status !== "done" && (
+
+        {/* 진단 시작 버튼 (결과 없을 때) */}
+        {!hasResult && status !== "loading" && (
           <button
             onClick={runDiagnosis}
-            disabled={status === "loading" || holdings.length === 0}
+            disabled={holdings.length === 0}
             className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary text-[12px] font-medium transition-all disabled:opacity-50"
           >
-            {status === "loading"
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 분석 중…</>
-              : <><Brain className="w-3.5 h-3.5" /> 진단 시작</>
-            }
+            <Brain className="w-3.5 h-3.5" /> 진단 시작
           </button>
         )}
-        {status === "done" && (
+        {status === "loading" && (
+          <span className="ml-auto flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> 분석 중…
+          </span>
+        )}
+
+        {/* 재진단 버튼 (결과 있을 때) */}
+        {hasResult && (
           <button
             onClick={runDiagnosis}
-            className="ml-1 p-1 rounded text-muted-foreground/50 hover:text-muted-foreground"
+            disabled={status === "loading"}
+            className="ml-1 p-1 rounded text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-40"
             title="재진단"
           >
-            <RefreshCw className="w-3 h-3" />
+            <RefreshCw className={cn("w-3 h-3", status === "loading" && "animate-spin")} />
           </button>
         )}
       </div>
@@ -493,7 +533,7 @@ function AIDiagnosis({ holdings }: { holdings: Holding[] }) {
       )}
 
       <AnimatePresence>
-        {status === "done" && result && expanded && (
+        {hasResult && expanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -501,9 +541,29 @@ function AIDiagnosis({ holdings }: { holdings: Holding[] }) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
+            {/* 판정 분포 배지 */}
+            {result.stats && (
+              <div className="flex items-center gap-2 px-5 pt-1 pb-3">
+                {result.stats.buyCount > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
+                    매수 {result.stats.buyCount}
+                  </span>
+                )}
+                {result.stats.holdCount > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
+                    홀드 {result.stats.holdCount}
+                  </span>
+                )}
+                {result.stats.sellCount > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">
+                    매도 {result.stats.sellCount}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="border-t border-border px-5 py-4 space-y-4">
-              {sections.map(({ key, icon: Icon, label, color }) => {
-                const text = result.sections[key];
+              {SECTIONS.map(({ key, icon: Icon, label, color }) => {
+                const text = result.sections[key as keyof typeof result.sections];
                 if (!text) return null;
                 return (
                   <div key={key}>

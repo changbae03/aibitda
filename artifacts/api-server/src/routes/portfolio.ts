@@ -79,6 +79,55 @@ async function fetchLatestAnalysis(ticker: string, userId: string) {
   return rows[0] ?? null;
 }
 
+// ── 집단지성 분석 조회 (모든 유저, 최신 완성 분석 우선) ───────────────────────
+async function fetchBestAnalysis(ticker: string) {
+  const { rows } = await pool.query(`
+    SELECT id, target_price, investment_verdict, risk_reward_ratio, industry,
+           company_name,
+           (SELECT content FROM analysis_steps
+            WHERE analysis_id = analyses.id AND step_key = 'key_catalysts'
+            LIMIT 1) AS catalysts,
+           (SELECT content FROM analysis_steps
+            WHERE analysis_id = analyses.id AND step_key = 'risk_factors'
+            LIMIT 1) AS risks,
+           (SELECT content FROM analysis_steps
+            WHERE analysis_id = analyses.id AND step_key = 'investment_strategy'
+            LIMIT 1) AS strategy
+    FROM analyses
+    WHERE ticker = $1 AND status = 'completed'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [ticker]);
+  return rows[0] ?? null;
+}
+
+// ── system_cache 헬퍼 ──────────────────────────────────────────────────────────
+async function getCache<T>(key: string): Promise<{ data: T; savedAt: string } | null> {
+  try {
+    const r = await pool.query(
+      `SELECT data, expires_at FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [key]
+    );
+    if (!r.rows[0]) return null;
+    const row = r.rows[0].data as any;
+    return { data: row.payload as T, savedAt: row.savedAt };
+  } catch { return null; }
+}
+
+async function setCache(key: string, payload: unknown, ttlMs: number, savedAt: string) {
+  try {
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [key, JSON.stringify({ payload, savedAt }), expiresAt]
+    );
+  } catch (e: any) {
+    console.error("[diagnose-cache] save error:", e?.message);
+  }
+}
+
 // ── GET /api/portfolio ────────────────────────────────────────────────────────
 router.get("/portfolio", async (req, res) => {
   const userId = getUserId(req);
@@ -211,14 +260,27 @@ router.put("/portfolio/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── POST /api/portfolio/diagnose — AI 포트폴리오 진단 ────────────────────────
+// ── GET /api/portfolio/diagnose — 캐시된 진단 조회 ───────────────────────────
+router.get("/portfolio/diagnose", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
+
+  const cached = await getCache<any>(`portfolio_diagnosis:${userId}`);
+  if (cached) {
+    res.json({ ...cached.data, savedAt: cached.savedAt, fromCache: true });
+  } else {
+    res.json({ fromCache: false, sections: null });
+  }
+});
+
+// ── POST /api/portfolio/diagnose — AI 포트폴리오 진단 (집단지성 + 캐시) ────────
 router.post("/portfolio/diagnose", async (req, res) => {
   const userId = getUserId(req);
   if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
 
   await ensureTable();
 
-  // 보유 종목 + 최신 분석 수집
+  // 보유 종목 수집
   const { rows: holdings } = await pool.query(
     `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1`,
     [userId]
@@ -227,33 +289,38 @@ router.post("/portfolio/diagnose", async (req, res) => {
     res.json({ error: "보유 종목이 없습니다" }); return;
   }
 
-  const analyses = await Promise.all(holdings.map((h: any) => fetchLatestAnalysis(h.ticker, userId)));
+  // 집단지성: 모든 유저의 최신 완성 분석 중 가장 최근 것 사용
+  const analyses = await Promise.all(holdings.map((h: any) => fetchBestAnalysis(h.ticker)));
 
   // 진단용 데이터 요약
   const portfolioLines = holdings.map((h: any, i: number) => {
     const a = analyses[i];
-    const verdict = a?.investment_verdict ?? "미분석";
-    const target = a?.target_price ? `목표가 ${parseFloat(a.target_price).toLocaleString()}` : "목표가없음";
+    const verdict  = a?.investment_verdict ?? "미분석";
+    const target   = a?.target_price ? `목표가 ${parseFloat(a.target_price).toLocaleString()}` : "목표가없음";
     const industry = a?.industry ?? "업종미상";
-    const rr = a?.risk_reward_ratio ? `리스크/리워드 1:${parseFloat(a.risk_reward_ratio).toFixed(1)}` : "";
+    const rr       = a?.risk_reward_ratio ? `리스크/리워드 1:${parseFloat(a.risk_reward_ratio).toFixed(1)}` : "";
     return `- ${h.company_name}(${h.ticker}) | ${industry} | AI판정:${verdict} | ${target} | ${rr}`.trim();
   }).join("\n");
 
-  const buyCount  = analyses.filter(a => a?.investment_verdict?.toLowerCase().includes("buy")).length;
-  const sellCount = analyses.filter(a => a?.investment_verdict?.toLowerCase().includes("sell")).length;
-  const holdCount = analyses.filter(a => a?.investment_verdict === "Hold").length;
+  // 섹터 목록 (중복 제거)
+  const sectors = [...new Set(analyses.map((a: any) => a?.industry).filter(Boolean))] as string[];
+
+  const buyCount  = analyses.filter((a: any) => a?.investment_verdict?.toLowerCase().includes("buy")).length;
+  const sellCount = analyses.filter((a: any) => a?.investment_verdict?.toLowerCase().includes("sell")).length;
+  const holdCount = analyses.filter((a: any) => a?.investment_verdict === "Hold").length;
 
   const prompt = `당신은 전문 포트폴리오 매니저입니다. 아래 포트폴리오를 종합 분석하고 한국어로 진단해주세요.
 
 [포트폴리오 현황 — ${holdings.length}종목]
 ${portfolioLines}
 
-[AI 판정 분포] 매수 ${buyCount}종목 / 홀드 ${holdCount}종목 / 매도${sellCount}종목
+[AI 판정 분포] 매수 ${buyCount}종목 / 홀드 ${holdCount}종목 / 매도 ${sellCount}종목
+[보유 섹터] ${sectors.join(", ") || "정보없음"}
 
-다음 4가지 항목을 각각 2-4문장으로 작성하세요. 마크다운 볼드(**) 사용 금지. 각 항목은 정확히 아래 헤더로 구분하세요:
+다음 5가지 항목을 각각 2-3문장으로 작성하세요. 마크다운 볼드(**) 사용 금지. 각 항목은 정확히 아래 헤더로 구분하세요:
 
 [종합진단]
-전체 포트폴리오의 건강 상태와 균형에 대한 한줄 평가. 강점과 약점 요약.
+전체 포트폴리오의 건강 상태와 균형 평가. 강점과 약점 요약.
 
 [리스크 집중도]
 업종·테마 쏠림, 상관관계 높은 종목 군집, 단일 종목 의존도 등 리스크 요인 분석.
@@ -262,32 +329,42 @@ ${portfolioLines}
 현재 포트폴리오에서 가장 주목할 종목과 그 이유. 상승여력이 높거나 AI 판정이 긍정적인 종목 중심.
 
 [실행 권고]
-포트폴리오 개선을 위해 지금 당장 할 수 있는 1-2가지 구체적 행동 제안.`;
+지금 당장 할 수 있는 1-2가지 구체적 행동 제안. 비중 축소/확대 또는 익절/손절 포함 가능.
+
+[섹터 보완]
+현재 포트폴리오에 빠진 섹터 또는 분산 효과를 높일 수 있는 보완 투자 방향 1-2가지 제안. 구체적인 섹터명이나 업종을 명시하세요.`;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 800 },
+      config: { maxOutputTokens: 1000 },
     });
     const text = response.text?.trim() ?? "";
 
-    // 섹션별 파싱
     function extractSection(raw: string, key: string): string {
       const match = raw.match(new RegExp(`\\[${key}\\]([\\s\\S]*?)(?=\\[|$)`));
       return match ? match[1].trim() : "";
     }
 
-    res.json({
-      raw: text,
+    const savedAt = new Date().toISOString();
+    const result = {
       sections: {
-        overall:      extractSection(text, "종합진단"),
-        risk:         extractSection(text, "리스크 집중도"),
-        opportunity:  extractSection(text, "기회 요인"),
-        action:       extractSection(text, "실행 권고"),
+        overall:     extractSection(text, "종합진단"),
+        risk:        extractSection(text, "리스크 집중도"),
+        opportunity: extractSection(text, "기회 요인"),
+        action:      extractSection(text, "실행 권고"),
+        recommend:   extractSection(text, "섹터 보완"),
       },
       stats: { total: holdings.length, buyCount, holdCount, sellCount },
-    });
+      savedAt,
+      fromCache: false,
+    };
+
+    // 6시간 캐시 저장
+    await setCache(`portfolio_diagnosis:${userId}`, result, 6 * 60 * 60 * 1000, savedAt);
+
+    res.json(result);
   } catch (e: any) {
     res.status(500).json({ error: "AI 진단 실패", detail: e?.message });
   }
