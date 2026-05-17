@@ -36,7 +36,7 @@ function extractBullets(content: string, max = 3): string[] {
   for (const line of lines) {
     const m = line.match(/^[-*•]\s+(.+)/);
     if (m) {
-      const t = m[1].trim().replace(/\*\*/g, "").replace(/^\w+[:：]\s*/, "").slice(0, 100);
+      const t = m[1].trim().replace(/\*\*/g, "").replace(/^\w+[:：]\s*/, "").slice(0, 180);
       if (t.length > 8) out.push(t);
     }
     if (out.length >= max) break;
@@ -92,24 +92,23 @@ function parseForecastTable(content: string): ForecastTable | null {
   return (result.revenue || result.opMargin || result.eps) ? result : null;
 }
 
-// 전망 해설에서 촉매 영향 첫 문장 추출
-function extractForecastNarrative(content: string, maxLen = 160): string {
+// 전망 해설에서 촉매 영향 첫 2문장 추출
+function extractForecastNarrative(content: string, maxLen = 300): string {
   const lines = content.split("\n");
   const idx = lines.findIndex(l => l.includes("전망 해설") || l.includes("Forecast Commentary"));
   const start = idx !== -1 ? idx + 1 : 0;
   for (let i = start; i < Math.min(start + 15, lines.length); i++) {
     const l = lines[i].trim();
     if (l.length > 20 && !l.startsWith("#") && !l.startsWith("|") && !l.startsWith("-")) {
-      // 첫 1~2문장만
       const sentences = l.split(/(?<=[.。])\s+/);
-      const text = sentences.slice(0, 2).join(" ");
+      const text = sentences.slice(0, 3).join(" ");
       return text.slice(0, maxLen) + (text.length > maxLen ? "…" : "");
     }
   }
   return "";
 }
 
-function extractLeadText(content: string, maxLen = 160): string {
+function extractLeadText(content: string, maxLen = 280): string {
   const clean = content
     .replace(/```[\s\S]*?```/g, "")
     .replace(/^#+\s.+$/gm, "")
@@ -118,12 +117,14 @@ function extractLeadText(content: string, maxLen = 160): string {
     .replace(/\*\*/g, "")
     .replace(/\n{2,}/g, "\n")
     .trim();
-  const firstPara = clean.split("\n").find(l => l.trim().length > 20) ?? "";
-  return firstPara.trim().slice(0, maxLen) + (firstPara.length > maxLen ? "…" : "");
+  // 충분히 긴 첫 두 문단을 합침
+  const paras = clean.split("\n").filter(l => l.trim().length > 20);
+  const text = paras.slice(0, 2).join(" ");
+  return text.trim().slice(0, maxLen) + (text.length > maxLen ? "…" : "");
 }
 
 // 핵심 이슈 문장 추출 ("핵심 이슈는 X" or "핵심 이슈: X")
-function extractKeyIssue(content: string, maxLen = 120): string {
+function extractKeyIssue(content: string, maxLen = 200): string {
   const lines = content.split("\n");
   for (const line of lines) {
     const m = line.match(/핵심 이슈[는은이]?\s*['"]?([^.。\n]{10,})/);
@@ -160,7 +161,7 @@ function extractIndustryPoints(content: string, max = 3): string[] {
     if (m1) {
       const label = m1[1].trim();
       if (/^(분析|개요|현황|요약|결론|Part|Step|Industry|Market|구조|경쟁)/.test(label)) continue;
-      const desc = m1[2].replace(/\*\*/g, "").trim().slice(0, 120);
+      const desc = m1[2].replace(/\*\*/g, "").trim().slice(0, 180);
       const point = desc.length > 15 ? desc : label + ": " + desc;
       if (!out.includes(point)) out.push(point);
       if (out.length >= max) break;
@@ -170,7 +171,7 @@ function extractIndustryPoints(content: string, max = 3): string[] {
     // 패턴 2: 불릿 라인에 볼드가 포함된 경우 — 전체 라인이 핵심
     const m2 = trimmed.match(/^[-*\u2022]\s+(.{20,})/u);
     if (m2 && trimmed.includes("**")) {
-      const text = m2[1].replace(/\*\*/g, "").trim().slice(0, 120);
+      const text = m2[1].replace(/\*\*/g, "").trim().slice(0, 180);
       if (text.length > 18 && !/^(분析|개요|현황|요약|결론)/.test(text)) {
         if (!out.includes(text)) out.push(text);
         if (out.length >= max) break;
@@ -187,40 +188,60 @@ function extractIndustryPoints(content: string, max = 3): string[] {
 function parseCatalystCard(content: string) {
   const lines = content.split("\n");
 
-  // 핵심 이슈 제목 (## 🎯 핵심 이슈 섹션 바로 아래)
+  /** idx 다음 줄부터 실제 내용(헤더/빈줄 아닌 것) 첫 번째 반환 */
+  function nextContent(fromIdx: number, limit = 8): string {
+    for (let i = fromIdx + 1; i < Math.min(fromIdx + limit, lines.length); i++) {
+      const l = lines[i].replace(/\*\*/g, "").trim();
+      // 헤더·라벨 줄 제외: # 시작, | 테이블, 이모지 + 짧은 레이블(:로 끝남), 빈줄
+      if (!l || l.startsWith("#") || l.startsWith("|")) continue;
+      if (l.length < 15) continue;
+      if (/^[⚡🎯✅⚠️🐻🐂🔺🔻📈📉]\s/.test(l) && l.endsWith(":")) continue;
+      return l.slice(0, 220);
+    }
+    return "";
+  }
+
+  /** 줄이 헤더/라벨인지 판단 */
+  function isHeaderLine(s: string): boolean {
+    if (s.length < 5) return true;
+    if (s.endsWith(":") && s.length < 40) return true;
+    if (/^[#]/.test(s)) return true;
+    return false;
+  }
+
+  // 핵심 이슈 제목
   let issueDesc = "";
   const issueIdx = lines.findIndex(l => l.includes("핵심 이슈"));
   if (issueIdx !== -1) {
-    for (let i = issueIdx + 1; i < Math.min(issueIdx + 6, lines.length); i++) {
-      const l = lines[i].trim();
-      if (l.length > 15 && !l.startsWith("#") && !l.startsWith("|")) {
-        issueDesc = l.replace(/\*\*/g, "").slice(0, 160);
-        break;
-      }
-    }
+    issueDesc = nextContent(issueIdx, 8).slice(0, 220);
   }
 
-  // "이슈가 실현되면" / "반대로 미실현 시" 문장 — 같은 줄에 있을 수 있음
   let bullCase = "";
   let bearCase = "";
+
+  // bull: "실현되면" / "실현 시" 줄
   const bullIdx = lines.findIndex(l => l.includes("실현되면") || l.includes("실현 시"));
   if (bullIdx !== -1) {
     const raw = lines[bullIdx].replace(/\*\*/g, "").trim();
-    // 같은 줄에 "반대로"가 포함된 경우 분리
     const splitAt = raw.search(/반대로\s/);
     if (splitAt !== -1) {
-      bullCase = raw.slice(0, splitAt).trim().slice(0, 140);
-      bearCase = raw.slice(splitAt).trim().slice(0, 140) + (raw.slice(splitAt).length > 140 ? "…" : "");
+      bullCase = raw.slice(0, splitAt).trim().slice(0, 220);
+      bearCase = raw.slice(splitAt).trim().slice(0, 220);
+    } else if (isHeaderLine(raw)) {
+      bullCase = nextContent(bullIdx);
     } else {
-      bullCase = raw.slice(0, 140) + (raw.length > 140 ? "…" : "");
+      bullCase = raw.slice(0, 220);
     }
   }
-  // bearCase를 못 찾았으면 별도 줄 탐색
+
+  // bear: "미실현" / "반대로" 줄 (bull과 다른 줄)
   if (!bearCase) {
-    const bearIdx = lines.findIndex(l => l.includes("미실현") || (l.includes("반대로") && l.length > 20));
-    if (bearIdx !== -1 && bearIdx !== bullIdx) {
-      const l = lines[bearIdx].replace(/\*\*/g, "").trim();
-      bearCase = l.slice(0, 140) + (l.length > 140 ? "…" : "");
+    const bearIdx = lines.findIndex((l, i) =>
+      i !== bullIdx && (l.includes("미실현") || (l.includes("반대로") && l.length > 20))
+    );
+    if (bearIdx !== -1) {
+      const raw = lines[bearIdx].replace(/\*\*/g, "").trim();
+      bearCase = isHeaderLine(raw) ? nextContent(bearIdx) : raw.slice(0, 220);
     }
   }
 
@@ -564,6 +585,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
   // ── 산업 분석 카드 ───────────────────────────────────────────────────────────
   if (stepKey === "industry_analysis") {
     const cfg = STEP_CFG.industry_analysis;
+    const lead = extractLeadText(content, 200);
     const industryItems = (() => {
       const pts = extractIndustryPoints(content, 3);
       if (pts.length > 0) return pts;
@@ -573,6 +595,12 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
     })();
     return (
       <div className="flex flex-col gap-2">
+        {/* 리드 텍스트: 항목이 있을 때는 짧게, 없을 때는 길게 */}
+        {lead && (
+          <p className="text-[12px] text-white/65 leading-relaxed mb-1">
+            {industryItems.length > 0 ? lead.slice(0, 160) + (lead.length > 160 ? "…" : "") : lead}
+          </p>
+        )}
         {industryItems.length > 0 ? (
           industryItems.map((b, i) => (
             <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
@@ -586,7 +614,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
             </div>
           ))
         ) : (
-          <div className="text-sm text-white/30 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>
+          !lead && <div className="text-sm text-white/30 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>
         )}
       </div>
     );
