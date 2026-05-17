@@ -4329,9 +4329,9 @@ async function executeStep(
             const tkr: string = spRow[0]?.ticker ?? "";
             const isKRtk = /^\d{6}$/.test(tkr);
 
-            // FIX: Median consistency guard — if rawTp deviates >40% from the
-            // median of recent analyses for the same ticker, clamp to median ±35%.
-            // This prevents a single wild DCF run from dominating the verdict.
+            // Median consistency guard — if rawTp deviates >30% from the
+            // median of recent analyses for the same ticker, clamp to median ±25%.
+            // Threshold lowered 40→30%, range tightened ±35→±25%, min samples 3→2.
             if (rawTp > 0 && tkr) {
               try {
                 const recentTpRows = await rawQuery(
@@ -4341,13 +4341,13 @@ async function executeStep(
                    ORDER BY created_at DESC LIMIT 7`,
                   [tkr, id]
                 );
-                if (recentTpRows.length >= 3) {
+                if (recentTpRows.length >= 2) {
                   const sorted = recentTpRows.map((r: any) => Number(r.target_price)).sort((a: number, b: number) => a - b);
                   const mid = Math.floor(sorted.length / 2);
                   const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
                   const deviation = Math.abs(rawTp - median) / median;
-                  if (deviation > 0.4) {
-                    const clamped = Math.round(Math.max(median * 0.65, Math.min(median * 1.35, rawTp)));
+                  if (deviation > 0.3) {
+                    const clamped = Math.round(Math.max(median * 0.75, Math.min(median * 1.25, rawTp)));
                     console.warn(
                       `[tp-inject] ${tkr} rawTp=${Math.round(rawTp)} deviates ${(deviation * 100).toFixed(0)}% from median=${Math.round(median)} (n=${sorted.length}) → clamped to ${clamped}`
                     );
@@ -5157,6 +5157,7 @@ async function executeStep(
           // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
           // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
           const TARGET_MAX_RATIO = isKR ? 3.5 : 4.5;
+          const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
             if (tRatio > TARGET_MAX_RATIO) {
@@ -5165,6 +5166,44 @@ async function executeStep(
                 `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (>${TARGET_MAX_RATIO}x ${isKR ? "KR" : "US"} cap) — clamped to ${capped}`
               );
               targetPrice = capped;
+            } else if (tRatio < TARGET_MIN_RATIO) {
+              const floored = Math.round(savedStartPrice * TARGET_MIN_RATIO);
+              console.warn(
+                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (<${TARGET_MIN_RATIO}x ${isKR ? "KR" : "US"} floor) — raised to ${floored}`
+              );
+              targetPrice = floored;
+            }
+          }
+
+          // ── 저장 시점 중앙값 일관성 가드 ──────────────────────────────────
+          // tp-inject에서 AI 프롬프트에 검증값을 주입해도 AI가 무시할 수 있으므로,
+          // 최종 FINAL_JSON에서 추출한 targetPrice에 대해서도 중앙값 가드를 다시 적용
+          if (targetPrice && savedTicker) {
+            try {
+              const recentRows = await rawQuery(
+                `SELECT target_price FROM analyses
+                 WHERE ticker = $1 AND status = 'completed' AND id != $2
+                   AND target_price IS NOT NULL AND target_price > 0
+                 ORDER BY created_at DESC LIMIT 7`,
+                [savedTicker, id]
+              );
+              if (recentRows.length >= 2) {
+                const sorted = recentRows.map((r: any) => Number(r.target_price)).sort((a: number, b: number) => a - b);
+                const mid = Math.floor(sorted.length / 2);
+                const median = sorted.length % 2 !== 0
+                  ? sorted[mid]
+                  : (sorted[mid - 1] + sorted[mid]) / 2;
+                const deviation = Math.abs(targetPrice - median) / median;
+                if (deviation > 0.3) {
+                  const clamped = Math.round(Math.max(median * 0.75, Math.min(median * 1.25, targetPrice)));
+                  console.warn(
+                    `[tp-final] ${savedTicker} targetPrice=${Math.round(targetPrice)} deviates ${(deviation * 100).toFixed(0)}% from median=${Math.round(median)} (n=${sorted.length}) → clamped to ${clamped}`
+                  );
+                  targetPrice = clamped;
+                }
+              }
+            } catch (e) {
+              console.warn("[tp-final] median guard error:", e);
             }
           }
 
