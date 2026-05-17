@@ -433,15 +433,20 @@ async function ensureBriefTable() {
 /** analysis_steps content가 JSON일 수 있으므로 파싱 후 읽기 좋은 텍스트로 변환 */
 function resolveStepText(raw: string): string {
   if (!raw) return "";
-  // 코드 펜스 제거 (```json ... ``` or ``` ... ```)
-  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  // 코드 펜스 제거 — 중간에 있는 경우도 처리
+  const stripped = raw.trim()
+    .replace(/^```(?:json)?\s*/im, "")
+    .replace(/\s*```\s*$/m, "")
+    .trim();
   if (stripped.startsWith("{") || stripped.startsWith("[")) {
     try {
       const obj = JSON.parse(stripped);
-      if (obj && typeof obj === "object") {
-        for (const key of ["summary", "description", "content", "text", "analysis"]) {
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        // 우선순위: summary > key_issue > description > content > text > analysis
+        for (const key of ["summary", "key_issue", "description", "content", "text", "analysis"]) {
           if (typeof obj[key] === "string" && obj[key].length > 20) return obj[key];
         }
+        // 긴 string 값 모두 이어 붙이기
         const parts = Object.values(obj)
           .filter((v): v is string => typeof v === "string" && v.length > 20)
           .join("\n");
@@ -449,6 +454,7 @@ function resolveStepText(raw: string): string {
       }
     } catch { /* fall through */ }
   }
+  // 코드펜스만 제거된 버전 반환 (JSON 파싱 실패 시에도 원문보다 낫다)
   return stripped;
 }
 

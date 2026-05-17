@@ -400,6 +400,32 @@ function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
   return s.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, maxLen);
 }
 
+/** 섹션 텍스트에 JSON/코드펜스가 섞여 있을 때 읽기 좋은 텍스트로 정제 */
+function cleanSectionText(raw: string): string {
+  if (!raw) return raw;
+  // 코드펜스 제거
+  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  // JSON 객체/배열이면 파싱해서 의미 있는 필드 추출
+  if (stripped.startsWith("{") || stripped.startsWith("[")) {
+    try {
+      const obj = JSON.parse(stripped);
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        for (const key of ["summary", "description", "content", "text", "analysis", "key_issue"]) {
+          if (typeof obj[key] === "string" && obj[key].length > 20) return obj[key];
+        }
+        // 그 외 긴 string 값 모두 합치기
+        const parts = Object.values(obj)
+          .filter((v): v is string => typeof v === "string" && v.length > 20)
+          .join("\n");
+        if (parts) return parts;
+      }
+    } catch { /* fall through */ }
+    // JSON 파싱 실패해도 코드펜스는 제거된 버전 반환
+    return stripped;
+  }
+  return stripped;
+}
+
 function parseBrief(summary: string) {
   type Icon = "core" | "risk" | "catalyst";
   const sections: { label: string; icon: Icon; text: string }[] = [];
@@ -417,13 +443,14 @@ function parseBrief(summary: string) {
   if (parts.length > 0) parts[parts.length - 1].text = summary.slice(lastIdx).trim();
 
   for (const { tag, text } of parts) {
-    if (!text) continue;
-    if (tag === "오늘의핵심")  sections.push({ label: "오늘의 핵심", icon: "core",     text });
-    else if (tag === "리스크") sections.push({ label: "리스크",     icon: "risk",     text });
-    else                       sections.push({ label: "투자 포인트", icon: "catalyst", text });
+    const clean = cleanSectionText(text);
+    if (!clean) continue;
+    if (tag === "오늘의핵심")  sections.push({ label: "오늘의 핵심", icon: "core",     text: clean });
+    else if (tag === "리스크") sections.push({ label: "리스크",     icon: "risk",     text: clean });
+    else                       sections.push({ label: "투자 포인트", icon: "catalyst", text: clean });
   }
 
-  return sections.length > 0 ? sections : [{ label: "브리핑", icon: "core" as const, text: summary }];
+  return sections.length > 0 ? sections : [{ label: "브리핑", icon: "core" as const, text: cleanSectionText(summary) }];
 }
 
 // ── 보유 종목 카드 ────────────────────────────────────────────────────────────
