@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, Plus, Trash2, TrendingUp, TrendingDown,
-  Minus, ChevronDown, ChevronUp, RefreshCw,
-  Target, ShieldAlert, ExternalLink, AlertCircle,
+  Loader2, Plus, Trash2, TrendingUp,
+  ChevronDown, ChevronUp, RefreshCw,
+  ShieldAlert, ExternalLink,
   Briefcase, PencilLine, Check, X as XIcon,
+  Search, Building2,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -82,140 +83,211 @@ function fmtPct(pct: number | null, showPlus = true) {
   return `${sign}${pct.toFixed(2)}%`;
 }
 
-// ── 종목 추가 다이얼로그 ─────────────────────────────────────────────────────
+// ── 검색 결과 타입 ────────────────────────────────────────────────────────────
+interface SearchResult {
+  symbol: string;
+  shortname: string;
+  exchange: string;
+  quoteType: string;
+}
+
+function isKorean(t: string) { return /[ㄱ-ㅎ가-힣]/.test(t); }
+
+// ── 종목 추가 다이얼로그 — 검색 자동완성 ────────────────────────────────────
 interface AddDialogProps { onClose: () => void; onAdded: () => void; }
 
 function AddDialog({ onClose, onAdded }: AddDialogProps) {
-  const [ticker, setTicker] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [avgPrice, setAvgPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [currency, setCurrency] = useState("KRW");
-  const [note, setNote] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isComposing = useRef(false);
+
+  // 자동완성 검색
+  const fetchSuggestions = useCallback(async (q: string) => {
+    if (!q.trim()) { setSuggestions([]); return; }
+    setIsSearching(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/market-data/search/${encodeURIComponent(q)}`));
+      const data: SearchResult[] = await r.json();
+      setSuggestions(data);
+      setSelectedIndex(-1);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const clean = ticker.trim().replace(/\s/g, "").toUpperCase();
-    if (/^\d{5,6}$/.test(clean)) setCurrency("KRW");
-    else if (clean) setCurrency("USD");
-  }, [ticker]);
+    const t = query.trim();
+    const isKo = isKorean(t);
+    const isDigit = /^\d{2,}$/.test(t);
+    const isEn = /^[A-Za-z0-9\-\. ]{2,}$/.test(t);
+    if (!isKo && !isDigit && !isEn) { setSuggestions([]); return; }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => fetchSuggestions(t), isDigit ? 150 : 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [query, fetchSuggestions]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const cleanTicker = ticker.trim().toUpperCase();
-    if (!cleanTicker) { setError("종목 코드를 입력하세요"); return; }
-    setLoading(true); setError(null);
+  // 종목 선택 → 즉시 추가
+  async function addTicker(symbol: string, name: string) {
+    // 한국 종목: .KS/.KQ 제거
+    const cleanTicker = /^\d{6}\.(KS|KQ)$/.test(symbol.toUpperCase())
+      ? symbol.split(".")[0]
+      : symbol.toUpperCase();
+    const currency = /^\d{5,6}$/.test(cleanTicker) ? "KRW" : "USD";
+
+    setAdding(true); setError(null);
     try {
       const r = await fetch(getApiUrl("/api/portfolio"), {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticker: cleanTicker,
-          companyName: companyName.trim() || cleanTicker,
-          avgPrice: avgPrice ? parseFloat(avgPrice) : undefined,
-          quantity: quantity ? parseFloat(quantity) : undefined,
-          currency,
-          note: note.trim() || undefined,
-        }),
+        body: JSON.stringify({ ticker: cleanTicker, companyName: name, currency }),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "추가 실패"); }
       onAdded();
       onClose();
     } catch (e: any) {
       setError(e?.message ?? "추가 실패");
-    } finally { setLoading(false); }
+      setAdding(false);
+    }
   }
 
+  // 키보드 내비게이션
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (isComposing.current) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, suggestions.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, -1)); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+        const s = suggestions[selectedIndex];
+        addTicker(s.symbol, s.shortname);
+      }
+    }
+    else if (e.key === "Escape") onClose();
+  }
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <motion.div
-        ref={ref}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-md rounded-2xl bg-[#1a1a1a] border border-border p-6 space-y-4 shadow-2xl"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
+        transition={{ duration: 0.18 }}
+        className="w-full max-w-md rounded-2xl bg-[#1a1a1a] border border-border shadow-2xl overflow-hidden"
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-foreground">종목 추가</h2>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted text-muted-foreground"><XIcon className="w-4 h-4" /></button>
+        {/* 헤더 */}
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
+          <Briefcase className="w-4 h-4 text-primary shrink-0" />
+          <p className="text-sm font-semibold text-foreground flex-1">포트폴리오에 종목 추가</p>
+          <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
+            <XIcon className="w-4 h-4" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">종목 코드 *</label>
-              <input
-                className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="AAPL · 005930"
-                value={ticker} onChange={e => setTicker(e.target.value)} autoFocus
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">기업명 (선택)</label>
-              <input
-                className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="Apple Inc."
-                value={companyName} onChange={e => setCompanyName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">평균 매수가 (선택)</label>
-              <input
-                type="number" min="0" step="any"
-                className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="0"
-                value={avgPrice} onChange={e => setAvgPrice(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">수량 (선택)</label>
-              <input
-                type="number" min="0" step="any"
-                className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="0"
-                value={quantity} onChange={e => setQuantity(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">통화</label>
-              <select
-                className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                value={currency} onChange={e => setCurrency(e.target.value)}
-              >
-                <option value="KRW">KRW ₩</option>
-                <option value="USD">USD $</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">메모 (선택)</label>
+        {/* 검색 입력 */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="relative flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
+            {isSearching
+              ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
+              : <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+            }
             <input
-              className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="매수 이유, 목표 등"
-              value={note} onChange={e => setNote(e.target.value)}
+              ref={inputRef}
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+              placeholder="종목명 또는 코드 검색 (예: 삼성전자, AAPL)"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => { isComposing.current = true; }}
+              onCompositionEnd={() => { isComposing.current = false; }}
+              autoComplete="off"
             />
+            {query && (
+              <button onClick={() => { setQuery(""); setSuggestions([]); inputRef.current?.focus(); }} className="text-muted-foreground hover:text-foreground">
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+        </div>
 
-          {error && (
-            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
+        {/* 오류 */}
+        {error && (
+          <p className="mx-4 mb-2 text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>
+        )}
+
+        {/* 검색 결과 목록 */}
+        <div ref={dropdownRef} className="max-h-72 overflow-y-auto pb-2">
+          {adding ? (
+            <div className="flex items-center justify-center py-10 gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> 추가 중...
             </div>
-          )}
-
-          <button
-            type="submit" disabled={loading}
-            className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            포트폴리오에 추가
-          </button>
-        </form>
+          ) : suggestions.length > 0 ? (
+            suggestions.map((s, i) => {
+              const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
+              const code = isKrStock ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
+              const ex = s.exchange;
+              const badgeStyle =
+                ex === "KOSPI"  ? "bg-blue-500/15 text-blue-400" :
+                ex === "KOSDAQ" ? "bg-emerald-500/15 text-emerald-400" :
+                ex === "NASDAQ" ? "bg-violet-500/15 text-violet-400" :
+                ex === "NYSE"   ? "bg-orange-500/15 text-orange-400" :
+                "bg-muted/60 text-muted-foreground";
+              const badgeLabel =
+                ex === "KOSPI" ? "코스피" :
+                ex === "KOSDAQ" ? "코스닥" :
+                ex || "US";
+              const isHighlighted = i === selectedIndex;
+              return (
+                <button
+                  key={s.symbol}
+                  type="button"
+                  onMouseEnter={() => setSelectedIndex(i)}
+                  onMouseDown={e => { e.preventDefault(); addTicker(s.symbol, s.shortname); }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/40 last:border-0",
+                    isHighlighted ? "bg-muted/60" : "hover:bg-muted/30"
+                  )}
+                >
+                  <div className={cn(
+                    "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                    isHighlighted ? "bg-primary/15" : "bg-muted/60"
+                  )}>
+                    <Building2 className={cn("w-4 h-4 transition-colors", isHighlighted ? "text-primary" : "text-muted-foreground")} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-semibold text-foreground truncate">{s.shortname}</span>
+                      <span className={cn("shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full", badgeStyle)}>
+                        {badgeLabel}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono">{code}</span>
+                  </div>
+                  <Plus className="w-4 h-4 text-primary shrink-0 opacity-0 group-hover:opacity-100" />
+                </button>
+              );
+            })
+          ) : query.trim().length >= 2 && !isSearching ? (
+            <div className="text-center py-10 text-sm text-muted-foreground">검색 결과가 없어요</div>
+          ) : query.trim().length < 2 ? (
+            <div className="text-center py-10 text-[13px] text-muted-foreground">
+              종목명이나 코드를 입력하세요
+            </div>
+          ) : null}
+        </div>
       </motion.div>
     </div>
   );
