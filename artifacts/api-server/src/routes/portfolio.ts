@@ -378,12 +378,13 @@ async function ensureBriefTable() {
       ticker      TEXT NOT NULL,
       brief_date  DATE NOT NULL DEFAULT CURRENT_DATE,
       summary     TEXT NOT NULL,
-      source      TEXT NOT NULL DEFAULT 'ai',  -- 'analysis' | 'ai'
-      analysis_id INTEGER,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (ticker, brief_date)
     )
   `);
+  // 기존 테이블에 컬럼이 없을 경우 추가
+  await pool.query(`ALTER TABLE portfolio_stock_briefs ADD COLUMN IF NOT EXISTS source      TEXT NOT NULL DEFAULT 'ai'`);
+  await pool.query(`ALTER TABLE portfolio_stock_briefs ADD COLUMN IF NOT EXISTS analysis_id INTEGER`);
 }
 
 // ── 핵심 헬퍼: 종목 브리핑 생성 (분석 DB 우선 → Gemini 폴백) ────────────────
@@ -392,9 +393,31 @@ async function ensureBriefTable() {
  *        (어떤 유저가 생성했든 최신 분석을 공유 — "집단지성")
  * 2순위: 분석 없을 때만 일반 Gemini 프롬프트 사용
  */
+/** analysis_steps content가 JSON일 수 있으므로 파싱 후 읽기 좋은 텍스트로 변환 */
+function resolveStepText(raw: string): string {
+  if (!raw) return "";
+  const s = raw.trim();
+  if (s.startsWith("{") || s.startsWith("[")) {
+    try {
+      const obj = JSON.parse(s);
+      if (obj && typeof obj === "object") {
+        for (const key of ["summary", "description", "content", "text", "analysis"]) {
+          if (typeof obj[key] === "string" && obj[key].length > 20) return obj[key];
+        }
+        const parts = Object.values(obj)
+          .filter((v): v is string => typeof v === "string" && v.length > 20)
+          .join("\n");
+        if (parts) return parts;
+      }
+    } catch { /* fall through */ }
+  }
+  return s;
+}
+
 /** 긴 텍스트에서 앞 N문장만 추출 */
-function extractSentences(text: string, n = 2): string {
-  if (!text) return "";
+function extractSentences(raw: string, n = 2): string {
+  if (!raw) return "";
+  const text = resolveStepText(raw);
   // 마크다운 헤더/볼드 제거
   const clean = text.replace(/#{1,4}\s+[^\n]+\n?/g, "").replace(/\*\*/g, "").trim();
   // 줄바꿈 기준으로 먼저 단락을 나누고, 이후 문장 부호 기준으로 자름

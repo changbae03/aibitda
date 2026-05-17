@@ -603,6 +603,30 @@ interface DailyBrief {
   cached: boolean;
 }
 
+/** analysis_steps content가 JSON 문자열일 수 있어 파싱 후 읽기 좋은 텍스트 추출 */
+function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
+  if (!raw) return "";
+  const s = raw.trim();
+  if (s.startsWith("{") || s.startsWith("[")) {
+    try {
+      const obj = JSON.parse(s);
+      if (obj && typeof obj === "object") {
+        // summary > description > 그 외 긴 문자열 값 순서로 추출
+        for (const key of ["summary", "description", "content", "text", "analysis"]) {
+          if (typeof obj[key] === "string" && obj[key].length > 20)
+            return obj[key].replace(/\*\*/g, "").slice(0, maxLen);
+        }
+        // 그래도 없으면 긴 값들을 줄바꿈으로 이어붙임
+        const parts = Object.values(obj)
+          .filter((v): v is string => typeof v === "string" && v.length > 20)
+          .join("\n");
+        if (parts) return parts.replace(/\*\*/g, "").slice(0, maxLen);
+      }
+    } catch { /* JSON 파싱 실패 — 아래 일반 처리로 */ }
+  }
+  return s.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, maxLen);
+}
+
 function parseBrief(summary: string) {
   const sections: { label: string; icon: "core" | "risk" | "catalyst"; text: string }[] = [];
   const coreMatch = summary.match(/\[오늘의핵심\]\s*([\s\S]*?)(?=\[리스크\]|\[촉매\]|$)/);
@@ -989,40 +1013,40 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
               </div>
 
               {/* 핵심 촉매 */}
-              {a.catalysts && (
+              {a.catalysts && cleanStepText(a.catalysts) && (
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Zap className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">핵심 촉매</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {a.catalysts.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 400)}
+                    {cleanStepText(a.catalysts, 400)}
                   </p>
                 </div>
               )}
 
               {/* 주요 리스크 */}
-              {a.risks && (
+              {a.risks && cleanStepText(a.risks) && (
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
                     <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">주요 리스크</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {a.risks.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 400)}
+                    {cleanStepText(a.risks, 400)}
                   </p>
                 </div>
               )}
 
               {/* 전략 요약 (촉매·리스크 없을 때) */}
-              {!a.catalysts && !a.risks && a.strategy && (
+              {!a.catalysts && !a.risks && a.strategy && cleanStepText(a.strategy) && (
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Target className="w-3.5 h-3.5 text-primary" />
                     <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">투자 전략</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {a.strategy.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, 500)}
+                    {cleanStepText(a.strategy, 500)}
                   </p>
                 </div>
               )}
