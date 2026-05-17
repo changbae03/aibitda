@@ -396,10 +396,11 @@ async function ensureBriefTable() {
 /** analysis_steps content가 JSON일 수 있으므로 파싱 후 읽기 좋은 텍스트로 변환 */
 function resolveStepText(raw: string): string {
   if (!raw) return "";
-  const s = raw.trim();
-  if (s.startsWith("{") || s.startsWith("[")) {
+  // 코드 펜스 제거 (```json ... ``` or ``` ... ```)
+  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  if (stripped.startsWith("{") || stripped.startsWith("[")) {
     try {
-      const obj = JSON.parse(s);
+      const obj = JSON.parse(stripped);
       if (obj && typeof obj === "object") {
         for (const key of ["summary", "description", "content", "text", "analysis"]) {
           if (typeof obj[key] === "string" && obj[key].length > 20) return obj[key];
@@ -411,7 +412,23 @@ function resolveStepText(raw: string): string {
       }
     } catch { /* fall through */ }
   }
-  return s;
+  return stripped;
+}
+
+/** investment_strategy JSON에서 risks 배열을 꺼내 텍스트로 변환 */
+function extractRisksFromStrategyJson(raw: string): string {
+  if (!raw) return "";
+  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  try {
+    const obj = JSON.parse(stripped);
+    if (Array.isArray(obj?.risks) && obj.risks.length > 0) {
+      return (obj.risks as string[]).slice(0, 3).join(" ");
+    }
+    if (Array.isArray(obj?.monitoring_indicators) && obj.monitoring_indicators.length > 0) {
+      return (obj.monitoring_indicators as string[]).slice(0, 2).join(" ");
+    }
+  } catch { /* fall through */ }
+  return "";
 }
 
 /** 긴 텍스트에서 앞 N문장만 추출 */
@@ -438,11 +455,12 @@ async function buildBriefSummary(ticker: string): Promise<{
   const today = new Date().toISOString().slice(0, 10);
 
   // 집단지성: 기간 제한 없이 가장 최신 완성 분석 (어떤 유저든)
+  // catalyst_analysis = 촉매/핵심이슈 분석 (실제 step_key)
+  // investment_strategy = JSON 포맷 전략 (summary·risks 배열 포함)
   const { rows: aRows } = await pool.query(`
     SELECT a.id, a.company_name, a.industry, a.investment_verdict, a.target_price,
       a.created_at,
-      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'key_catalysts'       LIMIT 1) AS catalysts,
-      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'risk_factors'        LIMIT 1) AS risks,
+      (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'catalyst_analysis'   LIMIT 1) AS catalysts,
       (SELECT content FROM analysis_steps WHERE analysis_id = a.id AND step_key = 'investment_strategy' LIMIT 1) AS strategy
     FROM analyses a
     WHERE a.ticker = $1 AND a.status = 'completed'
@@ -462,21 +480,22 @@ async function buildBriefSummary(ticker: string): Promise<{
   const analysis = aRows[0];
 
   // ── 경로 A: 분석 DB 직접 추출 — Gemini 호출 없음 ─────────────────────────
-  if (analysis?.catalysts || analysis?.risks || analysis?.strategy) {
+  if (analysis?.catalysts || analysis?.strategy) {
     const verdict     = analysis.investment_verdict ?? "미분석";
     const targetPrice = analysis.target_price
       ? ` (목표주가 ${Number(analysis.target_price).toLocaleString()}원)`
       : "";
 
-    // investment_strategy → 오늘의 핵심
+    // investment_strategy JSON → summary 필드를 오늘의 핵심으로
     const core = extractSentences(analysis.strategy ?? "", 2)
       || `AI 판정: ${verdict}${targetPrice}`;
 
-    // risk_factors → 리스크
-    const risk = extractSentences(analysis.risks ?? "", 2)
+    // investment_strategy JSON의 risks 배열 → 리스크
+    const risk = extractRisksFromStrategyJson(analysis.strategy ?? "")
+      || extractSentences(analysis.catalysts ?? "", 1)
       || "현재 등록된 리스크 정보가 없습니다.";
 
-    // key_catalysts → 투자 아이디어
+    // catalyst_analysis → 투자 아이디어 (핵심이슈·촉매 분석 전문)
     const catalyst = extractSentences(analysis.catalysts ?? "", 3)
       || "현재 등록된 투자 아이디어 정보가 없습니다.";
 
