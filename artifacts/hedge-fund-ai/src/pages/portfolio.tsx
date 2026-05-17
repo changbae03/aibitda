@@ -374,17 +374,22 @@ interface DailyBrief {
 /** analysis_steps content가 JSON 문자열일 수 있어 파싱 후 읽기 좋은 텍스트 추출 */
 function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
   if (!raw) return "";
-  const s = raw.trim();
+  let s = raw.trim();
+
+  // 코드 펜스 제거: ```json ... ``` 또는 ``` ... ```
+  const fenceMatch = s.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
+  if (fenceMatch) s = fenceMatch[1].trim();
+
   if (s.startsWith("{") || s.startsWith("[")) {
     try {
       const obj = JSON.parse(s);
       if (obj && typeof obj === "object") {
-        // summary > description > 그 외 긴 문자열 값 순서로 추출
-        for (const key of ["summary", "description", "content", "text", "analysis"]) {
+        // summary > key_issue > description 순서로 가장 의미 있는 텍스트 추출
+        for (const key of ["summary", "key_issue", "description", "content", "text", "analysis"]) {
           if (typeof obj[key] === "string" && obj[key].length > 20)
-            return obj[key].replace(/\*\*/g, "").slice(0, maxLen);
+            return obj[key].replace(/\*\*/g, "").replace(/\\n/g, "\n").slice(0, maxLen);
         }
-        // 그래도 없으면 긴 값들을 줄바꿈으로 이어붙임
+        // 그래도 없으면 긴 문자열 값들을 이어붙임
         const parts = Object.values(obj)
           .filter((v): v is string => typeof v === "string" && v.length > 20)
           .join("\n");
