@@ -20,8 +20,23 @@ interface EarningsEntry {
   epsLow: number | null;
   epsHigh: number | null;
   revenueEstimate: number | null;
+  revenueLow?: number | null;
+  revenueHigh?: number | null;
+  analyticCount?: number | null;
+  fiscalQuarterEnding?: string | null;
+  epsActualPrev?: number | null;
+  epsEstimatePrev?: number | null;
+  epsSurprisePct?: number | null;
   currency: string;
   isKorean: boolean;
+}
+
+interface DartDisclosure {
+  ticker: string;
+  companyName: string;
+  disclosureDate: string;
+  reportName: string;
+  dartUrl: string;
 }
 
 interface EconomicEvent {
@@ -249,6 +264,8 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
   const { isEn } = useLanguage();
   const hasEps = entry.epsEstimate !== null;
   const hasRevenue = entry.revenueEstimate !== null;
+  const hasConsensus = hasEps || hasRevenue;
+  const hasSurprise = entry.epsSurprisePct != null;
   const shortTicker = entry.ticker.replace(/\.(KS|KQ)$/, "");
 
   const [displayName, setDisplayName] = useState(entry.companyName);
@@ -261,6 +278,9 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
       setDisplayName(entry.companyName);
     }
   }, [isEn, entry.ticker, entry.companyName, entry.isKorean]);
+
+  const surprisePct = entry.epsSurprisePct ?? 0;
+  const surprisePositive = surprisePct >= 0;
 
   return (
     <motion.div
@@ -279,13 +299,24 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
           </span>
           <ExchangeBadge ticker={entry.ticker} isKorean={entry.isKorean} />
           <span className="text-xs text-muted-foreground">{shortTicker}</span>
+          {entry.analyticCount != null && entry.analyticCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/70 border border-border">
+              {entry.analyticCount}{isEn ? " analysts" : "명 추정"}
+            </span>
+          )}
         </div>
-        {(hasEps || hasRevenue) ? (
-          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+        {entry.fiscalQuarterEnding && (
+          <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+            {isEn ? `Reporting: ${entry.fiscalQuarterEnding}` : `보고 분기: ${entry.fiscalQuarterEnding}`}
+          </p>
+        )}
+        {hasConsensus ? (
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
             {hasEps && (
               <span className="flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />
-                {isEn ? "EPS Est:" : "EPS 예상:"} <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
+                {isEn ? "EPS Est:" : "EPS 예상:"}{" "}
+                <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
                 {entry.epsLow !== null && entry.epsHigh !== null && (
                   <span className="text-muted-foreground/70">({fmtEps(entry.epsLow, entry.currency)} – {fmtEps(entry.epsHigh, entry.currency)})</span>
                 )}
@@ -294,16 +325,135 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
             {hasRevenue && (
               <span className="flex items-center gap-1">
                 <DollarSign className="w-3 h-3" />
-                {isEn ? "Rev Est:" : "매출 예상:"} <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
+                {isEn ? "Rev Est:" : "매출 예상:"}{" "}
+                <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
+                {entry.revenueLow != null && entry.revenueHigh != null && (
+                  <span className="text-muted-foreground/70">
+                    ({fmtRevenue(entry.revenueLow, entry.isKorean)} – {fmtRevenue(entry.revenueHigh, entry.isKorean)})
+                  </span>
+                )}
               </span>
             )}
           </div>
         ) : (
           <p className="mt-1 text-xs text-muted-foreground/60">{isEn ? "No consensus data" : "컨센서스 데이터 없음"}</p>
         )}
+        {hasSurprise && (
+          <div className="mt-1.5">
+            <span className={cn(
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium",
+              surprisePositive
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            )}>
+              {surprisePositive ? "▲" : "▼"}
+              {isEn ? " Prev Q:" : " 전분기:"}
+              {entry.epsActualPrev != null && <span className="ml-0.5">{fmtEps(entry.epsActualPrev, entry.currency)}</span>}
+              <span className="ml-0.5">
+                ({surprisePositive ? "+" : ""}{surprisePct.toFixed(1)}%{" "}{isEn ? "surprise" : "서프라이즈"})
+              </span>
+            </span>
+          </div>
+        )}
       </div>
       <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 mt-1" />
     </motion.div>
+  );
+}
+
+// ── DART 최근 잠정실적 공시 섹션 ──────────────────────────────────────────────
+const _dartCache = new Map<string, { data: DartDisclosure[]; fetchedAt: number }>();
+
+function DartRecentSection() {
+  const { isEn } = useLanguage();
+  const [disclosures, setDisclosures] = useState<DartDisclosure[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const cached = _dartCache.get(today);
+    if (cached && Date.now() - cached.fetchedAt < 3 * 60 * 60 * 1000) {
+      setDisclosures(cached.data);
+      setLoading(false);
+      return;
+    }
+    fetch(getApiUrl("/api/market-data/dart-recent-earnings?days=14"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: DartDisclosure[]) => {
+        _dartCache.set(today, { data, fetchedAt: Date.now() });
+        setDisclosures(data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || disclosures.length === 0) return null;
+
+  const shown = expanded ? disclosures : disclosures.slice(0, 4);
+
+  return (
+    <div className="mb-4 rounded-xl border border-border bg-card/60 overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-accent/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">DART</span>
+          <span className="text-xs font-medium text-foreground">
+            {isEn ? "Recent Earnings Disclosures" : "최근 잠정실적 공시"}
+          </span>
+          <span className="text-[10px] text-muted-foreground/60">
+            {isEn ? `${disclosures.length} filings · 14d` : `${disclosures.length}건 · 최근 14일`}
+          </span>
+        </div>
+        <ChevronRight className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform", expanded && "rotate-90")} />
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-1.5">
+          {shown.map((d, i) => {
+            const bare = d.ticker.replace(/\.(KS|KQ)$/, "");
+            const krName = d.companyName;
+            return (
+              <div key={i} className="flex items-center gap-2 py-1 border-t border-border/50">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-medium text-foreground truncate">{krName}</span>
+                    <span className="text-[10px] text-muted-foreground/60">{bare}</span>
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                      {isEn ? "Filed" : "공시"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/50 mt-0.5 truncate">{d.reportName}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-muted-foreground/60">{d.disclosureDate.slice(5)}</p>
+                  <a
+                    href={d.dartUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-[10px] text-sky-400 hover:underline"
+                  >
+                    {isEn ? "View" : "공시 보기"}
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+          {disclosures.length > 4 && (
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="w-full text-center text-[10px] text-muted-foreground/50 hover:text-muted-foreground pt-1 transition-colors"
+            >
+              {expanded
+                ? (isEn ? "Show less" : "접기")
+                : (isEn ? `+${disclosures.length - 4} more` : `+${disclosures.length - 4}건 더 보기`)}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -619,6 +769,9 @@ export default function CalendarPage() {
                 ))}
               </div>
             )}
+
+            {/* DART 최근 잠정실적 공시 섹션 */}
+            {filter !== "economic" && <DartRecentSection />}
 
             {/* 날짜별 그룹 */}
             {sortedDates.map(date => (

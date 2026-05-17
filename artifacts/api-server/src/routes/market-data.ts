@@ -972,7 +972,7 @@ export async function warmupEarningsCache() {
       const settled = await batchProcess(allTickers, async t => {
         try {
           const d = await yahooFinance.quoteSummary(t,
-            { modules: ["calendarEvents", "price"] }, { validateResult: false });
+            { modules: ["calendarEvents", "price", "earningsTrend", "earningsHistory"] }, { validateResult: false });
           return { ticker: t, data: d as any };
         } catch { return null; }
       }, 5, 100);
@@ -985,6 +985,25 @@ export async function warmupEarningsCache() {
         const pr  = data?.price;
         const dates: any[] = cal?.earnings?.earningsDate ?? [];
         if (!dates.length) continue;
+
+        // earningsTrend: 현재 분기 컨센서스 추출
+        const trendArr: any[] = data?.earningsTrend?.trend ?? [];
+        const currentQtrW = trendArr.find((tr: any) => tr.period === "0q" || tr.period === "+1q") ?? trendArr[0];
+        const analyticCountW: number | null = currentQtrW?.earningsEstimate?.numberOfAnalysts ?? null;
+        const fqEndW = currentQtrW?.endDate;
+        const fiscalQuarterEndingW: string | null = fqEndW
+          ? (() => { const d2 = fqEndW instanceof Date ? fqEndW : new Date(fqEndW); return `${d2.toLocaleDateString("en-US",{month:"short"})} ${d2.getFullYear()}`; })()
+          : null;
+
+        // earningsHistory: 전분기 어닝 서프라이즈 추출
+        const histListW: any[] = data?.earningsHistory?.history ?? [];
+        const sortedHistW = [...histListW].sort((a, b) => {
+          const da = a.quarter instanceof Date ? a.quarter.getTime() : new Date(a.quarter ?? 0).getTime();
+          const db = b.quarter instanceof Date ? b.quarter.getTime() : new Date(b.quarter ?? 0).getTime();
+          return db - da;
+        });
+        const lastQtrW = sortedHistW[0];
+
         for (const rawDate of dates) {
           const ts = typeof rawDate === "number" ? rawDate * 1000
             : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
@@ -998,10 +1017,17 @@ export async function warmupEarningsCache() {
           raw.push({
             ticker, companyName: nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker,
             earningsDate: toKSTDateStr(displayDate),
-            epsEstimate:     cal?.earnings?.earningsAverage ?? null,
-            epsLow:          cal?.earnings?.earningsLow     ?? null,
-            epsHigh:         cal?.earnings?.earningsHigh    ?? null,
-            revenueEstimate: cal?.earnings?.revenueAverage  ?? null,
+            epsEstimate:     currentQtrW?.earningsEstimate?.avg ?? cal?.earnings?.earningsAverage ?? null,
+            epsLow:          currentQtrW?.earningsEstimate?.low ?? cal?.earnings?.earningsLow ?? null,
+            epsHigh:         currentQtrW?.earningsEstimate?.high ?? cal?.earnings?.earningsHigh ?? null,
+            revenueEstimate: currentQtrW?.revenueEstimate?.avg ?? cal?.earnings?.revenueAverage ?? null,
+            revenueLow:      currentQtrW?.revenueEstimate?.low ?? null,
+            revenueHigh:     currentQtrW?.revenueEstimate?.high ?? null,
+            analyticCount:   analyticCountW,
+            fiscalQuarterEnding: fiscalQuarterEndingW,
+            epsActualPrev:   lastQtrW?.epsActual ?? null,
+            epsEstimatePrev: lastQtrW?.epsEstimate ?? null,
+            epsSurprisePct:  lastQtrW?.surprisePercent ?? null,
             currency, isKorean,
           });
           break;
@@ -1192,7 +1218,10 @@ router.get("/earnings-calendar", async (req, res) => {
   interface EarningsEntry {
     ticker: string; companyName: string; earningsDate: string;
     epsEstimate: number | null; epsLow: number | null; epsHigh: number | null;
-    revenueEstimate: number | null; currency: string; isKorean: boolean;
+    revenueEstimate: number | null; revenueLow: number | null; revenueHigh: number | null;
+    analyticCount: number | null; fiscalQuarterEnding: string | null;
+    epsActualPrev: number | null; epsEstimatePrev: number | null; epsSurprisePct: number | null;
+    currency: string; isKorean: boolean;
   }
 
   // ── 3-A. 캐시 계층: 인메모리 → DB → Yahoo Finance 실시간 ──────────────────
@@ -1217,7 +1246,7 @@ router.get("/earnings-calendar", async (req, res) => {
       const settled = await batchProcess(allTickers, async t => {
         try {
           const d = await yahooFinance.quoteSummary(t,
-            { modules: ["calendarEvents", "price"] },
+            { modules: ["calendarEvents", "price", "earningsTrend", "earningsHistory"] },
             { validateResult: false }
           );
           return { ticker: t, data: d as any };
@@ -1232,6 +1261,24 @@ router.get("/earnings-calendar", async (req, res) => {
         const pr    = data?.price;
         const dates: any[] = cal?.earnings?.earningsDate ?? [];
         if (!dates.length) continue;
+
+        // earningsTrend: 현재 분기 컨센서스
+        const trendArr2: any[] = data?.earningsTrend?.trend ?? [];
+        const currentQtr2 = trendArr2.find((tr: any) => tr.period === "0q" || tr.period === "+1q") ?? trendArr2[0];
+        const analyticCount2: number | null = currentQtr2?.earningsEstimate?.numberOfAnalysts ?? null;
+        const fqEnd2 = currentQtr2?.endDate;
+        const fiscalQuarterEnding2: string | null = fqEnd2
+          ? (() => { const d2 = fqEnd2 instanceof Date ? fqEnd2 : new Date(fqEnd2); return `${d2.toLocaleDateString("en-US",{month:"short"})} ${d2.getFullYear()}`; })()
+          : null;
+
+        // earningsHistory: 전분기 서프라이즈
+        const histList2: any[] = data?.earningsHistory?.history ?? [];
+        const sortedHist2 = [...histList2].sort((a, b) => {
+          const da = a.quarter instanceof Date ? a.quarter.getTime() : new Date(a.quarter ?? 0).getTime();
+          const db = b.quarter instanceof Date ? b.quarter.getTime() : new Date(b.quarter ?? 0).getTime();
+          return db - da;
+        });
+        const lastQtr2 = sortedHist2[0];
 
         for (const rawDate of dates) {
           const ts   = typeof rawDate === "number" ? rawDate * 1000
@@ -1250,10 +1297,17 @@ router.get("/earnings-calendar", async (req, res) => {
 
           raw.push({
             ticker, companyName: name, earningsDate: toKSTDateStr(displayDate),
-            epsEstimate:     cal?.earnings?.earningsAverage ?? null,
-            epsLow:          cal?.earnings?.earningsLow     ?? null,
-            epsHigh:         cal?.earnings?.earningsHigh    ?? null,
-            revenueEstimate: cal?.earnings?.revenueAverage  ?? null,
+            epsEstimate:     currentQtr2?.earningsEstimate?.avg ?? cal?.earnings?.earningsAverage ?? null,
+            epsLow:          currentQtr2?.earningsEstimate?.low ?? cal?.earnings?.earningsLow ?? null,
+            epsHigh:         currentQtr2?.earningsEstimate?.high ?? cal?.earnings?.earningsHigh ?? null,
+            revenueEstimate: currentQtr2?.revenueEstimate?.avg ?? cal?.earnings?.revenueAverage ?? null,
+            revenueLow:      currentQtr2?.revenueEstimate?.low ?? null,
+            revenueHigh:     currentQtr2?.revenueEstimate?.high ?? null,
+            analyticCount:   analyticCount2,
+            fiscalQuarterEnding: fiscalQuarterEnding2,
+            epsActualPrev:   lastQtr2?.epsActual ?? null,
+            epsEstimatePrev: lastQtr2?.epsEstimate ?? null,
+            epsSurprisePct:  lastQtr2?.surprisePercent ?? null,
             currency, isKorean,
           });
           break;
@@ -1285,7 +1339,10 @@ router.get("/earnings-calendar", async (req, res) => {
       const bare = ticker.replace(/\.(KS|KQ)$/, "");
       entries.push({
         ticker, companyName: nameMap[ticker] ?? nameMap[bare] ?? ticker, earningsDate: gDate,
-        epsEstimate: null, epsLow: null, epsHigh: null, revenueEstimate: null,
+        epsEstimate: null, epsLow: null, epsHigh: null,
+        revenueEstimate: null, revenueLow: null, revenueHigh: null,
+        analyticCount: null, fiscalQuarterEnding: null,
+        epsActualPrev: null, epsEstimatePrev: null, epsSurprisePct: null,
         currency: "KRW", isKorean: true,
       });
     }
@@ -1300,6 +1357,69 @@ router.get("/earnings-calendar", async (req, res) => {
   } catch (err: any) {
     console.error("[earnings-calendar] unhandled error:", err?.message);
     res.status(500).json({ error: err?.message ?? "earnings-calendar error" });
+  }
+});
+
+// ─── GET /api/market-data/dart-recent-earnings ──────────────────────────────
+// 최근 N일(기본 14일) DART "잠정실적" 공시 목록 반환
+router.get("/dart-recent-earnings", async (req, res) => {
+  try {
+    const DART_KEY = process.env.DART_API_KEY;
+    if (!DART_KEY) return res.json([]);
+
+    const days = Math.min(Math.max(parseInt((req.query.days as string) ?? "14", 10) || 14, 1), 30);
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
+    const startDate = new Date(todayKST.getTime() - days * 86400000);
+    const fmt8 = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+
+    const todayStr = fmt8(todayKST);
+    const cacheKey = `dart-recent-earnings-${todayStr}-${days}`;
+    const memHit = (_yfCache as any).get?.(cacheKey);
+    if (memHit && memHit.expiresAt > Date.now()) return res.json(memHit.data);
+
+    const dbCached = await getFromDBCache<any[]>(cacheKey);
+    if (dbCached) {
+      (_yfCache as any).set?.(cacheKey, { data: dbCached, expiresAt: Date.now() + 3 * 60 * 60 * 1000 });
+      return res.json(dbCached);
+    }
+
+    const url =
+      `https://opendart.fss.or.kr/api/list.json` +
+      `?crtfc_key=${DART_KEY}` +
+      `&bgn_de=${fmt8(startDate)}&end_de=${todayStr}` +
+      `&sort=date&sort_mth=desc&page_no=1&page_count=100`;
+
+    const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) return res.json([]);
+    const data = await r.json() as Record<string, any>;
+    if (data["status"] !== "000") return res.json([]);
+
+    const list: any[] = data["list"] ?? [];
+    const filtered = list
+      .filter((item: any) =>
+        item.report_nm?.includes("잠정") &&
+        item.stock_code && /^\d{6}$/.test(String(item.stock_code))
+      )
+      .map((item: any) => {
+        const dt = String(item.rcept_dt ?? "");
+        const dateStr = dt.length === 8
+          ? `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`
+          : dt;
+        return {
+          ticker: `${item.stock_code}.KS`,
+          companyName: item.corp_name,
+          disclosureDate: dateStr,
+          reportName: item.report_nm,
+          dartUrl: `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${item.rcept_no}`,
+        };
+      });
+
+    await saveToDBCache(cacheKey, filtered, 3 * 60 * 60 * 1000); // 3시간 캐시
+    console.log(`[dart-recent-earnings] ${days}일 기준 ${filtered.length}건 잠정실적 공시`);
+    res.json(filtered);
+  } catch (e: any) {
+    console.error("[dart-recent-earnings]", e?.message);
+    res.json([]);
   }
 });
 
