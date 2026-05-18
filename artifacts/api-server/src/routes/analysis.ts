@@ -25,6 +25,7 @@ import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
+import { runCalibrationAgent, saveCalibrationNote, getCalibrationNote } from "../lib/calibration-agent.js";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -4331,13 +4332,23 @@ async function executeStep(
   // 운영자가 특정 종목에 입력한 보정 노트를 AI 컨텍스트에 항상 반영
   try {
     const noteRows = await rawQuery(
-      `SELECT memo FROM ticker_notes WHERE ticker = $1 AND memo != ''`,
+      `SELECT memo, calibration_note FROM ticker_notes WHERE ticker = $1`,
       [analysis.ticker]
     );
-    if (noteRows[0]?.memo) {
-      const memoBlock = `\n\n[📝 운영자 종목 보정 메모 — ${analysis.companyName}(${analysis.ticker}) — 반드시 반영하세요]\n${noteRows[0].memo}`;
+    const row = noteRows[0];
+
+    // ① 운영자 수동 메모
+    if (row?.memo) {
+      const memoBlock = `\n\n[📝 운영자 종목 보정 메모 — ${analysis.companyName}(${analysis.ticker}) — 반드시 반영하세요]\n${row.memo}`;
       enrichedContext = enrichedContext ? enrichedContext + memoBlock : memoBlock;
-      console.log(`[ticker-note] Injected ${memoBlock.length}chars for ${analysis.ticker}`);
+      console.log(`[ticker-note] Injected operator memo ${memoBlock.length}chars for ${analysis.ticker}`);
+    }
+
+    // ② AI 자동 보정 메모 — 이전 분석 QA 검토 결과
+    if (row?.calibration_note) {
+      const calibBlock = `\n\n[🔧 AI 자동 보정 메모 — ${analysis.companyName}(${analysis.ticker}) 이전 분석 QA 검토 결과 — 이번 분석에서 반드시 개선하세요]\n${row.calibration_note}`;
+      enrichedContext = enrichedContext ? enrichedContext + calibBlock : calibBlock;
+      console.log(`[ticker-note] Injected calibration note ${calibBlock.length}chars for ${analysis.ticker}`);
     }
   } catch {
     // 실패해도 분석 진행
@@ -5616,6 +5627,45 @@ async function executeStep(
               [qaResult.score, JSON.stringify(qaResult.flags), id]
             );
             console.log(`[qa] #${id} 자동 채점 완료: ${qaResult.score}점 (${qaResult.grade})`);
+
+            // ── AI 보정 메모 생성 (QA 채점 직후) ─────────────────────────────
+            // QA 점수가 낮거나(< 90) 실패 항목이 있을 때 AI가 보정 메모 작성
+            // → ticker_notes.calibration_note 저장 → 다음 분석 프롬프트에 자동 주입
+            if (qaResult.score < 95 || qaResult.flags.length > 0) {
+              try {
+                // peer_flags 읽기
+                const peerFlagRes = await pool.query(
+                  `SELECT peer_flags FROM analyses WHERE id = $1`, [id]
+                );
+                const peerFlags = peerFlagRes.rows[0]?.peer_flags
+                  ? JSON.parse(peerFlagRes.rows[0].peer_flags)
+                  : null;
+
+                const calibNote = await runCalibrationAgent({
+                  analysisId:  id,
+                  ticker:      analysis.ticker ?? "",
+                  companyName: analysis.companyName ?? "",
+                  qaScore:     qaResult.score,
+                  qaGrade:     qaResult.grade,
+                  qaFlags:     qaResult.flags,
+                  peerFlags,
+                  steps: sRes.rows.map((r: any) => ({
+                    stepKey: r.step_key,
+                    content: r.content ?? "",
+                  })),
+                });
+
+                if (calibNote) {
+                  await saveCalibrationNote(analysis.ticker ?? "", calibNote);
+                  console.log(`[calibration] #${id} ${analysis.ticker} 보정 메모 저장 완료 (${calibNote.length}자)`);
+                }
+              } catch (ce) {
+                console.error(`[calibration] #${id} 보정 메모 생성 실패:`, ce);
+              }
+            } else {
+              console.log(`[calibration] #${id} QA 점수 ${qaResult.score}점 — 보정 메모 생략 (기준 이상)`);
+            }
+            // ─────────────────────────────────────────────────────────────────
           }
         } catch (e) {
           console.error(`[qa] #${id} 자동 채점 실패:`, e);
