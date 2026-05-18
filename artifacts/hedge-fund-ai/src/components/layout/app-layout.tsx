@@ -4,6 +4,9 @@ import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
   Sparkles, BookOpen, CalendarDays, BarChart2,
   User, Search, ChevronRight, Download, Share, Briefcase,
+  LayoutDashboard, Activity, Bot, Users, Tag, FileText,
+  StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
+  ShieldCheck, Shield,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -97,20 +100,40 @@ const NAV_ITEMS = [
   { href: "/popular",      label: "애빛다 통계",     labelEn: "Statistics",      Icon: BarChart2 },
 ];
 
-const ADMIN_ITEMS = [
-  { href: "/admin/dashboard",       label: "대시보드" },
-  { href: "/admin/live",            label: "실시간 분석 현황" },
-  { href: "/admin/batch-reports",    label: "AI 자동 보고서" },
-  { href: "/admin/analyses",        label: "전체 보고서 목록" },
-  { href: "/admin/user-management", label: "유저 관리" },
-  { href: "/admin/promo-codes",     label: "프로모 코드" },
-  { href: "/admin/ticker-notes",    label: "종목 보정 메모" },
-  { href: "/admin/notices",         label: "공지사항 관리" },
-  { href: "/admin/feedback",        label: "유저 피드백" },
-  { href: "/admin/support",         label: "고객 문의" },
-  { href: "/admin/calibration",     label: "모델 보정 현황" },
-  { href: "/admin/quality",         label: "AI 품질 관리" },
-  { href: "/admin/users",           label: "관리자 관리" },
+const ADMIN_GROUPS = [
+  {
+    label: "현황",
+    items: [
+      { href: "/admin/dashboard",     label: "대시보드",       Icon: LayoutDashboard },
+      { href: "/admin/live",          label: "실시간 분석",    Icon: Activity },
+      { href: "/admin/batch-reports", label: "AI 자동 보고서", Icon: Bot },
+    ],
+  },
+  {
+    label: "유저",
+    items: [
+      { href: "/admin/user-management", label: "유저 관리",   Icon: Users },
+      { href: "/admin/promo-codes",     label: "프로모 코드", Icon: Tag },
+    ],
+  },
+  {
+    label: "콘텐츠",
+    items: [
+      { href: "/admin/analyses",     label: "전체 보고서",    Icon: FileText },
+      { href: "/admin/ticker-notes", label: "종목 보정 메모", Icon: StickyNote },
+      { href: "/admin/notices",      label: "공지사항",       Icon: Megaphone },
+    ],
+  },
+  {
+    label: "운영",
+    items: [
+      { href: "/admin/feedback",    label: "유저 피드백",   Icon: MessageSquare },
+      { href: "/admin/support",     label: "고객 문의",    Icon: Headphones },
+      { href: "/admin/calibration", label: "모델 보정",    Icon: SlidersHorizontal },
+      { href: "/admin/quality",     label: "AI 품질 관리", Icon: ShieldCheck },
+      { href: "/admin/users",       label: "관리자 관리",  Icon: Shield },
+    ],
+  },
 ];
 
 function CreditDots({ credits }: { credits: CreditInfo }) {
@@ -391,25 +414,30 @@ export function AppLayout({ children }: AppLayoutProps) {
         <nav className="flex-1 px-1.5 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden scrollbar-none">
           <NavLinks expanded={sidebarExpanded} />
           {isAdmin && sidebarExpanded && (
-            <div className="pt-4">
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">{isEn ? "Admin" : "관리자"}</p>
-              {ADMIN_ITEMS.map(item => {
-                const isActive = location === item.href || location.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150 whitespace-nowrap overflow-hidden",
-                      isActive
-                        ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
-                        : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <div className="pt-4 space-y-3">
+              {ADMIN_GROUPS.map(group => (
+                <div key={group.label}>
+                  <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/35">{group.label}</p>
+                  {group.items.map(item => {
+                    const isActive = location === item.href || location.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150 whitespace-nowrap overflow-hidden",
+                          isActive
+                            ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                            : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
+                        )}
+                      >
+                        <item.Icon className="w-3.5 h-3.5 shrink-0" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </nav>
@@ -473,26 +501,31 @@ export function AppLayout({ children }: AppLayoutProps) {
               <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
                 <NavLinks onSelect={() => setMenuOpen(false)} expanded={true} />
                 {isAdmin && (
-                  <div className="pt-4">
-                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">{isEn ? "Admin" : "관리자"}</p>
-                    {ADMIN_ITEMS.map(item => {
-                      const isActive = location === item.href || location.startsWith(item.href);
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setMenuOpen(false)}
-                          className={cn(
-                            "block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150",
-                            isActive
-                              ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
-                              : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
-                          )}
-                        >
-                          {item.label}
-                        </Link>
-                      );
-                    })}
+                  <div className="pt-4 space-y-3">
+                    {ADMIN_GROUPS.map(group => (
+                      <div key={group.label}>
+                        <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/35">{group.label}</p>
+                        {group.items.map(item => {
+                          const isActive = location === item.href || location.startsWith(item.href);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setMenuOpen(false)}
+                              className={cn(
+                                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors duration-150",
+                                isActive
+                                  ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                                  : "text-muted-foreground/60 hover:text-foreground hover:bg-accent"
+                              )}
+                            >
+                              <item.Icon className="w-3.5 h-3.5 shrink-0" />
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </nav>

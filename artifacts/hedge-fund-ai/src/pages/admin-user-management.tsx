@@ -3,9 +3,41 @@ import {
   Loader2, Search, ChevronRight, X,
   Zap, TrendingUp, RotateCcw, Plus, Minus, History,
   ArrowLeft, ArrowRight, User, Crown, FileText, ExternalLink, BarChart2, Star,
-  Download, SlidersHorizontal,
+  Download, SlidersHorizontal, Users, Activity, UserCheck,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+
+interface AdminStats {
+  totals?: { users: number; analyses: number; todayAnalyses: number };
+  activeUsersByDay?: { day: string; count: number }[];
+  tierCounts?: { free?: number; beta?: number; premium?: number };
+}
+
+function StatsBadge({ label, value, icon: Icon, accent }: { label: string; value: string | number; icon: React.ElementType; accent?: string }) {
+  return (
+    <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-muted/40 border border-border/60 min-w-0">
+      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0", accent ?? "bg-primary/10")}>
+        <Icon className={cn("w-3.5 h-3.5", accent ? "text-white" : "text-primary")} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] text-muted-foreground font-medium leading-none mb-0.5">{label}</p>
+        <p className="text-sm font-bold text-foreground tabular-nums truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-border/50">
+      {[...Array(7)].map((_, i) => (
+        <td key={i} className="px-4 py-3">
+          <div className="h-3 rounded bg-muted/60 animate-pulse" style={{ width: `${40 + Math.random() * 40}%` }} />
+        </td>
+      ))}
+    </tr>
+  );
+}
 
 interface UserDetail {
   user: {
@@ -239,6 +271,14 @@ export default function AdminUserManagement() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+
+  useEffect(() => {
+    fetch(getApiUrl("/api/admin/stats"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d); })
+      .catch(() => {});
+  }, []);
 
   const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
   const [analysesTotal, setAnalysesTotal] = useState(0);
@@ -463,6 +503,34 @@ export default function AdminUserManagement() {
             </button>
           </div>
 
+          {/* 통계 바 */}
+          {stats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <StatsBadge
+                label="전체 유저"
+                value={(stats.totals?.users ?? total).toLocaleString() + "명"}
+                icon={Users}
+              />
+              <StatsBadge
+                label="7일 활성"
+                value={(stats.activeUsersByDay?.reduce((s, d) => s + d.count, 0) ?? 0).toLocaleString() + "명"}
+                icon={Activity}
+              />
+              <StatsBadge
+                label="유료 유저"
+                value={((stats.tierCounts?.beta ?? 0) + (stats.tierCounts?.premium ?? 0)).toLocaleString() + "명"}
+                icon={UserCheck}
+                accent="bg-amber-500"
+              />
+              <StatsBadge
+                label="프리미엄"
+                value={(stats.tierCounts?.premium ?? 0).toLocaleString() + "명"}
+                icon={Crown}
+                accent="bg-[#FF8A7A]"
+              />
+            </div>
+          )}
+
           {/* 검색 */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
@@ -514,9 +582,20 @@ export default function AdminUserManagement() {
 
         <div className="overflow-auto flex-1">
           {loading ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin mr-2" /> 불러오는 중…
-            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">유저</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">등급</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">마지막 활동</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">총</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">7일</th>
+                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">오늘</th>
+                  <th className="w-6" />
+                </tr>
+              </thead>
+              <tbody>{[...Array(8)].map((_, i) => <SkeletonRow key={i} />)}</tbody>
+            </table>
           ) : users.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">유저가 없습니다</div>
           ) : (
