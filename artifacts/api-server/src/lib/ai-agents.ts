@@ -5323,16 +5323,31 @@ ${COMMON_RULES}`,
 
 【내부 처리 — 출력 금지】아래 두 단계는 JSON 작성 전 머릿속으로만 처리하는 내부 계산입니다. 단계 이름·계산 과정·메모를 JSON 필드에 절대 출력하지 마세요.
 
-[내부 계산 1 — 수치 추출]
-위 컨텍스트의 【Valuation Analyst】 단계에서 아래 수치를 찾아 기억하세요:
-  ① 최종 적정주가(Base 목표가)
-  ② 상단 밴드(Bull target)
-  ③ 하단 밴드(Bear target)
-  ④ 현재 주가
+[내부 계산 1 — 수치 추출 (반드시 아래 순서대로)]
+
+⛔ **1순위 — FINAL_VALUATION_DATA 기계 읽기 (이 방법으로 먼저 추출, 절대 건너뛰지 마세요)**
+컨텍스트 맨 끝 부분에서 "FINAL_VALUATION_DATA:" 로 시작하는 줄을 찾으세요.
+예: FINAL_VALUATION_DATA:{"current":27500,"bear":45000,"base":69644,"bull":88000,...}
+→ 이 JSON에서 아래 값을 추출하세요:
+  ① 최종 적정주가 = "base" 필드 숫자
+  ② 상단 밴드    = "bull" 필드 숫자
+  ③ 하단 밴드    = "bear" 필드 숫자
+  ④ 현재 주가    = "current" 필드 숫자
   ⑤ Base upside = (①-④)/④×100
 
+⚠️ **2순위 — FINAL_VALUATION_DATA가 없을 때만 사용**
+컨텍스트 【Valuation Analyst】 단계의 "⚖️ 최종 조율 → 12개월 적정주가 + 밴드" 섹션 마지막에 있는 가중평균 최종 목표가 숫자를 찾으세요.
+"최종 목표가", "12개월 목표주가", "가중평균 목표가", "Base-case" 단서를 재탐색하세요.
+
+⛔ **절대 금지 — 아래 값을 최종 적정주가로 쓰는 것은 중대 오류입니다:**
+- DCF·EV/EBITDA 등 절대가치 단독 중간값 (피어와 조율 전 값)
+- 피어 목표가 단독값 (DCF와 조율 전 값)
+- EPS, BPS, BVPS, EBITDA, WACC, 배수 계산 과정의 중간 숫자
+- 현재 주가(현재가) 자체를 적정주가로 사용
+
+⛔ **일관성 필수 체크**: JSON 최상위 "target_price" 필드와 scenarios[Base].target_price, FINAL_VALUATION_DATA의 "base" 값이 반드시 일치해야 합니다 (수급·심리 보정 적용 시에는 보정 후 값으로 통일).
+
 → 이 수치를 그대로 JSON 필드에 채웁니다. (단, 아래 한국 심리 보정이 적용된 경우 보정 후 수치 사용)
-→ 수치를 못 찾겠다면 "목표가", "적정가", "밸류에이션", "TP" 단서를 재탐색하세요.
 
 [내부 계산 1-B — 실적 수치 추출 (summary 작성 필수)]
 위 컨텍스트의 【Financial Analyst / company_analysis】 단계 끝부분(CHAIN-HANDOFF 섹션)에서 아래 수치를 찾아 기억하세요:
@@ -5435,9 +5450,9 @@ ${COMMON_RULES}`,
       "probability": "20%"
     }
   ],
-  "current_price": "컨텍스트의 현재 주가 숫자만 (KRW 예: 485500, USD 예: 134.25)",
+  "current_price": "FINAL_VALUATION_DATA의 current 필드값 (KRW 예: 485500, USD 예: 134.25)",
   "entry_price": "구체적 진입 가격 (KRW 예: 190000, USD 예: 120.50 — 현지통화 숫자만)",
-  "target_price": "scenarios Base target_price와 동일한 숫자 (KRW 예: 210000, USD 예: 180.00)",
+  "target_price": "⛔ 반드시 FINAL_VALUATION_DATA의 base 필드 숫자 (수급·심리 보정 적용 시 보정 후 값) — scenarios Base target_price와 반드시 동일해야 함",
   "stop_loss": "손절 가격 (KRW 예: 175000, USD 예: 110.00 — 현지통화 숫자만)",
   "risks": [
     "핵심 리스크 1",
