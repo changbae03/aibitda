@@ -129,6 +129,13 @@ async function pickUsStocks(count: number): Promise<BatchStock[]> {
   return rows;
 }
 
+// ─── 오늘 실행 기록 강제 초기화 (관리자용) ────────────────────────────────────
+export async function clearBatchDateForToday(): Promise<void> {
+  await pool.query(`DELETE FROM system_cache WHERE key = 'auto_batch_last_run'`);
+  await pool.query(`DELETE FROM system_cache WHERE key = $1`, [BATCH_LOCK_KEY]);
+  console.log("[auto-batch] 오늘 실행 기록 초기화 완료");
+}
+
 // ─── 메인: 일일 자동 배치 실행 ────────────────────────────────────────────────
 export async function runDailyAutoBatch(port: number): Promise<void> {
   // 오늘(KST) 이미 실행했으면 스킵
@@ -178,8 +185,9 @@ export async function runDailyAutoBatch(port: number): Promise<void> {
   const batch = [...krBatch, ...usBatch];
 
   if (batch.length === 0) {
-    console.log("[auto-batch] 선택된 종목 없음 — 스킵");
-    await setLastBatchDate(todayKST);
+    // 종목이 없으면 날짜를 기록하지 않음 → 다음 재시작 시 재시도
+    console.log("[auto-batch] 선택된 종목 없음 — 스킵 (날짜 기록 안 함, 다음 실행 때 재시도)");
+    await releaseLock();
     return;
   }
 

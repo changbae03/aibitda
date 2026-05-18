@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import { getUserId } from "../lib/credits.js";
+import { clearBatchDateForToday, runDailyAutoBatch } from "../lib/auto-batch-runner.js";
 
 const router = Router();
 
@@ -227,6 +228,32 @@ router.get("/batch-status", async (req, res) => {
     history,
     totalAutoAnalyses: parseInt(totalRow.rows[0].count, 10),
   });
+});
+
+// POST /api/admin/force-batch — 오늘 배치 기록 초기화 후 즉시 강제 실행
+// 관리자 세션 OR X-Scheduler-Token 헤더로 인증
+router.post("/force-batch", async (req, res) => {
+  const schedulerToken = req.headers["x-scheduler-token"];
+  const userId = getUserId(req);
+  const authorized =
+    schedulerToken === "internal-scheduler-cbst-2024" ||
+    (await isAdmin(userId));
+  if (!authorized) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  try {
+    await clearBatchDateForToday();
+    const port = parseInt(process.env["PORT"] ?? "8080", 10);
+    // 백그라운드 실행 (응답 먼저 반환)
+    runDailyAutoBatch(port).catch(e =>
+      console.error("[admin/force-batch] 실행 오류:", e?.message)
+    );
+    res.json({ ok: true, message: "배치 기록 초기화 완료. 자동 배치 실행 시작됩니다." });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "알 수 없는 오류" });
+  }
 });
 
 // GET /api/admin/peer-issues — 피어 이상 감지된 분석 목록

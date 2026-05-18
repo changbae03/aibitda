@@ -126,14 +126,14 @@ const server = app.listen(port, () => {
     );
   }, ONE_WEEK_MS);
 
-  // ── 일일 자동 배치 분석 (KR 10 + US 10, 워치리스트 로테이션) ────────────────
-  // 서버 시작 3분 후 첫 실행 → 이후 24시간마다 반복
-  // 오늘 이미 실행된 경우 DB 체크 후 자동 스킵
+  // ── 일일 자동 배치 분석 (KR 25 + US 15, 워치리스트 로테이션) ────────────────
+  // 서버 시작 8분 후 첫 실행 (KRX/US harvester가 2~4분 실행됨 → 충분한 여유)
+  // → 이후 24시간마다 반복. 오늘 이미 실행된 경우 DB 체크 후 자동 스킵
   setTimeout(() => {
     runDailyAutoBatch(port).catch((e) =>
       console.error("[SCHEDULER] 자동 배치 첫 실행 실패:", e?.message ?? e)
     );
-  }, 3 * 60 * 1000);
+  }, 8 * 60 * 1000);
 
   setInterval(() => {
     console.log("[SCHEDULER] 일일 자동 배치 분석 시작");
