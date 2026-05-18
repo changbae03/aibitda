@@ -1,12 +1,16 @@
 import { Router } from "express";
 import cookie from "cookie";
+import jwt from "jsonwebtoken";
 import {
   getUserId,
   getCreditStatus,
+  getOrCreateCredits,
   getOrCreateReferralCode,
   registerReferral,
 } from "../lib/credits.js";
 import { pool } from "@workspace/db";
+
+const JWT_SECRET = process.env.JWT_SECRET || "cbst-ai-research-secret-2024";
 
 const router = Router();
 
@@ -263,6 +267,55 @@ router.post("/credits/share/viewed", async (req, res) => {
 
   console.log(`[share-credit] +1 → ${sharer.user_id} | analysis=${analysisId} | viewer=${viewerUserId ?? "anonymous"}`);
   return res.json({ ok: true, credited: true });
+});
+
+// GET /api/mypage — 마이페이지 통합 데이터
+router.get("/mypage", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "로그인이 필요합니다" });
+
+  // JWT에서 카카오 프로필 정보 추출
+  const cookies = cookie.parse(req.headers.cookie || "");
+  const token = cookies.auth_token;
+  let jwtUser: any = null;
+  if (token) {
+    try { jwtUser = jwt.verify(token, JWT_SECRET) as any; } catch {}
+  }
+
+  const [row, dbRes] = await Promise.all([
+    getOrCreateCredits(userId),
+    pool.query(
+      `SELECT tier, total_analyses, created_at, display_name, email
+       FROM user_credits WHERE user_id = $1`,
+      [userId]
+    ),
+  ]);
+  const db = dbRes.rows[0] ?? {};
+  const dailyRemaining = Math.max(0, row.daily_limit - row.daily_used);
+
+  // 단기 ID (마지막 6자 표시용)
+  const shortId = userId.replace(/^kakao_/, "").replace(/^clerk_/, "").slice(-8).toUpperCase();
+
+  res.json({
+    user: {
+      id:            shortId,
+      fullId:        userId,
+      nickname:      db.display_name || jwtUser?.nickname || "사용자",
+      profileImage:  jwtUser?.profileImage ?? null,
+      email:         db.email || jwtUser?.email || null,
+      loginProvider: userId.startsWith("kakao_") ? "kakao" : "clerk",
+    },
+    credits: {
+      dailyUsed:      row.daily_used,
+      dailyLimit:     row.daily_limit,
+      bonusCredits:   row.bonus_credits,
+      remaining:      dailyRemaining + row.bonus_credits,
+      tier:           db.tier ?? "free",
+      totalAnalyses:  db.total_analyses ?? 0,
+      joinedAt:       db.created_at ?? null,
+      referralCode:   row.referral_code ?? null,
+    },
+  });
 });
 
 export default router;

@@ -248,7 +248,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const UserSection = ({ expanded }: { expanded?: boolean }) => (
     <div className="px-2 py-3 border-t border-border space-y-1">
       {user && expanded && (
-        <div className="flex items-center gap-2.5 px-2 py-1.5 mb-0.5">
+        <Link href="/mypage" className="flex items-center gap-2.5 px-2 py-1.5 mb-0.5 rounded-lg hover:bg-accent transition-colors">
           <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center shrink-0">
             {user.profileImage ? (
               <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
@@ -265,18 +265,18 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
             )}
           </div>
-        </div>
+        </Link>
       )}
       {user && !expanded && (
-        <div className="flex justify-center py-1">
-          <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center">
+        <Link href="/mypage" className="flex justify-center py-1" title={isEn ? "My Page" : "마이페이지"}>
+          <div className="w-7 h-7 rounded-full bg-[#FF8A7A]/20 flex items-center justify-center hover:bg-[#FF8A7A]/30 transition-colors">
             {user.profileImage ? (
               <img src={user.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
             ) : (
               <User className="w-3.5 h-3.5 text-[#FF8A7A]" />
             )}
           </div>
-        </div>
+        </Link>
       )}
 
       <Link

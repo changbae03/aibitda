@@ -47,6 +47,7 @@ import DisclaimerPage from "@/pages/disclaimer";
 import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
 import Portfolio from "@/pages/portfolio";
+import MyPage from "@/pages/mypage";
 
 const CORAL = "#FF8A7A";
 const CHARS_KO = ["애", "빛", "다"];
@@ -250,6 +251,7 @@ function Router() {
             <Route path="/admin/quality" component={AdminQuality} />
             <Route path="/admin/batch-reports" component={AdminBatchReports} />
             <Route path="/portfolio" component={Portfolio} />
+            <Route path="/mypage" component={MyPage} />
             <Route path="/disclaimer" component={DisclaimerPage} />
             <Route path="/support" component={SupportPage} />
             <Route path="/notices" component={NoticesPage} />
