@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useLanguage } from "@/lib/language-context";
 import {
   FileText, Search, TrendingUp, TrendingDown, Minus,
   Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, User,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
-import { ko } from "date-fns/locale";
+import { ko, enUS } from "date-fns/locale";
 
 interface AnalysisRow {
   id: number;
@@ -33,15 +34,21 @@ interface ReportResponse {
   offset: number;
 }
 
-const VERDICT_MAP: Record<string, { label: string; color: string }> = {
-  strong_buy: { label: "강력매수", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-  buy:        { label: "매수",     color: "text-blue-700 bg-blue-50 border-blue-200" },
-  hold:       { label: "보유",     color: "text-amber-700 bg-amber-50 border-amber-200" },
-  sell:       { label: "매도",     color: "text-red-600 bg-red-50 border-red-200" },
-  strong_sell:{ label: "강력매도", color: "text-red-700 bg-red-50 border-red-200" },
+const VERDICT_LABELS_KO: Record<string, string> = {
+  strong_buy: "강력매수", buy: "매수", hold: "보유", sell: "매도", strong_sell: "강력매도",
+};
+const VERDICT_LABELS_EN: Record<string, string> = {
+  strong_buy: "Strong Buy", buy: "Buy", hold: "Hold", sell: "Sell", strong_sell: "Strong Sell",
+};
+const VERDICT_COLOR: Record<string, string> = {
+  strong_buy: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  buy:        "text-blue-700 bg-blue-50 border-blue-200",
+  hold:       "text-amber-700 bg-amber-50 border-amber-200",
+  sell:       "text-red-600 bg-red-50 border-red-200",
+  strong_sell:"text-red-700 bg-red-50 border-red-200",
 };
 
-const STEP_LABEL: Record<string, string> = {
+const STEP_LABEL_KO: Record<string, string> = {
   company_intro: "기업 브리핑",
   industry_analysis: "산업 분석",
   financial_analysis: "재무 분석",
@@ -49,6 +56,15 @@ const STEP_LABEL: Record<string, string> = {
   technical_analysis: "기술적 분석",
   risk_analysis: "리스크 분석",
   investment_thesis: "종합 의견",
+};
+const STEP_LABEL_EN: Record<string, string> = {
+  company_intro: "Company Overview",
+  industry_analysis: "Industry Analysis",
+  financial_analysis: "Financial Analysis",
+  valuation: "Valuation",
+  technical_analysis: "Technical Analysis",
+  risk_analysis: "Risk Analysis",
+  investment_thesis: "Investment Thesis",
 };
 
 const PAGE_SIZE = 50;
@@ -73,6 +89,10 @@ function useAllReports(page: number, status: string, search: string) {
 
 export default function AdminAnalyses() {
   const [, setLocation] = useLocation();
+  const { isEn } = useLanguage();
+  const t = (ko: string, en: string) => isEn ? en : ko;
+  const STEP_LABEL = isEn ? STEP_LABEL_EN : STEP_LABEL_KO;
+  const VERDICT_LABELS = isEn ? VERDICT_LABELS_EN : VERDICT_LABELS_KO;
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
@@ -100,27 +120,27 @@ export default function AdminAnalyses() {
 
   return (
     <div className="space-y-4 pb-10">
-      {/* 헤더 */}
+      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <FileText className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-foreground">전체 보고서 목록</h1>
+          <h1 className="text-lg font-bold text-foreground">{t("전체 보고서 목록", "All Reports")}</h1>
           <p className="text-[12px] text-muted-foreground">
-            {data ? `총 ${data.total.toLocaleString()}건` : "로딩 중..."}
+            {data ? t(`총 ${data.total.toLocaleString()}건`, `${data.total.toLocaleString()} total`) : t("로딩 중...", "Loading...")}
           </p>
         </div>
       </div>
 
-      {/* 필터 & 검색 */}
+      {/* Filters & Search */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 bg-muted rounded-lg p-0.5">
           {[
-            { value: "all", label: "전체" },
-            { value: "completed", label: "완료" },
-            { value: "in_progress", label: "진행중" },
-            { value: "failed", label: "실패" },
+            { value: "all",         label: t("전체",   "All") },
+            { value: "completed",   label: t("완료",   "Done") },
+            { value: "in_progress", label: t("진행중", "In Progress") },
+            { value: "failed",      label: t("실패",   "Failed") },
           ].map((opt) => (
             <button
               key={opt.value}
@@ -143,7 +163,7 @@ export default function AdminAnalyses() {
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="종목명·코드 검색"
+              placeholder={t("종목명·코드 검색", "Search by name or ticker")}
               className="w-full pl-8 pr-3 py-1.5 text-[13px] rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
@@ -151,28 +171,36 @@ export default function AdminAnalyses() {
             type="submit"
             className="px-3 py-1.5 text-[12px] font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
           >
-            검색
+            {t("검색", "Search")}
           </button>
         </form>
       </div>
 
-      {/* 테이블 (데스크톱) / 카드 목록 (모바일) */}
+      {/* Table (desktop) / Card list (mobile) */}
       <div className="rounded-xl border border-border bg-background overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm">불러오는 중...</span>
+            <span className="text-sm">{t("불러오는 중...", "Loading...")}</span>
           </div>
         ) : !data?.data.length ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
-            해당하는 보고서가 없습니다.
+            {t("해당하는 보고서가 없습니다.", "No reports found.")}
           </div>
         ) : (
           <>
-            {/* ─── 데스크톱 테이블 (md 이상) ─── */}
+            {/* ─── Desktop table ─── */}
             <div className={cn("hidden md:block", isFetching && "opacity-60 pointer-events-none")}>
               <div className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-2.5 border-b border-border bg-muted/40">
-                {["#", "기업", "상태", "투자의견", "목표가", "상승여력", "분석일시"].map((h) => (
+                {[
+                  "#",
+                  t("기업", "Company"),
+                  t("상태", "Status"),
+                  t("투자의견", "Verdict"),
+                  t("목표가", "Target"),
+                  t("상승여력", "Upside"),
+                  t("분석일시", "Date"),
+                ].map((h) => (
                   <span key={h} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate">
                     {h}
                   </span>

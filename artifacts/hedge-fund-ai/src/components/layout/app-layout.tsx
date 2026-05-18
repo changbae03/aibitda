@@ -368,7 +368,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               className="text-[20px] font-black tracking-tighter leading-none select-none group-hover:opacity-70 transition-opacity duration-200"
               style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
             >
-              애
+              {isEn ? "A" : "애"}
             </span>
           </Link>
           {/* 펼쳐진 상태: 애빛다 + 검색 버튼 */}
@@ -392,7 +392,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <NavLinks expanded={sidebarExpanded} />
           {isAdmin && sidebarExpanded && (
             <div className="pt-4">
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">관리자</p>
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">{isEn ? "Admin" : "관리자"}</p>
               {ADMIN_ITEMS.map(item => {
                 const isActive = location === item.href || location.startsWith(item.href);
                 return (
@@ -474,7 +474,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <NavLinks onSelect={() => setMenuOpen(false)} expanded={true} />
                 {isAdmin && (
                   <div className="pt-4">
-                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">관리자</p>
+                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">{isEn ? "Admin" : "관리자"}</p>
                     {ADMIN_ITEMS.map(item => {
                       const isActive = location === item.href || location.startsWith(item.href);
                       return (
@@ -636,7 +636,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="flex items-center gap-3 px-4 pt-4 pb-3">
                 <img
                   src="/pwa-192x192.png"
-                  alt="애빛다"
+                  alt="AiBITDA"
                   className="w-12 h-12 rounded-xl shrink-0 shadow"
                 />
                 <div className="flex-1 min-w-0">
@@ -673,20 +673,24 @@ export function AppLayout({ children }: AppLayoutProps) {
                     className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:scale-[.98] transition-all flex items-center justify-center gap-2"
                   >
                     <Share className="w-4 h-4" />
-                    Safari에서 열고 설치하기
+                    {isEn ? "Open in Safari & Install" : "Safari에서 열고 설치하기"}
                   </button>
                 </div>
               ) : isSafariIos ? (
                 /* ── 일반 Safari iOS: 공유 버튼 안내 ── */
                 <div className="px-4 pb-4">
                   <div className="bg-muted/40 rounded-xl p-3 space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">설치 방법</p>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{isEn ? "How to Install" : "설치 방법"}</p>
                     <ol className="space-y-1.5">
-                      {[
+                      {(isEn ? [
+                        ["Tap the Share button", "(□↑) at the bottom"],
+                        ['"Add to Home Screen"', "select"],
+                        ['"Add"', "tap"],
+                      ] : [
                         ["하단 공유 버튼", "(□↑) 탭"],
                         ['"홈 화면에 추가"', "선택"],
                         ['"추가"', "탭"],
-                      ].map(([a, b], i) => (
+                      ]).map(([a, b], i) => (
                         <li key={i} className="flex items-center gap-2.5 text-xs text-foreground">
                           <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
                             {i + 1}
@@ -699,7 +703,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <div className="flex justify-center mt-2.5">
                     <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
                       <Share className="w-3 h-3" />
-                      <span>Safari 하단 공유 아이콘을 찾아요</span>
+                      <span>{isEn ? "Find the Share icon at the bottom of Safari" : "Safari 하단 공유 아이콘을 찾아요"}</span>
                     </div>
                   </div>
                 </div>
@@ -746,7 +750,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <path d="M14 34 L14 4 M14 4 L5 14 M14 4 L23 14"
                     stroke="#FF8A7A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <span className="text-xs text-primary font-bold">여기 ···</span>
+                <span className="text-xs text-primary font-bold">{isEn ? "Tap ···" : "여기 ···"}</span>
               </motion.div>
             </div>
 
@@ -759,23 +763,27 @@ export function AppLayout({ children }: AppLayoutProps) {
                 transition={{ delay: 0.1, duration: 0.3, ease: "easeOut" }}
                 className="w-full max-w-xs bg-card border border-border rounded-2xl shadow-2xl p-5"
               >
-                <p className="font-bold text-base text-foreground mb-1">Safari에서 열기</p>
+                <p className="font-bold text-base text-foreground mb-1">{isEn ? "Open in Safari" : "Safari에서 열기"}</p>
 
                 {/* 링크 자동 복사 안내 */}
                 <div className="bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 mb-4 flex items-center gap-2">
                   <span className="text-primary text-base">✓</span>
                   <p className="text-xs text-primary font-medium leading-snug">
-                    링크가 복사됐어요! Safari 주소창에 붙여넣기 해주세요.
+                    {isEn ? "Link copied! Paste it in Safari's address bar." : "링크가 복사됐어요! Safari 주소창에 붙여넣기 해주세요."}
                   </p>
                 </div>
 
-                <p className="text-[11px] text-muted-foreground mb-3 font-medium">또는 ··· 메뉴로 바로 열기</p>
+                <p className="text-[11px] text-muted-foreground mb-3 font-medium">{isEn ? "Or open directly via ··· menu" : "또는 ··· 메뉴로 바로 열기"}</p>
                 <ol className="space-y-3 mb-4">
-                  {[
+                  {(isEn ? [
+                    ["Top-right ···", "tap"],
+                    ['"Open in external browser"', 'or "Open in Safari"'],
+                    ["From the banner,", 'tap "Add to Home Screen"'],
+                  ] : [
                     ["오른쪽 상단 ···", "탭"],
                     ['"외부 브라우저로 열기"', '또는 "Safari로 열기" 선택'],
                     ["배너에서", '"홈 화면에 추가" 탭'],
-                  ].map(([a, b], i) => (
+                  ]).map(([a, b], i) => (
                     <li key={i} className="flex items-start gap-3 text-sm">
                       <span className="w-6 h-6 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                         {i + 1}
@@ -796,7 +804,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 onClick={() => setShowKakaoGuide(false)}
                 className="text-white/60 text-sm"
               >
-                닫기
+                {isEn ? "Close" : "닫기"}
               </button>
             </div>
           </motion.div>

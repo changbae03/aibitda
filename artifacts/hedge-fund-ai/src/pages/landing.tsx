@@ -89,7 +89,7 @@ export default function Landing() {
           onClick={() => setLanguage("ko")}
           className={`px-3 py-1 text-[11px] font-bold rounded-full transition-all ${language === "ko" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
         >
-          한국어
+          {language === "en" ? "Korean" : "한국어"}
         </button>
         <button
           onClick={() => setLanguage("en")}

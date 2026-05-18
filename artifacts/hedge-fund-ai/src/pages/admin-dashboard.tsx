@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLanguage } from "@/lib/language-context";
 import {
   ComposedChart, Bar, Line, LineChart, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend,

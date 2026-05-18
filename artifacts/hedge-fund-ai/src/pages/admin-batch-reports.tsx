@@ -4,6 +4,7 @@ import {
   ChevronLeft, ChevronRight, AlertTriangle, FileText, ShieldCheck,
   Target, TrendingUp, Zap, Filter,
 } from "lucide-react";
+import { useLanguage } from "@/lib/language-context";
 import {
   ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";

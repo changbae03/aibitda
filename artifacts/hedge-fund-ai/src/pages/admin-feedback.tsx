@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Trash2, MessageSquare, Search, RefreshCw } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 
 interface FeedbackItem {
   id: number;
@@ -33,6 +34,8 @@ function categoryColor(cat: string | null) {
 }
 
 export default function AdminFeedback() {
+  const { isEn } = useLanguage();
+  const t = (ko: string, en: string) => isEn ? en : ko;
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -78,22 +81,22 @@ export default function AdminFeedback() {
   if (forbidden) {
     return (
       <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm">
-        관리자 전용 페이지입니다.
+        {t("관리자 전용 페이지입니다.", "Admin only page.")}
       </div>
     );
   }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      {/* 헤더 */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
             <MessageSquare className="w-6 h-6 text-primary" />
-            유저 피드백
+            {t("유저 피드백", "User Feedback")}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            총 <span className="font-semibold text-foreground">{total}건</span>의 피드백
+            {t("총", "Total")} <span className="font-semibold text-foreground">{total}</span>{t("건의 피드백", " feedback items")}
           </p>
         </div>
         <button
@@ -101,11 +104,11 @@ export default function AdminFeedback() {
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          새로고침
+          {t("새로고침", "Refresh")}
         </button>
       </div>
 
-      {/* 필터 */}
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex gap-1.5 flex-wrap">
           {CATEGORIES.map(cat => (
@@ -119,7 +122,7 @@ export default function AdminFeedback() {
                   : "bg-muted/30 text-muted-foreground border-border hover:border-primary/40"
               )}
             >
-              {cat === "all" ? "전체" : cat}
+              {cat === "all" ? t("전체", "All") : cat}
             </button>
           ))}
         </div>
@@ -132,12 +135,12 @@ export default function AdminFeedback() {
             <input
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="내용 검색..."
+              placeholder={t("내용 검색...", "Search content...")}
               className="w-full pl-8 pr-3 py-1.5 text-sm bg-muted/30 border border-border rounded-lg focus:outline-none focus:border-primary/60"
             />
           </div>
           <button type="submit" className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg font-medium">
-            검색
+            {t("검색", "Search")}
           </button>
           {search && (
             <button
@@ -145,13 +148,13 @@ export default function AdminFeedback() {
               onClick={() => { setSearch(""); setSearchInput(""); }}
               className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:border-primary/40"
             >
-              초기화
+              {t("초기화", "Clear")}
             </button>
           )}
         </form>
       </div>
 
-      {/* 목록 */}
+      {/* List */}
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -159,7 +162,7 @@ export default function AdminFeedback() {
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
           <MessageSquare className="w-10 h-10 opacity-30" />
-          <p className="text-sm">피드백이 없습니다.</p>
+          <p className="text-sm">{t("피드백이 없습니다.", "No feedback yet.")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -174,7 +177,7 @@ export default function AdminFeedback() {
                     "px-2 py-0.5 rounded-full text-[11px] font-medium border",
                     categoryColor(item.category)
                   )}>
-                    {item.category ?? "기타"}
+                    {item.category ?? t("기타", "Other")}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
                     {formatDate(item.created_at)}
@@ -192,13 +195,13 @@ export default function AdminFeedback() {
                         onClick={() => handleDelete(item.id)}
                         className="px-2 py-1 text-[11px] bg-destructive text-destructive-foreground rounded-md"
                       >
-                        삭제확인
+                        {t("삭제확인", "Confirm")}
                       </button>
                       <button
                         onClick={() => setConfirmDelete(null)}
                         className="px-2 py-1 text-[11px] text-muted-foreground border border-border rounded-md"
                       >
-                        취소
+                        {t("취소", "Cancel")}
                       </button>
                     </>
                   ) : (

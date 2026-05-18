@@ -123,6 +123,7 @@ function Sparkline({ closes }: { closes: number[] }) {
 
 // ── Memo inline ───────────────────────────────────────────────────────────────
 function MemoInline({ id }: { id: number }) {
+  const { isEn } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(() => getMemo(id));
@@ -147,7 +148,7 @@ function MemoInline({ id }: { id: number }) {
           ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="이 보고서에 대한 메모를 입력하세요..."
+          placeholder={isEn ? "Add a note about this report..." : "이 보고서에 대한 메모를 입력하세요..."}
           rows={2}
           className="w-full text-[12px] text-foreground/80 placeholder:text-muted-foreground/50 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 dark:focus:ring-amber-700 leading-relaxed"
           onKeyDown={(e) => {
@@ -157,12 +158,12 @@ function MemoInline({ id }: { id: number }) {
         />
         <div className="flex items-center gap-1.5">
           <button onClick={handleSave} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-500 text-white text-[11px] font-semibold transition-colors">
-            <Check className="w-3 h-3" /> 저장
+            <Check className="w-3 h-3" /> {isEn ? "Save" : "저장"}
           </button>
           <button onClick={handleCancel} className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted hover:bg-muted text-muted-foreground text-[11px] font-semibold transition-colors">
-            <X className="w-3 h-3" /> 취소
+            <X className="w-3 h-3" /> {isEn ? "Cancel" : "취소"}
           </button>
-          <span className="text-[10px] text-muted-foreground/50 ml-1">⌘Enter로 저장</span>
+          <span className="text-[10px] text-muted-foreground/50 ml-1">{isEn ? "⌘Enter to save" : "⌘Enter로 저장"}</span>
         </div>
       </div>
     );
@@ -172,8 +173,8 @@ function MemoInline({ id }: { id: number }) {
       <div className="mt-2 flex items-start gap-1.5 group/memo" onClick={(e) => e.stopPropagation()}>
         <div className="flex-1 text-[12px] text-muted-foreground leading-relaxed bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-800/40 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">{saved}</div>
         <div className="shrink-0 mt-0.5 flex items-center gap-0.5 opacity-0 group-hover/memo:opacity-100 transition-opacity">
-          <button onClick={handleEdit} className="p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors" title="메모 수정"><Pencil className="w-3 h-3" /></button>
-          <button onClick={handleDelete} className="p-1 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title="메모 삭제"><Trash2 className="w-3 h-3" /></button>
+          <button onClick={handleEdit} className="p-1 rounded text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors" title={isEn ? "Edit memo" : "메모 수정"}><Pencil className="w-3 h-3" /></button>
+          <button onClick={handleDelete} className="p-1 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title={isEn ? "Delete memo" : "메모 삭제"}><Trash2 className="w-3 h-3" /></button>
         </div>
       </div>
     );
@@ -977,7 +978,7 @@ export default function History() {
                             <button
                               onClick={(e) => handleDelete(a.id, e)}
                               className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                              title="삭제"
+                              title={isEn ? "Delete" : "삭제"}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -991,7 +992,7 @@ export default function History() {
                                 setTimeout(() => setCopiedId((prev) => prev === a.id ? null : prev), 1800);
                               }}
                               className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-all"
-                              title="링크 복사"
+                              title={isEn ? "Copy link" : "링크 복사"}
                             >
                               {copiedId === a.id
                                 ? <Check className="w-4 h-4 text-emerald-500" />
