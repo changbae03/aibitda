@@ -218,6 +218,24 @@ const ROADMAP_KO_TO_EN: [RegExp, string | ((m: string, ...a: string[]) => string
   [/주요\s*예정\s*일정/g, "Key Upcoming Events"],
   [/예상\s*주가[·\s]*실적\s*영향/g, "Expected Price / Earnings Impact"],
   [/시나리오\s*전망/g, "Scenario Outlook"],
+  // ── 수급 & 기대감 섹션 헤더
+  [/수급\s*[&＆]\s*기대감\s*진단/g, "Supply & Sentiment Diagnostics"],
+  [/수급\s*흐름/g, "Capital Flow"],
+  [/기대감\s*선반영\s*판정\s*및\s*(?:단기|Short-term)\s*대응/g, "Expectation Pricing & Short-term Response"],
+  [/기대감\s*선반영\s*판정/g, "Expectation Pricing Assessment"],
+  [/선반영\s*수준/g, "Pricing Level"],
+  [/선반영/g, "Pre-Priced"],
+  [/셀온뉴스/g, "Sell-on-News"],
+  [/셀\s*온\s*뉴스/g, "Sell-on-News"],
+  [/과열\s*반영/g, "Over-Reflected"],
+  [/저\s*반영/g, "Under-Reflected"],
+  [/적정\s*반영/g, "Fairly Reflected"],
+  [/과열반영/g, "Over-Reflected"],
+  [/저반영/g, "Under-Reflected"],
+  [/적정반영/g, "Fairly Reflected"],
+  // ── 기타 공통 한국어 단어
+  [/수급/g, "Supply & Demand"],
+  [/기대감/g, "Sentiment"],
   // ── 시나리오 레이블 괄호 한국어 제거: "Base (핵심 이슈 정상 실현)" → "Base"
   [/(Base|Bull|Bear)\s*\([^)]*[\uAC00-\uD7A3][^)]*\)/g, "$1"],
   // ── 테이블 헤더
