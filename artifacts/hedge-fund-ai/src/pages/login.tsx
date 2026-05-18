@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useEffect } from "react";
 import { getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -88,9 +88,9 @@ export default function Login() {
         {/* Disclaimer */}
         <p className="text-center text-[11.5px] text-muted-foreground mt-8 leading-relaxed">
           {isEn ? (
-            <>By signing in, you agree to our <span className="underline cursor-pointer">Terms of Service</span> and{" "}<span className="underline cursor-pointer">Privacy Policy</span>.</>
+            <>By signing in, you agree to our{" "}<Link href="/terms" className="underline hover:text-foreground transition-colors">Terms of Service</Link> and{" "}<Link href="/privacy" className="underline hover:text-foreground transition-colors">Privacy Policy</Link>.</>
           ) : (
-            <>로그인하면 <span className="underline cursor-pointer">이용약관</span> 및{" "}<span className="underline cursor-pointer">개인정보처리방침</span>에 동의하는 것으로 간주됩니다.</>
+            <>로그인하면{" "}<Link href="/terms" className="underline hover:text-foreground transition-colors">이용약관</Link> 및{" "}<Link href="/privacy" className="underline hover:text-foreground transition-colors">개인정보처리방침</Link>에 동의하는 것으로 간주됩니다.</>
           )}
         </p>
 
