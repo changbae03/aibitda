@@ -433,29 +433,53 @@ async function ensureBriefTable() {
 /** analysis_steps content가 JSON일 수 있으므로 파싱 후 읽기 좋은 텍스트로 변환 */
 function resolveStepText(raw: string): string {
   if (!raw) return "";
-  // 코드 펜스 제거 — 중간에 있는 경우도 처리
-  const stripped = raw.trim()
+  // 코드 펜스 제거
+  let s = raw.trim()
     .replace(/^```(?:json)?\s*/im, "")
     .replace(/\s*```\s*$/m, "")
     .trim();
-  if (stripped.startsWith("{") || stripped.startsWith("[")) {
-    try {
-      const obj = JSON.parse(stripped);
-      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-        // 우선순위: summary > key_issue > description > content > text > analysis
-        for (const key of ["summary", "key_issue", "description", "content", "text", "analysis"]) {
-          if (typeof obj[key] === "string" && obj[key].length > 20) return obj[key];
+
+  // FINAL_VALUATION_DATA / VALUATION_DATA / CHART_DATA / EVENTS_DATA 메타 블록 제거
+  // — 이 블록이 JSON 뒤에 붙어 있으면 JSON.parse 실패 원인이 됨
+  s = s
+    .replace(/FINAL_VALUATION_DATA:\s*\{[^\n]*\}/g, "")
+    .replace(/VALUATION_DATA:\s*\{[^\n]*\}/g, "")
+    .replace(/CHART_DATA:\s*\[[^\n]*\]/g, "")
+    .replace(/EVENTS_DATA:\s*\[[^\n]*\]/g, "")
+    .trim();
+
+  // 첫 번째 { 위치에서 중괄호 카운팅으로 매칭되는 } 까지 JSON 블록 추출
+  const start = s.indexOf("{");
+  if (start !== -1) {
+    let depth = 0, end = -1;
+    for (let i = start; i < s.length; i++) {
+      if (s[i] === "{") depth++;
+      else if (s[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end !== -1) {
+      try {
+        const obj = JSON.parse(s.slice(start, end + 1));
+        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+          for (const key of ["summary", "key_issue", "description", "content", "text", "analysis"]) {
+            if (typeof obj[key] === "string" && obj[key].length > 20)
+              return (obj[key] as string).replace(/\\n/g, "\n");
+          }
+          const parts = Object.values(obj)
+            .filter((v): v is string => typeof v === "string" && v.length > 20)
+            .join("\n");
+          if (parts) return parts;
         }
-        // 긴 string 값 모두 이어 붙이기
-        const parts = Object.values(obj)
-          .filter((v): v is string => typeof v === "string" && v.length > 20)
-          .join("\n");
-        if (parts) return parts;
-      }
-    } catch { /* fall through */ }
+      } catch { /* JSON 파싱 실패 → 정규식 fallback */ }
+    }
+
+    // JSON 파싱 실패 시 정규식으로 주요 필드 직접 추출
+    const mSummary = s.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (mSummary) return mSummary[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    const mIssue = s.match(/"key_issue"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (mIssue) return mIssue[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
   }
-  // 코드펜스만 제거된 버전 반환 (JSON 파싱 실패 시에도 원문보다 낫다)
-  return stripped;
+
+  return s.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").trim();
 }
 
 /** investment_strategy JSON에서 risks 배열을 꺼내 텍스트로 변환 */

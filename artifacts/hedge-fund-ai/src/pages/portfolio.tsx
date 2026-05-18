@@ -428,26 +428,48 @@ function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
 function cleanSectionText(raw: string): string {
   if (!raw) return raw;
   // 코드펜스 제거
-  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-  // JSON 객체/배열이면 파싱해서 의미 있는 필드 추출
-  if (stripped.startsWith("{") || stripped.startsWith("[")) {
-    try {
-      const obj = JSON.parse(stripped);
-      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-        for (const key of ["summary", "description", "content", "text", "analysis", "key_issue"]) {
-          if (typeof obj[key] === "string" && obj[key].length > 20) return obj[key];
+  let s = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+
+  // FINAL_VALUATION_DATA / VALUATION_DATA 메타 블록 제거 (JSON 파싱 방해 요소)
+  s = s
+    .replace(/FINAL_VALUATION_DATA:\s*\{[^\n]*\}/g, "")
+    .replace(/VALUATION_DATA:\s*\{[^\n]*\}/g, "")
+    .replace(/CHART_DATA:\s*\[[^\n]*\]/g, "")
+    .replace(/EVENTS_DATA:\s*\[[^\n]*\]/g, "")
+    .trim();
+
+  // 첫 번째 { 위치에서 중괄호 카운팅으로 매칭되는 } 까지 JSON 블록 추출
+  const start = s.indexOf("{");
+  if (start !== -1) {
+    let depth = 0, end = -1;
+    for (let i = start; i < s.length; i++) {
+      if (s[i] === "{") depth++;
+      else if (s[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end !== -1) {
+      try {
+        const obj = JSON.parse(s.slice(start, end + 1));
+        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+          for (const key of ["summary", "key_issue", "description", "content", "text", "analysis"]) {
+            if (typeof obj[key] === "string" && obj[key].length > 20)
+              return (obj[key] as string).replace(/\\n/g, "\n");
+          }
+          const parts = Object.values(obj)
+            .filter((v): v is string => typeof v === "string" && v.length > 20)
+            .join("\n");
+          if (parts) return parts;
         }
-        // 그 외 긴 string 값 모두 합치기
-        const parts = Object.values(obj)
-          .filter((v): v is string => typeof v === "string" && v.length > 20)
-          .join("\n");
-        if (parts) return parts;
-      }
-    } catch { /* fall through */ }
-    // JSON 파싱 실패해도 코드펜스는 제거된 버전 반환
-    return stripped;
+      } catch { /* JSON 파싱 실패 → 정규식 fallback */ }
+    }
+
+    // 정규식으로 summary / key_issue 필드 직접 추출
+    const mSummary = s.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (mSummary) return mSummary[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    const mIssue = s.match(/"key_issue"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (mIssue) return mIssue[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
   }
-  return stripped;
+
+  return s;
 }
 
 function parseBrief(summary: string) {
