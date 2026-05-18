@@ -6,6 +6,7 @@ import {
   User, Sparkles, Shield,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import { motion } from "framer-motion";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
@@ -33,15 +34,15 @@ interface MyPageData {
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
 
-const TIER_CONFIG: Record<string, { label: string; color: string; bgColor: string; planName: string }> = {
-  free:    { label: "무료",    color: "text-slate-400",  bgColor: "bg-slate-500/15 border-slate-500/30",  planName: "무료 플랜" },
-  beta:    { label: "베타",    color: "text-blue-400",   bgColor: "bg-blue-500/15 border-blue-500/30",    planName: "베타 플랜" },
-  premium: { label: "프리미엄", color: "text-amber-400", bgColor: "bg-amber-500/15 border-amber-500/30",  planName: "프리미엄 플랜" },
+const TIER_CONFIG: Record<string, { label: string; labelEn: string; color: string; bgColor: string; planName: string; planNameEn: string }> = {
+  free:    { label: "무료",    labelEn: "Free",    color: "text-slate-400",  bgColor: "bg-slate-500/15 border-slate-500/30",  planName: "무료 플랜",    planNameEn: "Free Plan" },
+  beta:    { label: "베타",    labelEn: "Beta",    color: "text-blue-400",   bgColor: "bg-blue-500/15 border-blue-500/30",    planName: "베타 플랜",    planNameEn: "Beta Plan" },
+  premium: { label: "프리미엄", labelEn: "Premium", color: "text-amber-400", bgColor: "bg-amber-500/15 border-amber-500/30",  planName: "프리미엄 플랜", planNameEn: "Premium Plan" },
 };
 
-const PROVIDER_CONFIG: Record<string, { label: string; color: string }> = {
-  kakao:  { label: "카카오", color: "bg-[#FEE500] text-[#3A1D1D]" },
-  clerk:  { label: "소셜", color: "bg-primary/15 text-primary border border-primary/30" },
+const PROVIDER_CONFIG: Record<string, { label: string; labelEn: string; color: string }> = {
+  kakao:  { label: "카카오", labelEn: "Kakao",  color: "bg-[#FEE500] text-[#3A1D1D]" },
+  clerk:  { label: "소셜",   labelEn: "Social", color: "bg-primary/15 text-primary border border-primary/30" },
 };
 
 // ─── 서브 컴포넌트 ────────────────────────────────────────────────────────────
@@ -127,6 +128,8 @@ function MenuRow({
 // ─── 메인 ────────────────────────────────────────────────────────────────────
 
 export default function MyPage() {
+  const { isEn } = useLanguage();
+  const t = (ko: string, en: string) => isEn ? en : ko;
   const [, setLocation] = useLocation();
   const [data, setData] = useState<MyPageData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -165,16 +168,16 @@ export default function MyPage() {
       });
       const d = await r.json();
       if (r.ok) {
-        setPromoMsg({ type: "ok", text: d.message ?? "코드가 적용됐습니다!" });
+        setPromoMsg({ type: "ok", text: d.message ?? t("코드가 적용됐습니다!", "Code applied!") });
         setPromoInput("");
         // 데이터 새로고침
         const rd = await fetch(getApiUrl("/api/mypage"), { credentials: "include" });
         if (rd.ok) setData(await rd.json());
       } else {
-        setPromoMsg({ type: "err", text: d.error ?? "코드 적용에 실패했습니다" });
+        setPromoMsg({ type: "err", text: d.error ?? t("코드 적용에 실패했습니다", "Failed to apply code") });
       }
     } catch {
-      setPromoMsg({ type: "err", text: "네트워크 오류가 발생했습니다" });
+      setPromoMsg({ type: "err", text: t("네트워크 오류가 발생했습니다", "Network error occurred") });
     } finally {
       setPromoLoading(false);
     }
@@ -193,13 +196,13 @@ export default function MyPage() {
         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
           <User className="w-7 h-7 text-primary" />
         </div>
-        <h2 className="text-xl font-bold">로그인이 필요합니다</h2>
-        <p className="text-sm text-muted-foreground text-center">마이페이지를 보려면 먼저 로그인해주세요</p>
+        <h2 className="text-xl font-bold">{t("로그인이 필요합니다", "Login Required")}</h2>
+        <p className="text-sm text-muted-foreground text-center">{t("마이페이지를 보려면 먼저 로그인해주세요", "Please log in to view your profile")}</p>
         <button
           onClick={() => setLocation("/login")}
           className="px-6 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
-          로그인하기
+          {t("로그인하기", "Log In")}
         </button>
       </div>
     );
@@ -234,7 +237,7 @@ export default function MyPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-[17px] font-black text-foreground leading-tight">{data.user.nickname}</h2>
                   <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full", providerCfg.color)}>
-                    {providerCfg.label}
+                    {isEn ? providerCfg.labelEn : providerCfg.label}
                   </span>
                 </div>
                 {data.user.email && (
@@ -256,7 +259,7 @@ export default function MyPage() {
             </div>
             {joinYear && (
               <p className="text-[10.5px] text-muted-foreground/40 mt-3">
-                {joinYear}년부터 함께한 멤버
+                {isEn ? `Member since ${joinYear}` : `${joinYear}년부터 함께한 멤버`}
               </p>
             )}
           </div>
@@ -265,17 +268,17 @@ export default function MyPage() {
           <div className="rounded-2xl border border-border bg-card overflow-hidden grid grid-cols-3 divide-x divide-border">
             <div className="py-4 px-2 text-center">
               <p className="text-[22px] font-black tabular-nums text-primary leading-none">{dailyRemaining}</p>
-              <p className="text-[10.5px] text-muted-foreground mt-1">남은 횟수</p>
+              <p className="text-[10.5px] text-muted-foreground mt-1">{t("남은 횟수", "Remaining")}</p>
             </div>
             <div className="py-4 px-2 text-center flex flex-col items-center justify-center gap-1">
               <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full border", tierCfg.bgColor, tierCfg.color)}>
-                {tierCfg.label}
+                {isEn ? tierCfg.labelEn : tierCfg.label}
               </span>
-              <p className="text-[10.5px] text-muted-foreground">등급</p>
+              <p className="text-[10.5px] text-muted-foreground">{t("등급", "Tier")}</p>
             </div>
             <div className="py-4 px-2 text-center">
               <p className="text-[22px] font-black tabular-nums text-foreground leading-none">{data.credits.totalAnalyses.toLocaleString()}</p>
-              <p className="text-[10.5px] text-muted-foreground mt-1">누적 분석</p>
+              <p className="text-[10.5px] text-muted-foreground mt-1">{t("누적 분석", "Total Analyses")}</p>
             </div>
           </div>
 
@@ -283,22 +286,24 @@ export default function MyPage() {
           <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
               <Shield className="w-3 h-3" />
-              사용 중인 플랜
+              {t("사용 중인 플랜", "Current Plan")}
             </p>
 
             {/* 일일 분석 이용권 */}
             <div className="rounded-xl bg-muted/30 px-3.5 py-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-semibold text-foreground">{tierCfg.planName}</span>
+                  <span className="text-[13px] font-semibold text-foreground">{isEn ? tierCfg.planNameEn : tierCfg.planName}</span>
                   {data.credits.dailyUsed < data.credits.dailyLimit && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30">
-                      사용중
+                      {t("사용중", "Active")}
                     </span>
                   )}
                 </div>
                 <span className="text-[12px] font-bold tabular-nums text-muted-foreground">
-                  {data.credits.dailyUsed}/{data.credits.dailyLimit}회
+                  {isEn
+                    ? `${data.credits.dailyUsed}/${data.credits.dailyLimit}`
+                    : `${data.credits.dailyUsed}/${data.credits.dailyLimit}회`}
                 </span>
               </div>
               <UsageBar used={data.credits.dailyUsed} limit={data.credits.dailyLimit} />
@@ -309,10 +314,10 @@ export default function MyPage() {
               <div className="rounded-xl bg-muted/30 px-3.5 py-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-foreground">보너스 크레딧</span>
+                    <span className="text-[13px] font-semibold text-foreground">{t("보너스 크레딧", "Bonus Credits")}</span>
                   </div>
                   <span className="text-[12px] font-bold tabular-nums text-primary">
-                    {data.credits.bonusCredits}개 남음
+                    {isEn ? `${data.credits.bonusCredits} remaining` : `${data.credits.bonusCredits}개 남음`}
                   </span>
                 </div>
                 <UsageBar
@@ -333,7 +338,7 @@ export default function MyPage() {
               <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
                 <Tag className="w-4 h-4 text-muted-foreground" />
               </div>
-              <span className="flex-1 text-left text-[14px] font-medium text-foreground">프로모 코드 등록</span>
+              <span className="flex-1 text-left text-[14px] font-medium text-foreground">{t("프로모 코드 등록", "Register Promo Code")}</span>
               <ChevronRight className={cn("w-4 h-4 text-muted-foreground/40 transition-transform", promoOpen && "rotate-90")} />
             </button>
             {promoOpen && (
@@ -344,7 +349,7 @@ export default function MyPage() {
                     value={promoInput}
                     onChange={e => setPromoInput(e.target.value.toUpperCase())}
                     onKeyDown={e => e.key === "Enter" && applyPromo()}
-                    placeholder="코드를 입력하세요"
+                    placeholder={t("코드를 입력하세요", "Enter promo code")}
                     className="flex-1 px-3 py-2 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono tracking-widest uppercase"
                   />
                   <button
@@ -352,7 +357,7 @@ export default function MyPage() {
                     disabled={!promoInput.trim() || promoLoading}
                     className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center gap-1.5"
                   >
-                    {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "적용"}
+                    {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("적용", "Apply")}
                   </button>
                 </div>
                 {promoMsg && (
@@ -368,32 +373,32 @@ export default function MyPage() {
           <div className="rounded-2xl border border-border bg-card overflow-hidden divide-y divide-border">
             <MenuRow
               icon={Sparkles}
-              label="AI 기업분석 시작"
-              sublabel="새 보고서 생성"
+              label={t("AI 기업분석 시작", "Start AI Analysis")}
+              sublabel={t("새 보고서 생성", "Generate New Report")}
               href="/analysis/new"
             />
             <MenuRow
               icon={History}
-              label="내가 본 자료"
-              sublabel="분석 히스토리"
+              label={t("내가 본 자료", "My History")}
+              sublabel={t("분석 히스토리", "Analysis History")}
               href="/history"
             />
             <MenuRow
               icon={Briefcase}
-              label="내 포트폴리오"
-              sublabel="보유 종목 관리"
+              label={t("내 포트폴리오", "My Portfolio")}
+              sublabel={t("보유 종목 관리", "Manage Holdings")}
               href="/portfolio"
             />
             {data.credits.referralCode && (
               <MenuRow
                 icon={Gift}
-                label="친구 초대 코드"
+                label={t("친구 초대 코드", "Referral Code")}
                 sublabel={data.credits.referralCode}
                 onClick={() => copyText(data.credits.referralCode!, "referral")}
                 extra={
                   <div className="flex items-center gap-1.5">
                     {copied === "referral" && (
-                      <span className="text-[11px] text-green-400 font-medium">복사됨</span>
+                      <span className="text-[11px] text-green-400 font-medium">{t("복사됨", "Copied")}</span>
                     )}
                     {copied === "referral"
                       ? <Check className="w-4 h-4 text-green-400 shrink-0" />
@@ -405,13 +410,13 @@ export default function MyPage() {
             )}
             <MenuRow
               icon={HelpCircle}
-              label="고객 문의"
+              label={t("고객 문의", "Customer Support")}
               href="/support"
             />
             <MenuRow
               icon={Settings}
-              label="설정"
-              sublabel="닉네임·테마·언어"
+              label={t("설정", "Settings")}
+              sublabel={t("닉네임·테마·언어", "Nickname · Theme · Language")}
               href="/settings"
             />
           </div>
@@ -420,7 +425,7 @@ export default function MyPage() {
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
             <MenuRow
               icon={LogOut}
-              label="로그아웃"
+              label={t("로그아웃", "Log Out")}
               onClick={handleLogout}
               destructive
               extra={loggingOut ? <Loader2 className="w-4 h-4 animate-spin text-red-400" /> : undefined}
@@ -429,7 +434,7 @@ export default function MyPage() {
 
           {/* 버전 */}
           <p className="text-center text-[10.5px] text-muted-foreground/30 pt-1">
-            애빛다 · AI로 기업가치를 밝히다
+            {t("애빛다 · AI로 기업가치를 밝히다", "AiBITDA · Illuminating Corporate Value with AI")}
           </p>
         </motion.div>
       )}
