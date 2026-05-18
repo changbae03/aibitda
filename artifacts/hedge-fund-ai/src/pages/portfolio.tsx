@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Plus, Trash2, TrendingUp,
-  ChevronDown, ChevronUp, RefreshCw,
+  ChevronDown, ChevronUp, ChevronRight, RefreshCw,
   ShieldAlert, ExternalLink,
   Briefcase, PencilLine, Check, X as XIcon,
   Search, Building2, ArrowUpRight, ArrowDownRight,
@@ -519,15 +519,16 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       .catch(() => {});
   }, [holding.ticker]);
 
-  // 마운트 시 브리핑 자동 로드
+  // 마운트 시 브리핑 자동 로드 — 분석이 없으면 fetch 자체를 생략
   useEffect(() => {
+    if (!holding.analysis) return;
     setBriefLoading(true);
     fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}`), { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.summary) setBrief(d); })
       .catch(() => {})
       .finally(() => setBriefLoading(false));
-  }, [holding.ticker]);
+  }, [holding.ticker, holding.analysis]);
 
   async function refreshBrief() {
     setBriefLoading(true);
@@ -800,8 +801,20 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
         )}
       </div>
 
+      {/* ── 분석 없음 → 분석 유도 배너 ─────────────────────────── */}
+      {!a && (
+        <button
+          onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
+          className="mx-3 mb-3 w-[calc(100%-1.5rem)] flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-left"
+        >
+          <Brain className="w-3.5 h-3.5 text-primary/60 shrink-0" />
+          <span className="flex-1 text-[12px] text-primary/60">AI 분석을 요청하면 적정주가와 오늘의 이슈를 확인할 수 있어요</span>
+          <ChevronRight className="w-3.5 h-3.5 text-primary/40 shrink-0" />
+        </button>
+      )}
+
       {/* ── AI 데일리 이슈 브리핑 (뉴스라인: 한 줄 + 확장) ─────── */}
-      {(brief || briefLoading) && (() => {
+      {a && (brief || briefLoading) && (() => {
         const sections = brief ? parseBrief(brief.summary) : [];
         const coreSection = sections.find(s => s.icon === "core");
         const detailSections = sections.filter(s => s.icon !== "core");
@@ -902,7 +915,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
       {/* ── 하단 액션 바 ──────────────────────────────────────── */}
       <div className="border-t border-border/60 px-4 py-2.5 flex items-center gap-3">
-        {a ? (
+        {a && (
           <button
             onClick={() => setLocation(`/analysis/${a.id}`)}
             className="flex items-center gap-1.5 text-[11px] text-primary/80 hover:text-primary font-medium transition-colors"
@@ -912,13 +925,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             <span className="text-muted-foreground/50 font-normal">
               {format(new Date(a.createdAt), "M/d", { locale: ko })}
             </span>
-          </button>
-        ) : (
-          <button
-            onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
-            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-          >
-            <Brain className="w-3 h-3" /> AI 분석 요청
           </button>
         )}
 
