@@ -709,7 +709,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     {/* 내 분석 */}
                     <div>
                       <p className="text-[9px] text-muted-foreground/60 mb-0.5">내 분석</p>
-                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground">
+                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground whitespace-nowrap">
                         {fmtPrice(myTP!, holding.priceCurrency)}
                       </p>
                       {a!.upsidePct != null && (
@@ -724,7 +724,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                       <p className="text-[9px] text-muted-foreground/60 mb-0.5 flex items-center gap-0.5">
                         <Users className="w-2.5 h-2.5" />멀티뷰
                       </p>
-                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground">
+                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground whitespace-nowrap">
                         {fmtPrice(colTP!, holding.priceCurrency)}
                       </p>
                       {a!.collectiveUpsidePct != null && (
