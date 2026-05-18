@@ -1065,7 +1065,7 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
 
   return (
     <div className="mt-4 print:hidden">
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-[#1a1a1a] to-[#141414] px-5 py-5 space-y-3.5">
+      <div className="rounded-2xl border border-border bg-card dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-[#141414] px-5 py-5 space-y-3.5 shadow-sm">
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
           {isEn ? "What's next?" : "다음으로 무엇을 하시겠어요?"}
         </p>
@@ -1073,15 +1073,15 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
           {/* 홈으로 */}
           <button
             onClick={() => setLocation("/")}
-            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/20 hover:border-muted hover:bg-muted/40 px-4 py-4 transition-all duration-200 group"
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/30 hover:border-border hover:bg-muted/60 px-4 py-4 transition-all duration-200 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center group-hover:bg-muted transition-colors">
+            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center group-hover:bg-muted/80 transition-colors">
               <Home className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
-            <span className="text-[13px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">
+            <span className="text-[13px] font-semibold text-foreground leading-tight text-center">
               {isEn ? "Home" : "홈으로"}
             </span>
-            <span className="text-[11px] text-muted-foreground/60 leading-tight text-center">
+            <span className="text-[11px] text-muted-foreground leading-tight text-center">
               {isEn ? "Back to dashboard" : "대시보드로 돌아가기"}
             </span>
           </button>
@@ -1093,12 +1093,12 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
               className="relative flex flex-col items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15 px-4 py-4 transition-all duration-200 group overflow-hidden"
             >
               <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
-                <Check className="w-5 h-5 text-emerald-400" />
+                <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <span className="text-[13px] font-bold text-emerald-400 leading-tight text-center">
+              <span className="text-[13px] font-bold text-emerald-700 dark:text-emerald-400 leading-tight text-center">
                 {status === "added" ? (isEn ? "Added!" : "추가 완료!") : (isEn ? "In Portfolio" : "포트폴리오에 있음")}
               </span>
-              <span className="text-[11px] text-emerald-400/60 leading-tight text-center">
+              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 leading-tight text-center">
                 {isEn ? "View portfolio →" : "포트폴리오 보기 →"}
               </span>
             </button>
@@ -1106,19 +1106,19 @@ function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyNa
             <button
               onClick={addToPortfolio}
               disabled={status === "adding" || status === "checking"}
-              className="relative flex flex-col items-center gap-2 rounded-xl border border-primary/50 bg-gradient-to-br from-primary/15 to-primary/5 hover:from-primary/25 hover:to-primary/10 hover:border-primary/70 px-4 py-4 transition-all duration-200 group overflow-hidden disabled:opacity-60"
+              className="relative flex flex-col items-center gap-2 rounded-xl border border-[#FF8A7A]/50 bg-gradient-to-br from-[#FF8A7A]/10 to-[#FF8A7A]/5 hover:from-[#FF8A7A]/20 hover:to-[#FF8A7A]/10 hover:border-[#FF8A7A]/70 px-4 py-4 transition-all duration-200 group overflow-hidden disabled:opacity-60"
             >
-              <div className="absolute inset-0 rounded-xl bg-primary/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors relative">
+              <div className="absolute inset-0 rounded-xl bg-[#FF8A7A]/5 blur-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="w-10 h-10 rounded-xl bg-[#FF8A7A]/15 flex items-center justify-center group-hover:bg-[#FF8A7A]/25 transition-colors relative">
                 {status === "adding" || status === "checking"
-                  ? <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                  : <Briefcase className="w-5 h-5 text-primary" />
+                  ? <Loader2 className="w-5 h-5 text-[#FF8A7A] animate-spin" />
+                  : <Briefcase className="w-5 h-5 text-[#FF8A7A]" />
                 }
               </div>
-              <span className="text-[13px] font-bold text-primary leading-tight text-center relative">
+              <span className="text-[13px] font-bold text-[#FF8A7A] leading-tight text-center relative">
                 {isEn ? "Add to Portfolio" : "포트폴리오에 추가"}
               </span>
-              <span className="text-[11px] text-primary/60 leading-tight text-center relative">
+              <span className="text-[11px] text-[#FF8A7A]/70 leading-tight text-center relative">
                 {isEn ? "Track this stock" : "이 종목 바로 편입하기"}
               </span>
             </button>
@@ -1715,7 +1715,7 @@ export default function AnalysisDetail() {
                       {upsidePct !== null ? (
                         <>
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-                            {(analysis as any).language === 'en' ? (upsidePct >= 0 ? "Upside Potential" : "Downside Risk") : (upsidePct >= 0 ? "상승여력" : "하락여지")}
+                            {(analysis as any).language === 'en' ? (upsidePct >= 0 ? "Upside Potential" : "Downside Risk") : (upsidePct >= 0 ? "상승여지" : "하락여지")}
                           </p>
                           <p className={`text-4xl font-black tabular-nums leading-none tracking-tight ${upsidePct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
                             {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
@@ -2269,7 +2269,7 @@ export default function AnalysisDetail() {
                     <p className={`text-[20px] font-black tabular-nums leading-none ${upsidePct >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                       {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
                     </p>
-                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{isEn ? (upsidePct >= 0 ? "Upside" : "Downside") : (upsidePct >= 0 ? "상승여력" : "하락여지")}</p>
+                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">{isEn ? (upsidePct >= 0 ? "Upside" : "Downside") : (upsidePct >= 0 ? "상승여지" : "하락여지")}</p>
                   </div>
                 );
               })()}

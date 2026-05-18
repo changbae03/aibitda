@@ -351,6 +351,16 @@ const STEP_CFG: Record<string, { emoji: string; label: string; labelEn: string; 
 function ab(rgb: string, a = 0.1) { return `rgba(${rgb},${a})`; }
 function bd(rgb: string, a = 0.2) { return `1px solid rgba(${rgb},${a})`; }
 
+function toKoreanVerdictLabel(verdict: string): string {
+  const s = verdict.toLowerCase();
+  if (s.includes("strong buy"))  return "높은 상승여지";
+  if (s.includes("buy"))         return "상승여지";
+  if (s.includes("strong sell")) return "높은 하락여지";
+  if (s.includes("sell"))        return "하락여지";
+  if (s.includes("hold"))        return "적정 수준";
+  return verdict;
+}
+
 function fmtP(v: number | null | undefined, isUS: boolean) {
   if (v == null) return "—";
   return isUS
@@ -374,7 +384,9 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
 
   if (stepKey === "investment_strategy") {
     const j = parseStrategyJson(content);
-    const verdict  = (analysis.investmentVerdict ?? j?.verdict ?? "").toUpperCase();
+    const verdictRaw = (analysis.investmentVerdict ?? j?.verdict ?? "");
+    const verdict  = verdictRaw.toUpperCase();
+    const verdictLabel = isEn ? verdict : (toKoreanVerdictLabel(verdictRaw) || verdict);
     const targetP  = analysis.targetPrice ?? j?.target_price ?? null;
     const entryP   = (analysis as any).entryPrice ?? j?.entry_price ?? null;
     const stopL    = (analysis as any).stopLoss   ?? j?.stop_loss   ?? null;
@@ -386,8 +398,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
       <div className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-2">
           <div>
-            <div className="text-4xl font-black" style={{ color: STEP_CFG.investment_strategy.hex }}>
-              {verdict || "—"}
+            <div className={`font-black leading-tight ${isEn ? "text-4xl" : "text-2xl"}`} style={{ color: STEP_CFG.investment_strategy.hex }}>
+              {verdictLabel || "—"}
             </div>
             <div className="text-white/40 text-xs mt-0.5">{isEn ? "12M Verdict" : "12개월 투자의견"}</div>
           </div>
