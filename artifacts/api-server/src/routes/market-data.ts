@@ -1916,10 +1916,11 @@ router.get("/financials/:ticker", async (req, res) => {
 
 // ─── 주가 급변 이슈 분석 (Gemini + Google Search grounding) ─────────────────
 router.post("/price-events", async (req, res) => {
-  const { ticker, companyName, events } = req.body as {
+  const { ticker, companyName, events, isEn } = req.body as {
     ticker: string;
     companyName?: string;
     events: { date: string; changePercent: number }[];
+    isEn?: boolean;
   };
   if (!ticker || !Array.isArray(events) || events.length === 0) {
     return res.status(400).json({ error: "ticker and events required" });
@@ -1936,7 +1937,29 @@ router.post("/price-events", async (req, res) => {
     .join("\n");
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const prompt = `오늘 날짜: ${todayStr}. 아래 날짜들은 모두 과거 날짜입니다.
+
+  const prompt = isEn
+    ? `Today's date: ${todayStr}. All dates below are in the past.
+
+The stock "${stockId}" experienced significant price swings on the following dates.
+Search Google for real news, disclosures, or events that directly caused each price move for "${companyName ?? ticker}". Summarize concisely in English.
+
+${eventList}
+
+Rules:
+- Focus on news/disclosures/earnings directly related to "${companyName ?? ticker}" itself.
+- Do NOT write about sector-wide trends unrelated to the company.
+- Search for news within 3 days before/after each date.
+- Only if no company-specific event found, write: "No specific catalyst. Likely broad market influence."
+
+Respond with a JSON array for each date:
+[
+  {"date": "YYYY-MM-DD", "changePercent": number, "summary": "Event summary (max 80 chars)"},
+  ...
+]
+
+Output JSON only. No code blocks.`
+    : `오늘 날짜: ${todayStr}. 아래 날짜들은 모두 과거 날짜입니다.
 
 한국 주식 종목 "${stockId}"의 주가가 아래 날짜에 크게 변동했습니다.
 각 날짜에 이 종목(${companyName ?? ticker})에 직접 영향을 미친 실제 뉴스·공시·이벤트를 Google에서 검색하여 한국어로 간결하게 요약하세요.

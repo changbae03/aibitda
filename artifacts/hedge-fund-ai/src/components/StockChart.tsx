@@ -191,7 +191,7 @@ function detectPriceSwings(chartData: any[], minPct = 4, maxCount = 5): PriceSwi
 }
 
 // 백엔드 price-events 조회
-async function fetchPriceEvents(ticker: string, companyName: string | undefined, swings: PriceSwing[]): Promise<PriceEventNews[]> {
+async function fetchPriceEvents(ticker: string, companyName: string | undefined, swings: PriceSwing[], isEn = false): Promise<PriceEventNews[]> {
   const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
   const res = await fetch(`${BASE}/api/market-data/price-events`, {
     method: "POST",
@@ -200,6 +200,7 @@ async function fetchPriceEvents(ticker: string, companyName: string | undefined,
       ticker,
       companyName,
       events: swings.map(s => ({ date: s.date, changePercent: s.changePercent })),
+      isEn,
     }),
   });
   if (!res.ok) throw new Error("price-events fetch failed");
@@ -277,12 +278,12 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
     setPriceEventNews([]);
     setNewsLoading(true);
     setNewsError(false);
-    fetchPriceEvents(ticker, companyName, swings)
+    fetchPriceEvents(ticker, companyName, swings, isEn)
       .then(setPriceEventNews)
       .catch(() => setNewsError(true))
       .finally(() => setNewsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker, period, interval, chartData.length]);
+  }, [ticker, period, interval, chartData.length, isEn]);
 
   const axisStyle = { fontSize: 10, fill: "var(--muted-foreground, #a3a3a3)", fontFamily: "'Pretendard', sans-serif" };
 
@@ -582,7 +583,7 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
                                 {isPos ? "+" : ""}{swing.changePercent.toFixed(1)}%
                               </span>
                               <span className="text-[10px] text-muted-foreground font-mono">
-                                {priceLabel(swing.close, currency)}
+                                {priceLabel(swing.close, currency, isEn)}
                               </span>
                             </div>
                             {newsLoading && !news && (
