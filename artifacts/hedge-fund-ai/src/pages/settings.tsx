@@ -40,11 +40,11 @@ const themes = [
 ] as const;
 
 const FEEDBACK_CATEGORIES = [
-  { value: "분석 품질", label: "분석 품질" },
-  { value: "UI/UX", label: "UI/UX" },
-  { value: "기능 오류", label: "기능 오류" },
-  { value: "기능 제안", label: "기능 제안" },
-  { value: "기타", label: "기타" },
+  { value: "분석 품질", label: "분석 품질", labelEn: "Analysis Quality" },
+  { value: "UI/UX",    label: "UI/UX",     labelEn: "UI/UX" },
+  { value: "기능 오류", label: "기능 오류", labelEn: "Bug Report" },
+  { value: "기능 제안", label: "기능 제안", labelEn: "Feature Request" },
+  { value: "기타",      label: "기타",      labelEn: "Other" },
 ];
 
 interface AuthUser {
@@ -572,7 +572,7 @@ export default function SettingsPage() {
                     onClick={() => setShowCatMenu((v) => !v)}
                     className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-border bg-background text-[13px] text-foreground hover:border-primary/50 transition-colors"
                   >
-                    <span>{fbCategory}</span>
+                    <span>{isEn ? (FEEDBACK_CATEGORIES.find(c => c.value === fbCategory)?.labelEn ?? fbCategory) : fbCategory}</span>
                     <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", showCatMenu && "rotate-180")} />
                   </button>
                   <AnimatePresence>
@@ -594,7 +594,7 @@ export default function SettingsPage() {
                               fbCategory === c.value ? "font-semibold text-primary" : "text-foreground"
                             )}
                           >
-                            {c.label}
+                            {isEn ? c.labelEn : c.label}
                           </button>
                         ))}
                       </motion.div>
