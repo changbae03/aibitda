@@ -205,19 +205,31 @@ function fixSplitTableRows(lines: string[]): string[] {
 
 const RoadmapEnContext = createContext(false);
 
-const ROADMAP_KO_TO_EN: [RegExp, string][] = [
-  [/\b시점\b/g, "Timeframe"],
+const KO_MONTHS: Record<number, string> = {
+  1:"January",2:"February",3:"March",4:"April",5:"May",6:"June",
+  7:"July",8:"August",9:"September",10:"October",11:"November",12:"December",
+};
+
+const ROADMAP_KO_TO_EN: [RegExp, string | ((m: string, ...a: string[]) => string)][] = [
+  // ── 날짜: "2026년 5월" → "May 2026"
+  [/(\d{4})년\s*(\d{1,2})월/g, (_m, y, mo) => `${KO_MONTHS[Number(mo)] ?? mo+"M"} ${y}`],
+  // ── 섹션 제목 (긴 것 먼저)
+  [/향후\s*예상\s*일정\s*및\s*시나리오/g, "Upcoming Schedule & Scenarios"],
+  [/주요\s*예정\s*일정/g, "Key Upcoming Events"],
+  [/예상\s*주가[·\s]*실적\s*영향/g, "Expected Price / Earnings Impact"],
+  // ── 테이블 헤더
+  [/시점/g, "Timeframe"],
   [/이벤트\s*\/\s*확인\s*지표/g, "Event / Indicator"],
-  [/\b의미\b/g, "Implication"],
-  [/단기\s*\(~3개월\)/g, "Short-term (~3M)"],
-  [/중기\s*\(3~12개월\)/g, "Mid-term (3~12M)"],
-  [/장기\s*\(12개월\+?\)/g, "Long-term (12M+)"],
-  [/단기\s*\(~\s*3\s*개월\)/g, "Short-term (~3M)"],
-  [/중기\s*\(3\s*~\s*12\s*개월\)/g, "Mid-term (3~12M)"],
-  [/장기\s*\(12\s*개월\+?\)/g, "Long-term (12M+)"],
-  [/\b단기\b/g, "Short-term"],
-  [/\b중기\b/g, "Mid-term"],
-  [/\b장기\b/g, "Long-term"],
+  [/의미/g, "Implication"],
+  // ── 기간 레이블 (상세 먼저)
+  [/단기\s*\([~\s]*3\s*개월\)/g, "Short-term (~3M)"],
+  [/중기\s*\(3\s*[~–]\s*12\s*개월\)/g, "Mid-term (3–12M)"],
+  [/장기\s*\(1\s*년\s*\+?\)/g, "Long-term (1Y+)"],
+  [/장기\s*\(12\s*개월\s*\+?\)/g, "Long-term (12M+)"],
+  [/단기/g, "Short-term"],
+  [/중기/g, "Mid-term"],
+  [/장기/g, "Long-term"],
+  // ── 신호
   [/→\s*부정\s*신호/g, "→ Negative Signal"],
   [/→\s*긍정\s*신호/g, "→ Positive Signal"],
   [/→\s*중립\s*신호/g, "→ Neutral Signal"],
@@ -229,7 +241,7 @@ const ROADMAP_KO_TO_EN: [RegExp, string][] = [
 function translateRoadmapTerms(md: string): string {
   let out = md;
   for (const [pattern, replacement] of ROADMAP_KO_TO_EN) {
-    out = out.replace(pattern, replacement);
+    out = out.replace(pattern as RegExp, replacement as any);
   }
   return out;
 }
