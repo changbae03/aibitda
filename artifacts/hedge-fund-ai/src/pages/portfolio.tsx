@@ -507,7 +507,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [changes, setChanges] = useState<ChangesResult | null>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
-  const [briefExpanded, setBriefExpanded] = useState(true);
+  const [briefExpanded, setBriefExpanded] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
 
   const a = holding.analysis;
@@ -914,15 +914,16 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       })()}
 
       {/* ── 하단 액션 바 ──────────────────────────────────────── */}
-      <div className="border-t border-border/60 px-4 py-2.5 flex items-center gap-3">
+      <div className="border-t border-border/60 px-3 py-2 flex items-center gap-1.5">
+        {/* 기존 보고서 보기 */}
         {a && (
           <button
             onClick={() => setLocation(`/analysis/${a.id}`)}
-            className="flex items-center gap-1.5 text-[11px] text-primary/80 hover:text-primary font-medium transition-colors"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
           >
-            <ExternalLink className="w-3 h-3" />
-            리서치 보고서
-            <span className="text-muted-foreground/50 font-normal">
+            <ExternalLink className="w-3 h-3 shrink-0" />
+            <span>보고서</span>
+            <span className="text-muted-foreground/40 font-normal">
               {format(new Date(a.createdAt), "M/d", { locale: ko })}
             </span>
           </button>
@@ -930,17 +931,29 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
         <div className="flex-1" />
 
+        {/* 새 보고서 산출하기 */}
+        <button
+          onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] text-primary/70 hover:text-primary hover:bg-primary/8 border border-transparent hover:border-primary/20 transition-colors"
+          title="이 종목으로 새 보고서 산출"
+        >
+          <RefreshCw className="w-3 h-3 shrink-0" />
+          <span>새 보고서</span>
+        </button>
+
         {/* AI 리서치 요약 토글 */}
         {a && (
           <button
             onClick={() => setExpanded(v => !v)}
             className={cn(
-              "flex items-center gap-1 text-[11px] transition-colors",
-              expanded ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              "flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] transition-colors",
+              expanded
+                ? "text-foreground bg-muted/60"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
             )}
           >
-            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            요약 {expanded ? "접기" : "보기"}
+            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            요약
           </button>
         )}
       </div>
