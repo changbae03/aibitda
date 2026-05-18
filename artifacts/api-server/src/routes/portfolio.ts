@@ -161,10 +161,15 @@ router.get("/portfolio", async (req, res) => {
     [userId]
   );
 
-  // 현재가 + 내 분석 + 집단지성 평균 목표가를 병렬로 조회
+  // skipPrices=true 이면 현재가 조회 생략 → 클라이언트 batch-quotes로 채움
+  const skipPrices = req.query.skipPrices === "true";
+
+  // (skipPrices=false일 때) 현재가 + 내 분석 + 집단지성 평균 목표가를 병렬로 조회
   const enriched = await Promise.all(rows.map(async (row) => {
     const [priceData, analysis, bestAnalysis, collective] = await Promise.all([
-      fetchPrice(row.ticker),
+      skipPrices
+        ? Promise.resolve({ price: null as number | null, currency: row.currency ?? "KRW", change1d: null as number | null })
+        : fetchPrice(row.ticker),
       fetchLatestAnalysis(row.ticker, userId),
       fetchBestAnalysis(row.ticker),
       fetchCollectiveAvgTarget(row.ticker),

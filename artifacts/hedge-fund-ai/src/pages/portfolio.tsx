@@ -1411,13 +1411,13 @@ export default function Portfolio() {
     if (!quiet) setLoading(true);
     else setRefreshing(true);
     try {
-      const r = await fetch(getApiUrl("/api/portfolio"), { credentials: "include" });
+      // skipPrices=true: 분석/메타 데이터만 즉시 받고, 현재가는 batch-quotes로 후속 채움
+      const r = await fetch(getApiUrl("/api/portfolio?skipPrices=true"), { credentials: "include" });
       if (r.ok) {
         const d = await r.json();
         const h = d.holdings ?? [];
         setHoldings(h);
         holdingsRef.current = h;
-        setLastPriceUpdate(new Date());
       }
     } finally {
       setLoading(false);
@@ -1462,7 +1462,13 @@ export default function Portfolio() {
     finally { setPriceUpdating(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // 1단계: 분석/메타 데이터 즉시 렌더
+    load().then(() => {
+      // 2단계: 로드 직후 batch-quotes로 현재가 채움 (캐시 있으면 즉각 반영)
+      refreshPrices();
+    });
+  }, [load, refreshPrices]);
 
   // 30초마다 가격 자동 갱신
   useEffect(() => {
