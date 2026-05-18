@@ -353,8 +353,8 @@ function bd(rgb: string, a = 0.2) { return `1px solid rgba(${rgb},${a})`; }
 
 function toKoreanVerdictLabel(verdict: string): string {
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return "높은 상승여지";
-  if (s.includes("buy"))         return "상승여지";
+  if (s.includes("strong buy"))  return "높은 상승여력";
+  if (s.includes("buy"))         return "상승여력";
   if (s.includes("strong sell")) return "높은 하락여지";
   if (s.includes("sell"))        return "하락여지";
   if (s.includes("hold"))        return "적정 수준";
