@@ -869,7 +869,7 @@ export default function NewAnalysis() {
               {isEn ? (
                 <>
                   <p className="text-[13.5px] text-foreground/85 leading-relaxed">
-                    <span className="font-bold" style={{ color: "#FF8A7A" }}>CBST's AI analyst team</span><br />
+                    <span className="font-bold" style={{ color: "#FF8A7A" }}>AiBITDA's AI analyst team</span><br />
                     will start a 7-step deep analysis.
                   </p>
                   <p className="text-[11.5px] text-muted-foreground">
