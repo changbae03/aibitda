@@ -100,15 +100,31 @@ async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> 
     const kisData = await fetchKISStockQuotes(allCodes).catch(() => new Map());
 
     // 4. 피어 데이터 통합 (KIS 실시간 우선, 없으면 KRX 정적 fallback)
+    // ⚠️ 단위 통일: mcapEok(억원) 기준
+    //   - KIS: kis.mcap 이미 억원
+    //   - KRX: r.mcap 는 원 단위 → ÷ 1e8 → 억원
     const peers = peerRes.rows.map(r => {
       const kis = kisData.get(r.code);
+
+      // 시가총액(억원) — KIS 실시간 → KRX 원→억원 → price×shares 역산 순
+      let mcapEok: number | null = null;
+      if (kis?.mcap != null && kis.mcap > 0) {
+        mcapEok = kis.mcap;                                   // KIS: 이미 억원
+      } else if (r.mcap != null) {
+        mcapEok = parseFloat(r.mcap) / 1e8;                  // KRX: 원 → 억원
+      }
+      // KIS price × sharesOutstanding 역산 fallback
+      if ((mcapEok == null || mcapEok < 10) && kis?.price && kis.sharesOutstanding) {
+        mcapEok = Math.round((kis.price * kis.sharesOutstanding) / 1e8);
+      }
+
       return {
         code: r.code,
         name: r.name,
         pbr: kis?.pbr ?? (r.pbr ? parseFloat(r.pbr) : null),
         per: kis?.per ?? (r.per ? parseFloat(r.per) : null),
         bps: kis?.bps ?? (r.bps ? parseFloat(r.bps) : null),
-        mcap: kis?.mcap ?? (r.mcap ? parseFloat(r.mcap) : null),
+        mcapEok,                                              // 억원 단위로 통일
         price: kis?.price ?? null,
         roe: kis?.roe ?? null,
         kisEnriched: !!kis,
@@ -135,9 +151,15 @@ async function getKRXSectorPeerContext(krxCode: string): Promise<string | null> 
     const peerTable = peers
       .slice(0, 15)
       .map(p => {
-        const priceStr = p.price ? `${p.price.toLocaleString("ko-KR")}원` : "—";
-        const roeStr = p.roe !== null ? `${p.roe.toFixed(1)}%` : "—";
-        return `| ${p.code} | ${p.name} | ${p.pbr?.toFixed(2) ?? "—"} | ${p.per?.toFixed(1) ?? "—"} | ${roeStr} | ${priceStr} |`;
+        const priceStr  = p.price    ? `${p.price.toLocaleString("ko-KR")}원` : "—";
+        const roeStr    = p.roe !== null ? `${p.roe.toFixed(1)}%` : "—";
+        // 시가총액: 1조 이상이면 조원, 미만이면 억원으로 표시
+        const mcapStr   = p.mcapEok != null
+          ? p.mcapEok >= 10000
+            ? `${(p.mcapEok / 10000).toFixed(2)}조원`
+            : `${Math.round(p.mcapEok).toLocaleString("ko-KR")}억원`
+          : "—";
+        return `| ${p.code} | ${p.name} | ${mcapStr} | ${p.pbr?.toFixed(2) ?? "—"} | ${p.per?.toFixed(1) ?? "—"} | ${roeStr} | ${priceStr} |`;
       })
       .join("\n");
 
@@ -170,8 +192,9 @@ ${targetSection}
 - PER 중앙값:      ${perMedian ? perMedian.toFixed(1) + "x" : "N/A (적자 기업 다수)"}
 
 [시가총액 상위 피어 15개 — KIS 실시간 보강]
-| 종목코드 | 종목명 | PBR(배) | PER(배) | ROE | 현재가 |
-|--------|--------|--------|--------|-----|-------|
+⚠️ 아래 시가총액은 KIS 실시간 데이터 기반 정확값입니다. 피어 그룹 선정 표 작성 시 이 값을 그대로 인용하세요.
+| 종목코드 | 종목명 | 시가총액(KIS실시간) | PBR(배) | PER(배) | ROE | 현재가 |
+|--------|--------|-----------------|--------|--------|-----|-------|
 ${peerTable}
 
 ※ KIS 실시간 데이터로 보강된 피어 멀티플입니다. 상대가치(PBR/PER) 산출 시 위 중앙값을 기준 배수로 사용하고,
@@ -2692,12 +2715,25 @@ async function fetchPeerFinancials(
         const kis = kisCode ? kisQuotes.get(kisCode) : null;
 
         // 시가총액 & 가격
-        const currency = quote.currency ?? pr.currency ?? "USD";
+        const currency = quote.currency ?? pr.currency ?? (peer.ticker.endsWith(".KS") || peer.ticker.endsWith(".KQ") ? "KRW" : "USD");
         const isKrw = currency === "KRW";
         const price = kis?.price ?? quote.regularMarketPrice ?? pr.regularMarketPrice ?? null;
-        // KIS 시가총액(억원) → 원화 변환
-        const kisMcap = kis?.mcap != null ? kis.mcap * 1e8 : null;
-        const mcap = kisMcap ?? quote.marketCap ?? pr.marketCap ?? sd.marketCap ?? null;
+        // KIS 시가총액(억원) → 원 변환 (가장 신뢰도 높음)
+        const kisMcap = kis?.mcap != null && kis.mcap > 0 ? kis.mcap * 1e8 : null;
+        // Yahoo Finance 시가총액 (원 단위, KRW 종목)
+        const yahooMcap = quote.marketCap ?? pr.marketCap ?? sd.marketCap ?? null;
+        // price × sharesOutstanding 역산 fallback (KIS 실시간 주가 × KIS 상장주식수)
+        const calcMcap = (kis?.price && kis.sharesOutstanding)
+          ? kis.price * kis.sharesOutstanding
+          : (price && (quote as any).sharesOutstanding)
+            ? price * (quote as any).sharesOutstanding
+            : null;
+        let mcap = kisMcap ?? yahooMcap ?? calcMcap;
+        // Yahoo가 원 단위인데 너무 작으면(1,000억원 미만) 역산 결과로 교체
+        if (isKrw && mcap != null && mcap < 1e11 && calcMcap != null && calcMcap > mcap) {
+          console.warn(`[peer-data] ${peer.name} mcap 이상 보정: ${(mcap/1e8).toFixed(0)}억원 → ${(calcMcap/1e8).toFixed(0)}억원 (price×shares 역산)`);
+          mcap = calcMcap;
+        }
         const mcapStr = mcap
           ? isKrw
             ? `${(mcap / 1e12).toFixed(2)}조원`
