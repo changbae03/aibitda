@@ -1941,6 +1941,8 @@ router.post("/price-events", async (req, res) => {
   const prompt = isEn
     ? `Today's date: ${todayStr}. All dates below are in the past.
 
+IMPORTANT: You MUST respond entirely in English. All summary text must be in English only — no Korean characters allowed anywhere in the output.
+
 The stock "${stockId}" experienced significant price swings on the following dates.
 Search Google for real news, disclosures, or events that directly caused each price move for "${companyName ?? ticker}". Summarize concisely in English.
 
@@ -1951,10 +1953,11 @@ Rules:
 - Do NOT write about sector-wide trends unrelated to the company.
 - Search for news within 3 days before/after each date.
 - Only if no company-specific event found, write: "No specific catalyst. Likely broad market influence."
+- ALL summaries must be written in English, even if the source news is in Korean.
 
 Respond with a JSON array for each date:
 [
-  {"date": "YYYY-MM-DD", "changePercent": number, "summary": "Event summary (max 80 chars)"},
+  {"date": "YYYY-MM-DD", "changePercent": number, "summary": "Event summary in English (max 80 chars)"},
   ...
 ]
 
