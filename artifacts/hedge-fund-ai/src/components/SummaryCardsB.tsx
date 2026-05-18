@@ -361,11 +361,11 @@ function toKoreanVerdictLabel(verdict: string): string {
   return verdict;
 }
 
-function fmtP(v: number | null | undefined, isUS: boolean) {
+function fmtP(v: number | null | undefined, isUS: boolean, isEn = false) {
   if (v == null) return "—";
-  return isUS
-    ? `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : `₩${Math.round(v).toLocaleString("ko-KR")}`;
+  if (isUS) return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (isEn) return `KRW ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(v))}`;
+  return `₩${Math.round(v).toLocaleString("ko-KR")}`;
 }
 function fmtPct(v: number) { return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`; }
 
@@ -405,15 +405,15 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           </div>
           {upside !== null && (
             <div className="text-right">
-              <div className="text-2xl font-bold text-white">{fmtP(targetP, isUS)}</div>
+              <div className="text-2xl font-bold text-white">{fmtP(targetP, isUS, isEn)}</div>
               <div className="text-sm font-semibold" style={{ color: STEP_CFG.investment_strategy.hex }}>{fmtPct(upside)}</div>
             </div>
           )}
         </div>
         <div className="grid grid-cols-3 gap-2">
           {([
-            [isEn ? "Entry" : "진입가", fmtP(entryP, isUS)],
-            [isEn ? "Stop" : "손절가", fmtP(stopL, isUS)],
+            [isEn ? "Entry" : "진입가", fmtP(entryP, isUS, isEn)],
+            [isEn ? "Stop" : "손절가", fmtP(stopL, isUS, isEn)],
             [isEn ? "R/R" : "손익비", rr ? `${rr.toFixed(2)}:1` : "—"],
           ] as [string, string][]).map(([l, v]) => (
             <div key={l} className="rounded-xl p-2.5" style={{ background: ab(STEP_CFG.investment_strategy.rgb, 0.08) }}>
@@ -431,7 +431,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                 <div key={s.case} className="flex-1 rounded-xl p-2 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
                   <div className="text-[10px] text-white/40">{s.case}</div>
                   <div className="text-xs font-bold mt-0.5" style={{ color: col }}>
-                    {s.upside ? (typeof s.upside === "number" ? fmtPct(s.upside) : s.upside) : fmtP(s.target_price, isUS)}
+                    {s.upside ? (typeof s.upside === "number" ? fmtPct(s.upside) : s.upside) : fmtP(s.target_price, isUS, isEn)}
                   </div>
                 </div>
               );
@@ -456,7 +456,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         {base && (
           <div className="flex items-end justify-between">
             <div>
-              <div className="text-2xl font-bold text-white">{fmtP(base, isUS)}</div>
+              <div className="text-2xl font-bold text-white">{fmtP(base, isUS, isEn)}</div>
               <div className="text-xs text-white/40 mt-0.5">{isEn ? "Base Target" : "목표주가 (Base)"}</div>
             </div>
             {upside !== null && (
@@ -470,8 +470,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         {bear && bull && (
           <div>
             <div className="flex justify-between text-[10px] text-white/30 mb-1.5">
-              <span>Bear {fmtP(bear, isUS)}</span>
-              <span>Bull {fmtP(bull, isUS)}</span>
+              <span>Bear {fmtP(bear, isUS, isEn)}</span>
+              <span>Bull {fmtP(bull, isUS, isEn)}</span>
             </div>
             <div className="relative h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
               <div className="absolute inset-0 rounded-full"
@@ -489,7 +489,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           {([["Bear", bear, "#FF8A7A"], ["Base", base, cfg.hex], ["Bull", bull, "#7AE8B4"]] as [string,number|null,string][]).map(([l,v,c]) => (
             <div key={l} className="rounded-xl p-2.5 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
               <div className="text-[10px] text-white/40 mb-0.5">{l}</div>
-              <div className="text-xs font-bold" style={{ color: c }}>{fmtP(v, isUS)}</div>
+              <div className="text-xs font-bold" style={{ color: c }}>{fmtP(v, isUS, isEn)}</div>
             </div>
           ))}
         </div>
