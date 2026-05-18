@@ -503,7 +503,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
   const currency = isUSTicker(analysis?.ticker) ? "USD" : "KRW";
   const vs = verdictStyle(analysis?.verdict, isEnModal);
   const targetPriceStr = analysis?.targetPrice
-    ? formatCurrency(analysis.targetPrice, currency)
+    ? formatCurrency(analysis.targetPrice, currency, isEnModal)
     : null;
 
   const shareDateStr = analysis?.createdAt
@@ -839,7 +839,7 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
                     )}
                     {v.target_price != null && (
                       <span className="text-xs text-muted-foreground">
-                        {isEn ? "Target" : "목표가"} {formatCurrency(Math.round(v.target_price), isKR ? "KRW" : "USD")}
+                        {isEn ? "Target" : "목표가"} {formatCurrency(Math.round(v.target_price), isKR ? "KRW" : "USD", isEn)}
                       </span>
                     )}
                     {upside !== null && (
@@ -1546,7 +1546,7 @@ export default function AnalysisDetail() {
             <div className="text-right">
               <div className="text-xl font-bold text-gray-900">{isEn ? analysis.investmentVerdict : toKoreanVerdict(analysis.investmentVerdict)}</div>
               {analysis.targetPrice && (
-                <div className="text-sm text-gray-600 mt-0.5">{isEn ? "12M Target Price" : "12개월 적정주가"} {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</div>
+                <div className="text-sm text-gray-600 mt-0.5">{isEn ? "12M Target Price" : "12개월 적정주가"} {formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW", isEn)}</div>
               )}
             </div>
           )}
@@ -1744,12 +1744,12 @@ export default function AnalysisDetail() {
                     <div className="space-y-1.5 font-mono text-xs">
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
                         <span className="text-muted-foreground">{isEn ? <>Target Price <span className="text-xs opacity-60">(12M)</span></> : <>적정주가 <span className="text-xs opacity-60">(12개월)</span></>}</span>
-                        <span className={`font-bold ${targetColor}`}>{formatCurrency(analysis.targetPrice, currency)}</span>
+                        <span className={`font-bold ${targetColor}`}>{formatCurrency(analysis.targetPrice, currency, isEn)}</span>
                       </div>
                       {sp && (
                         <div className="flex justify-between items-center border-b border-border pb-1.5">
                           <span className="text-muted-foreground">{isEn ? 'Analysis Start Price' : '분석 시작가'}</span>
-                          <span className="text-foreground/70 font-medium">{formatCurrency(sp, currency)}</span>
+                          <span className="text-foreground/70 font-medium">{formatCurrency(sp, currency, isEn)}</span>
                         </div>
                       )}
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
@@ -1758,7 +1758,7 @@ export default function AnalysisDetail() {
                             ? (isSellVerdict ? "Re-entry Threshold" : "Entry Price")
                             : (isSellVerdict ? "재관심 기준가" : "진입가")}
                         </span>
-                        <span className={`font-semibold ${isSellVerdict ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>{formatCurrency(analysis.entryPrice, currency)}</span>
+                        <span className={`font-semibold ${isSellVerdict ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>{formatCurrency(analysis.entryPrice, currency, isEn)}</span>
                       </div>
                       <div className="flex justify-between items-center pt-0.5">
                         <span className="text-muted-foreground">
@@ -1766,7 +1766,7 @@ export default function AnalysisDetail() {
                             ? (isSellVerdict ? "Liquidation Zone" : "Stop Loss")
                             : (isSellVerdict ? "청산 우선 구간" : "손절가")}
                         </span>
-                        <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency)}</span>
+                        <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency, isEn)}</span>
                       </div>
                     </div>
                   </>
@@ -2287,13 +2287,13 @@ export default function AnalysisDetail() {
               {analysis.targetPrice && (
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground/60">{isEn ? "Target Price" : "적정주가"}</span>
-                  <span className="font-bold text-foreground/80">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
+                  <span className="font-bold text-foreground/80">{formatCurrency(analysis.targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW", isEn)}</span>
                 </div>
               )}
               {analysis.entryPrice && (
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground/60">{isEn ? "Entry" : "진입가"}</span>
-                  <span className="font-semibold text-emerald-500">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW")}</span>
+                  <span className="font-semibold text-emerald-500">{formatCurrency(analysis.entryPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW", isEn)}</span>
                 </div>
               )}
             </div>

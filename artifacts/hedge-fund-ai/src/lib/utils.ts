@@ -10,7 +10,7 @@ export function getApiUrl(path: string): string {
   return p;
 }
 
-export function formatCurrency(value: number | undefined | null, currency: string = "KRW") {
+export function formatCurrency(value: number | undefined | null, currency: string = "KRW", isEn = false) {
   if (value == null) return "N/A";
   if (currency === "USD") {
     return new Intl.NumberFormat("en-US", {
@@ -19,7 +19,10 @@ export function formatCurrency(value: number | undefined | null, currency: strin
       maximumFractionDigits: 2,
     }).format(value);
   }
-  // KRW: "원" suffix (한국어 표기 통일, ₩ 대신 원 사용)
+  // KRW: 영문 모드 "KRW X,XXX" / 한국어 모드 "X,XXX원"
+  if (isEn) {
+    return `KRW ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)}`;
+  }
   return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value)}원`;
 }
 
