@@ -4,6 +4,7 @@ import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
 import { GoogleGenAI } from "@google/genai";
 import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
+import { fetchKISStockQuote } from "../lib/kis-client";
 
 const TTL_BATCH_QUOTES      = 2  * 60 * 1000;  //  2분 — 현재가 (잦은 변동)
 const TTL_BATCH_SPARKLINES  = 30 * 60 * 1000;  // 30분 — 90일 차트 (거의 불변)
@@ -560,7 +561,17 @@ async function resolveQuote(raw: string): Promise<{ price: number | null; curren
   const isKoreanSix = /^\d{6}$/.test(sixDigit) && !ticker.includes(".");
 
   if (isKoreanSix) {
-    // ── 1순위: 네이버 금융 실시간가 (가장 정확) ─────────────────────────────
+    // ── 1순위: KIS API 실시간 현재가 (캐시 토큰 재사용 → 가장 빠름) ──────────
+    try {
+      const kis = await fetchKISStockQuote(sixDigit);
+      if (kis && kis.price && kis.price > 0) {
+        return { price: kis.price, currency: "KRW", change: kis.changeRate ?? null };
+      }
+    } catch (e) {
+      console.warn(`[resolveQuote] KIS fallback for ${sixDigit}:`, (e as Error).message?.slice(0, 60));
+    }
+
+    // ── 2순위: 네이버 금융 실시간가 ─────────────────────────────────────────
     try {
       const naverRes = await fetch(
         `https://m.stock.naver.com/api/stock/${sixDigit}/basic`,
