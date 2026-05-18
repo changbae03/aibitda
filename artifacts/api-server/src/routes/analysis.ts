@@ -2668,8 +2668,32 @@ async function fetchPeerFinancials(
   rows.push("\n=== 피어 그룹 실시간 재무 데이터 (Yahoo Finance + KIS 실시간) ===");
   rows.push("※ 아래 피어 기업들의 실제 수치를 Part B 상대가치 분석 표에 그대로 인용하세요. 피어 이름을 'Peer A/B/C/D' 등 플레이스홀더로 쓰지 말고 실제 회사명을 사용하세요.\n");
 
+  // 오늘 날짜(KST) 기반 캐시 키 — 같은 날 모든 분석에서 동일한 피어 데이터 보장
+  const today = new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })
+    .replace(/\. /g, "-").replace(/\.$/, ""); // "2026. 5. 18." → "2026-5-18"
+
+  type PeerResult = {
+    line: string; ticker: string; name: string;
+    ev_ebitda: number | null; per_trailing: number | null; per_fwd: number | null;
+    ev_sales: number | null; pbr: number | null;
+  };
+
   const results = await Promise.allSettled(
     peers.map(async (peer) => {
+      // ── 일간 캐시 확인 ─────────────────────────────────────────────────────
+      const cacheKey = `peer-fin:${peer.ticker}:${today}`;
+      const cached = cache.get<PeerResult>(cacheKey);
+      if (cached) {
+        console.log(`[peer-fin] 캐시 히트: ${peer.name} (${peer.ticker})`);
+        // 캐시된 line은 reason 없이 저장됨 — 현재 분석의 reason이 있으면 삽입
+        if (peer.reason) {
+          const lines = cached.line.split("\n");
+          lines.splice(1, 0, `  선정 이유: ${peer.reason}`);
+          return { ...cached, line: lines.join("\n") };
+        }
+        return cached;
+      }
+
       try {
         // quoteSummary + quote() 병렬 호출 — balanceSheetHistory·earningsTrend 추가로 멀티플 직접 계산 가능
         const [summaryResult, quoteResult] = await Promise.allSettled([
@@ -2846,16 +2870,22 @@ async function fetchPeerFinancials(
           ?? (netIncome != null && totalRevenue != null && totalRevenue > 0 ? netIncome / totalRevenue : null);
 
         // 아웃라이어 감지를 위해 원시 배수도 반환
-        return {
-          line: [
-            `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
-            peer.reason ? `  선정 이유: ${peer.reason}` : null,
-            `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
-            `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
-            `  ROE: ${pct(roe)} | 영업이익률: ${opm(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
-            `  매출(TTM): ${fmtAbs(totalRevenue, isKrw)} | 영업이익: ${fmtAbs(opIncome, isKrw)} | 순이익: ${fmtAbs(netIncome, isKrw)} | EBITDA: ${fmtAbs(ebitda, isKrw)}`,
-            `  자본총계: ${fmtAbs(totalEquity, isKrw)} | 총부채: ${fmtAbs(totalDebt, isKrw)} | 현금: ${fmtAbs(cash, isKrw)}`,
-          ].filter(Boolean).join("\n"),
+        // ⚠️ line에서 선정 이유(reason)는 제외하고 캐싱 — 분석마다 달라질 수 있음
+        const lineBase = [
+          `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]`,
+          `  시가총액: ${mcapStr}${price ? ` | 현재가: ${isKrw ? Math.round(price).toLocaleString() : price.toFixed(2)} ${currency}` : ""}`,
+          `  PER(Fwd): ${fmt1(fwdPE)}x | PER(TTM): ${fmt1(trailPE)}x | PBR: ${fmt2(pbr)}x | EV/EBITDA: ${fmt1(evEbitda)}x | EV/매출: ${fmt2(evRev)}x`,
+          `  ROE: ${pct(roe)} | 영업이익률: ${opm(opMargin)} | 순이익률: ${pct(netMargin)} | 매출총이익률: ${pct(grossMargin)} | 매출성장률(YoY): ${pct(revGrowth)}`,
+          `  매출(TTM): ${fmtAbs(totalRevenue, isKrw)} | 영업이익: ${fmtAbs(opIncome, isKrw)} | 순이익: ${fmtAbs(netIncome, isKrw)} | EBITDA: ${fmtAbs(ebitda, isKrw)}`,
+          `  자본총계: ${fmtAbs(totalEquity, isKrw)} | 총부채: ${fmtAbs(totalDebt, isKrw)} | 현금: ${fmtAbs(cash, isKrw)}`,
+        ].filter(Boolean).join("\n");
+
+        const result: PeerResult = {
+          // 캐시 히트 시 reason 줄을 재삽입할 수 있도록 lineBase만 저장
+          line: peer.reason
+            ? `[${peer.name} (${peer.ticker}) — ${peer.exchange ?? ""}]\n  선정 이유: ${peer.reason}\n` +
+              lineBase.split("\n").slice(1).join("\n")
+            : lineBase,
           ticker: peer.ticker,
           name: peer.name,
           ev_ebitda: evEbitda,
@@ -2864,6 +2894,16 @@ async function fetchPeerFinancials(
           ev_sales: evRev,
           pbr,
         };
+
+        // 숫자 데이터가 하나라도 있을 때만 캐시 저장 (실패 결과는 캐싱 안 함)
+        if (evEbitda != null || trailPE != null || pbr != null || mcap != null) {
+          // lineBase를 캐시에 저장 (reason 제외), 이후 캐시 히트 시 reason 재삽입
+          const cachePayload: PeerResult = { ...result, line: lineBase };
+          cache.set(cacheKey, cachePayload, TTL.PEER_FINANCIALS);
+          console.log(`[peer-fin] 캐시 저장: ${peer.name} (${peer.ticker})`);
+        }
+
+        return result;
       } catch (err) {
         return {
           line: `[${peer.name} (${peer.ticker})] 데이터 수집 실패: ${String(err).slice(0, 120)}`,

@@ -70,6 +70,8 @@ export const TTL = {
   YAHOO_FINANCIAL: 20 * 60 * 1000, // 20분 — Yahoo Finance 재무제표
   DART_FILING:    60 * 60 * 1000,  // 60분 — DART 공시 데이터
   KRX_LIST:       24 * 60 * 60 * 1000, // 24시간 — KRX 종목 목록
+  PEER_FINANCIALS: 8 * 60 * 60 * 1000, // 8시간 — 피어 재무 데이터 (당일 분석 일관성)
+  HOUR:            60 * 60 * 1000, // 1시간
 };
 
 // 주기적 만료 항목 정리 (5분마다)
