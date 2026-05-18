@@ -232,6 +232,11 @@ const ROADMAP_KO_TO_EN: [RegExp, string | ((m: string, ...a: string[]) => string
   [/단기/g, "Short-term"],
   [/중기/g, "Mid-term"],
   [/장기/g, "Long-term"],
+  // ── 혼합 출력: "Short-term(~3개월)" 등 영문 term + 한국어 괄호
+  [/(\d+)\s*[~–]\s*(\d+)\s*개월/g, "$1~$2M"],
+  [/[~]\s*(\d+)\s*개월/g, "~$1M"],
+  [/(\d+)\s*개월\s*\+/g, "$1M+"],
+  [/(\d+)\s*개월/g, "$1M"],
   // ── 신호
   [/→\s*부정\s*신호/g, "→ Negative Signal"],
   [/→\s*긍정\s*신호/g, "→ Positive Signal"],
