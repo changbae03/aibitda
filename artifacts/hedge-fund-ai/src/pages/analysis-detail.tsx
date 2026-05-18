@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, Children, isValidElement, cloneElement } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, Children, isValidElement, cloneElement, createContext, useContext } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useGetAnalysis, getGetAnalysisQueryKey, useDeleteAnalysis } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -203,7 +203,38 @@ function fixSplitTableRows(lines: string[]): string[] {
   return out;
 }
 
-function prepareMarkdown(md: string): string {
+const RoadmapEnContext = createContext(false);
+
+const ROADMAP_KO_TO_EN: [RegExp, string][] = [
+  [/\b시점\b/g, "Timeframe"],
+  [/이벤트\s*\/\s*확인\s*지표/g, "Event / Indicator"],
+  [/\b의미\b/g, "Implication"],
+  [/단기\s*\(~3개월\)/g, "Short-term (~3M)"],
+  [/중기\s*\(3~12개월\)/g, "Mid-term (3~12M)"],
+  [/장기\s*\(12개월\+?\)/g, "Long-term (12M+)"],
+  [/단기\s*\(~\s*3\s*개월\)/g, "Short-term (~3M)"],
+  [/중기\s*\(3\s*~\s*12\s*개월\)/g, "Mid-term (3~12M)"],
+  [/장기\s*\(12\s*개월\+?\)/g, "Long-term (12M+)"],
+  [/\b단기\b/g, "Short-term"],
+  [/\b중기\b/g, "Mid-term"],
+  [/\b장기\b/g, "Long-term"],
+  [/→\s*부정\s*신호/g, "→ Negative Signal"],
+  [/→\s*긍정\s*신호/g, "→ Positive Signal"],
+  [/→\s*중립\s*신호/g, "→ Neutral Signal"],
+  [/부정\s*신호/g, "Negative Signal"],
+  [/긍정\s*신호/g, "Positive Signal"],
+  [/중립\s*신호/g, "Neutral Signal"],
+];
+
+function translateRoadmapTerms(md: string): string {
+  let out = md;
+  for (const [pattern, replacement] of ROADMAP_KO_TO_EN) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
+function prepareMarkdown(md: string, isEn = false): string {
   if (!md) return md;
 
   // AI가 테이블 행을 여러 줄에 걸쳐 출력하는 경우 병합 후 remark-gfm에 전달
@@ -232,13 +263,17 @@ function prepareMarkdown(md: string): string {
     out.push(addKrwCommas(line));
   }
 
-  return out.join("\n");
+  const result = out.join("\n");
+  return isEn ? translateRoadmapTerms(result) : result;
 }
 
-const ROADMAP_GROUPS: Record<string, { label: string; range: string; bg: string; text: string; border: string }> = {
-  "단기": { label: "단기",  range: "1~3개월",  bg: "#EFF6FF", text: "#1D4ED8", border: "#93C5FD" },
-  "중기": { label: "중기",  range: "3~12개월", bg: "#FFFBEB", text: "#B45309", border: "#FCD34D" },
-  "장기": { label: "장기",  range: "12개월+",  bg: "#F0FDF4", text: "#15803D", border: "#86EFAC" },
+const ROADMAP_GROUPS: Record<string, { labelKo: string; labelEn: string; rangeKo: string; rangeEn: string; bg: string; text: string; border: string }> = {
+  "단기":       { labelKo: "단기",      labelEn: "Short",  rangeKo: "1~3개월",  rangeEn: "1~3M",   bg: "#EFF6FF", text: "#1D4ED8", border: "#93C5FD" },
+  "중기":       { labelKo: "중기",      labelEn: "Mid",    rangeKo: "3~12개월", rangeEn: "3~12M",  bg: "#FFFBEB", text: "#B45309", border: "#FCD34D" },
+  "장기":       { labelKo: "장기",      labelEn: "Long",   rangeKo: "12개월+",  rangeEn: "12M+",   bg: "#F0FDF4", text: "#15803D", border: "#86EFAC" },
+  "Short-term": { labelKo: "단기",      labelEn: "Short",  rangeKo: "1~3개월",  rangeEn: "1~3M",   bg: "#EFF6FF", text: "#1D4ED8", border: "#93C5FD" },
+  "Mid-term":   { labelKo: "중기",      labelEn: "Mid",    rangeKo: "3~12개월", rangeEn: "3~12M",  bg: "#FFFBEB", text: "#B45309", border: "#FCD34D" },
+  "Long-term":  { labelKo: "장기",      labelEn: "Long",   rangeKo: "12개월+",  rangeEn: "12M+",   bg: "#F0FDF4", text: "#15803D", border: "#86EFAC" },
 };
 
 function getCellText(el: any): string {
@@ -250,9 +285,10 @@ function getCellText(el: any): string {
 }
 
 function RoadmapTbody({ children }: { children: React.ReactNode }) {
+  const isEn = useContext(RoadmapEnContext);
   const rows = Children.toArray(children).filter(isValidElement);
   const labels = rows.map(getCellText);
-  const isRoadmap = labels.some((l) => l === "단기" || l === "중기" || l === "장기");
+  const isRoadmap = labels.some((l) => ROADMAP_GROUPS[l] != null);
 
   if (!isRoadmap) {
     return (
@@ -309,10 +345,10 @@ function RoadmapTbody({ children }: { children: React.ReactNode }) {
                 >
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
                     <span style={{ color: group.config.text, fontWeight: 700, fontSize: "0.75rem" }}>
-                      {group.config.label}
+                      {isEn ? group.config.labelEn : group.config.labelKo}
                     </span>
                     <span style={{ color: group.config.text, fontSize: "0.65rem", opacity: 0.8 }}>
-                      {group.config.range}
+                      {isEn ? group.config.rangeEn : group.config.rangeKo}
                     </span>
                   </div>
                 </td>
@@ -3780,7 +3816,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
           };
           const MdBlock = ({ src }: { src: string }) => src.trim() ? (
             <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareMarkdown(src)}</ReactMarkdown>
+              <RoadmapEnContext.Provider value={isEn}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
+              </RoadmapEnContext.Provider>
             </div>
           ) : null;
 
@@ -3821,6 +3859,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                         style={{ overflow: "hidden" }}
                       >
                         <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                          <RoadmapEnContext.Provider value={isEn}>
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                             h2: ({ children }: any) => <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">{children}</h2>,
                             h3: ({ children }: any) => <h3 className="text-[12px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>,
@@ -3835,8 +3874,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                             strong: ({ children }: any) => <strong className="font-semibold text-foreground/90">{children}</strong>,
                             ...MD_TABLE_COMPONENTS,
                           }}>
-                            {prepareMarkdown(waccOnlySection)}
+                            {prepareMarkdown(waccOnlySection, isEn)}
                           </ReactMarkdown>
+                          </RoadmapEnContext.Provider>
                         </div>
                       </motion.div>
                     )}
@@ -3859,7 +3899,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
             >
               <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
-              <span className="text-[12px] font-semibold text-muted-foreground flex-1">밸류에이션 핵심 지표</span>
+              <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Metrics" : "밸류에이션 핵심 지표"}</span>
               <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showValuationMetrics && "rotate-180")} />
             </button>
             <AnimatePresence initial={false}>
@@ -3873,6 +3913,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                   style={{ overflow: "hidden" }}
                 >
                   <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                    <RoadmapEnContext.Provider value={isEn}>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -3898,8 +3939,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                         ...MD_TABLE_COMPONENTS,
                       }}
                     >
-                      {prepareMarkdown(valuationMetricsContent)}
+                      {prepareMarkdown(valuationMetricsContent, isEn)}
                     </ReactMarkdown>
+                    </RoadmapEnContext.Provider>
                   </div>
                 </motion.div>
               )}
@@ -3929,6 +3971,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                   style={{ overflow: "hidden" }}
                 >
                   <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                    <RoadmapEnContext.Provider value={isEn}>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -3951,8 +3994,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                         ...MD_TABLE_COMPONENTS,
                       }}
                     >
-                      {prepareMarkdown(keyAssumptionsContent)}
+                      {prepareMarkdown(keyAssumptionsContent, isEn)}
                     </ReactMarkdown>
+                    </RoadmapEnContext.Provider>
                   </div>
                 </motion.div>
               )}
