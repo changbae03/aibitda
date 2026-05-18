@@ -2734,9 +2734,14 @@ async function fetchPeerFinancials(
           console.warn(`[peer-data] ${peer.name} mcap 이상 보정: ${(mcap/1e8).toFixed(0)}억원 → ${(calcMcap/1e8).toFixed(0)}억원 (price×shares 역산)`);
           mcap = calcMcap;
         }
+        // 억원 단위로 통일 — AI 프롬프트 표 헤더 "시가총액(억원)"과 단위 일치
+        const mcapEokStr = mcap && isKrw
+          ? `${Math.round(mcap / 1e8).toLocaleString("ko-KR")}억원`
+          : null;
         const mcapStr = mcap
           ? isKrw
-            ? `${(mcap / 1e12).toFixed(2)}조원`
+            ? `${mcapEokStr}` +
+              (mcap >= 1e12 ? ` (≈${(mcap / 1e12).toFixed(2)}조원)` : "")
             : `${(mcap / 1e9).toFixed(1)}B ${currency}`
           : "N/A";
 
