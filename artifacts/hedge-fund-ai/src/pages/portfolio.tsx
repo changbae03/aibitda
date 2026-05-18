@@ -13,6 +13,7 @@ import {
   Sparkles, TrendingDown, CheckCircle2, MoveRight, ArrowRight,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency, isUSTicker } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 
@@ -103,8 +104,12 @@ function verdictBg(v: string) {
 
 function isKRTicker(t: string) { return /^\d{5,6}/.test(t.split(".")[0]); }
 
-function fmtPrice(price: number, currency: string) {
-  if (currency === "KRW") return `${price.toLocaleString("ko-KR")}원`;
+function fmtPrice(price: number, currency: string, isEn = false) {
+  if (currency === "KRW") {
+    return isEn
+      ? `KRW ${price.toLocaleString("en-US")}`
+      : `${price.toLocaleString("ko-KR")}원`;
+  }
   return `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -128,6 +133,7 @@ function isKorean(t: string) { return /[ㄱ-ㅎ가-힣]/.test(t); }
 interface AddDialogProps { onClose: () => void; onAdded: () => void; }
 
 function AddDialog({ onClose, onAdded }: AddDialogProps) {
+  const { isEn } = useLanguage();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -181,11 +187,11 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: cleanTicker, companyName: name, currency }),
       });
-      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "추가 실패"); }
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? (isEn ? "Failed to add" : "추가 실패")); }
       onAdded();
       onClose();
     } catch (e: any) {
-      setError(e?.message ?? "추가 실패");
+      setError(e?.message ?? (isEn ? "Failed to add" : "추가 실패"));
       setAdding(false);
     }
   }
@@ -222,7 +228,7 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         {/* 헤더 */}
         <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
           <Briefcase className="w-4 h-4 text-primary shrink-0" />
-          <p className="text-sm font-semibold text-foreground flex-1">포트폴리오에 종목 추가</p>
+          <p className="text-sm font-semibold text-foreground flex-1">{isEn ? "Add to Portfolio" : "포트폴리오에 종목 추가"}</p>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
             <XIcon className="w-4 h-4" />
           </button>
@@ -238,7 +244,7 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
             <input
               ref={inputRef}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
-              placeholder="종목명 또는 코드 검색 (예: 삼성전자, AAPL)"
+              placeholder={isEn ? "Search by name or ticker (e.g., Samsung, AAPL)" : "종목명 또는 코드 검색 (예: 삼성전자, AAPL)"}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -263,7 +269,7 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         <div ref={dropdownRef} className="max-h-72 overflow-y-auto pb-2">
           {adding ? (
             <div className="flex items-center justify-center py-10 gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" /> 추가 중...
+              <Loader2 className="w-4 h-4 animate-spin" /> {isEn ? "Adding..." : "추가 중..."}
             </div>
           ) : suggestions.length > 0 ? (
             suggestions.map((s, i) => {
@@ -491,16 +497,17 @@ function parseBrief(summary: string) {
   for (const { tag, text } of parts) {
     const clean = cleanSectionText(text);
     if (!clean) continue;
-    if (tag === "오늘의핵심")  sections.push({ label: "오늘의 핵심", icon: "core",     text: clean });
-    else if (tag === "리스크") sections.push({ label: "리스크",     icon: "risk",     text: clean });
-    else                       sections.push({ label: "투자 포인트", icon: "catalyst", text: clean });
+    if (tag === "오늘의핵심")  sections.push({ label: "Today's Key", icon: "core",     text: clean });
+    else if (tag === "리스크") sections.push({ label: "Risk",        icon: "risk",     text: clean });
+    else                       sections.push({ label: "Key Points",  icon: "catalyst", text: clean });
   }
 
-  return sections.length > 0 ? sections : [{ label: "브리핑", icon: "core" as const, text: cleanSectionText(summary) }];
+  return sections.length > 0 ? sections : [{ label: "Briefing", icon: "core" as const, text: cleanSectionText(summary) }];
 }
 
 // ── 보유 종목 카드 ────────────────────────────────────────────────────────────
 function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDelete: (id: number) => void; onRefresh: () => void }) {
+  const { isEn } = useLanguage();
   const [, setLocation] = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -543,7 +550,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   }
 
   async function handleDelete() {
-    if (!confirm(`${holding.ticker}를 포트폴리오에서 제거할까요?`)) return;
+    if (!confirm(isEn ? `Remove ${holding.ticker} from portfolio?` : `${holding.ticker}를 포트폴리오에서 제거할까요?`)) return;
     setDeleting(true);
     await fetch(getApiUrl(`/api/portfolio/${holding.id}`), { method: "DELETE", credentials: "include" });
     onDelete(holding.id);
@@ -655,7 +662,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   "inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border font-semibold",
                   verdictBg(a.verdict), verdictColor(a.verdict)
                 )}>
-                  {VERDICT_KO[a.verdict] ?? a.verdict}
+                  {isEn ? (a.verdict) : (VERDICT_KO[a.verdict] ?? a.verdict)}
                 </span>
                 {holding.note && (
                   <span className="ml-2 text-[11px] text-muted-foreground/50 truncate">{holding.note}</span>
@@ -669,15 +676,15 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
         <div className="mt-3 grid grid-cols-2 gap-2">
           {/* 현재가 */}
           <div className="rounded-xl bg-muted/20 border border-border/60 px-3 py-2.5">
-            <p className="text-[10px] text-muted-foreground mb-1">현재가</p>
+            <p className="text-[10px] text-muted-foreground mb-1">{isEn ? "Current Price" : "현재가"}</p>
             {holding.currentPrice != null ? (
               <>
                 <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                  {fmtPrice(holding.currentPrice, holding.priceCurrency)}
+                  {fmtPrice(holding.currentPrice, holding.priceCurrency, isEn)}
                 </p>
                 {holding.change1d != null && (
                   <p className={cn("text-[11px] tabular-nums mt-1 font-medium", changeColor)}>
-                    {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""} {fmtPct(Math.abs(holding.change1d))} 오늘
+                    {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""} {fmtPct(Math.abs(holding.change1d))} {isEn ? "today" : "오늘"}
                   </p>
                 )}
               </>
@@ -701,16 +708,16 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
             return (
               <div className={cn("rounded-xl border px-3 py-2.5", bgCls)}>
-                <p className="text-[10px] text-muted-foreground mb-1.5">AI 적정주가</p>
+                <p className="text-[10px] text-muted-foreground mb-1.5">{isEn ? "AI Fair Value" : "AI 적정주가"}</p>
 
                 {hasBoth ? (
                   /* ── 두 목표가 나란히 표시 ── */
                   <div className="grid grid-cols-2 gap-x-2">
                     {/* 내 분석 */}
                     <div>
-                      <p className="text-[9px] text-muted-foreground/60 mb-0.5">내 분석</p>
+                      <p className="text-[9px] text-muted-foreground/60 mb-0.5">{isEn ? "My Analysis" : "내 분석"}</p>
                       <p className="text-[15px] font-bold tabular-nums leading-none text-foreground whitespace-nowrap">
-                        {fmtPrice(myTP!, holding.priceCurrency)}
+                        {fmtPrice(myTP!, holding.priceCurrency, isEn)}
                       </p>
                       {a!.upsidePct != null && (
                         <p className={cn("text-[10px] tabular-nums mt-0.5 font-semibold",
@@ -722,10 +729,10 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     {/* 멀티뷰 */}
                     <div>
                       <p className="text-[9px] text-muted-foreground/60 mb-0.5 flex items-center gap-0.5">
-                        <Users className="w-2.5 h-2.5" />멀티뷰
+                        <Users className="w-2.5 h-2.5" />{isEn ? "Multi-View" : "멀티뷰"}
                       </p>
                       <p className="text-[15px] font-bold tabular-nums leading-none text-foreground whitespace-nowrap">
-                        {fmtPrice(colTP!, holding.priceCurrency)}
+                        {fmtPrice(colTP!, holding.priceCurrency, isEn)}
                       </p>
                       {a!.collectiveUpsidePct != null && (
                         <p className={cn("text-[10px] tabular-nums mt-0.5 font-semibold",
@@ -739,12 +746,12 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   /* ── 내 분석만 있을 때 ── */
                   <>
                     <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                      {fmtPrice(myTP, holding.priceCurrency)}
+                      {fmtPrice(myTP, holding.priceCurrency, isEn)}
                     </p>
                     {a!.upsidePct != null && (
                       <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
                         a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} 여력
+                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} {isEn ? "upside" : "여력"}
                       </p>
                     )}
                   </>
@@ -752,15 +759,15 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                   /* ── 멀티뷰만 있을 때 ── */
                   <>
                     <p className="text-[9px] text-muted-foreground/60 -mt-0.5 mb-0.5 flex items-center gap-0.5">
-                      <Users className="w-2.5 h-2.5" />멀티뷰
+                      <Users className="w-2.5 h-2.5" />{isEn ? "Multi-View" : "멀티뷰"}
                     </p>
                     <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                      {fmtPrice(colTP, holding.priceCurrency)}
+                      {fmtPrice(colTP, holding.priceCurrency, isEn)}
                     </p>
                     {a!.upsidePct != null && (
                       <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
                         a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} 여력
+                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} {isEn ? "upside" : "여력"}
                       </p>
                     )}
                   </>
@@ -796,8 +803,8 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
               />
             </div>
             <div className="flex justify-between mt-0.5">
-              <span className="text-[9px] text-muted-foreground/50">현재가</span>
-              <span className="text-[9px] text-muted-foreground/50">적정주가</span>
+              <span className="text-[9px] text-muted-foreground/50">{isEn ? "Current" : "현재가"}</span>
+              <span className="text-[9px] text-muted-foreground/50">{isEn ? "Fair Value" : "적정주가"}</span>
             </div>
           </div>
         )}
@@ -810,7 +817,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           className="mx-3 mb-3 w-[calc(100%-1.5rem)] flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-left"
         >
           <Brain className="w-3.5 h-3.5 text-primary/60 shrink-0" />
-          <span className="flex-1 text-[12px] text-primary/60">AI 분석을 요청하면 적정주가와 오늘의 이슈를 확인할 수 있어요</span>
+          <span className="flex-1 text-[12px] text-primary/60">{isEn ? "Request AI analysis to see fair value and today's key issues" : "AI 분석을 요청하면 적정주가와 오늘의 이슈를 확인할 수 있어요"}</span>
           <ChevronRight className="w-3.5 h-3.5 text-primary/40 shrink-0" />
         </button>
       )}
@@ -833,7 +840,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 : <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               }
               {briefLoading ? (
-                <span className="flex-1 text-[12px] text-muted-foreground/50">브리핑 생성 중…</span>
+                <span className="flex-1 text-[12px] text-muted-foreground/50">{isEn ? "Generating briefing..." : "브리핑 생성 중…"}</span>
               ) : (
                 <p className={cn("flex-1 text-[12px] text-foreground/70 leading-snug min-w-0", !briefExpanded && "line-clamp-1")}>
                   {headlineText}
@@ -885,8 +892,8 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                           <>
                             <Users className="w-2.5 h-2.5 text-emerald-400/60" />
                             <span className="text-emerald-400/60">
-                              멀티뷰 기반
-                              {(brief.contributorCount ?? 0) > 0 && ` · ${brief.contributorCount}명 분석`}
+                              {isEn ? "Multi-View based" : "멀티뷰 기반"}
+                              {(brief.contributorCount ?? 0) > 0 && (isEn ? ` · ${brief.contributorCount} analysts` : ` · ${brief.contributorCount}명 분석`)}
                             </span>
                             {brief.analysisDate && (
                               <span>· {brief.analysisDate}</span>
@@ -895,7 +902,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         ) : (
                           <>
                             <Brain className="w-2.5 h-2.5" />
-                            <span>AI 생성 · {brief.date}</span>
+                            <span>{isEn ? `AI generated · ${brief.date}` : `AI 생성 · ${brief.date}`}</span>
                           </>
                         )}
                       </div>
@@ -904,7 +911,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
-                        새로고침
+                        {isEn ? "Refresh" : "새로고침"}
                       </button>
                     </div>
                   </div>
@@ -924,7 +931,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
           >
             <ExternalLink className="w-3 h-3 shrink-0" />
-            <span>보고서</span>
+            <span>{isEn ? "Report" : "보고서"}</span>
             <span className="text-muted-foreground/40 font-normal">
               {format(new Date(a.createdAt), "M/d", { locale: ko })}
             </span>
@@ -940,7 +947,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           title="이 종목으로 새 보고서 산출"
         >
           <RefreshCw className="w-3 h-3 shrink-0" />
-          <span>새 보고서</span>
+          <span>{isEn ? "New Report" : "새 보고서"}</span>
         </button>
 
         {/* AI 리서치 요약 토글 */}
@@ -955,7 +962,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             )}
           >
             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            요약
+            {isEn ? "Summary" : "요약"}
           </button>
         )}
       </div>
@@ -975,17 +982,19 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
               <div className="px-4 py-3 flex items-center gap-3">
                 <Brain className="w-4 h-4 text-primary shrink-0" />
                 <div>
-                  <p className="text-[11px] font-semibold text-foreground">AI 리서치 요약</p>
+                  <p className="text-[11px] font-semibold text-foreground">{isEn ? "AI Research Summary" : "AI 리서치 요약"}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {format(new Date(a.createdAt), "yyyy년 M월 d일", { locale: ko })} 분석
-                    {a.qaScore != null && ` · 신뢰도 ${a.qaScore}점`}
+                    {isEn
+                      ? format(new Date(a.createdAt), "MMM d, yyyy")
+                      : `${format(new Date(a.createdAt), "yyyy년 M월 d일", { locale: ko })} 분석`}
+                    {a.qaScore != null && (isEn ? ` · Score: ${a.qaScore}` : ` · 신뢰도 ${a.qaScore}점`)}
                   </p>
                 </div>
                 <button
                   onClick={() => setLocation(`/analysis/${a.id}`)}
                   className="ml-auto text-[10px] text-primary hover:underline flex items-center gap-0.5"
                 >
-                  전체 보기 <ExternalLink className="w-2.5 h-2.5" />
+                  {isEn ? "View All" : "전체 보기"} <ExternalLink className="w-2.5 h-2.5" />
                 </button>
               </div>
 
@@ -994,7 +1003,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">핵심 촉매</span>
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{isEn ? "Key Catalysts" : "핵심 촉매"}</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
                     {cleanStepText(a.catalysts, 400)}
@@ -1007,7 +1016,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">주요 리스크</span>
+                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">{isEn ? "Key Risks" : "주요 리스크"}</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
                     {cleanStepText(a.risks, 400)}
@@ -1020,7 +1029,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Target className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">투자 전략</span>
+                    <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">{isEn ? "Investment Strategy" : "투자 전략"}</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
                     {cleanStepText(a.strategy, 500)}
@@ -1031,11 +1040,11 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
               {/* 분석 없을 때 */}
               {!a.catalysts && !a.risks && !a.strategy && (
                 <div className="px-4 py-6 text-center">
-                  <p className="text-[12px] text-muted-foreground mb-2">세부 분석 데이터가 없습니다</p>
+                  <p className="text-[12px] text-muted-foreground mb-2">{isEn ? "No detailed analysis data" : "세부 분석 데이터가 없습니다"}</p>
                   <button
                     onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
                     className="text-[11px] text-primary hover:underline"
-                  >새 분석 요청하기 →</button>
+                  >{isEn ? "Request new analysis →" : "새 분석 요청하기 →"}</button>
                 </div>
               )}
 
@@ -1044,15 +1053,15 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 <div className="px-4 py-2.5 flex gap-4">
                   {a.stopLoss != null && (
                     <div>
-                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">손절가</p>
+                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{isEn ? "Stop Loss" : "손절가"}</p>
                       <p className="text-[12px] font-medium text-foreground/70 tabular-nums">
-                        {fmtPrice(a.stopLoss, holding.priceCurrency)}
+                        {fmtPrice(a.stopLoss, holding.priceCurrency, isEn)}
                       </p>
                     </div>
                   )}
                   {a.riskRewardRatio != null && (
                     <div>
-                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">위험보상</p>
+                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{isEn ? "Risk/Reward" : "위험보상"}</p>
                       <p className="text-[12px] font-medium text-foreground/70 tabular-nums">
                         1 : {a.riskRewardRatio.toFixed(1)}
                       </p>
@@ -1092,8 +1101,8 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 <Building2 className="w-5 h-5 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">AI 기업분석</p>
-                <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{holding.companyName}</h3>
+                <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">{isEn ? "AI Stock Analysis" : "AI 기업분석"}</p>
+                <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{(holding as any).englishName && isEn ? (holding as any).englishName : holding.companyName}</h3>
                 <p className="font-mono text-[11px] text-muted-foreground/50">{holding.ticker}</p>
               </div>
             </div>
@@ -1101,11 +1110,13 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             {/* 설명 */}
             <div className="rounded-xl bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
               <p className="text-[13.5px] text-foreground/85 leading-relaxed">
-                <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
-                7단계 심층 분석을 시작합니다.
+                {isEn
+                  ? <><span className="font-bold" style={{ color: "#FF8A7A" }}>AiBITDA's AI analyst team</span> begins a 7-step deep analysis.</>
+                  : <><span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />7단계 심층 분석을 시작합니다.</>
+                }
               </p>
               <p className="text-[11.5px] text-muted-foreground">
-                평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
+                {isEn ? "Avg. 3 min · Auto-selects DCF, rNPV & more" : "평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정"}
               </p>
             </div>
 
@@ -1115,14 +1126,14 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 onClick={() => setConfirmNewReport(false)}
                 className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
               >
-                취소
+                {isEn ? "Cancel" : "취소"}
               </button>
               <button
                 onClick={() => { setConfirmNewReport(false); setLocation(`/analysis/new?ticker=${holding.ticker}`); }}
                 className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white transition-colors flex items-center justify-center gap-2"
                 style={{ backgroundColor: "#FF8A7A" }}
               >
-                분석 시작 <ArrowRight className="w-4 h-4" />
+                {isEn ? "Start Analysis" : "분석 시작"} <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </motion.div>
@@ -1136,6 +1147,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
 // ── 포트폴리오 전체 리뷰 컴포넌트 ──────────────────────────────────────────
 function PortfolioReview({ holdings }: { holdings: Holding[] }) {
+  const { isEn } = useLanguage();
   const [review, setReview] = useState<PortfolioReviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1153,14 +1165,14 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        setError((err as any).error ?? "리뷰 생성 실패");
+        setError((err as any).error ?? (isEn ? "Review generation failed" : "리뷰 생성 실패"));
         setLoading(false);
         return;
       }
       const d = await r.json() as PortfolioReviewResult;
       setReview(d);
     } catch {
-      setError("네트워크 오류가 발생했습니다");
+      setError(isEn ? "Network error occurred" : "네트워크 오류가 발생했습니다");
     }
     setLoading(false);
   }
@@ -1173,9 +1185,9 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
           <Sparkles className="w-4 h-4 text-amber-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold text-foreground">AI 포트폴리오 전체 리뷰</p>
+          <p className="text-[13px] font-semibold text-foreground">{isEn ? "AI Portfolio Review" : "AI 포트폴리오 전체 리뷰"}</p>
           <p className="text-[11px] text-muted-foreground">
-            종목별 최신 뉴스 수집 → thesis 점검 → 포트폴리오 종합 판단
+            {isEn ? "News collection → thesis check → portfolio assessment" : "종목별 최신 뉴스 수집 → thesis 점검 → 포트폴리오 종합 판단"}
           </p>
         </div>
         <button
@@ -1189,8 +1201,8 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
           )}
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-          {loading ? "분석 중…" : "리뷰 시작"}
-          {!loading && <span className="text-[10px] text-amber-400/60 font-normal">크레딧 1</span>}
+          {loading ? (isEn ? "Analyzing..." : "분석 중…") : (isEn ? "Start Review" : "리뷰 시작")}
+          {!loading && <span className="text-[10px] text-amber-400/60 font-normal">{isEn ? "1 credit" : "크레딧 1"}</span>}
         </button>
       </div>
 
@@ -1210,10 +1222,10 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                 <div className="px-4 py-5 space-y-1.5">
                   <div className="flex items-center gap-2.5 text-[12px] text-muted-foreground/60">
                     <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
-                    종목별 최신 뉴스 수집 &amp; thesis 점검 중…
+                    {isEn ? "Collecting latest news & checking thesis..." : "종목별 최신 뉴스 수집 & thesis 점검 중…"}
                   </div>
                   <p className="text-[11px] text-muted-foreground/40 pl-6">
-                    보유 {holdings.length}개 종목 뉴스를 가져오고 있습니다. 잠시 기다려 주세요.
+                    {isEn ? `Fetching news for ${holdings.length} holdings. Please wait.` : `보유 ${holdings.length}개 종목 뉴스를 가져오고 있습니다. 잠시 기다려 주세요.`}
                   </p>
                 </div>
               )}
@@ -1234,15 +1246,18 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                   <div className="px-4 pt-3 pb-2">
                     <div className="flex items-center gap-1.5 mb-3">
                       <Newspaper className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">종목별 뉴스 & Thesis 점검</span>
+                      <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">{isEn ? "Stock News & Thesis Check" : "종목별 뉴스 & Thesis 점검"}</span>
                     </div>
                     <div className="space-y-4">
                       {review.stockUpdates.map(s => {
                         const sentimentCfg = s.sentiment === "bullish"
-                          ? { label: "강세", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" }
+                          ? { label: isEn ? "Bullish" : "강세", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" }
                           : s.sentiment === "bearish"
-                          ? { label: "약세", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
-                          : { label: "중립", cls: "bg-muted text-muted-foreground border-border/40" };
+                          ? { label: isEn ? "Bearish" : "약세", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
+                          : { label: isEn ? "Neutral" : "중립", cls: "bg-muted text-muted-foreground border-border/40" };
+                        const thesisLabel = s.thesisStatus === "훼손" ? (isEn ? "Impaired" : "훼손")
+                          : s.thesisStatus === "일부변화" ? (isEn ? "Partial Change" : "일부변화")
+                          : (isEn ? "Valid" : "유효");
                         const thesisCfg = s.thesisStatus === "훼손"
                           ? { cls: "bg-red-500/10 text-red-400 border-red-500/20" }
                           : s.thesisStatus === "일부변화"
@@ -1260,7 +1275,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                                 {sentimentCfg.label}
                               </span>
                               <span className={cn("px-1.5 py-0.5 rounded-md text-[10px] font-medium border", thesisCfg.cls)}>
-                                thesis {s.thesisStatus}
+                                thesis {thesisLabel}
                               </span>
                             </div>
                             {/* 핵심 이벤트 */}
@@ -1284,7 +1299,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                   <div className="px-4 py-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <Compass className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">포트폴리오 종합 평가</span>
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{isEn ? "Portfolio Assessment" : "포트폴리오 종합 평가"}</span>
                     </div>
                     <p className="text-[12px] text-foreground/75 leading-relaxed">{review.portfolioView}</p>
                   </div>
@@ -1293,7 +1308,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                   <div className="px-4 py-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <PieChart className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">집중도 & 분산 리스크</span>
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">{isEn ? "Concentration & Diversification Risk" : "집중도 & 분산 리스크"}</span>
                     </div>
                     <p className="text-[12px] text-foreground/75 leading-relaxed">{review.concentration}</p>
                   </div>
@@ -1302,7 +1317,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                   <div className="px-4 py-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <MoveRight className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">리밸런싱 & 행동 제안</span>
+                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">{isEn ? "Rebalancing & Action Plan" : "리밸런싱 & 행동 제안"}</span>
                     </div>
                     <p className="text-[12px] text-foreground/75 leading-relaxed">{review.rebalancing}</p>
                   </div>
@@ -1312,7 +1327,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                     <div className="px-4 py-3">
                       <div className="flex items-center gap-1.5 mb-3">
                         <Lightbulb className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                        <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider">포트폴리오 보완 섹터 추천</span>
+                        <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider">{isEn ? "Sector Recommendations" : "포트폴리오 보완 섹터 추천"}</span>
                       </div>
                       <div className="space-y-2.5">
                         {review.sectorRecommendations.map((rec, i) => (
@@ -1340,7 +1355,9 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                   <div className="px-4 py-2.5 flex items-center justify-between">
                     <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
                       <Brain className="w-2.5 h-2.5" />
-                      Gemini AI · 실시간 뉴스 기반 · {new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 생성
+                      {isEn
+                        ? `Gemini AI · Real-time news · Generated ${new Date(review.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                        : `Gemini AI · 실시간 뉴스 기반 · ${new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 생성`}
                     </span>
                     <button
                       onClick={runReview}
@@ -1348,7 +1365,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                       className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-amber-400 transition-colors"
                     >
                       <RefreshCw className="w-2.5 h-2.5" />
-                      다시 실행 (-1 크레딧)
+                      {isEn ? "Rerun (-1 credit)" : "다시 실행 (-1 크레딧)"}
                     </button>
                   </div>
                 </div>
@@ -1362,10 +1379,10 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
 }
 
 // ── 포트폴리오 히어로 배너 (삼쩜삼 스타일) ────────────────────────────────────
-function heroRelativeTime(date: Date): string {
+function heroRelativeTime(date: Date, isEn = false): string {
   const sec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (sec < 60)  return `${sec}초 전`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
+  if (sec < 60)  return isEn ? `${sec}s ago` : `${sec}초 전`;
+  if (sec < 3600) return isEn ? `${Math.floor(sec / 60)}m ago` : `${Math.floor(sec / 60)}분 전`;
   return format(date, "HH:mm");
 }
 
@@ -1377,6 +1394,7 @@ function PortfolioHero({
   priceUpdating: boolean;
   onAdd: () => void;
 }) {
+  const { isEn } = useLanguage();
   const withUpside    = holdings.filter(h => h.analysis?.upsidePct != null);
   const avgUpside     = withUpside.length > 0
     ? withUpside.reduce((s, h) => s + (h.analysis!.upsidePct!), 0) / withUpside.length
@@ -1394,20 +1412,20 @@ function PortfolioHero({
     <div className="rounded-2xl bg-card border border-border overflow-hidden">
       {/* 상단: 주요 수치 */}
       <div className="px-5 pt-5 pb-4">
-        <p className="text-[12px] text-muted-foreground mb-1">내 포트폴리오</p>
+        <p className="text-[12px] text-muted-foreground mb-1">{isEn ? "My Portfolio" : "내 포트폴리오"}</p>
         <div className="flex items-end gap-3">
           <div>
             <span className="text-[40px] font-bold text-foreground tabular-nums leading-none">
               {holdings.length}
             </span>
-            <span className="text-[16px] text-muted-foreground ml-1.5">개 종목</span>
+            <span className="text-[16px] text-muted-foreground ml-1.5">{isEn ? "stocks" : "개 종목"}</span>
           </div>
           {avgUpside != null && (
             <div className={cn(
               "mb-1.5 flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] font-semibold",
               hasPositive ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
             )}>
-              {hasPositive ? "▲" : "▼"} 평균 {Math.abs(avgUpside).toFixed(1)}% 여력
+              {hasPositive ? "▲" : "▼"} {isEn ? `Avg. ${Math.abs(avgUpside).toFixed(1)}% upside` : `평균 ${Math.abs(avgUpside).toFixed(1)}% 여력`}
             </div>
           )}
         </div>
@@ -1416,21 +1434,21 @@ function PortfolioHero({
         <div className="mt-4 pt-4 border-t border-border/40 grid grid-cols-3 gap-0">
           {/* AI 판정 분포 */}
           <div className="pr-4">
-            <p className="text-[11px] text-muted-foreground mb-2">AI 판정</p>
+            <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "AI Verdict" : "AI 판정"}</p>
             <div className="flex items-center gap-1.5">
               {buyCount > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{buyCount}매수
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{buyCount} {isEn ? "Buy" : "매수"}
                 </span>
               )}
               {holdCount > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />{holdCount}홀드
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />{holdCount} {isEn ? "Hold" : "홀드"}
                 </span>
               )}
               {sellCount > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-semibold text-red-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />{sellCount}매도
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />{sellCount} {isEn ? "Sell" : "매도"}
                 </span>
               )}
               {buyCount + holdCount + sellCount === 0 && (
@@ -1441,7 +1459,7 @@ function PortfolioHero({
 
           {/* AI 분석 완료 — 프로그레스 바 */}
           <div className="px-4 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground mb-2">AI 분석</p>
+            <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "AI Analysis" : "AI 분석"}</p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
@@ -1457,12 +1475,12 @@ function PortfolioHero({
 
           {/* 가격 업데이트 — 상대 시간 */}
           <div className="pl-4 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground mb-2">가격 갱신</p>
+            <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "Price Update" : "가격 갱신"}</p>
             <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               {priceUpdating
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> 갱신 중</>
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> {isEn ? "Updating" : "갱신 중"}</>
                 : lastPriceUpdate
-                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />{heroRelativeTime(lastPriceUpdate)}</>
+                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />{heroRelativeTime(lastPriceUpdate, isEn)}</>
                 : "—"
               }
             </p>
@@ -1475,7 +1493,7 @@ function PortfolioHero({
         onClick={onAdd}
         className="w-full flex items-center justify-center gap-2 py-3 bg-primary/10 hover:bg-primary/15 transition-colors border-t border-primary/20 text-primary text-[13px] font-semibold"
       >
-        <Plus className="w-4 h-4" /> 종목 추가하기
+        <Plus className="w-4 h-4" /> {isEn ? "Add Stock" : "종목 추가하기"}
       </button>
     </div>
   );
@@ -1483,6 +1501,7 @@ function PortfolioHero({
 
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 export default function Portfolio() {
+  const { isEn } = useLanguage();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -1588,7 +1607,7 @@ export default function Portfolio() {
         <div className="flex items-center justify-center py-36">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="w-7 h-7 animate-spin text-primary/60" />
-            <p className="text-[13px] text-muted-foreground">포트폴리오 불러오는 중…</p>
+            <p className="text-[13px] text-muted-foreground">{isEn ? "Loading portfolio..." : "포트폴리오 불러오는 중…"}</p>
           </div>
         </div>
       ) : holdings.length === 0 ? (
@@ -1598,16 +1617,19 @@ export default function Portfolio() {
             <Briefcase className="w-8 h-8 text-primary/60" />
           </div>
           <div>
-            <p className="text-[16px] font-bold text-foreground">보유 종목이 없어요</p>
+            <p className="text-[16px] font-bold text-foreground">{isEn ? "No holdings yet" : "보유 종목이 없어요"}</p>
             <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-              종목을 추가하면 AI가 현재가, 적정주가,<br/>오늘의 이슈를 한눈에 보여드려요.
+              {isEn
+                ? "Add stocks to see current price, fair value, and key issues at a glance."
+                : <>종목을 추가하면 AI가 현재가, 적정주가,<br/>오늘의 이슈를 한눈에 보여드려요.</>
+              }
             </p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-[14px] font-semibold hover:bg-primary/90 transition-colors"
           >
-            <Plus className="w-4 h-4" /> 첫 종목 추가하기
+            <Plus className="w-4 h-4" /> {isEn ? "Add First Stock" : "첫 종목 추가하기"}
           </button>
         </div>
       ) : (
@@ -1622,7 +1644,7 @@ export default function Portfolio() {
 
           {/* ── 정렬 탭 ── */}
           <div className="flex items-center gap-1 pt-1">
-            <span className="text-[11px] text-muted-foreground mr-1">정렬</span>
+            <span className="text-[11px] text-muted-foreground mr-1">{isEn ? "Sort" : "정렬"}</span>
             {(["added", "upside"] as const).map(k => (
               <button
                 key={k}
@@ -1634,7 +1656,10 @@ export default function Portfolio() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {{ added: "최근 추가순", upside: "상승여력순" }[k]}
+                {isEn
+                  ? { added: "Recently Added", upside: "By Upside" }[k]
+                  : { added: "최근 추가순", upside: "상승여력순" }[k]
+                }
               </button>
             ))}
           </div>
@@ -1668,7 +1693,10 @@ export default function Portfolio() {
       <div className="mt-8 px-1 flex items-start gap-1.5 text-[10px] text-muted-foreground/35 leading-relaxed">
         <Users className="w-3 h-3 shrink-0 mt-0.5" />
         <p>
-          <span className="font-semibold text-muted-foreground/50">멀티뷰</span>는 최근 30일 내 이 종목을 분석한 여러 분석자의 AI 적정주가를 평균낸 값입니다. 시점·이슈에 따라 적정주가가 달라질 수 있어 최신 분석만 반영합니다. 분석자가 2명 이상일 때 표시됩니다.
+          {isEn
+            ? <><span className="font-semibold text-muted-foreground/50">Multi-View</span> is the average AI fair value from multiple analysts who analyzed this stock within the last 30 days. Only the latest analyses are reflected, as fair value may vary by timing and context. Shown when 2+ analysts are available.</>
+            : <><span className="font-semibold text-muted-foreground/50">멀티뷰</span>는 최근 30일 내 이 종목을 분석한 여러 분석자의 AI 적정주가를 평균낸 값입니다. 시점·이슈에 따라 적정주가가 달라질 수 있어 최신 분석만 반영합니다. 분석자가 2명 이상일 때 표시됩니다.</>
+          }
         </p>
       </div>
     </div>
