@@ -126,21 +126,19 @@ const server = app.listen(port, () => {
     );
   }, ONE_WEEK_MS);
 
-  // ── 일일 자동 배치 분석 (KR 25 + US 15, 워치리스트 로테이션) ────────────────
-  // 서버 시작 8분 후 첫 실행 (KRX/US harvester가 2~4분 실행됨 → 충분한 여유)
-  // → 이후 24시간마다 반복. 오늘 이미 실행된 경우 DB 체크 후 자동 스킵
-  setTimeout(() => {
-    runDailyAutoBatch(port).catch((e) =>
-      console.error("[SCHEDULER] 자동 배치 첫 실행 실패:", e?.message ?? e)
-    );
-  }, 8 * 60 * 1000);
-
-  setInterval(() => {
-    console.log("[SCHEDULER] 일일 자동 배치 분석 시작");
-    runDailyAutoBatch(port).catch((e) =>
-      console.error("[SCHEDULER] 일일 자동 배치 실패:", e?.message ?? e)
-    );
-  }, ONE_DAY_MS);
+  // ── 일일 자동 배치 분석 — 비활성화됨 (수동 분석 모드) ──────────────────────
+  // setTimeout(() => {
+  //   runDailyAutoBatch(port).catch((e) =>
+  //     console.error("[SCHEDULER] 자동 배치 첫 실행 실패:", e?.message ?? e)
+  //   );
+  // }, 8 * 60 * 1000);
+  //
+  // setInterval(() => {
+  //   console.log("[SCHEDULER] 일일 자동 배치 분석 시작");
+  //   runDailyAutoBatch(port).catch((e) =>
+  //     console.error("[SCHEDULER] 일일 자동 배치 실패:", e?.message ?? e)
+  //   );
+  // }, ONE_DAY_MS);
 
   // ── KRX 전체 종목 DB 구축 (2,719개 재무 데이터 증분 수집) ─────────────────
   // 서버 시작 2분 후 목록 동기화 + 미수집 300개 처리 → 이후 12시간마다 반복
