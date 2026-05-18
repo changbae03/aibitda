@@ -4,6 +4,23 @@ import { ChevronLeft, ChevronRight, Loader2, Clock } from "lucide-react";
 import { cn, isUSTicker } from "@/lib/utils";
 import { ANALYSIS_STEPS_ORDER } from "@/lib/agents";
 
+// ── 한국어 괄호 제거 (영문 모드) ──────────────────────────────────────────────
+/** 영문 모드에서 한국어가 포함된 괄호 표현 제거: "Bull (초과 달성):" → "Bull:" */
+function stripKoreanParens(text: string): string {
+  return text
+    .replace(/\s*\([^)]*[\uAC00-\uD7A3][^)]*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+const PHASE_EN: Record<string, string> = {
+  "본격 가속": "Acceleration",
+  "초기 단계": "Early Stage",
+  "성숙 단계": "Mature Stage",
+  "전환 단계": "Transition",
+  "가속 단계": "Growth Phase",
+};
+
 // ── 문장 경계 자르기 헬퍼 ────────────────────────────────────────────────────
 /** maxLen 이상이면 가장 가까운 문장 끝(. ! ? 。)에서 자름. 문장 끝이 없으면 하드 컷. */
 function truncateAtSentence(text: string, maxLen: number): string {
@@ -663,22 +680,24 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                 </div>
                 {phase && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
-                    style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{phase}</span>
+                    style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>
+                    {isEn ? (PHASE_EN[phase] ?? phase) : phase}
+                  </span>
                 )}
               </div>
-              <p className="text-[12px] text-white/85 leading-snug">{issueDesc}</p>
+              <p className="text-[12px] text-white/85 leading-snug">{isEn ? stripKoreanParens(issueDesc) : issueDesc}</p>
             </div>
             <div className="flex flex-col gap-2">
               {bullCase && (
                 <div className="rounded-xl p-2.5" style={{ background: "rgba(122,232,180,0.06)", border: "1px solid rgba(122,232,180,0.15)" }}>
                   <div className="text-[9px] font-bold text-emerald-400 mb-1">✅ {isEn ? "If realized" : "실현 시"}</div>
-                  <p className="text-[12px] text-white/70 leading-snug">{bullCase}</p>
+                  <p className="text-[12px] text-white/70 leading-snug">{isEn ? stripKoreanParens(bullCase) : bullCase}</p>
                 </div>
               )}
               {bearCase && (
                 <div className="rounded-xl p-2.5" style={{ background: "rgba(255,138,122,0.06)", border: "1px solid rgba(255,138,122,0.15)" }}>
                   <div className="text-[9px] font-bold text-[#FF8A7A] mb-1">⚠️ {isEn ? "If not realized" : "미실현 시"}</div>
-                  <p className="text-[12px] text-white/70 leading-snug">{bearCase}</p>
+                  <p className="text-[12px] text-white/70 leading-snug">{isEn ? stripKoreanParens(bearCase) : bearCase}</p>
                 </div>
               )}
             </div>
@@ -690,7 +709,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                 style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
                   style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
-                <div className="text-white/80 text-[12.5px] leading-snug">{b}</div>
+                <div className="text-white/80 text-[12.5px] leading-snug">{isEn ? stripKoreanParens(b) : b}</div>
               </div>
             ))}
           </div>
