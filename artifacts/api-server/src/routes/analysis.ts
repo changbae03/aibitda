@@ -4599,9 +4599,11 @@ async function executeStep(
             const tkr: string = spRow[0]?.ticker ?? "";
             const isKRtk = /^\d{6}$/.test(tkr);
 
-            // Median consistency guard — if rawTp deviates >30% from the
-            // median of recent analyses for the same ticker, clamp to median ±25%.
-            // Threshold lowered 40→30%, range tightened ±35→±25%, min samples 3→2.
+            // Median consistency guard — if rawTp deviates >40% from the
+            // median of recent analyses for the same ticker, clamp to median ±30%.
+            // Requires at least 4 samples to avoid clamping on sparse historical data.
+            const originalTp = rawTp; // preserve AI-derived value before any clamping
+            let medianCorrected = false;
             if (rawTp > 0 && tkr) {
               try {
                 const recentTpRows = await rawQuery(
@@ -4611,18 +4613,21 @@ async function executeStep(
                    ORDER BY created_at DESC LIMIT 7`,
                   [tkr, id]
                 );
-                if (recentTpRows.length >= 2) {
+                if (recentTpRows.length >= 4) {
                   const sorted = recentTpRows.map((r: any) => Number(r.target_price)).sort((a: number, b: number) => a - b);
                   const mid = Math.floor(sorted.length / 2);
                   const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
                   const deviation = Math.abs(rawTp - median) / median;
-                  if (deviation > 0.3) {
-                    const clamped = Math.round(Math.max(median * 0.75, Math.min(median * 1.25, rawTp)));
+                  if (deviation > 0.4) {
+                    const clamped = Math.round(Math.max(median * 0.70, Math.min(median * 1.30, rawTp)));
                     console.warn(
                       `[tp-inject] ${tkr} rawTp=${Math.round(rawTp)} deviates ${(deviation * 100).toFixed(0)}% from median=${Math.round(median)} (n=${sorted.length}) → clamped to ${clamped}`
                     );
                     rawTp = clamped;
+                    medianCorrected = true;
                   }
+                } else {
+                  console.log(`[tp-inject] ${tkr} median guard skipped — insufficient samples (n=${recentTpRows.length} < 4)`);
                 }
               } catch (medErr) {
                 console.warn("[tp-inject] median guard error:", medErr);
@@ -4636,25 +4641,34 @@ async function executeStep(
               const validated = ratio > MAX_R ? Math.round(sp * MAX_R)
                              : ratio < MIN_R ? Math.round(sp * MIN_R)
                              : Math.round(rawTp);
-              const corrected = validated !== Math.round(rawTp);
+              // corrected = true if ANY adjustment occurred (median clamp OR ratio clamp)
+              const ratioCorrected = validated !== Math.round(rawTp);
+              const corrected = ratioCorrected || medianCorrected;
               const valRatio = validated / sp;
               const impliedVerdict = valRatio >= 1.15 ? "매수(BUY/Strong Buy)"
                                    : valRatio >= 1.05 ? "매수(BUY)"
                                    : valRatio <= 0.88 ? "매도(SELL)"
                                    : "중립(HOLD)";
               const upPct = ((valRatio - 1) * 100).toFixed(1);
+              const priceUnit = isKRtk ? "원" : "달러(USD)";
+              const fmtTp = (n: number) => isKRtk ? `${n.toLocaleString()}원` : `$${n.toLocaleString()}`;
+              const correctionNote = medianCorrected
+                ? `※ 밸류에이션 섹션의 AI 산출값 ${fmtTp(Math.round(originalTp))}이 과거 분석 중앙값 대비 편차 과다로 ${fmtTp(validated)}으로 서버 보정됨. 최종 결론의 적정주가는 반드시 ${fmtTp(validated)}을 사용할 것. 밸류에이션 섹션 수치와 다를 수 있으나 이 지시를 따를 것.\n`
+                : ratioCorrected
+                  ? `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 합리성 한도(현재가 대비 ${MIN_R}x~${MAX_R}x) 초과로 ${fmtTp(validated)}으로 자동 보정됨\n`
+                  : "";
               const tpBlock = `\n\n[⛔ 서버 검증 목표주가 — 최우선 지시, 위 모든 앵커보다 우선]\n`
-                + `현재가(분석 시작 기준): ${sp.toLocaleString()}원\n`
-                + `서버 검증 목표주가(12M): **${validated.toLocaleString()}원** (현재가 대비 ${Number(upPct) >= 0 ? "+" : ""}${upPct}%)\n`
-                + (corrected ? `※ AI 원산출값 ${Math.round(rawTp).toLocaleString()}원이 합리성 한도 초과로 ${validated.toLocaleString()}원으로 자동 보정됨\n` : "")
+                + `현재가(분석 시작 기준): ${fmtTp(sp)}\n`
+                + `서버 검증 목표주가(12M): **${fmtTp(validated)}** (현재가 대비 ${Number(upPct) >= 0 ? "+" : ""}${upPct}%)\n`
+                + correctionNote
                 + `\n⛔ 필수 준수 사항 (위반 금지):\n`
                 + `1. FINAL_JSON target_price = ${validated} (정수, 콤마 없이)\n`
                 + `2. 권고 판정: **${impliedVerdict}** — 목표가/현재가 괴리율 ${Number(upPct) >= 0 ? "+" : ""}${upPct}% 기준\n`
-                + `3. entry_price ≤ ${sp.toLocaleString()}원 (현재가 이하), stop_loss = 현재가의 88~93% 수준\n`
+                + `3. entry_price ≤ ${fmtTp(sp)} (현재가 이하), stop_loss = 현재가의 88~93% 수준\n`
                 + `4. 시나리오 Base upside도 이 목표가 기준으로 재계산할 것\n`
                 + `5. 위의 [판정 일관성 앵커]의 판정·목표가 제한은 이 지시로 완전 해제됨`;
               enrichedContext = enrichedContext ? enrichedContext + tpBlock : tpBlock;
-              console.log(`[tp-inject] ${tkr} validated=${validated} raw=${Math.round(rawTp)} ratio=${valRatio.toFixed(2)}x verdict=${impliedVerdict} corrected=${corrected}`);
+              console.log(`[tp-inject] ${tkr} validated=${validated} original=${Math.round(originalTp)} ratio=${valRatio.toFixed(2)}x verdict=${impliedVerdict} medianCorrected=${medianCorrected} ratioCorrected=${ratioCorrected}`);
             } else {
               console.log(`[tp-inject] ${id} — 조건 미충족: rawTp=${rawTp} sp=${sp}`);
             }
