@@ -2340,7 +2340,7 @@ export default function AnalysisDetail() {
             <div className="flex items-start justify-between gap-2 mb-2.5">
               <div className="min-w-0">
                 <p className="text-[10px] font-mono text-muted-foreground/60 leading-none mb-0.5">{analysis.ticker}</p>
-                <p className="text-[12.5px] font-bold text-foreground leading-tight truncate">{analysis.companyName}</p>
+                <p className="text-[12.5px] font-bold text-foreground leading-tight truncate">{isEn ? ((analysis as any).englishName ?? analysis.companyName) : analysis.companyName}</p>
               </div>
               {(() => {
                 const sp = (analysis as any).startPrice as number | null ?? null;
