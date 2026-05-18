@@ -1678,7 +1678,9 @@ export default function AnalysisDetail() {
                 <span className="text-2xl font-black tabular-nums tracking-tight text-foreground">
                   {headerLivePrice.currency === "USD"
                     ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : `₩${Math.round(headerLivePrice.price).toLocaleString("ko-KR")}`}
+                    : isEn
+                      ? `KRW ${Math.round(headerLivePrice.price).toLocaleString("en-US")}`
+                      : `₩${Math.round(headerLivePrice.price).toLocaleString("ko-KR")}`}
                 </span>
                 {headerLivePrice.change != null && (
                   <span className={cn(
@@ -2361,7 +2363,7 @@ export default function AnalysisDetail() {
   );
 }
 
-function formatPrice(val: string | number | undefined | null, currency: "KRW" | "USD" = "KRW"): string {
+function formatPrice(val: string | number | undefined | null, currency: "KRW" | "USD" = "KRW", isEn = false): string {
   if (val == null) return "N/A";
   const str = String(val).trim();
   const num = parseFloat(str.replace(/[^0-9.]/g, ""));
@@ -2369,6 +2371,7 @@ function formatPrice(val: string | number | undefined | null, currency: "KRW" | 
   if (currency === "USD") {
     return "$" + new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(num);
   }
+  if (isEn) return "KRW " + new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(num);
   return new Intl.NumberFormat("ko-KR").format(num) + "원";
 }
 
@@ -2594,7 +2597,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
                         <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground">{entryLabel}</p>
                       </div>
-                      <p className="text-[13px] sm:text-[17px] font-bold text-foreground font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency)}</p>
+                      <p className="text-[13px] sm:text-[17px] font-bold text-foreground font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency, isEn)}</p>
                       {entryVsCurrent !== null ? (
                         <p className={`text-[10px] sm:text-[11px] font-bold mt-1 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
                           {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
@@ -2610,7 +2613,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className={`w-1.5 h-1.5 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
                         <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>{isEn ? "Fair Value" : "적정주가"} <span className="font-normal opacity-70">(12M)</span></p>
                       </div>
-                      <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{tp ? formatPrice(String(tp), priceCurrency) : formatPrice(json.target_price, priceCurrency)}</p>
+                      <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{tp ? formatPrice(String(tp), priceCurrency, isEn) : formatPrice(json.target_price, priceCurrency, isEn)}</p>
                       {upsideFromCurrent !== null ? (
                         <p className={`text-[10px] sm:text-[11px] font-bold ${targetCardStyle.pctColor} mt-1`}>
                           {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
@@ -2626,7 +2629,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                         <p className="text-[10px] sm:text-[11px] font-semibold text-red-500 dark:text-red-400">{stopLabel}</p>
                       </div>
-                      <p className="text-[13px] sm:text-[17px] font-bold text-red-600 dark:text-red-400 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency)}</p>
+                      <p className="text-[13px] sm:text-[17px] font-bold text-red-600 dark:text-red-400 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency, isEn)}</p>
                       {slPct !== null ? (
                         <p className="text-[10px] sm:text-[11px] font-bold text-red-500 dark:text-red-400 mt-1">-{slPct}%</p>
                       ) : (
@@ -2679,7 +2682,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                         {/* 적정주가 + 등락률 */}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold font-mono text-foreground">
-                            {formatPrice(s.target_price, priceCurrency)}
+                            {formatPrice(s.target_price, priceCurrency, isEn)}
                           </p>
                           <p className={cn(
                             "text-xs font-semibold mt-0.5",
@@ -3191,7 +3194,9 @@ function TechnicalLevelLadder({ levels, startPrice, currency, isEn = false }: {
 
   const fmtP = (v: number) => currency === "USD"
     ? `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : `${v.toLocaleString("ko-KR")}원`;
+    : isEn
+      ? `KRW ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v)}`
+      : `${v.toLocaleString("ko-KR")}원`;
   const fmtPct = (v: number) => {
     const p = ((v - cp) / cp * 100);
     return { str: (p >= 0 ? "+" : "") + p.toFixed(1) + "%", isUp: p >= 0 };
@@ -3535,10 +3540,10 @@ function stripPromptInstructions(content: string): string {
 
 // ── ValuationScaleBar: 방법론별 Bear/Base/Bull 범위를 공통 스케일로 시각화 ──────
 function ValuationScaleBar({
-  label, bear, base, bull, current, globalMin, globalMax, currency,
+  label, bear, base, bull, current, globalMin, globalMax, currency, isEn,
 }: {
   label: string; bear: number; base: number; bull: number;
-  current: number; globalMin: number; globalMax: number; currency: "KRW" | "USD";
+  current: number; globalMin: number; globalMax: number; currency: "KRW" | "USD"; isEn?: boolean;
 }) {
   const span = globalMax - globalMin || 1;
   const toP = (v: number) => Math.max(0, Math.min(100, ((v - globalMin) / span) * 100));
@@ -3568,7 +3573,7 @@ function ValuationScaleBar({
           style={{ left: `${curP}%` }} />
       </div>
       <div className="w-32 shrink-0 text-right flex items-baseline justify-end gap-1.5">
-        <span className="text-[11px] font-mono font-semibold text-foreground">{formatPrice(base, currency)}</span>
+        <span className="text-[11px] font-mono font-semibold text-foreground">{formatPrice(base, currency, isEn)}</span>
         <span className={cn("text-[10px] font-mono font-bold", isUp ? "text-emerald-500" : "text-rose-500")}>
           {isUp ? "+" : ""}{upside.toFixed(1)}%
         </span>
@@ -4088,7 +4093,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               n: 2,
               title: isEn ? "Absolute" : "절대가치",
               sub: isEn ? `${absModel} intrinsic` : `${absModel} 내재가치`,
-              value: formatPrice(fv.abs_base, priceCurrency),
+              value: formatPrice(fv.abs_base, priceCurrency, isEn),
               badge: `${absUp >= 0 ? "+" : ""}${absUp.toFixed(1)}%`,
               badgeUp: absUp >= 0,
               highlight: false,
@@ -4097,7 +4102,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               n: 3,
               title: isEn ? "Relative" : "상대가치",
               sub: isEn ? "Peer multiples" : "피어 멀티플 비교",
-              value: formatPrice(fv.rel_base, priceCurrency),
+              value: formatPrice(fv.rel_base, priceCurrency, isEn),
               badge: `${relUp >= 0 ? "+" : ""}${relUp.toFixed(1)}%`,
               badgeUp: relUp >= 0,
               highlight: false,
@@ -4106,7 +4111,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               n: 4,
               title: isEn ? "Blended" : "최종 조율",
               sub: isEn ? "Abs. × Rel. blend" : "절대 + 상대 조율",
-              value: formatPrice(fv.base, priceCurrency),
+              value: formatPrice(fv.base, priceCurrency, isEn),
               badge: `${isUp ? "+" : ""}${upside.toFixed(1)}%`,
               badgeUp: isUp,
               highlight: true,
@@ -4171,7 +4176,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
                   <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(fv.current, priceCurrency)}</span>
+                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(fv.current, priceCurrency, isEn)}</span>
                 </div>
                 <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
                   <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
@@ -4182,9 +4187,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                 </div>
                 <div className="flex items-center gap-1.5 bg-muted/50 rounded-lg px-3 py-1.5">
                   <span className="text-[11px] text-muted-foreground">{isEn ? "Band" : "밴드"}</span>
-                  <span className="text-[11px] font-mono text-rose-500">{formatPrice(fv.bear, priceCurrency)}</span>
+                  <span className="text-[11px] font-mono text-rose-500">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
                   <span className="text-[10px] text-muted-foreground/50">~</span>
-                  <span className="text-[11px] font-mono text-blue-500">{formatPrice(fv.bull, priceCurrency)}</span>
+                  <span className="text-[11px] font-mono text-blue-500">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
                 </div>
               </div>
 
@@ -4209,14 +4214,14 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                       return (
                         <tr key={label} className={cn("transition-colors", bold ? "bg-muted/20 hover:bg-muted/30" : "hover:bg-muted/10")}>
                           <td className={cn("px-3 py-2 text-foreground/80", bold && "font-bold text-foreground")}>{label}</td>
-                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency)}</td>
+                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
                           <td className="px-3 py-2 text-right font-mono">
-                            <span className={cn("text-foreground", bold && "font-bold")}>{formatPrice(base, priceCurrency)}</span>
+                            <span className={cn("text-foreground", bold && "font-bold")}>{formatPrice(base, priceCurrency, isEn)}</span>
                             <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
                               {up >= 0 ? "+" : ""}{up.toFixed(1)}%
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency)}</td>
+                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
                         </tr>
                       );
                     })}
@@ -4248,7 +4253,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
                   <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency)}</span>
+                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency, isEn)}</span>
                 </div>
                 <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
                   <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
@@ -4280,9 +4285,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                     <span className="text-[10px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   </div>
                 </div>
-                <ValuationScaleBar label="DCF" bear={valuationData.dcf_bear} base={valuationData.dcf_base} bull={valuationData.dcf_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
-                <ValuationScaleBar label="Fwd P/E" bear={valuationData.pe_bear} base={valuationData.pe_base} bull={valuationData.pe_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
-                <ValuationScaleBar label="EV/EBITDA" bear={valuationData.ev_bear} base={valuationData.ev_base} bull={valuationData.ev_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} />
+                <ValuationScaleBar label="DCF" bear={valuationData.dcf_bear} base={valuationData.dcf_base} bull={valuationData.dcf_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
+                <ValuationScaleBar label="Fwd P/E" bear={valuationData.pe_bear} base={valuationData.pe_base} bull={valuationData.pe_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
+                <ValuationScaleBar label="EV/EBITDA" bear={valuationData.ev_bear} base={valuationData.ev_base} bull={valuationData.ev_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
               </div>
 
               {/* 상세 수치 테이블 (접힌 형태) */}
@@ -4306,14 +4311,14 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, startPri
                       return (
                         <tr key={label} className="hover:bg-muted/20 transition-colors">
                           <td className="px-3 py-2 font-medium text-foreground/80">{label}</td>
-                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency)}</td>
+                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
                           <td className="px-3 py-2 text-right font-mono">
-                            <span className="font-semibold text-foreground">{formatPrice(base, priceCurrency)}</span>
+                            <span className="font-semibold text-foreground">{formatPrice(base, priceCurrency, isEn)}</span>
                             <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
                               {up >= 0 ? "+" : ""}{up.toFixed(1)}%
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency)}</td>
+                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
                         </tr>
                       );
                     })}
