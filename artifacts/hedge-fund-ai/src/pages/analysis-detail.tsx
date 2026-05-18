@@ -217,6 +217,9 @@ const ROADMAP_KO_TO_EN: [RegExp, string | ((m: string, ...a: string[]) => string
   [/향후\s*예상\s*일정\s*및\s*시나리오/g, "Upcoming Schedule & Scenarios"],
   [/주요\s*예정\s*일정/g, "Key Upcoming Events"],
   [/예상\s*주가[·\s]*실적\s*영향/g, "Expected Price / Earnings Impact"],
+  [/시나리오\s*전망/g, "Scenario Outlook"],
+  // ── 시나리오 레이블 괄호 한국어 제거: "Base (핵심 이슈 정상 실현)" → "Base"
+  [/(Base|Bull|Bear)\s*\([^)]*[\uAC00-\uD7A3][^)]*\)/g, "$1"],
   // ── 테이블 헤더
   [/시점/g, "Timeframe"],
   [/이벤트\s*\/\s*확인\s*지표/g, "Event / Indicator"],
