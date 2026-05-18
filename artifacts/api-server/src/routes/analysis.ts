@@ -3307,8 +3307,9 @@ router.get("/", async (req, res) => {
       return;
     }
     const ids = aRows.map((r: any) => r.id);
+    // Exclude content column for history list — full content fetched only on detail view
     const sRows = await rawQuery(
-      `SELECT * FROM analysis_steps WHERE analysis_id = ANY($1::int[]) ORDER BY created_at ASC`,
+      `SELECT id, analysis_id, step_key, agent_name, agent_role, information_type, validation_notes, created_at FROM analysis_steps WHERE analysis_id = ANY($1::int[]) ORDER BY created_at ASC`,
       [ids]
     );
     const stepsByAnalysis = new Map<number, any[]>();
@@ -3319,7 +3320,9 @@ router.get("/", async (req, res) => {
     }
     const results = aRows
       .map(mapAnalysisRow)
-      .map((a: any) => formatAnalysis(a, (stepsByAnalysis.get(a.id) ?? []).map(mapStepRow)));
+      .map((a: any) => formatAnalysis(a, (stepsByAnalysis.get(a.id) ?? []).map((r: any) => ({
+        ...mapStepRow({ ...r, content: "" }),
+      }))));
     res.json(results);
   } catch (err: any) {
     console.error("[GET /analysis] DB error:", err?.message, err?.cause);
@@ -3907,7 +3910,18 @@ router.get("/share/:id/text", async (req, res) => {
 router.get("/public-stats", async (_req, res) => {
   try {
     const rows = await db
-      .select()
+      .select({
+        id: analysesTable.id,
+        ticker: analysesTable.ticker,
+        companyName: analysesTable.companyName,
+        englishName: analysesTable.englishName,
+        industry: analysesTable.industry,
+        investmentVerdict: analysesTable.investmentVerdict,
+        targetPrice: analysesTable.targetPrice,
+        startPrice: analysesTable.startPrice,
+        createdAt: analysesTable.createdAt,
+        userId: analysesTable.userId,
+      })
       .from(analysesTable)
       .where(eq(analysesTable.status, "completed"));
 
@@ -4842,7 +4856,7 @@ async function executeStep(
 
       // ── Feature 2: 틀린 예측 패턴 반영 (model_insights 교훈) ──────────────
       const allInsightRows = await rawQuery(
-        `SELECT * FROM model_insights WHERE outcome != 'pending'`
+        `SELECT ticker, company_name, lesson, days_elapsed, price_return, outcome FROM model_insights WHERE outcome != 'pending'`
       );
       const allInsights = allInsightRows.map(r => ({
         ticker: r.ticker,
