@@ -3607,7 +3607,7 @@ router.get("/all-reports", async (req, res) => {
 router.get("/popular", async (_req, res) => {
   try {
     const rawRows = await rawQuery(
-      `SELECT id, ticker, company_name, industry, investment_verdict, target_price, entry_price, stop_loss, created_at
+      `SELECT id, ticker, company_name, english_name, industry, investment_verdict, target_price, entry_price, stop_loss, created_at
        FROM analyses
        WHERE status = 'completed' AND is_public = 'true' AND investment_verdict IS NOT NULL
        ORDER BY created_at DESC LIMIT 50`
@@ -3617,6 +3617,7 @@ router.get("/popular", async (_req, res) => {
       id: r.id as number,
       ticker: r.ticker as string,
       companyName: r.company_name as string,
+      englishName: (r.english_name ?? null) as string | null,
       industry: r.industry as string,
       investmentVerdict: r.investment_verdict as string | null,
       targetPrice: r.target_price as number | null,
@@ -3648,13 +3649,13 @@ router.get("/popular", async (_req, res) => {
       }
     }
 
-    const tickerCounts: Record<string, { count: number; companyName: string }> = {};
+    const tickerCounts: Record<string, { count: number; companyName: string; englishName: string | null }> = {};
     for (const r of rows) {
-      if (!tickerCounts[r.ticker]) tickerCounts[r.ticker] = { count: 0, companyName: r.companyName };
+      if (!tickerCounts[r.ticker]) tickerCounts[r.ticker] = { count: 0, companyName: r.companyName, englishName: r.englishName };
       tickerCounts[r.ticker].count++;
     }
     const tickerStats = Object.entries(tickerCounts)
-      .map(([ticker, v]) => ({ ticker, companyName: v.companyName, count: v.count }))
+      .map(([ticker, v]) => ({ ticker, companyName: v.companyName, englishName: v.englishName, count: v.count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 

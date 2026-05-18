@@ -44,11 +44,18 @@ interface RecentAnalysis {
   id: number;
   ticker: string;
   companyName: string | null;
+  englishName: string | null;
   investmentVerdict: string | null;
   targetPrice: number | null;
   startPrice: number | null;
   createdAt: string;
   status: string;
+}
+
+// 언어 모드에 따른 표시명 선택: 영문 모드이고 영문명 있으면 영문명, 아니면 한국어명
+function dn(ko: string | null | undefined, en: string | null | undefined, isEn: boolean): string {
+  if (isEn && en) return en;
+  return ko ?? en ?? "";
 }
 
 const VERDICT_MINI: Record<string, { icon: React.ReactNode; color: string }> = {
@@ -74,7 +81,7 @@ function useRecentAnalyses() {
 
 // 회원 개인화 Quick Picks: 자주 분석한 종목 상위 6개
 function usePersonalizedPicks() {
-  return useQuery<{ ticker: string; companyName: string | null; count: number }[]>({
+  return useQuery<{ ticker: string; companyName: string | null; englishName: string | null; count: number }[]>({
     queryKey: ["personalized-picks"],
     queryFn: async () => {
       const r = await fetch(getApiUrl("/api/analyses?limit=50"), { credentials: "include" });
@@ -82,14 +89,15 @@ function usePersonalizedPicks() {
       const d = await r.json();
       const list: RecentAnalysis[] = d.data ?? d ?? [];
       // 티커별 빈도 집계
-      const map = new Map<string, { companyName: string | null; count: number }>();
+      const map = new Map<string, { companyName: string | null; englishName: string | null; count: number }>();
       for (const a of list) {
         const existing = map.get(a.ticker);
         if (existing) {
           existing.count++;
           if (!existing.companyName && a.companyName) existing.companyName = a.companyName;
+          if (!existing.englishName && a.englishName) existing.englishName = a.englishName;
         } else {
-          map.set(a.ticker, { companyName: a.companyName, count: 1 });
+          map.set(a.ticker, { companyName: a.companyName, englishName: a.englishName, count: 1 });
         }
       }
       return [...map.entries()]
@@ -111,7 +119,7 @@ interface RelatedCompany {
 
 function useRelatedCompanies(
   recentAnalyses: RecentAnalysis[] | undefined,
-  personalizedPicks: { ticker: string; companyName: string | null; count: number }[] | undefined,
+  personalizedPicks: { ticker: string; companyName: string | null; englishName: string | null; count: number }[] | undefined,
 ): RelatedCompany[] {
   const [related, setRelated] = useState<RelatedCompany[]>([]);
 
@@ -217,6 +225,7 @@ interface SearchResult {
 interface PopularTicker {
   ticker: string;
   companyName: string;
+  englishName: string | null;
   count: number;
   investmentVerdict: string | null;
 }
@@ -229,12 +238,12 @@ function useTrendingTickers(): PopularTicker[] {
       try {
         const r = await fetch(getApiUrl("/api/analysis/popular"));
         if (!r.ok) return;
-        const data: { ticker: string; companyName: string; investmentVerdict: string | null }[] = await r.json();
+        const data: { ticker: string; companyName: string; englishName: string | null; investmentVerdict: string | null }[] = await r.json();
         // Count by ticker
-        const map = new Map<string, { companyName: string; count: number; investmentVerdict: string | null }>();
+        const map = new Map<string, { companyName: string; englishName: string | null; count: number; investmentVerdict: string | null }>();
         for (const d of data) {
           const existing = map.get(d.ticker);
-          if (existing) { existing.count++; } else { map.set(d.ticker, { companyName: d.companyName, count: 1, investmentVerdict: d.investmentVerdict }); }
+          if (existing) { existing.count++; } else { map.set(d.ticker, { companyName: d.companyName, englishName: d.englishName ?? null, count: 1, investmentVerdict: d.investmentVerdict }); }
         }
         const sorted = [...map.entries()]
           .sort((a, b) => b[1].count - a[1].count)
@@ -731,12 +740,12 @@ export default function NewAnalysis() {
                   return (
                     <button
                       key={a.id}
-                      onClick={() => showConfirm(shortTicker, a.companyName ?? shortTicker)}
+                      onClick={() => showConfirm(shortTicker, dn(a.companyName, a.englishName, isEn) || shortTicker)}
                       disabled={isPending}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:text-foreground transition-all disabled:opacity-40 group"
                     >
                       <span className="font-mono text-[11px] text-muted-foreground/40 group-hover:text-primary/50 transition-colors">{shortTicker}</span>
-                      <span className="text-[12.5px] text-muted-foreground font-medium group-hover:text-foreground transition-colors">{a.companyName ?? shortTicker}</span>
+                      <span className="text-[12.5px] text-muted-foreground font-medium group-hover:text-foreground transition-colors">{dn(a.companyName, a.englishName, isEn) || shortTicker}</span>
                       {vm && <span className={cn("flex items-center", vm.color)}>{vm.icon}</span>}
                     </button>
                   );
@@ -765,7 +774,7 @@ export default function NewAnalysis() {
                   <motion.button
                     key={t.ticker}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => showConfirm(t.ticker, t.companyName ?? t.ticker)}
+                    onClick={() => showConfirm(t.ticker, dn(t.companyName, t.englishName, isEn) || t.ticker)}
                     disabled={isPending}
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-150 disabled:opacity-40 group",
@@ -783,7 +792,7 @@ export default function NewAnalysis() {
                     <span className={cn(
                       "text-[12.5px] font-medium transition-colors",
                       idx === 0 ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"
-                    )}>{t.companyName}</span>
+                    )}>{dn(t.companyName, t.englishName, isEn) || t.ticker}</span>
                     <span className="font-mono text-[10px] text-muted-foreground/40">{t.ticker}</span>
                   </motion.button>
                 ))}
