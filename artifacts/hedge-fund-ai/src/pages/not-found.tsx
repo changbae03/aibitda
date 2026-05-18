@@ -1,8 +1,10 @@
 import { Link } from "wouter";
 import { Home, Search, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/language-context";
 
 export default function NotFound() {
+  const { isEn } = useLanguage();
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background px-4">
       <motion.div
@@ -16,7 +18,7 @@ export default function NotFound() {
             className="text-[28px] font-black tracking-tighter"
             style={{ color: "#FF8A7A", fontFamily: "'Pretendard', sans-serif" }}
           >
-            애빛다
+            {isEn ? "AiBITDA" : "애빛다"}
           </span>
         </div>
 

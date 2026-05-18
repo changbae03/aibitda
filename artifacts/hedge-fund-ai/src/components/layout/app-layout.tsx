@@ -381,7 +381,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="text-[22px] font-black tracking-tighter leading-none select-none group-hover:opacity-70 transition-opacity duration-200 whitespace-nowrap"
                 style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
               >
-                애빛다
+                {isEn ? "AiBITDA" : "애빛다"}
               </span>
             </Link>
           </div>
@@ -461,7 +461,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   className="text-[22px] font-black tracking-tighter leading-none"
                   style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
                 >
-                  애빛다
+                  {isEn ? "AiBITDA" : "애빛다"}
                 </span>
                 <button
                   onClick={() => setMenuOpen(false)}
@@ -548,7 +548,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             className="text-[20px] font-black tracking-tighter leading-none"
             style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif", fontWeight: 900, color: "#FF8A7A" }}
           >
-            애빛다
+            {isEn ? "AiBITDA" : "애빛다"}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -613,7 +613,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </>
               )}
               <p className="text-[11px] text-muted-foreground/50 mt-1.5">
-                © {new Date().getFullYear()} 애빛다 · CBST. {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다."}
+                © {new Date().getFullYear()} {isEn ? "AiBITDA" : "애빛다"} · CBST. {isEn ? "Illuminating value with AI." : "AI로 기업가치를 밝히다."}
               </p>
             </div>
           </footer>
