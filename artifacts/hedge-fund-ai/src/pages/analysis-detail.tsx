@@ -1536,10 +1536,10 @@ export default function AnalysisDetail() {
           <div>
             <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2">{isEn ? "AiBITDA  |  AI Equity Research Report" : "애빛다 \u00a0|\u00a0 AI 기업분석 리포트"}</div>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-              {analysis.companyName}
+              {isEn ? (analysis.englishName || analysis.companyName) : analysis.companyName}
               <span className="ml-2 text-base font-mono text-gray-500">({analysis.ticker})</span>
             </h1>
-            {analysis.englishName && <p className="text-sm text-gray-500 mt-0.5">{analysis.englishName}</p>}
+            {!isEn && analysis.englishName && <p className="text-sm text-gray-500 mt-0.5">{analysis.englishName}</p>}
             <p className="text-xs text-gray-400 mt-1">{isEn ? (analysis.industry ?? '') : toKoreanIndustry(analysis.industry)} &nbsp;·&nbsp; {isEn ? format(new Date(analysis.createdAt), 'MMM d, yyyy HH:mm') : format(new Date(analysis.createdAt), 'yyyy년 M월 d일 HH:mm', { locale: ko })} {isEn ? "generated" : "생성"}</p>
           </div>
           {analysis.investmentVerdict && (
@@ -1574,7 +1574,7 @@ export default function AnalysisDetail() {
           >
             <div className="flex items-center gap-3 max-w-5xl mx-auto">
               <span className="font-mono text-xs text-muted-foreground/60 shrink-0">{analysis.ticker}</span>
-              <span className="text-sm font-bold text-foreground truncate flex-1">{analysis.companyName}</span>
+              <span className="text-sm font-bold text-foreground truncate flex-1">{isEn ? (analysis.englishName || analysis.companyName) : analysis.companyName}</span>
               <div className="flex items-center gap-1 shrink-0">
                 {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
                   const isDone = idx < analysis.steps.length;
@@ -1605,11 +1605,19 @@ export default function AnalysisDetail() {
           <div className="flex-1 min-w-0">
             {/* 회사명 */}
             <div className="mb-3">
-              <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
-                {analysis.companyName}
-              </h1>
-              {analysis.englishName && (
-                <p className="text-xs text-muted-foreground font-normal">{analysis.englishName}</p>
+              {isEn ? (
+                <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
+                  {analysis.englishName || analysis.companyName}
+                </h1>
+              ) : (
+                <>
+                  <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
+                    {analysis.companyName}
+                  </h1>
+                  {analysis.englishName && (
+                    <p className="text-xs text-muted-foreground font-normal">{analysis.englishName}</p>
+                  )}
+                </>
               )}
             </div>
 
