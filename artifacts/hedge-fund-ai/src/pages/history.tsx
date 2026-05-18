@@ -260,7 +260,7 @@ function PriceTrack({
             {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
           </p>
           <p className={cn("font-mono text-[12px] font-bold leading-none tabular-nums", curLabelColor)}>
-            {formatCurrency(cur, currency)}
+            {formatCurrency(cur, currency, isEn)}
           </p>
         </motion.div>
       </div>
@@ -296,7 +296,7 @@ function PriceTrack({
           style={{ left: `${entryPos}%`, transform: "translateX(-50%)" }}
         >
           <p className="text-[8px] text-muted-foreground/50 leading-none mb-0.5 whitespace-nowrap">{isEn ? "At Analysis" : "분석 당시"}</p>
-          <p className="font-mono text-[9px] font-semibold text-muted-foreground/60 tabular-nums whitespace-nowrap">{formatCurrency(entry, currency)}</p>
+          <p className="font-mono text-[9px] font-semibold text-muted-foreground/60 tabular-nums whitespace-nowrap">{formatCurrency(entry, currency, isEn)}</p>
         </div>
 
         {/* 적정주가 — 초록 마커(tgtX%) 바로 밑 */}
@@ -308,7 +308,7 @@ function PriceTrack({
             {isEn ? "Target " : "적정주가 "}{tgtLabel}
           </p>
           <p className={cn("font-mono text-[9px] font-semibold tabular-nums whitespace-nowrap", exceeded ? "text-emerald-600" : "text-muted-foreground/60")}>
-            {formatCurrency(tgt, currency)}
+            {formatCurrency(tgt, currency, isEn)}
           </p>
         </div>
       </div>
@@ -657,7 +657,7 @@ export default function History() {
             }).length;
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-muted-foreground/50">{list.length}건</span>
+                <span className="text-[11px] text-muted-foreground/50">{isEn ? `${list.length} Reports` : `${list.length}건`}</span>
                 {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-400 dark:border-green-700">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
                 {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
                 {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
@@ -833,7 +833,7 @@ export default function History() {
           {/* 결과 카운트 */}
           {(verdictFilter !== "all" || industryFilter !== "all") && (
             <span className="text-[11px] text-muted-foreground ml-auto">
-              {filteredAndSorted.length}건
+              {isEn ? `${filteredAndSorted.length} results` : `${filteredAndSorted.length}건`}
             </span>
           )}
         </div>
@@ -1017,7 +1017,7 @@ export default function History() {
                           <div className="flex-1 px-2.5 py-2 bg-muted/50 border-r border-border">
                             <p className="text-[9px] text-muted-foreground mb-0.5">{isEn ? "At Analysis" : "분석 당시"}</p>
                             <p className="text-[12px] font-bold text-foreground/70 tabular-nums">
-                              {entry != null ? formatCurrency(entry, currency) : <span className="text-muted-foreground/50">—</span>}
+                              {entry != null ? formatCurrency(entry, currency, isEn) : <span className="text-muted-foreground/50">—</span>}
                             </p>
                           </div>
                           <div className="flex-1 px-2.5 py-2 bg-background border-r border-border">
@@ -1026,7 +1026,7 @@ export default function History() {
                           </div>
                           <div className="flex-1 px-2.5 py-2 bg-background">
                             <p className="text-[9px] text-muted-foreground mb-0.5">{isEn ? "Target" : "적정주가"}</p>
-                            <p className="text-[12px] font-bold text-foreground/80 tabular-nums">{formatCurrency(tgt, currency)}</p>
+                            <p className="text-[12px] font-bold text-foreground/80 tabular-nums">{formatCurrency(tgt, currency, isEn)}</p>
                           </div>
                         </div>
                       );
@@ -1063,7 +1063,7 @@ export default function History() {
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                             <span className="text-[10px] text-muted-foreground/60">{isEn ? "Target" : "적정주가"}</span>
                             <span className="text-[11px] font-mono font-bold text-foreground/80">
-                              {formatCurrency(a.targetPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}
+                              {formatCurrency(a.targetPrice, isUSTicker(a.ticker) ? "USD" : "KRW", isEn)}
                             </span>
                           </div>
                         )}
@@ -1072,7 +1072,7 @@ export default function History() {
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                             <span className="text-[10px] text-muted-foreground/60">{isEn ? "Entry" : "진입가"}</span>
                             <span className="text-[11px] font-mono font-bold text-foreground/80">
-                              {formatCurrency(a.entryPrice, isUSTicker(a.ticker) ? "USD" : "KRW")}
+                              {formatCurrency(a.entryPrice, isUSTicker(a.ticker) ? "USD" : "KRW", isEn)}
                             </span>
                           </div>
                         )}
@@ -1081,7 +1081,7 @@ export default function History() {
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                             <span className="text-[10px] text-muted-foreground/60">{isEn ? "Stop Loss" : "손절가"}</span>
                             <span className="text-[11px] font-mono font-bold text-destructive/80">
-                              {formatCurrency(a.stopLoss, isUSTicker(a.ticker) ? "USD" : "KRW")}
+                              {formatCurrency(a.stopLoss, isUSTicker(a.ticker) ? "USD" : "KRW", isEn)}
                             </span>
                           </div>
                         )}
