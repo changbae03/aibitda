@@ -525,7 +525,7 @@ export default function NewAnalysis() {
                 setTicker(e.currentTarget.value);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="삼성전자, NVDA, 005930, AAPL..."
+              placeholder={isEn ? "NVDA, AAPL, 005930, TSLA..." : "삼성전자, NVDA, 005930, AAPL..."}
               className="flex-1 min-w-0 bg-transparent border-none outline-none text-foreground text-base placeholder:text-muted-foreground/40 placeholder:text-sm"
               style={{ fontSize: '16px' }}
               disabled={isPending}
