@@ -100,7 +100,7 @@ const NAV_ITEMS = [
 const ADMIN_ITEMS = [
   { href: "/admin/dashboard",       label: "대시보드" },
   { href: "/admin/live",            label: "실시간 분석 현황" },
-  { href: "/browse",                 label: "AI 자동 보고서" },
+  { href: "/admin/batch-reports",    label: "AI 자동 보고서" },
   { href: "/admin/analyses",        label: "전체 보고서 목록" },
   { href: "/admin/user-management", label: "유저 관리" },
   { href: "/admin/promo-codes",     label: "프로모 코드" },

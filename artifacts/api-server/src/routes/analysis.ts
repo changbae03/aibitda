@@ -5595,113 +5595,81 @@ async function executeStep(
         }
       })();
 
-      // ── QA 자동 채점 (백그라운드) ──────────────────────────────────────────
+      // ── QA 채점 + 피어 검증 + 보정메모 (백그라운드 순차 실행) ─────────────
+      // 순서: ① 피어검증 & QA 병렬 → ② 둘 다 완료 후 보정메모 생성
       (async () => {
         try {
-          await pool.query(`
-            ALTER TABLE analyses
-              ADD COLUMN IF NOT EXISTS qa_score INTEGER,
-              ADD COLUMN IF NOT EXISTS qa_flags TEXT
-          `);
-          const [aRes, sRes] = await Promise.all([
-            pool.query(
-              `SELECT investment_verdict, target_price, entry_price, stop_loss, risk_reward_ratio
-               FROM analyses WHERE id = $1`, [id]
-            ),
-            pool.query(
-              `SELECT step_key, content FROM analysis_steps WHERE analysis_id = $1`, [id]
-            ),
+          // 필요한 컬럼 추가 (병렬)
+          await Promise.all([
+            pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS qa_score INTEGER, ADD COLUMN IF NOT EXISTS qa_flags TEXT`),
+            pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS peer_flags TEXT`),
           ]);
+
+          // ① 피어 검증 + QA 채점 데이터 로드 병렬 실행
+          const [pvRes, aRes, sRes] = await Promise.all([
+            // 피어 검증
+            pool.query(`SELECT ticker, industry FROM analyses WHERE id = $1`, [id])
+              .then(async (aInfo) => {
+                if (!aInfo.rows[0]) return null;
+                const { ticker: aTicker, industry: aIndustry } = aInfo.rows[0];
+                const pvResult = await validatePeers(aTicker, aIndustry ?? null);
+                if (pvResult.issues.length > 0 || pvResult.totalPeerCount > 0) {
+                  await pool.query(`UPDATE analyses SET peer_flags=$1 WHERE id=$2`, [JSON.stringify(pvResult), id]);
+                  if (pvResult.hasIssues) {
+                    console.warn(`[peer-validator] #${id} ${aTicker} — ${pvResult.issues.length}개 이상 감지:`, pvResult.issues.map((i: any) => i.type).join(", "));
+                  } else {
+                    console.log(`[peer-validator] #${id} ${aTicker} — 이상 없음 (유효 피어 ${pvResult.validPeerCount}개)`);
+                  }
+                }
+                return pvResult;
+              })
+              .catch((e) => { console.error(`[peer-validator] #${id} 검증 실패:`, e); return null; }),
+            // QA 채점용 데이터 로드
+            pool.query(`SELECT investment_verdict, target_price, entry_price, stop_loss, risk_reward_ratio FROM analyses WHERE id = $1`, [id]),
+            pool.query(`SELECT step_key, content FROM analysis_steps WHERE analysis_id = $1`, [id]),
+          ]);
+
+          // ② QA 채점 (피어 검증과 병렬로 데이터 로드 완료 후)
+          let qaResult: ReturnType<typeof runQACheck> | null = null;
           if (aRes.rows[0]) {
             const a = aRes.rows[0];
-            const qaResult = runQACheck({
+            qaResult = runQACheck({
               investmentVerdict: a.investment_verdict,
-              targetPrice: a.target_price,
-              entryPrice: a.entry_price,
-              stopLoss: a.stop_loss,
-              riskRewardRatio: a.risk_reward_ratio,
+              targetPrice:       a.target_price,
+              entryPrice:        a.entry_price,
+              stopLoss:          a.stop_loss,
+              riskRewardRatio:   a.risk_reward_ratio,
               steps: sRes.rows.map((r: any) => ({ stepKey: r.step_key, content: r.content ?? "" })),
             });
-            await pool.query(
-              `UPDATE analyses SET qa_score=$1, qa_flags=$2 WHERE id=$3`,
-              [qaResult.score, JSON.stringify(qaResult.flags), id]
-            );
+            await pool.query(`UPDATE analyses SET qa_score=$1, qa_flags=$2 WHERE id=$3`, [qaResult.score, JSON.stringify(qaResult.flags), id]);
             console.log(`[qa] #${id} 자동 채점 완료: ${qaResult.score}점 (${qaResult.grade})`);
+          }
 
-            // ── AI 보정 메모 생성 (QA 채점 직후) ─────────────────────────────
-            // QA 점수가 낮거나(< 90) 실패 항목이 있을 때 AI가 보정 메모 작성
-            // → ticker_notes.calibration_note 저장 → 다음 분석 프롬프트에 자동 주입
-            if (qaResult.score < 95 || qaResult.flags.length > 0) {
-              try {
-                // peer_flags 읽기
-                const peerFlagRes = await pool.query(
-                  `SELECT peer_flags FROM analyses WHERE id = $1`, [id]
-                );
-                const peerFlags = peerFlagRes.rows[0]?.peer_flags
-                  ? JSON.parse(peerFlagRes.rows[0].peer_flags)
-                  : null;
-
-                const calibNote = await runCalibrationAgent({
-                  analysisId:  id,
-                  ticker:      analysis.ticker ?? "",
-                  companyName: analysis.companyName ?? "",
-                  qaScore:     qaResult.score,
-                  qaGrade:     qaResult.grade,
-                  qaFlags:     qaResult.flags,
-                  peerFlags,
-                  steps: sRes.rows.map((r: any) => ({
-                    stepKey: r.step_key,
-                    content: r.content ?? "",
-                  })),
-                });
-
-                if (calibNote) {
-                  await saveCalibrationNote(analysis.ticker ?? "", calibNote);
-                  console.log(`[calibration] #${id} ${analysis.ticker} 보정 메모 저장 완료 (${calibNote.length}자)`);
-                }
-              } catch (ce) {
-                console.error(`[calibration] #${id} 보정 메모 생성 실패:`, ce);
+          // ③ 보정메모 생성 — QA + 피어검증 모두 완료된 후 실행
+          if (qaResult && (qaResult.score < 95 || qaResult.flags.length > 0)) {
+            try {
+              const calibNote = await runCalibrationAgent({
+                analysisId:  id,
+                ticker:      analysis.ticker ?? "",
+                companyName: analysis.companyName ?? "",
+                qaScore:     qaResult.score,
+                qaGrade:     qaResult.grade,
+                qaFlags:     qaResult.flags,
+                peerFlags:   pvRes,   // 피어 검증 결과 직접 전달 (DB 재조회 불필요)
+                steps: sRes.rows.map((r: any) => ({ stepKey: r.step_key, content: r.content ?? "" })),
+              });
+              if (calibNote) {
+                await saveCalibrationNote(analysis.ticker ?? "", calibNote);
+                console.log(`[calibration] #${id} ${analysis.ticker} 보정메모 저장 완료 (${calibNote.length}자)`);
               }
-            } else {
-              console.log(`[calibration] #${id} QA 점수 ${qaResult.score}점 — 보정 메모 생략 (기준 이상)`);
+            } catch (ce) {
+              console.error(`[calibration] #${id} 보정메모 생성 실패:`, ce);
             }
-            // ─────────────────────────────────────────────────────────────────
+          } else if (qaResult) {
+            console.log(`[calibration] #${id} QA ${qaResult.score}점 — 보정메모 생략 (기준 이상)`);
           }
         } catch (e) {
-          console.error(`[qa] #${id} 자동 채점 실패:`, e);
-        }
-      })();
-
-      // ── 피어 검증 (백그라운드) ──────────────────────────────────────────────
-      (async () => {
-        try {
-          await pool.query(`
-            ALTER TABLE analyses
-              ADD COLUMN IF NOT EXISTS peer_flags TEXT
-          `);
-          const aInfo = await pool.query(
-            `SELECT ticker, industry FROM analyses WHERE id = $1`, [id]
-          );
-          if (aInfo.rows[0]) {
-            const { ticker: aTicker, industry: aIndustry } = aInfo.rows[0];
-            const pvResult = await validatePeers(aTicker, aIndustry ?? null);
-            if (pvResult.issues.length > 0 || pvResult.totalPeerCount > 0) {
-              await pool.query(
-                `UPDATE analyses SET peer_flags=$1 WHERE id=$2`,
-                [JSON.stringify(pvResult), id]
-              );
-              if (pvResult.hasIssues) {
-                console.warn(
-                  `[peer-validator] #${id} ${aTicker} — ${pvResult.issues.length}개 이상 감지:`,
-                  pvResult.issues.map(i => i.type).join(", ")
-                );
-              } else {
-                console.log(`[peer-validator] #${id} ${aTicker} — 이상 없음 (유효 피어 ${pvResult.validPeerCount}개)`);
-              }
-            }
-          }
-        } catch (e) {
-          console.error(`[peer-validator] #${id} 검증 실패:`, e);
+          console.error(`[qa+peer+calib] #${id} 백그라운드 처리 실패:`, e);
         }
       })();
 
