@@ -10,6 +10,8 @@ import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
 import { runKrxFullHarvest } from "./lib/krx-full-harvester.js";
 import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
+import { updateMarketRegime } from "./lib/market-regime-updater.js";
+import { updateAllSectorLearning } from "./lib/sector-learning.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -97,6 +99,37 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] 일일 섹터 재보정 실패:", e?.message ?? e)
     );
   }, ONE_DAY_MS);
+
+  // ── 동적 시장 학습 시스템 ────────────────────────────────────────────────────
+  // Layer 1: 매일 KOSPI/코스닥 트렌드 읽어 시장 레짐 컨텍스트 생성
+  setTimeout(() => {
+    console.log("[SCHEDULER] 시장 레짐 초기 업데이트 시작");
+    updateMarketRegime().catch((e) =>
+      console.error("[SCHEDULER] 시장 레짐 초기 업데이트 실패:", e?.message ?? e)
+    );
+  }, 3 * 60 * 1000); // 서버 시작 3분 후 첫 실행
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 시장 레짐 일일 업데이트 시작");
+    updateMarketRegime().catch((e) =>
+      console.error("[SCHEDULER] 시장 레짐 일일 업데이트 실패:", e?.message ?? e)
+    );
+  }, ONE_DAY_MS);
+
+  // Layer 2: 주 1회 섹터별 예측 정확도 → AI 가이던스 노트 생성
+  setTimeout(() => {
+    console.log("[SCHEDULER] 섹터 학습 노트 초기 생성 시작");
+    updateAllSectorLearning().catch((e) =>
+      console.error("[SCHEDULER] 섹터 학습 노트 초기 생성 실패:", e?.message ?? e)
+    );
+  }, 10 * 60 * 1000); // 서버 시작 10분 후 첫 실행
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 섹터 학습 노트 주간 업데이트 시작");
+    updateAllSectorLearning().catch((e) =>
+      console.error("[SCHEDULER] 섹터 학습 노트 주간 업데이트 실패:", e?.message ?? e)
+    );
+  }, ONE_WEEK_MS);
 
   setTimeout(() => {
     runDueSchedules(port).catch((e) =>

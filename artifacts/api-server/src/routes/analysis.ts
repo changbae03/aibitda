@@ -26,6 +26,8 @@ import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
 import { runCalibrationAgent, saveCalibrationNote, getCalibrationNote } from "../lib/calibration-agent.js";
+import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
+import { getSectorLearningNote } from "../lib/sector-learning.js";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -4367,6 +4369,28 @@ async function executeStep(
     }
   } catch {
     // 실패해도 분석 진행
+  }
+
+  // ③ 시장 레짐 컨텍스트 주입 (KRW 종목 전용)
+  // ④ 섹터 학습 보정 노트 주입  (KRW 종목 전용)
+  const isKrwTicker = /^\d{6}$/.test(analysis.ticker);
+  if (isKrwTicker) {
+    try {
+      const [regimeNote, sectorNote] = await Promise.all([
+        getLatestMarketRegime(),
+        getSectorLearningNote(analysis.ticker, analysis.industry ?? null),
+      ]);
+      if (regimeNote) {
+        enrichedContext = enrichedContext ? enrichedContext + "\n\n" + regimeNote : regimeNote;
+        console.log(`[market-regime] 주입 완료 — ${analysis.ticker} (${regimeNote.length}chars)`);
+      }
+      if (sectorNote) {
+        enrichedContext = enrichedContext ? enrichedContext + "\n\n" + sectorNote : sectorNote;
+        console.log(`[sector-learning] 주입 완료 — ${analysis.ticker} (${sectorNote.length}chars)`);
+      }
+    } catch {
+      // 실패해도 분석 진행
+    }
   }
   // ─────────────────────────────────────────────────────────────────────────
 
