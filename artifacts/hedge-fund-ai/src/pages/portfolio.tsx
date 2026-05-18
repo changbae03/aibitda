@@ -10,7 +10,7 @@ import {
   Zap, AlertTriangle, Bell, Brain, PieChart,
   Activity, Target, Lightbulb, ChevronsRight,
   Newspaper, Clock, Compass, Users,
-  Sparkles, TrendingDown, CheckCircle2, MoveRight,
+  Sparkles, TrendingDown, CheckCircle2, MoveRight, ArrowRight,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency, isUSTicker } from "@/lib/utils";
 import { format } from "date-fns";
@@ -504,6 +504,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [, setLocation] = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmNewReport, setConfirmNewReport] = useState(false);
   const [changes, setChanges] = useState<ChangesResult | null>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
@@ -589,6 +590,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
     : `https://file.alphasquare.co.kr/media/images/stock_logo/kr/${rawTicker.padStart(6, "0")}.png`;
 
   return (
+    <>
     <motion.div
       layout
       initial={{ opacity: 0, y: 8 }}
@@ -933,7 +935,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
         {/* 새 보고서 산출하기 */}
         <button
-          onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
+          onClick={() => setConfirmNewReport(true)}
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] text-primary/70 hover:text-primary hover:bg-primary/8 border border-transparent hover:border-primary/20 transition-colors"
           title="이 종목으로 새 보고서 산출"
         >
@@ -1064,6 +1066,70 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       </AnimatePresence>
 
     </motion.div>
+
+    {/* ── 새 보고서 확인 모달 ── */}
+    <AnimatePresence>
+      {confirmNewReport && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setConfirmNewReport(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-sm p-6"
+          >
+            {/* 헤더 */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Building2 className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">AI 기업분석</p>
+                <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{holding.companyName}</h3>
+                <p className="font-mono text-[11px] text-muted-foreground/50">{holding.ticker}</p>
+              </div>
+            </div>
+
+            {/* 설명 */}
+            <div className="rounded-xl bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
+              <p className="text-[13.5px] text-foreground/85 leading-relaxed">
+                <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
+                7단계 심층 분석을 시작합니다.
+              </p>
+              <p className="text-[11.5px] text-muted-foreground">
+                평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
+              </p>
+            </div>
+
+            {/* 버튼 */}
+            <div className="flex gap-2.5">
+              <button
+                onClick={() => setConfirmNewReport(false)}
+                className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { setConfirmNewReport(false); setLocation(`/analysis/new?ticker=${holding.ticker}`); }}
+                className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white transition-colors flex items-center justify-center gap-2"
+                style={{ backgroundColor: "#FF8A7A" }}
+              >
+                분석 시작 <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
 
