@@ -44,8 +44,14 @@ function formatPeriodLabel(period: string, view: "annual" | "quarterly"): string
   return `${q}Q${year}`;
 }
 
-function formatAmount(value: number, currency: string): string {
+function formatAmount(value: number, currency: string, isEn = false): string {
   if (currency === "KRW") {
+    if (isEn) {
+      const tril = value / 1e12;
+      if (Math.abs(tril) >= 1) return `₩${tril.toFixed(1)}T`;
+      const bil = value / 1e8;
+      return `₩${Math.round(bil)}B`;
+    }
     const tril = value / 1e12;
     if (Math.abs(tril) >= 1) return `${tril.toFixed(1)}조`;
     const bil = value / 1e8;
@@ -57,8 +63,14 @@ function formatAmount(value: number, currency: string): string {
   return `$${Math.round(mil)}M`;
 }
 
-function formatYAxis(value: number, currency: string): string {
+function formatYAxis(value: number, currency: string, isEn = false): string {
   if (currency === "KRW") {
+    if (isEn) {
+      const tril = value / 1e12;
+      if (Math.abs(tril) >= 1) return `₩${tril.toFixed(0)}T`;
+      const bil = value / 1e8;
+      return `₩${Math.round(bil)}B`;
+    }
     const tril = value / 1e12;
     if (Math.abs(tril) >= 1) return `${tril.toFixed(0)}조`;
     const bil = value / 1e8;
@@ -110,7 +122,7 @@ const CustomTooltip = ({ active, payload, label, currency, separateIncomeAxis, i
             <span className="font-mono font-semibold text-foreground">
               {p.dataKey === "operatingMargin"
                 ? `${Number(p.value).toFixed(1)}%`
-                : formatAmount(p.value, currency)}
+                : formatAmount(p.value, currency, isEn)}
             </span>
           </div>
         )
@@ -221,7 +233,7 @@ export default function FinancialChart({ ticker, isEn = false }: { ticker: strin
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
           <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(p) => formatPeriodLabel(p, view)} />
           <YAxis yAxisId="left" orientation="left"
-            tickFormatter={(v) => formatYAxis(v, currency)}
+            tickFormatter={(v) => formatYAxis(v, currency, isEn)}
             tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
             domain={leftDomain} width={52} />
           <YAxis yAxisId="right" orientation="right"
@@ -232,18 +244,23 @@ export default function FinancialChart({ ticker, isEn = false }: { ticker: strin
             <ReferenceLine yAxisId="left" y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
           )}
           <Tooltip content={<CustomTooltip currency={currency} separateIncomeAxis={false} isEn={isEn} />} />
-          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-            formatter={(value) =>
-              value === "revenue"
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+            formatter={(value, entry: any) => {
+              const label = value === "revenue"
                 ? (isEn ? "Revenue" : "매출")
                 : value === "operatingIncome"
                   ? (isEn ? "Op. Income" : "영업이익")
-                  : (isEn ? "OP Margin" : "영업이익률")
-            } />
-          <Bar yAxisId="left" dataKey="revenue" name="revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
+                  : (isEn ? "OP Margin" : "영업이익률");
+              return <span style={{ color: entry.color }}>{label}</span>;
+            }}
+          />
+          <Bar yAxisId="left" dataKey="revenue" name="revenue" fill={COLORS.revenue} radius={[3, 3, 0, 0]} maxBarSize={36}>
             {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.revenue : COLORS.revenue} />)}
           </Bar>
-          <Bar yAxisId="left" dataKey="operatingIncome" name="operatingIncome" radius={[3, 3, 0, 0]} maxBarSize={36}>
+          <Bar yAxisId="left" dataKey="operatingIncome" name="operatingIncome" fill={COLORS.operatingIncome} radius={[3, 3, 0, 0]} maxBarSize={36}>
             {entries.map((e, i) => <Cell key={i} fill={e.isEstimate ? COLORS.estimate.operatingIncome : COLORS.operatingIncome} />)}
           </Bar>
           <Line yAxisId="right" dataKey="operatingMargin" name="operatingMargin"
