@@ -55,6 +55,7 @@ interface PriceEventNews {
 interface StockChartProps {
   ticker: string;
   companyName?: string;
+  companyNameEn?: string;
   chartLevels?: ChartLevels;
   events?: ChartEvent[];
   currency?: "KRW" | "USD";
@@ -81,8 +82,9 @@ function formatPrice(v: number | null | undefined, currency: "KRW" | "USD" = "KR
   return v.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
 }
 
-function priceLabel(v: number, currency: "KRW" | "USD"): string {
+function priceLabel(v: number, currency: "KRW" | "USD", isEn = false): string {
   if (currency === "USD") return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (isEn) return `KRW ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v)}`;
   return `${v.toLocaleString("ko-KR")}원`;
 }
 
@@ -103,15 +105,15 @@ const CustomTooltip = ({ active, payload, label, currency = "KRW", isEn = false 
         <div className="space-y-1.5">
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">{isEn ? "Close" : "종가"}</span>
-            <span className="text-foreground font-bold font-mono">{priceLabel(d.close, currency)}</span>
+            <span className="text-foreground font-bold font-mono">{priceLabel(d.close, currency, isEn)}</span>
           </div>
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">{isEn ? "High" : "고가"}</span>
-            <span className="text-emerald-600 font-mono">{priceLabel(d.high, currency)}</span>
+            <span className="text-emerald-600 font-mono">{priceLabel(d.high, currency, isEn)}</span>
           </div>
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">{isEn ? "Low" : "저가"}</span>
-            <span className="text-red-500 font-mono">{priceLabel(d.low, currency)}</span>
+            <span className="text-red-500 font-mono">{priceLabel(d.low, currency, isEn)}</span>
           </div>
           {d.volume != null && (
             <div className="flex justify-between gap-4 border-t border-border pt-1.5 mt-0.5">
@@ -140,8 +142,8 @@ const ctrlBtn = (active: boolean) =>
       : "text-muted-foreground hover:text-foreground hover:bg-muted"
   );
 
-function LevelBadge({ label, value, color, currency = "KRW" }: { label: string; value: number | string; color: string; currency?: "KRW" | "USD" }) {
-  const display = typeof value === "number" ? priceLabel(value, currency) : (currency === "USD" ? `$${value}` : `${value}원`);
+function LevelBadge({ label, value, color, currency = "KRW", isEn = false }: { label: string; value: number | string; color: string; currency?: "KRW" | "USD"; isEn?: boolean }) {
+  const display = typeof value === "number" ? priceLabel(value, currency, isEn) : (currency === "USD" ? `$${value}` : isEn ? `KRW ${value}` : `${value}원`);
   return (
     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium" style={{ borderColor: `${color}40`, backgroundColor: `${color}10`, color }}>
       <span className="w-2 h-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
@@ -206,7 +208,7 @@ async function fetchPriceEvents(ticker: string, companyName: string | undefined,
 
 const NUM_BADGES = ["①", "②", "③", "④", "⑤"];
 
-export default function StockChart({ ticker, companyName, chartLevels, events = [], currency = "KRW", isEn = false }: StockChartProps) {
+export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, events = [], currency = "KRW", isEn = false }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
   const [showEvents, setShowEvents] = useState(true);
@@ -290,7 +292,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
       <div className="px-5 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-foreground">{companyName ?? ticker}</span>
+            <span className="text-base font-bold text-foreground">{isEn ? (companyNameEn ?? ticker) : (companyName ?? ticker)}</span>
             <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">{ticker}</span>
           </div>
           {data && (
@@ -299,7 +301,9 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                 <span className="text-2xl font-bold text-foreground font-mono tracking-tight">
                   {currency === "USD"
                     ? <>${formatPrice(data.currentPrice, "USD").replace("$", "")}</>
-                    : <>{formatPrice(data.currentPrice)}<span className="text-sm font-normal text-muted-foreground ml-0.5">원</span></>
+                    : isEn
+                      ? <>KRW {new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(data.currentPrice ?? 0)}</>
+                      : <>{formatPrice(data.currentPrice)}<span className="text-sm font-normal text-muted-foreground ml-0.5">원</span></>
                   }
                 </span>
                 <span className={cn(
@@ -321,7 +325,7 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
                       : (isEn ? "NXT Pre-Mkt" : "NXT 장전")}
                     {nxtInfo.status === "OPEN" ? (isEn ? " Live" : " 거래중") : ""}
                   </span>
-                  <span className="font-mono font-bold text-sm text-foreground">{formatPrice(nxtInfo.price)}</span>
+                  <span className="font-mono font-bold text-sm text-foreground">{isEn ? `KRW ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(nxtInfo.price)}` : formatPrice(nxtInfo.price)}</span>
                   <span className={cn("text-xs font-semibold", nxtIsUp ? "text-emerald-600" : "text-red-500")}>
                     {nxtIsUp ? "+" : ""}{nxtInfo.changePercent.toFixed(2)}%
                   </span>
@@ -509,24 +513,27 @@ export default function StockChart({ ticker, companyName, chartLevels, events = 
             {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
               <div className="mt-3 flex flex-wrap gap-1.5 px-1">
                 {chartLevels.stopLoss && (
-                  <LevelBadge label={isEn ? "Stop Loss" : "손절선"} value={chartLevels.stopLoss} color="#dc2626" currency={currency} />
+                  <LevelBadge label={isEn ? "Stop Loss" : "손절선"} value={chartLevels.stopLoss} color="#dc2626" currency={currency} isEn={isEn} />
                 )}
                 {chartLevels.entryMin && chartLevels.entryMax && (
                   <LevelBadge
                     label={isEn ? "Entry Zone" : "진입 구간"}
                     value={currency === "USD"
                       ? `$${chartLevels.entryMin.toLocaleString("en-US", { minimumFractionDigits: 2 })} ~ $${chartLevels.entryMax.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
-                      : `${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`
+                      : isEn
+                        ? `${chartLevels.entryMin.toLocaleString("en-US")} ~ ${chartLevels.entryMax.toLocaleString("en-US")}`
+                        : `${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`
                     }
                     color="#1d4ed8"
                     currency={currency}
+                    isEn={isEn}
                   />
                 )}
                 {chartLevels.target1 && (
-                  <LevelBadge label={isEn ? "1st Target" : "1차 적정주가"} value={chartLevels.target1} color="#16a34a" currency={currency} />
+                  <LevelBadge label={isEn ? "1st Target" : "1차 적정주가"} value={chartLevels.target1} color="#16a34a" currency={currency} isEn={isEn} />
                 )}
                 {chartLevels.target2 && (
-                  <LevelBadge label={isEn ? "2nd Target" : "2차 목표"} value={chartLevels.target2} color="#15803d" currency={currency} />
+                  <LevelBadge label={isEn ? "2nd Target" : "2차 목표"} value={chartLevels.target2} color="#15803d" currency={currency} isEn={isEn} />
                 )}
               </div>
             )}
