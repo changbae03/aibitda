@@ -167,14 +167,14 @@ function CreditsBadge({ credits }: { credits: CreditStatus | undefined | null })
 
   if (credits.remaining === 0) {
     return (
-      <motion.button
-        onClick={() => setLocation("/settings")}
-        whileTap={{ scale: 0.97 }}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-red-400/50 bg-red-950/30 text-red-300 text-[12px] font-medium hover:border-red-400 transition-colors"
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-950/25 text-amber-300 text-[12px] font-medium"
       >
         <Zap className="w-3 h-3 shrink-0" />
-        <span>{isEn ? "No credits · Charge 4 for ₩990 →" : "크레딧 소진 · 4개 ₩990 충전 →"}</span>
-      </motion.button>
+        <span>{isEn ? "All credits used · Come back tomorrow" : "오늘 크레딧 소진 · 내일 다시 이용해주세요"}</span>
+      </motion.div>
     );
   }
 
@@ -371,7 +371,7 @@ export default function NewAnalysis() {
       const errStatus = (err as any)?.status as number | undefined;
       const errMsg = (err as any)?.data?.error as string | undefined;
       if (errStatus === 402) {
-        setError(errMsg ?? "오늘 분석 횟수를 모두 사용했습니다.");
+        setError(errMsg ?? "오늘 크레딧이 모두 소진됐습니다. 내일 다시 이용해주세요.");
       } else if (errStatus === 429) {
         setError("분석 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
       } else if (errStatus === 400) {

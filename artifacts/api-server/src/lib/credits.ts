@@ -106,7 +106,7 @@ export async function checkAndDeductCredit(userId: string): Promise<{ ok: boolea
       );
       return { ok: true };
     } else {
-      return { ok: false, reason: "크레딧이 부족합니다. 설정 화면에서 크레딧을 충전해 주세요." };
+      return { ok: false, reason: "오늘 크레딧이 모두 소진됐습니다. 내일 다시 이용해주세요." };
     }
   } finally {
     client.release();

@@ -394,10 +394,10 @@ export default function SettingsPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-950/30 border border-red-700/40 text-red-300 text-[12px]"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-950/25 border border-amber-500/40 text-amber-300 text-[12px]"
                   >
                     <Zap className="w-3.5 h-3.5 shrink-0" />
-                    <span>{t("크레딧이 모두 소진됐습니다.", "No credits left.")}</span>
+                    <span>{t("오늘 크레딧이 모두 소진됐습니다. 내일 다시 이용해주세요.", "All credits used today. Come back tomorrow!")}</span>
                   </motion.div>
                 )}
 
