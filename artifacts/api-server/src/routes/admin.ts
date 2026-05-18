@@ -152,6 +152,10 @@ router.get("/stats", async (req, res) => {
 
 // ─── 자동 배치 현황 ──────────────────────────────────────────────────────────────
 
+const DAILY_TARGET_KR = 25;
+const DAILY_TARGET_US = 15;
+const DAILY_TARGET = DAILY_TARGET_KR + DAILY_TARGET_US;
+
 // GET /api/admin/batch-status — 일일 자동 배치 실행 현황
 router.get("/batch-status", async (req, res) => {
   const userId = getUserId(req);
@@ -160,21 +164,22 @@ router.get("/batch-status", async (req, res) => {
     return;
   }
 
-  const [cacheRows, lockRow, todayRows, historyRows, totalRow] = await Promise.all([
-    // 마지막 배치 실행일
+  const todayStart = `CURRENT_DATE AT TIME ZONE 'Asia/Seoul'`;
+  const todayEnd   = `CURRENT_DATE AT TIME ZONE 'Asia/Seoul' + INTERVAL '1 day'`;
+
+  const [cacheRows, lockRow, todayRows, historyRows, totalRow,
+         qaAvgRow, calibRow, peerIssueRow, coverageKrRow, coverageUsRow] = await Promise.all([
     pool.query(`SELECT data FROM system_cache WHERE key = 'auto_batch_last_run'`),
-    // 배치 lock 현황
     pool.query(`SELECT expires_at FROM system_cache WHERE key = 'auto_batch_lock' AND expires_at > NOW()`),
-    // 오늘 자동 배치 분석 목록 (user_id IS NULL)
     pool.query(`
-      SELECT id, ticker, company_name, status, investment_verdict, created_at
+      SELECT id, ticker, company_name, status, investment_verdict,
+             qa_score, peer_flags, created_at
       FROM analyses
       WHERE user_id IS NULL
-        AND created_at >= CURRENT_DATE AT TIME ZONE 'Asia/Seoul'
-        AND created_at <  CURRENT_DATE AT TIME ZONE 'Asia/Seoul' + INTERVAL '1 day'
+        AND created_at >= ${todayStart}
+        AND created_at <  ${todayEnd}
       ORDER BY created_at ASC
     `),
-    // 최근 14일 일별 자동 배치 분석 수
     pool.query(`
       SELECT
         DATE(created_at AT TIME ZONE 'Asia/Seoul') AS day,
@@ -182,13 +187,44 @@ router.get("/batch-status", async (req, res) => {
         COUNT(*) FILTER (WHERE status IN ('error','failed')) AS failed,
         COUNT(*) AS total
       FROM analyses
-      WHERE user_id IS NULL
-        AND created_at >= NOW() - INTERVAL '14 days'
-      GROUP BY day
-      ORDER BY day ASC
+      WHERE user_id IS NULL AND created_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day ORDER BY day ASC
     `),
-    // 누적 자동 배치 분석 수
     pool.query(`SELECT COUNT(*) FROM analyses WHERE user_id IS NULL`),
+    // 오늘 완료된 AI 보고서 QA 평균
+    pool.query(`
+      SELECT ROUND(AVG(qa_score), 1) AS avg_qa
+      FROM analyses
+      WHERE user_id IS NULL AND status = 'completed'
+        AND created_at >= ${todayStart} AND created_at < ${todayEnd}
+        AND qa_score IS NOT NULL
+    `),
+    // 오늘 AI 보고서 중 보정메모가 있는 종목 수
+    pool.query(`
+      SELECT COUNT(*) FROM analyses a
+      JOIN ticker_notes tn ON tn.ticker = a.ticker
+      WHERE a.user_id IS NULL AND a.status = 'completed'
+        AND a.created_at >= ${todayStart} AND a.created_at < ${todayEnd}
+        AND tn.calibration_note IS NOT NULL
+    `),
+    // 오늘 피어 이슈 감지 수
+    pool.query(`
+      SELECT COUNT(*) FROM analyses
+      WHERE user_id IS NULL
+        AND created_at >= ${todayStart} AND created_at < ${todayEnd}
+        AND peer_flags IS NOT NULL
+        AND peer_flags::jsonb ->> 'hasIssues' = 'true'
+    `),
+    // 누적 KR 종목 커버리지 (6자리 숫자 티커)
+    pool.query(`
+      SELECT COUNT(DISTINCT ticker) FROM analyses
+      WHERE user_id IS NULL AND ticker ~ '^[0-9]{6}'
+    `),
+    // 누적 US 종목 커버리지
+    pool.query(`
+      SELECT COUNT(DISTINCT ticker) FROM analyses
+      WHERE user_id IS NULL AND ticker !~ '^[0-9]'
+    `),
   ]);
 
   const lastRun = cacheRows.rows[0]?.data?.date ?? null;
@@ -202,20 +238,24 @@ router.get("/batch-status", async (req, res) => {
     companyName: r.company_name,
     status: r.status,
     verdict: r.investment_verdict,
+    qaScore: r.qa_score ?? null,
+    hasPeerIssue: r.peer_flags
+      ? (JSON.parse(r.peer_flags)?.hasIssues === true)
+      : false,
     createdAt: r.created_at,
   }));
   const todayStats = {
-    total: todayItems.length,
+    total:     todayItems.length,
     completed: todayItems.filter(r => r.status === "completed").length,
-    failed: todayItems.filter(r => ["error", "failed"].includes(r.status)).length,
-    running: todayItems.filter(r => ["pending", "running"].includes(r.status)).length,
+    failed:    todayItems.filter(r => ["error", "failed"].includes(r.status)).length,
+    running:   todayItems.filter(r => ["pending", "running"].includes(r.status)).length,
   };
 
   const history = historyRows.rows.map(r => ({
-    day: String(r.day).slice(0, 10),
+    day:       String(r.day).slice(0, 10),
     completed: parseInt(r.completed, 10),
-    failed: parseInt(r.failed, 10),
-    total: parseInt(r.total, 10),
+    failed:    parseInt(r.failed, 10),
+    total:     parseInt(r.total, 10),
   }));
 
   res.json({
@@ -227,6 +267,94 @@ router.get("/batch-status", async (req, res) => {
     todayItems,
     history,
     totalAutoAnalyses: parseInt(totalRow.rows[0].count, 10),
+    dailyTarget:       DAILY_TARGET,
+    qaAvgToday:        qaAvgRow.rows[0]?.avg_qa ? parseFloat(qaAvgRow.rows[0].avg_qa) : null,
+    calibCountToday:   parseInt(calibRow.rows[0].count, 10),
+    peerIssueCountToday: parseInt(peerIssueRow.rows[0].count, 10),
+    coverageKr:        parseInt(coverageKrRow.rows[0].count, 10),
+    coverageUs:        parseInt(coverageUsRow.rows[0].count, 10),
+  });
+});
+
+// GET /api/admin/batch-reports — AI 자동 생성 보고서 목록 (페이지네이션)
+router.get("/batch-reports", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const page        = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10));
+  const limit       = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "30"), 10)));
+  const offset      = (page - 1) * limit;
+  const dateFilter  = String(req.query.date    ?? "").slice(0, 10) || null;
+  const verdictFilter = String(req.query.verdict ?? "") || null;
+  const hasCalib    = req.query.hasCalib    === "1";
+  const hasPeerIssue = req.query.hasPeerIssue === "1";
+
+  const conditions: string[] = ["a.user_id IS NULL"];
+  const params: any[] = [];
+
+  if (dateFilter) {
+    params.push(dateFilter);
+    conditions.push(`DATE(a.created_at AT TIME ZONE 'Asia/Seoul') = $${params.length}`);
+  }
+  if (verdictFilter) {
+    params.push(verdictFilter);
+    conditions.push(`a.investment_verdict = $${params.length}`);
+  }
+  if (hasPeerIssue) {
+    conditions.push(`a.peer_flags IS NOT NULL AND a.peer_flags::jsonb ->> 'hasIssues' = 'true'`);
+  }
+  if (hasCalib) {
+    conditions.push(`tn.calibration_note IS NOT NULL`);
+  }
+
+  const where = conditions.join(" AND ");
+
+  params.push(limit, offset);
+  const limitParam  = params.length - 1;
+  const offsetParam = params.length;
+
+  const [itemsRes, countRes] = await Promise.all([
+    pool.query(`
+      SELECT a.id, a.ticker, a.company_name, a.status, a.investment_verdict,
+             a.created_at, a.qa_score, a.qa_flags, a.peer_flags,
+             tn.calibration_note IS NOT NULL AS has_calib,
+             tn.calibration_note
+      FROM analyses a
+      LEFT JOIN ticker_notes tn ON tn.ticker = a.ticker
+      WHERE ${where}
+      ORDER BY a.created_at DESC
+      LIMIT $${limitParam} OFFSET $${offsetParam}
+    `, params),
+    pool.query(`
+      SELECT COUNT(*) FROM analyses a
+      LEFT JOIN ticker_notes tn ON tn.ticker = a.ticker
+      WHERE ${where}
+    `, params.slice(0, params.length - 2)),
+  ]);
+
+  const items = itemsRes.rows.map(r => ({
+    id:           r.id,
+    ticker:       r.ticker,
+    companyName:  r.company_name,
+    status:       r.status,
+    verdict:      r.investment_verdict,
+    createdAt:    r.created_at,
+    qaScore:      r.qa_score ?? null,
+    qaFlags:      r.qa_flags ? JSON.parse(r.qa_flags) : [],
+    peerResult:   r.peer_flags ? JSON.parse(r.peer_flags) : null,
+    hasCalib:     r.has_calib === true,
+    calibNote:    r.calibration_note ?? null,
+  }));
+
+  res.json({
+    items,
+    total:    parseInt(countRes.rows[0].count, 10),
+    page,
+    limit,
+    pages:    Math.ceil(parseInt(countRes.rows[0].count, 10) / limit),
   });
 });
 
