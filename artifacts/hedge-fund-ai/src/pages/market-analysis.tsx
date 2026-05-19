@@ -9,7 +9,7 @@ import {
   CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
   Cpu, Database, GitMerge, ChevronRight, Zap,
   ChevronDown, Newspaper, Sparkles, CalendarDays, Info,
-  Shield,
+  Shield, Globe,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -56,6 +56,13 @@ interface MarketBrief {
   marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
   macroFactors?: { factor: string; status: string; implication: string }[];
   forwardLook?: { point: string; detail: string; watchFor: string }[];
+  upcomingMacroEvents?: {
+    date: string;
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+    direction: "positive" | "negative" | "neutral";
+  }[];
   keyRisk?: string;
   recentIssues: string[];
   outlook: string[];
@@ -104,7 +111,14 @@ function MarketBriefSection({
     ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : null;
 
-  const hasRich = !!(brief?.marketEvents?.length || brief?.macroFactors?.length || brief?.forwardLook?.length);
+  const hasRich = !!(brief?.marketEvents?.length || brief?.macroFactors?.length || brief?.forwardLook?.length || brief?.upcomingMacroEvents?.length);
+
+  const impactCfg = (impact: "high" | "medium" | "low") =>
+    impact === "high"
+      ? { label: "HIGH", cls: "text-red-400 bg-red-500/10 border-red-500/25" }
+      : impact === "medium"
+      ? { label: "MED",  cls: "text-amber-400 bg-amber-500/10 border-amber-500/25" }
+      : { label: "LOW",  cls: "text-white/30 bg-white/5 border-white/10" };
 
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
@@ -237,6 +251,39 @@ function MarketBriefSection({
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 향후 3~5거래일 주목 매크로 이벤트 */}
+                {(brief.upcomingMacroEvents?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5" /> 향후 3~5일 주목 매크로 이벤트
+                    </p>
+                    <div className="space-y-1.5">
+                      {brief.upcomingMacroEvents!.map((ev, i) => {
+                        const dc = dirCfg(ev.direction);
+                        const ic = impactCfg(ev.impact);
+                        return (
+                          <div key={i} className="flex gap-2.5 items-start bg-white/[0.025] rounded-xl px-3 py-2.5">
+                            <span className={cn("mt-1.5 shrink-0 w-2 h-2 rounded-full", dc.dot)} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                <span className="text-[10px] font-semibold text-primary/60 shrink-0">{ev.date}</span>
+                                <p className="text-[12px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>
+                                  {ic.label}
+                                </span>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
+                                  {dc.label}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{ev.description}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

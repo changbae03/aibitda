@@ -45,6 +45,13 @@ export interface MarketBriefResult {
     detail: string;
     watchFor: string;
   }[];
+  upcomingMacroEvents: {
+    date: string;
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+    direction: "positive" | "negative" | "neutral";
+  }[];
   keyRisk: string;
   recentIssues: string[];
   outlook: string[];
@@ -128,7 +135,7 @@ async function generateBrief(): Promise<MarketBriefResult> {
 
   const prompt = `당신은 한국 주식시장 전문 시니어 애널리스트입니다. 오늘은 ${today}입니다.
 
-아래 정량 데이터를 바탕으로 심층 시장 브리핑을 작성하세요.
+아래 정량 데이터와 당신의 최신 지식을 종합해 심층 시장 브리핑을 작성하세요.
 단순 사실 나열이 아니라, 데이터 간 인과관계·맥락·시사점을 풍부하게 해설하는 것이 목표입니다.
 
 [최근 5거래일 KOSPI]
@@ -175,14 +182,35 @@ ${macroLines || "데이터 없음"}
     { "point": "...", "detail": "...", "watchFor": "..." },
     { "point": "...", "detail": "...", "watchFor": "..." }
   ],
+  "upcomingMacroEvents": [
+    {
+      "date": "날짜 또는 '이번 주 수요일', '다음 주' 등 상대적 표현 가능",
+      "title": "이벤트명 (25자 이내)",
+      "description": "이 이벤트가 한국 증시(KOSPI/KOSDAQ)에 미칠 수 있는 영향을 구체적으로 서술. 예상 방향·규모·메커니즘 포함. (70~100자)",
+      "impact": "high 또는 medium 또는 low",
+      "direction": "positive 또는 negative 또는 neutral"
+    },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
+  ],
   "keyRisk": "현재 시장에서 가장 주의해야 할 리스크 한 문장. 구체적인 수치나 트리거 포함. (50~70자)",
   "recentIssues": ["요약용 이슈1", "요약용 이슈2", "요약용 이슈3"],
   "outlook": ["요약용 전망1", "요약용 전망2", "요약용 전망3"]
 }
 
 주의사항:
-- 데이터에 없는 뉴스는 언급하지 말 것 (데이터·지표 기반으로만)
-- 하지만 데이터에서 읽히는 패턴·함의는 최대한 깊이 해석할 것
+- summary·leadParagraph·marketEvents·macroFactors·forwardLook·keyRisk는 제공된 정량 데이터 기반으로 작성
+- upcomingMacroEvents는 당신의 최신 지식을 활용해 향후 3~5거래일 내 예정된 실제 이벤트를 포함하세요:
+  * 미국·한국 경제지표 발표 (CPI, PPI, FOMC 의사록, GDP, 고용지표 등)
+  * 연준(Fed) 인사 발언·FOMC 일정
+  * 트럼프 행정부 관세·무역 정책 관련 이슈
+  * 한국 이재명 대통령 정부의 정책·정치 이슈
+  * 중동(이란·이스라엘), 러시아-우크라이나 등 지정학적 리스크
+  * 미중 무역 갈등, 반도체 수출규제 등 공급망 이슈
+  * 기타 글로벌 매크로 이벤트 (G7, IMF, 세계은행 등)
+  * impact는 한국 증시 영향 기준: high=지수 1% 이상 변동 가능, medium=0.3~1%, low=0.3% 미만
 - "불확실성" 같은 공허한 표현 대신 구체적 수치·메커니즘으로 서술
 - 고객에게 전달하는 리포트이므로 한국어 존댓말(합쇼체)을 사용하여 친절하게 작성
 - 예: "~입니다", "~습니다", "~됩니다", "~주시기 바랍니다" 등의 격식 있는 존댓말 사용`;
@@ -208,20 +236,21 @@ ${macroLines || "데이터 없음"}
   const safeArr = (v: any) => Array.isArray(v) ? v : [];
 
   return {
-    summary:        parsed?.summary       ?? "한국 증시 데이터 분석 중",
-    sentiment:      parsed?.sentiment     ?? "neutral",
-    leadParagraph:  parsed?.leadParagraph ?? "",
-    marketEvents:   safeArr(parsed?.marketEvents).slice(0, 4),
-    macroFactors:   safeArr(parsed?.macroFactors).slice(0, 3),
-    forwardLook:    safeArr(parsed?.forwardLook).slice(0, 3),
-    keyRisk:        parsed?.keyRisk       ?? "",
-    recentIssues:   safeArr(parsed?.recentIssues).slice(0, 4),
-    outlook:        safeArr(parsed?.outlook).slice(0, 4),
-    generatedAt:    new Date().toISOString(),
-    kospiCurrent:   kospiLatest?.close  ?? null,
-    kosdaqCurrent:  kosdaqLatest?.close ?? null,
-    kospiChange:    kospiLatest?.change  ?? null,
-    kosdaqChange:   kosdaqLatest?.change ?? null,
+    summary:              parsed?.summary              ?? "한국 증시 데이터 분석 중",
+    sentiment:            parsed?.sentiment            ?? "neutral",
+    leadParagraph:        parsed?.leadParagraph        ?? "",
+    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 4),
+    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 3),
+    forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),
+    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 5),
+    keyRisk:              parsed?.keyRisk              ?? "",
+    recentIssues:         safeArr(parsed?.recentIssues).slice(0, 4),
+    outlook:              safeArr(parsed?.outlook).slice(0, 4),
+    generatedAt:          new Date().toISOString(),
+    kospiCurrent:         kospiLatest?.close  ?? null,
+    kosdaqCurrent:        kosdaqLatest?.close ?? null,
+    kospiChange:          kospiLatest?.change  ?? null,
+    kosdaqChange:         kosdaqLatest?.change ?? null,
   };
 }
 
