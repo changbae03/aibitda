@@ -168,10 +168,10 @@ function MarketBriefSection({
         {brief && (
           <>
             {/* 헤드라인 + 리드 */}
-            <div className="space-y-2">
-              <h3 className="text-base font-bold text-foreground leading-snug">{brief.summary}</h3>
+            <div className="space-y-3">
+              <h3 className="text-[15px] font-bold text-foreground leading-snug">{brief.summary}</h3>
               {brief.leadParagraph && (
-                <p className="text-xs text-muted-foreground/80 leading-relaxed border-l-2 border-primary/30 pl-3">
+                <p className="text-[13px] text-foreground/75 leading-relaxed border-l-2 border-primary/40 pl-3">
                   {brief.leadParagraph}
                 </p>
               )}
@@ -183,23 +183,23 @@ function MarketBriefSection({
                 {/* 최근 시장 이슈 */}
                 {(brief.marketEvents?.length ?? 0) > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <Newspaper className="w-3.5 h-3.5" /> 최근 시장 이슈 및 영향
+                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
+                      <Newspaper className="w-3.5 h-3.5" /> 요즘 시장에 무슨 일이?
                     </p>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {brief.marketEvents!.map((ev, i) => {
                         const dc = dirCfg(ev.direction);
                         return (
-                          <div key={i} className="flex gap-3 items-start bg-white/[0.025] rounded-xl px-3 py-2.5">
-                            <span className={cn("mt-1.5 shrink-0 w-2 h-2 rounded-full", dc.dot)} />
+                          <div key={i} className="flex gap-3 items-start bg-white/[0.03] rounded-xl px-3.5 py-3">
+                            <span className={cn("mt-[5px] shrink-0 w-2 h-2 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <p className="text-[12px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", dc.badge)}>
                                   {dc.label}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-muted-foreground/75 leading-relaxed">{ev.impact}</p>
+                              <p className="text-xs text-foreground/60 leading-relaxed">{ev.impact}</p>
                             </div>
                           </div>
                         );
@@ -211,17 +211,17 @@ function MarketBriefSection({
                 {/* 거시 팩터 */}
                 {(brief.macroFactors?.length ?? 0) > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5" /> 거시경제 팩터 분석
+                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5" /> 지금 경제 지표는?
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {brief.macroFactors!.map((mf, i) => (
-                        <div key={i} className="bg-white/[0.025] rounded-xl px-3 py-3 space-y-1.5">
+                        <div key={i} className="bg-white/[0.03] rounded-xl px-3.5 py-3 space-y-2">
                           <div>
-                            <p className="text-[10px] text-muted-foreground/50 font-medium">{mf.factor}</p>
-                            <p className="text-[13px] font-bold text-foreground">{mf.status}</p>
+                            <p className="text-[10px] text-muted-foreground/45 font-medium mb-0.5">{mf.factor}</p>
+                            <p className="text-[15px] font-bold text-foreground">{mf.status}</p>
                           </div>
-                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed border-t border-white/[0.05] pt-1.5">
+                          <p className="text-xs text-foreground/60 leading-relaxed border-t border-white/[0.06] pt-2">
                             {mf.implication}
                           </p>
                         </div>
@@ -233,20 +233,20 @@ function MarketBriefSection({
                 {/* 향후 전망 */}
                 {(brief.forwardLook?.length ?? 0) > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <CalendarDays className="w-3.5 h-3.5" /> 향후 3거래일 전망
+                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
+                      <CalendarDays className="w-3.5 h-3.5" /> 앞으로 3거래일, 뭘 봐야 하나?
                     </p>
                     <div className="space-y-2">
                       {brief.forwardLook!.map((fw, i) => (
-                        <div key={i} className="flex gap-3 items-start">
+                        <div key={i} className="flex gap-3 items-start bg-white/[0.03] rounded-xl px-3.5 py-3">
                           <div className="shrink-0 w-5 h-5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
                             {i + 1}
                           </div>
-                          <div className="flex-1 space-y-0.5">
-                            <p className="text-[12px] font-semibold text-foreground">{fw.point}</p>
-                            <p className="text-[11px] text-muted-foreground/75 leading-relaxed">{fw.detail}</p>
-                            <p className="text-[10px] text-primary/60 font-medium flex items-center gap-1">
-                              <span className="text-muted-foreground/40">주시:</span> {fw.watchFor}
+                          <div className="flex-1 space-y-1">
+                            <p className="text-[13px] font-semibold text-foreground leading-snug">{fw.point}</p>
+                            <p className="text-xs text-foreground/60 leading-relaxed">{fw.detail}</p>
+                            <p className="text-[11px] text-primary/50 font-medium flex items-center gap-1 pt-0.5">
+                              <span className="text-muted-foreground/35">체크포인트 →</span> {fw.watchFor}
                             </p>
                           </div>
                         </div>
@@ -258,28 +258,28 @@ function MarketBriefSection({
                 {/* 향후 3~5거래일 주목 매크로 이벤트 */}
                 {(brief.upcomingMacroEvents?.length ?? 0) > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5" /> 향후 3~5일 주목 매크로 이벤트
+                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5" /> 이번 주 놓치면 안 될 글로벌 이벤트
                     </p>
                     <div className="space-y-1.5">
                       {brief.upcomingMacroEvents!.map((ev, i) => {
                         const dc = dirCfg(ev.direction);
                         const ic = impactCfg(ev.impact);
                         return (
-                          <div key={i} className="flex gap-2.5 items-start bg-white/[0.025] rounded-xl px-3 py-2.5">
-                            <span className={cn("mt-1.5 shrink-0 w-2 h-2 rounded-full", dc.dot)} />
+                          <div key={i} className="flex gap-3 items-start bg-white/[0.03] rounded-xl px-3.5 py-3">
+                            <span className={cn("mt-[5px] shrink-0 w-2 h-2 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                                <span className="text-[10px] font-semibold text-primary/60 shrink-0">{ev.date}</span>
-                                <p className="text-[12px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className="text-[11px] font-semibold text-primary/50 shrink-0">{ev.date}</span>
+                                <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", ic.cls)}>
                                   {ic.label}
                                 </span>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", dc.badge)}>
                                   {dc.label}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{ev.description}</p>
+                              <p className="text-xs text-foreground/60 leading-relaxed">{ev.description}</p>
                             </div>
                           </div>
                         );
@@ -290,11 +290,11 @@ function MarketBriefSection({
 
                 {/* 핵심 리스크 */}
                 {brief.keyRisk && (
-                  <div className="flex items-start gap-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl px-3 py-2.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400/80 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3.5 py-3">
+                    <AlertCircle className="w-4 h-4 text-amber-400/70 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[10px] font-semibold text-amber-400/70 mb-0.5">핵심 리스크</p>
-                      <p className="text-[11px] text-amber-200/60 leading-relaxed">{brief.keyRisk}</p>
+                      <p className="text-[11px] font-bold text-amber-400/60 mb-1 uppercase tracking-wide">지금 가장 조심해야 할 것</p>
+                      <p className="text-xs text-amber-100/55 leading-relaxed">{brief.keyRisk}</p>
                     </div>
                   </div>
                 )}
