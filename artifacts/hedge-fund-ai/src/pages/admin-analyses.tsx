@@ -7,8 +7,18 @@ import {
   Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, User,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 import { ko, enUS } from "date-fns/locale";
+
+function safeFormat(dateStr: string | null | undefined, locale: Locale): string {
+  if (!dateStr) return "—";
+  try {
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    return isValid(d) ? format(d, "MM.dd HH:mm", { locale }) : "—";
+  } catch {
+    return "—";
+  }
+}
 
 interface AnalysisRow {
   id: number;
@@ -95,14 +105,15 @@ function useAllReports(page: number, status: string, search: string) {
 export default function AdminAnalyses() {
   const [, setLocation] = useLocation();
   const { isEn } = useLanguage();
-  const t = (ko: string, en: string) => isEn ? en : ko;
+  const locale = isEn ? enUS : ko;
+  const t = (kr: string, en: string) => isEn ? en : kr;
   const STEP_LABEL = isEn ? STEP_LABEL_EN : STEP_LABEL_KO;
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
 
-  const { data, isLoading, isFetching } = useAllReports(page, statusFilter, search);
+  const { data, isLoading, isFetching, isError } = useAllReports(page, statusFilter, search);
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
 
@@ -186,6 +197,10 @@ export default function AdminAnalyses() {
           <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
             <Loader2 className="w-5 h-5 animate-spin" />
             <span className="text-sm">{t("불러오는 중...", "Loading...")}</span>
+          </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center py-24 text-red-400 text-sm">
+            {t("데이터를 불러오지 못했습니다. 관리자 권한을 확인하세요.", "Failed to load. Check admin permissions.")}
           </div>
         ) : !data?.data.length ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
@@ -295,7 +310,7 @@ export default function AdminAnalyses() {
 
                       <div className="text-right">
                         <span className="text-[11px] text-muted-foreground tabular-nums">
-                          {format(parseISO(row.created_at), "MM.dd HH:mm", { locale: ko })}
+                          {safeFormat(row.created_at, locale)}
                         </span>
                       </div>
                     </div>
@@ -376,7 +391,7 @@ export default function AdminAnalyses() {
                         </span>
                       )}
                       <span className="text-[10px] text-muted-foreground/60 ml-auto tabular-nums">
-                        {format(parseISO(row.created_at), "MM.dd HH:mm", { locale: ko })}
+                        {safeFormat(row.created_at, locale)}
                       </span>
                     </div>
                   </div>
