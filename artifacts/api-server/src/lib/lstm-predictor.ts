@@ -1,12 +1,11 @@
 /**
- * 시장 예측 파이프라인 v4  — LSTM + GBDT 앙상블
- * ───────────────────────────────────────────────
- * 1. LSTM (TF.js)  : 시계열 패턴 · (20일 × 9피처) 시퀀스
- * 2. GBDT          : 피처 간 비선형 상호작용 (현재 구현)
- * 3. 앙상블        : 최근 30일 방향정확도 비율로 적응형 가중치
- * 4. 영속성        : 가중치 JSON 직렬화 (krx_<sym>_model.json)
- * 5. 일일 증분     : GBDT +5트리 (LSTM 스킵 — 1일 데이터 부족)
- * 6. 월간 완전학습 : LSTM + GBDT 모두 재학습
+ * 시장 예측 파이프라인 v5  — LSTM + GBDT 앙상블 + 외부 피처
+ * ─────────────────────────────────────────────────────────────
+ * 내부 피처 9개 (기술적 지표) + 외부 피처 3개:
+ *   - S&P500 전일 등락률  (Yahoo Finance ^GSPC)    → 시장 센티먼트
+ *   - 원/달러 환율 변화율  (Yahoo Finance USDKRW=X) → 외국인 수급 선행
+ *   - 국고채 3년 금리      (FRED IRLTLT01KRM156N)  → 금리 민감도
+ * 총 N_FEATURES = 12
  */
 import fs   from "node:fs";
 import path from "node:path";
@@ -42,7 +41,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 20;
 const PRED_H       = 3;
-const N_FEATURES   = 9;
+const N_FEATURES   = 12;   // 9 기술적 + 3 외부 (S&P500, 환율, 국고채)
 // GBDT
 const N_ENSEMBLE   = 2;
 const GBDT_TREES   = 60;
@@ -77,11 +76,12 @@ interface GBDTModel { trees: any[]; lr: number; basePred: number }
 interface LSTMWeightLayer { shape: number[]; data: number[] }
 
 interface StoredModelFile {
+  nFeatures: number;                                 // 버전 호환성 체크
   gbdtModels: GBDTModel[];
-  gbdtScaler: { mu: number[]; sigma: number[] };    // flat 181-dim
-  lstmWeights: LSTMWeightLayer[][];                  // per-layer weight tensors
-  lstmScaler:  { mu: number[]; sigma: number[] };   // per-feature 9-dim
-  ensembleAlpha: number;                             // LSTM weight (0-1)
+  gbdtScaler: { mu: number[]; sigma: number[] };
+  lstmWeights: LSTMWeightLayer[][];
+  lstmScaler:  { mu: number[]; sigma: number[] };
+  ensembleAlpha: number;
 }
 export interface StoredMeta {
   lastTrained: string; lastUpdated: string;
@@ -95,7 +95,7 @@ export interface StoredMeta {
 function saveModelFile(sym: string, payload: StoredModelFile) {
   ensureDataDir();
   fs.writeFileSync(MODEL_PATH(sym), JSON.stringify(payload));
-  console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (GBDT+LSTM)`);
+  console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (GBDT+LSTM, nFeatures=${payload.nFeatures})`);
 }
 function loadModelFile(sym: string): StoredModelFile | null {
   const p = MODEL_PATH(sym);
@@ -146,11 +146,105 @@ function stddev(arr: number[]): number {
 }
 function dirAccRate(preds: ArrayLike<number>, actual: ArrayLike<number>): number {
   let h = 0;
-  for (let i = 0; i < preds.length; i++) if (Math.sign((preds as any)[i]) === Math.sign((actual as any)[i])) h++;
+  for (let i = 0; i < (preds as any).length; i++) if (Math.sign((preds as any)[i]) === Math.sign((actual as any)[i])) h++;
   return (preds as any).length > 0 ? h / (preds as any).length : 0;
 }
 
-// ─── Feature engineering ─────────────────────────────────────────────────────
+// ─── External data (S&P500, 환율, 국고채) ────────────────────────────────────
+
+interface ExtPoint {
+  sp500Ret: number;   // S&P500 전일 등락률 (소수)
+  usdkrwRet: number;  // 원/달러 변화율 (소수)
+  bond3y: number;     // 국고채 3년 금리 (%, /10 for scale)
+}
+
+async function fetchYahooSeries(ticker: string, years: number): Promise<{ date: string; close: number }[]> {
+  const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
+  const end = new Date(), start = new Date();
+  start.setFullYear(start.getFullYear() - years);
+  try {
+    const r = await (yahoo as any).chart(ticker, { period1: start, period2: end, interval: "1d" });
+    return (r.quotes ?? [])
+      .filter((q: any) => q.close != null)
+      .map((q: any) => ({ date: new Date(q.date).toISOString().slice(0, 10), close: q.close as number }));
+  } catch (e) {
+    console.warn(`[ext] ${ticker} fetch 실패:`, (e as any)?.message ?? e);
+    return [];
+  }
+}
+
+async function fredFetchSeries(seriesId: string, startDate: string): Promise<{ date: string; value: number }[]> {
+  const key = process.env["FRED_API_KEY"];
+  if (!key) return [];
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${key}&file_type=json&observation_start=${startDate}&sort_order=asc&limit=5000`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) return [];
+    const data = await res.json() as any;
+    return (data?.observations ?? [])
+      .filter((o: any) => o.value !== ".")
+      .map((o: any) => ({ date: o.date as string, value: parseFloat(o.value) }));
+  } catch (e) {
+    console.warn(`[ext] FRED ${seriesId} fetch 실패:`, (e as any)?.message ?? e);
+    return [];
+  }
+}
+
+/** KOSPI/KOSDAQ 날짜 배열에 맞춰 외부 피처 Map 생성 (forward-fill) */
+async function fetchExternalData(dates: string[]): Promise<Map<string, ExtPoint>> {
+  if (dates.length === 0) return new Map();
+  const startDate = dates[0] ?? "2020-01-01";
+  const years = Math.min(YEARS_DATA + 0.3, Math.ceil((Date.now() - new Date(startDate).getTime()) / (365.25 * 24 * 3600_000)) + 0.3);
+
+  console.log(`[ext] 외부 데이터 수집 중 (S&P500·환율·국고채, ${years.toFixed(1)}년)...`);
+
+  const [sp500Rows, usdkrwRows, bondRows] = await Promise.all([
+    fetchYahooSeries("^GSPC", years),
+    fetchYahooSeries("USDKRW=X", years),
+    fredFetchSeries("IRLTLT01KRM156N", startDate),  // 한국 장기국채 (월별, OECD)
+  ]);
+
+  // S&P500 일별 수익률 Map
+  const sp500RetMap = new Map<string, number>();
+  for (let i = 1; i < sp500Rows.length; i++) {
+    const ret = (sp500Rows[i].close - sp500Rows[i-1].close) / sp500Rows[i-1].close;
+    sp500RetMap.set(sp500Rows[i].date, ret);
+  }
+
+  // 환율 일별 변화율 Map
+  const usdkrwRetMap = new Map<string, number>();
+  for (let i = 1; i < usdkrwRows.length; i++) {
+    const ret = (usdkrwRows[i].close - usdkrwRows[i-1].close) / usdkrwRows[i-1].close;
+    usdkrwRetMap.set(usdkrwRows[i].date, ret);
+  }
+
+  // 국고채 3년 ≈ 한국 장기금리 – 0.4pp (ECOS 코멘트 기반 추정), 월별 → 일별 forward-fill
+  const bondEntries = bondRows
+    .map(r => ({ date: r.date, value: r.value - 0.4 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // KOSPI 날짜 배열에 aligned ExtPoint 생성
+  const result = new Map<string, ExtPoint>();
+  let lastSP500 = 0, lastUSDKRW = 0, lastBond = 3.0;
+  let bondIdx = 0;
+
+  for (const date of dates) {
+    // 국고채 forward-fill (monthly → daily)
+    while (bondIdx < bondEntries.length && bondEntries[bondIdx].date <= date) {
+      lastBond = bondEntries[bondIdx].value;
+      bondIdx++;
+    }
+    if (sp500RetMap.has(date))   lastSP500  = sp500RetMap.get(date)!;
+    if (usdkrwRetMap.has(date))  lastUSDKRW = usdkrwRetMap.get(date)!;
+
+    result.set(date, { sp500Ret: lastSP500, usdkrwRet: lastUSDKRW, bond3y: lastBond });
+  }
+
+  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행 / 환율 ${usdkrwRows.length}행 / 국고채 ${bondRows.length}행`);
+  return result;
+}
+
+// ─── Feature engineering (내부 9 + 외부 3 = 12) ───────────────────────────────
 
 function rollingMean(arr: number[], w: number, i: number) {
   let s = 0, n = 0; for (let k = Math.max(0, i-w+1); k <= i; k++) { s += arr[k]; n++; } return s / n;
@@ -166,22 +260,36 @@ function rsiNorm(rets: number[], w: number, i: number) {
   for (let k = i-w+1; k <= i; k++) rets[k] > 0 ? (g += rets[k]) : (l -= rets[k]);
   g /= w; l /= w; return l < 1e-10 ? 1 : 1 - 1/(1 + g/l);
 }
-function buildFeatures(rows: { date: string; close: number }[]): {
-  feats: Float64Array[]; closes: number[]; dates: string[];
-} {
+
+function buildFeatures(
+  rows: { date: string; close: number }[],
+  extMap: Map<string, ExtPoint>,
+): { feats: Float64Array[]; closes: number[]; dates: string[] } {
   const closes = rows.map(r => r.close);
   const dates  = rows.map(r => r.date);
   const rets   = closes.map((c, i) => i === 0 ? 0 : (c - closes[i-1]) / closes[i-1]);
-  const feats  = rows.map((_, i): Float64Array => {
-    const ma5 = rollingMean(closes,5,i), ma20 = rollingMean(closes,20,i);
-    const std20 = rollingStdFn(rets,20,i);
+  const feats  = rows.map((row, i): Float64Array => {
+    const ma5   = rollingMean(closes, 5,  i);
+    const ma20  = rollingMean(closes, 20, i);
+    const std20 = rollingStdFn(rets, 20, i);
     const bband = std20>1e-10 ? (closes[i]-(ma20-2*std20*Math.abs(ma20)))/(4*std20*Math.abs(ma20)||1) : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
+    const ext   = extMap.get(row.date) ?? { sp500Ret: 0, usdkrwRet: 0, bond3y: 3.0 };
     return new Float64Array([
-      rets[i], ma5>0?closes[i]/ma5-1:0, ma20>0?closes[i]/ma20-1:0,
-      rsiNorm(rets,14,i), rollingStdFn(rets,5,i), rollingStdFn(rets,20,i),
-      Math.max(0,Math.min(1,bband)), mom5, mom10,
+      // ── 내부 기술적 지표 (9) ──
+      rets[i],
+      ma5>0  ? closes[i]/ma5  - 1 : 0,
+      ma20>0 ? closes[i]/ma20 - 1 : 0,
+      rsiNorm(rets, 14, i),
+      rollingStdFn(rets, 5,  i),
+      rollingStdFn(rets, 20, i),
+      Math.max(0, Math.min(1, bband)),
+      mom5, mom10,
+      // ── 외부 매크로 피처 (3) ──
+      ext.sp500Ret,           // S&P500 전일 등락 (−0.05 ~ 0.05)
+      ext.usdkrwRet,          // 환율 변화율    (−0.03 ~ 0.03)
+      ext.bond3y / 10,        // 국고채 3년 /10 (0~1 스케일, e.g. 3.3%→0.33)
     ]);
   });
   return { feats, closes, dates };
@@ -287,9 +395,8 @@ function incrementalAddTrees(model:GBDTModel,X:Float64Array[],y:Float64Array,nTr
   return{...model,trees:[...model.trees,...newTrees]};
 }
 
-// ─── LSTM utilities ───────────────────────────────────────────────────────────
+// ─── LSTM ────────────────────────────────────────────────────────────────────
 
-/** Per-feature scaler (9-dim) for LSTM 3D input */
 function computeLSTMScaler(feats: Float64Array[]) {
   const F=feats[0].length,n=feats.length;
   const mu=new Float64Array(F),sigma=new Float64Array(F);
@@ -300,7 +407,6 @@ function computeLSTMScaler(feats: Float64Array[]) {
   return{mu,sigma};
 }
 
-/** 3D sequences (n, LOOKBACK, N_FEATURES) for LSTM, normalised per-feature */
 function makeSeqs3D(
   feats: Float64Array[], closes: number[],
   mu: Float64Array, sigma: Float64Array,
@@ -317,7 +423,6 @@ function makeSeqs3D(
   return{X3d,y:new Float64Array(ys),anchorDateIdxs:anchors};
 }
 
-/** Build LSTM architecture (fixed; weights loaded separately) */
 function buildLSTMArch(): tf.Sequential {
   const model = tf.sequential();
   model.add(tf.layers.lstm({
@@ -330,14 +435,12 @@ function buildLSTMArch(): tf.Sequential {
   return model;
 }
 
-/** Extract weights as JSON-serializable arrays */
 function saveLSTMWeights(model: tf.LayersModel): LSTMWeightLayer[][] {
   return model.layers.map(layer =>
     layer.getWeights().map(w => ({ shape: w.shape, data: Array.from(w.dataSync()) }))
   );
 }
 
-/** Reconstruct model from saved weights (sync) */
 function loadLSTMFromWeights(weightsData: LSTMWeightLayer[][]): tf.Sequential {
   const model = buildLSTMArch();
   model.layers.forEach((layer, i) => {
@@ -349,7 +452,6 @@ function loadLSTMFromWeights(weightsData: LSTMWeightLayer[][]): tf.Sequential {
   return model;
 }
 
-/** Train LSTM on training sequences */
 async function trainLSTM(
   X3d_train: number[][][], y_train: Float64Array,
   X3d_val:   number[][][], y_val:   Float64Array,
@@ -381,7 +483,6 @@ async function trainLSTM(
   return model;
 }
 
-/** Predict using loaded LSTM model (sync) */
 function lstmPredict(model: tf.Sequential, X3d: number[][][]): Float64Array {
   if (X3d.length === 0) return new Float64Array(0);
   const input = tf.tensor3d(X3d);
@@ -397,24 +498,24 @@ async function fetchHistory(symbol: string, years = YEARS_DATA) {
   const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
   const end = new Date(), start = new Date();
   start.setFullYear(start.getFullYear() - years);
-  const r = await yahoo.chart(symbol, { period1: start, period2: end, interval: "1d" });
+  const r = await (yahoo as any).chart(symbol, { period1: start, period2: end, interval: "1d" });
   return (r.quotes ?? [])
     .filter((q: any) => q.close != null)
     .map((q: any) => ({ date: new Date(q.date).toISOString().slice(0,10), close: q.close as number }));
 }
 
-// ─── Core result builder (uses pre-trained GBDT + LSTM) ──────────────────────
+// ─── Core result builder ──────────────────────────────────────────────────────
 
 function buildResultFromModel(
   symbol: string, name: string,
   rows: { date: string; close: number }[],
+  extMap: Map<string, ExtPoint>,
   gbdtModels: GBDTModel[], gbdtScaler: { mu: Float64Array; sigma: Float64Array },
   lstmModel: tf.Sequential, lstmScaler: { mu: Float64Array; sigma: Float64Array },
   storedAlpha: number,
 ): IndexResult {
-  const { feats, closes, dates } = buildFeatures(rows);
+  const { feats, closes, dates } = buildFeatures(rows, extMap);
 
-  // GBDT sequences
   const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length;
   const trainEnd = Math.floor(n * 0.80);
@@ -427,21 +528,19 @@ function buildResultFromModel(
     for (let i = 0; i < p.length; i++) gbdtPreds[i] += p[i] / gbdtModels.length;
   }
 
-  // LSTM sequences
-  const { X3d, y: y3d, anchorDateIdxs: anchors3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
+  const { X3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
   const X3d_test = X3d.slice(trainEnd);
   const lstmPreds = lstmPredict(lstmModel, X3d_test);
 
-  // Adaptive ensemble weights (based on recent N dir accuracy)
+  // Adaptive ensemble weight (recent 30d dir accuracy ratio)
   const lastN = Math.min(RECENT_N, gbdtPreds.length);
   const g30 = dirAccRate(gbdtPreds.slice(-lastN), Array.from(yte).slice(-lastN));
   const l30 = dirAccRate(lstmPreds.slice(-lastN),  Array.from(yte).slice(-lastN));
-  const alpha = l30 + g30 > 0 ? l30 / (l30 + g30) : 0.5;  // LSTM weight
+  const alpha = l30 + g30 > 0 ? l30 / (l30 + g30) : 0.5;
 
   const testPreds = new Float64Array(gbdtPreds.length);
   for (let i = 0; i < testPreds.length; i++) testPreds[i] = alpha * lstmPreds[i] + (1-alpha) * gbdtPreds[i];
 
-  // Metrics
   const nTest = testPreds.length;
   const wfMid = Math.floor(nTest / 2);
   const wf1 = dirAccRate(testPreds.slice(0, wfMid), Array.from(yte).slice(0, wfMid));
@@ -461,7 +560,7 @@ function buildResultFromModel(
     return { date: dates[anchorIdx]??`D${m}`, predicted: +(pred*100).toFixed(2), actual: +(last30Actual[m]*100).toFixed(2) };
   });
 
-  // Final forecast using ensemble
+  // Final forecast
   const lastGBDT_Xn = applyStd([X[n-1]], gbdtScaler.mu, gbdtScaler.sigma);
   const gbdtForecast = gbdtModels.map(m => gbdtPredict(m, lastGBDT_Xn)[0]).reduce((a,b)=>a+b,0) / gbdtModels.length;
 
@@ -469,12 +568,12 @@ function buildResultFromModel(
   for (let t = 0; t < LOOKBACK; t++) {
     lastSeq3d.push(Array.from(feats[feats.length - LOOKBACK + t]).map((v,j) => (v - lstmScaler.mu[j]) / lstmScaler.sigma[j]));
   }
-  const lstmForecast = lstmPredict(lstmModel, [lastSeq3d])[0];
+  const lstmForecast  = lstmPredict(lstmModel, [lastSeq3d])[0];
   const forecastReturn = alpha * lstmForecast + (1-alpha) * gbdtForecast;
 
-  const curVal = closes[closes.length-1];
-  const pred3d = curVal * (1 + forecastReturn);
-  const bandPrice = (stddev(recentErrors) * curVal);
+  const curVal    = closes[closes.length-1];
+  const pred3d    = curVal * (1 + forecastReturn);
+  const bandPrice = stddev(recentErrors) * curVal;
 
   const futureDates: string[] = [];
   const cur = new Date(dates[dates.length-1] + "T00:00:00");
@@ -505,39 +604,43 @@ function buildResultFromModel(
   };
 }
 
-// ─── Full training (LSTM + GBDT) ─────────────────────────────────────────────
+// ─── Full training ────────────────────────────────────────────────────────────
 
 async function trainFull(symbol: string, name: string, rows: { date: string; close: number }[]) {
-  const { feats, closes, dates } = buildFeatures(rows);
+  const dates = rows.map(r => r.date);
 
-  // ── GBDT ──
-  const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
+  // 외부 데이터 fetch
+  const extMap = await fetchExternalData(dates);
+
+  const { feats, closes } = buildFeatures(rows, extMap);
+
+  // GBDT
+  const { X, y } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length, trainEnd = Math.floor(n*0.80);
   const { Xn: XtrN, mu: gbdtMu, sigma: gbdtSig } = standardize(X.slice(0, trainEnd));
   const gbdtModels = Array.from({length:N_ENSEMBLE},(_,e)=>gbdtFit(XtrN,y.slice(0,trainEnd),e*37+13));
 
-  // ── LSTM ──
+  // LSTM
   const lstmScaler = computeLSTMScaler(feats.slice(0, trainEnd+LOOKBACK));
-  const { X3d, y: y3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
-  const valSplit = Math.floor(trainEnd * 0.9);
+  const { X3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
+  const valSplit  = Math.floor(trainEnd * 0.9);
   const lstmModel = await trainLSTM(
     X3d.slice(0, valSplit),   y.slice(0, valSplit),
     X3d.slice(valSplit, trainEnd), y.slice(valSplit, trainEnd),
   );
 
   const gbdtScaler = { mu: gbdtMu, sigma: gbdtSig };
-
-  // ── Save ──
   const symKey = symbol.replace(/[\^]/g,"");
   saveModelFile(symKey, {
+    nFeatures: N_FEATURES,
     gbdtModels, gbdtScaler: { mu: Array.from(gbdtMu), sigma: Array.from(gbdtSig) },
     lstmWeights: saveLSTMWeights(lstmModel),
     lstmScaler:  { mu: Array.from(lstmScaler.mu), sigma: Array.from(lstmScaler.sigma) },
-    ensembleAlpha: 0.5,  // initial; adaptive at runtime
+    ensembleAlpha: 0.5,
   });
 
   const result = buildResultFromModel(
-    symbol, name, rows,
+    symbol, name, rows, extMap,
     gbdtModels, { mu: gbdtMu, sigma: gbdtSig },
     lstmModel, { mu: lstmScaler.mu, sigma: lstmScaler.sigma },
     0.5,
@@ -559,44 +662,55 @@ export function getStatus(): PipelineStatus {
 }
 
 export async function tryRestoreFromDisk(): Promise<boolean> {
-  const meta       = loadMeta();
-  const kospiStore = loadModelFile("KS11");
-  const kosdaqStore= loadModelFile("KQ11");
+  const meta        = loadMeta();
+  const kospiStore  = loadModelFile("KS11");
+  const kosdaqStore = loadModelFile("KQ11");
   if (!meta||!kospiStore||!kosdaqStore) return false;
-  if (!kospiStore.lstmWeights||!kosdaqStore.lstmWeights) {
-    console.log("[gbdt] 구형 모델 파일 감지 (LSTM 없음) — 완전 재학습 필요");
+
+  // 피처 수 / LSTM 가중치 버전 체크
+  if (!kospiStore.lstmWeights) {
+    console.log("[gbdt] 구형 모델 (LSTM 없음) — 완전 재학습");
     return false;
   }
-  console.log("[gbdt] 디스크에서 GBDT+LSTM 모델 복원 중...");
+  if ((kospiStore.nFeatures ?? 9) !== N_FEATURES) {
+    console.log(`[gbdt] 피처 수 변경 (${kospiStore.nFeatures ?? "?"}→${N_FEATURES}) — 완전 재학습`);
+    return false;
+  }
+
+  console.log("[gbdt] 디스크에서 GBDT+LSTM 모델 복원 중 (nFeatures=" + N_FEATURES + ")...");
   try {
     const [kospiRows, kosdaqRows] = await Promise.all([
-      fetchHistory("^KS11", 0.35), fetchHistory("^KQ11", 0.35),
+      fetchHistory("^KS11", 0.5), fetchHistory("^KQ11", 0.5),
     ]);
-    const [kospi, kosdaq] = await Promise.all([
-      Promise.resolve(buildResultFromModel(
-        "^KS11","KOSPI",kospiRows,
-        kospiStore.gbdtModels,
-        {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
-        loadLSTMFromWeights(kospiStore.lstmWeights),
-        {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
-        kospiStore.ensembleAlpha,
-      )),
-      Promise.resolve(buildResultFromModel(
-        "^KQ11","KOSDAQ",kosdaqRows,
-        kosdaqStore.gbdtModels,
-        {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
-        loadLSTMFromWeights(kosdaqStore.lstmWeights),
-        {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
-        kosdaqStore.ensembleAlpha,
-      )),
+    const [kospiExtMap, kosdaqExtMap] = await Promise.all([
+      fetchExternalData(kospiRows.map((r: { date: string; close: number }) => r.date)),
+      fetchExternalData(kosdaqRows.map((r: { date: string; close: number }) => r.date)),
     ]);
+
+    const kospi = buildResultFromModel(
+      "^KS11","KOSPI",kospiRows,kospiExtMap,
+      kospiStore.gbdtModels,
+      {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
+      loadLSTMFromWeights(kospiStore.lstmWeights),
+      {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
+      kospiStore.ensembleAlpha,
+    );
+    const kosdaq = buildResultFromModel(
+      "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,
+      kosdaqStore.gbdtModels,
+      {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
+      loadLSTMFromWeights(kosdaqStore.lstmWeights),
+      {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
+      kosdaqStore.ensembleAlpha,
+    );
+
     _lastRun = Date.now();
     _status = {
       running:false, ready:true,
       steps:defaultSteps().map(s=>({...s,status:"done" as const})),
       trainedAt:meta.lastTrained, trainingMs:0, kospi, kosdaq,
     };
-    console.log(`[gbdt] 복원 완료 | KOSPI lstmW=${kospi.ensembleAlpha} gbdtW=${(1-kospi.ensembleAlpha).toFixed(3)}`);
+    console.log(`[gbdt] 복원 완료 | KOSPI lstmW=${kospi.ensembleAlpha} | 피처 ${N_FEATURES}개`);
     return true;
   } catch(e:any) { console.warn("[gbdt] 복원 실패:",e?.message); return false; }
 }
@@ -617,7 +731,6 @@ export async function runPipeline(force=false): Promise<void> {
 
     stepSet("feature","running"); stepSet("feature","done",0);
 
-    // Train LSTM for each index sequentially (TF.js single-threaded)
     stepSet("lstm","running");
     const sL=Date.now();
     const kospiResult  = await trainFull("^KS11","KOSPI",kospiRows);
@@ -644,7 +757,7 @@ export async function runPipeline(force=false): Promise<void> {
       trainedAt, trainingMs:Date.now()-t0,
       kospi:kospiResult, kosdaq:kosdaqResult,
     };
-    console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI lstm=${kospiResult.lstmDirAcc}% gbdt=${kospiResult.gbdtDirAcc}% ens=${kospiResult.testDirAcc}%`);
+    console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI lstm=${kospiResult.lstmDirAcc}% gbdt=${kospiResult.gbdtDirAcc}% ens=${kospiResult.testDirAcc}% | 피처 ${N_FEATURES}개`);
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
     const f=_status.steps.find(s=>s.status==="running");
@@ -656,18 +769,23 @@ export async function runPipeline(force=false): Promise<void> {
 export async function runDailyIncrementalUpdate(): Promise<void> {
   if (_status.running){console.log("[gbdt] 학습 중 — 증분 스킵");return;}
   const meta=loadMeta(), kospiStore=loadModelFile("KS11"), kosdaqStore=loadModelFile("KQ11");
-  if(!kospiStore||!kosdaqStore||!kospiStore.lstmWeights){
-    console.log("[gbdt] 저장 모델 없음 → 완전 학습");
+  if(!kospiStore||!kosdaqStore||!kospiStore.lstmWeights||(kospiStore.nFeatures??9)!==N_FEATURES){
+    console.log("[gbdt] 저장 모델 없음 또는 피처 불일치 → 완전 학습");
     return runPipeline(true);
   }
   console.log("[gbdt] 일일 증분 시작 (GBDT +5트리; LSTM 스킵)");
   const t0=Date.now();
   try {
-    const [kospiRows,kosdaqRows]=await Promise.all([fetchHistory("^KS11",0.35),fetchHistory("^KQ11",0.35)]);
+    const [kospiRows,kosdaqRows]=await Promise.all([fetchHistory("^KS11",0.5),fetchHistory("^KQ11",0.5)]);
     const lastUpdated=meta?.lastUpdated??"2000-01-01";
 
-    function newSamples(rows:{date:string;close:number}[], store:StoredModelFile) {
-      const {feats,closes,dates}=buildFeatures(rows);
+    const [kospiExtMap,kosdaqExtMap]=await Promise.all([
+      fetchExternalData(kospiRows.map((r:{date:string;close:number})=>r.date)),
+      fetchExternalData(kosdaqRows.map((r:{date:string;close:number})=>r.date)),
+    ]);
+
+    function newSamples(rows:{date:string;close:number}[], extMap:Map<string,ExtPoint>, store:StoredModelFile) {
+      const {feats,closes,dates}=buildFeatures(rows,extMap);
       const {X,y,anchorDateIdxs}=makeSeqs(feats,closes,LOOKBACK,PRED_H);
       const idxs=X.map((_,k)=>k).filter(k=>(dates[anchorDateIdxs[k]]??"")>lastUpdated);
       if(!idxs.length)return null;
@@ -675,32 +793,32 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       const XteN=applyStd(idxs.map(k=>X[k]),gbdtMu,gbdtSig);
       return{XteN,yNew:new Float64Array(idxs.map(k=>y[k]))};
     }
-    const kNew=newSamples(kospiRows,kospiStore), qNew=newSamples(kosdaqRows,kosdaqStore);
+
+    const kNew=newSamples(kospiRows,kospiExtMap,kospiStore);
+    const qNew=newSamples(kosdaqRows,kosdaqExtMap,kosdaqStore);
     if(!kNew&&!qNew){console.log("[gbdt] 신규 데이터 없음");return;}
 
     const seed=Date.now()%10000;
     const updKospi  = kNew ? kospiStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,kNew.XteN,kNew.yNew,N_INCR_TREES,e*7+seed)) : kospiStore.gbdtModels;
     const updKosdaq = qNew ? kosdaqStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,qNew.XteN,qNew.yNew,N_INCR_TREES,e*7+3+seed)) : kosdaqStore.gbdtModels;
 
-    saveModelFile("KS11",{...kospiStore,  gbdtModels:updKospi});
-    saveModelFile("KQ11",{...kosdaqStore, gbdtModels:updKosdaq});
+    saveModelFile("KS11",{...kospiStore,  gbdtModels:updKospi,  nFeatures:N_FEATURES});
+    saveModelFile("KQ11",{...kosdaqStore, gbdtModels:updKosdaq, nFeatures:N_FEATURES});
 
-    const [kospi,kosdaq]=await Promise.all([
-      Promise.resolve(buildResultFromModel(
-        "^KS11","KOSPI",kospiRows,updKospi,
-        {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
-        loadLSTMFromWeights(kospiStore.lstmWeights),
-        {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
-        kospiStore.ensembleAlpha,
-      )),
-      Promise.resolve(buildResultFromModel(
-        "^KQ11","KOSDAQ",kosdaqRows,updKosdaq,
-        {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
-        loadLSTMFromWeights(kosdaqStore.lstmWeights),
-        {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
-        kosdaqStore.ensembleAlpha,
-      )),
-    ]);
+    const kospi = buildResultFromModel(
+      "^KS11","KOSPI",kospiRows,kospiExtMap,updKospi,
+      {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
+      loadLSTMFromWeights(kospiStore.lstmWeights),
+      {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
+      kospiStore.ensembleAlpha,
+    );
+    const kosdaq = buildResultFromModel(
+      "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,updKosdaq,
+      {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
+      loadLSTMFromWeights(kosdaqStore.lstmWeights),
+      {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
+      kosdaqStore.ensembleAlpha,
+    );
     const now=new Date().toISOString();
     saveMeta({
       ...(meta??{lastTrained:now,nSamples:{},dirAcc:{},wfDirAcc:{},rolling30dDirAcc:{},updateCount:0}),
