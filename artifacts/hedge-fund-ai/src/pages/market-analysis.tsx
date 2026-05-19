@@ -704,19 +704,7 @@ export default function MarketAnalysis() {
 
               <div className="px-4 py-5 space-y-6">
 
-                {/* 1. 지수 버튼 */}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">📊</span> 코스피 / 코스닥이 뭔가요?
-                  </p>
-                  <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    <span className="font-medium text-foreground">코스피</span>는 삼성전자·현대차·SK하이닉스처럼 우리나라 대표 대기업들의 주가를 모아서 하나의 숫자로 표현한 것입니다.
-                    <span className="font-medium text-foreground"> 코스닥</span>은 IT·바이오·게임 같은 중소·성장 기업들을 모은 지수예요.
-                    두 버튼을 눌러 원하는 시장을 골라서 보시면 됩니다.
-                  </p>
-                </div>
-
-                {/* 2. AI 예측 숫자 */}
+                {/* 1. AI 예측 숫자 */}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <span className="text-base">🔮</span> "3일 후 +0.8%" 이게 무슨 말이에요?
@@ -777,57 +765,127 @@ export default function MarketAnalysis() {
                   </p>
                 </div>
 
-                {/* 6. AI 원리 */}
-                <div className="space-y-2">
+                {/* 6. 방법론 */}
+                <div className="space-y-3">
                   <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">🤖</span> AI는 어떻게 예측하나요?
+                    <span className="text-base">🤖</span> 어떤 모델을 쓰고, 어떻게 작동하나요?
                   </p>
-                  <div className="bg-white/[0.03] rounded-xl px-4 py-3 space-y-4">
-                    {[
-                      {
-                        num: "1",
-                        title: "흐름을 기억하는 AI",
-                        desc: "최근 20거래일의 지수 흐름을 순서대로 읽어서, 이런 패턴 다음엔 이렇게 움직이더라를 학습합니다. 사람이 차트를 눈으로 보고 이거 예전에 이랬는데 라고 느끼는 것과 비슷해요.",
-                      },
-                      {
-                        num: "2",
-                        title: "규칙을 찾는 AI",
-                        desc: `5년치 데이터에서 수백 개의 규칙을 찾아냅니다. 기술적 지표 9개, 미국 증시·환율·금리 3개, 외국인·기관·공매도 3개 — 총 15가지를 동시에 고려해요. 날씨 앱이 기온·습도·기압을 종합해서 "오늘 비 올 확률 70%"를 알려주는 것과 비슷합니다.`,
-                      },
-                      {
-                        num: "3",
-                        title: "두 AI의 의견을 합칩니다",
-                        desc: `두 AI가 각자 예측하면, 최근에 더 잘 맞힌 쪽에 가중치를 더 줍니다.${current ? ` 지금은 흐름 기억 AI ${(current.ensembleAlpha * 100).toFixed(0)}% + 규칙 발견 AI ${((1 - current.ensembleAlpha) * 100).toFixed(0)}% 비율로 합산하고 있어요.` : ""} 이 비율은 시장 상황에 따라 자동으로 바뀝니다.`,
-                      },
-                    ].map(item => (
-                      <div key={item.num} className="flex gap-3 items-start">
-                        <div className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                          {item.num}
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-foreground mb-0.5">{item.title}</p>
-                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{item.desc}</p>
-                        </div>
-                      </div>
-                    ))}
 
+                  {/* LSTM */}
+                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                    <p className="text-xs font-bold text-primary tracking-wide">① LSTM — 시계열 패턴 학습</p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      <span className="font-semibold text-foreground">Long Short-Term Memory</span>는 순환신경망(RNN)의 한 종류로,
+                      데이터의 <span className="font-semibold text-foreground">순서와 흐름</span>을 이해하도록 설계된 딥러닝 모델입니다.
+                      일반 신경망과 달리 "이전에 어떤 일이 있었는지"를 내부 메모리에 누적하면서 학습하기 때문에
+                      주가처럼 시간 순서가 중요한 데이터에 강점이 있습니다.
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      여기서는 <span className="font-semibold text-foreground">직전 20거래일(약 한 달)의 지수 흐름</span>을
+                      입력으로 받아 3일 후의 수익률 방향을 예측합니다.
+                      LSTM 내부의 forget gate·input gate·output gate가 어떤 과거 정보를 기억하고 버릴지를 스스로 결정합니다.
+                    </p>
                     {current && (
-                      <div className="pt-2 border-t border-white/[0.06] grid grid-cols-3 gap-2 text-center text-[11px]">
-                        <div>
-                          <p className="text-muted-foreground/50">흐름 기억 AI</p>
-                          <p className="font-bold text-foreground mt-0.5">{current.lstmDirAcc}%</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground/50">규칙 발견 AI</p>
-                          <p className="font-bold text-foreground mt-0.5">{current.gbdtDirAcc}%</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground/50">합산 결과</p>
-                          <p className="font-bold text-primary mt-0.5">{current.rolling30dDirAcc}%</p>
-                        </div>
-                      </div>
+                      <p className="text-[11px] text-primary/80 font-medium">
+                        현재 방향 적중률: {current.lstmDirAcc}%
+                      </p>
                     )}
                   </div>
+
+                  {/* GBDT */}
+                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                    <p className="text-xs font-bold text-purple-400 tracking-wide">② GBDT — 15개 피처 기반 규칙 학습</p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      <span className="font-semibold text-foreground">Gradient Boosted Decision Trees</span>는
+                      수백 개의 결정 트리를 순차적으로 쌓아올리는 앙상블 모델입니다.
+                      앞 트리가 틀린 오차를 다음 트리가 보정하는 방식으로 점진적으로 정확도를 높입니다.
+                      XGBoost·LightGBM 계열과 같은 원리입니다.
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      입력 피처는 총 <span className="font-semibold text-foreground">15개</span>입니다:
+                    </p>
+                    <div className="grid grid-cols-1 gap-1 text-[11px]">
+                      {[
+                        { label: "기술적 지표 9개", desc: "수익률·변동성·RSI·MACD·볼린저밴드·거래량 변화율 등" },
+                        { label: "글로벌 거시 3개", desc: "S&P 500 수익률 · 달러/원 환율(USD/KRW) · 미국 기준금리(Fed Funds Rate)" },
+                        { label: "수급 3개", desc: "외국인 순매수 · 기관 순매수 · 공매도 비율 (데이터 공백 시 전일값 forward-fill)" },
+                      ].map(f => (
+                        <div key={f.label} className="flex gap-2 items-start">
+                          <span className="text-purple-400/80 font-semibold shrink-0">·</span>
+                          <p className="text-muted-foreground/70 leading-relaxed">
+                            <span className="font-semibold text-foreground">{f.label}</span> — {f.desc}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    {current && (
+                      <p className="text-[11px] text-purple-400/80 font-medium">
+                        현재 방향 적중률: {current.gbdtDirAcc}%
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 앙상블 */}
+                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                    <p className="text-xs font-bold text-emerald-400 tracking-wide">③ 동적 앙상블 — 성능 기반 가중치 합산</p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      두 모델의 예측값을 단순 평균하지 않고,
+                      <span className="font-semibold text-foreground"> 최근 30거래일의 방향 적중률</span>을 실시간으로 계산해
+                      더 잘 맞힌 모델에 더 높은 가중치(α)를 부여합니다.
+                    </p>
+                    <div className="bg-black/20 rounded-lg px-3 py-2 font-mono text-[11px] text-emerald-400/80">
+                      최종 예측 = α × LSTM + (1 − α) × GBDT
+                    </div>
+                    {current ? (
+                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                        현재 α = <span className="font-semibold text-foreground">{current.ensembleAlpha.toFixed(3)}</span>으로,
+                        LSTM {(current.ensembleAlpha * 100).toFixed(0)}% + GBDT {((1 - current.ensembleAlpha) * 100).toFixed(0)}% 비율로 합산되고 있습니다.
+                        이 값은 매번 분석 실행 시 자동으로 재계산됩니다.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                        α 값은 매번 분석 실행 시 최근 성능을 기반으로 자동 재계산됩니다.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Walk-Forward */}
+                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                    <p className="text-xs font-bold text-amber-400 tracking-wide">④ Walk-Forward 검증 — 미래 데이터 없이 테스트</p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      일반적인 백테스트는 미래 데이터를 훈련에 포함할 위험이 있어 실제보다 성능이 과대평가됩니다.
+                      이를 막기 위해 <span className="font-semibold text-foreground">Walk-Forward Validation</span>을 사용합니다.
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
+                      과거 데이터를 시간 순서대로 슬라이딩 윈도우로 분할해,
+                      훈련 구간 이후의 데이터만을 테스트에 씁니다.
+                      이 과정을 여러 구간에 걸쳐 반복해 얻은 평균 정확도가
+                      화면에 표시되는 <span className="font-semibold text-foreground">전체 검증 적중률(wfDirAcc)</span>입니다.
+                      실전과 가장 가까운 방식으로 평가한 수치입니다.
+                    </p>
+                    {current && (
+                      <p className="text-[11px] text-amber-400/80 font-medium">
+                        Walk-Forward 적중률: {current.wfDirAcc}% · 테스트셋 적중률: {current.testDirAcc}%
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 종합 성능 */}
+                  {current && (
+                    <div className="pt-1 grid grid-cols-4 gap-2 text-center text-[11px]">
+                      {[
+                        { label: "LSTM", val: `${current.lstmDirAcc}%`, color: "text-primary" },
+                        { label: "GBDT", val: `${current.gbdtDirAcc}%`, color: "text-purple-400" },
+                        { label: "앙상블", val: `${current.rolling30dDirAcc}%`, color: "text-emerald-400" },
+                        { label: "MAE", val: `${current.testMae}%`, color: "text-amber-400" },
+                      ].map(s => (
+                        <div key={s.label} className="bg-white/[0.03] rounded-lg py-2">
+                          <p className="text-muted-foreground/50 mb-0.5">{s.label}</p>
+                          <p className={cn("font-bold", s.color)}>{s.val}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* 면책 */}
