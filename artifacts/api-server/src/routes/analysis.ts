@@ -26,6 +26,7 @@ import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
+import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
 import { runCalibrationAgent, saveCalibrationNote, getCalibrationNote } from "../lib/calibration-agent.js";
 import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
 import { getSectorLearningNote } from "../lib/sector-learning.js";
@@ -3161,7 +3162,9 @@ router.post("/", async (req, res) => {
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
   // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData] = await Promise.all([
+  const needsSOTPData = isKoreanTicker && hasSOTPSubsidiaryData(krxCode);
+
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -3171,6 +3174,7 @@ router.post("/", async (req, res) => {
     isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
     isKoreanTicker ? getDartHistoricalContext(krxCode).catch(() => null) : Promise.resolve(null),
     isKoreanTicker ? fetchKOSISData().catch(() => null) : Promise.resolve(null),
+    needsSOTPData ? buildSOTPSubsidiaryContext(krxCode).catch(() => null) : Promise.resolve(null),
   ]);
 
   // KIS 결과 분리 — 한국 종목은 KIS 현재가 우선, 없으면 Yahoo fallback
@@ -3238,11 +3242,12 @@ router.post("/", async (req, res) => {
     : null;
 
   const fullContext = [
-    kisContext,          // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS·대차잔고비율·공매도) — 최우선 오버라이드
+    kisContext,              // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS·대차잔고비율·공매도) — 최우선 오버라이드
+    sotpSubsidiaryContext,   // SOTP 자회사 시총 (상장 자회사 실시간 시가총액·귀속가치 — SOTP 계산 필수 입력)
     financialData,
     dartBalanceContext,
-    dartHistorical,      // DART 시계열 재무 (DB 캐시 — 이전 분석에서 누적된 분기·연간 데이터)
-    kosisContext,        // KOSIS 산업생산지수·수출입 통계 — 섹터 거시 배경
+    dartHistorical,          // DART 시계열 재무 (DB 캐시 — 이전 분석에서 누적된 분기·연간 데이터)
+    kosisContext,            // KOSIS 산업생산지수·수출입 통계 — 섹터 거시 배경
     macroContext,
     newsData,
     userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
