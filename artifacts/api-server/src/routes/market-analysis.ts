@@ -143,10 +143,10 @@ async function fetchRecentIndexData() {
 
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
 
-/** KST 기준 세션 감지: UTC 23~02 → 장전(08:30~11:30 KST), 나머지 → 장마감 */
+/** KST 기준 세션 감지: UTC 21~02 → 장전(06:00~11:00 KST), 나머지 → 장마감 */
 function detectSession(): "morning" | "closing" {
   const utcH = new Date().getUTCHours();
-  return (utcH >= 23 || utcH <= 2) ? "morning" : "closing";
+  return (utcH >= 21 || utcH <= 2) ? "morning" : "closing";
 }
 
 function fmtIdx(d: { close: number; change: number | null } | null | undefined, unit = "pt") {

@@ -35,12 +35,12 @@ function checkAndRun() {
     return;
   }
 
-  // ── 장전 브리핑 갱신: 평일 08:30 KST = 전날 23:30 UTC ──────────────────
+  // ── 장전 브리핑 갱신: 평일 06:00 KST = 전날 21:00 UTC ──────────────────
   // 미국 야간 데이터(S&P500, 나스닥, 공포지수 등) 반영한 장전 해설
-  if (utcH === 23 && utcM === 30 && dow >= 0 && dow <= 4 && morningBriefToday !== dateStr) {
+  if (utcH === 21 && utcM === 0 && dow >= 0 && dow <= 4 && morningBriefToday !== dateStr) {
     // dow 0(일)~4(목): 다음날이 평일(월~금)인 경우만
     morningBriefToday = dateStr;
-    console.log("[scheduler] 장전 브리핑 갱신 시작 (08:30 KST)");
+    console.log("[scheduler] 장전 브리핑 갱신 시작 (06:00 KST)");
     invalidateBriefCache();
   }
 
@@ -73,7 +73,7 @@ export function startMarketScheduler() {
   // 2. 1분마다 스케줄 조건 확인
   setInterval(checkAndRun, 60_000);
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
-  console.log("  - 장전 브리핑:   평일 08:30 KST (23:30 UTC 전날)");
+  console.log("  - 장전 브리핑:   평일 06:00 KST (21:00 UTC 전날)");
   console.log("  - 장마감 업데이트: 평일 16:30 KST (07:30 UTC)");
   console.log("  - 월간 재학습:   매월 1일 00:00 KST (전날 15:00 UTC)");
 }
