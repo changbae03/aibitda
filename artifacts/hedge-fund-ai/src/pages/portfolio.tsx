@@ -40,6 +40,7 @@ interface Holding {
   id: number;
   ticker: string;
   companyName: string;
+  englishName: string | null;
   avgPrice: number | null;
   quantity: number | null;
   currency: string;
@@ -628,7 +629,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-foreground leading-tight truncate">
-                  {holding.companyName}
+                  {isEn && holding.englishName ? holding.englishName : holding.companyName}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                   <span className="font-mono text-[11px] text-muted-foreground/60">{holding.ticker}</span>
@@ -711,35 +712,39 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 <p className="text-[10px] text-muted-foreground mb-1.5">{isEn ? "AI Fair Value" : "AI 적정주가"}</p>
 
                 {hasBoth ? (
-                  /* ── 두 목표가 나란히 표시 ── */
-                  <div className="grid grid-cols-2 gap-x-2">
+                  /* ── 두 목표가: 세로 스택으로 겹침 방지 ── */
+                  <div className="flex flex-col gap-1.5">
                     {/* 내 분석 */}
-                    <div>
-                      <p className="text-[9px] text-muted-foreground/60 mb-0.5">{isEn ? "My Analysis" : "내 분석"}</p>
-                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground whitespace-nowrap">
-                        {fmtPrice(myTP!, holding.priceCurrency, isEn)}
-                      </p>
-                      {a!.upsidePct != null && (
-                        <p className={cn("text-[10px] tabular-nums mt-0.5 font-semibold",
-                          a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                          {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-[9px] text-muted-foreground/60 shrink-0">{isEn ? "My Analysis" : "내 분석"}</p>
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <p className="text-[13px] font-bold tabular-nums leading-none text-foreground truncate">
+                          {fmtPrice(myTP!, holding.priceCurrency, isEn)}
                         </p>
-                      )}
+                        {a!.upsidePct != null && (
+                          <p className={cn("text-[10px] tabular-nums font-semibold shrink-0",
+                            a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                            {a!.upsidePct >= 0 ? "▲" : "▼"}{fmtPct(Math.abs(a!.upsidePct))}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     {/* 멀티뷰 */}
-                    <div>
-                      <p className="text-[9px] text-muted-foreground/60 mb-0.5 flex items-center gap-0.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-[9px] text-muted-foreground/60 flex items-center gap-0.5 shrink-0">
                         <Users className="w-2.5 h-2.5" />{isEn ? "Multi-View" : "멀티뷰"}
                       </p>
-                      <p className="text-[15px] font-bold tabular-nums leading-none text-foreground whitespace-nowrap">
-                        {fmtPrice(colTP!, holding.priceCurrency, isEn)}
-                      </p>
-                      {a!.collectiveUpsidePct != null && (
-                        <p className={cn("text-[10px] tabular-nums mt-0.5 font-semibold",
-                          a!.collectiveUpsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
-                          {a!.collectiveUpsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.collectiveUpsidePct))}
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <p className="text-[13px] font-bold tabular-nums leading-none text-foreground truncate">
+                          {fmtPrice(colTP!, holding.priceCurrency, isEn)}
                         </p>
-                      )}
+                        {a!.collectiveUpsidePct != null && (
+                          <p className={cn("text-[10px] tabular-nums font-semibold shrink-0",
+                            a!.collectiveUpsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                            {a!.collectiveUpsidePct >= 0 ? "▲" : "▼"}{fmtPct(Math.abs(a!.collectiveUpsidePct))}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : myTP != null ? (
@@ -1102,7 +1107,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
               </div>
               <div className="min-w-0">
                 <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">{isEn ? "AI Stock Analysis" : "AI 기업분석"}</p>
-                <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{(holding as any).englishName && isEn ? (holding as any).englishName : holding.companyName}</h3>
+                <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{isEn && holding.englishName ? holding.englishName : holding.companyName}</h3>
                 <p className="font-mono text-[11px] text-muted-foreground/50">{holding.ticker}</p>
               </div>
             </div>

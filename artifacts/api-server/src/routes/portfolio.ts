@@ -154,10 +154,11 @@ router.get("/portfolio", async (req, res) => {
   await ensureTable();
 
   const { rows } = await pool.query(
-    `SELECT id, ticker, company_name, avg_price, quantity, currency, note, added_at
-     FROM portfolio_holdings
-     WHERE user_id = $1
-     ORDER BY added_at DESC`,
+    `SELECT ph.id, ph.ticker, ph.company_name, ph.avg_price, ph.quantity, ph.currency, ph.note, ph.added_at,
+            (SELECT a.english_name FROM analyses a WHERE a.ticker = ph.ticker AND a.english_name IS NOT NULL ORDER BY a.created_at DESC LIMIT 1) AS english_name
+     FROM portfolio_holdings ph
+     WHERE ph.user_id = $1
+     ORDER BY ph.added_at DESC`,
     [userId]
   );
 
@@ -208,6 +209,7 @@ router.get("/portfolio", async (req, res) => {
       id: row.id,
       ticker: row.ticker,
       companyName: row.company_name,
+      englishName: row.english_name ?? null,
       avgPrice,
       quantity: row.quantity ? parseFloat(row.quantity) : null,
       currency: row.currency,
