@@ -52,6 +52,7 @@ interface PipelineStatus {
 interface MarketBrief {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
+  sessionType?: "morning" | "closing";
   leadParagraph?: string;
   storyLine?: string;
   marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
@@ -148,9 +149,20 @@ function MarketBriefSection({
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
       {/* 헤더 */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">AI 시장 브리핑</span>
+          {/* 세션 뱃지 */}
+          {brief && !loading && brief.sessionType && (
+            <span className={cn(
+              "text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide",
+              brief.sessionType === "morning"
+                ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                : "text-sky-400 bg-sky-500/10 border-sky-500/20",
+            )}>
+              {brief.sessionType === "morning" ? "🌅 장전 브리핑" : "🌆 장마감 브리핑"}
+            </span>
+          )}
           {brief && !loading && (
             <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", sentimentConfig.color)}>
               {sentimentConfig.label}

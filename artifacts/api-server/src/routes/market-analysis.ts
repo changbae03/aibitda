@@ -59,6 +59,7 @@ export function invalidateBriefCache() {
 export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
+  sessionType: "morning" | "closing";
   leadParagraph: string;
   storyLine: string;
   marketEvents: {
@@ -101,11 +102,19 @@ async function fetchRecentIndexData() {
   const start = new Date();
   start.setDate(start.getDate() - 10);
 
-  const [kospiData, kosdaqData, snpData, vixData] = await Promise.allSettled([
-    (yahoo as any).chart("^KS11",  { period1: start, period2: end, interval: "1d" }),
-    (yahoo as any).chart("^KQ11",  { period1: start, period2: end, interval: "1d" }),
-    (yahoo as any).chart("^GSPC",  { period1: start, period2: end, interval: "1d" }),
-    (yahoo as any).chart("^VIX",   { period1: start, period2: end, interval: "1d" }),
+  const [
+    kospiData, kosdaqData,
+    snpData, nasdaqData, dowData,
+    vixData, soxData, dxyData,
+  ] = await Promise.allSettled([
+    (yahoo as any).chart("^KS11",    { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^KQ11",    { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^GSPC",    { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^IXIC",    { period1: start, period2: end, interval: "1d" }),  // 나스닥
+    (yahoo as any).chart("^DJI",     { period1: start, period2: end, interval: "1d" }),  // 다우존스
+    (yahoo as any).chart("^VIX",     { period1: start, period2: end, interval: "1d" }),  // 공포지수
+    (yahoo as any).chart("^SOX",     { period1: start, period2: end, interval: "1d" }),  // 필라델피아 반도체
+    (yahoo as any).chart("DX-Y.NYB", { period1: start, period2: end, interval: "1d" }),  // 달러 인덱스
   ]);
 
   function extractRecent(result: PromiseSettledResult<any>, n = 5) {
@@ -124,16 +133,33 @@ async function fetchRecentIndexData() {
   const kospi  = extractRecent(kospiData);
   const kosdaq = extractRecent(kosdaqData);
   const snp500 = extractRecent(snpData);
+  const nasdaq = extractRecent(nasdaqData, 3);
+  const dow    = extractRecent(dowData, 3);
   const vix    = extractRecent(vixData, 3);
-  return { kospi, kosdaq, snp500, vix };
+  const sox    = extractRecent(soxData, 3);   // 필라델피아 반도체 (삼성·SK하이닉스 선행지표)
+  const dxy    = extractRecent(dxyData, 3);   // 달러 인덱스
+  return { kospi, kosdaq, snp500, nasdaq, dow, vix, sox, dxy };
 }
 
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
+
+/** KST 기준 세션 감지: UTC 23~02 → 장전(08:30~11:30 KST), 나머지 → 장마감 */
+function detectSession(): "morning" | "closing" {
+  const utcH = new Date().getUTCHours();
+  return (utcH >= 23 || utcH <= 2) ? "morning" : "closing";
+}
+
+function fmtIdx(d: { close: number; change: number | null } | null | undefined, unit = "pt") {
+  if (!d) return "N/A";
+  const ch = d.change != null ? ` (${d.change >= 0 ? "+" : ""}${d.change}%)` : "";
+  return `${d.close.toLocaleString()}${unit}${ch}`;
+}
 
 async function generateBrief(): Promise<MarketBriefResult> {
   const today = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   });
+  const session = detectSession();
 
   // 병렬로 데이터 수집
   const [indexData, fredData, ecosData, pipelineStatus] = await Promise.allSettled([
@@ -152,132 +178,171 @@ async function generateBrief(): Promise<MarketBriefResult> {
   const kospiLatest  = idx?.kospi?.at(-1)  ?? null;
   const kosdaqLatest = idx?.kosdaq?.at(-1) ?? null;
 
-  // 3일치 요약 텍스트 구성
-  const kospiHistory  = idx?.kospi?.map((d: { date: string; close: number; change: number | null }) => `${d.date} ${d.close.toLocaleString()} (${d.change !== null ? (d.change >= 0 ? "+" : "") + d.change + "%" : "N/A"})`).join(", ") ?? "데이터 없음";
-  const kosdaqHistory = idx?.kosdaq?.map((d: { date: string; close: number; change: number | null }) => `${d.date} ${d.close.toLocaleString()} (${d.change !== null ? (d.change >= 0 ? "+" : "") + d.change + "%" : "N/A"})`).join(", ") ?? "데이터 없음";
+  // 역사적 요약
+  const histLine = (arr: any[] | null | undefined) =>
+    arr?.map((d: any) => `${d.date} ${d.close.toLocaleString()}(${d.change != null ? (d.change >= 0 ? "+" : "") + d.change + "%" : "N/A"})`).join(", ") ?? "데이터 없음";
+
+  const kospiHistory  = histLine(idx?.kospi);
+  const kosdaqHistory = histLine(idx?.kosdaq);
 
   const kospiPred  = pipeline?.kospi  ? `${pipeline.kospi.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kospi.predictedReturn3d}%` : null;
   const kosdaqPred = pipeline?.kosdaq ? `${pipeline.kosdaq.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kosdaq.predictedReturn3d}%` : null;
 
-  // 일별 변동 지표 (매일 바뀌는 것 위주)
-  const snp500Latest = idx?.snp500?.at(-1) ?? null;
-  const vixLatest    = idx?.vix?.at(-1)    ?? null;
+  // 미국 지수 최신값
+  const snpL   = idx?.snp500?.at(-1) ?? null;
+  const nasdaqL = idx?.nasdaq?.at(-1) ?? null;
+  const dowL    = idx?.dow?.at(-1)    ?? null;
+  const vixL    = idx?.vix?.at(-1)    ?? null;
+  const soxL    = idx?.sox?.at(-1)    ?? null;
+  const dxyL    = idx?.dxy?.at(-1)    ?? null;
 
-  const macroLines = [
-    // 매일 움직이는 지표
-    snp500Latest?.close != null
-      ? `S&P500 ${snp500Latest.close.toLocaleString()}pt (${snp500Latest.change != null ? (snp500Latest.change >= 0 ? "+" : "") + snp500Latest.change + "%" : "N/A"} 전일비)`
-      : null,
-    vixLatest?.close != null
-      ? `VIX(공포지수) ${vixLatest.close} (${vixLatest.close >= 25 ? "공포 구간" : vixLatest.close >= 18 ? "경계 구간" : "안정 구간"})`
-      : null,
-    fred?.wtiOil != null
-      ? `WTI 유가 ${fred.wtiOil.toFixed(1)} USD/bbl`
-      : null,
-    ecos?.usdKrw != null
-      ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원`
-      : null,
-    fred?.t10y != null
-      ? `미국 10년 국채금리 ${fred.t10y.toFixed(2)}% (${fred.latestDates.treasury})`
-      : null,
-    fred?.t2y != null
-      ? `미국 2년 국채금리 ${fred.t2y.toFixed(2)}%`
-      : null,
-    fred?.yieldSpread != null
-      ? `장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " ⚠️역전" : ""}`
-      : null,
-    // 기준금리는 참고용
+  const usIndicesBlock = [
+    snpL   ? `S&P500 ${fmtIdx(snpL)}`                                              : null,
+    nasdaqL ? `나스닥 ${fmtIdx(nasdaqL)}`                                          : null,
+    dowL    ? `다우존스 ${fmtIdx(dowL)}`                                            : null,
+    soxL    ? `필라델피아반도체(SOX) ${fmtIdx(soxL)} ← 삼성·SK하이닉스 선행지표`  : null,
+    vixL    ? `VIX 공포지수 ${vixL.close} (${vixL.close >= 25 ? "공포" : vixL.close >= 18 ? "경계" : "안정"})` : null,
+    dxyL    ? `달러인덱스(DXY) ${dxyL.close} (달러 강세 시 원화 약세·수출주 유리)` : null,
+  ].filter(Boolean).join("\n");
+
+  const macroBlock = [
+    fred?.t10y    != null ? `미국 10년 국채금리 ${fred.t10y.toFixed(2)}%`                                         : null,
+    fred?.t2y     != null ? `미국 2년 국채금리 ${fred.t2y.toFixed(2)}%`                                           : null,
+    fred?.yieldSpread != null ? `장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " ⚠️역전" : ""}` : null,
+    fred?.wtiOil  != null ? `WTI 유가 ${fred.wtiOil.toFixed(1)} USD/bbl`                                         : null,
+    ecos?.usdKrw  != null ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원`                                        : null,
     fred != null
       ? fred.fedTargetUpper != null && fred.fedTargetLower != null
         ? `미국 기준금리 목표 ${fred.fedTargetLower}~${fred.fedTargetUpper}% (참고)`
-        : fred.fedFundsRate != null
-        ? `미국 기준금리 ${fred.fedFundsRate}% (참고)`
-        : null
+        : fred.fedFundsRate != null ? `미국 기준금리 ${fred.fedFundsRate}% (참고)` : null
       : null,
-    ecos?.baseRate     != null ? `한국 기준금리 ${ecos.baseRate}%` : null,
-    ecos?.cpiYoY       != null ? `한국 CPI ${ecos.cpiYoY}% YoY` : null,
+    ecos?.baseRate != null ? `한국 기준금리 ${ecos.baseRate}%` : null,
+    ecos?.cpiYoY   != null ? `한국 CPI ${ecos.cpiYoY}% YoY`   : null,
   ].filter(Boolean).join(" | ");
 
-  const prompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}입니다.
-주식을 막 시작한 사람도 이해할 수 있게, 쉽고 짧게 설명해 주세요.
+  // ── 장전 프롬프트 ──────────────────────────────────────────────────────────
+  const morningPrompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장 개장 전입니다.
+간밤에 미국 시장에서 무슨 일이 있었는지, 그리고 오늘 우리 시장에 어떤 영향이 올지를 쉽게 설명해 주세요.
+주식을 막 시작한 사람도 이해할 수 있게, 친근한 해요체로 써주세요.
 
-[최근 5거래일 KOSPI]
+[간밤 미국 주요 지수 (최신)]
+${usIndicesBlock || "데이터 없음"}
+
+[거시경제 지표]
+${macroBlock || "데이터 없음"}
+
+[최근 KOSPI 흐름 (참고)]
 ${kospiHistory}
 
-[최근 5거래일 KOSDAQ]
+[최근 KOSDAQ 흐름 (참고)]
 ${kosdaqHistory}
 
 [AI 모델 3일 예측]
 KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}
 
-[거시경제 지표]
-${macroLines || "데이터 없음"}
-
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
-  "summary": "오늘 시장 분위기를 한 줄로 (20자 내외, 명사형 또는 짧은 문장)",
+  "summary": "간밤 미국 시장 한 줄 요약 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
-  "leadParagraph": "지금 시장이 어떤 상황인지, 왜 그런지를 2문장으로. 어려운 용어 없이 누구나 읽을 수 있게. 예: '이번 주 코스피가 많이 흔들렸어요. 미국 금리 걱정이 커졌기 때문인데, 쉽게 말하면 돈 빌리는 비용이 올라가면 기업들이 힘들어지거든요.' (80~120자)",
-  "storyLine": "지난 며칠간 어떤 일이 있었고, 그게 시장에 어떤 영향을 줬는지, 그래서 앞으로 어떻게 될 것 같은지를 이야기처럼 이어서 써주세요. 실제 데이터를 근거로, 마치 친구에게 설명하듯이. 예: '지난주부터 미국 물가 데이터가 예상보다 높게 나오면서 금리 인하 기대가 꺾였어요. 덩달아 달러가 강해지고 외국인 투자자들이 우리 시장에서 돈을 빼가기 시작했는데, 그게 코스피 하락으로 이어진 거예요. AI 예측으로는 이번 주 안에 반등 가능성이 있지만, 미국 연준 발언이 관건이에요.' (150~220자)",
+  "leadParagraph": "간밤 미국 시장 전체 분위기를 2문장으로. 주요 지수 등락 수치 포함. 예: '간밤 미국 시장은 기술주 중심으로 강하게 올랐어요. 나스닥이 1.5% 오르고 S&P500도 0.8% 상승하며 투자자들의 기대감이 커졌어요.' (80~120자)",
+  "storyLine": "왜 미국 시장이 그렇게 움직였는지, 어떤 이슈가 있었는지, 그래서 오늘 우리 한국 시장에 어떤 영향이 예상되는지를 이야기처럼 써주세요. SOX(반도체 지수)나 달러 움직임 같은 한국 주식과 직접 연결되는 내용을 꼭 포함해주세요. 예: '어제 미국에서 엔비디아가 실적을 잘 내면서 반도체 주식들이 많이 올랐어요. 필라델피아 반도체 지수(SOX)가 2% 넘게 오른 게 삼성전자·SK하이닉스에도 좋은 신호예요. 달러가 살짝 약해져서 우리나라 원화 가치도 올라갈 수 있고, 외국인 투자자들이 우리 시장에 돈을 더 넣을 가능성이 있어요. AI 예측으로는 오늘 코스피가 ${kospiPred ?? "N/A"} 움직임을 보일 것 같아요.' (180~250자)",
   "marketEvents": [
-    {
-      "title": "이슈 제목 (15자 이내, 핵심만)",
-      "impact": "이 이슈가 왜 주가에 영향을 줬는지 짧고 쉽게. 예: '미국이 금리를 내리면 우리 주식시장에 외국 돈이 들어와요. 그래서 오늘 코스피가 올랐어요.' (40~60자)",
-      "direction": "positive 또는 negative 또는 neutral"
-    },
+    { "title": "간밤 미국 이슈 제목 (15자 이내)", "impact": "이게 오늘 우리 시장에 왜 중요한지 쉽게 (40~60자)", "direction": "positive 또는 negative 또는 neutral" },
     { "title": "이슈2", "impact": "...", "direction": "..." },
-    { "title": "이슈3", "impact": "...", "direction": "..." }
+    { "title": "이슈3", "impact": "...", "direction": "..." },
+    { "title": "이슈4", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
-    {
-      "factor": "지표 이름 (예: S&P500, WTI 유가, VIX, 원달러환율, 장단기금리차)",
-      "status": "현재 수치와 전일비 또는 단위 포함 (예: 5,308pt +0.8%, 72.3달러, 18.4)",
-      "implication": "이 숫자가 내 주식에 왜 중요한지 한 줄로. 전문 용어 없이. 예: '환율이 높으면 수출 기업은 좋지만, 수입 물가가 올라 소비자는 부담돼요.' (40~60자)"
-    },
+    { "factor": "지표명 (나스닥, SOX, 달러인덱스, 국채금리, VIX 등)", "status": "수치와 전일비 포함", "implication": "오늘 한국 주식에 미치는 영향 한 줄 (40~60자)" },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." }
   ],
   "forwardLook": [
-    {
-      "point": "이번 주 가장 중요한 것 (15자 이내)",
-      "detail": "AI 예측 포함해서, 앞으로 어떻게 될 것 같은지 쉽게. 예: 'AI는 코스피가 약 2% 오를 것으로 봐요. 미국 지표가 좋게 나오면 더 힘을 받을 수 있어요.' (50~70자)",
-      "watchFor": "꼭 봐야 할 것 한 가지 (25자 이내)"
-    },
+    { "point": "오늘 장에서 가장 중요한 것 (15자)", "detail": "AI 예측 포함해서 오늘 어떨지 쉽게 (50~70자)", "watchFor": "꼭 체크해야 할 것 한 가지 (25자)" },
     { "point": "...", "detail": "...", "watchFor": "..." },
     { "point": "...", "detail": "...", "watchFor": "..." }
   ],
   "upcomingMacroEvents": [
-    {
-      "date": "'이번 주 수요일', '5월 21일' 등 구체적으로",
-      "title": "이벤트명 (20자 이내)",
-      "description": "이 이벤트가 뭔지, 왜 중요한지, 어떻게 될 수 있는지. 쉬운 말로. 예: '미국 소비자 물가 발표예요. 물가가 많이 올랐으면 금리 인하가 늦어져 주식에 안 좋을 수 있어요.' (60~80자)",
-      "impact": "high 또는 medium 또는 low",
-      "direction": "positive 또는 negative 또는 neutral"
-    },
+    { "date": "구체적 날짜나 '오늘', '이번 주 수요일'", "title": "이벤트명 (20자)", "description": "쉬운 설명 + 주가 영향 (60~80자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
+  ],
+  "keyRisk": "오늘 한국 시장에서 가장 조심해야 할 것 한 줄 (40~60자)",
+  "recentIssues": ["간밤 미국 이슈 요약1", "이슈2", "이슈3"],
+  "outlook": ["오늘 전망1", "전망2", "전망3"]
+}
+
+작성 원칙:
+- 미국 지수 수치(S&P500, 나스닥, 다우, SOX)와 달러인덱스를 구체적으로 인용하세요
+- SOX(필라델피아 반도체)는 삼성전자·SK하이닉스와 직결되므로 반드시 포함하세요
+- 달러 강약이 원화·수출주에 미치는 영향을 설명하세요
+- 절대 금지: 전문 용어 설명 없이 사용 금지 ("수급", "밸류에이션" 등)
+- 문체: 친근한 해요체`;
+
+  // ── 장마감 프롬프트 ────────────────────────────────────────────────────────
+  const closingPrompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}입니다.
+오늘 한국 주식시장이 마감됐어요. 오늘 어떤 일이 있었는지, 왜 그랬는지, 앞으로 어떻게 될지를 쉽게 설명해 주세요.
+
+[오늘 포함 최근 5거래일 KOSPI]
+${kospiHistory}
+
+[오늘 포함 최근 5거래일 KOSDAQ]
+${kosdaqHistory}
+
+[AI 모델 3일 예측]
+KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}
+
+[미국 주요 지수 (어제 마감)]
+${usIndicesBlock || "데이터 없음"}
+
+[거시경제 지표]
+${macroBlock || "데이터 없음"}
+
+아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
+{
+  "summary": "오늘 시장 분위기를 한 줄로 (20자 내외, 명사형 또는 짧은 문장)",
+  "sentiment": "bullish 또는 bearish 또는 neutral",
+  "leadParagraph": "오늘 코스피·코스닥이 어떻게 움직였는지, 왜 그랬는지 2문장으로. 수치 포함. (80~120자)",
+  "storyLine": "오늘 하루 어떤 일이 있었고, 왜 시장이 그렇게 움직였는지, 그래서 내일·이번 주에 어떻게 될 것 같은지 이야기처럼. AI 예측 포함. (150~220자)",
+  "marketEvents": [
+    { "title": "오늘 시장 이슈 제목 (15자)", "impact": "이 이슈가 왜 주가에 영향을 줬는지 (40~60자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2", "impact": "...", "direction": "..." },
+    { "title": "이슈3", "impact": "...", "direction": "..." }
+  ],
+  "macroFactors": [
+    { "factor": "지표명", "status": "수치와 전일비", "implication": "내 주식에 왜 중요한지 (40~60자)" },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." }
+  ],
+  "forwardLook": [
+    { "point": "내일·이번 주 가장 중요한 것 (15자)", "detail": "AI 예측 포함 (50~70자)", "watchFor": "꼭 봐야 할 것 (25자)" },
+    { "point": "...", "detail": "...", "watchFor": "..." },
+    { "point": "...", "detail": "...", "watchFor": "..." }
+  ],
+  "upcomingMacroEvents": [
+    { "date": "구체적 날짜", "title": "이벤트명 (20자)", "description": "쉬운 설명 (60~80자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
-  "keyRisk": "지금 가장 조심해야 할 것 한 줄. 쉽고 구체적으로. 예: '미국 물가 발표에서 예상보다 높은 숫자가 나오면 주식시장이 크게 흔들릴 수 있어요.' (40~60자)",
-  "recentIssues": ["짧은 이슈 요약1", "짧은 이슈 요약2", "짧은 이슈 요약3"],
-  "outlook": ["짧은 전망1", "짧은 전망2", "짧은 전망3"]
+  "keyRisk": "지금 가장 조심해야 할 것 한 줄 (40~60자)",
+  "recentIssues": ["이슈 요약1", "이슈2", "이슈3"],
+  "outlook": ["전망1", "전망2", "전망3"]
 }
 
 작성 원칙:
-- summary·leadParagraph·marketEvents·macroFactors·forwardLook·keyRisk는 제공된 데이터 기반으로 작성
-- upcomingMacroEvents는 당신의 지식을 활용해 향후 3~5거래일 예정 이벤트를 포함하세요:
-  * 미국·한국 경제지표 발표 (CPI, PPI, FOMC 의사록, GDP, 고용 등)
-  * 연준(Fed) 발언·FOMC 일정, 트럼프 관세·무역 정책 이슈
-  * 한국 이재명 정부 정책·정치 이슈, 국회 일정
-  * 중동(이란·이스라엘), 러우 전쟁 등 지정학 리스크
-  * 미중 무역·반도체 수출규제 이슈
-  * impact 기준: high=주가 1% 이상 변동 가능, medium=0.3~1%, low=0.3% 미만
-- 절대 금지: "인과관계", "메커니즘", "수급", "섹터별" 같은 전문 용어를 설명 없이 쓰지 마세요
-- 문체: 친근한 "해요체" 사용. "~해요", "~거예요", "~수 있어요" 처럼 자연스럽게
-- 수치는 꼭 포함하되, 의미를 함께 설명하세요 (수치만 나열 금지)`;
+- 오늘 코스피·코스닥 수치를 구체적으로 인용하세요
+- upcomingMacroEvents는 향후 3~5거래일 예정 이벤트 (FOMC, CPI, 관세, 정치 이슈 등)
+- 절대 금지: 전문 용어 설명 없이 사용 금지
+- 문체: 친근한 해요체`;
+
+  const prompt = session === "morning" ? morningPrompt : closingPrompt;
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -302,6 +367,7 @@ ${macroLines || "데이터 없음"}
   return {
     summary:              parsed?.summary              ?? "한국 증시 데이터 분석 중",
     sentiment:            parsed?.sentiment            ?? "neutral",
+    sessionType:          session,
     leadParagraph:        parsed?.leadParagraph        ?? "",
     storyLine:            parsed?.storyLine            ?? "",
     marketEvents:         safeArr(parsed?.marketEvents).slice(0, 4),
