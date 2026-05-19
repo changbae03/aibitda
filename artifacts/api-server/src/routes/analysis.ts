@@ -4638,40 +4638,10 @@ async function executeStep(
             const tkr: string = spRow[0]?.ticker ?? "";
             const isKRtk = /^\d{6}$/.test(tkr);
 
-            // Median consistency guard — if rawTp deviates >40% from the
-            // median of recent analyses for the same ticker, clamp to median ±30%.
-            // Requires at least 4 samples to avoid clamping on sparse historical data.
-            const originalTp = rawTp; // preserve AI-derived value before any clamping
-            let medianCorrected = false;
-            if (rawTp > 0 && tkr) {
-              try {
-                const recentTpRows = await rawQuery(
-                  `SELECT target_price FROM analyses
-                   WHERE ticker = $1 AND status = 'completed' AND id != $2
-                     AND target_price IS NOT NULL AND target_price > 0
-                   ORDER BY created_at DESC LIMIT 7`,
-                  [tkr, id]
-                );
-                if (recentTpRows.length >= 4) {
-                  const sorted = recentTpRows.map((r: any) => Number(r.target_price)).sort((a: number, b: number) => a - b);
-                  const mid = Math.floor(sorted.length / 2);
-                  const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-                  const deviation = Math.abs(rawTp - median) / median;
-                  if (deviation > 0.4) {
-                    const clamped = Math.round(Math.max(median * 0.70, Math.min(median * 1.30, rawTp)));
-                    console.warn(
-                      `[tp-inject] ${tkr} rawTp=${Math.round(rawTp)} deviates ${(deviation * 100).toFixed(0)}% from median=${Math.round(median)} (n=${sorted.length}) → clamped to ${clamped}`
-                    );
-                    rawTp = clamped;
-                    medianCorrected = true;
-                  }
-                } else {
-                  console.log(`[tp-inject] ${tkr} median guard skipped — insufficient samples (n=${recentTpRows.length} < 4)`);
-                }
-              } catch (medErr) {
-                console.warn("[tp-inject] median guard error:", medErr);
-              }
-            }
+            // 중앙값 클램핑 제거: AI 결론 본문과 DB 저장값 불일치 원인
+            // 비율 가드(0.45x~3.5x)만으로 극단값 방지
+            const originalTp = rawTp;
+            const medianCorrected = false;
 
             if (rawTp > 0 && sp > 0) {
               const MAX_R = isKRtk ? 3.5 : 4.5;
@@ -5498,37 +5468,8 @@ async function executeStep(
             }
           }
 
-          // ── 저장 시점 중앙값 일관성 가드 ──────────────────────────────────
-          // tp-inject에서 AI 프롬프트에 검증값을 주입해도 AI가 무시할 수 있으므로,
-          // 최종 FINAL_JSON에서 추출한 targetPrice에 대해서도 중앙값 가드를 다시 적용
-          if (targetPrice && savedTicker) {
-            try {
-              const recentRows = await rawQuery(
-                `SELECT target_price FROM analyses
-                 WHERE ticker = $1 AND status = 'completed' AND id != $2
-                   AND target_price IS NOT NULL AND target_price > 0
-                 ORDER BY created_at DESC LIMIT 7`,
-                [savedTicker, id]
-              );
-              if (recentRows.length >= 2) {
-                const sorted = recentRows.map((r: any) => Number(r.target_price)).sort((a: number, b: number) => a - b);
-                const mid = Math.floor(sorted.length / 2);
-                const median = sorted.length % 2 !== 0
-                  ? sorted[mid]
-                  : (sorted[mid - 1] + sorted[mid]) / 2;
-                const deviation = Math.abs(targetPrice - median) / median;
-                if (deviation > 0.3) {
-                  const clamped = Math.round(Math.max(median * 0.75, Math.min(median * 1.25, targetPrice)));
-                  console.warn(
-                    `[tp-final] ${savedTicker} targetPrice=${Math.round(targetPrice)} deviates ${(deviation * 100).toFixed(0)}% from median=${Math.round(median)} (n=${sorted.length}) → clamped to ${clamped}`
-                  );
-                  targetPrice = clamped;
-                }
-              }
-            } catch (e) {
-              console.warn("[tp-final] median guard error:", e);
-            }
-          }
+          // 중앙값 클램핑 제거: AI 결론 본문과 DB 저장값 불일치 원인이었음
+          // 비율 가드(0.45x~3.5x)만으로 극단값을 충분히 방지
 
           // ── 진입가·손절가 3.5배 가드 ────────────────────────────────────
           const MAX_RATIO = 3.5;
