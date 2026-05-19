@@ -88,11 +88,12 @@ function formatDate(dateStr: string, short = false): string {
 
 /* ── AI 브리핑 카드 ──────────────────────────────────────────────────────── */
 function MarketBriefSection({
-  brief, loading, onRefresh,
+  brief, loading, onRefresh, showRefresh = true,
 }: {
   brief: MarketBrief | null;
   loading: boolean;
   onRefresh: () => void;
+  showRefresh?: boolean;
 }) {
   const sentimentConfig = brief?.sentiment === "bullish"
     ? { color: "text-red-400 bg-red-500/10 border-red-500/20", label: "상승 우세", bar: "bg-red-400" }
@@ -137,14 +138,16 @@ function MarketBriefSection({
           {genTime && (
             <span className="text-[10px] text-muted-foreground/40">{genTime} 분석</span>
           )}
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground transition-all disabled:opacity-40"
-          >
-            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
-            {loading ? "분석 중..." : "다시 분석"}
-          </button>
+          {showRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground transition-all disabled:opacity-40"
+            >
+              <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+              {loading ? "분석 중..." : "다시 분석"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -683,32 +686,6 @@ export default function MarketAnalysis() {
 
   const current = activeIdx === "kospi" ? status?.kospi : status?.kosdaq;
 
-  // 권한 확인 중
-  if (isAdmin === null) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
-      </div>
-    );
-  }
-
-  // 관리자 아닌 경우 잠금 화면
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-6 text-center px-4">
-        <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-          <Lock className="w-7 h-7 text-muted-foreground/40" />
-        </div>
-        <div className="space-y-2 max-w-xs">
-          <h2 className="text-lg font-bold text-foreground">관리자 전용 기능</h2>
-          <p className="text-sm text-muted-foreground/70 leading-relaxed">
-            AI 시장 분석은 관리자만 이용할 수 있어요.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5 pb-20">
 
@@ -722,17 +699,19 @@ export default function MarketAnalysis() {
             코스피·코스닥의 3일 앞을 AI가 예측합니다
           </p>
         </div>
-        <button
-          onClick={() => triggerRun(true)}
-          disabled={status?.running || isStarting}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.10] text-sm font-medium hover:bg-white/[0.10] transition-all disabled:opacity-40 shrink-0"
-        >
-          {status?.running || isStarting ? (
-            <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중...</>
-          ) : (
-            <><RefreshCw className="w-4 h-4" /> AI 다시 분석</>
-          )}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => triggerRun(true)}
+            disabled={status?.running || isStarting}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.10] text-sm font-medium hover:bg-white/[0.10] transition-all disabled:opacity-40 shrink-0"
+          >
+            {status?.running || isStarting ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중...</>
+            ) : (
+              <><RefreshCw className="w-4 h-4" /> AI 다시 분석</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── AI 브리핑 ───────────────────────────────────────────────────── */}
@@ -740,6 +719,7 @@ export default function MarketAnalysis() {
         brief={brief}
         loading={briefLoading}
         onRefresh={() => fetchBrief(true)}
+        showRefresh={!!isAdmin}
       />
 
       {/* ── 로딩 상태 ───────────────────────────────────────────────────── */}

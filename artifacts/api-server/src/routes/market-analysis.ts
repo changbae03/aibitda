@@ -301,7 +301,6 @@ ${macroLines || "데이터 없음"}
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
 router.get("/status", async (req, res) => {
-  if (!(await requireAdmin(req, res))) return;
   res.json(getStatus());
 });
 
@@ -317,9 +316,10 @@ router.post("/run", async (req, res) => {
   res.json({ ok: true, message: "파이프라인 시작" });
 });
 
-// GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (4시간 캐시, 관리자 전용)
+// GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (4시간 캐시)
 router.get("/brief", async (req, res) => {
-  if (!(await requireAdmin(req, res))) return;
+  // 강제 갱신(force=true)은 관리자만 허용
+  if (req.query.force === "true" && !(await requireAdmin(req, res))) return;
   const force = req.query.force === "true";
 
   // 캐시 확인
