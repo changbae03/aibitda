@@ -296,6 +296,15 @@ function repairInvestmentStrategyContent(raw: string): string {
 
 // Prevent concurrent duplicate step execution
 const runningStepsLock = new Map<string, boolean>();
+// Track analyses currently fetching external data (before pipeline starts)
+const pendingDataFetch = new Set<number>();
+
+// ── 파이프라인 세션 공통 컨텍스트 (스텝마다 중복 DB 조회 방지) ───────────────
+interface PipelineCtx {
+  tickerNote: { memo?: string | null; calibration_note?: string | null } | null;
+  regimeNote: string | null;
+  sectorNote: string | null;
+}
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
@@ -3163,105 +3172,7 @@ router.post("/", async (req, res) => {
   const krxCode = upperTicker.split(".")[0];
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
-  // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
-  const needsSOTPData = isKoreanTicker && hasSOTPSubsidiaryData(krxCode);
-
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent] = await Promise.all([
-    fetchFinancialContext(resolvedSymbol),
-    fetchCompanyNews(companyName ?? ""),
-    isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
-    isKoreanTicker ? fetchECOSMacro() : Promise.resolve(null),
-    !isKoreanTicker ? fetchFREDMacro() : Promise.resolve(null),
-    yahooFinance.quote(resolvedSymbol).catch(() => null),
-    isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
-    isKoreanTicker ? getDartHistoricalContext(krxCode).catch(() => null) : Promise.resolve(null),
-    isKoreanTicker ? fetchKOSISData().catch(() => null) : Promise.resolve(null),
-    needsSOTPData ? buildSOTPSubsidiaryContext(krxCode).catch(() => null) : Promise.resolve(null),
-    isKoreanTicker ? fetchDartBusinessContent(krxCode).catch(() => null) : Promise.resolve(null),
-    !isKoreanTicker ? fetchSECEdgarContent(resolvedSymbol).catch(() => null) : Promise.resolve(null),
-  ]);
-
-  // KIS 결과 분리 — 한국 종목은 KIS 현재가 우선, 없으면 Yahoo fallback
-  const kisContext = kisResult?.context ?? null;
-  const kisQuote = kisResult?.quote ?? null;
-  const yahooPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
-  const startPrice: number | null = isKoreanTicker
-    ? (kisQuote?.price ?? yahooPrice)
-    : yahooPrice;
-  if (isKoreanTicker && kisQuote?.price) {
-    console.log(`[analysis] startPrice KIS 우선: ${kisQuote.price}원 (Yahoo: ${yahooPrice})`);
-  }
-
-  // DART 재무상태표 컨텍스트 구성
-  let dartBalanceContext = "";
-  if (dartBalance) {
-    const fmtKrw = (v: number | null) =>
-      v == null ? "N/A" : `${(v / 1e8).toFixed(1)}억원`;
-
-    // 순현금 계산: totalDebt가 null이면 금융부채 항목이 DART에서 미검출된 것
-    // → Yahoo Finance의 WACC 섹션에서 totalDebt를 보완 사용하도록 안내
-    let netDebtStr: string;
-    if (dartBalance.totalDebt != null && dartBalance.cash != null) {
-      const netDebt = dartBalance.totalDebt - dartBalance.cash;
-      netDebtStr = netDebt < 0
-        ? `${fmtKrw(-netDebt)} (순현금)  ← DCF 주주가치 환산 시 이 값 사용`
-        : `${fmtKrw(netDebt)} (순부채)  ← DCF 주주가치 환산 시 이 값 사용`;
-    } else if (dartBalance.cash != null && dartBalance.totalDebt == null) {
-      // 금융부채 항목 미검출 — Yahoo Finance WACC 섹션의 총부채 수치로 보완
-      netDebtStr = `금융부채 항목 미검출 (차입금·사채 계정이 DART 별도 항목으로 존재하지 않을 수 있음) — Yahoo Finance "[⚡ WACC·EBITDA 계산 핵심 데이터]" 섹션의 총부채(Total Debt) 수치로 보완하세요. 보완 후: 순현금 = 현금 ${fmtKrw(dartBalance.cash)} − Yahoo총부채`;
-    } else {
-      netDebtStr = "N/A";
-    }
-
-    const constructionLines: string[] = [];
-    if (dartBalance.unbilledWork != null) {
-      constructionLines.push(`미청구공사: ${fmtKrw(dartBalance.unbilledWork)}  ※ 건설업 핵심 리스크 — 매출 대비 10% 초과 시 대손 주의`);
-    }
-    if (dartBalance.constructionReceivables != null) {
-      constructionLines.push(`공사미수금: ${fmtKrw(dartBalance.constructionReceivables)}`);
-    }
-
-    dartBalanceContext = [
-      `\n[⭐ DART 사업보고서 재무상태표 — ${dartBalance.year}년 ${dartBalance.fsType === "CFS" ? "연결" : "별도"} 기준]`,
-      `⚠️ 이 데이터는 DART OpenAPI 원천 데이터입니다. Yahoo Finance 수치와 다를 경우 이 값을 우선 사용하세요.`,
-      `현금및현금성자산: ${fmtKrw(dartBalance.cash)}`,
-      `자산총계: ${fmtKrw(dartBalance.totalAssets)}`,
-      `부채총계(DART전체): ${fmtKrw(dartBalance.totalLiab)}  ※ 매입채무·충당부채 등 영업부채 포함, 순현금 계산엔 금융부채만 사용`,
-      `자본총계: ${fmtKrw(dartBalance.equity)}`,
-      dartBalance.totalDebt != null ? `금융부채(차입금+사채+리스 합계): ${fmtKrw(dartBalance.totalDebt)}` : `금융부채: 개별 차입금·사채 항목 미검출 (무차입/소액 차입 가능성)`,
-      `순현금/순부채: ${netDebtStr}`,
-      ...constructionLines,
-    ].filter(Boolean).join("\n");
-  }
-
-  const userContext = additionalContext ?? null;
-  // 한국 종목 → ECOS(한국은행), 미국/글로벌 종목 → FRED(연준) 거시지표 주입
-  const macroContext = isKoreanTicker
-    ? buildECOSContext(ecosMacro)
-    : buildFREDContext(fredMacro);
-
-  // KOSIS 산업동향 (해당 종목 섹터와 매핑)
-  const kosisContext = isKoreanTicker
-    ? buildKOSISContext(kosisData, industry ?? "")
-    : null;
-
-  const fullContext = [
-    kisContext,              // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS·대차잔고비율·공매도) — 최우선 오버라이드
-    sotpSubsidiaryContext,   // SOTP 자회사 시총 (상장 자회사 실시간 시가총액·귀속가치 — SOTP 계산 필수 입력)
-    financialData,
-    dartBalanceContext,
-    dartHistorical,          // DART 시계열 재무 (DB 캐시 — 이전 분석에서 누적된 분기·연간 데이터)
-    dartBizContent,          // DART 사업보고서 원문 — 주요 제품·수주잔고·경쟁현황·R&D 등 사업 내용 텍스트
-    secEdgarContent,         // SEC 10-K 원문 — Item 1 Business (미국 종목 전용, 한국 종목은 null)
-    kosisContext,            // KOSIS 산업생산지수·수출입 통계 — 섹터 거시 배경
-    macroContext,
-    newsData,
-    userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n") || null;
-
-  // 사용자 언어 설정 조회
+  // ── 사용자 언어 설정 — 빠른 조회 ──────────────────────────────────────────
   let userLanguage: "ko" | "en" = "ko";
   if (userId) {
     try {
@@ -3273,6 +3184,8 @@ router.post("/", async (req, res) => {
     } catch { /* 기본값 'ko' 유지 */ }
   }
 
+  // ── DB 레코드를 먼저 생성 → 즉시 응답 → 외부 데이터 수집은 백그라운드 ────
+  // 이 구조로 "분析 시작" 버튼 클릭 후 분析 페이지까지 대기 시간이 ~1초로 단축
   let analysis: typeof analysesTable.$inferSelect;
   try {
     const client = await pool.connect();
@@ -3288,11 +3201,11 @@ router.post("/", async (req, res) => {
           companyName,
           englishName ?? null,
           industry ?? "Unknown",
-          fullContext,
+          null,           // additional_context: 백그라운드에서 채워짐
           "in_progress",
           "company_intro",
           "true",
-          startPrice,
+          null,           // start_price: 백그라운드에서 채워짐
           userLanguage,
         ]
       );
@@ -3305,11 +3218,111 @@ router.post("/", async (req, res) => {
     const pgCode = err?.cause?.code ?? err?.code;
     const pgDetail = err?.cause?.detail ?? err?.detail;
     console.error("[POST /analysis] INSERT failed:", { pgMsg, pgCode, pgDetail, fullError: String(err) });
-    res.status(500).json({ error: "분석 시작 실패: DB INSERT 오류", detail: pgMsg });
+    res.status(500).json({ error: "분析 시작 실패: DB INSERT 오류", detail: pgMsg });
     return;
   }
 
+  // 즉시 응답 — 분析 페이지로 바로 이동
   res.json(formatAnalysis(analysis, []));
+
+  // ── 백그라운드: 외부 API 12개 병렬 수집 → DB 업데이트 → 파이프라인 시작 ──
+  const _analysisId = analysis.id;
+  pendingDataFetch.add(_analysisId);
+  console.log(`[analysis-create] #${_analysisId} 즉시 응답 완료 — 백그라운드 데이터 수집 시작`);
+
+  (async () => {
+    try {
+      const needsSOTPData = isKoreanTicker && hasSOTPSubsidiaryData(krxCode);
+      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent] = await Promise.all([
+        fetchFinancialContext(resolvedSymbol),
+        fetchCompanyNews(companyName ?? ""),
+        isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
+        isKoreanTicker ? fetchECOSMacro() : Promise.resolve(null),
+        !isKoreanTicker ? fetchFREDMacro() : Promise.resolve(null),
+        yahooFinance.quote(resolvedSymbol).catch(() => null),
+        isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
+        isKoreanTicker ? getDartHistoricalContext(krxCode).catch(() => null) : Promise.resolve(null),
+        isKoreanTicker ? fetchKOSISData().catch(() => null) : Promise.resolve(null),
+        needsSOTPData ? buildSOTPSubsidiaryContext(krxCode).catch(() => null) : Promise.resolve(null),
+        isKoreanTicker ? fetchDartBusinessContent(krxCode).catch(() => null) : Promise.resolve(null),
+        !isKoreanTicker ? fetchSECEdgarContent(resolvedSymbol).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      const kisContext = kisResult?.context ?? null;
+      const kisQuote = kisResult?.quote ?? null;
+      const yahooPrice: number | null = (startQuote as any)?.regularMarketPrice ?? null;
+      const startPrice: number | null = isKoreanTicker ? (kisQuote?.price ?? yahooPrice) : yahooPrice;
+      if (isKoreanTicker && kisQuote?.price) {
+        console.log(`[analysis] #${_analysisId} startPrice KIS 우선: ${kisQuote.price}원 (Yahoo: ${yahooPrice})`);
+      }
+
+      let dartBalanceContext = "";
+      if (dartBalance) {
+        const fmtKrw = (v: number | null) =>
+          v == null ? "N/A" : `${(v / 1e8).toFixed(1)}억원`;
+        let netDebtStr: string;
+        if (dartBalance.totalDebt != null && dartBalance.cash != null) {
+          const netDebt = dartBalance.totalDebt - dartBalance.cash;
+          netDebtStr = netDebt < 0
+            ? `${fmtKrw(-netDebt)} (순현금)  ← DCF 주주가치 환산 시 이 값 사용`
+            : `${fmtKrw(netDebt)} (순부채)  ← DCF 주주가치 환산 시 이 값 사용`;
+        } else if (dartBalance.cash != null && dartBalance.totalDebt == null) {
+          netDebtStr = `금융부채 항목 미검출 (차입금·사채 계정이 DART 별도 항목으로 존재하지 않을 수 있음) — Yahoo Finance "[⚡ WACC·EBITDA 계산 핵심 데이터]" 섹션의 총부채(Total Debt) 수치로 보완하세요. 보완 후: 순현금 = 현금 ${fmtKrw(dartBalance.cash)} − Yahoo총부채`;
+        } else {
+          netDebtStr = "N/A";
+        }
+        const constructionLines: string[] = [];
+        if (dartBalance.unbilledWork != null) {
+          constructionLines.push(`미청구공사: ${fmtKrw(dartBalance.unbilledWork)}  ※ 건설업 핵심 리스크 — 매출 대비 10% 초과 시 대손 주의`);
+        }
+        if (dartBalance.constructionReceivables != null) {
+          constructionLines.push(`공사미수금: ${fmtKrw(dartBalance.constructionReceivables)}`);
+        }
+        dartBalanceContext = [
+          `\n[⭐ DART 사업보고서 재무상태표 — ${dartBalance.year}년 ${dartBalance.fsType === "CFS" ? "연결" : "별도"} 기준]`,
+          `⚠️ 이 데이터는 DART OpenAPI 원천 데이터입니다. Yahoo Finance 수치와 다를 경우 이 값을 우선 사용하세요.`,
+          `현금및현금성자산: ${fmtKrw(dartBalance.cash)}`,
+          `자산총계: ${fmtKrw(dartBalance.totalAssets)}`,
+          `부채총계(DART전체): ${fmtKrw(dartBalance.totalLiab)}  ※ 매입채무·충당부채 등 영업부채 포함, 순현금 계산엔 금융부채만 사용`,
+          `자본총계: ${fmtKrw(dartBalance.equity)}`,
+          dartBalance.totalDebt != null ? `금융부채(차입금+사채+리스 합계): ${fmtKrw(dartBalance.totalDebt)}` : `금융부채: 개별 차입금·사채 항목 미검출 (무차입/소액 차입 가능성)`,
+          `순현금/순부채: ${netDebtStr}`,
+          ...constructionLines,
+        ].filter(Boolean).join("\n");
+      }
+
+      const userContext = additionalContext ?? null;
+      const macroContext = isKoreanTicker ? buildECOSContext(ecosMacro) : buildFREDContext(fredMacro);
+      const kosisContext = isKoreanTicker ? buildKOSISContext(kosisData, industry ?? "") : null;
+      const fullContext = [
+        kisContext, sotpSubsidiaryContext, financialData, dartBalanceContext,
+        dartHistorical, dartBizContent, secEdgarContent, kosisContext, macroContext, newsData,
+        userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
+      ].filter(Boolean).join("\n\n") || null;
+
+      await pool.query(
+        `UPDATE analyses SET additional_context=$1, start_price=$2, updated_at=NOW() WHERE id=$3`,
+        [fullContext, startPrice, _analysisId]
+      );
+      console.log(`[analysis-create] #${_analysisId} 데이터 수집 완료 (${fullContext?.length ?? 0}자)`);
+    } catch (err) {
+      console.error(`[analysis-create] #${_analysisId} 데이터 수집 실패:`, err);
+      await pool.query(
+        `UPDATE analyses SET status='error', error_message=$1, updated_at=NOW() WHERE id=$2`,
+        [String(err), _analysisId]
+      ).catch(() => {});
+    } finally {
+      pendingDataFetch.delete(_analysisId);
+    }
+
+    // 에러 없으면 파이프라인 시작
+    try {
+      const check = await pool.query(`SELECT status FROM analyses WHERE id=$1`, [_analysisId]);
+      if (check.rows[0]?.status === "in_progress") {
+        enqueueAnalysis(_analysisId).catch(console.error);
+      }
+    } catch { /* ignore */ }
+  })();
 });
 
 router.get("/", async (req, res) => {
@@ -4327,7 +4340,8 @@ async function executeStep(
   stepKey: AgentKey,
   analysis: ReturnType<typeof mapAnalysisRow>,
   existingSteps: ReturnType<typeof mapStepRow>[],
-  onEvent?: (data: object) => void
+  onEvent?: (data: object) => void,
+  pipelineCtx?: PipelineCtx
 ): Promise<AgentKey | null> {
   const agent = AGENTS[stepKey];
   let enrichedContext = analysis.additionalContext ?? null;
@@ -4365,13 +4379,11 @@ async function executeStep(
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── 종목별 관리자 보정 메모 주입 (모든 분석 단계 공통) ──────────────────
-  // 운영자가 특정 종목에 입력한 보정 노트를 AI 컨텍스트에 항상 반영
+  // pipelineCtx가 있으면 캐시값 사용 (파이프라인 당 1회 DB 조회), 없으면 직접 조회
   try {
-    const noteRows = await rawQuery(
-      `SELECT memo, calibration_note FROM ticker_notes WHERE ticker = $1`,
-      [analysis.ticker]
-    );
-    const row = noteRows[0];
+    const row = pipelineCtx !== undefined
+      ? pipelineCtx.tickerNote
+      : ((await rawQuery(`SELECT memo, calibration_note FROM ticker_notes WHERE ticker = $1`, [analysis.ticker]))[0] ?? null);
 
     // ① 운영자 수동 메모
     if (row?.memo) {
@@ -4380,35 +4392,33 @@ async function executeStep(
       console.log(`[ticker-note] Injected operator memo ${memoBlock.length}chars for ${analysis.ticker}`);
     }
 
-    // ② AI 자동 보정 메모 — 이전 분석 QA 검토 결과
+    // ② AI 자동 보정 메모 — 이전 분析 QA 검토 결과
     if (row?.calibration_note) {
-      const calibBlock = `\n\n[🔧 AI 자동 보정 메모 — ${analysis.companyName}(${analysis.ticker}) 이전 분석 QA 검토 결과 — 이번 분석에서 반드시 개선하세요]\n${row.calibration_note}`;
+      const calibBlock = `\n\n[🔧 AI 자동 보정 메모 — ${analysis.companyName}(${analysis.ticker}) 이전 분析 QA 검토 결과 — 이번 분析에서 반드시 개선하세요]\n${row.calibration_note}`;
       enrichedContext = enrichedContext ? enrichedContext + calibBlock : calibBlock;
       console.log(`[ticker-note] Injected calibration note ${calibBlock.length}chars for ${analysis.ticker}`);
     }
   } catch {
-    // 실패해도 분석 진행
+    // 실패해도 분析 진행
   }
 
-  // ③ 시장 레짐 컨텍스트 주입 (KRW 종목 전용)
-  // ④ 섹터 학습 보정 노트 주입  (KRW 종목 전용)
+  // ③④ 시장 레짐 + 섹터 학습 노트 주입 (KRW 종목 전용)
+  // pipelineCtx가 있으면 파이프라인 시작 시 1회 pre-fetch한 값 재사용 (8회 중복 조회 방지)
   const isKrwTicker = /^\d{6}$/.test(analysis.ticker);
   if (isKrwTicker) {
     try {
-      const [regimeNote, sectorNote] = await Promise.all([
-        getLatestMarketRegime(),
-        getSectorLearningNote(analysis.ticker, analysis.industry ?? null),
-      ]);
+      const regimeNote = pipelineCtx !== undefined ? pipelineCtx.regimeNote : await getLatestMarketRegime();
+      const sectorNote = pipelineCtx !== undefined ? pipelineCtx.sectorNote : await getSectorLearningNote(analysis.ticker, analysis.industry ?? null);
       if (regimeNote) {
         enrichedContext = enrichedContext ? enrichedContext + "\n\n" + regimeNote : regimeNote;
-        console.log(`[market-regime] 주입 완료 — ${analysis.ticker} (${regimeNote.length}chars)`);
+        if (pipelineCtx === undefined) console.log(`[market-regime] 주입 완료 — ${analysis.ticker} (${regimeNote.length}chars)`);
       }
       if (sectorNote) {
         enrichedContext = enrichedContext ? enrichedContext + "\n\n" + sectorNote : sectorNote;
-        console.log(`[sector-learning] 주입 완료 — ${analysis.ticker} (${sectorNote.length}chars)`);
+        if (pipelineCtx === undefined) console.log(`[sector-learning] 주입 완료 — ${analysis.ticker} (${sectorNote.length}chars)`);
       }
     } catch {
-      // 실패해도 분석 진행
+      // 실패해도 분析 진행
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -5771,8 +5781,40 @@ async function runPipelineBackground(id: number): Promise<void> {
     console.log(`[pipeline-bg] Already running for analysis ${id} — skip`);
     return;
   }
+  // 백그라운드 데이터 수집이 아직 진행 중이면 완료될 때까지 최대 60초 대기
+  if (pendingDataFetch.has(id)) {
+    console.log(`[pipeline-bg] Analysis ${id} 데이터 수집 진행 중 — 완료 대기...`);
+    let waited = 0;
+    while (pendingDataFetch.has(id) && waited < 60_000) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      waited += 500;
+    }
+    if (pendingDataFetch.has(id)) {
+      console.warn(`[pipeline-bg] Analysis ${id} 데이터 수집 타임아웃 — 파이프라인 중단`);
+      return;
+    }
+    console.log(`[pipeline-bg] Analysis ${id} 데이터 수집 완료 — 파이프라인 시작`);
+  }
   runningPipelineIds.add(id);
   console.log(`[pipeline-bg] Starting background pipeline for analysis ${id}`);
+
+  // 파이프라인 전체에서 공유할 컨텍스트를 1회만 pre-fetch (스텝별 중복 DB 조회 방지)
+  let sharedCtx: PipelineCtx = { tickerNote: null, regimeNote: null, sectorNote: null };
+  try {
+    const firstRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
+    const firstAnalysis = firstRows[0] ? mapAnalysisRow(firstRows[0]) : null;
+    if (firstAnalysis) {
+      const isKrw = /^\d{6}$/.test(firstAnalysis.ticker);
+      const [noteRows, regimeNote, sectorNote] = await Promise.all([
+        rawQuery(`SELECT memo, calibration_note FROM ticker_notes WHERE ticker = $1`, [firstAnalysis.ticker]),
+        isKrw ? getLatestMarketRegime().catch(() => null) : Promise.resolve(null),
+        isKrw ? getSectorLearningNote(firstAnalysis.ticker, firstAnalysis.industry ?? null).catch(() => null) : Promise.resolve(null),
+      ]);
+      sharedCtx = { tickerNote: noteRows[0] ?? null, regimeNote, sectorNote };
+      console.log(`[pipeline-bg] Pre-fetched shared context for ${firstAnalysis.ticker} (regime=${!!regimeNote}, sector=${!!sectorNote})`);
+    }
+  } catch { /* context pre-fetch 실패해도 진행 */ }
+
   try {
     while (true) {
       const aRows = await rawQuery(`SELECT * FROM analyses WHERE id = $1 LIMIT 1`, [id]);
@@ -5796,7 +5838,7 @@ async function runPipelineBackground(id: number): Promise<void> {
 
       runningStepsLock.set(lockKey, true);
       try {
-        await executeStep(id, nextStepKey, analysis, existingSteps);
+        await executeStep(id, nextStepKey, analysis, existingSteps, undefined, sharedCtx);
       } finally {
         runningStepsLock.delete(lockKey);
       }
@@ -5911,6 +5953,11 @@ router.post("/:id/run-pipeline", async (req, res) => {
       return res.json({ ok: true, resumed: true });
     }
     return res.json({ ok: true, status: "error" });
+  }
+
+  // 데이터 수집이 아직 진행 중이면 파이프라인 시작 보류
+  if (pendingDataFetch.has(id)) {
+    return res.json({ ok: true, status: "fetching_data", message: "데이터 수집 중..." });
   }
 
   // 이미 큐 대기 중이거나 완료 상태면 재진입 방지
