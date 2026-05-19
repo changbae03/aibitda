@@ -46,28 +46,55 @@ export interface PipelineStatus {
 const LOOKBACK     = 20;
 const PRED_H       = 3;
 const N_FEATURES   = 15;   // 9 기술적 + 3 매크로 + 3 수급
-// GBDT
-const N_ENSEMBLE   = 2;
-const GBDT_TREES   = 60;
-const GBDT_LR      = 0.05;
-const GBDT_DEPTH   = 3;
-const GBDT_LEAF    = 20;
-const GBDT_FSUB    = 0.55;
-const GBDT_SSUB    = 0.80;
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
-// LSTM
 const LSTM_UNITS   = 32;
 const LSTM_DENSE   = 16;
-const LSTM_EPOCHS  = 20;
 const LSTM_BATCH   = 32;
-const LSTM_LR      = 0.001;
-const LSTM_DROP    = 0.2;
-// General
 const YEARS_DATA   = 5;
-const RECENT_N     = 30;
 const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
+
+// 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
+const MODEL_VERSION = 9;
+
+// ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
+
+interface IndexHP {
+  gbdtTrees:    number;
+  gbdtLR:       number;
+  gbdtDepth:    number;
+  gbdtLeaf:     number;
+  gbdtFsub:     number;
+  gbdtSsub:     number;
+  nEnsemble:    number;
+  lstmEpochs:   number;
+  lstmLR:       number;
+  lstmDrop:     number;
+  recentWindow: number;   // 최근 적중률 계산 창 (알파 동적 조정용)
+}
+
+const INDEX_HP: Record<string, IndexHP> = {
+  /** KOSPI — 안정적인 대형주 지수, 보수적 설정 */
+  KS11: {
+    gbdtTrees: 60,  gbdtLR: 0.05,  gbdtDepth: 3, gbdtLeaf: 20,
+    gbdtFsub: 0.55, gbdtSsub: 0.80, nEnsemble: 2,
+    lstmEpochs: 20, lstmLR: 0.001,  lstmDrop: 0.20,
+    recentWindow: 30,
+  },
+  /** KOSDAQ — 변동성 높은 성장주 지수, 더 깊고 많은 트리 + 긴 학습 */
+  KQ11: {
+    gbdtTrees: 120, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 10,
+    gbdtFsub: 0.65, gbdtSsub: 0.75, nEnsemble: 4,
+    lstmEpochs: 40, lstmLR: 0.001, lstmDrop: 0.15,
+    recentWindow: 20,   // 최근 20일로 빠르게 반응
+  },
+};
+
+function getHP(symRaw: string): IndexHP {
+  const key = symRaw.replace(/[\^]/g, "");
+  return INDEX_HP[key] ?? INDEX_HP["KS11"]!;
+}
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
 
@@ -81,6 +108,7 @@ interface GBDTModel { trees: any[]; lr: number; basePred: number }
 interface LSTMWeightLayer { shape: number[]; data: number[] }
 
 interface StoredModelFile {
+  version?: number;
   nFeatures: number;
   gbdtModels: GBDTModel[];
   gbdtScaler: { mu: number[]; sigma: number[] };
@@ -99,8 +127,8 @@ export interface StoredMeta {
 
 function saveModelFile(sym: string, payload: StoredModelFile) {
   ensureDataDir();
-  fs.writeFileSync(MODEL_PATH(sym), JSON.stringify(payload));
-  console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (nFeatures=${payload.nFeatures})`);
+  fs.writeFileSync(MODEL_PATH(sym), JSON.stringify({ ...payload, version: MODEL_VERSION }));
+  console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (nFeatures=${payload.nFeatures}, v${MODEL_VERSION})`);
 }
 function loadModelFile(sym: string): StoredModelFile | null {
   const p = MODEL_PATH(sym);
@@ -402,10 +430,14 @@ function buildFeatures(
   const dates  = rows.map(r => r.date);
   const rets   = closes.map((c, i) => i === 0 ? 0 : (c - closes[i-1]) / closes[i-1]);
   const feats  = rows.map((row, i): Float64Array => {
-    const ma5   = rollingMean(closes, 5,  i);
-    const ma20  = rollingMean(closes, 20, i);
-    const std20 = rollingStdFn(rets, 20, i);
-    const bband = std20>1e-10 ? (closes[i]-(ma20-2*std20*Math.abs(ma20)))/(4*std20*Math.abs(ma20)||1) : 0.5;
+    const ma5       = rollingMean(closes, 5,  i);
+    const ma20      = rollingMean(closes, 20, i);
+    const std20     = rollingStdFn(rets, 20, i);
+    // 볼린저밴드 %B: (close - lower) / (upper - lower), price std 기반으로 수정
+    const std20P    = rollingStdFn(closes, 20, i);
+    const bband     = std20P > 1e-8 && ma20 > 0
+      ? Math.max(0, Math.min(1, (closes[i] - (ma20 - 2*std20P)) / (4*std20P)))
+      : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
     const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0 };
@@ -501,31 +533,31 @@ function buildNode(X:Float64Array[],res:number[],idxs:number[],depth:number,minL
     right:buildNode(X,res,bestRight,depth-1,minLeaf,rng,ff,nBins)};
 }
 
-function gbdtFit(X:Float64Array[],y:Float64Array,seed:number):GBDTModel {
+function gbdtFit(X:Float64Array[],y:Float64Array,seed:number,hp:IndexHP):GBDTModel {
   const rng=makeRng(seed),n=X.length;
   let basePred=0;for(let i=0;i<n;i++)basePred+=y[i];basePred/=n;
   const preds=new Float64Array(n).fill(basePred),trees:any[]=[];
-  const rowBag=Math.floor(n*GBDT_SSUB);
-  for(let t=0;t<GBDT_TREES;t++){
+  const rowBag=Math.floor(n*hp.gbdtSsub);
+  for(let t=0;t<hp.gbdtTrees;t++){
     const res=Array.from({length:n},(_,i)=>y[i]-preds[i]);
     const idxs=Array.from({length:n},(_,i)=>i).sort(()=>rng()-0.5).slice(0,rowBag);
-    const tree=buildNode(X,res,idxs,GBDT_DEPTH,GBDT_LEAF,rng,GBDT_FSUB,GBDT_BINS);
+    const tree=buildNode(X,res,idxs,hp.gbdtDepth,hp.gbdtLeaf,rng,hp.gbdtFsub,GBDT_BINS);
     trees.push(tree);
-    for(let i=0;i<n;i++)preds[i]+=GBDT_LR*dtPredict(tree,X[i]);
+    for(let i=0;i<n;i++)preds[i]+=hp.gbdtLR*dtPredict(tree,X[i]);
   }
-  return{trees,lr:GBDT_LR,basePred};
+  return{trees,lr:hp.gbdtLR,basePred};
 }
 function gbdtPredict(model:GBDTModel,X:Float64Array[]):Float64Array {
   return new Float64Array(X.map(x=>{let p=model.basePred;for(const t of model.trees)p+=model.lr*dtPredict(t as DNode|number,x);return p;}));
 }
-function incrementalAddTrees(model:GBDTModel,X:Float64Array[],y:Float64Array,nTrees:number,seed:number):GBDTModel {
+function incrementalAddTrees(model:GBDTModel,X:Float64Array[],y:Float64Array,nTrees:number,seed:number,hp:IndexHP):GBDTModel {
   if(X.length===0)return model;
-  const rng=makeRng(seed),n=X.length,rowBag=Math.max(1,Math.floor(n*GBDT_SSUB));
+  const rng=makeRng(seed),n=X.length,rowBag=Math.max(1,Math.floor(n*hp.gbdtSsub));
   const preds=gbdtPredict(model,X),newTrees:any[]=[];
   for(let t=0;t<nTrees;t++){
     const res=Array.from({length:n},(_,i)=>y[i]-preds[i]);
     const idxs=Array.from({length:n},(_,i)=>i).sort(()=>rng()-0.5).slice(0,Math.min(rowBag,n));
-    const tree=buildNode(X,res,idxs,GBDT_DEPTH,GBDT_LEAF,rng,GBDT_FSUB,GBDT_BINS);
+    const tree=buildNode(X,res,idxs,hp.gbdtDepth,hp.gbdtLeaf,rng,hp.gbdtFsub,GBDT_BINS);
     newTrees.push(tree);
     for(let i=0;i<n;i++)preds[i]+=model.lr*dtPredict(tree as DNode|number,X[i]);
   }
@@ -560,14 +592,14 @@ function makeSeqs3D(
   return{X3d,y:new Float64Array(ys),anchorDateIdxs:anchors};
 }
 
-function buildLSTMArch(): tf.Sequential {
+function buildLSTMArch(drop = 0.2): tf.Sequential {
   const model = tf.sequential();
   model.add(tf.layers.lstm({
     units: LSTM_UNITS, inputShape: [LOOKBACK, N_FEATURES],
-    returnSequences: false, dropout: LSTM_DROP, recurrentDropout: 0.1,
+    returnSequences: false, dropout: drop, recurrentDropout: drop / 2,
   }));
   model.add(tf.layers.dense({ units: LSTM_DENSE, activation: "relu" }));
-  model.add(tf.layers.dropout({ rate: 0.1 }));
+  model.add(tf.layers.dropout({ rate: drop / 2 }));
   model.add(tf.layers.dense({ units: 1 }));
   return model;
 }
@@ -592,10 +624,11 @@ function loadLSTMFromWeights(weightsData: LSTMWeightLayer[][]): tf.Sequential {
 async function trainLSTM(
   X3d_train: number[][][], y_train: Float64Array,
   X3d_val:   number[][][], y_val:   Float64Array,
+  hp: IndexHP,
 ): Promise<tf.Sequential> {
   await tf.ready();
-  const model = buildLSTMArch();
-  model.compile({ optimizer: tf.train.adam(LSTM_LR), loss: "meanSquaredError" });
+  const model = buildLSTMArch(hp.lstmDrop);
+  model.compile({ optimizer: tf.train.adam(hp.lstmLR), loss: "meanSquaredError" });
 
   const xTrain = tf.tensor3d(X3d_train);
   const yTrain = tf.tensor2d(Array.from(y_train), [y_train.length, 1]);
@@ -604,12 +637,12 @@ async function trainLSTM(
 
   try {
     await model.fit(xTrain, yTrain, {
-      epochs: LSTM_EPOCHS, batchSize: LSTM_BATCH,
+      epochs: hp.lstmEpochs, batchSize: LSTM_BATCH,
       validationData: [xVal, yVal], verbose: 0,
       callbacks: {
         onEpochEnd: (epoch: number, logs: any) => {
           if (epoch % 5 === 4)
-            console.log(`[lstm] epoch ${epoch+1}/${LSTM_EPOCHS} loss=${logs?.loss?.toFixed(4)} val=${logs?.val_loss?.toFixed(4)}`);
+            console.log(`[lstm] epoch ${epoch+1}/${hp.lstmEpochs} loss=${logs?.loss?.toFixed(4)} val=${logs?.val_loss?.toFixed(4)}`);
         },
       },
     });
@@ -649,6 +682,7 @@ function buildResultFromModel(
   gbdtModels: GBDTModel[], gbdtScaler: { mu: Float64Array; sigma: Float64Array },
   lstmModel: tf.Sequential, lstmScaler: { mu: Float64Array; sigma: Float64Array },
   storedAlpha: number,
+  recentWindow = 30,
 ): IndexResult {
   const { feats, closes, dates } = buildFeatures(rows, extMap);
 
@@ -668,13 +702,31 @@ function buildResultFromModel(
   const X3d_test = X3d.slice(trainEnd);
   const lstmPreds = lstmPredict(lstmModel, X3d_test);
 
-  const lastN = Math.min(RECENT_N, gbdtPreds.length);
+  const lastN = Math.min(recentWindow, gbdtPreds.length);
   const g30 = dirAccRate(gbdtPreds.slice(-lastN), Array.from(yte).slice(-lastN));
   const l30 = dirAccRate(lstmPreds.slice(-lastN),  Array.from(yte).slice(-lastN));
-  const alpha = l30 + g30 > 0 ? l30 / (l30 + g30) : 0.5;
+
+  // "랜덤 대비 스킬" 기반 가중치: 50%에서의 초과분 기준으로 알파 계산
+  // LSTM이 50%(랜덤) 수준이면 alpha ≈ 0 → GBDT가 거의 전부 가져감
+  const lstmSkill = Math.max(0, l30 - 0.50);
+  const gbdtSkill = Math.max(0, g30 - 0.50);
+  const rawAlpha  = lstmSkill + gbdtSkill > 1e-6 ? lstmSkill / (lstmSkill + gbdtSkill) : 0.5;
+  // 최소 10% LSTM 참여 보장 (완전히 0이 되지 않도록)
+  const alpha = Math.max(0.10, rawAlpha);
+
+  // 안전장치: LSTM 예측이 GBDT 대비 3배 초과하면 방향 유지 채 압축
+  // (LSTM이 역방향 큰 값을 예측할 때 앙상블 플립 방지)
+  const safeLstmPreds = new Float64Array(lstmPreds.length);
+  for (let i = 0; i < lstmPreds.length; i++) {
+    const gAbs = Math.abs(gbdtPreds[i]);
+    const lAbs = Math.abs(lstmPreds[i]);
+    safeLstmPreds[i] = gAbs > 1e-10 && lAbs > gAbs * 3
+      ? Math.sign(lstmPreds[i]) * gAbs * 2
+      : lstmPreds[i];
+  }
 
   const testPreds = new Float64Array(gbdtPreds.length);
-  for (let i = 0; i < testPreds.length; i++) testPreds[i] = alpha * lstmPreds[i] + (1-alpha) * gbdtPreds[i];
+  for (let i = 0; i < testPreds.length; i++) testPreds[i] = alpha * safeLstmPreds[i] + (1-alpha) * gbdtPreds[i];
 
   const nTest = testPreds.length;
   const wfMid = Math.floor(nTest / 2);
@@ -702,7 +754,12 @@ function buildResultFromModel(
   for (let t = 0; t < LOOKBACK; t++) {
     lastSeq3d.push(Array.from(feats[feats.length - LOOKBACK + t]).map((v,j) => (v - lstmScaler.mu[j]) / lstmScaler.sigma[j]));
   }
-  const lstmForecast   = lstmPredict(lstmModel, [lastSeq3d])[0];
+  const lstmForecastRaw = lstmPredict(lstmModel, [lastSeq3d])[0];
+  // 예측 안전장치: LSTM이 GBDT 대비 3배 초과하면 압축
+  const gfAbs = Math.abs(gbdtForecast);
+  const lstmForecast = gfAbs > 1e-10 && Math.abs(lstmForecastRaw) > gfAbs * 3
+    ? Math.sign(lstmForecastRaw) * gfAbs * 2
+    : lstmForecastRaw;
   const forecastReturn = alpha * lstmForecast + (1-alpha) * gbdtForecast;
 
   const curVal    = closes[closes.length-1];
@@ -745,20 +802,24 @@ async function trainFull(
   rows: { date: string; close: number }[],
   market: "KOSPI" | "KOSDAQ",
 ) {
+  const hp = getHP(symbol);
+  console.log(`[train] ${symbol} HP: gbdtTrees=${hp.gbdtTrees} depth=${hp.gbdtDepth} leaf=${hp.gbdtLeaf} nEns=${hp.nEnsemble} lstmEpochs=${hp.lstmEpochs} lstmLR=${hp.lstmLR}`);
+
   const extMap = await fetchExternalData(rows.map(r => r.date), market);
   const { feats, closes } = buildFeatures(rows, extMap);
 
   const { X, y } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length, trainEnd = Math.floor(n*0.80);
   const { Xn: XtrN, mu: gbdtMu, sigma: gbdtSig } = standardize(X.slice(0, trainEnd));
-  const gbdtModels = Array.from({length:N_ENSEMBLE},(_,e)=>gbdtFit(XtrN,y.slice(0,trainEnd),e*37+13));
+  const gbdtModels = Array.from({length:hp.nEnsemble}, (_,e) => gbdtFit(XtrN, y.slice(0,trainEnd), e*37+13, hp));
 
   const lstmScaler = computeLSTMScaler(feats.slice(0, trainEnd+LOOKBACK));
   const { X3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
   const valSplit  = Math.floor(trainEnd * 0.9);
   const lstmModel = await trainLSTM(
-    X3d.slice(0, valSplit),       y.slice(0, valSplit),
+    X3d.slice(0, valSplit),        y.slice(0, valSplit),
     X3d.slice(valSplit, trainEnd), y.slice(valSplit, trainEnd),
+    hp,
   );
 
   const symKey = symbol.replace(/[\^]/g,"");
@@ -776,6 +837,7 @@ async function trainFull(
     gbdtModels, { mu: gbdtMu, sigma: gbdtSig },
     lstmModel, { mu: lstmScaler.mu, sigma: lstmScaler.sigma },
     0.5,
+    hp.recentWindow,
   );
   lstmModel.dispose();
   return result;
@@ -798,13 +860,19 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
   const kosdaqStore = loadModelFile("KQ11");
   if (!meta||!kospiStore||!kosdaqStore) return false;
 
-  if (!kospiStore.lstmWeights) { console.log("[gbdt] 구형 모델 — 재학습"); return false; }
+  if (!kospiStore.lstmWeights || !kosdaqStore.lstmWeights) {
+    console.log("[gbdt] 구형 모델 (lstmWeights 없음) — 재학습"); return false;
+  }
   if ((kospiStore.nFeatures ?? 9) !== N_FEATURES) {
     console.log(`[gbdt] 피처 수 변경 (${kospiStore.nFeatures ?? "?"}→${N_FEATURES}) — 재학습`);
     return false;
   }
+  if ((kospiStore.version ?? 0) < MODEL_VERSION || (kosdaqStore.version ?? 0) < MODEL_VERSION) {
+    console.log(`[gbdt] 모델 버전 변경 (v${MODEL_VERSION}) — 재학습`);
+    return false;
+  }
 
-  console.log("[gbdt] 디스크 복원 중 (nFeatures=" + N_FEATURES + ")...");
+  console.log("[gbdt] 디스크 복원 중 (nFeatures=" + N_FEATURES + ", v" + MODEL_VERSION + ")...");
   try {
     const [kospiRows, kosdaqRows] = await Promise.all([
       fetchHistory("^KS11", 0.5), fetchHistory("^KQ11", 0.5),
@@ -821,6 +889,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       loadLSTMFromWeights(kospiStore.lstmWeights),
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
       kospiStore.ensembleAlpha,
+      getHP("^KS11").recentWindow,
     );
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,
@@ -829,6 +898,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       loadLSTMFromWeights(kosdaqStore.lstmWeights),
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
       kosdaqStore.ensembleAlpha,
+      getHP("^KQ11").recentWindow,
     );
 
     _lastRun = Date.now();
@@ -927,8 +997,9 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     if(!kNew&&!qNew){console.log("[gbdt] 신규 데이터 없음");return;}
 
     const seed=Date.now()%10000;
-    const updKospi  = kNew ? kospiStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,kNew.XteN,kNew.yNew,N_INCR_TREES,e*7+seed)) : kospiStore.gbdtModels;
-    const updKosdaq = qNew ? kosdaqStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,qNew.XteN,qNew.yNew,N_INCR_TREES,e*7+3+seed)) : kosdaqStore.gbdtModels;
+    const ksHP = getHP("^KS11"), kqHP = getHP("^KQ11");
+    const updKospi  = kNew ? kospiStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,kNew.XteN,kNew.yNew,N_INCR_TREES,e*7+seed,ksHP)) : kospiStore.gbdtModels;
+    const updKosdaq = qNew ? kosdaqStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,qNew.XteN,qNew.yNew,N_INCR_TREES,e*7+3+seed,kqHP)) : kosdaqStore.gbdtModels;
 
     saveModelFile("KS11",{...kospiStore,  gbdtModels:updKospi,  nFeatures:N_FEATURES});
     saveModelFile("KQ11",{...kosdaqStore, gbdtModels:updKosdaq, nFeatures:N_FEATURES});
@@ -939,6 +1010,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       loadLSTMFromWeights(kospiStore.lstmWeights),
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
       kospiStore.ensembleAlpha,
+      ksHP.recentWindow,
     );
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,updKosdaq,
@@ -946,6 +1018,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       loadLSTMFromWeights(kosdaqStore.lstmWeights),
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
       kosdaqStore.ensembleAlpha,
+      kqHP.recentWindow,
     );
     const now=new Date().toISOString();
     saveMeta({
