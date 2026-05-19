@@ -41,37 +41,29 @@ export default function ConsentModal({ onConsented }: Props) {
           </div>
           <div>
             <h2 className="text-[15px] font-bold text-foreground">
-              {t("서비스 이용 동의", "Service Consent")}
+              {t("서비스 이용 안내", "Service Terms")}
             </h2>
             <p className="text-[11px] text-muted-foreground">
-              {t("애빛다를 이용하기 전에 아래 내용을 확인해 주세요.", "Please review the following before using AiBITDA.")}
+              {t("시작하기 전에 아래 내용을 확인해 주세요.", "Please review the following before getting started.")}
             </p>
           </div>
         </div>
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
-          {/* 핵심 동의 사항 */}
           <div className="space-y-2.5">
             <ConsentItem
-              title={t("포트폴리오 정보 관리자 열람", "Portfolio Visibility to Admins")}
+              title={t("서비스 품질 및 고객 지원", "Service Quality & Support")}
               desc={t(
-                "입력하신 포트폴리오(종목명, 평단가, 수량 등)는 서비스 운영을 위해 관리자가 열람할 수 있습니다.",
-                "Your portfolio data (stock name, avg. price, qty, etc.) may be reviewed by admins for service operation."
-              )}
-            />
-            <ConsentItem
-              title={t("분석 이력 관리자 열람", "Analysis History Visibility")}
-              desc={t(
-                "요청하신 AI 분석 결과 및 이력이 서비스 품질 개선을 위해 관리자에게 공개됩니다.",
-                "Your AI analysis requests and results are visible to admins for service quality improvement."
+                "문의·오류·부정 이용 등 고객 지원이 필요한 경우, 운영팀이 해당 계정의 이용 내역(분석 이력, 포트폴리오 등)을 확인할 수 있습니다.",
+                "In the event of an inquiry, error, or suspected misuse, the operations team may review your account activity (analysis history, portfolio, etc.) to provide support."
               )}
             />
             <ConsentItem
               title={t("개인정보 처리", "Personal Data Handling")}
               desc={t(
-                "카카오 계정의 닉네임 및 이메일이 회원 관리 목적으로 저장됩니다.",
-                "Your Kakao nickname and email are stored for account management purposes."
+                "카카오 계정의 닉네임 및 이메일이 회원 식별과 고객 응대 목적으로 저장됩니다. 수집된 정보는 서비스 운영 외 목적으로 사용되거나 외부에 제공되지 않습니다.",
+                "Your Kakao nickname and email are stored for account identification and customer support. This information is not used for other purposes or shared externally."
               )}
             />
           </div>
@@ -87,43 +79,19 @@ export default function ConsentModal({ onConsented }: Props) {
 
           {detailOpen && (
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-2 text-[11px] text-muted-foreground leading-relaxed">
-              <p>
-                {t(
-                  "• 수집 항목: 카카오 식별 ID, 닉네임, 이메일, 포트폴리오 데이터, 분석 요청 이력",
-                  "• Collected: Kakao ID, nickname, email, portfolio data, analysis history"
-                )}
-              </p>
-              <p>
-                {t(
-                  "• 수집 목적: 서비스 운영, 품질 개선, 부정 이용 방지",
-                  "• Purpose: Service operation, quality improvement, fraud prevention"
-                )}
-              </p>
-              <p>
-                {t(
-                  "• 제3자 제공: 법령에 따른 경우를 제외하고 외부에 제공하지 않습니다.",
-                  "• Third-party sharing: Not shared externally except as required by law."
-                )}
-              </p>
-              <p>
-                {t(
-                  "• 보유 기간: 회원 탈퇴 시까지, 법령상 보관 의무가 있는 경우 해당 기간",
-                  "• Retention: Until account deletion, or as required by law."
-                )}
-              </p>
-              <p>
-                {t(
-                  "• 동의 철회: 설정 > 계정 삭제를 통해 언제든지 탈퇴하실 수 있습니다.",
-                  "• Withdrawal: You may withdraw consent at any time via Settings > Delete Account."
-                )}
-              </p>
+              <p>{t("• 수집 항목: 카카오 식별 ID, 닉네임, 이메일, 포트폴리오 데이터, 분석 요청 이력", "• Collected: Kakao ID, nickname, email, portfolio data, analysis history")}</p>
+              <p>{t("• 수집 목적: 서비스 운영, 품질 개선, 고객 문의 대응, 부정 이용 방지", "• Purpose: Service operation, quality improvement, customer support, fraud prevention")}</p>
+              <p>{t("• 열람 주체: 서비스 운영팀에 한하며, 문제 해결에 필요한 경우에만 확인합니다.", "• Access: Limited to the operations team, and only when necessary to resolve issues.")}</p>
+              <p>{t("• 제3자 제공: 법령에 따른 경우를 제외하고 외부에 제공하지 않습니다.", "• Third-party sharing: Not shared externally except as required by law.")}</p>
+              <p>{t("• 보유 기간: 회원 탈퇴 시까지, 법령상 보관 의무가 있는 경우 해당 기간", "• Retention: Until account deletion, or as required by law.")}</p>
+              <p>{t("• 동의 철회: 설정 > 계정 삭제를 통해 언제든지 탈퇴하실 수 있습니다.", "• Withdrawal: You may withdraw consent at any time via Settings > Delete Account.")}</p>
             </div>
           )}
 
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             {t(
-              "'동의하고 시작하기'를 누르면 위 내용에 동의하는 것으로 간주되며, 서비스를 이용하실 수 있습니다.",
-              "By clicking 'Agree & Continue', you confirm your consent to the above and may proceed to use the service."
+              "확인 후 동의하시면 서비스를 이용하실 수 있습니다. 자세한 내용은 개인정보처리방침을 참고해 주세요.",
+              "After reviewing, click below to proceed. See our Privacy Policy for full details."
             )}
           </p>
         </div>
@@ -136,7 +104,7 @@ export default function ConsentModal({ onConsented }: Props) {
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-[14px] bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {t("동의하고 시작하기", "Agree & Continue")}
+            {t("확인했습니다", "Got it, continue")}
           </button>
         </div>
       </div>
