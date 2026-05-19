@@ -147,6 +147,9 @@ router.get("/auth/kakao/callback", async (req, res) => {
   }
 });
 
+// ── 시작 시 consented_at 컬럼 마이그레이션 ──────────────────────────────────
+pool.query(`ALTER TABLE user_credits ADD COLUMN IF NOT EXISTS consented_at TIMESTAMPTZ`).catch(() => {});
+
 router.get("/auth/me", async (req, res) => {
   const cookies = cookie.parse(req.headers.cookie || "");
   const token = cookies.auth_token;
@@ -156,13 +159,30 @@ router.get("/auth/me", async (req, res) => {
   try {
     const user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
     const { rows } = await pool.query(
-      `SELECT display_name FROM user_credits WHERE user_id = $1`,
+      `SELECT display_name, consented_at FROM user_credits WHERE user_id = $1`,
       [`kakao_${user.id}`]
     ).catch(() => ({ rows: [] }));
     const displayName = rows[0]?.display_name ?? null;
-    res.json({ user: { ...user, displayName } });
+    const consented = !!rows[0]?.consented_at;
+    res.json({ user: { ...user, displayName, consented } });
   } catch {
     res.json({ user: null });
+  }
+});
+
+router.post("/auth/consent", async (req, res) => {
+  const cookies = cookie.parse(req.headers.cookie || "");
+  const token = cookies.auth_token;
+  if (!token) return res.status(401).json({ error: "로그인이 필요합니다." });
+  try {
+    const user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
+    await pool.query(
+      `UPDATE user_credits SET consented_at = NOW() WHERE user_id = $1`,
+      [`kakao_${user.id}`]
+    );
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "오류가 발생했습니다." });
   }
 });
 

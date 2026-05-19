@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
@@ -49,6 +49,8 @@ import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
 import Portfolio from "@/pages/portfolio";
 import MyPage from "@/pages/mypage";
+import ConsentModal from "@/components/consent-modal";
+import { useAuth } from "@/lib/auth";
 
 const CORAL = "#FF8A7A";
 const CHARS_KO = ["애", "빛", "다"];
@@ -210,6 +212,17 @@ function PublicPrivacyPage() {
   return <PublicDocLayout><PrivacyPage /></PublicDocLayout>;
 }
 
+function ConsentGate() {
+  const { data } = useAuth();
+  const [dismissed, setDismissed] = useState(false);
+  const handleConsented = useCallback(() => setDismissed(true), []);
+
+  const user = data?.user;
+  if (!user || user.consented || dismissed) return null;
+
+  return <ConsentModal onConsented={handleConsented} />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -279,6 +292,7 @@ function ClerkProviderWithRoutes() {
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <Router />
+          <ConsentGate />
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>

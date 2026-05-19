@@ -5,6 +5,8 @@ export interface AuthUser {
   id: string;
   nickname: string;
   profileImage: string | null;
+  displayName?: string | null;
+  consented?: boolean;
   iat?: number;
   exp?: number;
 }
