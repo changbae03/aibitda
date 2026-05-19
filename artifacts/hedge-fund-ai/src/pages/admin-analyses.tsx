@@ -34,19 +34,24 @@ interface ReportResponse {
   offset: number;
 }
 
-const VERDICT_LABELS_KO: Record<string, string> = {
-  strong_buy: "강력매수", buy: "매수", hold: "보유", sell: "매도", strong_sell: "강력매도",
+const VERDICT_MAP: Record<string, { label: string; labelEn: string; color: string }> = {
+  strong_buy:  { label: "강력매수", labelEn: "Strong Buy",  color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  buy:         { label: "매수",     labelEn: "Buy",         color: "text-blue-700 bg-blue-50 border-blue-200" },
+  hold:        { label: "보유",     labelEn: "Hold",        color: "text-amber-700 bg-amber-50 border-amber-200" },
+  sell:        { label: "매도",     labelEn: "Sell",        color: "text-red-600 bg-red-50 border-red-200" },
+  strong_sell: { label: "강력매도", labelEn: "Strong Sell", color: "text-red-700 bg-red-50 border-red-200" },
 };
-const VERDICT_LABELS_EN: Record<string, string> = {
-  strong_buy: "Strong Buy", buy: "Buy", hold: "Hold", sell: "Sell", strong_sell: "Strong Sell",
-};
-const VERDICT_COLOR: Record<string, string> = {
-  strong_buy: "text-emerald-700 bg-emerald-50 border-emerald-200",
-  buy:        "text-blue-700 bg-blue-50 border-blue-200",
-  hold:       "text-amber-700 bg-amber-50 border-amber-200",
-  sell:       "text-red-600 bg-red-50 border-red-200",
-  strong_sell:"text-red-700 bg-red-50 border-red-200",
-};
+
+function normalizeVerdict(raw: string | null): { label: string; labelEn: string; color: string } | null {
+  if (!raw) return null;
+  const v = raw.toLowerCase();
+  if (v.includes("strong buy") || v.includes("강력매수") || v.includes("적극매수")) return VERDICT_MAP.strong_buy;
+  if (v.includes("strong sell") || v.includes("강력매도") || v.includes("적극매도")) return VERDICT_MAP.strong_sell;
+  if (v.includes("buy") || v.includes("매수")) return VERDICT_MAP.buy;
+  if (v.includes("sell") || v.includes("매도")) return VERDICT_MAP.sell;
+  if (v.includes("hold") || v.includes("보유") || v.includes("중립")) return VERDICT_MAP.hold;
+  return null;
+}
 
 const STEP_LABEL_KO: Record<string, string> = {
   company_intro: "기업 브리핑",
@@ -92,7 +97,6 @@ export default function AdminAnalyses() {
   const { isEn } = useLanguage();
   const t = (ko: string, en: string) => isEn ? en : ko;
   const STEP_LABEL = isEn ? STEP_LABEL_EN : STEP_LABEL_KO;
-  const VERDICT_LABELS = isEn ? VERDICT_LABELS_EN : VERDICT_LABELS_KO;
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
@@ -208,7 +212,7 @@ export default function AdminAnalyses() {
               </div>
               <div className="divide-y divide-border/60">
                 {data.data.map((row) => {
-                  const verdict = row.investment_verdict ? VERDICT_MAP[row.investment_verdict] : null;
+                  const verdict = normalizeVerdict(row.investment_verdict);
                   const up = upside(row);
                   const isCompleted = row.status === "completed";
                   const isInProgress = row.status === "in_progress";
@@ -250,16 +254,16 @@ export default function AdminAnalyses() {
                           <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
                         )}
                         <span className="text-[11px] text-muted-foreground truncate">
-                          {isCompleted ? "완료" : isInProgress
-                            ? (STEP_LABEL[row.current_step ?? ""] ?? "진행중")
-                            : "실패"}
+                          {isCompleted ? t("완료", "Done") : isInProgress
+                            ? (STEP_LABEL[row.current_step ?? ""] ?? t("진행중", "In Progress"))
+                            : t("실패", "Failed")}
                         </span>
                       </div>
 
                       <div>
                         {verdict ? (
                           <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", verdict.color)}>
-                            {verdict.label}
+                            {isEn ? verdict.labelEn : verdict.label}
                           </span>
                         ) : (
                           <span className="text-[11px] text-muted-foreground/40">—</span>
@@ -303,7 +307,7 @@ export default function AdminAnalyses() {
             {/* ─── 모바일 카드 목록 (md 미만) ─── */}
             <div className={cn("md:hidden divide-y divide-border/60", isFetching && "opacity-60 pointer-events-none")}>
               {data.data.map((row) => {
-                const verdict = row.investment_verdict ? VERDICT_MAP[row.investment_verdict] : null;
+                const verdict = normalizeVerdict(row.investment_verdict);
                 const up = upside(row);
                 const isCompleted = row.status === "completed";
                 const isInProgress = row.status === "in_progress";
@@ -355,7 +359,7 @@ export default function AdminAnalyses() {
                     <div className="flex items-center gap-2 flex-wrap">
                       {verdict ? (
                         <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", verdict.color)}>
-                          {verdict.label}
+                          {isEn ? verdict.labelEn : verdict.label}
                         </span>
                       ) : null}
                       {row.target_price != null && (
