@@ -4,7 +4,7 @@ import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
 import { GoogleGenAI } from "@google/genai";
 import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
-import { fetchKISStockQuote } from "../lib/kis-client";
+import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
 
 const TTL_BATCH_QUOTES      =  3 * 60 * 1000;  //  3분 — 현재가
 const TTL_BATCH_SPARKLINES  =  6 * 60 * 60 * 1000;  //  6시간 — 90일 차트 (장 마감 후 변경)
@@ -752,17 +752,24 @@ router.post("/batch-sparklines", async (req, res) => {
         let closes: number[] = [];
 
         if (isKoreanSix) {
-          const [kqChart, ksChart] = await Promise.allSettled([
-            yahooFinance.chart(`${ticker}.KQ`, { period1: p1, period2: p2, interval: "1d" }),
-            yahooFinance.chart(`${ticker}.KS`, { period1: p1, period2: p2, interval: "1d" }),
-          ]);
-          const kqCloses = kqChart.status === "fulfilled"
-            ? (kqChart.value?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number)
-            : [];
-          const ksCloses = ksChart.status === "fulfilled"
-            ? (ksChart.value?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number)
-            : [];
-          closes = kqCloses.length > 0 ? kqCloses : ksCloses;
+          // KIS 기간별 시세 — 단일 호출, 실시간, .KQ/.KS 이중 시도 불필요
+          const history = await fetchKISDailyPriceHistory(ticker.split(".")[0]);
+          if (history.length > 0) {
+            closes = history.map(d => d.close);
+          } else {
+            // KIS 실패 시 Yahoo Finance fallback
+            const [kqChart, ksChart] = await Promise.allSettled([
+              yahooFinance.chart(`${ticker}.KQ`, { period1: p1, period2: p2, interval: "1d" }),
+              yahooFinance.chart(`${ticker}.KS`, { period1: p1, period2: p2, interval: "1d" }),
+            ]);
+            const kqCloses = kqChart.status === "fulfilled"
+              ? (kqChart.value?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number)
+              : [];
+            const ksCloses = ksChart.status === "fulfilled"
+              ? (ksChart.value?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number)
+              : [];
+            closes = kqCloses.length > 0 ? kqCloses : ksCloses;
+          }
         } else {
           const chart = await yahooFinance.chart(ticker, { period1: p1, period2: p2, interval: "1d" });
           closes = (chart?.quotes ?? []).filter((d: any) => d.close != null && d.close > 0).map((d: any) => d.close as number);

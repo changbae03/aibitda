@@ -202,7 +202,7 @@ interface KISDailyBar {
   tradingValue: number; // 당일 거래대금(원)
 }
 
-async function fetchKISDailyPriceHistory(
+export async function fetchKISDailyPriceHistory(
   stockCode: string
 ): Promise<KISDailyBar[]> {
   try {
