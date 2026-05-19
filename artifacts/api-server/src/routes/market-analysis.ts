@@ -171,15 +171,21 @@ async function generateBrief(): Promise<MarketBriefResult> {
     ecos?.usdKrw != null
       ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원`
       : null,
-    fred?.yieldSpread != null
-      ? `미국 장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p`
+    fred?.t10y != null
+      ? `미국 10년 국채금리 ${fred.t10y.toFixed(2)}% (${fred.latestDates.treasury})`
       : null,
-    // 느리게 바뀌는 지표 (참고용)
+    fred?.t2y != null
+      ? `미국 2년 국채금리 ${fred.t2y.toFixed(2)}%`
+      : null,
+    fred?.yieldSpread != null
+      ? `장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " ⚠️역전" : ""}`
+      : null,
+    // 기준금리는 참고용
     fred != null
       ? fred.fedTargetUpper != null && fred.fedTargetLower != null
-        ? `미국 기준금리 목표범위 ${fred.fedTargetLower}~${fred.fedTargetUpper}% (${fred.latestDates.fedTarget})`
+        ? `미국 기준금리 목표 ${fred.fedTargetLower}~${fred.fedTargetUpper}% (참고)`
         : fred.fedFundsRate != null
-        ? `미국 기준금리 실효 ${fred.fedFundsRate}% (${fred.latestDates.fedFunds}, 월간)`
+        ? `미국 기준금리 ${fred.fedFundsRate}% (참고)`
         : null
       : null,
     ecos?.baseRate     != null ? `한국 기준금리 ${ecos.baseRate}%` : null,
