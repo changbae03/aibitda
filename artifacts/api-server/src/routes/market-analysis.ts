@@ -41,14 +41,20 @@ const ai = new GoogleGenAI({
   }),
 });
 
-// ─── 인메모리 캐시 (4시간) ──────────────────────────────────────────────────
+// ─── 인메모리 캐시 ──────────────────────────────────────────────────────────
 
 interface BriefCache {
   data: MarketBriefResult;
   cachedAt: number;
 }
-const BRIEF_TTL = 4 * 3600_000;
+const BRIEF_TTL = 8 * 3600_000;   // 8시간 (장전·장마감 2회 갱신 주기에 맞춤)
 let _briefCache: BriefCache | null = null;
+
+/** 스케줄러에서 호출 — 다음 요청 시 Gemini 브리핑을 새로 생성하도록 캐시 무효화 */
+export function invalidateBriefCache() {
+  _briefCache = null;
+  console.log("[market-brief] 캐시 초기화 — 다음 요청 시 재생성");
+}
 
 export interface MarketBriefResult {
   summary: string;
