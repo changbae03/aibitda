@@ -309,6 +309,8 @@ export default function NewAnalysis() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isComposing = useRef(false);
   const handleSubmitRef = useRef<(val: string) => Promise<void>>(async () => {});
+  const touchStartY = useRef(0);
+  const touchMoved = useRef(false);
 
   const fetchSuggestions = useCallback(async (query: string) => {
     if (!query.trim()) { setSuggestions([]); setShowDropdown(false); return; }
@@ -406,12 +408,7 @@ export default function NewAnalysis() {
   const handleSelectSuggestion = (sym: string, name?: string, englishName?: string) => {
     const normalized = /^\d{6}\.(KS|KQ)$/.test(sym.toUpperCase()) ? sym.split(".")[0] : sym;
     const displayName = (isEn && englishName) ? englishName : (name ?? normalized);
-    setTicker(normalized);
-    setSelectedCompany(displayName);
-    setSuggestions([]);
-    setShowDropdown(false);
-    setSelectedIndex(-1);
-    setSelectHint(false);
+    showConfirm(normalized, displayName);
   };
 
   // 6자리 숫자 코드 or 순수 영문 티커(1-5자)는 직접 입력 허용
@@ -621,7 +618,9 @@ export default function NewAnalysis() {
                       key={s.symbol}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleSelectSuggestion(s.symbol, s.shortname, s.englishName)}
+                      onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; touchMoved.current = false; }}
+                      onTouchMove={(e) => { if (Math.abs(e.touches[0].clientY - touchStartY.current) > 8) touchMoved.current = true; }}
+                      onClick={() => { if (touchMoved.current) { touchMoved.current = false; return; } handleSelectSuggestion(s.symbol, s.shortname, s.englishName); }}
                       animate={isHighlighted ? { backgroundColor: "hsl(var(--accent))" } : { backgroundColor: "transparent" }}
                       whileTap={{ scale: 0.99 }}
                       className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left border-b border-border/60 last:border-0 cursor-pointer"
