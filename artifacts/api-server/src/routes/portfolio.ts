@@ -1237,6 +1237,80 @@ stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니�
   }
 });
 
+// ── GET /api/portfolio/admin/all — 어드민: 전체 유저 포트폴리오 ───────────────
+router.get("/portfolio/admin/all", async (req, res) => {
+  try {
+    const requesterId = getUserId(req);
+    if (!requesterId) return res.status(401).json({ error: "로그인이 필요합니다." });
+
+    const adminCheck = await pool.query(`SELECT 1 FROM admins WHERE user_id = $1`, [requesterId]);
+    if ((adminCheck.rowCount ?? 0) === 0) return res.status(403).json({ error: "관리자 전용 기능입니다." });
+
+    const search = ((req.query.search as string) ?? "").trim().toLowerCase();
+
+    let whereClause = "WHERE 1=1";
+    const params: any[] = [];
+    let idx = 1;
+
+    if (search) {
+      whereClause += ` AND (LOWER(ph.ticker) LIKE $${idx} OR LOWER(ph.company_name) LIKE $${idx} OR LOWER(uc.display_name) LIKE $${idx} OR LOWER(uc.email) LIKE $${idx})`;
+      params.push(`%${search}%`);
+      idx++;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         ph.id, ph.user_id, ph.ticker, ph.company_name,
+         ph.avg_price, ph.quantity, ph.currency, ph.note, ph.added_at,
+         uc.display_name AS user_display_name,
+         uc.email        AS user_email
+       FROM portfolio_holdings ph
+       LEFT JOIN user_credits uc ON uc.user_id = ph.user_id
+       ${whereClause}
+       ORDER BY uc.display_name NULLS LAST, ph.added_at DESC`,
+      params
+    );
+
+    // 유저별로 그룹핑
+    const userMap: Record<string, {
+      userId: string;
+      displayName: string | null;
+      email: string | null;
+      holdings: any[];
+    }> = {};
+
+    for (const row of rows) {
+      if (!userMap[row.user_id]) {
+        userMap[row.user_id] = {
+          userId: row.user_id,
+          displayName: row.user_display_name,
+          email: row.user_email,
+          holdings: [],
+        };
+      }
+      userMap[row.user_id].holdings.push({
+        id: row.id,
+        ticker: row.ticker,
+        companyName: row.company_name,
+        avgPrice: row.avg_price,
+        quantity: row.quantity,
+        currency: row.currency,
+        note: row.note,
+        addedAt: row.added_at,
+      });
+    }
+
+    res.json({
+      users: Object.values(userMap),
+      totalUsers: Object.keys(userMap).length,
+      totalHoldings: rows.length,
+    });
+  } catch (err: any) {
+    console.error("[GET /portfolio/admin/all] error:", err?.message);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 // ── DELETE /api/portfolio/:id — 종목 삭제 ────────────────────────────────────
 router.delete("/portfolio/:id", async (req, res) => {
   const userId = getUserId(req);

@@ -41,6 +41,7 @@ import AdminNoticesPage from "@/pages/admin-notices";
 import AdminCalibration from "@/pages/admin-calibration";
 import AdminQuality from "@/pages/admin-quality";
 import AdminBatchReports from "@/pages/admin-batch-reports";
+import AdminPortfolios from "@/pages/admin-portfolios";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
 import DisclaimerPage from "@/pages/disclaimer";
@@ -250,6 +251,7 @@ function Router() {
             <Route path="/admin/calibration" component={AdminCalibration} />
             <Route path="/admin/quality" component={AdminQuality} />
             <Route path="/admin/batch-reports" component={AdminBatchReports} />
+            <Route path="/admin/portfolios" component={AdminPortfolios} />
             <Route path="/portfolio" component={Portfolio} />
             <Route path="/mypage" component={MyPage} />
             <Route path="/disclaimer" component={DisclaimerPage} />

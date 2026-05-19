@@ -4,7 +4,7 @@ import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
   Sparkles, BookOpen, CalendarDays, BarChart2,
   User, Search, ChevronRight, Download, Share, Briefcase,
-  LayoutDashboard, Activity, Bot, Users, Tag, FileText,
+  LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
   ShieldCheck, Shield,
 } from "lucide-react";
@@ -120,6 +120,7 @@ const ADMIN_GROUPS = [
     label: "콘텐츠",
     items: [
       { href: "/admin/analyses",     label: "전체 보고서",    Icon: FileText },
+      { href: "/admin/portfolios",   label: "유저 포트폴리오", Icon: LayoutGrid },
       { href: "/admin/ticker-notes", label: "종목 보정 메모", Icon: StickyNote },
       { href: "/admin/notices",      label: "공지사항",       Icon: Megaphone },
     ],
