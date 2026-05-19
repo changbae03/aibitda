@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend,
+  BarChart, Bar, Cell,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, RefreshCw, BrainCircuit,
@@ -13,16 +14,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/lib/language-context";
 
 interface PredPoint { date: string; value: number; lower: number; upper: number }
+interface RecentPerfPoint { date: string; predicted: number; actual: number }
 interface IndexResult {
   symbol: string; name: string;
   historical: { date: string; value: number }[];
   predictions: PredPoint[];
   currentValue: number;
   predictedReturn3d: number;
-  confidence: number;
+  trend: "up" | "down";
   testMae: number;
   testDirAcc: number;
-  trend: "up" | "down";
+  wfDirAcc: number;
+  rolling30dDirAcc: number;
+  predErrStd: number;
+  recentPerf: RecentPerfPoint[];
 }
 interface PipelineStep {
   key: string; label: string;
@@ -48,11 +53,14 @@ const STEP_ICONS: Record<string, React.ElementType> = {
   output:   BarChart3,
 };
 
+const RISE  = "#ef4444";
+const FALL  = "#3b82f6";
+
 function StepIcon({ stepKey, status }: { stepKey: string; status: PipelineStep["status"] }) {
   const Icon = STEP_ICONS[stepKey] ?? Circle;
-  if (status === "done") return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+  if (status === "done")    return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
   if (status === "running") return <Loader2 className="w-4 h-4 text-primary animate-spin" />;
-  if (status === "error") return <AlertCircle className="w-4 h-4 text-red-500" />;
+  if (status === "error")   return <AlertCircle className="w-4 h-4 text-red-500" />;
   return <Icon className="w-4 h-4 text-muted-foreground/40" />;
 }
 
@@ -104,6 +112,8 @@ function formatDate(dateStr: string, short = false): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/* ── Main line/area chart ───────────────────────────────────────────────── */
+
 function IndexChart({ result }: { result: IndexResult }) {
   const chartData = [
     ...result.historical.map(h => ({
@@ -134,12 +144,9 @@ function IndexChart({ result }: { result: IndexResult }) {
   const maxVal = Math.max(...allValues) * 1.002;
 
   const lastHistDate = result.historical[result.historical.length - 1]?.date;
+  const predColor = result.trend === "up" ? RISE : FALL;
 
-  const upColor = "#ef4444";
-  const downColor = "#3b82f6";
-  const predColor = result.trend === "up" ? upColor : downColor;
-
-  const customTooltip = ({ active, payload, label }: any) => {
+  const customTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     const d = payload[0]?.payload;
     const val = d?.historical ?? d?.predicted;
@@ -153,40 +160,32 @@ function IndexChart({ result }: { result: IndexResult }) {
             구간: {d.lower.toLocaleString()} ~ {d.upper.toLocaleString()}
           </p>
         )}
-        {d.isPrediction && <p className="text-primary text-[10px] mt-0.5">예측값</p>}
+        {d.isPrediction && <p className="text-primary text-[10px] mt-0.5">예측값 (±1σ 구간)</p>}
       </div>
     );
   };
-
-  const tickCount = Math.min(10, chartData.length);
-  const tickIdxs = Array.from({ length: tickCount }, (_, i) =>
-    Math.round((i / (tickCount - 1)) * (chartData.length - 1))
-  );
 
   return (
     <ResponsiveContainer width="100%" height={280}>
       <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id={`confGrad-${result.symbol}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={predColor} stopOpacity={0.15} />
-            <stop offset="100%" stopColor={predColor} stopOpacity={0.02} />
+            <stop offset="0%" stopColor={predColor} stopOpacity={0.18} />
+            <stop offset="100%" stopColor={predColor} stopOpacity={0.03} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
         <XAxis
           dataKey="label"
           tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }}
-          tickLine={false}
-          axisLine={false}
+          tickLine={false} axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
           domain={[minVal, maxVal]}
           tickFormatter={v => v.toLocaleString()}
           tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }}
-          tickLine={false}
-          axisLine={false}
-          width={60}
+          tickLine={false} axisLine={false} width={60}
         />
         <Tooltip content={customTooltip} />
         {lastHistDate && (
@@ -197,49 +196,95 @@ function IndexChart({ result }: { result: IndexResult }) {
             label={{ value: "현재", fill: "rgba(255,255,255,0.4)", fontSize: 10, position: "insideTopLeft" }}
           />
         )}
-        <Area
-          dataKey="upper"
-          stroke="none"
-          fill={`url(#confGrad-${result.symbol})`}
-          isAnimationActive={false}
-          legendType="none"
-          activeDot={false}
-        />
-        <Area
-          dataKey="lower"
-          stroke="none"
-          fill="transparent"
-          isAnimationActive={false}
-          legendType="none"
-          activeDot={false}
-        />
+        <Area dataKey="upper" stroke="none" fill={`url(#confGrad-${result.symbol})`}
+          isAnimationActive={false} legendType="none" activeDot={false} />
+        <Area dataKey="lower" stroke="none" fill="transparent"
+          isAnimationActive={false} legendType="none" activeDot={false} />
         <Line
           dataKey="historical"
           stroke="rgba(255,255,255,0.7)"
-          strokeWidth={1.5}
-          dot={false}
-          name="실제 지수"
-          connectNulls={false}
-          isAnimationActive={true}
-          animationDuration={800}
+          strokeWidth={1.5} dot={false} name="실제 지수"
+          connectNulls={false} isAnimationActive animationDuration={800}
         />
         <Line
           dataKey="predicted"
-          stroke={predColor}
-          strokeWidth={2}
-          strokeDasharray="5 3"
+          stroke={predColor} strokeWidth={2} strokeDasharray="5 3"
           dot={{ r: 3, fill: predColor, stroke: predColor }}
-          name="LSTM 예측"
-          connectNulls={false}
-          isAnimationActive={true}
-          animationDuration={800}
-          animationBegin={400}
+          name="GBDT 예측" connectNulls={false}
+          isAnimationActive animationDuration={800} animationBegin={400}
         />
-        <Legend
-          iconType="line"
-          wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "rgba(255,255,255,0.5)" }}
-        />
+        <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "rgba(255,255,255,0.5)" }} />
       </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ── Return comparison bar chart (last 30 days: predicted vs actual) ─────── */
+
+function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
+  const customTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload as RecentPerfPoint;
+    return (
+      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-0.5">
+        <p className="text-muted-foreground">{d.date}</p>
+        <p style={{ color: d.predicted >= 0 ? RISE : FALL }}>
+          예측: {d.predicted >= 0 ? "+" : ""}{d.predicted}%
+        </p>
+        <p style={{ color: d.actual >= 0 ? RISE : FALL }}>
+          실제: {d.actual >= 0 ? "+" : ""}{d.actual}%
+        </p>
+      </div>
+    );
+  };
+
+  // Show every 5th date label to avoid crowding
+  const tickFormatter = (_: any, index: number) =>
+    index % 5 === 0 ? formatDate(data[index]?.date ?? "", true) : "";
+
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barGap={1} barCategoryGap="25%">
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={tickFormatter}
+          tick={{ fontSize: 9, fill: "rgba(255,255,255,0.35)" }}
+          tickLine={false} axisLine={false}
+          interval={0}
+        />
+        <YAxis
+          tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
+          tick={{ fontSize: 9, fill: "rgba(255,255,255,0.35)" }}
+          tickLine={false} axisLine={false} width={52}
+        />
+        <Tooltip content={customTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+        <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" />
+
+        {/* Actual — filled bars */}
+        <Bar dataKey="actual" name="실제" radius={[2, 2, 0, 0]}>
+          {data.map((d, i) => (
+            <Cell key={`act-${i}`} fill={d.actual >= 0 ? RISE : FALL} fillOpacity={0.65} />
+          ))}
+        </Bar>
+
+        {/* Predicted — outlined (stroke-only) bars */}
+        <Bar dataKey="predicted" name="예측" radius={[2, 2, 0, 0]}>
+          {data.map((d, i) => (
+            <Cell
+              key={`pred-${i}`}
+              fill="transparent"
+              stroke={d.predicted >= 0 ? RISE : FALL}
+              strokeWidth={1.5}
+            />
+          ))}
+        </Bar>
+
+        <Legend
+          iconType="rect"
+          wrapperStyle={{ fontSize: 11, paddingTop: 6, color: "rgba(255,255,255,0.5)" }}
+        />
+      </BarChart>
     </ResponsiveContainer>
   );
 }
@@ -253,6 +298,8 @@ function MetricCard({ label, value, sub }: { label: string; value: string; sub?:
     </div>
   );
 }
+
+const PRED_HORIZON_LABEL = "3일 후";
 
 export default function MarketAnalysis() {
   const { isEn } = useLanguage();
@@ -279,9 +326,7 @@ export default function MarketAnalysis() {
     }
   }, [fetchStatus]);
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   useEffect(() => {
     if (!status) return;
@@ -339,12 +384,12 @@ export default function MarketAnalysis() {
           )}
         </div>
         <PipelineTracker steps={status?.steps ?? [
-          { key: "data",     label: "데이터 수집",    status: "pending" },
+          { key: "data",     label: "데이터 수집",     status: "pending" },
           { key: "feature",  label: "피처 엔지니어링", status: "pending" },
-          { key: "sequence", label: "시퀀스 생성",     status: "pending" },
-          { key: "train",    label: "LSTM 학습",       status: "pending" },
-          { key: "ensemble", label: "앙상블 예측",     status: "pending" },
-          { key: "output",   label: "출력",            status: "pending" },
+          { key: "sequence", label: "시퀀스 생성",      status: "pending" },
+          { key: "train",    label: "GBDT 학습",        status: "pending" },
+          { key: "ensemble", label: "앙상블 예측",      status: "pending" },
+          { key: "output",   label: "출력",             status: "pending" },
         ]} />
         {status?.error && (
           <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
@@ -359,15 +404,17 @@ export default function MarketAnalysis() {
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col items-center justify-center gap-3 py-16">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground">LSTM 모델 학습 중...</p>
+            <p className="text-sm font-medium text-foreground">GBDT 모델 학습 중...</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {isEn ? "Training LSTM ensemble. This takes ~60s on first run." : "첫 실행 시 약 60초 소요됩니다. 잠시 기다려주세요."}
+              {isEn
+                ? "Training GBDT ensemble on 5-year data. First run may take ~40s."
+                : "5년치 데이터로 GBDT 앙상블 학습 중. 첫 실행 시 약 40초 소요됩니다."}
             </p>
           </div>
         </div>
       )}
 
-      {/* Initial state - not started yet */}
+      {/* Initial state */}
       {!status?.ready && !status?.running && !status?.error && (
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col items-center justify-center gap-3 py-16">
           <BrainCircuit className="w-8 h-8 text-muted-foreground/40" />
@@ -387,7 +434,7 @@ export default function MarketAnalysis() {
             transition={{ duration: 0.4 }}
             className="space-y-4"
           >
-            {/* Index selector + current values */}
+            {/* Index selector */}
             <div className="flex items-center gap-3 flex-wrap">
               {(["kospi", "kosdaq"] as const).map(idx => {
                 const data = idx === "kospi" ? status.kospi! : status.kosdaq!;
@@ -418,16 +465,16 @@ export default function MarketAnalysis() {
               })}
             </div>
 
-            {/* Chart */}
+            {/* ── Main line chart ─────────────────────────────────────────── */}
             {current && (
               <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-4">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div>
                     <h2 className="text-base font-bold text-foreground">
-                      {current.name} — LSTM 예측 ({PRED_HORIZON_LABEL})
+                      {current.name} — GBDT 예측 ({PRED_HORIZON_LABEL})
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      최근 90거래일 + 3일 예측 · 회색 점선: 기준일 · 음영: 신뢰 구간
+                      최근 90거래일 + 3일 예측 · 음영: ±1σ 예측 오차 신뢰구간
                     </p>
                   </div>
                   <IndexBadge
@@ -439,7 +486,7 @@ export default function MarketAnalysis() {
               </div>
             )}
 
-            {/* Metrics */}
+            {/* ── Metrics ─────────────────────────────────────────────────── */}
             {current && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <MetricCard
@@ -448,9 +495,9 @@ export default function MarketAnalysis() {
                   sub={current.trend === "up" ? "상승 전망" : "하락 전망"}
                 />
                 <MetricCard
-                  label={isEn ? "Dir. Accuracy" : "방향 정확도"}
-                  value={`${current.testDirAcc}%`}
-                  sub="테스트셋 기준"
+                  label={isEn ? "Walk-Forward Acc." : "Walk-Forward 정확도"}
+                  value={`${current.wfDirAcc}%`}
+                  sub="2 구간 평균"
                 />
                 <MetricCard
                   label={isEn ? "Test MAE" : "예측 오차 (MAE)"}
@@ -458,14 +505,31 @@ export default function MarketAnalysis() {
                   sub="수익률 기준"
                 />
                 <MetricCard
-                  label={isEn ? "Confidence" : "모델 신뢰도"}
-                  value={`${(current.confidence * 100).toFixed(1)}%`}
-                  sub="앙상블 일치도"
+                  label={isEn ? "30-Day Dir. Acc." : "최근 30일 정확도"}
+                  value={`${current.rolling30dDirAcc}%`}
+                  sub="방향 정확도 (롤링)"
                 />
               </div>
             )}
 
-            {/* Model info */}
+            {/* ── Predicted vs Actual return chart (last 30 days) ─────────── */}
+            {current && current.recentPerf && current.recentPerf.length > 0 && (
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+                <div>
+                  <h2 className="text-base font-bold text-foreground">
+                    {isEn ? "Prediction vs Actual (Last 30 Days)" : "예측 vs 실제 수익률 — 최근 30거래일"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isEn
+                      ? "Outlined bar = predicted 3-day return · Filled bar = actual 3-day return"
+                      : "테두리 막대 = 예측 3일 수익률 · 채운 막대 = 실제 3일 수익률 · 상승=빨강, 하락=파랑"}
+                  </p>
+                </div>
+                <ReturnComparisonChart data={current.recentPerf} />
+              </div>
+            )}
+
+            {/* ── Model info ──────────────────────────────────────────────── */}
             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-xs text-muted-foreground/60 space-y-1.5">
               <div className="flex items-center gap-2 font-medium text-muted-foreground mb-2">
                 <BrainCircuit className="w-3.5 h-3.5" />
@@ -473,11 +537,13 @@ export default function MarketAnalysis() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
                 {[
-                  ["알고리즘", "LightGBM-style GBDT (100 트리, 깊이 4, lr=0.05)"],
+                  ["알고리즘", "LightGBM-style GBDT (60 트리, 깊이 3, min_child=20, lr=0.05)"],
                   ["피처", "수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일"],
                   ["시퀀스 길이", "20거래일 lookback → 181차원 벡터 (표준화)"],
-                  ["앙상블", "3개 GBDT 평균 (seed 다양화, feature·row subsampling)"],
-                  ["학습 데이터", "최근 2년 일별 종가 (Yahoo Finance)"],
+                  ["앙상블", "2× GBDT 평균 (seed 다양화, feature·row subsampling 80%)"],
+                  ["학습 데이터", "최근 5년 일별 종가 (Yahoo Finance) · 80:20 분할"],
+                  ["검증", "Walk-Forward (테스트셋 2구간 분리) + 롤링 30일 정확도"],
+                  ["신뢰구간", "최근 30일 예측 오차 ±1σ 기반"],
                   ["예측 목표", "3거래일 후 수익률 (회귀) · 캐시 TTL 6h"],
                 ].map(([k, v]) => (
                   <div key={k} className="flex gap-2">
@@ -496,5 +562,3 @@ export default function MarketAnalysis() {
     </div>
   );
 }
-
-const PRED_HORIZON_LABEL = "3일 예측";
