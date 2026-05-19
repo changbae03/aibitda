@@ -79,6 +79,28 @@ interface MarketBrief {
 const RISE = "#ef4444";
 const FALL = "#3b82f6";
 
+/* ── 테마 감지 훅 (차트용) ───────────────────────────────────────────────── */
+function useChartColors() {
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const obs = new MutationObserver(() =>
+      setIsDark(document.documentElement.classList.contains("dark"))
+    );
+    obs.observe(document.documentElement, { attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  return {
+    tickFill:        isDark ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.45)",
+    gridStroke:      isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.07)",
+    refLineStroke:   isDark ? "rgba(255,255,255,0.2)"  : "rgba(0,0,0,0.18)",
+    histLineStroke:  isDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.60)",
+    legendColor:     isDark ? "rgba(255,255,255,0.5)"  : "rgba(0,0,0,0.45)",
+    barCursor:       isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)",
+  };
+}
+
 /* ── 날짜 포매터 ─────────────────────────────────────────────────────────── */
 function formatDate(dateStr: string, short = false): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -106,7 +128,7 @@ function MarketBriefSection({
       ? { dot: "bg-red-400", badge: "text-red-400 bg-red-500/10 border-red-500/20", label: "긍정" }
       : d === "negative"
       ? { dot: "bg-blue-400", badge: "text-blue-400 bg-blue-500/10 border-blue-500/20", label: "부정" }
-      : { dot: "bg-white/30", badge: "text-white/40 bg-white/5 border-white/10", label: "중립" };
+      : { dot: "bg-muted-foreground/30", badge: "text-muted-foreground/50 bg-muted/60 border-border", label: "중립" };
 
   const genTime = brief?.generatedAt
     ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -119,12 +141,12 @@ function MarketBriefSection({
       ? { label: "HIGH", cls: "text-red-400 bg-red-500/10 border-red-500/25" }
       : impact === "medium"
       ? { label: "MED",  cls: "text-amber-400 bg-amber-500/10 border-amber-500/25" }
-      : { label: "LOW",  cls: "text-white/30 bg-white/5 border-white/10" };
+      : { label: "LOW",  cls: "text-muted-foreground/50 bg-muted/50 border-border" };
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
       {/* 헤더 */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border flex-wrap">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">AI 시장 브리핑</span>
@@ -142,7 +164,7 @@ function MarketBriefSection({
             <button
               onClick={onRefresh}
               disabled={loading}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground transition-all disabled:opacity-40"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/50 border border-border text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-all disabled:opacity-40"
             >
               <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
               {loading ? "분석 중..." : "다시 분석"}
@@ -193,10 +215,10 @@ function MarketBriefSection({
                       {brief.marketEvents!.map((ev, i) => {
                         const dc = dirCfg(ev.direction);
                         return (
-                          <div key={i} className="flex gap-3 items-start bg-white/[0.03] rounded-xl px-3.5 py-3">
+                          <div key={i} className="flex gap-3 items-start bg-muted/30 rounded-xl px-3.5 py-3">
                             <span className={cn("mt-[5px] shrink-0 w-2 h-2 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
                                 <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", dc.badge)}>
                                   {dc.label}
@@ -219,12 +241,12 @@ function MarketBriefSection({
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {brief.macroFactors!.map((mf, i) => (
-                        <div key={i} className="bg-white/[0.03] rounded-xl px-3.5 py-3 space-y-2">
+                        <div key={i} className="bg-muted/30 rounded-xl px-3.5 py-3 space-y-2">
                           <div>
                             <p className="text-[10px] text-muted-foreground/45 font-medium mb-0.5">{mf.factor}</p>
                             <p className="text-[14px] font-bold text-foreground leading-tight">{mf.status}</p>
                           </div>
-                          <p className="text-xs text-foreground/60 leading-relaxed border-t border-white/[0.06] pt-2">
+                          <p className="text-xs text-foreground/60 leading-relaxed border-t border-border pt-2">
                             {mf.implication}
                           </p>
                         </div>
@@ -241,7 +263,7 @@ function MarketBriefSection({
                     </p>
                     <div className="space-y-2">
                       {brief.forwardLook!.map((fw, i) => (
-                        <div key={i} className="flex gap-3 items-start bg-white/[0.03] rounded-xl px-3.5 py-3">
+                        <div key={i} className="flex gap-3 items-start bg-muted/30 rounded-xl px-3.5 py-3">
                           <div className="shrink-0 w-5 h-5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
                             {i + 1}
                           </div>
@@ -269,7 +291,7 @@ function MarketBriefSection({
                         const dc = dirCfg(ev.direction);
                         const ic = impactCfg(ev.impact);
                         return (
-                          <div key={i} className="flex gap-3 items-start bg-white/[0.03] rounded-xl px-3.5 py-3">
+                          <div key={i} className="flex gap-3 items-start bg-muted/30 rounded-xl px-3.5 py-3">
                             <span className={cn("mt-[5px] shrink-0 w-2 h-2 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -294,10 +316,10 @@ function MarketBriefSection({
                 {/* 핵심 리스크 */}
                 {brief.keyRisk && (
                   <div className="flex items-start gap-3 bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3.5 py-3">
-                    <AlertCircle className="w-4 h-4 text-amber-400/70 shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 text-amber-500/70 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[11px] font-bold text-amber-400/60 mb-1 uppercase tracking-wide">지금 가장 조심해야 할 것</p>
-                      <p className="text-xs text-amber-100/55 leading-relaxed">{brief.keyRisk}</p>
+                      <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400/60 mb-1 uppercase tracking-wide">지금 가장 조심해야 할 것</p>
+                      <p className="text-xs text-amber-900/70 dark:text-amber-100/55 leading-relaxed">{brief.keyRisk}</p>
                     </div>
                   </div>
                 )}
@@ -315,7 +337,7 @@ function MarketBriefSection({
                     <ul className="space-y-1.5">
                       {brief.recentIssues.map((issue, i) => (
                         <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
-                          <span className="shrink-0 w-4 h-4 rounded-full bg-white/[0.06] border border-white/[0.10] flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-muted border border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
                           {issue}
                         </li>
                       ))}
@@ -330,7 +352,7 @@ function MarketBriefSection({
                     <ul className="space-y-1.5">
                       {brief.outlook.map((item, i) => (
                         <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
-                          <span className="shrink-0 w-4 h-4 rounded-full bg-white/[0.06] border border-white/[0.10] flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-muted border border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
                           {item}
                         </li>
                       ))}
@@ -413,6 +435,7 @@ function TrendBadge({ value }: { value: number }) {
 
 /* ── 메인 차트 ───────────────────────────────────────────────────────────── */
 function IndexChart({ result }: { result: IndexResult }) {
+  const cc = useChartColors();
   const chartData = [
     ...result.historical.map(h => ({
       date: h.date,
@@ -464,34 +487,34 @@ function IndexChart({ result }: { result: IndexResult }) {
   };
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={240}>
+      <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id={`confGrad-${result.symbol}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={predColor} stopOpacity={0.18} />
             <stop offset="100%" stopColor={predColor} stopOpacity={0.03} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }}
+          tick={{ fontSize: 10, fill: cc.tickFill }}
           tickLine={false} axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
           domain={[minVal, maxVal]}
           tickFormatter={v => v.toLocaleString()}
-          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }}
-          tickLine={false} axisLine={false} width={60}
+          tick={{ fontSize: 10, fill: cc.tickFill }}
+          tickLine={false} axisLine={false} width={58}
         />
         <Tooltip content={customTooltip} />
         {lastHistDate && (
           <ReferenceLine
             x={formatDate(lastHistDate, true)}
-            stroke="rgba(255,255,255,0.2)"
+            stroke={cc.refLineStroke}
             strokeDasharray="4 4"
-            label={{ value: "오늘", fill: "rgba(255,255,255,0.4)", fontSize: 10, position: "insideTopLeft" }}
+            label={{ value: "오늘", fill: cc.tickFill, fontSize: 10, position: "insideTopLeft" }}
           />
         )}
         <Area dataKey="upper" stroke="none" fill={`url(#confGrad-${result.symbol})`}
@@ -500,7 +523,7 @@ function IndexChart({ result }: { result: IndexResult }) {
           isAnimationActive={false} legendType="none" activeDot={false} />
         <Line
           dataKey="historical"
-          stroke="rgba(255,255,255,0.7)"
+          stroke={cc.histLineStroke}
           strokeWidth={1.5} dot={false} name="실제 흐름"
           connectNulls={false} isAnimationActive animationDuration={800}
         />
@@ -511,7 +534,7 @@ function IndexChart({ result }: { result: IndexResult }) {
           name="AI 예측" connectNulls={false}
           isAnimationActive animationDuration={800} animationBegin={400}
         />
-        <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "rgba(255,255,255,0.5)" }} />
+        <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 8, color: cc.legendColor }} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -519,6 +542,7 @@ function IndexChart({ result }: { result: IndexResult }) {
 
 /* ── 예측 vs 실제 비교 차트 ──────────────────────────────────────────────── */
 function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
+  const cc = useChartColors();
   const allVals  = data.flatMap(d => [d.actual, d.predicted]);
   const dataMin  = Math.min(...allVals);
   const dataMax  = Math.max(...allVals);
@@ -551,24 +575,24 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
     index % 5 === 0 ? formatDate(data[index]?.date ?? "", true) : "";
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+    <ResponsiveContainer width="100%" height={210}>
+      <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap="30%">
+        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={tickFormatter}
-          tick={{ fontSize: 9, fill: "rgba(255,255,255,0.35)" }}
+          tick={{ fontSize: 9, fill: cc.tickFill }}
           tickLine={false} axisLine={false}
           interval={0}
         />
         <YAxis
           domain={yDomain}
           tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
-          tick={{ fontSize: 9, fill: "rgba(255,255,255,0.35)" }}
-          tickLine={false} axisLine={false} width={52}
+          tick={{ fontSize: 9, fill: cc.tickFill }}
+          tickLine={false} axisLine={false} width={48}
         />
-        <Tooltip content={customTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-        <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 2" />
+        <Tooltip content={customTooltip} cursor={{ fill: cc.barCursor }} />
+        <ReferenceLine y={0} stroke={cc.refLineStroke} strokeDasharray="4 2" />
 
         <Bar dataKey="actual" name="실제 등락" radius={[2, 2, 0, 0]}>
           {data.map((d, i) => (
@@ -588,7 +612,7 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
 
         <Legend
           iconSize={10}
-          wrapperStyle={{ fontSize: 10, paddingTop: 8, color: "rgba(255,255,255,0.5)" }}
+          wrapperStyle={{ fontSize: 10, paddingTop: 8, color: cc.legendColor }}
         />
       </ComposedChart>
     </ResponsiveContainer>
@@ -606,7 +630,7 @@ function StatCard({
       "flex flex-col gap-1 px-4 py-3.5 rounded-2xl border",
       highlight
         ? "border-primary/25 bg-primary/5"
-        : "border-white/[0.07] bg-white/[0.02]",
+        : "border-border bg-muted/20",
     )}>
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
         <span>{emoji}</span>
@@ -690,9 +714,9 @@ export default function MarketAnalysis() {
     <div className="space-y-5 pb-20">
 
       {/* ── 헤더 ───────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">
             오늘의 AI 시장 분석
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -703,7 +727,7 @@ export default function MarketAnalysis() {
           <button
             onClick={() => triggerRun(true)}
             disabled={status?.running || isStarting}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.10] text-sm font-medium hover:bg-white/[0.10] transition-all disabled:opacity-40 shrink-0"
+            className="self-start flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-all disabled:opacity-40 shrink-0 min-h-[44px]"
           >
             {status?.running || isStarting ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중...</>
@@ -724,7 +748,7 @@ export default function MarketAnalysis() {
 
       {/* ── 로딩 상태 ───────────────────────────────────────────────────── */}
       {!status?.ready && status?.running && (
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col items-center justify-center gap-3 py-16">
+        <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">AI가 시장 데이터를 분석하고 있어요 ☕</p>
@@ -734,7 +758,7 @@ export default function MarketAnalysis() {
       )}
 
       {!status?.ready && !status?.running && !status?.error && (
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col items-center justify-center gap-3 py-16">
+        <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
           <BrainCircuit className="w-8 h-8 text-muted-foreground/40" />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">AI를 준비하는 중이에요...</p>
@@ -766,10 +790,10 @@ export default function MarketAnalysis() {
                       key={idx}
                       onClick={() => setActiveIdx(idx)}
                       className={cn(
-                        "flex-1 min-w-[140px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left",
+                        "flex-1 min-w-[140px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left min-h-[88px]",
                         isActive
                           ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
-                          : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]",
+                          : "border-border bg-card hover:bg-muted/30",
                       )}
                     >
                       <div className="flex items-center justify-between">
@@ -794,14 +818,14 @@ export default function MarketAnalysis() {
 
             {/* ── 메인 차트 ────────────────────────────────────────────── */}
             {current && (
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+              <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h2 className="text-base font-bold text-foreground">
                       {current.name} — 최근 흐름과 AI 예측
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      흰 실선 = 실제 지수 흐름 · 점선 = AI가 예측한 3일 · 반투명 영역 = 오차 범위
+                      실선 = 실제 지수 흐름 · 점선 = AI가 예측한 3일 · 반투명 영역 = 오차 범위
                     </p>
                   </div>
                   <TrendBadge value={current.predictedReturn3d} />
@@ -848,13 +872,13 @@ export default function MarketAnalysis() {
 
             {/* ── 예측 vs 실제 비교 ─────────────────────────────────────── */}
             {current && current.recentPerf && current.recentPerf.length > 0 && (
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+              <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
                 <div>
                   <h2 className="text-base font-bold text-foreground">
                     AI가 실제로 얼마나 맞혔나요?
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    막대 = 실제 등락 (빨강=오름·파랑=내림) · 보라 선 = AI가 예측한 방향 · 막대에 마우스를 올리면 상세 정보가 나와요
+                    막대 = 실제 등락 (빨강=오름·파랑=내림) · 보라 선 = AI가 예측한 방향 · 터치하면 상세 정보가 나와요
                   </p>
                 </div>
                 <ReturnComparisonChart data={current.recentPerf} />
@@ -862,10 +886,10 @@ export default function MarketAnalysis() {
             )}
 
             {/* ── 이 화면 보는 법 (토글) ───────────────────────────────────── */}
-            <div className="rounded-2xl border border-white/[0.06] bg-transparent overflow-hidden">
+            <div className="rounded-2xl border border-border bg-transparent overflow-hidden">
               <button
                 onClick={() => setGuideOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/30 transition-colors min-h-[48px]"
               >
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-primary/50" />
@@ -875,7 +899,7 @@ export default function MarketAnalysis() {
               </button>
 
               {guideOpen && (
-              <div className="px-4 pb-5 pt-2 space-y-6 border-t border-white/[0.05]">
+              <div className="px-4 pb-5 pt-2 space-y-6 border-t border-border">
 
                 {/* 1. AI 예측 숫자 */}
                 <div className="space-y-2">
@@ -925,7 +949,7 @@ export default function MarketAnalysis() {
                   </p>
 
                   {/* LSTM */}
-                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
                     <p className="text-xs font-bold text-primary tracking-wide">① LSTM — 시계열 패턴 학습</p>
                     <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
                       <span className="font-semibold text-foreground">Long Short-Term Memory</span>는 순환신경망(RNN)의 한 종류로,
@@ -946,7 +970,7 @@ export default function MarketAnalysis() {
                   </div>
 
                   {/* GBDT */}
-                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
                     <p className="text-xs font-bold text-purple-400 tracking-wide">② GBDT — 15개 피처 기반 규칙 학습</p>
                     <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
                       <span className="font-semibold text-foreground">Gradient Boosted Decision Trees</span>는
@@ -979,14 +1003,14 @@ export default function MarketAnalysis() {
                   </div>
 
                   {/* 앙상블 */}
-                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
                     <p className="text-xs font-bold text-emerald-400 tracking-wide">③ 동적 앙상블 — 성능 기반 가중치 합산</p>
                     <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
                       두 모델의 예측값을 단순 평균하지 않고,
                       <span className="font-semibold text-foreground"> 최근 30거래일의 방향 적중률</span>을 실시간으로 계산해
                       더 잘 맞힌 모델에 더 높은 가중치(α)를 부여합니다.
                     </p>
-                    <div className="bg-black/20 rounded-lg px-3 py-2 font-mono text-[11px] text-emerald-400/80">
+                    <div className="bg-black/10 dark:bg-black/20 rounded-lg px-3 py-2 font-mono text-[11px] text-emerald-700 dark:text-emerald-400/80">
                       최종 예측 = α × LSTM + (1 − α) × GBDT
                     </div>
                     {current ? (
@@ -1003,7 +1027,7 @@ export default function MarketAnalysis() {
                   </div>
 
                   {/* Walk-Forward */}
-                  <div className="bg-white/[0.03] rounded-xl px-4 py-4 space-y-2">
+                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
                     <p className="text-xs font-bold text-amber-400 tracking-wide">④ Walk-Forward 검증 — 미래 데이터 없이 테스트</p>
                     <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
                       일반적인 백테스트는 미래 데이터를 훈련에 포함할 위험이 있어 실제보다 성능이 과대평가됩니다.
@@ -1028,11 +1052,11 @@ export default function MarketAnalysis() {
                     <div className="pt-1 grid grid-cols-4 gap-2 text-center text-[11px]">
                       {[
                         { label: "LSTM", val: `${current.lstmDirAcc}%`, color: "text-primary" },
-                        { label: "GBDT", val: `${current.gbdtDirAcc}%`, color: "text-purple-400" },
-                        { label: "앙상블", val: `${current.rolling30dDirAcc}%`, color: "text-emerald-400" },
-                        { label: "MAE", val: `${current.testMae}%`, color: "text-amber-400" },
+                        { label: "GBDT", val: `${current.gbdtDirAcc}%`, color: "text-purple-500 dark:text-purple-400" },
+                        { label: "앙상블", val: `${current.rolling30dDirAcc}%`, color: "text-emerald-600 dark:text-emerald-400" },
+                        { label: "MAE", val: `${current.testMae}%`, color: "text-amber-600 dark:text-amber-400" },
                       ].map(s => (
-                        <div key={s.label} className="bg-white/[0.03] rounded-lg py-2">
+                        <div key={s.label} className="bg-muted/30 rounded-lg py-2">
                           <p className="text-muted-foreground/50 mb-0.5">{s.label}</p>
                           <p className={cn("font-bold", s.color)}>{s.val}</p>
                         </div>
@@ -1042,7 +1066,7 @@ export default function MarketAnalysis() {
                 </div>
 
                 {/* 면책 */}
-                <p className="text-[10px] text-muted-foreground/30 border-t border-white/[0.05] pt-4 leading-relaxed">
+                <p className="text-[10px] text-muted-foreground/40 border-t border-border pt-4 leading-relaxed">
                   ※ 이 예측은 AI의 통계적 분석이며, 투자를 권유하는 것이 아닙니다.
                   실제 시장은 AI가 반영하지 못하는 갑작스러운 뉴스·정책·글로벌 이슈에 크게 영향받을 수 있습니다.
                   투자 결정은 반드시 전문가와 상담하시거나 본인이 직접 판단하세요.
@@ -1052,10 +1076,10 @@ export default function MarketAnalysis() {
             </div>
 
             {/* ── 기술 정보 (개발자용, 접어두기) ──────────────────────── */}
-            <div className="rounded-2xl border border-white/[0.05] bg-transparent overflow-hidden">
+            <div className="rounded-2xl border border-border bg-transparent overflow-hidden">
               <button
                 onClick={() => setTechOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/30 transition-colors min-h-[48px]"
               >
                 <div className="flex items-center gap-2 text-xs text-muted-foreground/40 font-medium">
                   <BrainCircuit className="w-3.5 h-3.5" />
@@ -1073,7 +1097,7 @@ export default function MarketAnalysis() {
               </button>
 
               {techOpen && (
-                <div className="px-4 pb-4 border-t border-white/[0.05] pt-3 space-y-2">
+                <div className="px-4 pb-4 border-t border-border pt-3 space-y-2">
                   <PipelineTracker steps={status?.steps ?? [
                     { key: "data",     label: "데이터 수집",    status: "pending" },
                     { key: "feature",  label: "피처 엔지니어링", status: "pending" },
