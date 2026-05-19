@@ -48,6 +48,7 @@ import DisclaimerPage from "@/pages/disclaimer";
 import SupportPage from "@/pages/support";
 import NoticesPage from "@/pages/notices";
 import Portfolio from "@/pages/portfolio";
+import MarketAnalysis from "@/pages/market-analysis";
 import MyPage from "@/pages/mypage";
 import ConsentModal from "@/components/consent-modal";
 import { useAuth } from "@/lib/auth";
@@ -265,6 +266,7 @@ function Router() {
             <Route path="/admin/quality" component={AdminQuality} />
             <Route path="/admin/batch-reports" component={AdminBatchReports} />
             <Route path="/admin/portfolios" component={AdminPortfolios} />
+            <Route path="/market-analysis" component={MarketAnalysis} />
             <Route path="/portfolio" component={Portfolio} />
             <Route path="/mypage" component={MyPage} />
             <Route path="/disclaimer" component={DisclaimerPage} />

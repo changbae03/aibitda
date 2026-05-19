@@ -18,6 +18,7 @@ import macroRouter from "./macro.js";
 import { performanceRouter } from "./performance.js";
 import userSettingsRouter from "./user-settings.js";
 import portfolioRouter from "./portfolio.js";
+import marketAnalysisRouter from "./market-analysis.js";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(macroRouter);
 router.use(performanceRouter);
 router.use(userSettingsRouter);
 router.use(portfolioRouter);
+router.use("/market-analysis", marketAnalysisRouter);
 
 export default router;
