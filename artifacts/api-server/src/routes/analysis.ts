@@ -4630,9 +4630,10 @@ async function executeStep(
           const fvdRaw = fvdMatch?.[1] ?? rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
           if (fvdRaw) {
             const fvd = JSON.parse(fvdRaw.replace(/[\r\n\t]/g, " "));
-            // FIX: FINAL_VALUATION_DATA uses 'base' as the base-case target key,
-            // not 'target' or 'target_price'. Check all three to avoid rawTp=0.
-            let rawTp = parseFloat(String(fvd.target ?? fvd.target_price ?? fvd.base ?? "0").replace(/[^0-9.]/g, ""));
+            // investment_strategy 프롬프트 1순위와 동일하게 'base' 필드를 우선 읽음
+            // (AI가 {target: X, base: Y} 형태로 출력 시 investment_strategy는 base=Y를 쓰는데
+            // tp-inject가 target=X를 읽으면 불일치 발생 → base 우선으로 통일)
+            let rawTp = parseFloat(String(fvd.base ?? fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
             const spRow = await rawQuery(`SELECT start_price, ticker FROM analyses WHERE id=$1`, [id]);
             const sp: number = spRow[0]?.start_price ?? 0;
             const tkr: string = spRow[0]?.ticker ?? "";
