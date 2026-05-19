@@ -856,12 +856,13 @@ async function trainFull(
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export function getStatus(): PipelineStatus {
+export function getStatus(): PipelineStatus & { initializing?: boolean } {
   return {
     running:_status.running, ready:_status.ready,
     steps:_status.steps.map(s=>({...s})),
     error:_status.error, trainedAt:_status.trainedAt,
     trainingMs:_status.trainingMs, kospi:_status.kospi, kosdaq:_status.kosdaq,
+    initializing: (_status as any).initializing ?? false,
   };
 }
 
@@ -883,6 +884,8 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
     return false;
   }
 
+  // ★ 복원 시작 전에 running: true 로 설정 → 프론트가 자동 재학습 트리거하지 않도록 방어
+  _status = { running: true, ready: false, steps: defaultSteps(), initializing: true } as any;
   console.log("[gbdt] 디스크 복원 중 (nFeatures=" + N_FEATURES + ", v" + MODEL_VERSION + ")...");
   try {
     const [kospiRows, kosdaqRows] = await Promise.all([

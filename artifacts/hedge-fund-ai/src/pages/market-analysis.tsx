@@ -41,6 +41,7 @@ interface PipelineStep {
 }
 interface PipelineStatus {
   running: boolean; ready: boolean;
+  initializing?: boolean;
   steps: PipelineStep[];
   error?: string;
   trainedAt?: string;
@@ -776,8 +777,17 @@ export default function MarketAnalysis() {
         <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground">AI가 시장 데이터를 분석하고 있어요 ☕</p>
-            <p className="text-xs text-muted-foreground mt-1">처음 실행 시 약 90초 정도 걸립니다. 잠시 기다려 주세요!</p>
+            {status.initializing ? (
+              <>
+                <p className="text-sm font-medium text-foreground">저장된 AI 모델을 불러오는 중이에요</p>
+                <p className="text-xs text-muted-foreground mt-1">잠시만 기다려 주세요 (보통 10초 이내)</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">AI가 시장 데이터를 분석하고 있어요 ☕</p>
+                <p className="text-xs text-muted-foreground mt-1">약 60~90초 정도 걸려요. 잠시 기다려 주세요!</p>
+              </>
+            )}
           </div>
         </div>
       )}
