@@ -4,8 +4,32 @@ import { fetchFREDMacro } from "../lib/fred-client.js";
 import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
+import { pool } from "@workspace/db";
+import { getUserId } from "../lib/credits.js";
 
 const router = Router();
+
+// ─── 관리자 확인 ─────────────────────────────────────────────────────────────
+
+async function isAdmin(userId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  const client = await pool.connect();
+  try {
+    const res = await client.query(`SELECT 1 FROM admins WHERE user_id = $1 LIMIT 1`, [userId]);
+    return res.rows.length > 0;
+  } finally {
+    client.release();
+  }
+}
+
+async function requireAdmin(req: any, res: any): Promise<boolean> {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자 전용 기능입니다." });
+    return false;
+  }
+  return true;
+}
 
 // ─── Gemini 클라이언트 (analysis.ts 와 동일한 패턴) ─────────────────────────
 
@@ -252,11 +276,13 @@ ${macroLines || "데이터 없음"}
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
-router.get("/status", (req, res) => {
+router.get("/status", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
   res.json(getStatus());
 });
 
 router.post("/run", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
   const force = req.query.force === "true";
   const status = getStatus();
   if (status.running) {
@@ -267,8 +293,9 @@ router.post("/run", async (req, res) => {
   res.json({ ok: true, message: "파이프라인 시작" });
 });
 
-// GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (4시간 캐시)
+// GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (4시간 캐시, 관리자 전용)
 router.get("/brief", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
   const force = req.query.force === "true";
 
   // 캐시 확인

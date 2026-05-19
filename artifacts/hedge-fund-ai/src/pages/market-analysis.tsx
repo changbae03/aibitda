@@ -9,7 +9,7 @@ import {
   CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
   Cpu, Database, GitMerge, ChevronRight, Zap,
   ChevronDown, Newspaper, Sparkles, CalendarDays, Info,
-  Shield, Globe,
+  Shield, Globe, Lock,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -628,6 +628,15 @@ export default function MarketAnalysis() {
   const [brief, setBrief]             = useState<MarketBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
 
+  // 관리자 권한 확인
+  const [isAdmin, setIsAdmin]         = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setIsAdmin(d?.isAdmin === true))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
   const fetchBrief = useCallback(async (force = false) => {
     setBriefLoading(true);
     try {
@@ -673,6 +682,32 @@ export default function MarketAnalysis() {
   }, [status, fetchStatus, triggerRun]);
 
   const current = activeIdx === "kospi" ? status?.kospi : status?.kosdaq;
+
+  // 권한 확인 중
+  if (isAdmin === null) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  // 관리자 아닌 경우 잠금 화면
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-6 text-center px-4">
+        <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+          <Lock className="w-7 h-7 text-muted-foreground/40" />
+        </div>
+        <div className="space-y-2 max-w-xs">
+          <h2 className="text-lg font-bold text-foreground">관리자 전용 기능</h2>
+          <p className="text-sm text-muted-foreground/70 leading-relaxed">
+            AI 시장 분석은 관리자만 이용할 수 있어요.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-20">
