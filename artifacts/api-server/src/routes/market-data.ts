@@ -488,13 +488,15 @@ router.get("/search/:query", async (req, res) => {
         const sym = `${query}.KS`;
         const yahooName = ksQ.value.longName || ksQ.value.shortName || "";
         const name = DISPLAY_NAME_OVERRIDE.get(sym) || yahooName;
-        if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, exchange: "KOSPI", quoteType: "EQUITY" });
+        const englishName = (DISPLAY_NAME_OVERRIDE.has(sym) && yahooName && yahooName !== name) ? yahooName : undefined;
+        if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, englishName, exchange: "KOSPI", quoteType: "EQUITY" });
       }
       if (kqQ.status === "fulfilled") {
         const sym = `${query}.KQ`;
         const yahooName = kqQ.value.longName || kqQ.value.shortName || "";
         const name = DISPLAY_NAME_OVERRIDE.get(sym) || yahooName;
-        if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, exchange: "KOSDAQ", quoteType: "EQUITY" });
+        const englishName = (DISPLAY_NAME_OVERRIDE.has(sym) && yahooName && yahooName !== name) ? yahooName : undefined;
+        if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, englishName, exchange: "KOSDAQ", quoteType: "EQUITY" });
       }
       // Fallback: if Yahoo returned nothing, still try local map
       if (results.length === 0) {
@@ -544,8 +546,11 @@ router.get("/search/:query", async (req, res) => {
     } catch { /* fall through */ }
 
     // 로컬 결과 우선, Yahoo Finance 결과 추가 (중복 심볼 제거)
+    // Yahoo의 영문명을 로컬 결과의 englishName으로 보강
     const seen = new Set(local.map(r => r.symbol));
-    const merged = [...local, ...yahoo.filter(r => !seen.has(r.symbol))].slice(0, 10);
+    const yahooBySymbol = new Map(yahoo.map((r: any) => [r.symbol, r.shortname as string]));
+    const mergedWithEn = local.map(r => ({ ...r, englishName: yahooBySymbol.get(r.symbol) }));
+    const merged = [...mergedWithEn, ...yahoo.filter((r: any) => !seen.has(r.symbol))].slice(0, 10);
     res.json(merged);
     return;
   }

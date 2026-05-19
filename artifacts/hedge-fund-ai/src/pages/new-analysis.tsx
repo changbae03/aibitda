@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl, cn } from "@/lib/utils";
@@ -218,6 +218,7 @@ function isKorean(str: string) {
 interface SearchResult {
   symbol: string;
   shortname: string;
+  englishName?: string;
   exchange: string;
   quoteType: string;
 }
@@ -302,6 +303,7 @@ export default function NewAnalysis() {
   const [isSearching, setIsSearching] = useState(false);
   const [selectHint, setSelectHint] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -401,9 +403,15 @@ export default function NewAnalysis() {
     setConfirmModal({ ticker: tickerVal, companyName });
   };
 
-  const handleSelectSuggestion = (sym: string, name?: string) => {
+  const handleSelectSuggestion = (sym: string, name?: string, englishName?: string) => {
     const normalized = /^\d{6}\.(KS|KQ)$/.test(sym.toUpperCase()) ? sym.split(".")[0] : sym;
-    showConfirm(normalized, name ?? normalized);
+    const displayName = (isEn && englishName) ? englishName : (name ?? normalized);
+    setTicker(normalized);
+    setSelectedCompany(displayName);
+    setSuggestions([]);
+    setShowDropdown(false);
+    setSelectedIndex(-1);
+    setSelectHint(false);
   };
 
   // 6자리 숫자 코드 or 순수 영문 티커(1-5자)는 직접 입력 허용
@@ -421,9 +429,10 @@ export default function NewAnalysis() {
     e.preventDefault();
     if (isComposing.current) return;
 
-    // 방향키로 선택한 항목 있으면 바로 실행
+    // 방향키로 선택한 항목 있으면 입력창에만 채우기
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
-      handleSelectSuggestion(suggestions[selectedIndex].symbol);
+      const s = suggestions[selectedIndex];
+      handleSelectSuggestion(s.symbol, s.shortname, s.englishName);
       return;
     }
 
@@ -431,7 +440,7 @@ export default function NewAnalysis() {
 
     // 6자리 숫자 코드 또는 영문 1~5자 티커 → 확인 팝업 표시
     if (isDirectTicker(val)) {
-      showConfirm(val, val);
+      showConfirm(val, selectedCompany || val);
       return;
     }
 
@@ -518,7 +527,7 @@ export default function NewAnalysis() {
               ref={inputRef}
               type="text"
               value={ticker}
-              onChange={(e) => { setTicker(e.target.value); setError(""); }}
+              onChange={(e) => { setTicker(e.target.value); setError(""); setSelectedCompany(null); }}
               onCompositionStart={() => { isComposing.current = true; }}
               onCompositionEnd={(e) => {
                 isComposing.current = false;
@@ -545,6 +554,26 @@ export default function NewAnalysis() {
               )}
             </button>
           </div>
+
+          {/* 선택된 종목 표시 */}
+          <AnimatePresence>
+            {selectedCompany && !showDropdown && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center gap-2 mt-2 px-1"
+              >
+                <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="text-[13px] font-semibold text-foreground">{selectedCompany}</span>
+                <span className="text-muted-foreground/40 text-[12px]">·</span>
+                <span className="text-[12px] text-muted-foreground/60">
+                  {isEn ? "Press Analyze to start →" : "분석 시작 버튼을 눌러주세요 →"}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Autocomplete Dropdown */}
           <AnimatePresence>
@@ -583,16 +612,16 @@ export default function NewAnalysis() {
                     ex === "NYSE" ? "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400" :
                     "bg-muted text-muted-foreground";
                   const badgeLabel =
-                    ex === "KOSPI" ? "코스피" :
-                    ex === "KOSDAQ" ? "코스닥" :
+                    ex === "KOSPI" ? (isEn ? "KOSPI" : "코스피") :
+                    ex === "KOSDAQ" ? (isEn ? "KOSDAQ" : "코스닥") :
                     ex || "US";
                   const isHighlighted = i === selectedIndex;
                   return (
                     <motion.button
                       key={s.symbol}
                       type="button"
-                      onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol, s.shortname); }}
-                      onTouchEnd={(e) => { e.preventDefault(); handleSelectSuggestion(s.symbol, s.shortname); }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelectSuggestion(s.symbol, s.shortname, s.englishName)}
                       animate={isHighlighted ? { backgroundColor: "hsl(var(--accent))" } : { backgroundColor: "transparent" }}
                       whileTap={{ scale: 0.99 }}
                       className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left border-b border-border/60 last:border-0 cursor-pointer"
@@ -604,7 +633,7 @@ export default function NewAnalysis() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[14px] font-semibold text-foreground truncate">{s.shortname}</span>
+                          <span className="text-[14px] font-semibold text-foreground truncate">{isEn && s.englishName ? s.englishName : s.shortname}</span>
                           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badgeStyle}`}>
                             {badgeLabel}
                           </span>
