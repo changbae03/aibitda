@@ -95,8 +95,8 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
 const NAV_ITEMS = [
   { href: "/analysis/new",    label: "AI 기업분석",   labelEn: "AI Analysis",     Icon: Sparkles },
   { href: "/portfolio",       label: "내 포트폴리오",  labelEn: "Portfolio",        Icon: Briefcase },
-  { href: "/popular",         label: "애빛다 통계",    labelEn: "Statistics",      Icon: BarChart2 },
   { href: "/history",         label: "내가 본 자료",   labelEn: "My Reports",      Icon: BookOpen },
+  { href: "/popular",         label: "애빛다 통계",    labelEn: "Statistics",      Icon: BarChart2 },
   { href: "/market-analysis", label: "시장분석",       labelEn: "Market Analysis", Icon: LineChart },
   { href: "/calendar",        label: "마켓 캘린더",    labelEn: "Market Calendar", Icon: CalendarDays },
 ];
