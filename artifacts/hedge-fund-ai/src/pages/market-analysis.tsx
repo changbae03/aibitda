@@ -28,6 +28,9 @@ interface IndexResult {
   rolling30dDirAcc: number;
   predErrStd: number;
   recentPerf: RecentPerfPoint[];
+  lstmDirAcc: number;
+  gbdtDirAcc: number;
+  ensembleAlpha: number;
 }
 interface PipelineStep {
   key: string; label: string;
@@ -48,8 +51,10 @@ const STEP_ICONS: Record<string, React.ElementType> = {
   data:     Database,
   feature:  Zap,
   sequence: GitMerge,
+  lstm:     BrainCircuit,
+  gbdt:     Cpu,
   train:    BrainCircuit,
-  ensemble: Cpu,
+  ensemble: GitMerge,
   output:   BarChart3,
 };
 
@@ -350,8 +355,8 @@ export default function MarketAnalysis() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isEn
-              ? "LightGBM-style GBDT ensemble · 3-day return prediction for KOSPI/KOSDAQ"
-              : "LightGBM-style GBDT 앙상블 · KOSPI/KOSDAQ 3일 후 수익률 예측 파이프라인"}
+              ? "LSTM + GBDT ensemble · 3-day return prediction for KOSPI/KOSDAQ"
+              : "LSTM + GBDT 앙상블 · KOSPI/KOSDAQ 3일 후 수익률 예측 파이프라인"}
           </p>
         </div>
         <button
@@ -386,9 +391,9 @@ export default function MarketAnalysis() {
         <PipelineTracker steps={status?.steps ?? [
           { key: "data",     label: "데이터 수집",     status: "pending" },
           { key: "feature",  label: "피처 엔지니어링", status: "pending" },
-          { key: "sequence", label: "시퀀스 생성",      status: "pending" },
-          { key: "train",    label: "GBDT 학습",        status: "pending" },
-          { key: "ensemble", label: "앙상블 예측",      status: "pending" },
+          { key: "lstm",     label: "LSTM 학습",        status: "pending" },
+          { key: "gbdt",     label: "GBDT 학습",        status: "pending" },
+          { key: "ensemble", label: "앙상블 합성",      status: "pending" },
           { key: "output",   label: "출력",             status: "pending" },
         ]} />
         {status?.error && (
@@ -404,11 +409,11 @@ export default function MarketAnalysis() {
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col items-center justify-center gap-3 py-16">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground">GBDT 모델 학습 중...</p>
+            <p className="text-sm font-medium text-foreground">LSTM + GBDT 앙상블 학습 중...</p>
             <p className="text-xs text-muted-foreground mt-1">
               {isEn
-                ? "Training GBDT ensemble on 5-year data. First run may take ~40s."
-                : "5년치 데이터로 GBDT 앙상블 학습 중. 첫 실행 시 약 40초 소요됩니다."}
+                ? "Training LSTM + GBDT ensemble on 5-year data. First run may take ~90s."
+                : "5년치 데이터로 LSTM + GBDT 앙상블 학습 중. 첫 실행 시 약 90초 소요됩니다."}
             </p>
           </div>
         </div>
@@ -471,7 +476,7 @@ export default function MarketAnalysis() {
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div>
                     <h2 className="text-base font-bold text-foreground">
-                      {current.name} — GBDT 예측 ({PRED_HORIZON_LABEL})
+                      {current.name} — LSTM+GBDT 앙상블 예측 ({PRED_HORIZON_LABEL})
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       최근 90거래일 + 3일 예측 · 음영: ±1σ 예측 오차 신뢰구간
@@ -537,14 +542,18 @@ export default function MarketAnalysis() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
                 {[
-                  ["알고리즘", "LightGBM-style GBDT (60 트리, 깊이 3, min_child=20, lr=0.05)"],
+                  ["LSTM", `32 유닛 · lookback 20일 · dropout 0.2 · epochs ${20} · Adam lr=0.001`],
+                  ["GBDT", "60 트리 · depth 3 · min_child 20 · lr=0.05 · feature/row sub 55%/80%"],
                   ["피처", "수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일"],
-                  ["시퀀스 길이", "20거래일 lookback → 181차원 벡터 (표준화)"],
-                  ["앙상블", "2× GBDT 평균 (seed 다양화, feature·row subsampling 80%)"],
+                  ["앙상블 가중치", current
+                    ? `LSTM ${(current.ensembleAlpha * 100).toFixed(0)}% · GBDT ${((1 - current.ensembleAlpha) * 100).toFixed(0)}% (최근 30일 방향정확도 비율)`
+                    : "최근 30일 방향정확도 비율로 적응형 산출"],
+                  ["모델 정확도", current
+                    ? `LSTM ${current.lstmDirAcc}% · GBDT ${current.gbdtDirAcc}% · 앙상블 ${current.testDirAcc}%`
+                    : "—"],
                   ["학습 데이터", "최근 5년 일별 종가 (Yahoo Finance) · 80:20 분할"],
                   ["검증", "Walk-Forward (테스트셋 2구간 분리) + 롤링 30일 정확도"],
-                  ["신뢰구간", "최근 30일 예측 오차 ±1σ 기반"],
-                  ["예측 목표", "3거래일 후 수익률 (회귀) · 캐시 TTL 6h"],
+                  ["예측 목표", "3거래일 후 수익률 (회귀) · 신뢰구간 ±1σ · 캐시 TTL 6h"],
                 ].map(([k, v]) => (
                   <div key={k} className="flex gap-2">
                     <span className="shrink-0 text-muted-foreground/50">{k}:</span>
