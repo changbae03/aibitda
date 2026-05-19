@@ -406,7 +406,7 @@ function getReanalysisLevel(
 
 // ── Main component ────────────────────────────────────────────────────────────
 type SortKey = "date" | "upside" | "return" | "name";
-type VerdictFilter = "all" | "buy" | "sell" | "hold";
+type VerdictFilter = "all" | "buy" | "sell" | "hold" | "reanalysis";
 
 export default function History() {
   const { isEn } = useLanguage();
@@ -542,12 +542,16 @@ export default function History() {
 
   // ── 필터 + 정렬 (모든 useMemo는 early return 전에 위치해야 함) ────────────
   const filteredAndSorted = useMemo(() => {
-    const verdictMatch = (verdict: string | undefined): boolean => {
+    const verdictMatch = (a: any): boolean => {
       if (verdictFilter === "all") return true;
-      const s = (verdict ?? "").toLowerCase();
+      const s = (a.investmentVerdict ?? "").toLowerCase();
       if (verdictFilter === "buy")  return s.includes("buy");
       if (verdictFilter === "sell") return s.includes("sell");
       if (verdictFilter === "hold") return !s.includes("buy") && !s.includes("sell");
+      if (verdictFilter === "reanalysis") {
+        const cur = quotes[a.ticker]?.price ?? null;
+        return getReanalysisLevel(a.createdAt, a.startPrice ?? a.entryPrice, cur) != null;
+      }
       return true;
     };
     const getUpsideForSort = (a: any): number => {
@@ -562,7 +566,7 @@ export default function History() {
       return ((q.price - ep) / ep) * 100;
     };
     let items = list.filter((a) =>
-      verdictMatch(a.investmentVerdict) &&
+      verdictMatch(a) &&
       (industryFilter === "all" || a.industry === industryFilter)
     );
     if (sortBy === "date")   items = [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -663,9 +667,16 @@ export default function History() {
                 {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
                 {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
                 {reanalysisCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border border-orange-400 dark:border-orange-700">
+                  <button
+                    onClick={() => setVerdictFilter(verdictFilter === "reanalysis" ? "all" : "reanalysis")}
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold border transition-colors ${
+                      verdictFilter === "reanalysis"
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border-orange-400 dark:border-orange-700 hover:bg-orange-100 dark:hover:bg-orange-950/50"
+                    }`}
+                  >
                     {isEn ? `Re-analyze ${reanalysisCount}` : `재분석 ${reanalysisCount}`}
-                  </span>
+                  </button>
                 )}
               </div>
             );
@@ -772,11 +783,12 @@ export default function History() {
           <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
 
           {/* Verdict 필터 */}
-          {(["all", "buy", "sell", "hold"] as VerdictFilter[]).map((v) => {
+          {(["all", "buy", "sell", "hold", "reanalysis"] as VerdictFilter[]).map((v) => {
             const labels: Record<VerdictFilter, string> = isEn
-              ? { all: "All", buy: "Buy", sell: "Sell", hold: "Hold" }
-              : { all: "전체", buy: "상승여력", sell: "하락여지", hold: "적정수준" };
+              ? { all: "All", buy: "Buy", sell: "Sell", hold: "Hold", reanalysis: "Re-analyze" }
+              : { all: "전체", buy: "상승여력", sell: "하락여지", hold: "적정수준", reanalysis: "재분석" };
             const active = verdictFilter === v;
+            const isReanalysis = v === "reanalysis";
             return (
               <button
                 key={v}
@@ -784,8 +796,12 @@ export default function History() {
                 className={cn(
                   "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors border",
                   active
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-background text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground"
+                    ? isReanalysis
+                      ? "bg-orange-500 text-white border-orange-500"
+                      : "bg-foreground text-background border-foreground"
+                    : isReanalysis
+                      ? "bg-background text-orange-600 dark:text-orange-400 border-orange-400 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                      : "bg-background text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground"
                 )}
               >
                 {labels[v]}
