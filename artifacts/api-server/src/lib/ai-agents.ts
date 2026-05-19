@@ -1388,6 +1388,70 @@ function needsUSBiotech(industry: string, companyName: string, ticker?: string):
   return false;
 }
 
+function needsKorBiotech(industry: string, companyName: string, ticker?: string): boolean {
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  // 반드시 한국 주식
+  const isKoreanTicker = (ticker ?? "").includes(".KS") || (ticker ?? "").includes(".KQ");
+  if (!isKoreanTicker) return false;
+
+  // 바이오·제약 관련 업종이면 감지
+  if (/바이오|생명과학|헬스케어|유전체|신약|세포치료|줄기세포|유전자치료|제약/.test(ind)) return true;
+
+  // 알려진 한국 파이프라인 바이오텍 이름 키워드
+  const KOR_BIOTECH_NAMES = [
+    "메디포스트", "파미셀", "셀트리온", "한올바이오파마", "오스코텍",
+    "코오롱티슈진", "에이비엘바이오", "알테오젠", "레고켐바이오", "올릭스",
+    "에스티팜", "에이치엘비", "에이치엘비생명과학", "파멥신", "유틸렉스",
+    "젠큐릭스", "압타머사이언스", "큐라티스", "지놈앤컴퍼니", "이뮨온시아",
+    "티앤알바이오팹", "테고사이언스", "강스템바이오텍", "차바이오텍",
+    "녹십자랩셀", "엔케이맥스", "이노셀", "셀리드", "바이오솔루션",
+    "오가노이드사이언스", "압타바이오", "메디젠휴먼케어", "제넥신",
+    "에이프릴바이오", "온코크로스", "펩트론", "한국비엔씨", "비씨월드제약",
+    "에이비프로바이오", "셀레믹스", "노바렉스", "팜캐드", "지씨셀",
+  ];
+  if (KOR_BIOTECH_NAMES.some(n => name.includes(n))) return true;
+
+  // 코스닥·코스피 한국 바이오텍 티커 화이트리스트
+  const KOR_BIOTECH_TICKERS = new Set([
+    "078160", // 메디포스트
+    "005690", // 파미셀
+    "068760", // 셀트리온제약
+    "009290", // 한올바이오파마
+    "041960", // 코오롱티슈진
+    "298380", // 에이비엘바이오
+    "196170", // 알테오젠
+    "141080", // 레고켐바이오
+    "285870", // 올릭스
+    "145020", // 에이치엘비
+    "048410", // 현대바이오사이언스
+    "214450", // 파멥신
+    "179290", // 유틸렉스
+    "246710", // 티앤알바이오팹
+    "191420", // 테고사이언스
+    "217730", // 강스템바이오텍
+    "085660", // 차바이오텍
+    "144510", // 녹십자랩셀 (GC셀)
+    "234690", // 엔케이맥스
+    "299660", // 셀리드
+    "086820", // 바이오솔루션
+    "219859", // 레이크머티리얼즈 — 제외
+    "102940", // 코오롱생명과학
+    "142760", // 하이트론씨스템즈 — 제외
+    "008930", // 한미사이언스
+    "128940", // 한미약품
+    "326030", // 에이프릴바이오
+    "012790", // 제넥신(구 이수앱지스)
+    "085370", // 제넥신
+    "065690", // 지씨셀 (GC Cell)
+  ]);
+  if (bare && KOR_BIOTECH_TICKERS.has(bare)) return true;
+
+  return false;
+}
+
 function needsUSDefense(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
@@ -1854,6 +1918,7 @@ export function buildPrompt(
   const gamingFlag          = needsGaming(industry, companyName, ticker);
   const shippingFlag        = needsShipping(industry, companyName, ticker);
   const cbDilutionFlag      = needsCBDilutionCheck(industry, companyName, ticker);
+  const korBiotechFlag      = needsKorBiotech(industry, companyName, ticker);
 
   const _now = new Date();
   const _currentYear = _now.getFullYear();
@@ -1862,7 +1927,7 @@ export function buildPrompt(
 
   const baseContext = `종목: ${ticker} (${companyName})
 산업: ${industry}
-현재 날짜: ${_currentDateStr} 기준 (분석 실행 시점). ${_currentYear - 2}년·${_currentYear - 1}년 실적·수치는 이미 확정된 과거 데이터입니다. ⚠️ 절대 금지: "${_currentYear - 1}년까지 성장할 것으로 전망", "${_currentYear - 1}년 예상", "${_currentYear - 1}년 목표" 등 ${_currentYear - 1}년 이하 연도에 미래형 표현 사용 금지. "전망", "예상", "성장할 것으로", "이를 것으로" 등 미래형 표현은 반드시 ${_currentYear + 1}년 이후 수치에만 사용하세요. 산업 분석·시장 규모 서술 시 ${_currentYear - 1}년 이하 수치는 "~였다", "~를 기록했다", "~로 집계됐다" 등 과거형으로만 작성하세요. DCF·밸류에이션 전망 기간은 ${_currentYear}년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: P/BV(피어 0.4~1.0x) + EV/EBITDA(4~8x) 복합 방식이 Lead 밸류에이션입니다. RNAV는 컨텍스트에 분양 예정 사업 세부 데이터(현장명·세대수·분양가)가 명시된 경우에만 시도하고, 없으면 RNAV를 언급하지 마세요. relative_valuation 단계에서 BPS 기반 목표 P/BV 산출, EV/EBITDA 피어 비교, 수주잔고 Coverage(공시 있을 때만), 미청구공사 비율(공시 있을 때만)을 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}${cryptoTreasuryFlag ? "\n[가상자산/비트코인 트레저리 감지: 코어 사업 EV + BTC NAV를 반드시 분리하는 SOTP가 Lead입니다. 단일 EV/EBITDA 배수 적용 금지. relative_valuation 단계에서 ① 코어 사업 독립 밸류에이션 ② BTC NAV = 보유량×현재가-담보순부채 ③ mNAV 배율(시총/BTC NAV) ④ BTC 가격 Bear/Base/Bull 3-시나리오 민감도 테이블 ⑤ 레버리지 LTV 및 청산 트리거 가격을 반드시 포함하세요.]" : ""}${shipbuildingFlag ? "\n[조선사 감지: 수주잔고 NPV가 Lead 밸류에이션입니다. 현재 PER 단독 사용 금지(수주-매출 2–3년 시차). relative_valuation 단계에서 ① 선종별 수주잔고 NPV 산출(LNG선/컨테이너선/탱커별 마진 차등 적용) ② Book-to-Bill Ratio 추이 ③ 잔고 커버리지(잔고/TTM Revenue, 연) ④ 클락슨 신조선가지수·강재 가격 Bear/Base/Bull 3-시나리오 민감도 테이블을 반드시 포함하세요.]" : ""}${batteryFlag ? "\n[K-배터리/2차전지 감지: EV/GWh Capacity 배수가 Lead입니다. 투자 사이클 중 적자 기간의 PER 단독 사용 금지. relative_valuation 단계에서 ① EV per GWh 산출 및 CATL·Panasonic·삼성SDI 피어 비교 ② LTA(장기공급계약) NPV Floor 가치 ③ ASP 하락 커브·리튬 가격 3-시나리오 민감도 테이블 ④ 전고체 파이프라인 옵션 가치를 반드시 포함하세요.]" : ""}${gamingFlag ? "\n[게임/IP 감지: 기존 게임 Decay DCF + 파이프라인 NPV(PoS 가중) + IP 로열티 스트림의 3중 구조가 Lead입니다. 현재 GAAP PER 단독 사용 금지(신작 출시 연도 마케팅비 왜곡). relative_valuation 단계에서 ① 라이브 타이틀별 MAU × ARPU × 수명 Decay DCF ② 미출시 파이프라인 타이틀별 PoS × 피크 매출 NPV ③ IP 라이선싱·OSMU 로열티 스트림 NPV ④ EV/Revenue·EV/EBITDA 피어 비교를 반드시 포함하세요.]" : ""}${shippingFlag ? "\n[해운사 감지: P/NAV(선박 실물가치 기반)가 Lead입니다. 사이클 정점의 EPS/PER 단독 사용 금지. relative_valuation 단계에서 ① 선박 NAV(Clarksons 기준 선박 시장가 합산 - 순부채) 및 P/NAV Ratio ② TCE Rate 기반 DCF(용선 커버리지 × Contracted Rate + Spot 노출분 × Mid-cycle TCE) ③ Mid-cycle 정상화 EV/EBITDA ④ SCFI/BDI Bear/Base/Bull 3-시나리오 운임 민감도 테이블을 반드시 포함하세요.]" : ""}${cbDilutionFlag ? "\n[한국 소·중형주 CB/BW 희석 체크 필수: 전환사채(CB)·신주인수권부사채(BW)·스톡옵션 잠재 주식이 상장주식수의 5% 이상인 경우 완전희석 주식수(Fully Diluted Shares) 기준으로 EPS·목표주가를 재산출하세요. 희석 전·후 목표주가를 모두 제시하고, 전환가액 및 미전환 잔액을 명시하세요. DART 전자공시의 전환사채 현황을 반드시 확인하세요.]" : ""}`;
+현재 날짜: ${_currentDateStr} 기준 (분석 실행 시점). ${_currentYear - 2}년·${_currentYear - 1}년 실적·수치는 이미 확정된 과거 데이터입니다. ⚠️ 절대 금지: "${_currentYear - 1}년까지 성장할 것으로 전망", "${_currentYear - 1}년 예상", "${_currentYear - 1}년 목표" 등 ${_currentYear - 1}년 이하 연도에 미래형 표현 사용 금지. "전망", "예상", "성장할 것으로", "이를 것으로" 등 미래형 표현은 반드시 ${_currentYear + 1}년 이후 수치에만 사용하세요. 산업 분석·시장 규모 서술 시 ${_currentYear - 1}년 이하 수치는 "~였다", "~를 기록했다", "~로 집계됐다" 등 과거형으로만 작성하세요. DCF·밸류에이션 전망 기간은 ${_currentYear}년을 기준 연도로 시작하세요.${additionalContext ? `\n추가 컨텍스트: ${additionalContext}` : ""}${sectorTemplate ? `\n${sectorTemplate}` : ""}${sotpFlag ? "\n[복합기업/지주사 감지: Sum-of-the-Parts(SOTP) 밸류에이션 적용 대상입니다. relative_valuation 단계에서 사업부별 SOTP 테이블을 반드시 작성하세요.]" : ""}${reitFlag ? "\n[리츠(REIT) 감지: NAV + P/FFO 복합 방식이 Lead 밸류에이션입니다. 일반 DCF·EV/EBITDA 단독 사용 금지. relative_valuation 단계에서 FFO 계산, Cap Rate NAV 산출, P/FFO 배수 비교를 반드시 포함하세요.]" : ""}${financialFlag ? "\n[금융지주/은행/보험/증권 감지: P/B-ROE 스프레드 모델이 Lead 밸류에이션입니다. EV/EBITDA 사용 금지(이자비용이 영업비용이라 왜곡). 목표주가 = 적정 P/B × BPS 방식 적용. relative_valuation 단계에서 Justified P/B 산출과 ROE-CoE 스프레드 분석을 반드시 포함하세요.]" : ""}${resourcesFlag ? "\n[자원/광산 감지: 자산 NAV(매장량 기반 DCF) + Mid-cycle EV/EBITDA 복합 방식이 Lead입니다. 스팟가 기반 단순 배수 사용 금지. relative_valuation 단계에서 AISC, 매장량 수명, 장기 원자재 가격 가정을 반드시 명시하세요.]" : ""}${telecomFlag ? "\n[통신(Telecom) 감지: EV/EBITDA + EV/OpFCF 복합이 Lead입니다. 높은 D&A로 인해 PER 단독 사용 금지. relative_valuation 단계에서 ARPU 추이, CapEx/매출, 배당수익률 vs 국고채 스프레드 분석을 반드시 포함하세요.]" : ""}${constructionFlag ? "\n[건설/주택개발 감지: P/BV(피어 0.4~1.0x) + EV/EBITDA(4~8x) 복합 방식이 Lead 밸류에이션입니다. RNAV는 컨텍스트에 분양 예정 사업 세부 데이터(현장명·세대수·분양가)가 명시된 경우에만 시도하고, 없으면 RNAV를 언급하지 마세요. relative_valuation 단계에서 BPS 기반 목표 P/BV 산출, EV/EBITDA 피어 비교, 수주잔고 Coverage(공시 있을 때만), 미청구공사 비율(공시 있을 때만)을 포함하세요.]" : ""}${utilityFlag ? "\n[유틸리티/공기업 감지: EV/EBITDA + 배당수익률 + RAB(규제자산기반) 방법론 적용 대상입니다. 단기 PER 사용 금지(연료비 급등 시 일시 손실). relative_valuation 단계에서 요금 단가 vs 원가 갭, 규제 ROE 한도, 연료비 민감도를 반드시 분석하세요.]" : ""}${mlpFlag ? "\n[MLP(Master Limited Partnership) 감지: 법인세 없는 패스스루 구조입니다. EPS/PER 완전 금지. EV/EBITDA + DCF per Unit + Distribution Yield 역산이 Lead입니다. relative_valuation 단계에서 Distribution Coverage Ratio, Debt/EBITDA, Fee-based Revenue 비중을 반드시 산출하세요.]" : ""}${bdcFlag ? "\n[BDC(Business Development Company) 감지: 중소기업 대출 전문 펀드입니다. EV/EBITDA 금지. P/NAV + NII Coverage Ratio가 Lead입니다. relative_valuation 단계에서 NAV per Share 추이, Non-accrual Rate, 금리 민감도를 반드시 분석하세요.]" : ""}${royaltyFlag ? "\n[로열티/스트리밍 컴퍼니 감지: 직접 운영 없이 로열티 수취 구조입니다. 일반 광산사 배수 직접 적용 금지. 스트림별 NPV 합산 + P/NAV가 Lead입니다. relative_valuation 단계에서 자산별 로열티 스트림 NPV를 반드시 포함하세요.]" : ""}${bigTechFlag ? "\n[빅테크/M7 감지: 복수의 이질적 사업부 보유 → Segment SOTP 필수. GAAP PER 단독 금지(SBC 왜곡). FCF Yield + 자사주 매입 EPS Accretion 의무 분석. relative_valuation 단계에서 사업부별 배수를 다르게 적용하고 자사주 누적 EPS 기여분을 반드시 명시하세요.]" : ""}${usBankFlag ? "\n[미국 은행 감지: CCAR 스트레스 테스트가 배당·자사주 매입을 결정합니다. EV/EBITDA 금지. P/TBVPS(유형장부가 기준) + ROTCE가 Lead입니다. relative_valuation 단계에서 CET1/SCB 초과자본, NIM 금리 민감도, PCL/NCO 사이클, CCAR 통과 여부를 반드시 분석하세요.]" : ""}${usDefenseFlag ? "\n[미국 방산 감지: Backlog 가시성 + 계약유형 Mix + Book-to-Bill이 핵심입니다. EV/EBITDA(13~18x)가 Lead입니다. relative_valuation 단계에서 Backlog/Revenue 가시성 배수, Book-to-Bill 추이, FFP 원가초과(EAC) 리스크, FCF Conversion을 반드시 분석하세요.]" : ""}${usBiotechFlag ? "\n[미국 바이오 감지: PDUFA date가 주가 트리거입니다. rNPV는 한국 바이오와 동일하나 FDA 지정(BTD/Priority/FastTrack)에 따른 PoS 보정이 의무입니다. relative_valuation 단계에서 PDUFA 일정 캘린더, FDA 지정 PoS 보정표, AdCom 결과, CRL 리스크 체크리스트를 반드시 작성하세요.]" : ""}${korBiotechFlag ? "\n[한국 바이오텍 감지 — rNPV 의무 적용 규칙: ① STEP 0 Q1=YES 확인 → 영업적자(Q2=YES) 시 rNPV ONLY (DCF 완전 금지). ② 한국 MFDS 허가 완료 제품(예: 카티스템 등)은 PoS=100%로 해당 시장 EV/Sales 또는 소규모 DCF로 '한국 허가제품 가치'로 별도 평가 — 임상 PoS 재적용 이중할인 절대 금지. ③ 같은 약물이 한국 허가 + 글로벌(FDA/EMA) 임상 단계 동시 진행 중이면 반드시 시장별 분리 평가(한국 DCF + 글로벌 rNPV SOTP). ④ 세포치료제(줄기세포·CAR-T) 영업이익률 상한 10~30%, COGS 50~70% 엄격 적용. ⑤ 한국 비급여 세포치료제: 현행 비급여 Base 시나리오 + 급여 등재 Bull 시나리오(PoS 30~50%) 분리 필수. 카티스템 유형: 비급여 연 시술 단가 700만~900만원, 급여 등재 시 매출 3~5배 확대 가정. ⑥ 완전희석 주식수(CB·BW·스톡옵션 전환 포함) 반드시 산출 후 목표주가 계산. ⑦ 피어 벤치마크: 세포치료제 → Vericel(VCEL)·Anika Therapeutics(ANIK)·Orthopediatrics·바이오솔루션·테고사이언스. 줄기세포 플랫폼 → 차바이오텍·강스템바이오텍.]" : ""}${usReitFlag ? "\n[미국 리츠 감지: AFFO(Adjusted FFO) 기준이 필수입니다(FFO 단독 금지). 서브섹터별 Cap Rate 차등 적용 의무 — 데이터센터 4~5.5%/셀타워 3~5%/산업물류 4~6%/헬스케어 5~6.5%/주거 4~5.5%. relative_valuation 단계에서 서브섹터별 NAV 산출(지역별 Cap Rate 차등), P/AFFO 배수, AFFO Payout Ratio 지속가능성을 반드시 포함하세요.]" : ""}${cryptoTreasuryFlag ? "\n[가상자산/비트코인 트레저리 감지: 코어 사업 EV + BTC NAV를 반드시 분리하는 SOTP가 Lead입니다. 단일 EV/EBITDA 배수 적용 금지. relative_valuation 단계에서 ① 코어 사업 독립 밸류에이션 ② BTC NAV = 보유량×현재가-담보순부채 ③ mNAV 배율(시총/BTC NAV) ④ BTC 가격 Bear/Base/Bull 3-시나리오 민감도 테이블 ⑤ 레버리지 LTV 및 청산 트리거 가격을 반드시 포함하세요.]" : ""}${shipbuildingFlag ? "\n[조선사 감지: 수주잔고 NPV가 Lead 밸류에이션입니다. 현재 PER 단독 사용 금지(수주-매출 2–3년 시차). relative_valuation 단계에서 ① 선종별 수주잔고 NPV 산출(LNG선/컨테이너선/탱커별 마진 차등 적용) ② Book-to-Bill Ratio 추이 ③ 잔고 커버리지(잔고/TTM Revenue, 연) ④ 클락슨 신조선가지수·강재 가격 Bear/Base/Bull 3-시나리오 민감도 테이블을 반드시 포함하세요.]" : ""}${batteryFlag ? "\n[K-배터리/2차전지 감지: EV/GWh Capacity 배수가 Lead입니다. 투자 사이클 중 적자 기간의 PER 단독 사용 금지. relative_valuation 단계에서 ① EV per GWh 산출 및 CATL·Panasonic·삼성SDI 피어 비교 ② LTA(장기공급계약) NPV Floor 가치 ③ ASP 하락 커브·리튬 가격 3-시나리오 민감도 테이블 ④ 전고체 파이프라인 옵션 가치를 반드시 포함하세요.]" : ""}${gamingFlag ? "\n[게임/IP 감지: 기존 게임 Decay DCF + 파이프라인 NPV(PoS 가중) + IP 로열티 스트림의 3중 구조가 Lead입니다. 현재 GAAP PER 단독 사용 금지(신작 출시 연도 마케팅비 왜곡). relative_valuation 단계에서 ① 라이브 타이틀별 MAU × ARPU × 수명 Decay DCF ② 미출시 파이프라인 타이틀별 PoS × 피크 매출 NPV ③ IP 라이선싱·OSMU 로열티 스트림 NPV ④ EV/Revenue·EV/EBITDA 피어 비교를 반드시 포함하세요.]" : ""}${shippingFlag ? "\n[해운사 감지: P/NAV(선박 실물가치 기반)가 Lead입니다. 사이클 정점의 EPS/PER 단독 사용 금지. relative_valuation 단계에서 ① 선박 NAV(Clarksons 기준 선박 시장가 합산 - 순부채) 및 P/NAV Ratio ② TCE Rate 기반 DCF(용선 커버리지 × Contracted Rate + Spot 노출분 × Mid-cycle TCE) ③ Mid-cycle 정상화 EV/EBITDA ④ SCFI/BDI Bear/Base/Bull 3-시나리오 운임 민감도 테이블을 반드시 포함하세요.]" : ""}${cbDilutionFlag ? "\n[한국 소·중형주 CB/BW 희석 체크 필수: 전환사채(CB)·신주인수권부사채(BW)·스톡옵션 잠재 주식이 상장주식수의 5% 이상인 경우 완전희석 주식수(Fully Diluted Shares) 기준으로 EPS·목표주가를 재산출하세요. 희석 전·후 목표주가를 모두 제시하고, 전환가액 및 미전환 잔액을 명시하세요. DART 전자공시의 전환사채 현황을 반드시 확인하세요.]" : ""}`;
 
   // 이전 단계 분석 결과를 단계별 번호 + 에이전트명으로 명확하게 구조화
   // 토큰 절약 전략:
@@ -3675,9 +3740,17 @@ rNPV는 PoS(임상 성공 확률)로 임상 위험을 이미 제거합니다. �
 
 📋 **한국 규제 타임라인 가이드 (MFDS 기준)**
 - MFDS 허가 심사 기간: NDA 제출 후 통상 12~18개월 (신속심사 6~9개월)
-- 건강보험 급여 등재: 허가 후 추가 12~24개월 (급여 전 매출은 극히 제한적)
+- 건강보험 급여 등재 (일반 신약): 허가 후 추가 12~24개월 (급여 전 매출은 극히 제한적)
+- ⚠️ **세포치료제·줄기세포 급여 등재는 일반 신약과 근본적으로 다름**: MFDS 허가 후에도 5~10년 이상 비급여 상태 유지 사례 다수. 건강보험심사평가원(HIRA) 급여 기준 자체가 세포치료제에 미비하여 협상 기간 극히 장기화. 예시: 카티스템(메디포스트) — 2012년 MFDS 허가 후 10년 이상 비급여 유지. 비급여 기간 연 매출 100~300억원 수준으로 제한됨. 급여 등재 시 접근성 확대로 매출 3~5배 확대 잠재력.
 - ⚠️ 한국 허가 후 글로벌(FDA·EMA) 진출까지 추가 2~4년 소요 가정
 - 한국 단독 시장: 글로벌 제약 시장의 약 1.5~2% (TAM 계산 시 적용)
+
+🏥 **한국 허가 완료 비급여 세포치료제 밸류에이션 (카티스템 유형 적용)**
+- ⚠️ 허가 완료 한국 제품에 임상 PoS 적용 절대 금지 (PoS=100% — 이중할인 오류). 급여 등재 PoS만 별도 확률(30~50%)로 적용.
+- **비급여 Base 시나리오 (DCF 또는 EV/Sales)**: 현행 비급여 상태 유지. 시장 규모 = 연간 시술 건수 × 비급여 단가(700만~900만원/회). COGS 50~70%, 영업이익률 10~30% 상한 적용.
+- **급여 등재 Bull 시나리오**: 급여 등재 성공 가정(PoS 30~50% 가중) → 급여 단가(비급여 대비 50~60% 수준) × 급여 후 시술 건수 급증(3~5배) 가정.
+- ⛔ 동일 약물의 글로벌(FDA) 임상 자산은 별도 rNPV로 독립 평가. 한국 DCF와 이중계산 금지.
+- ⛔ 세포치료제 영업이익률 30% 초과 가정 금지 (COGS 구조상 물리적 상한).
 
 | 가정 항목 | 수치 |
 |-----------|------|
