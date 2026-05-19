@@ -108,7 +108,7 @@ export default function Stats() {
     ? stats.winRate >= 60 ? "text-emerald-600" : stats.winRate >= 40 ? "text-amber-600" : "text-red-500"
     : "text-muted-foreground";
   const avgReturnColor = stats.avgReturn != null
-    ? stats.avgReturn > 0 ? "text-emerald-600" : stats.avgReturn < 0 ? "text-red-500" : "text-foreground"
+    ? stats.avgReturn > 0 ? "text-red-500" : stats.avgReturn < 0 ? "text-blue-500" : "text-foreground"
     : "text-muted-foreground";
 
   const topIndustries = Object.entries(stats.byIndustry)
@@ -420,8 +420,8 @@ export default function Stats() {
               const ret = c.priceReturn;
               const retStr = ret != null ? `${ret >= 0 ? "+" : ""}${ret.toFixed(1)}%` : "—";
               const retColor = isStop
-                ? "text-red-500"
-                : ret != null ? (ret >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground";
+                ? "text-blue-500"
+                : ret != null ? (ret >= 0 ? "text-red-500" : "text-blue-500") : "text-muted-foreground";
               const stopButPositive = isStop && ret != null && ret > 0;
               return (
                 <motion.div
@@ -489,7 +489,7 @@ export default function Stats() {
                     </span>
                     {data.avgReturn != null && (
                       <span className={cn("ml-2 text-[11px]",
-                        data.avgReturn > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-red-500 dark:text-red-400"
+                        data.avgReturn > 0 ? "text-red-500" : "text-blue-500"
                       )}>
                         ({data.avgReturn >= 0 ? "+" : ""}{data.avgReturn.toFixed(1)}%)
                       </span>
