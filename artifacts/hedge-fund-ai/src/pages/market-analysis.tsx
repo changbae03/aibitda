@@ -8,6 +8,7 @@ import {
   TrendingUp, TrendingDown, RefreshCw, BrainCircuit,
   CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
   Cpu, Database, GitMerge, ChevronRight, Zap,
+  ChevronDown, HelpCircle, Target, BarChart2, Vote,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -311,6 +312,7 @@ export default function MarketAnalysis() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [activeIdx, setActiveIdx] = useState<"kospi" | "kosdaq">("kospi");
   const [isStarting, setIsStarting] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -534,36 +536,150 @@ export default function MarketAnalysis() {
               </div>
             )}
 
-            {/* ── Model info ──────────────────────────────────────────────── */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-xs text-muted-foreground/60 space-y-1.5">
-              <div className="flex items-center gap-2 font-medium text-muted-foreground mb-2">
-                <BrainCircuit className="w-3.5 h-3.5" />
-                {isEn ? "Model Architecture" : "모델 구조"}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
-                {[
-                  ["LSTM", `32 유닛 · lookback 20일 · dropout 0.2 · epochs ${20} · Adam lr=0.001`],
-                  ["GBDT", "60 트리 · depth 3 · min_child 20 · lr=0.05 · feature/row sub 55%/80%"],
-                  ["피처", "수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일"],
-                  ["앙상블 가중치", current
-                    ? `LSTM ${(current.ensembleAlpha * 100).toFixed(0)}% · GBDT ${((1 - current.ensembleAlpha) * 100).toFixed(0)}% (최근 30일 방향정확도 비율)`
-                    : "최근 30일 방향정확도 비율로 적응형 산출"],
-                  ["모델 정확도", current
-                    ? `LSTM ${current.lstmDirAcc}% · GBDT ${current.gbdtDirAcc}% · 앙상블 ${current.testDirAcc}%`
-                    : "—"],
-                  ["학습 데이터", "최근 5년 일별 종가 (Yahoo Finance) · 80:20 분할"],
-                  ["검증", "Walk-Forward (테스트셋 2구간 분리) + 롤링 30일 정확도"],
-                  ["예측 목표", "3거래일 후 수익률 (회귀) · 신뢰구간 ±1σ · 캐시 TTL 6h"],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex gap-2">
-                    <span className="shrink-0 text-muted-foreground/50">{k}:</span>
-                    <span>{v}</span>
+            {/* ── 이 화면 보는 법 ───────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+              <button
+                onClick={() => setGuideOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <HelpCircle className="w-4 h-4 text-primary/70" />
+                  이 화면 보는 법
+                </div>
+                <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", guideOpen && "rotate-180")} />
+              </button>
+
+              {guideOpen && (
+                <div className="px-4 pb-5 space-y-5 border-t border-white/[0.06]">
+
+                  {/* 섹션 1: 지수 선택 버튼 */}
+                  <div className="pt-4 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="text-base">📊</span> 코스피 / 코스닥 버튼
+                    </div>
+                    <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                      보고 싶은 지수를 선택합니다. 옆에 붙은 <span className="text-red-400 font-medium">+1.2%</span> 같은 숫자가
+                      <span className="font-medium text-foreground"> "AI가 예측한 3거래일 후 변화율"</span>입니다.
+                      빨간색이면 상승, 파란색이면 하락 전망입니다.
+                    </p>
                   </div>
-                ))}
-              </div>
-              <p className="mt-2 text-[10px] text-muted-foreground/30 border-t border-white/[0.05] pt-2">
-                ※ 본 예측은 AI 모델의 통계적 분석이며 투자 권유가 아닙니다. 실제 시장은 모델이 반영하지 못한 외부 변수에 영향받을 수 있습니다.
-              </p>
+
+                  {/* 섹션 2: 메인 차트 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="text-base">📈</span> 위쪽 꺾은선 차트
+                    </div>
+                    <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                      <span className="font-medium text-foreground">실선</span>은 최근 90거래일(약 4.5개월)의 실제 지수입니다.
+                      오른쪽 끝 <span className="font-medium text-foreground">점선 구간</span>이 AI가 예측한 향후 3일입니다.
+                      점선 주변의 <span className="font-medium text-foreground">반투명 음영</span>은 "예측이 이 범위 안에서 어긋날 수 있다"는 불확실성 구간입니다.
+                      음영이 넓을수록 AI도 확신이 낮다는 뜻입니다.
+                    </p>
+                  </div>
+
+                  {/* 섹션 3: 지표 카드 4개 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="text-base">🎯</span> 4개 지표 카드
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {[
+                        {
+                          title: "3일 예측 수익률",
+                          desc: "AI가 3거래일 뒤 지수가 몇 % 오르거나 내릴지 예측한 값입니다. 방향(+/-)이 실제로 맞는지가 핵심이고, 정확한 숫자보다 방향을 참고하세요.",
+                        },
+                        {
+                          title: "Walk-Forward 정확도",
+                          desc: "AI를 과거 데이터로 '시험' 봤을 때 상승·하락 방향을 맞힌 비율입니다. 50%는 동전 던지기와 같고, 55% 이상이면 통계적으로 의미 있습니다.",
+                        },
+                        {
+                          title: "예측 오차 (MAE)",
+                          desc: "예측 수익률과 실제 수익률의 평균 오차입니다. 작을수록 정밀합니다. 단, 이 수치보다 위의 방향 정확도가 실용적으로 더 중요합니다.",
+                        },
+                        {
+                          title: "최근 30일 정확도",
+                          desc: "지난 30거래일(약 6주) 동안 방향을 맞힌 비율입니다. 과거 전체보다 최근 시장에 얼마나 잘 적응했는지 보여줍니다.",
+                        },
+                      ].map(item => (
+                        <div key={item.title} className="bg-white/[0.03] rounded-xl px-3 py-2.5 space-y-1">
+                          <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{item.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 섹션 4: 막대 비교 차트 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="text-base">📋</span> 아래쪽 막대 비교 차트
+                    </div>
+                    <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                      최근 30거래일 동안 AI 예측과 실제 결과를 나란히 보여줍니다.
+                      <span className="font-medium text-foreground"> 테두리만 있는 막대</span>가 AI 예측,
+                      <span className="font-medium text-foreground"> 속이 채워진 막대</span>가 실제 결과입니다.
+                      둘이 같은 색(빨강·파랑)이면 방향을 맞힌 것, 색이 다르면 틀린 것입니다.
+                    </p>
+                  </div>
+
+                  {/* 섹션 5: AI 작동 원리 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="text-base">🤖</span> AI가 어떻게 예측하나요?
+                    </div>
+                    <div className="bg-white/[0.03] rounded-xl px-3 py-3 space-y-3">
+                      <div className="flex gap-3 items-start">
+                        <div className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">1</div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground mb-0.5">패턴 기억형 AI (LSTM)</p>
+                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                            과거 20거래일의 가격 흐름을 순서대로 읽어서 "이런 패턴 다음엔 이렇게 움직이더라"를 학습합니다.
+                            사람이 차트를 눈으로 읽는 방식과 유사합니다.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-start">
+                        <div className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">2</div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground mb-0.5">규칙 발견형 AI (GBDT)</p>
+                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                            5년치 데이터에서 수백 개의 "만약 X이면 Y" 규칙을 찾아냅니다.
+                            RSI, 이동평균, 변동성 등 9가지 지표를 동시에 고려해 조건을 조합합니다.
+                            날씨 예보가 기온·습도·기압을 종합하는 것과 비슷합니다.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-start">
+                        <div className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">3</div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground mb-0.5">두 AI의 투표 (앙상블)</p>
+                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                            두 AI가 각자 예측값을 내면, 최근 30거래일 동안 더 잘 맞힌 AI에게 투표권을 더 많이 줍니다.
+                            {current && (
+                              <span className="font-medium text-foreground">
+                                {" "}현재: LSTM {(current.ensembleAlpha * 100).toFixed(0)}표 · GBDT {((1 - current.ensembleAlpha) * 100).toFixed(0)}표.
+                              </span>
+                            )}
+                            {" "}이 가중치는 시장 상황에 따라 자동으로 바뀝니다.
+                          </p>
+                        </div>
+                      </div>
+                      {current && (
+                        <div className="pt-1 border-t border-white/[0.06] flex items-center gap-4 text-[11px] text-muted-foreground/60">
+                          <span>최근 30일 방향 정확도</span>
+                          <span className="font-medium text-foreground">LSTM {current.lstmDirAcc}%</span>
+                          <span className="font-medium text-foreground">GBDT {current.gbdtDirAcc}%</span>
+                          <span className="font-medium text-primary">앙상블 {current.rolling30dDirAcc}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground/30 border-t border-white/[0.05] pt-3">
+                    ※ 이 예측은 AI의 통계적 분석이며 투자 권유가 아닙니다. 실제 시장은 AI가 반영하지 못한 뉴스·정책·외부 충격에 영향받을 수 있습니다.
+                  </p>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
