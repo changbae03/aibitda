@@ -1,9 +1,22 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import YahooFinance from "yahoo-finance2";
+import { GoogleGenAI } from "@google/genai";
 
 const router = Router();
 const yahooFinance = new YahooFinance();
+const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY ?? "" });
+
+// ── lazy migration: diagnosis_note 컬럼 자동 추가 ─────────────────────────────
+(async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE model_calibration
+        ADD COLUMN IF NOT EXISTS diagnosis_note TEXT,
+        ADD COLUMN IF NOT EXISTS diagnosis_updated_at TIMESTAMPTZ
+    `);
+  } catch { /* already exists */ }
+})();
 
 async function fetchCurrentPrice(ticker: string): Promise<number | null> {
   const isKorean = /^\d{6}$/.test(ticker);
@@ -76,6 +89,91 @@ function isBullishVerdict(verdict: string): boolean | null {
   return null;
 }
 
+// ── 섹터 오류 원인 진단 AI 에이전트 ─────────────────────────────────────────
+async function runSectorDiagnosisAgent(
+  sector: string,
+  directionAccuracy: number | null,
+  avgPriceDeviation: number | null,
+  wrongCases: Array<{ id: number; ticker: string; startPrice: number; targetPrice: number; currentPrice: number; verdict: string; deviationPct: number; directionWrong: boolean }>
+): Promise<string | null> {
+  try {
+    // 틀린 분석들의 밸류에이션·DCF 핵심 가정 추출
+    const ids = wrongCases.map(w => w.id);
+    const { rows: steps } = await pool.query(
+      `SELECT s.analysis_id, s.step_key, LEFT(s.content, 1500) AS content
+       FROM analysis_steps s
+       WHERE s.analysis_id = ANY($1::int[])
+         AND s.step_key IN ('intrinsic_valuation', 'relative_valuation', 'dcf_assumptions', 'investment_strategy')
+       ORDER BY s.analysis_id, s.step_key`,
+      [ids]
+    );
+
+    const caseBlocks = wrongCases.map(w => {
+      const relevantSteps = steps.filter((s: any) => s.analysis_id === w.id);
+      const valStep = relevantSteps.find((s: any) => s.step_key === "intrinsic_valuation")?.content ?? "";
+      const relStep = relevantSteps.find((s: any) => s.step_key === "relative_valuation")?.content ?? "";
+      const actualReturn = ((w.currentPrice - w.startPrice) / w.startPrice * 100).toFixed(1);
+      const predictedReturn = ((w.targetPrice - w.startPrice) / w.startPrice * 100).toFixed(1);
+      return `
+[종목: ${w.ticker}]
+- 투자의견: ${w.verdict}
+- 분석 시 시작가: ${w.startPrice.toLocaleString()}
+- 목표주가: ${w.targetPrice.toLocaleString()} (예측 수익률 ${predictedReturn}%)
+- 현재 실제가격: ${w.currentPrice.toLocaleString()} (실제 수익률 ${actualReturn}%)
+- 목표가 괴리: ${w.deviationPct > 0 ? "+" : ""}${w.deviationPct.toFixed(1)}%p ${w.directionWrong ? "[방향 오류]" : ""}
+- 내재가치 분석 핵심 가정 (일부):
+${valStep.slice(0, 800) || "(없음)"}
+- 상대가치 분석 핵심 가정 (일부):
+${relStep.slice(0, 600) || "(없음)"}`;
+    }).join("\n\n---\n");
+
+    const accStr = directionAccuracy !== null ? `${Math.round(directionAccuracy)}%` : "N/A";
+    const devStr = avgPriceDeviation !== null
+      ? `${avgPriceDeviation > 0 ? "+" : ""}${avgPriceDeviation.toFixed(1)}%p (${avgPriceDeviation > 0 ? "과대평가" : "과소평가"} 경향)`
+      : "N/A";
+
+    const prompt = `당신은 주식 리서치 모델의 체계적 오류를 진단하는 전문가입니다.
+
+아래는 ${sector} 섹터에서 실제로 틀린 분석 사례들입니다.
+
+## 섹터 전체 오류 지표
+- 방향 예측 정확도: ${accStr} (62% 미만이면 문제)
+- 목표주가 평균 괴리: ${devStr} (±15%p 초과면 문제)
+
+## 틀린 분석 사례 (${wrongCases.length}건)
+${caseBlocks}
+
+## 요청
+위 사례들을 분석하여 **이 섹터에서 반복되는 체계적 방법론 오류**를 진단하세요.
+
+출력 형식 (반드시 아래 형식 준수):
+1. [오류 유형 1]: 구체적 진단 (예: "DCF 성장률 3년차 이후 수렴 미적용 — Year 3+ 성장률이 Year 1과 동일하게 유지됨")
+2. [오류 유형 2]: 구체적 진단
+3. ...
+
+그 다음 줄:
+→ 다음 분석 시 반드시 적용할 보정 지침 (3~5항목, 구체적 수치 포함):
+• 보정 지침 1
+• 보정 지침 2
+...
+
+주의: 일반론 금지. 이 섹터의 실제 수치에서 확인된 패턴만 기술하세요.
+최대 600자 이내로 작성하세요.`;
+
+    const response = await genai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { temperature: 0.3, maxOutputTokens: 700 },
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    return text.length > 50 ? text : null;
+  } catch (e) {
+    console.error("[diagnosis-agent] 실패:", (e as Error)?.message ?? e);
+    return null;
+  }
+}
+
 // ── 자동 재보정 핵심 로직 (스케줄러 + 어드민 라우트 공용) ─────────────────────────
 export async function autoRecalibrate(): Promise<{
   analysesProcessed: number;
@@ -116,6 +214,7 @@ export async function autoRecalibrate(): Promise<{
     directionTotal: number;
     deviationSum: number;
     deviationCount: number;
+    wrongAnalysisIds: Array<{ id: number; ticker: string; startPrice: number; targetPrice: number; currentPrice: number; verdict: string; deviationPct: number; directionWrong: boolean }>;
   }>();
 
   for (const row of analyses) {
@@ -132,20 +231,30 @@ export async function autoRecalibrate(): Promise<{
     const sector = classifySector(industry, market);
 
     if (!sectorStats.has(sector)) {
-      sectorStats.set(sector, { market, directionCorrect: 0, directionTotal: 0, deviationSum: 0, deviationCount: 0 });
+      sectorStats.set(sector, { market, directionCorrect: 0, directionTotal: 0, deviationSum: 0, deviationCount: 0, wrongAnalysisIds: [] });
     }
     const stats = sectorStats.get(sector)!;
 
     const bullish = isBullishVerdict(verdict);
+    let directionWrong = false;
     if (bullish !== null) {
       const actualUp = currentPrice > startPrice;
-      if ((bullish && actualUp) || (!bullish && !actualUp)) stats.directionCorrect++;
+      if ((bullish && actualUp) || (!bullish && !actualUp)) {
+        stats.directionCorrect++;
+      } else {
+        directionWrong = true;
+      }
       stats.directionTotal++;
     }
 
     const deviationPct = ((targetPrice - currentPrice) / startPrice) * 100;
     stats.deviationSum += deviationPct;
     stats.deviationCount++;
+
+    // 방향 틀렸거나 목표가 괴리 20%p 초과 → 진단 대상으로 수집 (최대 8건)
+    if ((directionWrong || Math.abs(deviationPct) > 20) && stats.wrongAnalysisIds.length < 8) {
+      stats.wrongAnalysisIds.push({ id: row.id as number, ticker, startPrice, targetPrice, currentPrice, verdict, deviationPct, directionWrong });
+    }
   }
 
   let updatedSectors = 0;
@@ -169,6 +278,26 @@ export async function autoRecalibrate(): Promise<{
       [sector, stats.market, directionAccuracy, avgPriceDeviation, stats.deviationCount]
     );
     updatedSectors++;
+
+    // ── 편향 임계치 초과 섹터: 원인 진단 실행 ──────────────────────────────
+    const needsDiagnosis =
+      (directionAccuracy !== null && directionAccuracy < 62) ||
+      (avgPriceDeviation !== null && Math.abs(avgPriceDeviation) > 15);
+
+    if (needsDiagnosis && stats.wrongAnalysisIds.length >= 2) {
+      runSectorDiagnosisAgent(sector, directionAccuracy, avgPriceDeviation, stats.wrongAnalysisIds)
+        .then(async (note) => {
+          if (!note) return;
+          await pool.query(
+            `UPDATE model_calibration
+             SET diagnosis_note = $1, diagnosis_updated_at = NOW()
+             WHERE sector = $2`,
+            [note, sector]
+          );
+          console.log(`[diagnosis] ${sector} 진단 저장 완료 (${note.length}자)`);
+        })
+        .catch((e) => console.error(`[diagnosis] ${sector} 진단 실패:`, e?.message ?? e));
+    }
   }
 
   // 히스토리 스냅샷 저장 (추세 추적용)
@@ -459,7 +588,8 @@ export async function getCalibrationContext(sector: string): Promise<string | nu
 
     // ── Part 2: 실적 데이터 기반 편향 보정 (3건 이상 있을 때) ──────────────
     const { rows } = await pool.query(
-      `SELECT direction_accuracy, avg_price_deviation, sample_count, sector_benchmarks
+      `SELECT direction_accuracy, avg_price_deviation, sample_count, sector_benchmarks,
+              diagnosis_note, diagnosis_updated_at
        FROM model_calibration
        WHERE sector = $1`,
       [sector]
@@ -470,6 +600,8 @@ export async function getCalibrationContext(sector: string): Promise<string | nu
     const dirAcc = cal ? (cal.direction_accuracy as number | null) : null;
     const dev = cal ? (cal.avg_price_deviation as number | null) : null;
     const n = cal ? (cal.sample_count as number) : 0;
+    const diagnosisNote: string | null = rows[0]?.diagnosis_note ?? null;
+    const diagnosisUpdatedAt: string | null = rows[0]?.diagnosis_updated_at ?? null;
 
     // sector_benchmarks: market-harvester가 수집한 실시장 중간값
     const benchRow = rows[0]?.sector_benchmarks ?? null;
@@ -528,6 +660,17 @@ export async function getCalibrationContext(sector: string): Promise<string | nu
         const leverLines = biasToLeverGuidance(devRounded, sector);
         lines.push(...leverLines);
       }
+    }
+
+    // ── Part 2-B: AI 오류 원인 진단 (틀린 사례 패턴 분석 결과) ──────────────
+    if (diagnosisNote && diagnosisNote.trim().length > 30) {
+      const diagDate = diagnosisUpdatedAt
+        ? new Date(diagnosisUpdatedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })
+        : "최근";
+      lines.push(`\n[🔍 실제 오류 사례 AI 진단 — ${sector} 섹터, ${diagDate} 갱신]`);
+      lines.push(`⛔ 아래는 이 섹터에서 실제로 틀린 분석들의 방법론 오류를 AI가 진단한 결과입니다.`);
+      lines.push(`   동일한 실수를 반복하지 않도록 반드시 숙지하고 이번 분석에 반영하세요:\n`);
+      lines.push(diagnosisNote);
     }
 
     // ── Part 3: 시장 실데이터 벤치마크 (market-harvester 수집, 주 1회 갱신) ──
