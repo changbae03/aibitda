@@ -25,7 +25,6 @@ import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
-import { fetchKRXShortData, buildKRXShortContext } from "../lib/krx-short-client.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { runCalibrationAgent, saveCalibrationNote, getCalibrationNote } from "../lib/calibration-agent.js";
 import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
@@ -3162,7 +3161,7 @@ router.post("/", async (req, res) => {
   const isKoreanTicker = /^\d{6}$/.test(krxCode);
 
   // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, krxShortRows, kosisData] = await Promise.all([
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -3171,7 +3170,6 @@ router.post("/", async (req, res) => {
     yahooFinance.quote(resolvedSymbol).catch(() => null),
     isKoreanTicker ? buildKISStockContext(krxCode).catch(() => null) : Promise.resolve(null),
     isKoreanTicker ? getDartHistoricalContext(krxCode).catch(() => null) : Promise.resolve(null),
-    isKoreanTicker ? fetchKRXShortData(krxCode, 10).catch(() => [] as any[]) : Promise.resolve([]),
     isKoreanTicker ? fetchKOSISData().catch(() => null) : Promise.resolve(null),
   ]);
 
@@ -3234,22 +3232,16 @@ router.post("/", async (req, res) => {
     ? buildECOSContext(ecosMacro)
     : buildFREDContext(fredMacro);
 
-  // KRX 공매도·대차잔고
-  const krxShortContext = isKoreanTicker
-    ? buildKRXShortContext(krxCode, krxShortRows as any[])
-    : null;
-
   // KOSIS 산업동향 (해당 종목 섹터와 매핑)
   const kosisContext = isKoreanTicker
     ? buildKOSISContext(kosisData, industry ?? "")
     : null;
 
   const fullContext = [
-    kisContext,          // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS) — 최우선 오버라이드
+    kisContext,          // KIS 실시간 (상장주식수·현재가·PBR/PER/BPS·대차잔고비율·공매도) — 최우선 오버라이드
     financialData,
     dartBalanceContext,
     dartHistorical,      // DART 시계열 재무 (DB 캐시 — 이전 분석에서 누적된 분기·연간 데이터)
-    krxShortContext,     // KRX 공매도 잔량·대차잔고 — 수급 분석 핵심 지표
     kosisContext,        // KOSIS 산업생산지수·수출입 통계 — 섹터 거시 배경
     macroContext,
     newsData,

@@ -111,6 +111,10 @@ export interface KISStockQuote {
   changeRate: number | null;   // 전일 대비 등락률(%)
   volume: number | null;       // 누적 거래량
   volumeTurnover: number | null; // 거래량 회전율(%)
+  loanRate: number | null;     // 전체 대차잔고비율(%) — whol_loan_rmnd_rate
+  lastShortQty: number | null; // 최근 공매도 체결수량 — last_ssts_cntg_qty
+  shortOverYn: string | null;  // 공매도 과열 여부 (Y/N) — short_over_yn
+  shortSaleYn: string | null;  // 공매도 가능 여부 (Y/N) — ssts_yn
 }
 
 /**
@@ -184,6 +188,10 @@ export async function fetchKISStockQuote(
       changeRate: parseNum(d.prdy_ctrt),
       volume: parseInt_(d.acml_vol),    // 누적 거래량 (주)
       volumeTurnover: parseNum(d.vol_tnrt), // 거래량 회전율 (%)
+      loanRate: parseNum(d.whol_loan_rmnd_rate),  // 전체 대차잔고비율(%)
+      lastShortQty: parseInt_(d.last_ssts_cntg_qty), // 최근 공매도 체결수량
+      shortOverYn: d.short_over_yn ?? null,          // 공매도 과열 여부 (Y/N)
+      shortSaleYn: d.ssts_yn ?? null,                // 공매도 가능 여부 (Y/N)
     };
   } catch (err) {
     console.error(`[kis] fetchKISStockQuote(${stockCode}) 예외:`, err);
@@ -399,6 +407,23 @@ export async function buildKISStockContext(
     }
   }
 
+  // ── 공매도·대차잔고 섹션 ─────────────────────────────────────────────────
+  let shortSection = "";
+  if (quote.loanRate !== null || quote.lastShortQty !== null) {
+    const loanRateStr = quote.loanRate !== null ? `${quote.loanRate.toFixed(2)}%` : "N/A";
+    const loanRisk = quote.loanRate !== null
+      ? (quote.loanRate >= 3 ? "🔴 높음(3%↑)" : quote.loanRate >= 1 ? "🟡 보통(1~3%)" : "🟢 낮음(1%↓)")
+      : "";
+    const shortQtyStr = quote.lastShortQty !== null ? `${quote.lastShortQty.toLocaleString("ko-KR")}주` : "N/A";
+    const overStr = quote.shortOverYn === "Y" ? "⚠️ 과열(Y)" : quote.shortOverYn === "N" ? "정상(N)" : "N/A";
+
+    shortSection = `\n[KIS 공매도·대차잔고 현황]
+대차잔고비율: ${loanRateStr} ${loanRisk}  ← 공매도 선행지표 (대차 후 공매도)
+최근 공매도 체결수량: ${shortQtyStr}
+공매도 과열 여부: ${overStr}
+⭐ 대차잔고비율 급증 시 향후 공매도 증가 압력 경고, 감소 시 숏 커버링 수혜 가능성을 분석에 명시하세요.\n`;
+  }
+
   const context = `
 === KIS 실시간 시세 데이터 (${new Date().toLocaleDateString("ko-KR")} 기준) ===
 종목코드: ${stockCode}
@@ -417,7 +442,7 @@ ${sharesLine ? sharesLine + "\n" : ""}
 | ROE | ${quote.roe !== null ? quote.roe.toFixed(1) + "%" : "N/A"} |
 | 액면가 | ${quote.faceValue !== null ? fmt(quote.faceValue, "원") : "N/A"} |
 | 거래량 회전율 | ${quote.volumeTurnover !== null ? quote.volumeTurnover.toFixed(2) + "%" : "N/A"} |
-${returnSection}${tradingValueSection}
+${returnSection}${tradingValueSection}${shortSection}
 ※ KIS Open API 실전투자 실시간 데이터입니다. 밸류에이션 현재가·BPS·상장주식수 기준으로 최우선 활용하세요.
 `;
 
