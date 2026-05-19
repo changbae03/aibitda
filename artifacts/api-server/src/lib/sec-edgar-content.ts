@@ -1,0 +1,329 @@
+/**
+ * sec-edgar-content.ts
+ * SEC EDGAR 10-K / 20-F 연간보고서에서 "Item 1. Business" 핵심 섹션 텍스트 추출.
+ *
+ * 흐름:
+ *  1. www.sec.gov/files/company_tickers.json → ticker → CIK 매핑 (인메모리 24h 캐시)
+ *  2. data.sec.gov/submissions/CIK{paddedCIK}.json → 최신 10-K/20-F 접수번호 조회
+ *  3. EDGAR 파일링 인덱스 → 주요 문서(HTML) URL 획득
+ *  4. HTML 다운로드 (최대 15MB) → Item 1 Business 섹션 추출
+ *  5. DB(sec_edgar_content 테이블)에 30일 캐시
+ */
+
+import { pool } from "@workspace/db";
+
+const SEC_BASE    = "https://www.sec.gov";
+const SEC_DATA    = "https://data.sec.gov";
+const USER_AGENT  = "AiBITDA Research ai@aibotda.com";
+const MAX_HTML_BYTES = 15 * 1024 * 1024;
+const CACHE_DAYS  = 30;
+const FETCH_TIMEOUT = 20_000;
+
+// ─── In-memory CIK 매핑 (24시간 캐시) ──────────────────────────────────────
+
+let _cikMap: Map<string, number> | null = null;
+let _cikMapFetchedAt = 0;
+
+async function getCikMap(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (_cikMap && now - _cikMapFetchedAt < 24 * 3_600_000) return _cikMap;
+
+  const res = await fetch(`${SEC_BASE}/files/company_tickers.json`, {
+    headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`company_tickers fetch ${res.status}`);
+
+  const raw = await res.json() as Record<
+    string,
+    { cik_str: number; ticker: string; title: string }
+  >;
+  const map = new Map<string, number>();
+  for (const entry of Object.values(raw)) {
+    map.set(entry.ticker.toUpperCase(), entry.cik_str);
+  }
+  _cikMap = map;
+  _cikMapFetchedAt = now;
+  console.log(`[sec-edgar] CIK 맵 로드: ${map.size}개 종목`);
+  return map;
+}
+
+// ─── DB 캐시 ────────────────────────────────────────────────────────────────
+
+let _tableReady = false;
+
+async function ensureTable(): Promise<void> {
+  if (_tableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sec_edgar_content (
+      id         SERIAL PRIMARY KEY,
+      ticker     VARCHAR(20) NOT NULL,
+      form_type  VARCHAR(10),
+      filed_date VARCHAR(12),
+      content    TEXT,
+      fetched_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(ticker)
+    )
+  `);
+  _tableReady = true;
+}
+
+async function getCached(ticker: string): Promise<string | null> {
+  try {
+    await ensureTable();
+    const r = await pool.query<{ content: string; fetched_at: Date }>(
+      "SELECT content, fetched_at FROM sec_edgar_content WHERE ticker = $1",
+      [ticker]
+    );
+    if (!r.rows[0]) return null;
+    const ageMs = Date.now() - r.rows[0].fetched_at.getTime();
+    return ageMs > CACHE_DAYS * 86_400_000 ? null : r.rows[0].content;
+  } catch {
+    return null;
+  }
+}
+
+async function setCached(
+  ticker: string,
+  formType: string,
+  filedDate: string,
+  content: string
+): Promise<void> {
+  try {
+    await ensureTable();
+    await pool.query(
+      `INSERT INTO sec_edgar_content (ticker, form_type, filed_date, content, fetched_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (ticker) DO UPDATE
+         SET form_type = $2, filed_date = $3, content = $4, fetched_at = NOW()`,
+      [ticker, formType, filedDate, content]
+    );
+  } catch { /* 캐시 저장 실패는 무시 */ }
+}
+
+// ─── 최신 10-K / 20-F 접수번호 조회 ─────────────────────────────────────────
+
+interface FilingInfo {
+  accessionNumber: string;
+  filedDate: string;
+  form: string;
+}
+
+async function fetchLatestAnnualFiling(cik: number): Promise<FilingInfo | null> {
+  const paddedCik = String(cik).padStart(10, "0");
+  const url = `${SEC_DATA}/submissions/CIK${paddedCik}.json`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT),
+  });
+  if (!res.ok) return null;
+
+  const data = await res.json() as any;
+  const recent = data.filings?.recent;
+  if (!recent) return null;
+
+  const forms: string[]   = recent.form ?? [];
+  const accNums: string[] = recent.accessionNumber ?? [];
+  const dates: string[]   = recent.filingDate ?? [];
+
+  let best: FilingInfo | null = null;
+  for (let i = 0; i < forms.length; i++) {
+    // 10-K: 국내 상장사 연간보고서 / 20-F: 외국 기업(ADR 등) 연간보고서
+    if (forms[i] === "10-K" || forms[i] === "20-F") {
+      if (!best || dates[i] > best.filedDate) {
+        best = { accessionNumber: accNums[i], filedDate: dates[i], form: forms[i] };
+      }
+    }
+  }
+  return best;
+}
+
+// ─── 파일링 인덱스에서 주요 문서 URL 탐색 ────────────────────────────────────
+
+async function findPrimaryDocUrl(cik: number, accession: string): Promise<string | null> {
+  const accNoDash = accession.replace(/-/g, "");
+  const indexUrl  = `${SEC_BASE}/Archives/edgar/data/${cik}/${accNoDash}/${accession}-index.htm`;
+
+  const res = await fetch(indexUrl, {
+    headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) return null;
+
+  const html = await res.text();
+
+  // href="...htm(l)" 중 인덱스 파일 자체 제외, 첫 번째 항목 선택
+  const matches = [...html.matchAll(/href="([^"]+\.htm(?:l)?)"[^>]*>/gi)];
+  for (const m of matches) {
+    const href = m[1];
+    if (href.includes("-index") || href.includes("R2.htm") || href.includes("R1.htm")) continue;
+    const docUrl = href.startsWith("http")
+      ? href
+      : `${SEC_BASE}${
+          href.startsWith("/")
+            ? href
+            : `/Archives/edgar/data/${cik}/${accNoDash}/${href}`
+        }`;
+    return docUrl;
+  }
+  return null;
+}
+
+// ─── HTML → 평문 변환 ────────────────────────────────────────────────────────
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|tr|li|h[1-6]|section|article)>/gi, "\n")
+    .replace(/<\/(?:td|th)>/gi, "  ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+    .replace(/&#\d+;|&#x[\da-f]+;/gi, "")
+    .replace(/[ \t]{4,}/g, "  ")
+    .replace(/\n{4,}/g, "\n\n")
+    .trim();
+}
+
+// ─── Item 1 Business 섹션 추출 ───────────────────────────────────────────────
+
+function extractBusinessSection(text: string, maxChars = 5_000): string | null {
+  // 시작점: "ITEM 1. BUSINESS" 또는 "ITEM 1 BUSINESS"
+  const startPatterns = [
+    /ITEM\s+1\.?\s+BUSINESS\s*[\n\r]/i,
+    /ITEM\s+1\b[.\s]*\n\s*BUSINESS\b/i,
+    /^ITEM\s+1[\s.]+BUSINESS/im,
+  ];
+
+  let startIdx = -1;
+  for (const pat of startPatterns) {
+    const m = text.match(pat);
+    if (m?.index !== undefined) {
+      startIdx = m.index + m[0].length;
+      break;
+    }
+  }
+
+  if (startIdx === -1) {
+    // 폴백: "BUSINESS" 키워드 이후 내용
+    const bi = text.toUpperCase().indexOf("BUSINESS");
+    if (bi === -1) return null;
+    startIdx = bi + 8;
+  }
+
+  // 끝점: Item 1A Risk Factors 또는 Item 2 Properties
+  const endPatterns = [
+    /ITEM\s+1A\.?\s+RISK\s+FACTOR/i,
+    /ITEM\s+2\.?\s+PROPERT/i,
+    /ITEM\s+2\b/i,
+  ];
+
+  let endIdx = Math.min(text.length, startIdx + maxChars * 3);
+  const searchFrom = startIdx + 200;
+  for (const pat of endPatterns) {
+    const m = text.slice(searchFrom).match(pat);
+    if (m?.index !== undefined) {
+      endIdx = Math.min(endIdx, searchFrom + m.index);
+    }
+  }
+
+  const raw = text.slice(startIdx, endIdx).trim();
+  if (raw.length < 200) return null;
+
+  // 줄 정리: 빈 줄 압축, 페이지 번호 단독 행 제거
+  const cleaned = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !/^\d{1,3}$/.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .slice(0, maxChars);
+
+  return cleaned || null;
+}
+
+// ─── 공개 함수 ───────────────────────────────────────────────────────────────
+
+/**
+ * 미국 주식 티커를 입력받아 SEC 10-K/20-F "Item 1. Business" 주요 내용을 반환.
+ * 실패·타임아웃 시 null 반환 (분석 파이프라인 블로킹 없음).
+ */
+export async function fetchSECEdgarContent(ticker: string): Promise<string | null> {
+  // 한국 종목 코드(숫자 6자리)는 스킵
+  if (/^\d{6}$/.test(ticker)) return null;
+  // .KS/.KQ 접미사 제거
+  const bare = ticker.replace(/\.(KS|KQ)$/i, "").toUpperCase();
+
+  // ── 캐시 확인 ──
+  const cached = await getCached(bare);
+  if (cached) {
+    console.log(`[sec-edgar] ${bare} 캐시 히트`);
+    return cached;
+  }
+
+  try {
+    // ── CIK 조회 ──
+    const cikMap = await getCikMap();
+    const cik = cikMap.get(bare);
+    if (!cik) {
+      console.log(`[sec-edgar] ${bare} CIK 없음 — 스킵`);
+      return null;
+    }
+
+    // ── 최신 10-K / 20-F 접수번호 조회 ──
+    const filing = await fetchLatestAnnualFiling(cik);
+    if (!filing) {
+      console.log(`[sec-edgar] ${bare} (CIK ${cik}) 연간보고서 없음`);
+      return null;
+    }
+
+    // ── 주요 문서 URL 탐색 ──
+    const docUrl = await findPrimaryDocUrl(cik, filing.accessionNumber);
+    if (!docUrl) {
+      console.log(`[sec-edgar] ${bare} 주요 문서 URL 탐색 실패`);
+      return null;
+    }
+
+    // ── HTML 다운로드 (크기 제한) ──
+    const docRes = await fetch(docUrl, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!docRes.ok) return null;
+
+    const cl = Number(docRes.headers.get("content-length") ?? "0");
+    if (cl > MAX_HTML_BYTES) {
+      console.warn(`[sec-edgar] ${bare} 문서 ${(cl / 1e6).toFixed(1)}MB > 15MB 제한, 스킵`);
+      return null;
+    }
+
+    const rawHtml = await docRes.text();
+    if (rawHtml.length > MAX_HTML_BYTES) return null;
+
+    // ── Item 1 Business 섹션 추출 ──
+    const text    = htmlToText(rawHtml);
+    const section = extractBusinessSection(text, 5_000);
+    if (!section) {
+      console.log(`[sec-edgar] ${bare} Item 1 Business 섹션 추출 실패`);
+      return null;
+    }
+
+    const result = [
+      `[📄 SEC 10-K — Item 1. Business (${filing.filedDate} 제출, ${filing.form})]`,
+      `⚠️ SEC 공시 원문 기반 사업 내용. 주요 제품·시장·경쟁·전략 파악에 활용. 재무 수치는 Yahoo Finance 섹션과 교차 검증 필수.`,
+      section,
+    ].join("\n");
+
+    await setCached(bare, filing.form, filing.filedDate, result);
+    console.log(`[sec-edgar] ${bare} 10-K 추출 완료 (${result.length}자, ${filing.filedDate})`);
+    return result;
+
+  } catch (e) {
+    console.warn("[sec-edgar] 조회 실패:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
