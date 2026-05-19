@@ -558,8 +558,8 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   }
 
   const changeColor = holding.change1d == null ? "text-muted-foreground"
-    : holding.change1d > 0 ? "text-emerald-400"
-    : holding.change1d < 0 ? "text-red-400"
+    : holding.change1d > 0 ? "text-red-500"
+    : holding.change1d < 0 ? "text-blue-500"
     : "text-muted-foreground";
 
   // 진행 바에 쓸 "대표" 목표가 — 내 분석 우선, 없으면 집단지성
@@ -723,7 +723,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         </p>
                         {a!.upsidePct != null && (
                           <p className={cn("text-[10px] tabular-nums font-semibold shrink-0",
-                            a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                            a!.upsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
                             {a!.upsidePct >= 0 ? "▲" : "▼"}{fmtPct(Math.abs(a!.upsidePct))}
                           </p>
                         )}
@@ -740,7 +740,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                         </p>
                         {a!.collectiveUpsidePct != null && (
                           <p className={cn("text-[10px] tabular-nums font-semibold shrink-0",
-                            a!.collectiveUpsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                            a!.collectiveUpsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
                             {a!.collectiveUpsidePct >= 0 ? "▲" : "▼"}{fmtPct(Math.abs(a!.collectiveUpsidePct))}
                           </p>
                         )}
@@ -755,7 +755,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     </p>
                     {a!.upsidePct != null && (
                       <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
-                        a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                        a!.upsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
                         {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} {isEn ? "upside" : "여력"}
                       </p>
                     )}
@@ -771,7 +771,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     </p>
                     {a!.upsidePct != null && (
                       <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
-                        a!.upsidePct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                        a!.upsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
                         {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} {isEn ? "upside" : "여력"}
                       </p>
                     )}
@@ -1428,7 +1428,7 @@ function PortfolioHero({
           {avgUpside != null && (
             <div className={cn(
               "mb-1.5 flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] font-semibold",
-              hasPositive ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+              hasPositive ? "bg-red-500/15 text-red-500" : "bg-blue-500/15 text-blue-500"
             )}>
               {hasPositive ? "▲" : "▼"} {isEn ? `Avg. ${Math.abs(avgUpside).toFixed(1)}% upside` : `평균 ${Math.abs(avgUpside).toFixed(1)}% 여력`}
             </div>
