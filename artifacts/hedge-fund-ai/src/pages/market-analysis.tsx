@@ -577,6 +577,7 @@ export default function MarketAnalysis() {
   const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq">("kospi");
   const [isStarting, setIsStarting]   = useState(false);
   const [techOpen, setTechOpen]       = useState(false);
+  const [guideOpen, setGuideOpen]     = useState(false);
   const [brief, setBrief]             = useState<MarketBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
 
@@ -798,14 +799,21 @@ export default function MarketAnalysis() {
               </div>
             )}
 
-            {/* ── 이 화면 보는 법 (항상 펼쳐진 안내) ─────────────────────── */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
-                <Info className="w-4 h-4 text-primary/70" />
-                <span className="text-sm font-semibold text-foreground">이 화면 보는 법</span>
-              </div>
+            {/* ── 이 화면 보는 법 (토글) ───────────────────────────────────── */}
+            <div className="rounded-2xl border border-white/[0.06] bg-transparent overflow-hidden">
+              <button
+                onClick={() => setGuideOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-primary/50" />
+                  <span className="text-sm font-semibold text-muted-foreground/60">이 화면 보는 법</span>
+                </div>
+                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/30 transition-transform", guideOpen && "rotate-180")} />
+              </button>
 
-              <div className="px-4 py-5 space-y-6">
+              {guideOpen && (
+              <div className="px-4 pb-5 pt-2 space-y-6 border-t border-white/[0.05]">
 
                 {/* 1. AI 예측 숫자 */}
                 <div className="space-y-2">
@@ -817,26 +825,6 @@ export default function MarketAnalysis() {
                     <span className="text-red-400 font-medium"> 빨간색 숫자·화살표</span>는 오를 것 같다, <span className="text-blue-400 font-medium">파란색은 내릴 것 같다</span>는 뜻이에요.
                     정확한 숫자보다 <span className="font-medium text-foreground">방향(오를지 내릴지)</span>을 참고하는 데 쓰세요.
                   </p>
-                </div>
-
-                {/* 3. 차트 */}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">📈</span> 차트 읽는 법
-                  </p>
-                  <div className="bg-white/[0.03] rounded-xl px-4 py-3 space-y-2.5">
-                    {[
-                      { mark: "——", color: "text-white/70", desc: "흰색 실선 — 최근 약 4개월간의 실제 지수 흐름입니다." },
-                      { mark: "- -", color: "text-red-400", desc: "점선 — 오늘 이후 AI가 예측하는 3일 구간입니다." },
-                      { mark: "░░░", color: "text-muted-foreground", desc: "반투명 영역 — 예측의 오차 범위예요. 이 안에서 실제 값이 움직일 가능성이 높습니다. 넓을수록 AI도 확신이 낮다는 뜻이에요." },
-                      { mark: "│", color: "text-white/40", desc: "세로 점선 — 오늘(현재)을 나타내는 기준선입니다." },
-                    ].map(item => (
-                      <div key={item.mark} className="flex items-start gap-3">
-                        <span className={cn("text-sm font-bold shrink-0 w-6", item.color)}>{item.mark}</span>
-                        <p className="text-xs text-muted-foreground/75 leading-relaxed">{item.desc}</p>
-                      </div>
-                    ))}
-                  </div>
                 </div>
 
                 {/* 4. 적중률 */}
@@ -998,6 +986,7 @@ export default function MarketAnalysis() {
                   투자 결정은 반드시 전문가와 상담하시거나 본인이 직접 판단하세요.
                 </p>
               </div>
+              )}
             </div>
 
             {/* ── 기술 정보 (개발자용, 접어두기) ──────────────────────── */}
