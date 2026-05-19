@@ -6,9 +6,9 @@ import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote } from "../lib/kis-client";
 
-const TTL_BATCH_QUOTES      = 2  * 60 * 1000;  //  2분 — 현재가 (잦은 변동)
-const TTL_BATCH_SPARKLINES  = 30 * 60 * 1000;  // 30분 — 90일 차트 (거의 불변)
-const TTL_BATCH_PERFORMANCE = 60 * 60 * 1000;  // 60분 — 과거 성과 (불변)
+const TTL_BATCH_QUOTES      =  3 * 60 * 1000;  //  3분 — 현재가
+const TTL_BATCH_SPARKLINES  =  6 * 60 * 60 * 1000;  //  6시간 — 90일 차트 (장 마감 후 변경)
+const TTL_BATCH_PERFORMANCE = 24 * 60 * 60 * 1000;  // 24시간 — 과거 수익률 (불변)
 
 const yahooFinance = new YahooFinance();
 
