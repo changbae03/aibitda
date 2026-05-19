@@ -182,8 +182,67 @@ SOP(Sum-of-Parts) 합산:
 `;
   }
 
+  // ── 의료기기 / 헬스케어 기기 ─────────────────────────────────────────────
+  const isMedDevice =
+    /레이|디오|루트로닉|뷰노|클래시스|큐렉소|인바디|바텍|오스코텍|힘스|메디트|덴티스|오스템임플란트|제이시스메디칼|이루다|하이로닉|원텍|제이엘케이|뷰웍스|나노엔텍|씨젠/.test(name) ||
+    /intuitive surgical|stryker|medtronic|boston scientific|hologic|dexcom|insulet|penumbra|shockwave|enovis|globus medical|nuvasive|masimo|invacare|natus medical/.test(name) ||
+    /의료기기|치과기기|임플란트|수술로봇|의료영상|체외진단|피부미용기기|레이저치료기|안과기기|정형외과기기/.test(ind);
+
+  if (isMedDevice) {
+    return `
+[섹터 특화 지침 — 의료기기 / 헬스케어 기기]
+
+━━━ 0. 세부 유형 분류 (분석 시작 전 필수 확인) ━━━
+아래 5가지 유형 중 해당 유형을 먼저 확정하고, 유형별 KPI와 밸류에이션 가이드를 적용하세요.
+① **진단장비·의료영상**: CT/MRI/초음파/X선/내시경 장비 제조. 인스톨베이스(Installed Base)·소모품 반복매출 구조.
+② **치과(임플란트·CAD/CAM·구강스캐너)**: ASP·시장점유율·중국 점유율 변화가 핵심. 소비 심리 사이클 영향 받음.
+③ **피부미용·에너지기반(EBMD)**: 레이저·HIFU·RF 기기. 클리닉 고객사 집중도·신제품 출시 사이클·중국 수출 의존도 주목.
+④ **수술로봇·의료IT·디지털헬스**: 플랫폼 구독 수익(SaaS형) + 소모품 + 서비스. 기술 진입장벽과 병원 전환비용이 멀티플 결정.
+⑤ **체외진단(IVD)·현장진단(POCT)**: 진단 키트·시약 반복 수요. 팬데믹 특수 여부와 엔데믹 이후 매출 정상화 여부 구분 필수.
+
+━━━ 1. 핵심 KPI ━━━
+- **Installed Base (설치 대수)**: 장비형 비즈니스의 미래 소모품·서비스 매출 예측 기반
+- **소모품·서비스 매출 비중(%)**: 높을수록 수익 가시성↑ → 멀티플 프리미엄 정당화
+- **ASP(평균판매단가)**: 제품 믹스 변화(고가/중가/저가) 및 OEM·자체브랜드 비중
+- **수출 비중 및 국가 믹스**: 중국·미국·유럽·신흥국 비중 — 중국 규제리스크, 미국 FDA 허가 여부
+- **규제 허가 현황**: FDA 510(k)/PMA, CE마크(EU MDR), MFDS(식약처), NMPA(중국) — 미허가 시장은 매출 기회 제한
+- **R&D 투자 효율**: 매출 대비 R&D 비중(%), 허가 파이프라인 수·타임라인
+
+━━━ 2. 구조 특이사항 ━━━
+- **바이오와 혼동 금지**: 의료기기는 매출·영업이익이 있는 흑자 기업이 대부분 → DCF·EV/EBITDA 적용 가능. rNPV 단독 사용 금지.
+- **규제 주기 리스크**: FDA 510(k) CTA 또는 EU MDR 전환 심사 지연이 단기 매출에 직접 타격
+- **중국 의존도 이중성**: 수출 성장의 핵심이지만, 현지 로컬 브랜드 급성장·VBP(Volume-Based Procurement) 제도로 ASP 압박
+- **대형사 인수합병(M&A) 프리미엄**: Stryker·Medtronic·J&J 등이 고성장 틈새 기업 인수 → 소형 의료기기주에 Buy-out Premium 가산 가능 (단, 실제 협의 없을 시 보수적 적용)
+- **소모품 반복매출**: 장비 판매 → 소모품·유지보수 수익 구조. Installed Base가 클수록 매출 하방 지지
+
+━━━ 3. 밸류에이션 방법론 ━━━
+**Lead: EV/EBITDA + P/E 복합**
+- EV/EBITDA: 성장기(매출증가율 20%+) 15~25x / 성숙기(10~15%) 10~18x / 저성장 8~12x
+- P/E: 성장기 25~40x / 성숙기 18~28x
+- EV/Sales: 초기 성장 기업(흑자 전환 전) 3~6x
+- DCF: WACC 8~11% (한국 의료기기), WACC 7~10% (글로벌 대형사), Terminal Growth 2~3%
+
+**소모품 비중 기반 멀티플 조정**:
+| 소모품+서비스 비중 | EV/EBITDA 프리미엄 |
+|-----------------|-----------------|
+| 50%+ (플랫폼형)  | 피어 +20~30%     |
+| 30~50% (혼합형) | 피어 ±0%         |
+| 30% 미만 (일회성)| 피어 -10~20%     |
+
+**SOTP (복합 의료기기 대형사)**:
+- 사업부별(진단/치료/디지털) EV/EBITDA 독립 적용 후 합산
+
+━━━ 4. 피어 비교 기준 ━━━
+- 치과 임플란트: 오스템임플란트(048260), 덴티움(145720), Dentsply Sirona(XRAY), Align Technology(ALGN)
+- 피부미용기기: 클래시스(214150), 루트로닉(085370), 원텍(336570), 하이로닉(149980), Cutera(CUTR)
+- 수술로봇: 인튜이티브서지컬(ISRG) — 글로벌 벤치마크, EV/EBITDA 40~60x 프리미엄 인정
+- 체외진단: 씨젠(096530), 수젠텍(253840), Abbott(ABT), bioMérieux
+- 의료영상·AI진단: 뷰노(338220), JLK(322510), Butterfly Network(BFLY)
+`;
+  }
+
   // ── 바이오 / 제약 ──────────────────────────────────────────────────────────
-  if (/바이오|생명과학|제약|헬스케어|유전체|신약|의료기기/.test(ind)) {
+  if (/바이오|생명과학|제약|헬스케어|유전체|신약/.test(ind)) {
     return `
 [섹터 특화 지침 — 한국 바이오/제약]
 
@@ -1292,15 +1351,21 @@ Book-to-Bill 분석:
 `;
   }
 
-  // ── K-배터리 / 2차전지 (Battery / EV Battery) ─────────────────────────────
-  const isBattery =
-    /lg에너지솔루션|lges|삼성sdi|sk이노베이션|sk온|에코프로비엠|포스코퓨처엠|엘앤에프|코스모신소재|천보|일진머티리얼즈|솔루스첨단소재/.test(name) ||
+  // ── K-배터리 / 2차전지 — 셀 제조사 ─────────────────────────────────────
+  const isBatteryCellMfr =
+    /lg에너지솔루션|lges|삼성sdi|sk이노베이션|sk온/.test(name) ||
     /lg energy solution|panasonic energy|catl|byd battery|northvolt|svolt|solid power|quantumscape|enovix|freyr/.test(name) ||
-    /battery manufacturer|ev battery|lithium.?ion battery|battery cell|battery pack|cathode material|anode material|electrolyte|solid.?state battery|battery technology/.test(ind);
+    /battery manufacturer|battery cell|battery pack|ev battery cell|solid.?state battery/.test(ind);
 
-  if (isBattery) {
+  // ── K-배터리 / 2차전지 — 소재·부품사 ──────────────────────────────────────
+  const isBatteryMaterial =
+    !isBatteryCellMfr &&
+    (/에코프로비엠|포스코퓨처엠|엘앤에프|천보|일진머티리얼즈|코스모신소재|솔루스첨단소재|sk아이이테크놀로지|더블유씨피|나노신소재|동화기업|후성/.test(name) ||
+    /cathode material|anode material|electrolyte material|separator film|lithium.?ion material|battery material|battery component/.test(ind));
+
+  if (isBatteryCellMfr) {
     return `
-[섹터 특화 지침 — K-배터리 / 2차전지 (EV Battery)]
+[섹터 특화 지침 — K-배터리 / 2차전지 셀 제조사 (EV Battery Cell)]
 핵심 KPI: 연간 생산 용량(GWh, 현재/예정), 가동률(%), ASP($/kWh 또는 원/kWh), EBITDA/kWh, 장기공급계약(LTA) 잔액·기간, 고객사 집중도(Tesla/GM/현대 비중), 소재 원가 패스스루(%) 비율, 에너지 밀도(Wh/kg), 전고체 개발 진척도
 
 구조 특이사항:
@@ -1336,6 +1401,50 @@ Book-to-Bill 분석:
   | Bull    | -8%/년     | 현재-20% | 90%+ |           |         |
 
 피어: CATL(300750.SZ), Panasonic Energy, Samsung SDI, BYD Battery, QuantumScape(QS) — EV/GWh, EBITDA/kWh, Gross Margin 비교
+`;
+  }
+
+  // ── K-배터리 / 2차전지 — 소재·부품사 템플릿 ──────────────────────────────
+  if (isBatteryMaterial) {
+    return `
+[섹터 특화 지침 — K-배터리 소재·부품사 (Battery Materials & Components)]
+
+━━━ 0. 세부 유형 분류 (필수 확인) ━━━
+① **양극재(Cathode Material)**: NCM/NCA/LFP 분말 제조. 에코프로비엠·포스코퓨처엠·엘앤에프·코스모신소재. 리튬·니켈·망간·코발트 원가 직결.
+② **음극재(Anode Material)**: 인조흑연·천연흑연·실리콘음극재. 일진머티리얼즈(동박 겸). 중국 BTR·Shanshan 대비 프리미엄 근거 필수.
+③ **분리막(Separator)**: 건식/습식 PE·PP 필름. SK아이이테크놀로지·더블유씨피. 두께·기공률·열수축률이 기술 차별화 핵심.
+④ **전해질·전해액(Electrolyte)**: LiPF6 기반 액체 전해질, 전고체 전해질 전환 로드맵. 천보·동화기업·후성.
+⑤ **동박·알루미늄박(Foil)**: 집전체 소재. 일진머티리얼즈·SKC. 초박막화(6μm→4μm) 기술력 및 수율이 경쟁력.
+
+핵심 KPI: 가공마진(Processing Margin = 소재 ASP − 핵심 광물 원가), 출하량(톤/월), 핵심 광물 가격 민감도(리튬·니켈·코발트 1% 변화 시 마진 영향), LTA 수주잔고(톤·금액), 고객사 집중도(상위 1개사 비중), CAPA 가동률(%), 전고체 전환 준비 여부
+
+━━━ 1. 구조 특이사항 ━━━
+- **셀 제조사 EV/GWh 적용 절대 금지**: 소재사는 GWh 단위가 아닌 톤(ton) 단위로 수익이 발생. EV/GWh는 셀 제조사 전용 배수.
+- **가공마진(Processing Margin) 방어가 핵심**: 소재 ASP는 핵심 광물 가격에 연동되어 자동으로 오르내리지만, 가공마진은 협상력·효율화로 결정. 리튬 가격 급락 시 ASP 하락에도 마진이 방어되는지 확인.
+- **핵심 광물 가격 사이클**: 리튬(탄산리튬·수산화리튬)·니켈 가격은 EV 수요 사이클에 연동. 사이클 하단에서 원가 메리트 발생하나 ASP도 하락 → 마진 시뮬레이션 필수.
+- **LTA(장기공급계약) 수주잔고 = 매출 가시성**: 확정 LTA는 DCF Floor. LTA 비중이 낮을수록 스팟 노출이 높아 실적 변동성 확대.
+- **중국 경쟁 심화**: CNGR·Ronbay(중국 양극재)가 가격 공세 중. 한국 소재사의 프리미엄 배수 유지 여부는 고성능 셀(하이니켈, 전고체) 공급 여부에 달림.
+
+━━━ 2. 밸류에이션 방법론 ━━━
+**Lead: EV/EBITDA + DCF 복합**
+- EV/EBITDA (성장기·LTA 가시성 높음): 12~20x
+- EV/EBITDA (성숙·저성장): 8~13x
+- DCF: WACC 9~11%, Terminal Growth 1.5~2.5%
+- EV/Sales: 초기 공장 램프업 중 적자 시 보조 참고용 0.8~2.5x
+
+**3-시나리오 민감도 (핵심 광물 변수)**:
+| 시나리오 | 리튬 가격 | 니켈 가격 | 가공마진 | 가동률 | EBITDA 마진 | 목표주가 |
+|---------|---------|---------|--------|------|-----------|---------|
+| Bear    | 현재-30% | 현재-20% | 최소화  | 60%  |           |         |
+| Base    | 현재     | 현재     | 정상화  | 80%  |           |         |
+| Bull    | 현재+20% | 현재+15% | 확대   | 90%+ |           |         |
+
+※ 리튬·니켈 가격 변동은 소재 ASP에 그대로 반영되므로 매출이 아닌 가공마진(절대금액)으로 민감도 분석.
+
+━━━ 3. 피어 비교 기준 ━━━
+- 양극재: 에코프로비엠(247540), 포스코퓨처엠(003670), 엘앤에프(066970), 코스모신소재(005070), 글로벌: CNGR(300919.SZ), Ronbay(688005.SH) — EV/EBITDA, 가공마진, 하이니켈 비중 비교
+- 분리막: SK아이이테크놀로지(361610), 더블유씨피(383310), 글로벌: Asahi Kasei, Toray — 두께·수율·글로벌 CAPA 비교
+- 전해질: 천보(278280), 동화기업(025900), 후성(093370) — LiPF6 점유율, 전고체 준비 여부
 `;
   }
 
@@ -1882,27 +1991,52 @@ function needsShipbuilding(industry: string, companyName: string, ticker?: strin
 }
 
 function needsBattery(industry: string, companyName: string, ticker?: string): boolean {
+  return needsBatteryCellMfr(industry, companyName, ticker) || needsBatteryMaterial(industry, companyName, ticker);
+}
+
+function needsBatteryCellMfr(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
 
-  if (/lg에너지솔루션|lges|삼성sdi|sk이노베이션|sk온|에코프로비엠|포스코퓨처엠|엘앤에프|천보|일진머티리얼/.test(name)) return true;
-  if (/lg energy solution|panasonic energy|catl|northvolt|quantumscape|enovix|solid power/.test(name)) return true;
-  if (/battery manufacturer|ev battery|lithium.?ion battery|battery cell|cathode material|anode material|solid.?state battery/.test(ind)) return true;
+  if (/lg에너지솔루션|lges|삼성sdi|sk이노베이션|sk온/.test(name)) return true;
+  if (/lg energy solution|panasonic energy|catl|byd battery|northvolt|svolt|solid power|quantumscape|enovix|freyr/.test(name)) return true;
+  if (/battery manufacturer|battery cell|battery pack|ev battery cell|solid.?state battery/.test(ind)) return true;
 
-  const BATTERY_TICKERS = new Set([
+  const CELL_TICKERS = new Set([
     "373220", // LG에너지솔루션
     "006400", // 삼성SDI
     "096770", // SK이노베이션
+    "QS",     // QuantumScape
+    "ENVX",   // Enovix
+  ]);
+  if (bare && CELL_TICKERS.has(bare)) return true;
+  return false;
+}
+
+function needsBatteryMaterial(industry: string, companyName: string, ticker?: string): boolean {
+  if (needsBatteryCellMfr(industry, companyName, ticker)) return false;
+  const ind  = (industry ?? "").toLowerCase();
+  const name = (companyName ?? "").toLowerCase();
+  const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "").toUpperCase();
+
+  if (/에코프로비엠|포스코퓨처엠|엘앤에프|천보|일진머티리얼즈|코스모신소재|솔루스첨단소재|sk아이이테크놀로지|더블유씨피|나노신소재|동화기업|후성/.test(name)) return true;
+  if (/cathode material|anode material|electrolyte material|separator film|lithium.?ion material|battery material|battery component/.test(ind)) return true;
+
+  const MATERIAL_TICKERS = new Set([
     "247540", // 에코프로비엠
     "003670", // 포스코퓨처엠
     "066970", // L&F(엘앤에프)
     "278280", // 천보
     "271940", // 일진머티리얼즈
-    "QS",     // QuantumScape
-    "ENVX",   // Enovix
+    "005070", // 코스모신소재
+    "336370", // 솔루스첨단소재
+    "361610", // SK아이이테크놀로지
+    "383310", // 더블유씨피
+    "025900", // 동화기업
+    "093370", // 후성
   ]);
-  if (bare && BATTERY_TICKERS.has(bare)) return true;
+  if (bare && MATERIAL_TICKERS.has(bare)) return true;
   return false;
 }
 
@@ -2041,6 +2175,7 @@ export function buildPrompt(
   const shippingFlag        = needsShipping(industry, companyName, ticker);
   const cbDilutionFlag      = needsCBDilutionCheck(industry, companyName, ticker);
   const korBiotechFlag      = needsKorBiotech(industry, companyName, ticker);
+  const batteryMaterialFlag = needsBatteryMaterial(industry, companyName, ticker);
 
   const _now = new Date();
   const _currentYear = _now.getFullYear();
@@ -3167,7 +3302,10 @@ PBR < 1인 기업이 ROE 개선·주주환원 계획을 공시하면 할증 밸�
 | OSAT·후공정·첨단패키징 | 8~18x | 5~10x | 1.0~2.5x | 1.0~3.0x | 8~18% | 0.5~2.0% |
 | 디스플레이(OLED·LCD) | 8~20x | 4~10x | 0.8~2.0x | 0.8~2.5x | 5~15% | 0.5~2.0% |
 | IT서비스·플랫폼 | 20~35x | 12~20x | 2~5x | 3~8x | 10~20% | 0.3~1.5% |
-| 2차전지·소재 | 15~30x | 8~18x | 1.5~4x | 2~6x | 8~18% | 0.5~2.0% |
+| 2차전지 셀 제조 | 20~40x | 10~20x | 2~5x | 3~8x | 5~18% | 0.3~1.5% |
+| 2차전지 소재·부품(양극재/분리막 등) | 10~20x | 6~14x | 1.0~3.0x | 1.5~4.0x | 6~18% | 0.5~2.0% |
+| 의료기기(흑자·소모품 비중 높음) | 20~35x | 12~22x | 3~6x | 3~8x | 12~28% | 0.5~2.0% |
+| 의료기기(성장초기·수출확장) | 30~50x | 18~30x | 4~8x | 5~12x | 8~20% | 0~1.0% |
 | 바이오·제약(흑자) | 20~50x | 10~20x | 2~5x | 3~8x | 8~20% | 0.3~1.5% |
 | 바이오·제약(적자/파이프라인) | N/A | N/A | 2~6x | 4~12x | 적자 | 0% |
 | 화학·정유 | 8~16x | 5~9x | 0.7~1.4x | 0.3~0.7x | 4~10% | 2.0~4.5% |
@@ -3587,8 +3725,10 @@ Unlevered Beta 참조: KRW 종목은 아래 [⭐ 한국 1순위] 표 사용. USD
 | 반도체·메모리 | 1.2~1.5 |
 | 반도체 장비·소재 | 1.2~1.5 |
 | IT·소프트웨어·플랫폼 | 1.0~1.3 |
-| 2차전지·소재·장비 | 1.2~1.5 |
+| 2차전지 셀 제조 | 1.3~1.6 |
+| 2차전지 소재·부품(양극재/분리막 등) | 1.2~1.5 |
 | 바이오·제약 | 1.2~1.5 |
+| 의료기기·헬스케어 기기 | 0.9~1.2 |
 | 방산·우주·위성 장비 | 0.9~1.2 |
 | 통신·위성서비스 | 0.6~0.9 |
 | 전자부품·광학장비 | 0.9~1.2 |
@@ -3609,7 +3749,9 @@ Unlevered Beta 참조: KRW 종목은 아래 [⭐ 한국 1순위] 표 사용. USD
 | 반도체·메모리 | 0.8~1.5 |
 | 반도체 장비·소재 | 1.5~2.5 |
 | IT·소프트웨어 | 2.0~4.0 |
-| 2차전지·소재 | 0.8~1.5 |
+| 2차전지 셀 제조 | 0.6~1.2 |
+| 2차전지 소재·부품 | 1.0~2.0 |
+| 의료기기 | 1.5~3.0 |
 | 방산·위성 장비 | 1.5~2.5 |
 | 기계·산업장비 | 1.5~2.5 |
 | 자동차·부품 | 1.2~2.0 |
