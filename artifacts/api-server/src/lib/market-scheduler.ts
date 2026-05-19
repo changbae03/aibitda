@@ -9,7 +9,7 @@
  * node-cron 없이 1분 간격 setInterval로 구현
  * (Replit 환경에서 외부 패키지 의존 최소화)
  */
-import { runPipeline, runDailyIncrementalUpdate, tryRestoreFromDisk, loadMeta } from "./lstm-predictor.js";
+import { runPipeline, runDailyIncrementalUpdate, tryRestoreFromDisk, tryRestoreFromDB, loadMeta } from "./lstm-predictor.js";
 import { invalidateBriefCache } from "../routes/market-analysis.js";
 
 // 실행 중복 방지용 플래그
@@ -59,16 +59,32 @@ function checkAndRun() {
 }
 
 export function startMarketScheduler() {
-  // 1. 서버 시작 시 저장된 모델 복원 시도 (재학습 없이 빠른 복구)
-  console.log("[scheduler] 시작 — 저장 모델 복원 시도 중...");
-  tryRestoreFromDisk().then(restored => {
-    if (restored) {
+  // 1. 서버 시작 시 모델 복원: 디스크 → DB → 즉시 전체학습 순서로 시도
+  console.log("[scheduler] 시작 — 모델 복원 시도 중...");
+
+  (async () => {
+    // 1-a. 디스크에 저장된 모델 시도
+    const diskOk = await tryRestoreFromDisk();
+    if (diskOk) {
       const meta = loadMeta();
-      console.log(`[scheduler] 모델 복원 성공 (last_trained=${meta?.lastTrained ?? "?"})`);
-    } else {
-      console.log("[scheduler] 저장 모델 없음 — API 첫 호출 시 완전 학습 실행");
+      console.log(`[scheduler] 디스크 복원 성공 (last_trained=${meta?.lastTrained ?? "?"})`);
+      return;
     }
-  });
+
+    // 1-b. DB 캐시 시도 (재배포 후에도 이전 예측값 즉시 표시)
+    console.log("[scheduler] 디스크 모델 없음 — DB 캐시 시도...");
+    const dbOk = await tryRestoreFromDB();
+    if (dbOk) {
+      console.log("[scheduler] DB 캐시 복원 성공 — 백그라운드로 최신 학습 시작");
+      // DB 캐시는 즉시 표시하되, 최신 데이터로 백그라운드 재학습도 진행
+      runPipeline(true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
+      return;
+    }
+
+    // 1-c. 캐시 없음 — 즉시 전체 학습 시작 (사용자 방문 대기 안 함)
+    console.log("[scheduler] 캐시 없음 — 즉시 전체 학습 시작 (~90초)");
+    runPipeline(false).catch(e => console.error("[scheduler] 초기 학습 실패:", e?.message));
+  })();
 
   // 2. 1분마다 스케줄 조건 확인
   setInterval(checkAndRun, 60_000);

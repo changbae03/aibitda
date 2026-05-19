@@ -15,6 +15,7 @@ import fs   from "node:fs";
 import path from "node:path";
 import * as tf from "@tensorflow/tfjs";
 import YahooFinance from "yahoo-finance2";
+import { pool } from "@workspace/db";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -854,6 +855,52 @@ async function trainFull(
   return result;
 }
 
+// ─── DB 캐시 (재배포 후에도 예측값 즉시 표시) ───────────────────────────────
+
+const DB_CACHE_KEY = "lstm_pipeline_result_v1";
+const DB_CACHE_TTL_DAYS = 7;
+
+async function saveResultsToDB(kospi: IndexResult, kosdaq: IndexResult): Promise<void> {
+  try {
+    const expires = new Date();
+    expires.setDate(expires.getDate() + DB_CACHE_TTL_DAYS);
+    const payload = JSON.stringify({ kospi, kosdaq, savedAt: new Date().toISOString() });
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [DB_CACHE_KEY, payload, expires.toISOString()],
+    );
+    console.log("[pipeline] 예측 결과 DB 저장 완료");
+  } catch (e: any) {
+    console.warn("[pipeline] DB 저장 실패 (무시):", e?.message);
+  }
+}
+
+export async function tryRestoreFromDB(): Promise<boolean> {
+  try {
+    const r = await pool.query<{ data: { kospi: IndexResult; kosdaq: IndexResult; savedAt: string } }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [DB_CACHE_KEY],
+    );
+    const row = r.rows[0]?.data;
+    if (!row?.kospi || !row?.kosdaq) return false;
+
+    _status = {
+      running: false, ready: true,
+      steps: defaultSteps().map(s => ({ ...s, status: "done" as const })),
+      trainedAt: row.savedAt, trainingMs: 0,
+      kospi: row.kospi, kosdaq: row.kosdaq,
+    };
+    _lastRun = Date.now();
+    console.log(`[pipeline] DB 캐시 복원 완료 (savedAt=${row.savedAt})`);
+    return true;
+  } catch (e: any) {
+    console.warn("[pipeline] DB 캐시 복원 실패:", e?.message);
+    return false;
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function getStatus(): PipelineStatus & { initializing?: boolean } {
@@ -970,6 +1017,8 @@ export async function runPipeline(force=false): Promise<void> {
       kospi:kospiResult, kosdaq:kosdaqResult,
     };
     console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | 피처 ${N_FEATURES}개`);
+    // 재배포 후에도 즉시 표시될 수 있도록 DB에 저장
+    saveResultsToDB(kospiResult, kosdaqResult).catch(() => {});
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
     const f=_status.steps.find(s=>s.status==="running");
