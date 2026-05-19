@@ -137,19 +137,18 @@ const ADMIN_GROUPS = [
   },
 ];
 
-function CreditDots({ credits }: { credits: CreditInfo }) {
+function CreditBar({ credits }: { credits: CreditInfo }) {
   const remaining = Math.max(0, credits.dailyLimit - credits.dailyUsed);
+  const pct = credits.dailyLimit > 0 ? (remaining / credits.dailyLimit) * 100 : 0;
+  const color = remaining === 0 ? "bg-muted-foreground/30" : remaining <= 3 ? "bg-amber-400" : "bg-[#FF8A7A]";
   return (
-    <div className="flex items-center gap-1">
-      {Array.from({ length: credits.dailyLimit }).map((_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "w-2 h-2 rounded-full transition-colors",
-            i < remaining ? "bg-[#FF8A7A]" : "bg-muted-foreground/20"
-          )}
-        />
-      ))}
+    <div className="flex items-center gap-1.5 w-full">
+      <div className="flex-1 h-1 rounded-full bg-muted-foreground/15 overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={cn("text-[10px] font-semibold tabular-nums shrink-0", remaining === 0 ? "text-muted-foreground/40" : remaining <= 3 ? "text-amber-400" : "text-[#FF8A7A]")}>
+        {remaining}
+      </span>
     </div>
   );
 }
@@ -283,9 +282,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex-1 min-w-0 overflow-hidden">
             <p className="text-[12px] font-semibold text-foreground truncate">{user.nickname}</p>
             {credits && (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <CreditDots credits={credits} />
-                <span className="text-[10px] text-muted-foreground/60">{isEn ? `${Math.max(0, credits.dailyLimit - credits.dailyUsed)} left today` : `오늘 ${Math.max(0, credits.dailyLimit - credits.dailyUsed)}회 남음`}</span>
+              <div className="mt-0.5 w-full pr-1">
+                <CreditBar credits={credits} />
               </div>
             )}
           </div>
