@@ -66,8 +66,8 @@ function toKoreanVerdict(verdict: string): string {
 }
 function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return "dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700";
-  if (s.includes("buy"))         return "dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-400 dark:border-green-700";
+  if (s.includes("strong buy"))  return "dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-400 dark:border-red-700";
+  if (s.includes("buy"))         return "dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800";
   if (s.includes("strong sell")) return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
   if (s.includes("sell"))        return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
   return "dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-amber-700";
@@ -659,7 +659,7 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-muted-foreground/50">{isEn ? `${list.length} Reports` : `${list.length}건`}</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-400 dark:border-green-700">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-400 dark:border-red-700">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
                 {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
                 {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
                 {reanalysisCount > 0 && (
@@ -881,18 +881,18 @@ export default function History() {
                 const effectiveEntry = entry ?? cur;
                 const isDownside = tgt < effectiveEntry;
                 const exceeded = isDownside ? cur <= tgt : cur >= tgt;
-                if (exceeded) return { label: isEn ? "🎯 Target Hit" : "🎯 목표 달성", cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700" };
+                if (exceeded) return { label: isEn ? "🎯 Target Hit" : "🎯 목표 달성", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
                 const distNow  = Math.abs(cur - tgt);
                 const distThen = entry != null ? Math.abs(entry - tgt) : null;
                 if (distThen == null) return null;
-                if (distNow < distThen) return { label: isEn ? "▲ Approaching" : "▲ 목표 접근", cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-400 dark:border-blue-700" };
-                if (distNow > distThen) return { label: isEn ? "▼ Diverging" : "▼ 목표 이탈", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
+                if (distNow < distThen) return { label: isEn ? "▲ Approaching" : "▲ 목표 접근", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
+                if (distNow > distThen) return { label: isEn ? "▼ Diverging" : "▼ 목표 이탈", cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-400 dark:border-blue-700" };
                 return { label: isEn ? "— Flat" : "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
               const verdictLeftBorder = (() => {
                 const v = (a.investmentVerdict ?? "").toLowerCase();
-                if (v.includes("buy")) return "border-l-emerald-500/50";
+                if (v.includes("buy")) return "border-l-red-500/50";
                 if (v.includes("sell")) return "border-l-blue-400/50";
                 if (v.includes("hold")) return "border-l-amber-400/50";
                 return "";
