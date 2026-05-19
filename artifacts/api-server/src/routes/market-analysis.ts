@@ -54,6 +54,7 @@ export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
   leadParagraph: string;
+  storyLine: string;
   marketEvents: {
     title: string;
     impact: string;
@@ -174,7 +175,13 @@ async function generateBrief(): Promise<MarketBriefResult> {
       ? `미국 장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p`
       : null,
     // 느리게 바뀌는 지표 (참고용)
-    fred?.fedFundsRate != null ? `미국 기준금리 ${fred.fedFundsRate}%` : null,
+    fred != null
+      ? fred.fedTargetUpper != null && fred.fedTargetLower != null
+        ? `미국 기준금리 목표범위 ${fred.fedTargetLower}~${fred.fedTargetUpper}% (${fred.latestDates.fedTarget})`
+        : fred.fedFundsRate != null
+        ? `미국 기준금리 실효 ${fred.fedFundsRate}% (${fred.latestDates.fedFunds}, 월간)`
+        : null
+      : null,
     ecos?.baseRate     != null ? `한국 기준금리 ${ecos.baseRate}%` : null,
     ecos?.cpiYoY       != null ? `한국 CPI ${ecos.cpiYoY}% YoY` : null,
   ].filter(Boolean).join(" | ");
@@ -199,6 +206,7 @@ ${macroLines || "데이터 없음"}
   "summary": "오늘 시장 분위기를 한 줄로 (20자 내외, 명사형 또는 짧은 문장)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
   "leadParagraph": "지금 시장이 어떤 상황인지, 왜 그런지를 2문장으로. 어려운 용어 없이 누구나 읽을 수 있게. 예: '이번 주 코스피가 많이 흔들렸어요. 미국 금리 걱정이 커졌기 때문인데, 쉽게 말하면 돈 빌리는 비용이 올라가면 기업들이 힘들어지거든요.' (80~120자)",
+  "storyLine": "지난 며칠간 어떤 일이 있었고, 그게 시장에 어떤 영향을 줬는지, 그래서 앞으로 어떻게 될 것 같은지를 이야기처럼 이어서 써주세요. 실제 데이터를 근거로, 마치 친구에게 설명하듯이. 예: '지난주부터 미국 물가 데이터가 예상보다 높게 나오면서 금리 인하 기대가 꺾였어요. 덩달아 달러가 강해지고 외국인 투자자들이 우리 시장에서 돈을 빼가기 시작했는데, 그게 코스피 하락으로 이어진 거예요. AI 예측으로는 이번 주 안에 반등 가능성이 있지만, 미국 연준 발언이 관건이에요.' (150~220자)",
   "marketEvents": [
     {
       "title": "이슈 제목 (15자 이내, 핵심만)",
@@ -283,6 +291,7 @@ ${macroLines || "데이터 없음"}
     summary:              parsed?.summary              ?? "한국 증시 데이터 분석 중",
     sentiment:            parsed?.sentiment            ?? "neutral",
     leadParagraph:        parsed?.leadParagraph        ?? "",
+    storyLine:            parsed?.storyLine            ?? "",
     marketEvents:         safeArr(parsed?.marketEvents).slice(0, 4),
     macroFactors:         safeArr(parsed?.macroFactors).slice(0, 5),
     forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),

@@ -53,6 +53,7 @@ interface MarketBrief {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
   leadParagraph?: string;
+  storyLine?: string;
   marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
   macroFactors?: { factor: string; status: string; implication: string }[];
   forwardLook?: { point: string; detail: string; watchFor: string }[];
@@ -201,6 +202,18 @@ function MarketBriefSection({
                 </p>
               )}
             </div>
+
+            {/* AI 해설 — 과거→현재→미래 내러티브 */}
+            {brief.storyLine && (
+              <div className="bg-primary/[0.06] border border-primary/15 rounded-2xl px-4 py-4 space-y-2">
+                <p className="text-[10px] font-bold text-primary/50 uppercase tracking-widest flex items-center gap-1.5">
+                  <span>✦</span> AI 시장 해설
+                </p>
+                <p className="text-[13px] text-foreground/85 leading-[1.75] whitespace-pre-line">
+                  {brief.storyLine}
+                </p>
+              </div>
+            )}
 
             {/* 풍부한 섹션이 있을 때만 표시 */}
             {hasRich && (
