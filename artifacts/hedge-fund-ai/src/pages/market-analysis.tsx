@@ -305,8 +305,8 @@ export default function MarketAnalysis() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isEn
-              ? "Ridge Regression ensemble · 3-day return prediction for KOSPI/KOSDAQ"
-              : "회귀 앙상블 모델 · KOSPI/KOSDAQ 3일 후 수익률 예측 파이프라인"}
+              ? "LightGBM-style GBDT ensemble · 3-day return prediction for KOSPI/KOSDAQ"
+              : "LightGBM-style GBDT 앙상블 · KOSPI/KOSDAQ 3일 후 수익률 예측 파이프라인"}
           </p>
         </div>
         <button
@@ -473,10 +473,10 @@ export default function MarketAnalysis() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
                 {[
-                  ["알고리즘", "Ridge Regression 앙상블 (λ=0.001, 0.01, 0.1)"],
-                  ["피처", "일별수익률, MA5비율, MA20비율, RSI14, 변동성5일, 변동성20일"],
-                  ["시퀀스 길이", "20거래일 lookback → 120차원 벡터 (표준화)"],
-                  ["앙상블", "3개 모델 평균 (정규화 강도 다양화)"],
+                  ["알고리즘", "LightGBM-style GBDT (100 트리, 깊이 4, lr=0.05)"],
+                  ["피처", "수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일"],
+                  ["시퀀스 길이", "20거래일 lookback → 181차원 벡터 (표준화)"],
+                  ["앙상블", "3개 GBDT 평균 (seed 다양화, feature·row subsampling)"],
                   ["학습 데이터", "최근 2년 일별 종가 (Yahoo Finance)"],
                   ["예측 목표", "3거래일 후 수익률 (회귀) · 캐시 TTL 6h"],
                 ].map(([k, v]) => (
