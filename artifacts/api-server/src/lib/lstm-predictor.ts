@@ -1,11 +1,15 @@
 /**
- * 시장 예측 파이프라인 v5  — LSTM + GBDT 앙상블 + 외부 피처
- * ─────────────────────────────────────────────────────────────
- * 내부 피처 9개 (기술적 지표) + 외부 피처 3개:
- *   - S&P500 전일 등락률  (Yahoo Finance ^GSPC)    → 시장 센티먼트
- *   - 원/달러 환율 변화율  (Yahoo Finance USDKRW=X) → 외국인 수급 선행
- *   - 국고채 3년 금리      (FRED IRLTLT01KRM156N)  → 금리 민감도
- * 총 N_FEATURES = 12
+ * 시장 예측 파이프라인 v6  — LSTM + GBDT 앙상블 + 외부 피처 + 수급
+ * ──────────────────────────────────────────────────────────────────────
+ * 기술적 지표 9 + 매크로 3 + 수급 3 = 총 N_FEATURES = 15
+ *
+ * [기술적 9]  수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
+ * [매크로  3]  S&P500 전일 등락 (Yahoo Finance ^GSPC)
+ *             원/달러 환율 변화율 (Yahoo Finance USDKRW=X)
+ *             국고채 3년 금리     (FRED IRLTLT01KRM156N)
+ * [수급    3]  외국인 순매수 (KRX MDCSTAT02303) → 외국인 수급 직접 지표
+ *             기관 순매수   (KRX MDCSTAT02303) → 기관 수급 직접 지표
+ *             공매도 비율   (KRX MDCSTAT05001) → 하락 압력 선행지표
  */
 import fs   from "node:fs";
 import path from "node:path";
@@ -41,7 +45,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 20;
 const PRED_H       = 3;
-const N_FEATURES   = 12;   // 9 기술적 + 3 외부 (S&P500, 환율, 국고채)
+const N_FEATURES   = 15;   // 9 기술적 + 3 매크로 + 3 수급
 // GBDT
 const N_ENSEMBLE   = 2;
 const GBDT_TREES   = 60;
@@ -63,6 +67,7 @@ const LSTM_DROP    = 0.2;
 const YEARS_DATA   = 5;
 const RECENT_N     = 30;
 const CACHE_TTL    = 6 * 3600_000;
+const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
 
@@ -76,7 +81,7 @@ interface GBDTModel { trees: any[]; lr: number; basePred: number }
 interface LSTMWeightLayer { shape: number[]; data: number[] }
 
 interface StoredModelFile {
-  nFeatures: number;                                 // 버전 호환성 체크
+  nFeatures: number;
   gbdtModels: GBDTModel[];
   gbdtScaler: { mu: number[]; sigma: number[] };
   lstmWeights: LSTMWeightLayer[][];
@@ -95,7 +100,7 @@ export interface StoredMeta {
 function saveModelFile(sym: string, payload: StoredModelFile) {
   ensureDataDir();
   fs.writeFileSync(MODEL_PATH(sym), JSON.stringify(payload));
-  console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (GBDT+LSTM, nFeatures=${payload.nFeatures})`);
+  console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (nFeatures=${payload.nFeatures})`);
 }
 function loadModelFile(sym: string): StoredModelFile | null {
   const p = MODEL_PATH(sym);
@@ -150,12 +155,105 @@ function dirAccRate(preds: ArrayLike<number>, actual: ArrayLike<number>): number
   return (preds as any).length > 0 ? h / (preds as any).length : 0;
 }
 
-// ─── External data (S&P500, 환율, 국고채) ────────────────────────────────────
+// ─── KRX helper ──────────────────────────────────────────────────────────────
+
+/** 쉼표·공백 제거 후 숫자 파싱 (억원 단위, 음수 허용) */
+function parseKRXNum(v: unknown): number {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(String(v).replace(/,/g, "").trim());
+  return isNaN(n) ? 0 : n;
+}
+
+/** KRX 날짜 문자열 → ISO (YYYYMMDD or YYYY/MM/DD → YYYY-MM-DD) */
+function krxDateToISO(raw: unknown): string {
+  const s = String(raw ?? "").replace(/[/\-]/g, "");
+  if (s.length !== 8) return "";
+  return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+}
+
+/** KRX GET 요청 헬퍼 (krx-short-client.ts 와 동일한 방식) */
+async function krxGet(bld: string, extra: Record<string, string>): Promise<any[]> {
+  const params = new URLSearchParams({ bld, ...extra });
+  try {
+    const res = await fetch(`${KRX_BASE}?${params}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer":    "http://data.krx.co.kr/",
+        "Accept":     "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) { console.warn(`[ext] KRX HTTP ${res.status} (bld=${bld})`); return []; }
+    const json = await res.json() as any;
+    return json?.output ?? json?.OutBlock_1 ?? [];
+  } catch (e: any) {
+    console.warn(`[ext] KRX GET 예외 (${bld}):`, e?.message);
+    return [];
+  }
+}
+
+/**
+ * KRX 시장별 투자자별 거래실적 (MDCSTAT02303)
+ * 외국인·기관 순매수 거래대금 (억원) 일별 시계열
+ */
+async function fetchKRXMarketInvestor(
+  market: "KOSPI" | "KOSDAQ",
+  startYYYYMMDD: string,
+  endYYYYMMDD:   string,
+): Promise<{ date: string; foreignNet: number; instNet: number }[]> {
+  const mktId = market === "KOSPI" ? "STK" : "KSQ";
+  const rows = await krxGet("dbms/MDC/STAT/standard/MDCSTAT02303", {
+    mktId, strtDd: startYYYYMMDD, endDd: endYYYYMMDD, share: "1", money: "1", csvxls_isNo: "false",
+  });
+  if (!rows.length) { console.warn(`[ext] KRX 투자자 0행 (${market})`); return []; }
+  console.log(`[ext] KRX 투자자 ${rows.length}행 수신 (${market}) 샘플:`, JSON.stringify(rows[0]).slice(0, 120));
+  return rows.map((r: any) => ({
+    date:       krxDateToISO(r.TRD_DD ?? r.trdDd ?? r["일자"]),
+    foreignNet: parseKRXNum(r.FRGN_NETBUY_TRDVAL ?? r.frgnNetbuyTrdval
+                  ?? r.FRGN_NETBYTD_AMT ?? r["외국인_순매수거래대금"] ?? 0),
+    instNet:    parseKRXNum(r.INST_NETBUY_TRDVAL  ?? r.instNetbuyTrdval
+                  ?? r.INST_NETBYTD_AMT ?? r["기관계_순매수거래대금"] ?? 0),
+  })).filter(r => r.date.length === 10);
+}
+
+/**
+ * KRX 공매도 거래 추이 (MDCSTAT05001)
+ * 공매도 비율 (%) 일별 시계열
+ */
+async function fetchKRXMarketShort(
+  market: "KOSPI" | "KOSDAQ",
+  startYYYYMMDD: string,
+  endYYYYMMDD:   string,
+): Promise<{ date: string; shortRatio: number }[]> {
+  const mktId = market === "KOSPI" ? "STK" : "KSQ";
+  const rows = await krxGet("dbms/MDC/STAT/standard/MDCSTAT05001", {
+    mktId, strtDd: startYYYYMMDD, endDd: endYYYYMMDD, share: "1", money: "1", csvxls_isNo: "false",
+  });
+  if (!rows.length) { console.warn(`[ext] KRX 공매도 0행 (${market})`); return []; }
+  console.log(`[ext] KRX 공매도 ${rows.length}행 수신 (${market}) 샘플:`, JSON.stringify(rows[0]).slice(0, 120));
+  return rows.map((r: any) => {
+    const ratioRaw = r.SHTSELL_TRDVOL_WGHT ?? r.shtsellTrdvolWght
+      ?? r.SHT_SELNG_RQST_RGHT_QTY_WGHT ?? r["공매도비율"];
+    let shortRatio = ratioRaw !== undefined ? parseKRXNum(ratioRaw) : NaN;
+    if (isNaN(shortRatio) || shortRatio === 0) {
+      const shortVol = parseKRXNum(r.SHTSELL_TRDVOL ?? r.shtsellTrdvol ?? r["공매도거래량"]);
+      const totalVol = parseKRXNum(r.TRDVOL        ?? r.trdvol        ?? r["거래량"]);
+      shortRatio = totalVol > 0 ? (shortVol / totalVol) * 100 : 0;
+    }
+    return { date: krxDateToISO(r.TRD_DD ?? r.trdDd ?? r["일자"]), shortRatio };
+  }).filter(r => r.date.length === 10 && !isNaN(r.shortRatio));
+}
+
+// ─── External data (매크로 + 수급) ───────────────────────────────────────────
 
 interface ExtPoint {
-  sp500Ret: number;   // S&P500 전일 등락률 (소수)
-  usdkrwRet: number;  // 원/달러 변화율 (소수)
-  bond3y: number;     // 국고채 3년 금리 (%, /10 for scale)
+  sp500Ret:   number;   // S&P500 전일 등락률 (소수)
+  usdkrwRet:  number;   // 원/달러 변화율 (소수)
+  bond3y:     number;   // 국고채 3년 금리 % (/10 scaled)
+  foreignNet: number;   // 외국인 순매수 (억원, 표준화)
+  instNet:    number;   // 기관 순매수 (억원, 표준화)
+  shortRatio: number;   // 공매도 비율 % (/10 scaled)
 }
 
 async function fetchYahooSeries(ticker: string, years: number): Promise<{ date: string; close: number }[]> {
@@ -185,66 +283,101 @@ async function fredFetchSeries(seriesId: string, startDate: string): Promise<{ d
       .filter((o: any) => o.value !== ".")
       .map((o: any) => ({ date: o.date as string, value: parseFloat(o.value) }));
   } catch (e) {
-    console.warn(`[ext] FRED ${seriesId} fetch 실패:`, (e as any)?.message ?? e);
+    console.warn(`[ext] FRED ${seriesId} 실패:`, (e as any)?.message ?? e);
     return [];
   }
 }
 
-/** KOSPI/KOSDAQ 날짜 배열에 맞춰 외부 피처 Map 생성 (forward-fill) */
-async function fetchExternalData(dates: string[]): Promise<Map<string, ExtPoint>> {
+/** KOSPI/KOSDAQ 날짜 배열 → 모든 외부 피처 Map (forward-fill) */
+async function fetchExternalData(
+  dates: string[],
+  market: "KOSPI" | "KOSDAQ" = "KOSPI",
+): Promise<Map<string, ExtPoint>> {
   if (dates.length === 0) return new Map();
-  const startDate = dates[0] ?? "2020-01-01";
-  const years = Math.min(YEARS_DATA + 0.3, Math.ceil((Date.now() - new Date(startDate).getTime()) / (365.25 * 24 * 3600_000)) + 0.3);
+  const startISO  = dates[0] ?? "2020-01-01";
+  const years = Math.min(YEARS_DATA + 0.3,
+    Math.ceil((Date.now() - new Date(startISO).getTime()) / (365.25 * 24 * 3600_000)) + 0.3);
+  const startKRX  = startISO.replace(/-/g, "");
+  const endKRX    = (dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10)).replace(/-/g, "");
 
-  console.log(`[ext] 외부 데이터 수집 중 (S&P500·환율·국고채, ${years.toFixed(1)}년)...`);
+  console.log(`[ext] 외부 데이터 수집 (${market}, ${years.toFixed(1)}년, KRX ${startKRX}~${endKRX})...`);
 
-  const [sp500Rows, usdkrwRows, bondRows] = await Promise.all([
+  const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows] = await Promise.all([
     fetchYahooSeries("^GSPC", years),
     fetchYahooSeries("USDKRW=X", years),
-    fredFetchSeries("IRLTLT01KRM156N", startDate),  // 한국 장기국채 (월별, OECD)
+    fredFetchSeries("IRLTLT01KRM156N", startISO),  // 한국 장기국채 (월별, OECD) – 3Y ≈ 10Y – 0.4pp
+    fetchKRXMarketInvestor(market, startKRX, endKRX),
+    fetchKRXMarketShort(market, startKRX, endKRX),
   ]);
 
-  // S&P500 일별 수익률 Map
+  // ── S&P500 일별 수익률 Map ──
   const sp500RetMap = new Map<string, number>();
   for (let i = 1; i < sp500Rows.length; i++) {
-    const ret = (sp500Rows[i].close - sp500Rows[i-1].close) / sp500Rows[i-1].close;
-    sp500RetMap.set(sp500Rows[i].date, ret);
+    sp500RetMap.set(sp500Rows[i].date, (sp500Rows[i].close - sp500Rows[i-1].close) / sp500Rows[i-1].close);
   }
 
-  // 환율 일별 변화율 Map
+  // ── 환율 일별 변화율 Map ──
   const usdkrwRetMap = new Map<string, number>();
   for (let i = 1; i < usdkrwRows.length; i++) {
-    const ret = (usdkrwRows[i].close - usdkrwRows[i-1].close) / usdkrwRows[i-1].close;
-    usdkrwRetMap.set(usdkrwRows[i].date, ret);
+    usdkrwRetMap.set(usdkrwRows[i].date, (usdkrwRows[i].close - usdkrwRows[i-1].close) / usdkrwRows[i-1].close);
   }
 
-  // 국고채 3년 ≈ 한국 장기금리 – 0.4pp (ECOS 코멘트 기반 추정), 월별 → 일별 forward-fill
+  // ── 국고채 3Y (월별 → forward-fill) ──
   const bondEntries = bondRows
     .map(r => ({ date: r.date, value: r.value - 0.4 }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // KOSPI 날짜 배열에 aligned ExtPoint 생성
+  // ── KRX 투자자 Map ──
+  const investorMap = new Map<string, { foreignNet: number; instNet: number }>();
+  for (const r of investorRows) investorMap.set(r.date, { foreignNet: r.foreignNet, instNet: r.instNet });
+
+  // ── KRX 공매도 Map ──
+  const shortMap = new Map<string, number>();
+  for (const r of shortRows) shortMap.set(r.date, r.shortRatio);
+
+  // ── 정규화 기준값 계산 (외국인/기관 순매수 스케일) ──
+  const fnetVals = investorRows.map(r => Math.abs(r.foreignNet)).filter(v => v > 0);
+  const inetVals = investorRows.map(r => Math.abs(r.instNet)).filter(v => v > 0);
+  const fnetScale = fnetVals.length > 0 ? (fnetVals.sort((a,b)=>a-b)[Math.floor(fnetVals.length*0.95)] || 10000) : 10000;
+  const inetScale = inetVals.length > 0 ? (inetVals.sort((a,b)=>a-b)[Math.floor(inetVals.length*0.95)] || 10000) : 10000;
+
+  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행`);
+
+  // ── KOSPI 날짜에 맞춰 forward-fill ──
   const result = new Map<string, ExtPoint>();
   let lastSP500 = 0, lastUSDKRW = 0, lastBond = 3.0;
+  let lastForeign = 0, lastInst = 0, lastShort = 2.0;
   let bondIdx = 0;
 
   for (const date of dates) {
-    // 국고채 forward-fill (monthly → daily)
+    // 국고채 forward-fill
     while (bondIdx < bondEntries.length && bondEntries[bondIdx].date <= date) {
       lastBond = bondEntries[bondIdx].value;
       bondIdx++;
     }
     if (sp500RetMap.has(date))   lastSP500  = sp500RetMap.get(date)!;
     if (usdkrwRetMap.has(date))  lastUSDKRW = usdkrwRetMap.get(date)!;
+    if (investorMap.has(date)) {
+      const iv = investorMap.get(date)!;
+      lastForeign = iv.foreignNet;
+      lastInst    = iv.instNet;
+    }
+    if (shortMap.has(date)) lastShort = shortMap.get(date)!;
 
-    result.set(date, { sp500Ret: lastSP500, usdkrwRet: lastUSDKRW, bond3y: lastBond });
+    result.set(date, {
+      sp500Ret:   lastSP500,
+      usdkrwRet:  lastUSDKRW,
+      bond3y:     lastBond,
+      foreignNet: lastForeign / fnetScale,  // ≈ −1 ~ +1
+      instNet:    lastInst    / inetScale,  // ≈ −1 ~ +1
+      shortRatio: lastShort,                // % (scaler가 표준화)
+    });
   }
 
-  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행 / 환율 ${usdkrwRows.length}행 / 국고채 ${bondRows.length}행`);
   return result;
 }
 
-// ─── Feature engineering (내부 9 + 외부 3 = 12) ───────────────────────────────
+// ─── Feature engineering (기술적 9 + 매크로 3 + 수급 3 = 15) ─────────────────
 
 function rollingMean(arr: number[], w: number, i: number) {
   let s = 0, n = 0; for (let k = Math.max(0, i-w+1); k <= i; k++) { s += arr[k]; n++; } return s / n;
@@ -275,9 +408,9 @@ function buildFeatures(
     const bband = std20>1e-10 ? (closes[i]-(ma20-2*std20*Math.abs(ma20)))/(4*std20*Math.abs(ma20)||1) : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
-    const ext   = extMap.get(row.date) ?? { sp500Ret: 0, usdkrwRet: 0, bond3y: 3.0 };
+    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0 };
     return new Float64Array([
-      // ── 내부 기술적 지표 (9) ──
+      // ── 기술적 (9) ──
       rets[i],
       ma5>0  ? closes[i]/ma5  - 1 : 0,
       ma20>0 ? closes[i]/ma20 - 1 : 0,
@@ -286,16 +419,20 @@ function buildFeatures(
       rollingStdFn(rets, 20, i),
       Math.max(0, Math.min(1, bband)),
       mom5, mom10,
-      // ── 외부 매크로 피처 (3) ──
-      ext.sp500Ret,           // S&P500 전일 등락 (−0.05 ~ 0.05)
-      ext.usdkrwRet,          // 환율 변화율    (−0.03 ~ 0.03)
-      ext.bond3y / 10,        // 국고채 3년 /10 (0~1 스케일, e.g. 3.3%→0.33)
+      // ── 매크로 (3) ──
+      ext.sp500Ret,          // S&P500 등락 (−0.05 ~ 0.05)
+      ext.usdkrwRet,         // 환율 변화 (−0.03 ~ 0.03)
+      ext.bond3y / 10,       // 국고채3Y /10 → 0 ~ 1 스케일
+      // ── 수급 (3) ──
+      ext.foreignNet,        // 외국인 순매수 (95th pct 기준 정규화, −1~+1)
+      ext.instNet,           // 기관 순매수   (동일 정규화)
+      ext.shortRatio / 10,   // 공매도비율 /10 (0~1 스케일)
     ]);
   });
   return { feats, closes, dates };
 }
 
-// ─── GBDT sequence generation (flat) ─────────────────────────────────────────
+// ─── GBDT sequence generation ─────────────────────────────────────────────────
 
 function makeSeqs(feats: Float64Array[], closes: number[], lookback: number, horizon: number) {
   const F = feats[0].length;
@@ -309,7 +446,7 @@ function makeSeqs(feats: Float64Array[], closes: number[], lookback: number, hor
   return { X: Xs, y: new Float64Array(ys), anchorDateIdxs: anchors };
 }
 
-// ─── GBDT standardisation ────────────────────────────────────────────────────
+// ─── Standardisation ─────────────────────────────────────────────────────────
 
 function standardize(X: Float64Array[]) {
   const n=X.length, F=X[0].length;
@@ -468,8 +605,7 @@ async function trainLSTM(
   try {
     await model.fit(xTrain, yTrain, {
       epochs: LSTM_EPOCHS, batchSize: LSTM_BATCH,
-      validationData: [xVal, yVal],
-      verbose: 0,
+      validationData: [xVal, yVal], verbose: 0,
       callbacks: {
         onEpochEnd: (epoch: number, logs: any) => {
           if (epoch % 5 === 4)
@@ -532,7 +668,6 @@ function buildResultFromModel(
   const X3d_test = X3d.slice(trainEnd);
   const lstmPreds = lstmPredict(lstmModel, X3d_test);
 
-  // Adaptive ensemble weight (recent 30d dir accuracy ratio)
   const lastN = Math.min(RECENT_N, gbdtPreds.length);
   const g30 = dirAccRate(gbdtPreds.slice(-lastN), Array.from(yte).slice(-lastN));
   const l30 = dirAccRate(lstmPreds.slice(-lastN),  Array.from(yte).slice(-lastN));
@@ -560,7 +695,6 @@ function buildResultFromModel(
     return { date: dates[anchorIdx]??`D${m}`, predicted: +(pred*100).toFixed(2), actual: +(last30Actual[m]*100).toFixed(2) };
   });
 
-  // Final forecast
   const lastGBDT_Xn = applyStd([X[n-1]], gbdtScaler.mu, gbdtScaler.sigma);
   const gbdtForecast = gbdtModels.map(m => gbdtPredict(m, lastGBDT_Xn)[0]).reduce((a,b)=>a+b,0) / gbdtModels.length;
 
@@ -568,7 +702,7 @@ function buildResultFromModel(
   for (let t = 0; t < LOOKBACK; t++) {
     lastSeq3d.push(Array.from(feats[feats.length - LOOKBACK + t]).map((v,j) => (v - lstmScaler.mu[j]) / lstmScaler.sigma[j]));
   }
-  const lstmForecast  = lstmPredict(lstmModel, [lastSeq3d])[0];
+  const lstmForecast   = lstmPredict(lstmModel, [lastSeq3d])[0];
   const forecastReturn = alpha * lstmForecast + (1-alpha) * gbdtForecast;
 
   const curVal    = closes[closes.length-1];
@@ -606,34 +740,32 @@ function buildResultFromModel(
 
 // ─── Full training ────────────────────────────────────────────────────────────
 
-async function trainFull(symbol: string, name: string, rows: { date: string; close: number }[]) {
-  const dates = rows.map(r => r.date);
-
-  // 외부 데이터 fetch
-  const extMap = await fetchExternalData(dates);
-
+async function trainFull(
+  symbol: string, name: string,
+  rows: { date: string; close: number }[],
+  market: "KOSPI" | "KOSDAQ",
+) {
+  const extMap = await fetchExternalData(rows.map(r => r.date), market);
   const { feats, closes } = buildFeatures(rows, extMap);
 
-  // GBDT
   const { X, y } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length, trainEnd = Math.floor(n*0.80);
   const { Xn: XtrN, mu: gbdtMu, sigma: gbdtSig } = standardize(X.slice(0, trainEnd));
   const gbdtModels = Array.from({length:N_ENSEMBLE},(_,e)=>gbdtFit(XtrN,y.slice(0,trainEnd),e*37+13));
 
-  // LSTM
   const lstmScaler = computeLSTMScaler(feats.slice(0, trainEnd+LOOKBACK));
   const { X3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
   const valSplit  = Math.floor(trainEnd * 0.9);
   const lstmModel = await trainLSTM(
-    X3d.slice(0, valSplit),   y.slice(0, valSplit),
+    X3d.slice(0, valSplit),       y.slice(0, valSplit),
     X3d.slice(valSplit, trainEnd), y.slice(valSplit, trainEnd),
   );
 
-  const gbdtScaler = { mu: gbdtMu, sigma: gbdtSig };
   const symKey = symbol.replace(/[\^]/g,"");
   saveModelFile(symKey, {
     nFeatures: N_FEATURES,
-    gbdtModels, gbdtScaler: { mu: Array.from(gbdtMu), sigma: Array.from(gbdtSig) },
+    gbdtModels,
+    gbdtScaler: { mu: Array.from(gbdtMu), sigma: Array.from(gbdtSig) },
     lstmWeights: saveLSTMWeights(lstmModel),
     lstmScaler:  { mu: Array.from(lstmScaler.mu), sigma: Array.from(lstmScaler.sigma) },
     ensembleAlpha: 0.5,
@@ -645,7 +777,6 @@ async function trainFull(symbol: string, name: string, rows: { date: string; clo
     lstmModel, { mu: lstmScaler.mu, sigma: lstmScaler.sigma },
     0.5,
   );
-
   lstmModel.dispose();
   return result;
 }
@@ -667,24 +798,20 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
   const kosdaqStore = loadModelFile("KQ11");
   if (!meta||!kospiStore||!kosdaqStore) return false;
 
-  // 피처 수 / LSTM 가중치 버전 체크
-  if (!kospiStore.lstmWeights) {
-    console.log("[gbdt] 구형 모델 (LSTM 없음) — 완전 재학습");
-    return false;
-  }
+  if (!kospiStore.lstmWeights) { console.log("[gbdt] 구형 모델 — 재학습"); return false; }
   if ((kospiStore.nFeatures ?? 9) !== N_FEATURES) {
-    console.log(`[gbdt] 피처 수 변경 (${kospiStore.nFeatures ?? "?"}→${N_FEATURES}) — 완전 재학습`);
+    console.log(`[gbdt] 피처 수 변경 (${kospiStore.nFeatures ?? "?"}→${N_FEATURES}) — 재학습`);
     return false;
   }
 
-  console.log("[gbdt] 디스크에서 GBDT+LSTM 모델 복원 중 (nFeatures=" + N_FEATURES + ")...");
+  console.log("[gbdt] 디스크 복원 중 (nFeatures=" + N_FEATURES + ")...");
   try {
     const [kospiRows, kosdaqRows] = await Promise.all([
       fetchHistory("^KS11", 0.5), fetchHistory("^KQ11", 0.5),
     ]);
     const [kospiExtMap, kosdaqExtMap] = await Promise.all([
-      fetchExternalData(kospiRows.map((r: { date: string; close: number }) => r.date)),
-      fetchExternalData(kosdaqRows.map((r: { date: string; close: number }) => r.date)),
+      fetchExternalData(kospiRows.map((r: { date: string; close: number }) => r.date), "KOSPI"),
+      fetchExternalData(kosdaqRows.map((r: { date: string; close: number }) => r.date), "KOSDAQ"),
     ]);
 
     const kospi = buildResultFromModel(
@@ -710,7 +837,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       steps:defaultSteps().map(s=>({...s,status:"done" as const})),
       trainedAt:meta.lastTrained, trainingMs:0, kospi, kosdaq,
     };
-    console.log(`[gbdt] 복원 완료 | KOSPI lstmW=${kospi.ensembleAlpha} | 피처 ${N_FEATURES}개`);
+    console.log(`[gbdt] 복원 완료 | KOSPI ${kospi.testDirAcc}% | KOSDAQ ${kosdaq.testDirAcc}% | 피처 ${N_FEATURES}개`);
     return true;
   } catch(e:any) { console.warn("[gbdt] 복원 실패:",e?.message); return false; }
 }
@@ -730,16 +857,17 @@ export async function runPipeline(force=false): Promise<void> {
     stepSet("data","done",Date.now()-s1);
 
     stepSet("feature","running"); stepSet("feature","done",0);
-
     stepSet("lstm","running");
     const sL=Date.now();
-    const kospiResult  = await trainFull("^KS11","KOSPI",kospiRows);
-    const kosdaqResult = await trainFull("^KQ11","KOSDAQ",kosdaqRows);
-    stepSet("lstm","done",Date.now()-sL);
 
-    stepSet("gbdt","running"); stepSet("gbdt","done",0);
+    // KOSPI와 KOSDAQ를 순차 학습 (TF.js 메모리 안전)
+    const kospiResult  = await trainFull("^KS11","KOSPI",  kospiRows,  "KOSPI");
+    const kosdaqResult = await trainFull("^KQ11","KOSDAQ", kosdaqRows, "KOSDAQ");
+
+    stepSet("lstm","done",Date.now()-sL);
+    stepSet("gbdt","running");    stepSet("gbdt","done",0);
     stepSet("ensemble","running"); stepSet("ensemble","done",0);
-    stepSet("output","running"); stepSet("output","done",0);
+    stepSet("output","running");   stepSet("output","done",0);
 
     const trainedAt = new Date().toISOString();
     saveMeta({
@@ -757,7 +885,7 @@ export async function runPipeline(force=false): Promise<void> {
       trainedAt, trainingMs:Date.now()-t0,
       kospi:kospiResult, kosdaq:kosdaqResult,
     };
-    console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI lstm=${kospiResult.lstmDirAcc}% gbdt=${kospiResult.gbdtDirAcc}% ens=${kospiResult.testDirAcc}% | 피처 ${N_FEATURES}개`);
+    console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | 피처 ${N_FEATURES}개`);
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
     const f=_status.steps.find(s=>s.status==="running");
@@ -780,8 +908,8 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     const lastUpdated=meta?.lastUpdated??"2000-01-01";
 
     const [kospiExtMap,kosdaqExtMap]=await Promise.all([
-      fetchExternalData(kospiRows.map((r:{date:string;close:number})=>r.date)),
-      fetchExternalData(kosdaqRows.map((r:{date:string;close:number})=>r.date)),
+      fetchExternalData(kospiRows.map((r:{date:string;close:number})=>r.date), "KOSPI"),
+      fetchExternalData(kosdaqRows.map((r:{date:string;close:number})=>r.date), "KOSDAQ"),
     ]);
 
     function newSamples(rows:{date:string;close:number}[], extMap:Map<string,ExtPoint>, store:StoredModelFile) {

@@ -644,9 +644,10 @@ export default function MarketAnalysis() {
                           <p className="text-xs font-semibold text-foreground mb-0.5">규칙 발견형 AI (GBDT)</p>
                           <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
                             5년치 데이터에서 수백 개의 "만약 X이면 Y" 규칙을 찾아냅니다.
-                            RSI·이동평균·변동성 등 기술적 지표 9개에 더해{" "}
-                            <span className="text-foreground/80">미국 S&P500 전일 등락, 원/달러 환율 변화, 국고채 3년 금리</span>까지{" "}
-                            총 12가지 지표를 동시에 고려합니다.
+                            RSI·이동평균·변동성 등 기술적 지표 9개,{" "}
+                            <span className="text-foreground/80">S&P500 등락·환율·국고채 3년</span> 3개,{" "}
+                            <span className="text-foreground/80">외국인 순매수·기관 순매수·공매도 비율</span> 3개—{" "}
+                            총 15가지 지표를 동시에 고려합니다.
                             날씨 예보가 기온·습도·기압을 종합하는 것과 비슷합니다.
                           </p>
                         </div>
