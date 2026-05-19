@@ -96,6 +96,23 @@ export interface MarketBriefResult {
 
 // ─── 시장 데이터 수집 헬퍼 ──────────────────────────────────────────────────
 
+/** 네이버 증권 API로 KOSPI/KOSDAQ 당일 데이터 취득 (Yahoo Finance보다 하루 빠름) */
+async function fetchNaverIndex(indexCode: "KOSPI" | "KOSDAQ", n = 5) {
+  try {
+    const res = await fetch(
+      `https://m.stock.naver.com/api/index/${indexCode}/price`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) return null;
+    const rows: any[] = await res.json();
+    return rows.slice(0, n).reverse().map((r: any) => ({
+      date:   r.localTradedAt as string,
+      close:  +String(r.closePrice).replace(/,/g, ""),
+      change: r.fluctuationsRatio != null ? +Number(r.fluctuationsRatio).toFixed(2) : null,
+    }));
+  } catch { return null; }
+}
+
 async function fetchRecentIndexData() {
   const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
   const end = new Date();
@@ -107,37 +124,41 @@ async function fetchRecentIndexData() {
     snpData, nasdaqData, dowData,
     vixData, soxData, dxyData,
   ] = await Promise.allSettled([
-    (yahoo as any).chart("^KS11",    { period1: start, period2: end, interval: "1d" }),
-    (yahoo as any).chart("^KQ11",    { period1: start, period2: end, interval: "1d" }),
+    fetchNaverIndex("KOSPI",  5),   // 네이버 — 당일 KRX 데이터
+    fetchNaverIndex("KOSDAQ", 5),   // 네이버 — 당일 KRX 데이터
     (yahoo as any).chart("^GSPC",    { period1: start, period2: end, interval: "1d" }),
-    (yahoo as any).chart("^IXIC",    { period1: start, period2: end, interval: "1d" }),  // 나스닥
-    (yahoo as any).chart("^DJI",     { period1: start, period2: end, interval: "1d" }),  // 다우존스
-    (yahoo as any).chart("^VIX",     { period1: start, period2: end, interval: "1d" }),  // 공포지수
-    (yahoo as any).chart("^SOX",     { period1: start, period2: end, interval: "1d" }),  // 필라델피아 반도체
-    (yahoo as any).chart("DX-Y.NYB", { period1: start, period2: end, interval: "1d" }),  // 달러 인덱스
+    (yahoo as any).chart("^IXIC",    { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^DJI",     { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^VIX",     { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^SOX",     { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("DX-Y.NYB", { period1: start, period2: end, interval: "1d" }),
   ]);
 
-  function extractRecent(result: PromiseSettledResult<any>, n = 5) {
+  // 네이버 결과는 이미 파싱된 배열, Yahoo는 quotes 배열
+  function extractNaver(result: PromiseSettledResult<any>) {
+    if (result.status !== "fulfilled" || !result.value) return null;
+    return result.value as { date: string; close: number; change: number | null }[];
+  }
+  function extractYahoo(result: PromiseSettledResult<any>, n = 5) {
     if (result.status !== "fulfilled") return null;
-    const quotes = (result.value?.quotes ?? [])
+    return (result.value?.quotes ?? [])
       .filter((q: any) => q.close != null)
       .slice(-n)
       .map((q: any) => ({
-        date: new Date(q.date).toISOString().slice(0, 10),
-        close: +(q.close as number).toFixed(2),
+        date:   new Date(q.date).toISOString().slice(0, 10),
+        close:  +(q.close as number).toFixed(2),
         change: q.open && q.close ? +(((q.close - q.open) / q.open) * 100).toFixed(2) : null,
       }));
-    return quotes;
   }
 
-  const kospi  = extractRecent(kospiData);
-  const kosdaq = extractRecent(kosdaqData);
-  const snp500 = extractRecent(snpData);
-  const nasdaq = extractRecent(nasdaqData, 3);
-  const dow    = extractRecent(dowData, 3);
-  const vix    = extractRecent(vixData, 3);
-  const sox    = extractRecent(soxData, 3);   // 필라델피아 반도체 (삼성·SK하이닉스 선행지표)
-  const dxy    = extractRecent(dxyData, 3);   // 달러 인덱스
+  const kospi  = extractNaver(kospiData);
+  const kosdaq = extractNaver(kosdaqData);
+  const snp500 = extractYahoo(snpData);
+  const nasdaq = extractYahoo(nasdaqData, 3);
+  const dow    = extractYahoo(dowData, 3);
+  const vix    = extractYahoo(vixData, 3);
+  const sox    = extractYahoo(soxData, 3);
+  const dxy    = extractYahoo(dxyData, 3);
   return { kospi, kosdaq, snp500, nasdaq, dow, vix, sox, dxy };
 }
 
