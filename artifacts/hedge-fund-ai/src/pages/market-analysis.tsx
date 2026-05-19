@@ -9,6 +9,7 @@ import {
   CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
   Cpu, Database, GitMerge, ChevronRight, Zap,
   ChevronDown, HelpCircle, Target, BarChart2, Vote,
+  Newspaper, Sparkles, CalendarDays,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,6 +47,150 @@ interface PipelineStatus {
   trainingMs?: number;
   kospi?: IndexResult;
   kosdaq?: IndexResult;
+}
+
+interface MarketBrief {
+  summary: string;
+  sentiment: "bullish" | "bearish" | "neutral";
+  recentIssues: string[];
+  outlook: string[];
+  generatedAt: string;
+  kospiCurrent: number | null;
+  kosdaqCurrent: number | null;
+  kospiChange: number | null;
+  kosdaqChange: number | null;
+  cached?: boolean;
+  stale?: boolean;
+}
+
+/* ── MarketBriefSection ──────────────────────────────────────────────────── */
+
+function MarketBriefSection({
+  brief, loading, onRefresh,
+}: {
+  brief: MarketBrief | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const sentimentColor = brief?.sentiment === "bullish"
+    ? "text-red-400 bg-red-500/10 border-red-500/20"
+    : brief?.sentiment === "bearish"
+    ? "text-blue-400 bg-blue-500/10 border-blue-500/20"
+    : "text-amber-400 bg-amber-500/10 border-amber-500/20";
+  const sentimentLabel = brief?.sentiment === "bullish" ? "강세" : brief?.sentiment === "bearish" ? "약세" : "중립";
+
+  const genTime = brief?.generatedAt
+    ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.06]">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">AI 시장 브리핑</span>
+          {brief && !loading && (
+            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-md border", sentimentColor)}>
+              {sentimentLabel}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {genTime && (
+            <span className="text-[10px] text-muted-foreground/40">{genTime} 기준</span>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground transition-all disabled:opacity-40"
+          >
+            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+            {loading ? "생성 중..." : "새로 고침"}
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4">
+        {loading && !brief && (
+          <div className="flex items-center gap-3 py-8 justify-center">
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            <span className="text-sm text-muted-foreground">시장 데이터 분석 중...</span>
+          </div>
+        )}
+
+        {!loading && !brief && (
+          <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground/40">
+            <Newspaper className="w-6 h-6" />
+            <span className="text-xs">브리핑을 불러올 수 없습니다</span>
+          </div>
+        )}
+
+        {brief && (
+          <div className="space-y-4">
+            {/* Summary */}
+            {brief.summary && (
+              <p className="text-sm font-medium text-foreground/90 leading-relaxed">
+                {brief.summary}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Recent Issues */}
+              {brief.recentIssues.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <Newspaper className="w-3.5 h-3.5" />
+                    최근 주요 이슈
+                  </div>
+                  <ul className="space-y-1.5">
+                    {brief.recentIssues.map((issue, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
+                        <span className="shrink-0 w-4 h-4 rounded-full bg-white/[0.06] border border-white/[0.10] flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">
+                          {i + 1}
+                        </span>
+                        {issue}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Outlook */}
+              {brief.outlook.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    향후 3일 전망
+                  </div>
+                  <ul className="space-y-1.5">
+                    {brief.outlook.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
+                        <span className={cn(
+                          "shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5",
+                          i === 0 ? "bg-primary/15 border border-primary/30 text-primary text-[9px] font-bold" : "bg-white/[0.06] border border-white/[0.10] text-muted-foreground text-[9px] font-bold",
+                        )}>
+                          {i + 1}
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {brief.stale && (
+              <p className="text-[10px] text-amber-500/60 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> 이전 브리핑입니다 (새로고침 실패)
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const STEP_ICONS: Record<string, React.ElementType> = {
@@ -313,6 +458,18 @@ export default function MarketAnalysis() {
   const [activeIdx, setActiveIdx] = useState<"kospi" | "kosdaq">("kospi");
   const [isStarting, setIsStarting] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [brief, setBrief] = useState<MarketBrief | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+
+  const fetchBrief = useCallback(async (force = false) => {
+    setBriefLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/market-analysis/brief${force ? "?force=true" : ""}`), { credentials: "include" });
+      if (r.ok) setBrief(await r.json());
+    } catch {} finally {
+      setBriefLoading(false);
+    }
+  }, []);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -334,6 +491,7 @@ export default function MarketAnalysis() {
   }, [fetchStatus]);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
+  useEffect(() => { fetchBrief(); }, [fetchBrief]);
 
   useEffect(() => {
     if (!status) return;
@@ -405,6 +563,13 @@ export default function MarketAnalysis() {
           </div>
         )}
       </div>
+
+      {/* AI 시장 브리핑 */}
+      <MarketBriefSection
+        brief={brief}
+        loading={briefLoading}
+        onRefresh={() => fetchBrief(true)}
+      />
 
       {/* Loading state */}
       {!status?.ready && status?.running && (
