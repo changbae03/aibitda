@@ -25,6 +25,7 @@ import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
+import { fetchDartBusinessContent } from "../lib/dart-business-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
 import { runCalibrationAgent, saveCalibrationNote, getCalibrationNote } from "../lib/calibration-agent.js";
@@ -3164,7 +3165,7 @@ router.post("/", async (req, res) => {
   // Fetch financial data, news, DART balance sheet, macro data, start price, KIS real-time in parallel
   const needsSOTPData = isKoreanTicker && hasSOTPSubsidiaryData(krxCode);
 
-  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext] = await Promise.all([
+  const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent] = await Promise.all([
     fetchFinancialContext(resolvedSymbol),
     fetchCompanyNews(companyName ?? ""),
     isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -3175,6 +3176,7 @@ router.post("/", async (req, res) => {
     isKoreanTicker ? getDartHistoricalContext(krxCode).catch(() => null) : Promise.resolve(null),
     isKoreanTicker ? fetchKOSISData().catch(() => null) : Promise.resolve(null),
     needsSOTPData ? buildSOTPSubsidiaryContext(krxCode).catch(() => null) : Promise.resolve(null),
+    isKoreanTicker ? fetchDartBusinessContent(krxCode).catch(() => null) : Promise.resolve(null),
   ]);
 
   // KIS 결과 분리 — 한국 종목은 KIS 현재가 우선, 없으면 Yahoo fallback
@@ -3247,6 +3249,7 @@ router.post("/", async (req, res) => {
     financialData,
     dartBalanceContext,
     dartHistorical,          // DART 시계열 재무 (DB 캐시 — 이전 분석에서 누적된 분기·연간 데이터)
+    dartBizContent,          // DART 사업보고서 원문 — 주요 제품·수주잔고·경쟁현황·R&D 등 사업 내용 텍스트
     kosisContext,            // KOSIS 산업생산지수·수출입 통계 — 섹터 거시 배경
     macroContext,
     newsData,
