@@ -94,9 +94,11 @@ async function fetchRecentIndexData() {
   const start = new Date();
   start.setDate(start.getDate() - 10);
 
-  const [kospiData, kosdaqData] = await Promise.allSettled([
-    (yahoo as any).chart("^KS11", { period1: start, period2: end, interval: "1d" }),
-    (yahoo as any).chart("^KQ11", { period1: start, period2: end, interval: "1d" }),
+  const [kospiData, kosdaqData, snpData, vixData] = await Promise.allSettled([
+    (yahoo as any).chart("^KS11",  { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^KQ11",  { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^GSPC",  { period1: start, period2: end, interval: "1d" }),
+    (yahoo as any).chart("^VIX",   { period1: start, period2: end, interval: "1d" }),
   ]);
 
   function extractRecent(result: PromiseSettledResult<any>, n = 5) {
@@ -114,7 +116,9 @@ async function fetchRecentIndexData() {
 
   const kospi  = extractRecent(kospiData);
   const kosdaq = extractRecent(kosdaqData);
-  return { kospi, kosdaq };
+  const snp500 = extractRecent(snpData);
+  const vix    = extractRecent(vixData, 3);
+  return { kospi, kosdaq, snp500, vix };
 }
 
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
@@ -148,14 +152,32 @@ async function generateBrief(): Promise<MarketBriefResult> {
   const kospiPred  = pipeline?.kospi  ? `${pipeline.kospi.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kospi.predictedReturn3d}%` : null;
   const kosdaqPred = pipeline?.kosdaq ? `${pipeline.kosdaq.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kosdaq.predictedReturn3d}%` : null;
 
+  // 일별 변동 지표 (매일 바뀌는 것 위주)
+  const snp500Latest = idx?.snp500?.at(-1) ?? null;
+  const vixLatest    = idx?.vix?.at(-1)    ?? null;
+
   const macroLines = [
+    // 매일 움직이는 지표
+    snp500Latest?.close != null
+      ? `S&P500 ${snp500Latest.close.toLocaleString()}pt (${snp500Latest.change != null ? (snp500Latest.change >= 0 ? "+" : "") + snp500Latest.change + "%" : "N/A"} 전일비)`
+      : null,
+    vixLatest?.close != null
+      ? `VIX(공포지수) ${vixLatest.close} (${vixLatest.close >= 25 ? "공포 구간" : vixLatest.close >= 18 ? "경계 구간" : "안정 구간"})`
+      : null,
+    fred?.wtiOil != null
+      ? `WTI 유가 ${fred.wtiOil.toFixed(1)} USD/bbl`
+      : null,
+    ecos?.usdKrw != null
+      ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원`
+      : null,
+    fred?.yieldSpread != null
+      ? `미국 장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p`
+      : null,
+    // 느리게 바뀌는 지표 (참고용)
     fred?.fedFundsRate != null ? `미국 기준금리 ${fred.fedFundsRate}%` : null,
-    fred?.t10y         != null ? `미국 10년물 ${fred.t10y}%` : null,
-    fred?.t2y          != null ? `미국 2년물 ${fred.t2y}%` : null,
     ecos?.baseRate     != null ? `한국 기준금리 ${ecos.baseRate}%` : null,
-    ecos?.usdKrw       != null ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원` : null,
     ecos?.cpiYoY       != null ? `한국 CPI ${ecos.cpiYoY}% YoY` : null,
-  ].filter(Boolean).join(", ");
+  ].filter(Boolean).join(" | ");
 
   const prompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}입니다.
 주식을 막 시작한 사람도 이해할 수 있게, 쉽고 짧게 설명해 주세요.
@@ -188,10 +210,12 @@ ${macroLines || "데이터 없음"}
   ],
   "macroFactors": [
     {
-      "factor": "지표 이름 (예: 미국 기준금리, 원달러 환율)",
-      "status": "현재 수치 (예: 4.5%, 1,450원)",
+      "factor": "지표 이름 (예: S&P500, WTI 유가, VIX, 원달러환율, 장단기금리차)",
+      "status": "현재 수치와 전일비 또는 단위 포함 (예: 5,308pt +0.8%, 72.3달러, 18.4)",
       "implication": "이 숫자가 내 주식에 왜 중요한지 한 줄로. 전문 용어 없이. 예: '환율이 높으면 수출 기업은 좋지만, 수입 물가가 올라 소비자는 부담돼요.' (40~60자)"
     },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." }
   ],
@@ -260,7 +284,7 @@ ${macroLines || "데이터 없음"}
     sentiment:            parsed?.sentiment            ?? "neutral",
     leadParagraph:        parsed?.leadParagraph        ?? "",
     marketEvents:         safeArr(parsed?.marketEvents).slice(0, 4),
-    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 3),
+    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 5),
     forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),
     upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 5),
     keyRisk:              parsed?.keyRisk              ?? "",

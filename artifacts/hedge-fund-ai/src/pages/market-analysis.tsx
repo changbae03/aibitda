@@ -214,12 +214,12 @@ function MarketBriefSection({
                     <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
                       <TrendingUp className="w-3.5 h-3.5" /> 지금 경제 지표는?
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {brief.macroFactors!.map((mf, i) => (
                         <div key={i} className="bg-white/[0.03] rounded-xl px-3.5 py-3 space-y-2">
                           <div>
                             <p className="text-[10px] text-muted-foreground/45 font-medium mb-0.5">{mf.factor}</p>
-                            <p className="text-[15px] font-bold text-foreground">{mf.status}</p>
+                            <p className="text-[14px] font-bold text-foreground leading-tight">{mf.status}</p>
                           </div>
                           <p className="text-xs text-foreground/60 leading-relaxed border-t border-white/[0.06] pt-2">
                             {mf.implication}
