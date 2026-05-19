@@ -1,13 +1,13 @@
 /**
- * 시장 예측 파이프라인 v2 (LightGBM-style GBDT)
- * ─────────────────────────────────────────────
- * 1. 데이터 수집 : Yahoo Finance ^KS11 / ^KQ11 (5년)
- * 2. 피처 엔지니어링 : 9개 피처 × 20일 lookback
- * 3. 시퀀스 생성   : sliding window, 181차원 벡터
- * 4. GBDT 학습     : max_depth=3, min_child=20, histogram split
- * 5. 앙상블        : 2× GBDT (seed 다양화)
- * 6. Walk-Forward 검증 + Rolling 30d 정확도 계산
+ * 시장 예측 파이프라인 v3 (LightGBM-style GBDT + 모델 영속성)
+ * ─────────────────────────────────────────────────────────────
+ * 1. 초기 학습     : 5년 데이터 → krx_<symbol>_model.json + krx_meta.json 저장
+ * 2. 서버 재시작   : 저장된 모델 로드 (재학습 없이 30초 내 복구)
+ * 3. 일일 증분     : 16:30 KST 평일 → 최근 60일 데이터로 5 트리 추가
+ * 4. 월간 완전학습 : 매월 1일 00:00 KST → 5년 완전 재학습
  */
+import fs from "node:fs";
+import path from "node:path";
 import YahooFinance from "yahoo-finance2";
 
 // ─── Public types ────────────────────────────────────────────────────────────
@@ -22,15 +22,11 @@ export interface IndexResult {
   currentValue: number;
   predictedReturn3d: number;
   trend: "up" | "down";
-  // Metrics
-  testMae: number;           // MAE on full test set (%)
-  testDirAcc: number;        // overall dir accuracy on test set (%)
-  wfDirAcc: number;          // walk-forward avg dir accuracy across 2 windows (%)
-  rolling30dDirAcc: number;  // last-30 sample directional accuracy (%)
-  predErrStd: number;        // std dev of last-30 prediction errors (%, used for chart band)
-  recentPerf: RecentPerfPoint[]; // last 30 predicted vs actual returns (%)
+  testMae: number; testDirAcc: number;
+  wfDirAcc: number; rolling30dDirAcc: number;
+  predErrStd: number;
+  recentPerf: RecentPerfPoint[];
 }
-
 export interface PipelineStep {
   key: string; label: string;
   status: "pending" | "running" | "done" | "error";
@@ -44,20 +40,82 @@ export interface PipelineStatus {
 
 // ─── Hyperparameters ─────────────────────────────────────────────────────────
 
-const LOOKBACK   = 20;
-const PRED_H     = 3;
-const N_FEATURES = 9;
-const N_ENSEMBLE = 2;
-const GBDT_TREES = 60;
-const GBDT_LR    = 0.05;
-const GBDT_DEPTH = 3;    // max_depth
-const GBDT_LEAF  = 20;   // min_child_samples
-const GBDT_FSUB  = 0.55;
-const GBDT_SSUB  = 0.80;
-const GBDT_BINS  = 32;   // histogram bins (speed optimisation)
-const CACHE_TTL  = 6 * 3600_000;
-const YEARS_DATA = 5;
-const RECENT_N   = 30;   // window for rolling accuracy / performance chart
+const LOOKBACK     = 20;
+const PRED_H       = 3;
+const N_ENSEMBLE   = 2;
+const GBDT_TREES   = 60;
+const GBDT_LR      = 0.05;
+const GBDT_DEPTH   = 3;
+const GBDT_LEAF    = 20;
+const GBDT_FSUB    = 0.55;
+const GBDT_SSUB    = 0.80;
+const GBDT_BINS    = 32;
+const N_INCR_TREES = 5;   // trees added per incremental update
+const YEARS_DATA   = 5;
+const RECENT_N     = 30;
+const CACHE_TTL    = 6 * 3600_000;
+
+// ─── Persistence paths ───────────────────────────────────────────────────────
+
+const DATA_DIR = path.resolve(process.cwd(), "artifacts", "api-server", "data");
+const MODEL_PATH = (sym: string) => path.join(DATA_DIR, `krx_${sym}_model.json`);
+const META_PATH  = path.join(DATA_DIR, "krx_meta.json");
+
+function ensureDataDir() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); }
+
+// ─── Stored types ────────────────────────────────────────────────────────────
+
+interface GBDTModel { trees: any[]; lr: number; basePred: number }
+
+interface StoredModelFile {
+  models: GBDTModel[];
+  scaler: { mu: number[]; sigma: number[] };
+}
+export interface StoredMeta {
+  lastTrained: string;  // full retrain timestamp
+  lastUpdated: string;  // last update (incremental or full)
+  nSamples: Record<string, number>;
+  dirAcc:          Record<string, number>;
+  wfDirAcc:        Record<string, number>;
+  rolling30dDirAcc: Record<string, number>;
+  updateCount: number;  // incremental updates since last full retrain
+}
+
+function saveModelFile(sym: string, models: GBDTModel[], scaler: { mu: Float64Array; sigma: Float64Array }) {
+  ensureDataDir();
+  const payload: StoredModelFile = {
+    models,
+    scaler: { mu: Array.from(scaler.mu), sigma: Array.from(scaler.sigma) },
+  };
+  fs.writeFileSync(MODEL_PATH(sym), JSON.stringify(payload));
+  console.log(`[gbdt] 모델 저장 완료: ${MODEL_PATH(sym)}`);
+}
+
+function loadModelFile(sym: string): { models: GBDTModel[]; scaler: { mu: Float64Array; sigma: Float64Array } } | null {
+  const p = MODEL_PATH(sym);
+  if (!fs.existsSync(p)) return null;
+  try {
+    const d: StoredModelFile = JSON.parse(fs.readFileSync(p, "utf-8"));
+    return {
+      models: d.models,
+      scaler: { mu: new Float64Array(d.scaler.mu), sigma: new Float64Array(d.scaler.sigma) },
+    };
+  } catch (e) {
+    console.warn(`[gbdt] 모델 파일 로드 실패 (${sym}):`, e);
+    return null;
+  }
+}
+
+export function saveMeta(meta: StoredMeta) {
+  ensureDataDir();
+  fs.writeFileSync(META_PATH, JSON.stringify(meta, null, 2));
+}
+
+export function loadMeta(): StoredMeta | null {
+  if (!fs.existsSync(META_PATH)) return null;
+  try { return JSON.parse(fs.readFileSync(META_PATH, "utf-8")); }
+  catch { return null; }
+}
 
 // ─── Pipeline state ──────────────────────────────────────────────────────────
 
@@ -85,17 +143,15 @@ function makeRng(seed: number) {
   let s = (seed >>> 0) || 1;
   return () => { s = Math.imul(s, 1664525) + 1013904223 >>> 0; return s / 0x100000000; };
 }
-
 function stddev(arr: number[]): number {
   if (arr.length < 2) return 0;
   const m = arr.reduce((a, b) => a + b, 0) / arr.length;
   return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length);
 }
-
-function dirAccRate(preds: Float64Array | number[], actual: Float64Array | number[]): number {
+function dirAccRate(preds: ArrayLike<number>, actual: ArrayLike<number>): number {
   let hits = 0;
   for (let i = 0; i < preds.length; i++) if (Math.sign(preds[i]) === Math.sign(actual[i])) hits++;
-  return preds.length > 0 ? hits / preds.length : 0;
+  return preds.length > 0 ? hits / (preds as any).length : 0;
 }
 
 // ─── Feature engineering ─────────────────────────────────────────────────────
@@ -106,8 +162,7 @@ function rollingMean(arr: number[], w: number, i: number): number {
   return s / n;
 }
 function rollingStdFn(arr: number[], w: number, i: number): number {
-  const s = Math.max(0, i - w + 1);
-  const sl = arr.slice(s, i + 1);
+  const sl = arr.slice(Math.max(0, i - w + 1), i + 1);
   const m = sl.reduce((a, b) => a + b, 0) / sl.length;
   return Math.sqrt(sl.reduce((a, b) => a + (b - m) ** 2, 0) / sl.length) || 1e-8;
 }
@@ -136,11 +191,8 @@ function buildFeatures(rows: { date: string; close: number }[]): {
       rets[i],
       ma5  > 0 ? closes[i] / ma5  - 1 : 0,
       ma20 > 0 ? closes[i] / ma20 - 1 : 0,
-      rsiNorm(rets, 14, i),
-      rollingStdFn(rets, 5, i),
-      rollingStdFn(rets, 20, i),
-      Math.max(0, Math.min(1, bband)),
-      mom5, mom10,
+      rsiNorm(rets, 14, i), rollingStdFn(rets, 5, i), rollingStdFn(rets, 20, i),
+      Math.max(0, Math.min(1, bband)), mom5, mom10,
     ]);
   });
   return { feats, closes, dates };
@@ -148,41 +200,37 @@ function buildFeatures(rows: { date: string; close: number }[]): {
 
 // ─── Sequence generation ─────────────────────────────────────────────────────
 
-function makeSeqs(
-  feats: Float64Array[], closes: number[],
-  lookback: number, horizon: number,
-): { X: Float64Array[]; y: Float64Array; anchorDateIdxs: number[] } {
+function makeSeqs(feats: Float64Array[], closes: number[], lookback: number, horizon: number) {
   const F = feats[0].length;
   const Xs: Float64Array[] = [], ys: number[] = [], anchors: number[] = [];
   for (let i = lookback; i < feats.length - horizon; i++) {
     const v = new Float64Array(lookback * F + 1);
-    for (let t = 0; t < lookback; t++)
-      for (let f = 0; f < F; f++) v[t * F + f] = feats[i - lookback + t][f];
+    for (let t = 0; t < lookback; t++) for (let f = 0; f < F; f++) v[t * F + f] = feats[i - lookback + t][f];
     v[lookback * F] = 1;
     Xs.push(v);
     ys.push((closes[i + horizon] - closes[i]) / closes[i]);
-    anchors.push(i); // index in `closes`/`dates` for "current" day
+    anchors.push(i);
   }
   return { X: Xs, y: new Float64Array(ys), anchorDateIdxs: anchors };
 }
 
 // ─── Standardisation ─────────────────────────────────────────────────────────
 
-function standardize(X: Float64Array[]): { Xn: Float64Array[]; mu: Float64Array; sigma: Float64Array } {
+function standardize(X: Float64Array[]) {
   const n = X.length, F = X[0].length;
   const mu = new Float64Array(F), sigma = new Float64Array(F);
   for (const row of X) for (let j = 0; j < F; j++) mu[j] += row[j];
   for (let j = 0; j < F; j++) mu[j] /= n;
   for (const row of X) for (let j = 0; j < F; j++) sigma[j] += (row[j] - mu[j]) ** 2;
   for (let j = 0; j < F; j++) sigma[j] = Math.sqrt(sigma[j] / n) || 1;
-  const Xn = X.map(row => { const r = new Float64Array(F); for (let j = 0; j < F; j++) r[j] = (row[j] - mu[j]) / sigma[j]; return r; });
+  const Xn = X.map(row => { const r = new Float64Array(row.length); for (let j = 0; j < row.length; j++) r[j] = (row[j] - mu[j]) / sigma[j]; return r; });
   return { Xn, mu, sigma };
 }
 function applyStd(X: Float64Array[], mu: Float64Array, sigma: Float64Array): Float64Array[] {
   return X.map(row => { const r = new Float64Array(row.length); for (let j = 0; j < row.length; j++) r[j] = (row[j] - mu[j]) / sigma[j]; return r; });
 }
 
-// ─── GBDT with histogram splits ───────────────────────────────────────────────
+// ─── GBDT ────────────────────────────────────────────────────────────────────
 
 type DNode = { fi: number; thresh: number; left: DNode | number; right: DNode | number };
 
@@ -193,78 +241,52 @@ function dtPredict(node: DNode | number, x: Float64Array): number {
 
 function buildNode(
   X: Float64Array[], res: number[], idxs: number[],
-  depth: number, minLeaf: number, rng: () => number,
-  featureFrac: number, nBins: number,
+  depth: number, minLeaf: number, rng: () => number, featureFrac: number, nBins: number,
 ): DNode | number {
   const n = idxs.length;
-  if (depth === 0 || n < minLeaf * 2) {
-    let s = 0; for (const i of idxs) s += res[i]; return s / n;
-  }
-
+  if (depth === 0 || n < minLeaf * 2) { let s = 0; for (const i of idxs) s += res[i]; return s / n; }
   const F = X[0].length;
   const nUsed = Math.max(1, Math.floor(F * featureFrac));
   const fIdxs = Array.from({ length: F }, (_, i) => i).sort(() => rng() - 0.5).slice(0, nUsed);
-
   let totSum = 0, totSumSq = 0;
   for (const i of idxs) { totSum += res[i]; totSumSq += res[i] * res[i]; }
   const totMse = totSumSq / n - (totSum / n) ** 2;
-
   let bestGain = 1e-9, bestFi = -1, bestThresh = 0;
   let bestLeft: number[] = [], bestRight: number[] = [];
-
   for (const fi of fIdxs) {
-    // Sort by feature value once
     const sorted = idxs.slice().sort((a, b) => X[a][fi] - X[b][fi]);
-
     let lSum = 0, lSumSq = 0;
-    // Histogram: evaluate at most nBins evenly-spaced positions
     const step = Math.max(1, Math.floor(n / nBins));
-
     for (let k = 1; k < n; k++) {
       lSum += res[sorted[k - 1]]; lSumSq += res[sorted[k - 1]] ** 2;
-      // Only evaluate at step intervals and boundaries
       if (k % step !== 0 && k !== n - minLeaf) continue;
       if (k < minLeaf || k > n - minLeaf) continue;
-      // Skip identical adjacent values (can't split here)
       if (X[sorted[k]][fi] === X[sorted[k - 1]][fi]) continue;
-
       const nl = k, nr = n - k;
       const rSum = totSum - lSum, rSumSq = totSumSq - lSumSq;
-      const lMse = lSumSq / nl - (lSum / nl) ** 2;
-      const rMse = rSumSq / nr - (rSum / nr) ** 2;
-      const gain = totMse - (nl * lMse + nr * rMse) / n;
-
+      const gain = totMse - (nl * (lSumSq/nl - (lSum/nl)**2) + nr * (rSumSq/nr - (rSum/nr)**2)) / n;
       if (gain > bestGain) {
-        bestGain = gain;
-        bestFi = fi;
-        bestThresh = (X[sorted[k - 1]][fi] + X[sorted[k]][fi]) / 2;
-        bestLeft  = sorted.slice(0, k);
-        bestRight = sorted.slice(k);
+        bestGain = gain; bestFi = fi;
+        bestThresh = (X[sorted[k-1]][fi] + X[sorted[k]][fi]) / 2;
+        bestLeft = sorted.slice(0, k); bestRight = sorted.slice(k);
       }
     }
   }
-
   if (bestFi < 0) { let s = 0; for (const i of idxs) s += res[i]; return s / n; }
   return {
     fi: bestFi, thresh: bestThresh,
-    left:  buildNode(X, res, bestLeft,  depth - 1, minLeaf, rng, featureFrac, nBins),
-    right: buildNode(X, res, bestRight, depth - 1, minLeaf, rng, featureFrac, nBins),
+    left:  buildNode(X, res, bestLeft,  depth-1, minLeaf, rng, featureFrac, nBins),
+    right: buildNode(X, res, bestRight, depth-1, minLeaf, rng, featureFrac, nBins),
   };
 }
-
-interface GBDTModel { trees: (DNode | number)[]; lr: number; basePred: number }
 
 function gbdtFit(X: Float64Array[], y: Float64Array, seed: number): GBDTModel {
   const rng = makeRng(seed);
   const n = X.length;
-  let basePred = 0;
-  for (let i = 0; i < n; i++) basePred += y[i];
-  basePred /= n;
-
+  let basePred = 0; for (let i = 0; i < n; i++) basePred += y[i]; basePred /= n;
   const preds = new Float64Array(n).fill(basePred);
   const trees: (DNode | number)[] = [];
   const rowBag = Math.floor(n * GBDT_SSUB);
-
   for (let t = 0; t < GBDT_TREES; t++) {
     const res = Array.from({ length: n }, (_, i) => y[i] - preds[i]);
     const idxs = Array.from({ length: n }, (_, i) => i).sort(() => rng() - 0.5).slice(0, rowBag);
@@ -278,96 +300,100 @@ function gbdtFit(X: Float64Array[], y: Float64Array, seed: number): GBDTModel {
 function gbdtPredict(model: GBDTModel, X: Float64Array[]): Float64Array {
   return new Float64Array(X.map(x => {
     let p = model.basePred;
-    for (const tree of model.trees) p += model.lr * dtPredict(tree, x);
+    for (const tree of model.trees) p += model.lr * dtPredict(tree as DNode | number, x);
     return p;
   }));
 }
 
+/**
+ * Incremental boosting: add N new trees to an existing model.
+ * Equivalent to lgb.train(init_model=existing, num_boost_round=N).
+ */
+function incrementalAddTrees(
+  model: GBDTModel,
+  X: Float64Array[], y: Float64Array,
+  nTrees: number, seed: number,
+): GBDTModel {
+  if (X.length === 0) return model;
+  const rng = makeRng(seed);
+  const n = X.length;
+  const rowBag = Math.max(1, Math.floor(n * GBDT_SSUB));
+  // Start from current ensemble predictions
+  const preds = gbdtPredict(model, X);
+  const newTrees: (DNode | number)[] = [];
+  for (let t = 0; t < nTrees; t++) {
+    const res = Array.from({ length: n }, (_, i) => y[i] - preds[i]);
+    const idxs = Array.from({ length: n }, (_, i) => i).sort(() => rng() - 0.5).slice(0, Math.min(rowBag, n));
+    const tree = buildNode(X, res, idxs, GBDT_DEPTH, GBDT_LEAF, rng, GBDT_FSUB, GBDT_BINS);
+    newTrees.push(tree);
+    for (let i = 0; i < n; i++) preds[i] += model.lr * dtPredict(tree as DNode | number, X[i]);
+  }
+  return { ...model, trees: [...model.trees, ...newTrees] };
+}
+
 // ─── Data fetch ──────────────────────────────────────────────────────────────
 
-async function fetchHistory(symbol: string): Promise<{ date: string; close: number }[]> {
+async function fetchHistory(symbol: string, years = YEARS_DATA): Promise<{ date: string; close: number }[]> {
   const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
   const end = new Date(), start = new Date();
-  start.setFullYear(start.getFullYear() - YEARS_DATA);
+  start.setFullYear(start.getFullYear() - years);
   const r = await yahoo.chart(symbol, { period1: start, period2: end, interval: "1d" });
   return (r.quotes ?? [])
     .filter((q: any) => q.close != null)
     .map((q: any) => ({ date: new Date(q.date).toISOString().slice(0, 10), close: q.close as number }));
 }
 
-// ─── Core result builder ─────────────────────────────────────────────────────
+// ─── Build IndexResult from trained model (no retraining) ────────────────────
 
-function buildResult(
+function buildResultFromModel(
   symbol: string, name: string,
   rows: { date: string; close: number }[],
+  models: GBDTModel[],
+  scaler: { mu: Float64Array; sigma: Float64Array },
 ): IndexResult {
   const { feats, closes, dates } = buildFeatures(rows);
   const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length;
-
-  // 80/20 train-test split
   const trainEnd = Math.floor(n * 0.80);
-  const Xtr = X.slice(0, trainEnd), ytr = y.slice(0, trainEnd);
-  const Xte = X.slice(trainEnd),  yte = y.slice(trainEnd);
+  const Xte = X.slice(trainEnd), yte = y.slice(trainEnd);
+  const XteN = applyStd(Xte, scaler.mu, scaler.sigma);
 
-  const { Xn: XtrN, mu, sigma } = standardize(Xtr);
-  const XteN = applyStd(Xte, mu, sigma);
-
-  // Train ensemble
-  const models = Array.from({ length: N_ENSEMBLE }, (_, e) => gbdtFit(XtrN, ytr, e * 37 + 13));
-
-  // Test predictions (ensemble average)
   const testPreds = new Float64Array(Xte.length);
   for (const m of models) {
     const p = gbdtPredict(m, XteN);
-    for (let i = 0; i < p.length; i++) testPreds[i] += p[i] / N_ENSEMBLE;
+    for (let i = 0; i < p.length; i++) testPreds[i] += p[i] / models.length;
   }
 
-  // ── Walk-forward validation: split test set into 2 windows ──────────────
   const nTest = testPreds.length;
   const wfMid = Math.floor(nTest / 2);
-  const wf1Acc = dirAccRate(testPreds.slice(0, wfMid), Array.from(yte).slice(0, wfMid));
-  const wf2Acc = dirAccRate(testPreds.slice(wfMid),    Array.from(yte).slice(wfMid));
-  const wfDirAcc = +((wf1Acc + wf2Acc) / 2 * 100).toFixed(1);
+  const wf1 = dirAccRate(testPreds.slice(0, wfMid), Array.from(yte).slice(0, wfMid));
+  const wf2 = dirAccRate(testPreds.slice(wfMid),    Array.from(yte).slice(wfMid));
+  const wfDirAcc = +((wf1 + wf2) / 2 * 100).toFixed(1);
 
-  // ── Overall test metrics ─────────────────────────────────────────────────
   let mae = 0;
   for (let i = 0; i < nTest; i++) mae += Math.abs(testPreds[i] - yte[i]);
   mae /= nTest || 1;
   const testDirAcc = +(dirAccRate(testPreds, yte) * 100).toFixed(1);
 
-  // ── Rolling 30-day directional accuracy ─────────────────────────────────
   const lastN = Math.min(RECENT_N, nTest);
   const last30Preds  = Array.from(testPreds).slice(-lastN);
   const last30Actual = Array.from(yte).slice(-lastN);
   const rolling30dDirAcc = +(dirAccRate(last30Preds, last30Actual) * 100).toFixed(1);
-
-  // ── Prediction error std (for confidence band = ±1σ) ────────────────────
   const recentErrors = last30Actual.map((a, i) => a - last30Preds[i]);
   const predErrStd = +(stddev(recentErrors) * 100).toFixed(3);
 
-  // ── Recent performance: last 30 test predictions vs actual ───────────────
   const recentPerf: RecentPerfPoint[] = last30Preds.map((pred, m) => {
     const j = nTest - lastN + m;
     const anchorIdx = anchorDateIdxs[trainEnd + j];
-    return {
-      date: dates[anchorIdx] ?? `D${m}`,
-      predicted: +(pred * 100).toFixed(2),
-      actual:    +(last30Actual[m] * 100).toFixed(2),
-    };
+    return { date: dates[anchorIdx] ?? `D${m}`, predicted: +(pred * 100).toFixed(2), actual: +(last30Actual[m] * 100).toFixed(2) };
   });
 
-  // ── Final forecast (using last known sequence) ───────────────────────────
-  const lastXn = applyStd([X[n - 1]], mu, sigma);
-  const forecasts = models.map(m => gbdtPredict(m, lastXn)[0]);
-  const forecastReturn = forecasts.reduce((a, b) => a + b, 0) / N_ENSEMBLE;
-
+  const lastXn = applyStd([X[n - 1]], scaler.mu, scaler.sigma);
+  const forecastReturn = models.map(m => gbdtPredict(m, lastXn)[0]).reduce((a, b) => a + b, 0) / models.length;
   const curVal = closes[closes.length - 1];
   const pred3d = curVal * (1 + forecastReturn);
-  // Use recent prediction error std as confidence band (±1σ)
   const bandPrice = (predErrStd / 100) * curVal;
 
-  // Future trading dates
   const futureDates: string[] = [];
   const cur = new Date(dates[dates.length - 1] + "T00:00:00");
   while (futureDates.length < PRED_H) {
@@ -380,25 +406,37 @@ function buildResult(
     return { date, value: +v.toFixed(2), lower: +(v - bandPrice).toFixed(2), upper: +(v + bandPrice).toFixed(2) };
   });
 
-  const hist90 = dates.slice(-90);
-  const c90 = closes.slice(-90);
-  const historical = hist90.map((date, i) => ({ date, value: +c90[i].toFixed(2) }));
-
   return {
-    symbol, name, historical, predictions,
+    symbol, name,
+    historical: dates.slice(-90).map((date, i) => ({ date, value: +closes[closes.length - 90 + i].toFixed(2) })),
+    predictions,
     currentValue: +curVal.toFixed(2),
     predictedReturn3d: +(forecastReturn * 100).toFixed(2),
     trend: forecastReturn >= 0 ? "up" : "down",
-    testMae: +(mae * 100).toFixed(3),
-    testDirAcc,
-    wfDirAcc,
-    rolling30dDirAcc,
-    predErrStd,
-    recentPerf,
+    testMae: +(mae * 100).toFixed(3), testDirAcc, wfDirAcc, rolling30dDirAcc, predErrStd, recentPerf,
   };
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// ─── Full training ────────────────────────────────────────────────────────────
+
+function trainFull(
+  symbol: string, name: string,
+  rows: { date: string; close: number }[],
+): IndexResult & { _models: GBDTModel[]; _scaler: { mu: Float64Array; sigma: Float64Array } } {
+  const { feats, closes, dates } = buildFeatures(rows);
+  const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
+  const n = X.length;
+  const trainEnd = Math.floor(n * 0.80);
+  const Xtr = X.slice(0, trainEnd), ytr = y.slice(0, trainEnd);
+  const { Xn: XtrN, mu, sigma } = standardize(Xtr);
+  const models = Array.from({ length: N_ENSEMBLE }, (_, e) => gbdtFit(XtrN, ytr, e * 37 + 13));
+  // Save to disk
+  saveModelFile(symbol.replace(/[\^]/g, ""), models, { mu, sigma });
+  const result = buildResultFromModel(symbol, name, rows, models, { mu, sigma });
+  return { ...result, _models: models, _scaler: { mu, sigma } };
+}
+
+// ─── Data fetch ──────────────────────────────────────────────────────────────
 
 export function getStatus(): PipelineStatus {
   return {
@@ -408,6 +446,39 @@ export function getStatus(): PipelineStatus {
     trainingMs: _status.trainingMs, kospi: _status.kospi, kosdaq: _status.kosdaq,
   };
 }
+
+// ─── Try to restore from saved model files ────────────────────────────────────
+
+export async function tryRestoreFromDisk(): Promise<boolean> {
+  const meta = loadMeta();
+  const kospiStored  = loadModelFile("KS11");
+  const kosdaqStored = loadModelFile("KQ11");
+  if (!meta || !kospiStored || !kosdaqStored) return false;
+
+  console.log("[gbdt] 저장된 모델 복원 중... (last:", meta.lastUpdated, ")");
+  try {
+    // Fetch only 60 days (lightweight) for fresh predictions
+    const [kospiRows, kosdaqRows] = await Promise.all([
+      fetchHistory("^KS11", 0.25),   // ~90 days
+      fetchHistory("^KQ11", 0.25),
+    ]);
+    const kospi  = buildResultFromModel("^KS11", "KOSPI",  kospiRows,  kospiStored.models,  kospiStored.scaler);
+    const kosdaq = buildResultFromModel("^KQ11", "KOSDAQ", kosdaqRows, kosdaqStored.models, kosdaqStored.scaler);
+    _lastRun = Date.now();
+    _status = {
+      running: false, ready: true,
+      steps: defaultSteps().map(s => ({ ...s, status: "done" as const })),
+      trainedAt: meta.lastTrained, trainingMs: 0, kospi, kosdaq,
+    };
+    console.log("[gbdt] 디스크 복원 완료 (재학습 없음)");
+    return true;
+  } catch (e: any) {
+    console.warn("[gbdt] 디스크 복원 실패:", e?.message);
+    return false;
+  }
+}
+
+// ─── Full pipeline (initial / monthly retrain) ────────────────────────────────
 
 export async function runPipeline(force = false): Promise<void> {
   const now = Date.now();
@@ -423,45 +494,126 @@ export async function runPipeline(force = false): Promise<void> {
     const [kospiRows, kosdaqRows] = await Promise.all([fetchHistory("^KS11"), fetchHistory("^KQ11")]);
     stepSet("data", "done", Date.now() - s1);
 
-    stepSet("feature", "running");
-    const s2 = Date.now();
-    buildFeatures(kospiRows); buildFeatures(kosdaqRows);
-    stepSet("feature", "done", Date.now() - s2);
-
-    stepSet("sequence", "running");
-    const s3 = Date.now();
-    const kf = buildFeatures(kospiRows), qf = buildFeatures(kosdaqRows);
-    makeSeqs(kf.feats, kf.closes, LOOKBACK, PRED_H);
-    makeSeqs(qf.feats, qf.closes, LOOKBACK, PRED_H);
-    stepSet("sequence", "done", Date.now() - s3);
+    stepSet("feature", "running"); stepSet("feature", "done", 0);
+    stepSet("sequence", "running"); stepSet("sequence", "done", 0);
 
     stepSet("train", "running");
     const s4 = Date.now();
-    const [kospi, kosdaq] = await Promise.all([
-      new Promise<IndexResult>(res => res(buildResult("^KS11", "KOSPI", kospiRows))),
-      new Promise<IndexResult>(res => res(buildResult("^KQ11", "KOSDAQ", kosdaqRows))),
+    const [kospiResult, kosdaqResult] = await Promise.all([
+      new Promise<ReturnType<typeof trainFull>>(res => res(trainFull("^KS11", "KOSPI",  kospiRows))),
+      new Promise<ReturnType<typeof trainFull>>(res => res(trainFull("^KQ11", "KOSDAQ", kosdaqRows))),
     ]);
     stepSet("train", "done", Date.now() - s4);
-
     stepSet("ensemble", "running"); stepSet("ensemble", "done", 0);
-    stepSet("output", "running");
+    stepSet("output", "running"); stepSet("output", "done", 0);
+
     const trainedAt = new Date().toISOString();
-    stepSet("output", "done", 0);
+    // Save metadata
+    const existingMeta = loadMeta();
+    saveMeta({
+      lastTrained: trainedAt, lastUpdated: trainedAt,
+      nSamples: { kospi: kospiRows.length, kosdaq: kosdaqRows.length },
+      dirAcc:           { kospi: kospiResult.testDirAcc,        kosdaq: kosdaqResult.testDirAcc },
+      wfDirAcc:         { kospi: kospiResult.wfDirAcc,          kosdaq: kosdaqResult.wfDirAcc },
+      rolling30dDirAcc: { kospi: kospiResult.rolling30dDirAcc,  kosdaq: kosdaqResult.rolling30dDirAcc },
+      updateCount: 0,
+    });
 
     _lastRun = now;
     _status = {
-      running: false, ready: true,
-      steps: _status.steps, trainedAt,
-      trainingMs: Date.now() - t0,
-      kospi, kosdaq,
+      running: false, ready: true, steps: _status.steps,
+      trainedAt, trainingMs: Date.now() - t0,
+      kospi: kospiResult, kosdaq: kosdaqResult,
     };
     console.log(
-      `[gbdt] 완료 ${Date.now() - t0}ms | KOSPI pred=${kospi.predictedReturn3d}% wfAcc=${kospi.wfDirAcc}% roll30=${kospi.rolling30dDirAcc}%`
+      `[gbdt] 완전학습 완료 ${Date.now() - t0}ms | KOSPI wfAcc=${kospiResult.wfDirAcc}% roll30=${kospiResult.rolling30dDirAcc}%`
     );
   } catch (err: any) {
-    console.error("[gbdt] 오류:", err?.message ?? err);
+    console.error("[gbdt] 파이프라인 오류:", err?.message ?? err);
     const failing = _status.steps.find(s => s.status === "running");
     if (failing) failing.status = "error";
     _status = { ..._status, running: false, ready: false, error: err?.message ?? String(err) };
+  }
+}
+
+// ─── Daily incremental update ─────────────────────────────────────────────────
+
+export async function runDailyIncrementalUpdate(): Promise<void> {
+  if (_status.running) { console.log("[gbdt] 학습 중이라 증분 업데이트 건너뜀"); return; }
+
+  const meta = loadMeta();
+  const kospiStored  = loadModelFile("KS11");
+  const kosdaqStored = loadModelFile("KQ11");
+
+  if (!kospiStored || !kosdaqStored) {
+    console.log("[gbdt] 저장된 모델 없음 → 완전 학습으로 전환");
+    return runPipeline(true);
+  }
+
+  console.log("[gbdt] 일일 증분 업데이트 시작");
+  const t0 = Date.now();
+
+  try {
+    // Fetch 90 days for feature computation context
+    const [kospiRows, kosdaqRows] = await Promise.all([
+      fetchHistory("^KS11", 0.35),
+      fetchHistory("^KQ11", 0.35),
+    ]);
+
+    // Identify new data since last update
+    const lastUpdated = meta?.lastUpdated ?? "2000-01-01";
+
+    function getNewSamples(rows: { date: string; close: number }[], stored: typeof kospiStored) {
+      const { feats, closes, dates } = buildFeatures(rows);
+      const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
+      // New = anchor date strictly after lastUpdated
+      const newIdxs = X.map((_, k) => k).filter(k => (dates[anchorDateIdxs[k]] ?? "") > lastUpdated);
+      if (newIdxs.length === 0) return null;
+      const XteN = applyStd(newIdxs.map(k => X[k]), stored.scaler.mu, stored.scaler.sigma);
+      const yNew = new Float64Array(newIdxs.map(k => y[k]));
+      return { XteN, yNew };
+    }
+
+    const kospiNew  = getNewSamples(kospiRows,  kospiStored);
+    const kosdaqNew = getNewSamples(kosdaqRows, kosdaqStored);
+
+    if (!kospiNew && !kosdaqNew) {
+      console.log("[gbdt] 새로운 데이터 없음 — 증분 업데이트 건너뜀");
+      return;
+    }
+
+    // Add N_INCR_TREES trees to each model in each ensemble
+    const updatedKospiModels = kospiNew
+      ? kospiStored.models.map((m, e) => incrementalAddTrees(m, kospiNew.XteN, kospiNew.yNew, N_INCR_TREES, e * 7 + Date.now() % 1000))
+      : kospiStored.models;
+    const updatedKosdaqModels = kosdaqNew
+      ? kosdaqStored.models.map((m, e) => incrementalAddTrees(m, kosdaqNew.XteN, kosdaqNew.yNew, N_INCR_TREES, e * 7 + 3 + Date.now() % 1000))
+      : kosdaqStored.models;
+
+    // Save updated models
+    saveModelFile("KS11", updatedKospiModels,  kospiStored.scaler);
+    saveModelFile("KQ11", updatedKosdaqModels, kosdaqStored.scaler);
+
+    // Rebuild IndexResult with updated models
+    const [kospi, kosdaq] = await Promise.all([
+      Promise.resolve(buildResultFromModel("^KS11", "KOSPI",  kospiRows,  updatedKospiModels,  kospiStored.scaler)),
+      Promise.resolve(buildResultFromModel("^KQ11", "KOSDAQ", kosdaqRows, updatedKosdaqModels, kosdaqStored.scaler)),
+    ]);
+
+    const now = new Date().toISOString();
+    saveMeta({
+      ...(meta ?? { lastTrained: now, nSamples: {}, dirAcc: {}, wfDirAcc: {}, rolling30dDirAcc: {}, updateCount: 0 }),
+      lastUpdated: now,
+      dirAcc:           { kospi: kospi.testDirAcc,        kosdaq: kosdaq.testDirAcc },
+      wfDirAcc:         { kospi: kospi.wfDirAcc,          kosdaq: kosdaq.wfDirAcc },
+      rolling30dDirAcc: { kospi: kospi.rolling30dDirAcc,  kosdaq: kosdaq.rolling30dDirAcc },
+      updateCount: (meta?.updateCount ?? 0) + 1,
+    });
+
+    _lastRun = Date.now();
+    _status = { ..._status, ready: true, kospi, kosdaq };
+    console.log(`[gbdt] 증분 업데이트 완료 ${Date.now() - t0}ms | +${N_INCR_TREES} 트리/모델 | updateCount=${(meta?.updateCount ?? 0) + 1}`);
+  } catch (e: any) {
+    console.error("[gbdt] 증분 업데이트 실패:", e?.message ?? e);
   }
 }

@@ -12,6 +12,7 @@ import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
+import { startMarketScheduler } from "./lib/market-scheduler.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -36,6 +37,9 @@ const THIRTY_MIN_MS = 30 * 60 * 1000;
 
 const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
+
+  // 시장분석 스케줄러 (저장 모델 복원 + 일일/월간 스케줄)
+  startMarketScheduler();
 
   runMigrations()
     .then(() => {
