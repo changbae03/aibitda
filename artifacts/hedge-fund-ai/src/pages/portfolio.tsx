@@ -685,7 +685,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 </p>
                 {holding.change1d != null && (
                   <p className={cn("text-[11px] tabular-nums mt-1 font-medium", changeColor)}>
-                    {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""} {fmtPct(Math.abs(holding.change1d))} {isEn ? "today" : "오늘"}
+                    {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""} {fmtPct(holding.change1d)} {isEn ? "today" : "오늘"}
                   </p>
                 )}
               </>
