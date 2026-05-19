@@ -370,32 +370,40 @@ function IndexChart({ result }: { result: IndexResult }) {
   );
 }
 
-/* ── Return comparison bar chart (last 30 days: predicted vs actual) ─────── */
+/* ── Return comparison chart (last 30 days: actual bars + predicted line) ─── */
 
 function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
+  const allVals  = data.flatMap(d => [d.actual, d.predicted]);
+  const dataMin  = Math.min(...allVals);
+  const dataMax  = Math.max(...allVals);
+  const pad      = Math.max(Math.abs(dataMin), Math.abs(dataMax)) * 0.15;
+  const yDomain: [number, number] = [
+    Math.floor((dataMin - pad) * 10) / 10,
+    Math.ceil ((dataMax + pad) * 10) / 10,
+  ];
+
   const customTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     const d = payload[0]?.payload as RecentPerfPoint;
     return (
       <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-0.5">
-        <p className="text-muted-foreground">{d.date}</p>
-        <p style={{ color: d.predicted >= 0 ? RISE : FALL }}>
-          예측: {d.predicted >= 0 ? "+" : ""}{d.predicted}%
+        <p className="text-muted-foreground font-medium">{d.date}</p>
+        <p style={{ color: "#a78bfa" }}>
+          예측(3일): {d.predicted >= 0 ? "+" : ""}{d.predicted}%
         </p>
         <p style={{ color: d.actual >= 0 ? RISE : FALL }}>
-          실제: {d.actual >= 0 ? "+" : ""}{d.actual}%
+          실제(3일): {d.actual >= 0 ? "+" : ""}{d.actual}%
         </p>
       </div>
     );
   };
 
-  // Show every 5th date label to avoid crowding
   const tickFormatter = (_: any, index: number) =>
     index % 5 === 0 ? formatDate(data[index]?.date ?? "", true) : "";
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barGap={1} barCategoryGap="25%">
+    <ResponsiveContainer width="100%" height={240}>
+      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
         <XAxis
           dataKey="date"
@@ -405,37 +413,37 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
           interval={0}
         />
         <YAxis
+          domain={yDomain}
           tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
           tick={{ fontSize: 9, fill: "rgba(255,255,255,0.35)" }}
           tickLine={false} axisLine={false} width={52}
         />
         <Tooltip content={customTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-        <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" />
+        <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 2" />
 
-        {/* Actual — filled bars */}
-        <Bar dataKey="actual" name="실제" radius={[2, 2, 0, 0]}>
+        {/* Actual — colour-coded solid bars */}
+        <Bar dataKey="actual" name="실제 수익률" radius={[2, 2, 0, 0]}>
           {data.map((d, i) => (
-            <Cell key={`act-${i}`} fill={d.actual >= 0 ? RISE : FALL} fillOpacity={0.65} />
+            <Cell key={`act-${i}`} fill={d.actual >= 0 ? RISE : FALL} fillOpacity={0.7} />
           ))}
         </Bar>
 
-        {/* Predicted — outlined (stroke-only) bars */}
-        <Bar dataKey="predicted" name="예측" radius={[2, 2, 0, 0]}>
-          {data.map((d, i) => (
-            <Cell
-              key={`pred-${i}`}
-              fill="transparent"
-              stroke={d.predicted >= 0 ? RISE : FALL}
-              strokeWidth={1.5}
-            />
-          ))}
-        </Bar>
+        {/* Predicted — violet line + dots (always visible regardless of scale) */}
+        <Line
+          dataKey="predicted"
+          name="AI 예측 (방향 참고)"
+          type="monotone"
+          stroke="#a78bfa"
+          strokeWidth={1.5}
+          dot={{ r: 3, fill: "#a78bfa", strokeWidth: 0 }}
+          activeDot={{ r: 5 }}
+        />
 
         <Legend
-          iconType="rect"
-          wrapperStyle={{ fontSize: 11, paddingTop: 6, color: "rgba(255,255,255,0.5)" }}
+          iconSize={10}
+          wrapperStyle={{ fontSize: 10, paddingTop: 8, color: "rgba(255,255,255,0.5)" }}
         />
-      </BarChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }
