@@ -31,6 +31,8 @@ export default defineConfig({
       injectRegister: "auto",
       devOptions: { enabled: false },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
         navigateFallback: null,
         runtimeCaching: [
