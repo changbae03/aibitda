@@ -141,14 +141,20 @@ async function fetchRecentIndexData() {
   }
   function extractYahoo(result: PromiseSettledResult<any>, n = 5) {
     if (result.status !== "fulfilled") return null;
-    return (result.value?.quotes ?? [])
-      .filter((q: any) => q.close != null)
-      .slice(-n)
-      .map((q: any) => ({
+    // 전날 종가 대비 등락률(= 실제 하루 수익률)을 계산하기 위해 n+1개 가져옴
+    const all = (result.value?.quotes ?? []).filter((q: any) => q.close != null);
+    const window = all.slice(-(n + 1));
+    return window.slice(1).map((q: any, i: number) => {
+      const prevClose = window[i]?.close ?? null;
+      const change = prevClose && q.close
+        ? +(((q.close - prevClose) / prevClose) * 100).toFixed(2)
+        : null;
+      return {
         date:   new Date(q.date).toISOString().slice(0, 10),
         close:  +(q.close as number).toFixed(2),
-        change: q.open && q.close ? +(((q.close - q.open) / q.open) * 100).toFixed(2) : null,
-      }));
+        change,
+      };
+    });
   }
 
   const kospi  = extractNaver(kospiData);
