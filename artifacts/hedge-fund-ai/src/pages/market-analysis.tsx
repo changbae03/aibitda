@@ -52,6 +52,11 @@ interface PipelineStatus {
 interface MarketBrief {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
+  leadParagraph?: string;
+  marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
+  macroFactors?: { factor: string; status: string; implication: string }[];
+  forwardLook?: { point: string; detail: string; watchFor: string }[];
+  keyRisk?: string;
   recentIssues: string[];
   outlook: string[];
   generatedAt: string;
@@ -83,24 +88,34 @@ function MarketBriefSection({
   onRefresh: () => void;
 }) {
   const sentimentConfig = brief?.sentiment === "bullish"
-    ? { color: "text-red-400 bg-red-500/10 border-red-500/20", label: "상승 우세", emoji: "📈" }
+    ? { color: "text-red-400 bg-red-500/10 border-red-500/20", label: "상승 우세", bar: "bg-red-400" }
     : brief?.sentiment === "bearish"
-    ? { color: "text-blue-400 bg-blue-500/10 border-blue-500/20", label: "하락 우세", emoji: "📉" }
-    : { color: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "방향 불확실", emoji: "↔️" };
+    ? { color: "text-blue-400 bg-blue-500/10 border-blue-500/20", label: "하락 우세", bar: "bg-blue-400" }
+    : { color: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "방향 불확실", bar: "bg-amber-400" };
+
+  const dirCfg = (d: "positive" | "negative" | "neutral") =>
+    d === "positive"
+      ? { dot: "bg-red-400", badge: "text-red-400 bg-red-500/10 border-red-500/20", label: "긍정" }
+      : d === "negative"
+      ? { dot: "bg-blue-400", badge: "text-blue-400 bg-blue-500/10 border-blue-500/20", label: "부정" }
+      : { dot: "bg-white/30", badge: "text-white/40 bg-white/5 border-white/10", label: "중립" };
 
   const genTime = brief?.generatedAt
     ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : null;
 
+  const hasRich = !!(brief?.marketEvents?.length || brief?.macroFactors?.length || brief?.forwardLook?.length);
+
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+      {/* 헤더 */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">AI 오늘의 한마디</span>
+          <span className="text-sm font-semibold text-foreground">AI 시장 브리핑</span>
           {brief && !loading && (
             <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", sentimentConfig.color)}>
-              {sentimentConfig.emoji} {sentimentConfig.label}
+              {sentimentConfig.label}
             </span>
           )}
         </div>
@@ -119,80 +134,168 @@ function MarketBriefSection({
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 space-y-5">
+        {/* 로딩 */}
         {loading && !brief && (
-          <div className="flex items-center gap-3 py-8 justify-center">
+          <div className="flex items-center gap-3 py-10 justify-center">
             <Loader2 className="w-5 h-5 text-primary animate-spin" />
-            <span className="text-sm text-muted-foreground">시장 데이터를 읽어보는 중이에요...</span>
+            <span className="text-sm text-muted-foreground">시장 데이터를 분석하는 중이에요...</span>
           </div>
         )}
 
+        {/* 에러 */}
         {!loading && !brief && (
-          <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground/40">
+          <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground/40">
             <Newspaper className="w-6 h-6" />
             <span className="text-xs">브리핑을 불러올 수 없습니다</span>
           </div>
         )}
 
         {brief && (
-          <div className="space-y-4">
-            {brief.summary && (
-              <p className="text-sm font-medium text-foreground/90 leading-relaxed">
-                {brief.summary}
-              </p>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {brief.recentIssues.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                    <Newspaper className="w-3.5 h-3.5" />
-                    요즘 시장에서 일어나는 일
-                  </div>
-                  <ul className="space-y-2">
-                    {brief.recentIssues.map((issue, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
-                        <span className="shrink-0 w-4 h-4 rounded-full bg-white/[0.06] border border-white/[0.10] flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">
-                          {i + 1}
-                        </span>
-                        {issue}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {brief.outlook.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    앞으로 3일은 어떨까?
-                  </div>
-                  <ul className="space-y-2">
-                    {brief.outlook.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
-                        <span className={cn(
-                          "shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5",
-                          i === 0
-                            ? "bg-primary/15 border border-primary/30 text-primary text-[9px] font-bold"
-                            : "bg-white/[0.06] border border-white/[0.10] text-muted-foreground text-[9px] font-bold",
-                        )}>
-                          {i + 1}
-                        </span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+          <>
+            {/* 헤드라인 + 리드 */}
+            <div className="space-y-2">
+              <h3 className="text-base font-bold text-foreground leading-snug">{brief.summary}</h3>
+              {brief.leadParagraph && (
+                <p className="text-xs text-muted-foreground/80 leading-relaxed border-l-2 border-primary/30 pl-3">
+                  {brief.leadParagraph}
+                </p>
               )}
             </div>
+
+            {/* 풍부한 섹션이 있을 때만 표시 */}
+            {hasRich && (
+              <>
+                {/* 최근 시장 이슈 */}
+                {(brief.marketEvents?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <Newspaper className="w-3.5 h-3.5" /> 최근 시장 이슈 및 영향
+                    </p>
+                    <div className="space-y-2">
+                      {brief.marketEvents!.map((ev, i) => {
+                        const dc = dirCfg(ev.direction);
+                        return (
+                          <div key={i} className="flex gap-3 items-start bg-white/[0.025] rounded-xl px-3 py-2.5">
+                            <span className={cn("mt-1.5 shrink-0 w-2 h-2 rounded-full", dc.dot)} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="text-[12px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
+                                  {dc.label}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground/75 leading-relaxed">{ev.impact}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 거시 팩터 */}
+                {(brief.macroFactors?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5" /> 거시경제 팩터 분석
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {brief.macroFactors!.map((mf, i) => (
+                        <div key={i} className="bg-white/[0.025] rounded-xl px-3 py-3 space-y-1.5">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground/50 font-medium">{mf.factor}</p>
+                            <p className="text-[13px] font-bold text-foreground">{mf.status}</p>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground/70 leading-relaxed border-t border-white/[0.05] pt-1.5">
+                            {mf.implication}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 향후 전망 */}
+                {(brief.forwardLook?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <CalendarDays className="w-3.5 h-3.5" /> 향후 3거래일 전망
+                    </p>
+                    <div className="space-y-2">
+                      {brief.forwardLook!.map((fw, i) => (
+                        <div key={i} className="flex gap-3 items-start">
+                          <div className="shrink-0 w-5 h-5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
+                            {i + 1}
+                          </div>
+                          <div className="flex-1 space-y-0.5">
+                            <p className="text-[12px] font-semibold text-foreground">{fw.point}</p>
+                            <p className="text-[11px] text-muted-foreground/75 leading-relaxed">{fw.detail}</p>
+                            <p className="text-[10px] text-primary/60 font-medium flex items-center gap-1">
+                              <span className="text-muted-foreground/40">주시:</span> {fw.watchFor}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 핵심 리스크 */}
+                {brief.keyRisk && (
+                  <div className="flex items-start gap-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl px-3 py-2.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400/80 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] font-semibold text-amber-400/70 mb-0.5">핵심 리스크</p>
+                      <p className="text-[11px] text-amber-200/60 leading-relaxed">{brief.keyRisk}</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* 풍부한 데이터 없을 때 폴백: 기존 리스트 */}
+            {!hasRich && (brief.recentIssues.length > 0 || brief.outlook.length > 0) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {brief.recentIssues.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <Newspaper className="w-3.5 h-3.5" /> 최근 이슈
+                    </p>
+                    <ul className="space-y-1.5">
+                      {brief.recentIssues.map((issue, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-white/[0.06] border border-white/[0.10] flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
+                          {issue}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {brief.outlook.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <CalendarDays className="w-3.5 h-3.5" /> 전망
+                    </p>
+                    <ul className="space-y-1.5">
+                      {brief.outlook.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-white/[0.06] border border-white/[0.10] flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {brief.stale && (
               <p className="text-[10px] text-amber-500/60 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" /> 이전 분석입니다 (새로고침 실패)
               </p>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>

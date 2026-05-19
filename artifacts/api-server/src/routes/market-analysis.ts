@@ -29,6 +29,23 @@ let _briefCache: BriefCache | null = null;
 export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
+  leadParagraph: string;
+  marketEvents: {
+    title: string;
+    impact: string;
+    direction: "positive" | "negative" | "neutral";
+  }[];
+  macroFactors: {
+    factor: string;
+    status: string;
+    implication: string;
+  }[];
+  forwardLook: {
+    point: string;
+    detail: string;
+    watchFor: string;
+  }[];
+  keyRisk: string;
   recentIssues: string[];
   outlook: string[];
   generatedAt: string;
@@ -109,9 +126,10 @@ async function generateBrief(): Promise<MarketBriefResult> {
     ecos?.cpiYoY       != null ? `한국 CPI ${ecos.cpiYoY}% YoY` : null,
   ].filter(Boolean).join(", ");
 
-  const prompt = `당신은 한국 주식시장 전문 애널리스트입니다. 오늘은 ${today}입니다.
+  const prompt = `당신은 한국 주식시장 전문 시니어 애널리스트입니다. 오늘은 ${today}입니다.
 
-아래 실시간 데이터를 바탕으로 한국 주식시장 브리핑을 작성하세요.
+아래 정량 데이터를 바탕으로 심층 시장 브리핑을 작성하세요.
+단순 사실 나열이 아니라, 데이터 간 인과관계·맥락·시사점을 풍부하게 해설하는 것이 목표입니다.
 
 [최근 5거래일 KOSPI]
 ${kospiHistory}
@@ -127,28 +145,53 @@ ${macroLines || "데이터 없음"}
 
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
-  "summary": "한 문장 시장 전체 분위기 (30자 이내)",
+  "summary": "시장 전체 분위기를 담은 헤드라인 (20~30자, 명사형 마침)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
-  "recentIssues": [
-    "최근 3~5거래일 주요 이슈·이벤트 1 (50자 이내)",
-    "최근 3~5거래일 주요 이슈·이벤트 2",
-    "최근 3~5거래일 주요 이슈·이벤트 3"
+  "leadParagraph": "시장 상황을 2~3문장으로 서술. 최근 지수 흐름의 원인, 거시환경과의 연결, 전반적 맥락을 투자자 관점에서 분석. (100~150자)",
+  "marketEvents": [
+    {
+      "title": "이벤트 제목 (20자 이내)",
+      "impact": "이 이벤트가 시장에 미친 영향과 그 메커니즘을 구체적으로 설명. 왜 이런 반응이 나왔는지 인과관계 포함. (60~80자)",
+      "direction": "positive 또는 negative 또는 neutral"
+    },
+    { "title": "이벤트2", "impact": "...", "direction": "..." },
+    { "title": "이벤트3", "impact": "...", "direction": "..." }
   ],
-  "outlook": [
-    "향후 3거래일 전망 포인트 1 (50자 이내, AI 예측값 포함)",
-    "향후 3거래일 전망 포인트 2",
-    "향후 3거래일 전망 포인트 3"
-  ]
+  "macroFactors": [
+    {
+      "factor": "팩터명 (예: 미국 기준금리, 원달러환율)",
+      "status": "현재 수치나 상태 (예: 5.33%, 1,499원으로 고환율)",
+      "implication": "이 수치가 한국 주식시장에 구체적으로 어떤 영향을 주는지 설명. 외국인 수급·기업 실적·섹터별 영향 등 연결. (60~80자)"
+    },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." }
+  ],
+  "forwardLook": [
+    {
+      "point": "향후 3일 핵심 관전 포인트 (20자 이내)",
+      "detail": "AI 예측값 포함, 왜 이렇게 전망하는지 근거를 구체적으로 서술. (60~80자)",
+      "watchFor": "특히 주시해야 할 지표·이벤트·가격 레벨 (30자 이내)"
+    },
+    { "point": "...", "detail": "...", "watchFor": "..." },
+    { "point": "...", "detail": "...", "watchFor": "..." }
+  ],
+  "keyRisk": "현재 시장에서 가장 주의해야 할 리스크 한 문장. 구체적인 수치나 트리거 포함. (50~70자)",
+  "recentIssues": ["요약용 이슈1", "요약용 이슈2", "요약용 이슈3"],
+  "outlook": ["요약용 전망1", "요약용 전망2", "요약용 전망3"]
 }
 
-주의: 실제 뉴스 없이는 시장 데이터·지표 기반으로만 작성. 억측 금지. recentIssues는 데이터에서 관찰된 사실(가격 움직임·지표 수준)로 작성.`;
+주의사항:
+- 데이터에 없는 뉴스는 언급하지 말 것 (데이터·지표 기반으로만)
+- 하지만 데이터에서 읽히는 패턴·함의는 최대한 깊이 해석할 것
+- "불확실성" 같은 공허한 표현 대신 구체적 수치·메커니즘으로 서술
+- 한국어 존댓말 없이, 분석 보고서 스타일로 작성`;
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 800,
-      temperature: 0.4,
+      maxOutputTokens: 2000,
+      temperature: 0.5,
       topP: 0.9,
       thinkingConfig: { thinkingBudget: 0 },
     },
@@ -161,16 +204,23 @@ ${macroLines || "데이터 없음"}
     if (match) parsed = JSON.parse(match[0]);
   } catch {}
 
+  const safeArr = (v: any) => Array.isArray(v) ? v : [];
+
   return {
-    summary:       parsed?.summary     ?? "한국 증시 데이터 분석 중",
-    sentiment:     parsed?.sentiment   ?? "neutral",
-    recentIssues:  Array.isArray(parsed?.recentIssues) ? parsed.recentIssues.slice(0, 4) : [],
-    outlook:       Array.isArray(parsed?.outlook)      ? parsed.outlook.slice(0, 4)      : [],
-    generatedAt:   new Date().toISOString(),
-    kospiCurrent:  kospiLatest?.close  ?? null,
-    kosdaqCurrent: kosdaqLatest?.close ?? null,
-    kospiChange:   kospiLatest?.change  ?? null,
-    kosdaqChange:  kosdaqLatest?.change ?? null,
+    summary:        parsed?.summary       ?? "한국 증시 데이터 분석 중",
+    sentiment:      parsed?.sentiment     ?? "neutral",
+    leadParagraph:  parsed?.leadParagraph ?? "",
+    marketEvents:   safeArr(parsed?.marketEvents).slice(0, 4),
+    macroFactors:   safeArr(parsed?.macroFactors).slice(0, 3),
+    forwardLook:    safeArr(parsed?.forwardLook).slice(0, 3),
+    keyRisk:        parsed?.keyRisk       ?? "",
+    recentIssues:   safeArr(parsed?.recentIssues).slice(0, 4),
+    outlook:        safeArr(parsed?.outlook).slice(0, 4),
+    generatedAt:    new Date().toISOString(),
+    kospiCurrent:   kospiLatest?.close  ?? null,
+    kosdaqCurrent:  kosdaqLatest?.close ?? null,
+    kospiChange:    kospiLatest?.change  ?? null,
+    kosdaqChange:   kosdaqLatest?.change ?? null,
   };
 }
 
