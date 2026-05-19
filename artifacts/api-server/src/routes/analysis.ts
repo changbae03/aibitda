@@ -4667,16 +4667,19 @@ async function executeStep(
                 : ratioCorrected
                   ? `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 합리성 한도(현재가 대비 ${MIN_R}x~${MAX_R}x) 초과로 ${fmtTp(validated)}으로 자동 보정됨\n`
                   : "";
-              const tpBlock = `\n\n[⛔ 서버 검증 목표주가 — 최우선 지시, 위 모든 앵커보다 우선]\n`
+              const tpBlock = `\n\n[⛔ 밸류에이션 확정 목표주가 — 보고서 전체 일관성 필수]\n`
                 + `현재가(분석 시작 기준): ${fmtTp(sp)}\n`
-                + `서버 검증 목표주가(12M): **${fmtTp(validated)}** (현재가 대비 ${Number(upPct) >= 0 ? "+" : ""}${upPct}%)\n`
+                + `밸류에이션 산출 목표주가(12M Base): **${fmtTp(validated)}** (현재가 대비 ${Number(upPct) >= 0 ? "+" : ""}${upPct}%)\n`
                 + correctionNote
-                + `\n⛔ 필수 준수 사항 (위반 금지):\n`
-                + `1. FINAL_JSON target_price = ${validated} (정수, 콤마 없이)\n`
-                + `2. 권고 판정: **${impliedVerdict}** — 목표가/현재가 괴리율 ${Number(upPct) >= 0 ? "+" : ""}${upPct}% 기준\n`
-                + `3. entry_price ≤ ${fmtTp(sp)} (현재가 이하), stop_loss = 현재가의 88~93% 수준\n`
-                + `4. 시나리오 Base upside도 이 목표가 기준으로 재계산할 것\n`
-                + `5. 위의 [판정 일관성 앵커]의 판정·목표가 제한은 이 지시로 완전 해제됨`;
+                + `\n⛔ 보고서 전체 일관성 규칙 (위반 금지):\n`
+                + `1. 이 목표주가는 위 밸류에이션 단계(FINAL_VALUATION_DATA)에서 산출된 값입니다.\n`
+                + `2. 결론 본문 텍스트에도 반드시 이 수치(${fmtTp(validated)})를 사용하세요. 다른 숫자 사용 금지.\n`
+                + `3. FINAL_JSON target_price = ${validated} (정수, 콤마 없이)\n`
+                + `4. scenarios Base target_price = ${validated} — JSON 최상위 target_price와 반드시 동일\n`
+                + `5. 권고 판정: **${impliedVerdict}** — 목표가/현재가 괴리율 ${Number(upPct) >= 0 ? "+" : ""}${upPct}% 기준\n`
+                + `6. entry_price ≤ ${fmtTp(sp)} (현재가 이하), stop_loss = 현재가의 88~93% 수준\n`
+                + `7. 시나리오 Base upside = (${validated} - 현재가) / 현재가 × 100 으로 재계산\n`
+                + `8. 위의 [판정 일관성 앵커]의 판정·목표가 제한은 이 지시로 완전 해제됨`;
               enrichedContext = enrichedContext ? enrichedContext + tpBlock : tpBlock;
               console.log(`[tp-inject] ${tkr} validated=${validated} original=${Math.round(originalTp)} ratio=${valRatio.toFixed(2)}x verdict=${impliedVerdict} medianCorrected=${medianCorrected} ratioCorrected=${ratioCorrected}`);
             } else {
@@ -4710,11 +4713,11 @@ async function executeStep(
             const prevDate = new Date(prevValRow[0].created_at).toISOString().slice(0, 10);
             const lower = Math.round(prevTarget * 0.8).toLocaleString();
             const upper = Math.round(prevTarget * 1.2).toLocaleString();
-            const valAnchorBlock = `\n\n[🔒 밸류에이션 일관성 앵커 — ${analysis.companyName}(${analysis.ticker}) ${prevDate} 기준]\n`
+            const valAnchorBlock = `\n\n[📌 밸류에이션 참고 앵커 — ${analysis.companyName}(${analysis.ticker}) ${prevDate} 기준]\n`
               + `직전 분석 적정주가(Base): ${prevTarget.toLocaleString()}원 | 판정: ${prevVerdict}\n`
-              + `⛔ 핵심 지시: 이번 분석에서 도출하는 적정주가 Base는 반드시 ${lower}원 ~ ${upper}원 범위 이내에서 산정하세요.\n`
-              + `- 단, 임상 결과 발표·대형 파트너십·어닝 쇼크 등 명백한 펀더멘털 변화가 있으면 이 제한을 무시하고 그 이유를 명시하세요.\n`
-              + `- 할인율·성공확률·피크세일즈 등 핵심 가정은 직전 분석과 동일하게 유지하는 것을 기본 원칙으로 합니다.`;
+              + `- 참고용입니다. 이번 분석의 독자적 판단이 우선합니다.\n`
+              + `- 직전 분석과 크게 다른 결론이 나오면 그 이유(펀더멘털 변화, 가정 수정 등)를 밸류에이션 섹션에 한 문장으로 명시하세요.\n`
+              + `- 할인율·성공확률·피크세일즈 등 핵심 가정을 바꾸는 경우에도 변경 이유를 명시하세요.`;
             enrichedContext = enrichedContext ? enrichedContext + valAnchorBlock : valAnchorBlock;
             console.log(`[val-anchor] ${stepKey} for ${analysis.ticker} — target range ${lower}~${upper}`);
           }
