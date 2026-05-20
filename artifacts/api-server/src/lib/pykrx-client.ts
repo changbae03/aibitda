@@ -93,15 +93,16 @@ export async function fetchInvestorData(
   if (!rows.length) return [];
 
   return rows.map((r: any) => {
-    // pykrx 컬럼: "외국인합계", "기관합계", "개인" (순매수 금액, 백만원 단위)
+    // pykrx 컬럼: "외국인합계", "기관합계", "개인" — 단위: 원(KRW)
+    // 1억 = 100,000,000 원 → 억원 단위로 변환
     const foreign     = r["외국인합계"] ?? r["외국인"] ?? 0;
     const institution = r["기관합계"]   ?? r["기관"]   ?? 0;
     const individual  = r["개인"]       ?? 0;
     return {
       date:        r.date,
-      foreign:     Math.round(foreign     / 1_000_000), // 백만→조 단위(억)
-      institution: Math.round(institution / 1_000_000),
-      individual:  Math.round(individual  / 1_000_000),
+      foreign:     Math.round(foreign     / 100_000_000), // 원→억원
+      institution: Math.round(institution / 100_000_000),
+      individual:  Math.round(individual  / 100_000_000),
     };
   });
 }
@@ -125,7 +126,9 @@ export async function fetchShortRatio(
 
   return rows.map((r: any) => ({
     date:  r.date,
-    ratio: Number(r["공매도비중"] ?? r["ratio"] ?? 0),
+    // "합계" = 공매도 총 거래대금(원). 억원으로 변환해 ratio 필드에 담음
+    // LSTM 정규화가 스케일을 조정하므로 비율 대신 절대값 사용
+    ratio: Math.round(Number(r["합계"] ?? 0) / 100_000_000),
   }));
 }
 
