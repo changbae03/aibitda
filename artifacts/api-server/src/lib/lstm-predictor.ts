@@ -16,6 +16,7 @@ import path from "node:path";
 import * as tf from "@tensorflow/tfjs";
 import YahooFinance from "yahoo-finance2";
 import { pool } from "@workspace/db";
+import { fetchInvestorData, fetchShortRatio, isPykrxEnabled } from "./pykrx-client.js";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -298,7 +299,7 @@ async function krxGet(bld: string, extra: Record<string, string>): Promise<any[]
 }
 
 /**
- * KRX 시장별 투자자별 거래실적 (MDCSTAT02303)
+ * 시장별 투자자별 거래실적 — pykrx 우선, KRX OTP fallback
  * 외국인·기관 순매수 거래대금 (억원) 일별 시계열
  */
 async function fetchKRXMarketInvestor(
@@ -306,12 +307,25 @@ async function fetchKRXMarketInvestor(
   startYYYYMMDD: string,
   endYYYYMMDD:   string,
 ): Promise<{ date: string; foreignNet: number; instNet: number }[]> {
+  // ① pykrx (KRX_ID/KRX_PW 있을 때)
+  if (isPykrxEnabled()) {
+    const fromISO = `${startYYYYMMDD.slice(0,4)}-${startYYYYMMDD.slice(4,6)}-${startYYYYMMDD.slice(6,8)}`;
+    const toISO   = `${endYYYYMMDD.slice(0,4)}-${endYYYYMMDD.slice(4,6)}-${endYYYYMMDD.slice(6,8)}`;
+    const rows = await fetchInvestorData(market, fromISO, toISO);
+    if (rows.length) {
+      console.log(`[ext] pykrx 투자자 ${rows.length}행 (${market})`);
+      return rows.map(r => ({ date: r.date, foreignNet: r.foreign, instNet: r.institution }));
+    }
+    console.warn(`[ext] pykrx 투자자 0행 (${market}) — KRX OTP fallback`);
+  }
+
+  // ② KRX OpenAPI OTP (IP 화이트리스트 등록 후)
   const mktId = market === "KOSPI" ? "STK" : "KSQ";
   const rows = await krxGet("dbms/MDC/STAT/standard/MDCSTAT02303", {
     mktId, strtDd: startYYYYMMDD, endDd: endYYYYMMDD, share: "1", money: "1", csvxls_isNo: "false",
   });
   if (!rows.length) { console.warn(`[ext] KRX 투자자 0행 (${market})`); return []; }
-  console.log(`[ext] KRX 투자자 ${rows.length}행 수신 (${market}) 샘플:`, JSON.stringify(rows[0]).slice(0, 120));
+  console.log(`[ext] KRX OTP 투자자 ${rows.length}행 (${market})`);
   return rows.map((r: any) => ({
     date:       krxDateToISO(r.TRD_DD ?? r.trdDd ?? r["일자"]),
     foreignNet: parseKRXNum(r.FRGN_NETBUY_TRDVAL ?? r.frgnNetbuyTrdval
@@ -322,7 +336,7 @@ async function fetchKRXMarketInvestor(
 }
 
 /**
- * KRX 공매도 거래 추이 (MDCSTAT05001)
+ * 공매도 비율 — pykrx 우선, KRX OTP fallback
  * 공매도 비율 (%) 일별 시계열
  */
 async function fetchKRXMarketShort(
@@ -330,12 +344,25 @@ async function fetchKRXMarketShort(
   startYYYYMMDD: string,
   endYYYYMMDD:   string,
 ): Promise<{ date: string; shortRatio: number }[]> {
+  // ① pykrx (KRX_ID/KRX_PW 있을 때)
+  if (isPykrxEnabled()) {
+    const fromISO = `${startYYYYMMDD.slice(0,4)}-${startYYYYMMDD.slice(4,6)}-${startYYYYMMDD.slice(6,8)}`;
+    const toISO   = `${endYYYYMMDD.slice(0,4)}-${endYYYYMMDD.slice(4,6)}-${endYYYYMMDD.slice(6,8)}`;
+    const rows = await fetchShortRatio(market, fromISO, toISO);
+    if (rows.length) {
+      console.log(`[ext] pykrx 공매도 ${rows.length}행 (${market})`);
+      return rows.map(r => ({ date: r.date, shortRatio: r.ratio }));
+    }
+    console.warn(`[ext] pykrx 공매도 0행 (${market}) — KRX OTP fallback`);
+  }
+
+  // ② KRX OpenAPI OTP (IP 화이트리스트 등록 후)
   const mktId = market === "KOSPI" ? "STK" : "KSQ";
   const rows = await krxGet("dbms/MDC/STAT/standard/MDCSTAT05001", {
     mktId, strtDd: startYYYYMMDD, endDd: endYYYYMMDD, share: "1", money: "1", csvxls_isNo: "false",
   });
   if (!rows.length) { console.warn(`[ext] KRX 공매도 0행 (${market})`); return []; }
-  console.log(`[ext] KRX 공매도 ${rows.length}행 수신 (${market}) 샘플:`, JSON.stringify(rows[0]).slice(0, 120));
+  console.log(`[ext] KRX OTP 공매도 ${rows.length}행 (${market})`);
   return rows.map((r: any) => {
     const ratioRaw = r.SHTSELL_TRDVOL_WGHT ?? r.shtsellTrdvolWght
       ?? r.SHT_SELNG_RQST_RGHT_QTY_WGHT ?? r["공매도비율"];
