@@ -90,8 +90,10 @@ export interface MarketBriefResult {
   generatedAt: string;
   kospiCurrent: number | null;
   kosdaqCurrent: number | null;
+  snp500Current: number | null;
   kospiChange: number | null;
   kosdaqChange: number | null;
+  snp500Change: number | null;
 }
 
 // ─── 시장 데이터 수집 헬퍼 ──────────────────────────────────────────────────
@@ -221,6 +223,7 @@ async function generateBrief(): Promise<MarketBriefResult> {
 
   const kospiPred  = pipeline?.kospi  ? `${pipeline.kospi.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kospi.predictedReturn3d}%` : null;
   const kosdaqPred = pipeline?.kosdaq ? `${pipeline.kosdaq.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kosdaq.predictedReturn3d}%` : null;
+  const snp500Pred = pipeline?.snp500 ? `${pipeline.snp500.predictedReturn3d >= 0 ? "+" : ""}${pipeline.snp500.predictedReturn3d}%` : null;
 
   // 미국 지수 최신값
   const snpL   = idx?.snp500?.at(-1) ?? null;
@@ -272,7 +275,7 @@ ${kospiHistory}
 ${kosdaqHistory}
 
 [AI 모델 3일 예측]
-KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}
+KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"}
 
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
@@ -327,7 +330,7 @@ ${kospiHistory}
 ${kosdaqHistory}
 
 [AI 모델 3일 예측]
-KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}
+KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"}
 
 [미국 주요 지수 (어제 마감)]
 ${usIndicesBlock || "데이터 없음"}
@@ -387,7 +390,7 @@ ${kospiHistory}
 ${kosdaqHistory}
 
 [AI 모델 3일 예측]
-KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}
+KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"}
 
 [어제 미국 주요 지수]
 ${usIndicesBlock || "데이터 없음"}
@@ -430,7 +433,7 @@ ${macroBlock || "데이터 없음"}
 작성 원칙:
 - 현재 코스피·코스닥 수치를 구체적으로 인용하세요
 - '지금', '오후에', '마감 전' 등 시간감 있는 표현을 사용하세요
-- AI 3일 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"})을 storyLine과 forwardLook에 반드시 포함하세요
+- AI 3일 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"})을 storyLine과 forwardLook에 반드시 포함하세요
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
@@ -472,8 +475,10 @@ ${macroBlock || "데이터 없음"}
     generatedAt:          new Date().toISOString(),
     kospiCurrent:         kospiLatest?.close  ?? null,
     kosdaqCurrent:        kosdaqLatest?.close ?? null,
+    snp500Current:        pipeline?.snp500?.currentValue ?? null,
     kospiChange:          kospiLatest?.change  ?? null,
     kosdaqChange:         kosdaqLatest?.change ?? null,
+    snp500Change:         pipeline?.snp500?.predictedReturn3d ?? null,
   };
 }
 

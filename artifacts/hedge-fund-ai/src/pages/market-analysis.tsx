@@ -48,6 +48,7 @@ interface PipelineStatus {
   trainingMs?: number;
   kospi?: IndexResult;
   kosdaq?: IndexResult;
+  snp500?: IndexResult;
 }
 
 interface MarketBrief {
@@ -680,7 +681,7 @@ function StatCard({
 export default function MarketAnalysis() {
   const { isEn } = useLanguage();
   const [status, setStatus]           = useState<PipelineStatus | null>(null);
-  const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq">("kospi");
+  const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq" | "snp500">("kospi");
   const [isStarting, setIsStarting]   = useState(false);
   const [techOpen, setTechOpen]       = useState(false);
   const [guideOpen, setGuideOpen]     = useState(false);
@@ -740,7 +741,7 @@ export default function MarketAnalysis() {
     return undefined;
   }, [status, fetchStatus, triggerRun]);
 
-  const current = activeIdx === "kospi" ? status?.kospi : status?.kosdaq;
+  const current = activeIdx === "kospi" ? status?.kospi : activeIdx === "snp500" ? status?.snp500 : status?.kosdaq;
 
   return (
     <div className="space-y-5 pb-20">
@@ -822,16 +823,19 @@ export default function MarketAnalysis() {
             <div>
               <p className="text-xs text-muted-foreground/60 mb-2 font-medium">어떤 지수를 볼까요?</p>
               <div className="flex items-stretch gap-3 flex-wrap">
-                {(["kospi", "kosdaq"] as const).map(idx => {
-                  const data = idx === "kospi" ? status.kospi! : status.kosdaq!;
-                  const isActive = activeIdx === idx;
+                {([
+                  { id: "kospi",  data: status.kospi!  },
+                  { id: "kosdaq", data: status.kosdaq! },
+                  ...(status.snp500 ? [{ id: "snp500", data: status.snp500 }] : []),
+                ] as { id: "kospi" | "kosdaq" | "snp500"; data: IndexResult }[]).map(({ id, data }) => {
+                  const isActive = activeIdx === id;
                   const up = data.predictedReturn3d >= 0;
                   return (
                     <button
-                      key={idx}
-                      onClick={() => setActiveIdx(idx)}
+                      key={id}
+                      onClick={() => setActiveIdx(id)}
                       className={cn(
-                        "flex-1 min-w-[140px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left min-h-[88px]",
+                        "flex-1 min-w-[130px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left min-h-[88px]",
                         isActive
                           ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
                           : "border-border bg-card hover:bg-muted/30",

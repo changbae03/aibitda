@@ -39,7 +39,7 @@ export interface PipelineStep {
 export interface PipelineStatus {
   running: boolean; ready: boolean; steps: PipelineStep[];
   error?: string; trainedAt?: string; trainingMs?: number;
-  kospi?: IndexResult; kosdaq?: IndexResult;
+  kospi?: IndexResult; kosdaq?: IndexResult; snp500?: IndexResult;
 }
 
 // ─── Hyperparameters ─────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 9;
+const MODEL_VERSION = 10;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -89,6 +89,13 @@ const INDEX_HP: Record<string, IndexHP> = {
     gbdtFsub: 0.65, gbdtSsub: 0.75, nEnsemble: 4,
     lstmEpochs: 40, lstmLR: 0.001, lstmDrop: 0.15,
     recentWindow: 20,   // 최근 20일로 빠르게 반응
+  },
+  /** S&P500 — 유동성 높은 미국 대형주 지수, 추세 추종 특성 */
+  GSPC: {
+    gbdtTrees: 80,  gbdtLR: 0.04,  gbdtDepth: 3, gbdtLeaf: 15,
+    gbdtFsub: 0.60, gbdtSsub: 0.80, nEnsemble: 2,
+    lstmEpochs: 25, lstmLR: 0.001, lstmDrop: 0.20,
+    recentWindow: 30,
   },
 };
 
@@ -317,10 +324,13 @@ async function fredFetchSeries(seriesId: string, startDate: string): Promise<{ d
   }
 }
 
-/** KOSPI/KOSDAQ 날짜 배열 → 모든 외부 피처 Map (forward-fill) */
+/** 날짜 배열 → 외부 피처 Map (forward-fill)
+ *  market = "KOSPI"|"KOSDAQ" → S&P500 + USDKRW + 한국채 + KRX 수급
+ *  market = "SNP"             → DXY + USDKRW + 미국 10Y (KRX 없음)
+ */
 async function fetchExternalData(
   dates: string[],
-  market: "KOSPI" | "KOSDAQ" = "KOSPI",
+  market: "KOSPI" | "KOSDAQ" | "SNP" = "KOSPI",
 ): Promise<Map<string, ExtPoint>> {
   if (dates.length === 0) return new Map();
   const startISO  = dates[0] ?? "2020-01-01";
@@ -330,6 +340,39 @@ async function fetchExternalData(
   const endKRX    = (dates[dates.length - 1] ?? new Date().toISOString().slice(0, 10)).replace(/-/g, "");
 
   console.log(`[ext] 외부 데이터 수집 (${market}, ${years.toFixed(1)}년, KRX ${startKRX}~${endKRX})...`);
+
+  // ── S&P500 전용 분기: DXY + USDKRW + 미국 10Y, KRX 없음 ─────────────────
+  if (market === "SNP") {
+    const [dxyRows, usdkrwRows, bondRows] = await Promise.all([
+      fetchYahooSeries("DX-Y.NYB", years),   // 달러인덱스 (DXY)
+      fetchYahooSeries("USDKRW=X", years),   // 원달러 환율
+      fredFetchSeries("DGS10", startISO),     // 미국 10Y 국채금리 (일별)
+    ]);
+    const dxyRetMap = new Map<string, number>();
+    for (let i = 1; i < dxyRows.length; i++)
+      dxyRetMap.set(dxyRows[i].date, (dxyRows[i].close - dxyRows[i-1].close) / dxyRows[i-1].close);
+    const usdkrwRetMap = new Map<string, number>();
+    for (let i = 1; i < usdkrwRows.length; i++)
+      usdkrwRetMap.set(usdkrwRows[i].date, (usdkrwRows[i].close - usdkrwRows[i-1].close) / usdkrwRows[i-1].close);
+    const bondEntries = bondRows.sort((a, b) => a.date.localeCompare(b.date));
+    const result = new Map<string, ExtPoint>();
+    let lastDXY = 0, lastUSDKRW = 0, lastBond = 4.5, bondIdx = 0;
+    for (const date of dates) {
+      while (bondIdx < bondEntries.length && bondEntries[bondIdx].date <= date) {
+        lastBond = bondEntries[bondIdx].value; bondIdx++;
+      }
+      if (dxyRetMap.has(date))    lastDXY    = dxyRetMap.get(date)!;
+      if (usdkrwRetMap.has(date)) lastUSDKRW = usdkrwRetMap.get(date)!;
+      result.set(date, {
+        sp500Ret:   lastDXY,     // DXY 등락 (달러 강도)
+        usdkrwRet:  lastUSDKRW,  // USDKRW 변화율
+        bond3y:     lastBond,    // 미국 10Y 금리
+        foreignNet: 0, instNet: 0, shortRatio: 0,
+      });
+    }
+    console.log(`[ext] 완료(SNP) — DXY ${dxyRows.length}행, 환율 ${usdkrwRows.length}행, 미국10Y ${bondRows.length}행`);
+    return result;
+  }
 
   const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows] = await Promise.all([
     fetchYahooSeries("^GSPC", years),
@@ -812,7 +855,7 @@ function buildResultFromModel(
 async function trainFull(
   symbol: string, name: string,
   rows: { date: string; close: number }[],
-  market: "KOSPI" | "KOSDAQ",
+  market: "KOSPI" | "KOSDAQ" | "SNP",
 ) {
   const hp = getHP(symbol);
   console.log(`[train] ${symbol} HP: gbdtTrees=${hp.gbdtTrees} depth=${hp.gbdtDepth} leaf=${hp.gbdtLeaf} nEns=${hp.nEnsemble} lstmEpochs=${hp.lstmEpochs} lstmLR=${hp.lstmLR}`);
@@ -857,21 +900,21 @@ async function trainFull(
 
 // ─── DB 캐시 (재배포 후에도 예측값 즉시 표시) ───────────────────────────────
 
-const DB_CACHE_KEY = "lstm_pipeline_result_v1";
+const DB_CACHE_KEY = "lstm_pipeline_result_v2";
 const DB_CACHE_TTL_DAYS = 7;
 
-async function saveResultsToDB(kospi: IndexResult, kosdaq: IndexResult): Promise<void> {
+async function saveResultsToDB(kospi: IndexResult, kosdaq: IndexResult, snp500: IndexResult): Promise<void> {
   try {
     const expires = new Date();
     expires.setDate(expires.getDate() + DB_CACHE_TTL_DAYS);
-    const payload = JSON.stringify({ kospi, kosdaq, savedAt: new Date().toISOString() });
+    const payload = JSON.stringify({ kospi, kosdaq, snp500, savedAt: new Date().toISOString() });
     await pool.query(
       `INSERT INTO system_cache (key, data, expires_at)
        VALUES ($1, $2::jsonb, $3)
        ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
       [DB_CACHE_KEY, payload, expires.toISOString()],
     );
-    console.log("[pipeline] 예측 결과 DB 저장 완료");
+    console.log("[pipeline] 예측 결과 DB 저장 완료 (KOSPI+KOSDAQ+S&P500)");
   } catch (e: any) {
     console.warn("[pipeline] DB 저장 실패 (무시):", e?.message);
   }
@@ -879,7 +922,7 @@ async function saveResultsToDB(kospi: IndexResult, kosdaq: IndexResult): Promise
 
 export async function tryRestoreFromDB(): Promise<boolean> {
   try {
-    const r = await pool.query<{ data: { kospi: IndexResult; kosdaq: IndexResult; savedAt: string } }>(
+    const r = await pool.query<{ data: { kospi: IndexResult; kosdaq: IndexResult; snp500?: IndexResult; savedAt: string } }>(
       `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
       [DB_CACHE_KEY],
     );
@@ -890,7 +933,7 @@ export async function tryRestoreFromDB(): Promise<boolean> {
       running: false, ready: true,
       steps: defaultSteps().map(s => ({ ...s, status: "done" as const })),
       trainedAt: row.savedAt, trainingMs: 0,
-      kospi: row.kospi, kosdaq: row.kosdaq,
+      kospi: row.kospi, kosdaq: row.kosdaq, snp500: row.snp500,
     };
     _lastRun = Date.now();
     console.log(`[pipeline] DB 캐시 복원 완료 (savedAt=${row.savedAt})`);
@@ -908,7 +951,7 @@ export function getStatus(): PipelineStatus & { initializing?: boolean } {
     running:_status.running, ready:_status.ready,
     steps:_status.steps.map(s=>({...s})),
     error:_status.error, trainedAt:_status.trainedAt,
-    trainingMs:_status.trainingMs, kospi:_status.kospi, kosdaq:_status.kosdaq,
+    trainingMs:_status.trainingMs, kospi:_status.kospi, kosdaq:_status.kosdaq, snp500:_status.snp500,
     initializing: (_status as any).initializing ?? false,
   };
 }
@@ -917,16 +960,17 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
   const meta        = loadMeta();
   const kospiStore  = loadModelFile("KS11");
   const kosdaqStore = loadModelFile("KQ11");
-  if (!meta||!kospiStore||!kosdaqStore) return false;
+  const snpStore    = loadModelFile("GSPC");
+  if (!meta||!kospiStore||!kosdaqStore||!snpStore) return false;
 
-  if (!kospiStore.lstmWeights || !kosdaqStore.lstmWeights) {
+  if (!kospiStore.lstmWeights || !kosdaqStore.lstmWeights || !snpStore.lstmWeights) {
     console.log("[gbdt] 구형 모델 (lstmWeights 없음) — 재학습"); return false;
   }
   if ((kospiStore.nFeatures ?? 9) !== N_FEATURES) {
     console.log(`[gbdt] 피처 수 변경 (${kospiStore.nFeatures ?? "?"}→${N_FEATURES}) — 재학습`);
     return false;
   }
-  if ((kospiStore.version ?? 0) < MODEL_VERSION || (kosdaqStore.version ?? 0) < MODEL_VERSION) {
+  if ((kospiStore.version ?? 0) < MODEL_VERSION || (kosdaqStore.version ?? 0) < MODEL_VERSION || (snpStore.version ?? 0) < MODEL_VERSION) {
     console.log(`[gbdt] 모델 버전 변경 (v${MODEL_VERSION}) — 재학습`);
     return false;
   }
@@ -935,12 +979,13 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
   _status = { running: true, ready: false, steps: defaultSteps(), initializing: true } as any;
   console.log("[gbdt] 디스크 복원 중 (nFeatures=" + N_FEATURES + ", v" + MODEL_VERSION + ")...");
   try {
-    const [kospiRows, kosdaqRows] = await Promise.all([
-      fetchHistory("^KS11", 0.5), fetchHistory("^KQ11", 0.5),
+    const [kospiRows, kosdaqRows, snpRows] = await Promise.all([
+      fetchHistory("^KS11", 0.5), fetchHistory("^KQ11", 0.5), fetchHistory("^GSPC", 0.5),
     ]);
-    const [kospiExtMap, kosdaqExtMap] = await Promise.all([
+    const [kospiExtMap, kosdaqExtMap, snpExtMap] = await Promise.all([
       fetchExternalData(kospiRows.map((r: { date: string; close: number }) => r.date), "KOSPI"),
       fetchExternalData(kosdaqRows.map((r: { date: string; close: number }) => r.date), "KOSDAQ"),
+      fetchExternalData(snpRows.map((r: { date: string; close: number }) => r.date), "SNP"),
     ]);
 
     const kospi = buildResultFromModel(
@@ -949,8 +994,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(kospiStore.lstmWeights),
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
-      kospiStore.ensembleAlpha,
-      getHP("^KS11").recentWindow,
+      kospiStore.ensembleAlpha, getHP("^KS11").recentWindow,
     );
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,
@@ -958,17 +1002,24 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(kosdaqStore.lstmWeights),
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
-      kosdaqStore.ensembleAlpha,
-      getHP("^KQ11").recentWindow,
+      kosdaqStore.ensembleAlpha, getHP("^KQ11").recentWindow,
+    );
+    const snp500 = buildResultFromModel(
+      "^GSPC","S&P500",snpRows,snpExtMap,
+      snpStore.gbdtModels,
+      {mu:new Float64Array(snpStore.gbdtScaler.mu),sigma:new Float64Array(snpStore.gbdtScaler.sigma)},
+      loadLSTMFromWeights(snpStore.lstmWeights),
+      {mu:new Float64Array(snpStore.lstmScaler.mu),sigma:new Float64Array(snpStore.lstmScaler.sigma)},
+      snpStore.ensembleAlpha, getHP("^GSPC").recentWindow,
     );
 
     _lastRun = Date.now();
     _status = {
       running:false, ready:true,
       steps:defaultSteps().map(s=>({...s,status:"done" as const})),
-      trainedAt:meta.lastTrained, trainingMs:0, kospi, kosdaq,
+      trainedAt:meta.lastTrained, trainingMs:0, kospi, kosdaq, snp500,
     };
-    console.log(`[gbdt] 복원 완료 | KOSPI ${kospi.testDirAcc}% | KOSDAQ ${kosdaq.testDirAcc}% | 피처 ${N_FEATURES}개`);
+    console.log(`[gbdt] 복원 완료 | KOSPI ${kospi.testDirAcc}% | KOSDAQ ${kosdaq.testDirAcc}% | S&P500 ${snp500.testDirAcc}%`);
     return true;
   } catch(e:any) { console.warn("[gbdt] 복원 실패:",e?.message); return false; }
 }
@@ -984,14 +1035,15 @@ export async function runPipeline(force=false): Promise<void> {
   try {
     stepSet("data","running");
     const s1=Date.now();
-    const [kospiRows,kosdaqRows]=await Promise.all([fetchHistory("^KS11"),fetchHistory("^KQ11")]);
+    const [kospiRows,kosdaqRows,snpRows]=await Promise.all([fetchHistory("^KS11"),fetchHistory("^KQ11"),fetchHistory("^GSPC")]);
     stepSet("data","done",Date.now()-s1);
 
     stepSet("feature","running"); stepSet("feature","done",0);
     stepSet("lstm","running");
     const sL=Date.now();
 
-    // KOSPI와 KOSDAQ를 순차 학습 (TF.js 메모리 안전)
+    // S&P500 → KOSPI → KOSDAQ 순차 학습 (TF.js 메모리 안전)
+    const snp500Result = await trainFull("^GSPC","S&P500", snpRows,    "SNP");
     const kospiResult  = await trainFull("^KS11","KOSPI",  kospiRows,  "KOSPI");
     const kosdaqResult = await trainFull("^KQ11","KOSDAQ", kosdaqRows, "KOSDAQ");
 
@@ -1003,10 +1055,10 @@ export async function runPipeline(force=false): Promise<void> {
     const trainedAt = new Date().toISOString();
     saveMeta({
       lastTrained:trainedAt, lastUpdated:trainedAt,
-      nSamples:{kospi:kospiRows.length,kosdaq:kosdaqRows.length},
-      dirAcc:          {kospi:kospiResult.testDirAcc,       kosdaq:kosdaqResult.testDirAcc},
-      wfDirAcc:        {kospi:kospiResult.wfDirAcc,         kosdaq:kosdaqResult.wfDirAcc},
-      rolling30dDirAcc:{kospi:kospiResult.rolling30dDirAcc, kosdaq:kosdaqResult.rolling30dDirAcc},
+      nSamples:{kospi:kospiRows.length,kosdaq:kosdaqRows.length,snp500:snpRows.length},
+      dirAcc:          {kospi:kospiResult.testDirAcc,       kosdaq:kosdaqResult.testDirAcc,       snp500:snp500Result.testDirAcc},
+      wfDirAcc:        {kospi:kospiResult.wfDirAcc,         kosdaq:kosdaqResult.wfDirAcc,         snp500:snp500Result.wfDirAcc},
+      rolling30dDirAcc:{kospi:kospiResult.rolling30dDirAcc, kosdaq:kosdaqResult.rolling30dDirAcc, snp500:snp500Result.rolling30dDirAcc},
       updateCount:0,
     });
 
@@ -1014,11 +1066,11 @@ export async function runPipeline(force=false): Promise<void> {
     _status={
       running:false,ready:true,steps:_status.steps,
       trainedAt, trainingMs:Date.now()-t0,
-      kospi:kospiResult, kosdaq:kosdaqResult,
+      kospi:kospiResult, kosdaq:kosdaqResult, snp500:snp500Result,
     };
-    console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | 피처 ${N_FEATURES}개`);
+    console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | S&P500 ${snp500Result.testDirAcc}%`);
     // 재배포 후에도 즉시 표시될 수 있도록 DB에 저장
-    saveResultsToDB(kospiResult, kosdaqResult).catch(() => {});
+    saveResultsToDB(kospiResult, kosdaqResult, snp500Result).catch(() => {});
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
     const f=_status.steps.find(s=>s.status==="running");
@@ -1029,20 +1081,21 @@ export async function runPipeline(force=false): Promise<void> {
 
 export async function runDailyIncrementalUpdate(): Promise<void> {
   if (_status.running){console.log("[gbdt] 학습 중 — 증분 스킵");return;}
-  const meta=loadMeta(), kospiStore=loadModelFile("KS11"), kosdaqStore=loadModelFile("KQ11");
-  if(!kospiStore||!kosdaqStore||!kospiStore.lstmWeights||(kospiStore.nFeatures??9)!==N_FEATURES){
+  const meta=loadMeta(), kospiStore=loadModelFile("KS11"), kosdaqStore=loadModelFile("KQ11"), snpStore=loadModelFile("GSPC");
+  if(!kospiStore||!kosdaqStore||!snpStore||!kospiStore.lstmWeights||(kospiStore.nFeatures??9)!==N_FEATURES){
     console.log("[gbdt] 저장 모델 없음 또는 피처 불일치 → 완전 학습");
     return runPipeline(true);
   }
   console.log("[gbdt] 일일 증분 시작 (GBDT +5트리; LSTM 스킵)");
   const t0=Date.now();
   try {
-    const [kospiRows,kosdaqRows]=await Promise.all([fetchHistory("^KS11",0.5),fetchHistory("^KQ11",0.5)]);
+    const [kospiRows,kosdaqRows,snpRows]=await Promise.all([fetchHistory("^KS11",0.5),fetchHistory("^KQ11",0.5),fetchHistory("^GSPC",0.5)]);
     const lastUpdated=meta?.lastUpdated??"2000-01-01";
 
-    const [kospiExtMap,kosdaqExtMap]=await Promise.all([
+    const [kospiExtMap,kosdaqExtMap,snpExtMap]=await Promise.all([
       fetchExternalData(kospiRows.map((r:{date:string;close:number})=>r.date), "KOSPI"),
       fetchExternalData(kosdaqRows.map((r:{date:string;close:number})=>r.date), "KOSDAQ"),
+      fetchExternalData(snpRows.map((r:{date:string;close:number})=>r.date), "SNP"),
     ]);
 
     function newSamples(rows:{date:string;close:number}[], extMap:Map<string,ExtPoint>, store:StoredModelFile) {
@@ -1057,43 +1110,52 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
 
     const kNew=newSamples(kospiRows,kospiExtMap,kospiStore);
     const qNew=newSamples(kosdaqRows,kosdaqExtMap,kosdaqStore);
-    if(!kNew&&!qNew){console.log("[gbdt] 신규 데이터 없음");return;}
+    const sNew=newSamples(snpRows,snpExtMap,snpStore);
+    if(!kNew&&!qNew&&!sNew){console.log("[gbdt] 신규 데이터 없음");return;}
 
     const seed=Date.now()%10000;
-    const ksHP = getHP("^KS11"), kqHP = getHP("^KQ11");
+    const ksHP = getHP("^KS11"), kqHP = getHP("^KQ11"), gspcHP = getHP("^GSPC");
     const updKospi  = kNew ? kospiStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,kNew.XteN,kNew.yNew,N_INCR_TREES,e*7+seed,ksHP)) : kospiStore.gbdtModels;
     const updKosdaq = qNew ? kosdaqStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,qNew.XteN,qNew.yNew,N_INCR_TREES,e*7+3+seed,kqHP)) : kosdaqStore.gbdtModels;
+    const updSnp    = sNew ? snpStore.gbdtModels.map((m,e)=>incrementalAddTrees(m,sNew.XteN,sNew.yNew,N_INCR_TREES,e*7+7+seed,gspcHP)) : snpStore.gbdtModels;
 
     saveModelFile("KS11",{...kospiStore,  gbdtModels:updKospi,  nFeatures:N_FEATURES});
     saveModelFile("KQ11",{...kosdaqStore, gbdtModels:updKosdaq, nFeatures:N_FEATURES});
+    saveModelFile("GSPC",{...snpStore,    gbdtModels:updSnp,    nFeatures:N_FEATURES});
 
     const kospi = buildResultFromModel(
       "^KS11","KOSPI",kospiRows,kospiExtMap,updKospi,
       {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(kospiStore.lstmWeights),
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
-      kospiStore.ensembleAlpha,
-      ksHP.recentWindow,
+      kospiStore.ensembleAlpha, ksHP.recentWindow,
     );
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,updKosdaq,
       {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(kosdaqStore.lstmWeights),
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
-      kosdaqStore.ensembleAlpha,
-      kqHP.recentWindow,
+      kosdaqStore.ensembleAlpha, kqHP.recentWindow,
+    );
+    const snp500 = buildResultFromModel(
+      "^GSPC","S&P500",snpRows,snpExtMap,updSnp,
+      {mu:new Float64Array(snpStore.gbdtScaler.mu),sigma:new Float64Array(snpStore.gbdtScaler.sigma)},
+      loadLSTMFromWeights(snpStore.lstmWeights),
+      {mu:new Float64Array(snpStore.lstmScaler.mu),sigma:new Float64Array(snpStore.lstmScaler.sigma)},
+      snpStore.ensembleAlpha, gspcHP.recentWindow,
     );
     const now=new Date().toISOString();
     saveMeta({
       ...(meta??{lastTrained:now,nSamples:{},dirAcc:{},wfDirAcc:{},rolling30dDirAcc:{},updateCount:0}),
       lastUpdated:now,
-      dirAcc:          {kospi:kospi.testDirAcc,       kosdaq:kosdaq.testDirAcc},
-      wfDirAcc:        {kospi:kospi.wfDirAcc,         kosdaq:kosdaq.wfDirAcc},
-      rolling30dDirAcc:{kospi:kospi.rolling30dDirAcc, kosdaq:kosdaq.rolling30dDirAcc},
+      dirAcc:          {kospi:kospi.testDirAcc,       kosdaq:kosdaq.testDirAcc,       snp500:snp500.testDirAcc},
+      wfDirAcc:        {kospi:kospi.wfDirAcc,         kosdaq:kosdaq.wfDirAcc,         snp500:snp500.wfDirAcc},
+      rolling30dDirAcc:{kospi:kospi.rolling30dDirAcc, kosdaq:kosdaq.rolling30dDirAcc, snp500:snp500.rolling30dDirAcc},
       updateCount:(meta?.updateCount??0)+1,
     });
     _lastRun=Date.now();
-    _status={..._status,ready:true,kospi,kosdaq};
+    _status={..._status,ready:true,kospi,kosdaq,snp500};
+    saveResultsToDB(kospi,kosdaq,snp500).catch(()=>{});
     console.log(`[gbdt] 증분 완료 ${Date.now()-t0}ms | updateCount=${(meta?.updateCount??0)+1}`);
   } catch(e:any){console.error("[gbdt] 증분 실패:",e?.message??e);}
 }
