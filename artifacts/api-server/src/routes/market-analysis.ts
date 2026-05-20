@@ -173,15 +173,23 @@ async function fetchRecentIndexData() {
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
 
 /**
- * KST 기준 세션 감지
- *   UTC 21~02  (KST 06:00~11:00) → 장전  : 간밤 미국 시장 브리핑
- *   UTC 02~07  (KST 11:00~16:00) → 장중  : 오전 흐름·오후 전망 브리핑
- *   UTC 07~21  (KST 16:00~06:00) → 장마감: 당일 한국 장 리뷰·내일 준비
+ * KST 기준 세션 감지 (분 단위 정밀도)
+ *   UTC 21:00~02:00  (KST 06:00~11:00) → 장전  : 간밤 미국 시장 브리핑
+ *   UTC 02:00~06:30  (KST 11:00~15:30) → 장중  : 오전 흐름·오후 전망 브리핑
+ *   UTC 06:30~21:00  (KST 15:30~06:00) → 장마감: 당일 한국 장 리뷰·내일 준비
+ *
+ * 한국 증시 종료: 15:30 KST = 06:30 UTC
  */
 function detectSession(): "morning" | "midday" | "closing" {
-  const utcH = new Date().getUTCHours();
-  if (utcH >= 21 || utcH < 2) return "morning";
-  if (utcH >= 2  && utcH < 7) return "midday";
+  const now = new Date();
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+  const MORNING_START = 21 * 60;  // 06:00 KST
+  const MIDDAY_START  =  2 * 60;  // 11:00 KST
+  const CLOSE_START   =  6 * 60 + 30;  // 15:30 KST — 장 종료
+
+  if (utcMin >= MORNING_START || utcMin < MIDDAY_START) return "morning";
+  if (utcMin < CLOSE_START)  return "midday";
   return "closing";
 }
 
