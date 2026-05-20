@@ -58,7 +58,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 10;
+const MODEL_VERSION = 11;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -91,11 +91,11 @@ const INDEX_HP: Record<string, IndexHP> = {
     lstmEpochs: 40, lstmLR: 0.001, lstmDrop: 0.15,
     recentWindow: 20,   // 최근 20일로 빠르게 반응
   },
-  /** S&P500 — 유동성 높은 미국 대형주 지수, 추세 추종 특성 */
+  /** S&P500 — 유동성 높은 미국 대형주 지수, VIX+금리차 피처 강화 */
   GSPC: {
-    gbdtTrees: 80,  gbdtLR: 0.04,  gbdtDepth: 3, gbdtLeaf: 15,
-    gbdtFsub: 0.60, gbdtSsub: 0.80, nEnsemble: 2,
-    lstmEpochs: 25, lstmLR: 0.001, lstmDrop: 0.20,
+    gbdtTrees: 160, gbdtLR: 0.03,  gbdtDepth: 4, gbdtLeaf: 12,
+    gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 4,
+    lstmEpochs: 80, lstmLR: 0.0008, lstmDrop: 0.25,
     recentWindow: 30,
   },
 };
@@ -436,12 +436,17 @@ async function fetchExternalData(
 
   console.log(`[ext] 외부 데이터 수집 (${market}, ${years.toFixed(1)}년, KRX ${startKRX}~${endKRX})...`);
 
-  // ── S&P500 전용 분기: DXY + USDKRW + 미국 10Y, KRX 없음 ─────────────────
+  // ── S&P500 전용 분기: DXY + USDKRW + 미국10Y + VIX + 미국2Y ────────────
+  // foreignNet → VIX 레벨 (공포지수, 정규화)
+  // instNet    → VIX 일별 변화율 (공포 가속도)
+  // shortRatio → 장단기 금리차 10Y-2Y (경기선행, %)
   if (market === "SNP") {
-    const [dxyRows, usdkrwRows, bondRows] = await Promise.all([
+    const [dxyRows, usdkrwRows, bond10Rows, vixRows, bond2Rows] = await Promise.all([
       fetchYahooSeries("DX-Y.NYB", years),   // 달러인덱스 (DXY)
       fetchYahooSeries("USDKRW=X", years),   // 원달러 환율
       fredFetchSeries("DGS10", startISO),     // 미국 10Y 국채금리 (일별)
+      fetchYahooSeries("^VIX",    years),     // VIX 공포지수
+      fredFetchSeries("DGS2",  startISO),     // 미국 2Y 국채금리 (일별)
     ]);
     const dxyRetMap = new Map<string, number>();
     for (let i = 1; i < dxyRows.length; i++)
@@ -449,23 +454,47 @@ async function fetchExternalData(
     const usdkrwRetMap = new Map<string, number>();
     for (let i = 1; i < usdkrwRows.length; i++)
       usdkrwRetMap.set(usdkrwRows[i].date, (usdkrwRows[i].close - usdkrwRows[i-1].close) / usdkrwRows[i-1].close);
-    const bondEntries = bondRows.sort((a, b) => a.date.localeCompare(b.date));
+
+    // VIX: 레벨 맵 + 일별 변화율 맵
+    const vixLevelMap = new Map<string, number>();
+    const vixRetMap   = new Map<string, number>();
+    for (let i = 0; i < vixRows.length; i++) {
+      vixLevelMap.set(vixRows[i].date, vixRows[i].close);
+      if (i > 0)
+        vixRetMap.set(vixRows[i].date, (vixRows[i].close - vixRows[i-1].close) / (vixRows[i-1].close || 1));
+    }
+
+    const bond10Entries = bond10Rows.sort((a, b) => a.date.localeCompare(b.date));
+    const bond2Entries  = bond2Rows.sort((a, b) => a.date.localeCompare(b.date));
+
     const result = new Map<string, ExtPoint>();
-    let lastDXY = 0, lastUSDKRW = 0, lastBond = 4.5, bondIdx = 0;
+    let lastDXY = 0, lastUSDKRW = 0, lastBond10 = 4.5, lastBond2 = 4.0;
+    let lastVixLevel = 20, lastVixRet = 0;
+    let b10Idx = 0, b2Idx = 0;
+
     for (const date of dates) {
-      while (bondIdx < bondEntries.length && bondEntries[bondIdx].date <= date) {
-        lastBond = bondEntries[bondIdx].value; bondIdx++;
+      while (b10Idx < bond10Entries.length && bond10Entries[b10Idx].date <= date) {
+        lastBond10 = bond10Entries[b10Idx].value; b10Idx++;
       }
-      if (dxyRetMap.has(date))    lastDXY    = dxyRetMap.get(date)!;
-      if (usdkrwRetMap.has(date)) lastUSDKRW = usdkrwRetMap.get(date)!;
+      while (b2Idx < bond2Entries.length && bond2Entries[b2Idx].date <= date) {
+        lastBond2 = bond2Entries[b2Idx].value; b2Idx++;
+      }
+      if (dxyRetMap.has(date))    lastDXY      = dxyRetMap.get(date)!;
+      if (usdkrwRetMap.has(date)) lastUSDKRW   = usdkrwRetMap.get(date)!;
+      if (vixLevelMap.has(date))  lastVixLevel = vixLevelMap.get(date)!;
+      if (vixRetMap.has(date))    lastVixRet   = vixRetMap.get(date)!;
+
+      const yieldSpread = lastBond10 - lastBond2;   // 10Y-2Y 금리차 (보통 -2 ~ +3%)
       result.set(date, {
-        sp500Ret:   lastDXY,     // DXY 등락 (달러 강도)
-        usdkrwRet:  lastUSDKRW,  // USDKRW 변화율
-        bond3y:     lastBond,    // 미국 10Y 금리
-        foreignNet: 0, instNet: 0, shortRatio: 0,
+        sp500Ret:   lastDXY,                // DXY 등락 (달러 강도)
+        usdkrwRet:  lastUSDKRW,             // USDKRW 변화율
+        bond3y:     lastBond10,             // 미국 10Y 금리
+        foreignNet: lastVixLevel / 50,      // VIX 레벨 정규화 (50=극공포 상한)
+        instNet:    lastVixRet,             // VIX 일별 변화율 (-0.3 ~ +0.3)
+        shortRatio: yieldSpread,            // 10Y-2Y 장단기 금리차 (scaler가 표준화)
       });
     }
-    console.log(`[ext] 완료(SNP) — DXY ${dxyRows.length}행, 환율 ${usdkrwRows.length}행, 미국10Y ${bondRows.length}행`);
+    console.log(`[ext] 완료(SNP) — DXY ${dxyRows.length}행, 환율 ${usdkrwRows.length}행, 미국10Y ${bond10Rows.length}행, VIX ${vixRows.length}행, 미국2Y ${bond2Rows.length}행`);
     return result;
   }
 
@@ -774,19 +803,46 @@ async function trainLSTM(
   const xVal   = tf.tensor3d(X3d_val);
   const yVal   = tf.tensor2d(Array.from(y_val),   [y_val.length,   1]);
 
+  // Early stopping: val_loss가 patience 에포크 연속 개선 없으면 조기 종료
+  let bestValLoss = Infinity, patience = 10, noImproveCount = 0;
+  let bestWeights: LSTMWeightLayer[][] | null = null;
+
   try {
     await model.fit(xTrain, yTrain, {
       epochs: hp.lstmEpochs, batchSize: LSTM_BATCH,
       validationData: [xVal, yVal], verbose: 0,
       callbacks: {
-        onEpochEnd: (epoch: number, logs: any) => {
+        onEpochEnd: async (epoch: number, logs: any) => {
+          const valLoss: number = logs?.val_loss ?? Infinity;
           if (epoch % 5 === 4)
-            console.log(`[lstm] epoch ${epoch+1}/${hp.lstmEpochs} loss=${logs?.loss?.toFixed(4)} val=${logs?.val_loss?.toFixed(4)}`);
+            console.log(`[lstm] epoch ${epoch+1}/${hp.lstmEpochs} loss=${logs?.loss?.toFixed(4)} val=${valLoss.toFixed(4)}`);
+          if (valLoss < bestValLoss - 1e-6) {
+            bestValLoss = valLoss;
+            noImproveCount = 0;
+            bestWeights = saveLSTMWeights(model);
+          } else {
+            noImproveCount++;
+            if (noImproveCount >= patience) {
+              console.log(`[lstm] early stop @ epoch ${epoch+1} (best val=${bestValLoss.toFixed(4)})`);
+              model.stopTraining = true;
+            }
+          }
         },
       },
     });
   } finally {
     xTrain.dispose(); yTrain.dispose(); xVal.dispose(); yVal.dispose();
+  }
+
+  // best weights 복원
+  if (bestWeights) {
+    model.layers.forEach((layer, i) => {
+      const wd = bestWeights![i];
+      if (wd?.length > 0) {
+        const tensors = wd.map(w => tf.tensor(w.data, w.shape));
+        try { layer.setWeights(tensors); } finally { tensors.forEach(t => t.dispose()); }
+      }
+    });
   }
   return model;
 }
