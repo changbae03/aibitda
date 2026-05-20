@@ -1,10 +1,11 @@
 /**
  * 시장 분석 스케줄러
  * ─────────────────
- * - 장전 브리핑 갱신    : 평일 08:30 KST (= 23:30 UTC 전날) → Gemini 브리핑 캐시만 초기화
+ * - 장전 브리핑 갱신    : 평일 06:00 KST (= 21:00 UTC 전날) → Gemini 브리핑 캐시만 초기화
+ * - 장중 브리핑 갱신    : 평일 13:00 KST (= 04:00 UTC)      → Gemini 브리핑 캐시만 초기화
  * - 장마감 증분 업데이트 : 평일 16:30 KST (= 07:30 UTC)     → LSTM+5트리 + 브리핑 캐시 초기화
  * - 월간 완전 재학습    : 매월 1일 00:00 KST (= 전날 15:00 UTC) → 5년 완전 재학습
- * - 서버 재시작 시      : tryRestoreFromDisk() → 저장 모델 즉시 복원
+ * - 서버 재시작 시      : 디스크 → DB → 즉시 학습 순서로 복원
  *
  * node-cron 없이 1분 간격 setInterval로 구현
  * (Replit 환경에서 외부 패키지 의존 최소화)
@@ -14,6 +15,7 @@ import { invalidateBriefCache } from "../routes/market-analysis.js";
 
 // 실행 중복 방지용 플래그
 let morningBriefToday = "";   // "YYYY-MM-DD" 형식
+let middayBriefToday  = "";   // "YYYY-MM-DD" 형식
 let dailyRunToday     = "";   // "YYYY-MM-DD" 형식
 let monthlyRunMonth   = "";   // "YYYY-MM" 형식
 
@@ -41,6 +43,14 @@ function checkAndRun() {
     // dow 0(일)~4(목): 다음날이 평일(월~금)인 경우만
     morningBriefToday = dateStr;
     console.log("[scheduler] 장전 브리핑 갱신 시작 (06:00 KST)");
+    invalidateBriefCache();
+  }
+
+  // ── 장중 브리핑 갱신: 평일 13:00 KST = 04:00 UTC ────────────────────────
+  // 오전 장 흐름 반영, 오후 전망 제공
+  if (utcH === 4 && utcM === 0 && dow >= 1 && dow <= 5 && middayBriefToday !== dateStr) {
+    middayBriefToday = dateStr;
+    console.log("[scheduler] 장중 브리핑 갱신 시작 (13:00 KST)");
     invalidateBriefCache();
   }
 
@@ -90,6 +100,7 @@ export function startMarketScheduler() {
   setInterval(checkAndRun, 60_000);
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
   console.log("  - 장전 브리핑:   평일 06:00 KST (21:00 UTC 전날)");
+  console.log("  - 장중 브리핑:   평일 13:00 KST (04:00 UTC)");
   console.log("  - 장마감 업데이트: 평일 16:30 KST (07:30 UTC)");
   console.log("  - 월간 재학습:   매월 1일 00:00 KST (전날 15:00 UTC)");
 }

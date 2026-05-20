@@ -170,10 +170,17 @@ async function fetchRecentIndexData() {
 
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
 
-/** KST 기준 세션 감지: UTC 21~02 → 장전(06:00~11:00 KST), 나머지 → 장마감 */
-function detectSession(): "morning" | "closing" {
+/**
+ * KST 기준 세션 감지
+ *   UTC 21~02  (KST 06:00~11:00) → 장전  : 간밤 미국 시장 브리핑
+ *   UTC 02~07  (KST 11:00~16:00) → 장중  : 오전 흐름·오후 전망 브리핑
+ *   UTC 07~21  (KST 16:00~06:00) → 장마감: 당일 한국 장 리뷰·내일 준비
+ */
+function detectSession(): "morning" | "midday" | "closing" {
   const utcH = new Date().getUTCHours();
-  return (utcH >= 21 || utcH <= 2) ? "morning" : "closing";
+  if (utcH >= 21 || utcH < 2) return "morning";
+  if (utcH >= 2  && utcH < 7) return "midday";
+  return "closing";
 }
 
 function fmtIdx(d: { close: number; change: number | null } | null | undefined, unit = "pt") {
@@ -369,7 +376,65 @@ ${macroBlock || "데이터 없음"}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
-  const prompt = session === "morning" ? morningPrompt : closingPrompt;
+  // ── 장중 프롬프트 (오후 1시, KST 11~16) ────────────────────────────────────
+  const middayPrompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장이 한창 열려 있는 시간입니다.
+지금 장 중반 흐름이 어떤지, 오후에 어떻게 될지, 마감까지 꼭 챙겨봐야 할 것은 무엇인지 쉽게 설명해 주세요.
+
+[오전 포함 최근 KOSPI 흐름]
+${kospiHistory}
+
+[오전 포함 최근 KOSDAQ 흐름]
+${kosdaqHistory}
+
+[AI 모델 3일 예측]
+KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}
+
+[어제 미국 주요 지수]
+${usIndicesBlock || "데이터 없음"}
+
+[거시경제 지표]
+${macroBlock || "데이터 없음"}
+
+아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
+{
+  "summary": "지금 장 분위기 한 줄로 (20자 내외, 명사형)",
+  "sentiment": "bullish 또는 bearish 또는 neutral",
+  "leadParagraph": "오전 코스피·코스닥 흐름을 2문장으로. 수치 포함. 예: '오늘 오전 코스피는 2,590선에서 강보합 흐름이에요. 반도체주가 오르면서 지수를 끌어올리고 있어요.' (80~120자)",
+  "storyLine": "왜 오전에 이렇게 움직였는지, 오후에는 어떻게 될 것 같은지, 마감까지 무엇을 지켜봐야 하는지 이야기처럼. AI 예측도 포함. (150~220자)",
+  "marketEvents": [
+    { "title": "오늘 장 중 이슈 제목 (15자)", "impact": "이 이슈가 왜 지금 주가에 영향 주는지 (40~60자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2", "impact": "...", "direction": "..." },
+    { "title": "이슈3", "impact": "...", "direction": "..." }
+  ],
+  "macroFactors": [
+    { "factor": "지표명", "status": "수치와 전일비", "implication": "오후 장에 왜 중요한지 (40~60자)" },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." }
+  ],
+  "forwardLook": [
+    { "point": "오후 장 핵심 포인트 (15자)", "detail": "AI 예측 포함, 오후 어떻게 될지 (50~70자)", "watchFor": "지금 당장 봐야 할 것 (25자)" },
+    { "point": "...", "detail": "...", "watchFor": "..." },
+    { "point": "...", "detail": "...", "watchFor": "..." }
+  ],
+  "upcomingMacroEvents": [
+    { "date": "오늘 또는 구체적 날짜", "title": "이벤트명 (20자)", "description": "쉬운 설명 (60~80자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
+  ],
+  "keyRisk": "오후 장에서 가장 조심해야 할 것 한 줄 (40~60자)",
+  "recentIssues": ["오전 이슈 요약1", "이슈2", "이슈3"],
+  "outlook": ["오후 전망1", "전망2", "전망3"]
+}
+
+작성 원칙:
+- 현재 코스피·코스닥 수치를 구체적으로 인용하세요
+- '지금', '오후에', '마감 전' 등 시간감 있는 표현을 사용하세요
+- AI 3일 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"})을 storyLine과 forwardLook에 반드시 포함하세요
+- 절대 금지: 전문 용어 설명 없이 사용 금지
+- 문체: 친근한 해요체`;
+
+  const prompt = session === "morning" ? morningPrompt : session === "midday" ? middayPrompt : closingPrompt;
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
