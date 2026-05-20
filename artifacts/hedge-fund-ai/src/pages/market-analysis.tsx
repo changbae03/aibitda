@@ -1170,6 +1170,20 @@ export default function MarketAnalysis() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 면책 고지 */}
+      <div className="max-w-2xl mx-auto px-4 pb-10">
+        <div className="flex items-start gap-2.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3">
+          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground/50" />
+          <p className="text-[11px] leading-relaxed text-muted-foreground/50">
+            본 페이지의 시장 예측 수치(3일 예상 수익률, 방향성 등)는 LSTM·GBDT 앙상블 모델이 산출한{" "}
+            <strong className="font-medium text-muted-foreground/60">참고용 예측치</strong>이며,
+            실제 시장 결과와 다를 수 있습니다. 투자 결정의 유일한 근거로 사용하지 마시고,
+            전문 금융 자문과 함께 활용하시기 바랍니다.
+            애빛다는 본 예측 정보에 기반한 투자 손실에 대해 책임을 지지 않습니다.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
