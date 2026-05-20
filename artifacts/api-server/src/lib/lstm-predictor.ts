@@ -207,8 +207,76 @@ function krxDateToISO(raw: unknown): string {
   return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
 }
 
-/** KRX GET 요청 헬퍼 (krx-short-client.ts 와 동일한 방식) */
+/**
+ * KRX OpenAPI — OTP 인증 방식 (KRX_API_KEY 환경변수 필요)
+ *
+ * 흐름:
+ *   1) POST /contents/COM/GenerateOTP.jspx  → OTP 문자열 반환
+ *   2) POST /comm/bldAttendant/getJsonData.cmd?bld=...&otp=OTP&...params
+ *
+ * 사전 조건: KRX 정보데이터시스템 포털에서 서버 IP(34.122.175.30)를 허용 IP로 등록해야 함.
+ */
+async function krxOpenApiPost(bld: string, params: Record<string, string>): Promise<any[]> {
+  const apiKey = process.env.KRX_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    // Step 1: OTP 발급
+    const otpBody = new URLSearchParams({ auth: apiKey, code: bld });
+    const otpRes = await fetch("http://data.krx.co.kr/contents/COM/GenerateOTP.jspx", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent":   "Mozilla/5.0",
+        "Referer":      "http://data.krx.co.kr/",
+      },
+      body: otpBody.toString(),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!otpRes.ok) { console.warn(`[ext] KRX OTP HTTP ${otpRes.status}`); return []; }
+
+    const otpText = (await otpRes.text()).trim();
+    // OTP는 짧은 영숫자 문자열. HTML이 돌아오면 인증 실패 (IP 미등록 등)
+    if (otpText.includes("<html") || otpText.length > 200) {
+      console.warn("[ext] KRX OTP 인증 실패 — 포털에서 IP(34.122.175.30) 등록 필요");
+      return [];
+    }
+
+    // Step 2: OTP로 데이터 조회
+    const dataBody = new URLSearchParams({ bld, otp: otpText, ...params });
+    const dataRes = await fetch("http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent":   "Mozilla/5.0",
+        "Referer":      "http://data.krx.co.kr/",
+        "Accept":       "application/json, */*",
+      },
+      body: dataBody.toString(),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!dataRes.ok) { console.warn(`[ext] KRX 데이터 HTTP ${dataRes.status}`); return []; }
+
+    const json = await dataRes.json() as any;
+    return json?.output ?? json?.OutBlock_1 ?? [];
+  } catch (e: any) {
+    console.warn(`[ext] KRX OpenAPI 예외 (${bld}):`, e?.message);
+    return [];
+  }
+}
+
+/** KRX 데이터 요청 — OpenAPI(OTP) 우선, 실패 시 퍼블릭 스크래핑 fallback */
 async function krxGet(bld: string, extra: Record<string, string>): Promise<any[]> {
+  // KRX_API_KEY 있으면 OpenAPI 먼저 시도
+  if (process.env.KRX_API_KEY) {
+    const rows = await krxOpenApiPost(bld, extra);
+    if (rows.length > 0) return rows;
+    // OTP 인증 실패(IP 미등록)면 바로 리턴 — 스크래핑은 어차피 LOGOUT
+    const apiKey = process.env.KRX_API_KEY;
+    if (apiKey) return [];  // 키 있지만 실패 → fallback 생략
+  }
+
+  // fallback: 퍼블릭 스크래핑 (세션 불필요한 공개 엔드포인트)
   const params = new URLSearchParams({ bld, ...extra });
   try {
     const res = await fetch(`${KRX_BASE}?${params}`, {
