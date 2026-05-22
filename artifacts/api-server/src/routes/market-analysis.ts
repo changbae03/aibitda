@@ -151,8 +151,11 @@ export interface MarketBriefResult {
 async function fetchMarketNews(): Promise<string> {
   const queries = [
     "코스피 코스닥 증시 주식 이슈",
-    "삼성전자 SK하이닉스 현대차 LG 기업",
+    "삼성전자 SK하이닉스 현대차 LG에너지솔루션 기업",
     "한국 경제 정치 금리 환율 관세",
+    "반도체 바이오 2차전지 방산 조선 섹터 주식",
+    "미국 나스닥 S&P500 Fed 연준 금리 달러",
+    "중국 경제 무역 위안화 미중 관계",
   ];
 
   function parseRssItems(xml: string, maxItems = 8): string[] {
@@ -379,14 +382,16 @@ async function generateBrief(): Promise<MarketBriefResult> {
 
   // ── 공통 JSON 스키마 (keyTopics 포함) ─────────────────────────────────────
   const keyTopicsSchema = `  "keyTopics": [
-    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 시장에 왜 중요한지 (40~50자)" },
+    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 시장에 왜 중요한지 구체적으로 (50~70자)" },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." }
   ]`;
 
-  const keyTopicsRule = `- keyTopics: 뉴스 헤드라인과 현재 시황을 바탕으로 오늘 시장을 움직이는 핵심 키워드 5개 선정. 삼성전자 파업·실적, 미중 관세, FOMC, 반도체 업황, 환율 등 구체적 이슈 포함.`;
+  const keyTopicsRule = `- keyTopics: 뉴스 헤드라인과 현재 시황을 바탕으로 시장을 움직이는 핵심 키워드 7개 선정. 반드시 글로벌(미국·중국)·국내 기업(삼성전자·SK하이닉스·현대차)·정치(관세·규제)·섹터(반도체·바이오·2차전지·방산·조선) 중 다양하게 커버. 각 description은 "왜 지금 주가에 영향 주는지" 구체적으로.`;
 
   // ── 장전 프롬프트 ──────────────────────────────────────────────────────────
   const morningPrompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장 개장 전입니다.
@@ -416,13 +421,15 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   "summary": "간밤 미국 시장 한 줄 요약 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
   "leadParagraph": "간밤 미국 시장 전체 분위기를 2문장으로. 주요 지수 등락 수치 포함. (80~120자)",
-  "storyLine": "왜 미국 시장이 그렇게 움직였는지, 어떤 이슈가 있었는지(뉴스 헤드라인 참고), 그래서 오늘 한국 시장에 어떤 영향이 예상되는지 이야기처럼. SOX·달러 움직임도 포함. AI 예측(KOSPI: ${kospiPred ?? "N/A"}) 포함. (200~280자)",
+  "storyLine": "왜 미국 시장이 그렇게 움직였는지, 어떤 이슈가 있었는지(뉴스 헤드라인 참고), 그래서 오늘 한국 시장에 어떤 영향이 예상되는지 이야기처럼. SOX·달러 움직임, 주요 섹터(반도체·바이오·2차전지·방산) 영향, 기관·외국인 수급 동향도 포함. AI 예측(KOSPI: ${kospiPred ?? "N/A"}) 포함. (350~500자)",
   "marketEvents": [
-    { "title": "간밤 핵심 이슈 (15자)", "impact": "오늘 우리 시장에 왜 중요한지 쉽게 (50~70자)", "direction": "positive 또는 negative 또는 neutral" },
-    { "title": "이슈2", "impact": "...", "direction": "..." },
-    { "title": "이슈3", "impact": "...", "direction": "..." },
-    { "title": "이슈4", "impact": "...", "direction": "..." },
-    { "title": "이슈5 (국내 기업·정치 이슈)", "impact": "...", "direction": "..." }
+    { "title": "간밤 핵심 이슈 (15자)", "impact": "오늘 우리 시장에 왜 중요한지 쉽게 (60~80자)", "direction": "positive 또는 negative 또는 neutral" },
+    { "title": "이슈2 (미국·글로벌)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (반도체·SOX)", "impact": "...", "direction": "..." },
+    { "title": "이슈4 (국내 대형주 기업)", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (정치·관세·규제)", "impact": "...", "direction": "..." },
+    { "title": "이슈6 (섹터: 바이오·2차전지·방산·조선 중 하나)", "impact": "...", "direction": "..." },
+    { "title": "이슈7 (환율·원자재·금리)", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
     { "factor": "지표명 (나스닥, SOX, 달러인덱스, 국채금리, VIX 등)", "status": "수치와 전일비 포함", "implication": "오늘 한국 주식에 미치는 영향 (40~60자)" },
@@ -452,9 +459,12 @@ ${keyTopicsSchema},
 - 미국 지수 수치(S&P500, 나스닥, 다우, SOX)와 달러인덱스를 구체적으로 인용하세요
 - SOX(필라델피아 반도체)는 삼성전자·SK하이닉스와 직결되므로 반드시 포함하세요
 - 달러 강약이 원화·수출주에 미치는 영향을 설명하세요
-- marketEvents에 국내 기업 이슈(실적·파업·인수합병 등)와 정치 이슈(관세·규제·선거)를 반드시 1~2개 포함하세요
+- marketEvents 7개를 반드시 채우세요: 글로벌·기업·정치·반도체·섹터·환율 카테고리를 골고루 커버
+- 국내 기업 이슈(삼성전자·SK하이닉스·현대차·LG에너지솔루션 실적·파업·인수합병)와 정치 이슈(관세·규제)를 반드시 포함
+- 바이오·2차전지·방산·조선·게임 등 테마 섹터 이슈 최소 1개 포함
+- impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 (예: "SOX 2.3% 상승으로 삼성전자·SK하이닉스 동반 강세 예상")
 ${keyTopicsRule}
-- 절대 금지: 전문 용어 설명 없이 사용 금지 ("수급", "밸류에이션" 등)
+- 절대 금지: 전문 용어 설명 없이 사용 금지 ("수급", "밸류에이션" 등 → 쉬운 말로 풀어서)
 - 문체: 친근한 해요체`;
 
   // ── 장마감 프롬프트 ────────────────────────────────────────────────────────
@@ -484,13 +494,15 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   "summary": "오늘 시장 분위기를 한 줄로 (20자 내외, 명사형 또는 짧은 문장)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
   "leadParagraph": "오늘 코스피·코스닥이 어떻게 움직였는지, 왜 그랬는지 2문장으로. 수치 포함. (80~120자)",
-  "storyLine": "오늘 하루 어떤 대내외 이슈가 있었고(뉴스 헤드라인 참고), 왜 시장이 그렇게 움직였는지, 내일·이번 주에 어떻게 될 것 같은지 이야기처럼. 국내 기업·정치 이슈와 글로벌 이슈를 모두 언급. AI 예측 포함. (200~280자)",
+  "storyLine": "오늘 하루 어떤 대내외 이슈가 있었고(뉴스 헤드라인 참고), 왜 시장이 그렇게 움직였는지, 내일·이번 주에 어떻게 될 것 같은지 이야기처럼. 국내 기업·정치 이슈와 글로벌 이슈, 주요 섹터(반도체·바이오·2차전지·방산·조선) 동향, 기관·외국인·개인 수급 흐름도 언급. AI 예측 포함. (350~500자)",
   "marketEvents": [
-    { "title": "오늘 핵심 이슈 (15자)", "impact": "이 이슈가 왜 주가에 영향을 줬는지 (50~70자)", "direction": "positive/negative/neutral" },
-    { "title": "이슈2 (기업 이슈)", "impact": "...", "direction": "..." },
-    { "title": "이슈3 (정치/경제)", "impact": "...", "direction": "..." },
-    { "title": "이슈4 (글로벌)", "impact": "...", "direction": "..." },
-    { "title": "이슈5 (산업/섹터)", "impact": "...", "direction": "..." }
+    { "title": "오늘 핵심 이슈 (15자)", "impact": "이 이슈가 왜 주가에 영향을 줬는지 (60~80자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2 (국내 대형주 기업)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (정치/관세/규제)", "impact": "...", "direction": "..." },
+    { "title": "이슈4 (글로벌·미국·중국)", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (반도체·SOX)", "impact": "...", "direction": "..." },
+    { "title": "이슈6 (섹터: 바이오·2차전지·방산·조선 중 하나)", "impact": "...", "direction": "..." },
+    { "title": "이슈7 (환율·원자재·수급)", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
     { "factor": "지표명", "status": "수치와 전일비", "implication": "내 주식에 왜 중요한지 (40~60자)" },
@@ -519,8 +531,11 @@ ${keyTopicsSchema},
 
 작성 원칙:
 - 오늘 코스피·코스닥 수치를 구체적으로 인용하세요
-- marketEvents에 삼성전자·현대차·SK하이닉스 같은 기업 이슈, 정치 이슈(관세·규제·파업 등)를 반드시 포함하세요
+- marketEvents 7개를 반드시 채우세요: 글로벌·기업·정치·반도체·섹터·환율/수급 카테고리를 골고루 커버
+- 삼성전자·SK하이닉스·현대차·LG에너지솔루션 같은 기업 이슈, 정치 이슈(관세·규제·파업 등) 반드시 포함
+- 바이오·2차전지·방산·조선 등 테마 섹터 이슈 최소 1개 포함
 - upcomingMacroEvents는 향후 3~5거래일 예정 이벤트 (FOMC, CPI, 관세, 정치 이슈 등)
+- impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 작성
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
@@ -552,12 +567,14 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   "summary": "지금 장 분위기 한 줄로 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
   "leadParagraph": "오전 코스피·코스닥 흐름을 2문장으로. 수치 포함. (80~120자)",
-  "storyLine": "왜 오전에 이렇게 움직였는지(뉴스 헤드라인 참고), 국내외 어떤 이슈가 있었는지, 오후에는 어떻게 될 것 같은지, 마감까지 무엇을 지켜봐야 하는지 이야기처럼. AI 예측도 포함. (200~280자)",
+  "storyLine": "왜 오전에 이렇게 움직였는지(뉴스 헤드라인 참고), 국내외 어떤 이슈가 있었는지, 주요 섹터(반도체·바이오·2차전지·방산) 흐름, 기관·외국인 수급 동향, 오후에는 어떻게 될 것 같은지, 마감까지 무엇을 지켜봐야 하는지 이야기처럼. AI 예측도 포함. (350~500자)",
   "marketEvents": [
-    { "title": "오늘 장 중 이슈 (15자)", "impact": "이 이슈가 왜 지금 주가에 영향 주는지 (50~70자)", "direction": "positive/negative/neutral" },
-    { "title": "이슈2 (기업 이슈)", "impact": "...", "direction": "..." },
-    { "title": "이슈3 (정치/경제)", "impact": "...", "direction": "..." },
-    { "title": "이슈4", "impact": "...", "direction": "..." }
+    { "title": "오늘 장 중 이슈 (15자)", "impact": "이 이슈가 왜 지금 주가에 영향 주는지 (60~80자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2 (국내 대형주 기업)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (정치/관세/경제)", "impact": "...", "direction": "..." },
+    { "title": "이슈4 (글로벌·미국·중국)", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (반도체·SOX)", "impact": "...", "direction": "..." },
+    { "title": "이슈6 (섹터: 바이오·2차전지·방산·조선 중 하나)", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
     { "factor": "지표명", "status": "수치와 전일비", "implication": "오후 장에 왜 중요한지 (40~60자)" },
@@ -583,9 +600,12 @@ ${keyTopicsSchema},
 
 작성 원칙:
 - 현재 코스피·코스닥 수치를 구체적으로 인용하세요
-- marketEvents에 삼성전자·현대차·SK하이닉스 같은 기업 이슈, 정치 이슈를 반드시 포함하세요
+- marketEvents 6개를 반드시 채우세요: 글로벌·기업·정치·반도체·섹터 카테고리를 골고루 커버
+- 삼성전자·SK하이닉스·현대차 등 기업 이슈, 정치 이슈 반드시 포함
+- 바이오·2차전지·방산·조선 등 테마 섹터 이슈 최소 1개 포함
 - '지금', '오후에', '마감 전' 등 시간감 있는 표현을 사용하세요
 - AI 3일 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"})을 storyLine과 forwardLook에 반드시 포함하세요
+- impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 작성
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
@@ -617,13 +637,15 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   "summary": "이번 주 증시 한 줄 요약 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
   "leadParagraph": "이번 주 코스피·코스닥이 어떻게 움직였는지, 주요 원인은 무엇이었는지 2문장. 수치 포함. (80~120자)",
-  "storyLine": "이번 주 증시 스토리: 어떤 이슈가 시장을 움직였는지, 다음 주 어떻게 될 것 같은지. AI 예측 포함. 국내·해외 이슈 모두 언급. (200~280자)",
+  "storyLine": "이번 주 증시 스토리: 어떤 이슈가 시장을 움직였는지, 주요 섹터(반도체·바이오·2차전지·방산·조선) 흐름, 외국인·기관 수급 특이사항, 다음 주 어떻게 될 것 같은지. AI 예측 포함. 국내·해외 이슈 모두 언급. (350~500자)",
   "marketEvents": [
-    { "title": "이번 주 핵심 이슈 (15자)", "impact": "이 이슈가 왜 시장에 영향을 줬는지 (50~70자)", "direction": "positive/negative/neutral" },
-    { "title": "이슈2", "impact": "...", "direction": "..." },
-    { "title": "이슈3", "impact": "...", "direction": "..." },
-    { "title": "이슈4", "impact": "...", "direction": "..." },
-    { "title": "이슈5", "impact": "...", "direction": "..." }
+    { "title": "이번 주 핵심 이슈 (15자)", "impact": "이 이슈가 왜 시장에 영향을 줬는지 (60~80자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2 (국내 대형주 기업)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (정치·관세·규제)", "impact": "...", "direction": "..." },
+    { "title": "이슈4 (글로벌·미국·중국)", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (반도체·SOX)", "impact": "...", "direction": "..." },
+    { "title": "이슈6 (섹터: 바이오·2차전지·방산·조선 중 하나)", "impact": "...", "direction": "..." },
+    { "title": "이슈7 (환율·원자재·수급)", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
     { "factor": "지표명", "status": "수치", "implication": "내 주식에 왜 중요한지 (40~60자)" },
@@ -652,10 +674,13 @@ ${keyTopicsSchema},
 
 작성 원칙:
 - 이번 주 코스피·코스닥 수치를 구체적으로 인용하세요
-- marketEvents에 이번 주 삼성전자·현대차·SK하이닉스 같은 기업 이슈와 정치·글로벌 이슈를 반드시 포함하세요
+- marketEvents 7개를 반드시 채우세요: 이번 주 글로벌·기업·정치·반도체·섹터·환율/수급 카테고리를 골고루 커버
+- 삼성전자·SK하이닉스·현대차·LG에너지솔루션 기업 이슈와 정치·글로벌 이슈 반드시 포함
+- 바이오·2차전지·방산·조선 등 테마 섹터 이슈 최소 1개 포함
 - upcomingMacroEvents는 다음 주 예정 이벤트 (FOMC, CPI, 관세, 기업 실적 등) 중심으로
 - '이번 주', '지난 주', '다음 주 월요일' 등 주말 맥락에 맞는 표현을 사용하세요
 - AI 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"})을 다음 주 전망에 자연스럽게 포함하세요
+- impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 작성
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
@@ -669,9 +694,9 @@ ${keyTopicsRule}
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 3000,
-      temperature: 0.6,
-      topP: 0.9,
+      maxOutputTokens: 5000,
+      temperature: 0.65,
+      topP: 0.92,
       thinkingConfig: { thinkingBudget: 0 },
     },
   });
@@ -691,13 +716,13 @@ ${keyTopicsRule}
     sessionType:          session,
     leadParagraph:        parsed?.leadParagraph        ?? "",
     storyLine:            parsed?.storyLine            ?? "",
-    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 5),
-    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 5),
+    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 8),
+    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 6),
     forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),
-    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 5),
-    keyTopics:            safeArr(parsed?.keyTopics).slice(0, 5),
+    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 6),
+    keyTopics:            safeArr(parsed?.keyTopics).slice(0, 7),
     keyRisk:              parsed?.keyRisk              ?? "",
-    recentIssues:         safeArr(parsed?.recentIssues).slice(0, 4),
+    recentIssues:         safeArr(parsed?.recentIssues).slice(0, 5),
     outlook:              safeArr(parsed?.outlook).slice(0, 4),
     generatedAt:          new Date().toISOString(),
     kospiCurrent:         kospiLatest?.close  ?? null,
@@ -745,8 +770,9 @@ router.post("/update", async (req, res) => {
 
 // GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (DB 영구 캐시)
 router.get("/brief", async (req, res) => {
-  // 강제 갱신(force=true)은 관리자만 허용
-  if (req.query.force === "true" && !(await requireAdmin(req, res))) return;
+  // 강제 갱신(force=true)은 관리자 또는 localhost 허용
+  const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+  if (req.query.force === "true" && !isLocalhost && !(await requireAdmin(req, res))) return;
   const force = req.query.force === "true";
 
   // ① 인메모리 캐시 유효 → 즉시 반환 (~1ms)
