@@ -41,7 +41,7 @@ const ai = new GoogleGenAI({
   }),
 });
 
-// ─── 인메모리 캐시 ──────────────────────────────────────────────────────────
+// ─── 인메모리 캐시 + DB 영구 캐시 ───────────────────────────────────────────
 
 interface BriefCache {
   data: MarketBriefResult;
@@ -49,6 +49,50 @@ interface BriefCache {
 }
 const BRIEF_TTL = 8 * 3600_000;   // 8시간 (장전·장마감 2회 갱신 주기에 맞춤)
 let _briefCache: BriefCache | null = null;
+let _briefRefreshing = false;      // 백그라운드 갱신 중복 방지
+
+/** DB에 brief 저장 */
+async function saveBriefToDb(cache: BriefCache) {
+  try {
+    await pool.query(`
+      INSERT INTO kv_cache (key, value, cached_at)
+      VALUES ('market_brief', $1, $2)
+      ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
+    `, [JSON.stringify(cache.data), new Date(cache.cachedAt)]);
+  } catch (err: any) {
+    console.error("[market-brief] DB 저장 실패:", err?.message);
+  }
+}
+
+/** 서버 시작 시 DB에서 brief 복원 */
+async function loadBriefFromDb(): Promise<void> {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kv_cache (
+        key TEXT PRIMARY KEY,
+        value JSONB NOT NULL,
+        cached_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    const r = await pool.query(
+      `SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief' LIMIT 1`
+    );
+    if (r.rows.length) {
+      const cachedAt = new Date(r.rows[0].cached_at).getTime();
+      if (Date.now() - cachedAt < BRIEF_TTL) {
+        _briefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
+        console.log("[market-brief] DB 캐시 복원 성공 (즉시 서빙 가능)");
+      } else {
+        console.log("[market-brief] DB 캐시 만료 — 다음 요청 시 재생성");
+      }
+    }
+  } catch (err: any) {
+    console.error("[market-brief] DB 복원 실패:", err?.message);
+  }
+}
+
+// 모듈 로드 시 DB 캐시 자동 복원
+loadBriefFromDb().catch(() => {});
 
 /** 스케줄러에서 호출 — 다음 요청 시 Gemini 브리핑을 새로 생성하도록 캐시 무효화 */
 export function invalidateBriefCache() {
@@ -524,27 +568,46 @@ router.post("/update", async (req, res) => {
   res.json({ ok: true, message: "증분 업데이트 시작" });
 });
 
-// GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (4시간 캐시)
+// GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (DB 영구 캐시)
 router.get("/brief", async (req, res) => {
   // 강제 갱신(force=true)은 관리자만 허용
   if (req.query.force === "true" && !(await requireAdmin(req, res))) return;
   const force = req.query.force === "true";
 
-  // 캐시 확인
+  // ① 인메모리 캐시 유효 → 즉시 반환 (~1ms)
   if (!force && _briefCache && Date.now() - _briefCache.cachedAt < BRIEF_TTL) {
     res.json({ ...(_briefCache.data), cached: true });
     return;
   }
 
+  // ② 캐시 만료 or force → 이미 캐시가 있으면 즉시 반환 후 백그라운드 갱신
+  if (!force && _briefCache) {
+    // 만료된 캐시라도 즉시 반환 (사용자는 바로 볼 수 있음)
+    res.json({ ...(_briefCache.data), cached: true, stale: true });
+    // 이미 갱신 중이 아닐 때만 백그라운드 재생성
+    if (!_briefRefreshing) {
+      _briefRefreshing = true;
+      generateBrief()
+        .then(result => {
+          _briefCache = { data: result, cachedAt: Date.now() };
+          return saveBriefToDb(_briefCache);
+        })
+        .catch(err => console.error("[market-brief] 백그라운드 갱신 실패:", err?.message))
+        .finally(() => { _briefRefreshing = false; });
+    }
+    return;
+  }
+
+  // ③ 캐시 없음(첫 요청 or force) → 생성해서 반환
   try {
     console.log("[market-brief] Gemini 브리핑 생성 중...");
     const result = await generateBrief();
     _briefCache = { data: result, cachedAt: Date.now() };
+    await saveBriefToDb(_briefCache);
     console.log(`[market-brief] 완료 — sentiment: ${result.sentiment}`);
     res.json({ ...result, cached: false });
   } catch (err: any) {
     console.error("[market-brief] 오류:", err?.message);
-    // 캐시가 있으면 만료된 것이라도 반환
     if (_briefCache) {
       res.json({ ...(_briefCache.data), cached: true, stale: true });
     } else {

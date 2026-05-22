@@ -195,18 +195,20 @@ function MarketBriefSection({
       </div>
 
       <div className="p-4 space-y-5">
-        {/* 로딩 */}
+        {/* 로딩 — 컴팩트 스켈레톤 (차트 렌더링 차단하지 않음) */}
         {loading && !brief && (
-          <div className="flex items-center gap-3 py-10 justify-center">
-            <Loader2 className="w-5 h-5 text-primary animate-spin" />
-            <span className="text-sm text-muted-foreground">시장 데이터를 분석하는 중이에요...</span>
+          <div className="space-y-2 py-3 animate-pulse">
+            <div className="h-4 bg-muted/60 rounded-md w-3/4" />
+            <div className="h-3 bg-muted/40 rounded-md w-full" />
+            <div className="h-3 bg-muted/40 rounded-md w-5/6" />
+            <div className="h-3 bg-muted/30 rounded-md w-2/3 mt-1" />
           </div>
         )}
 
         {/* 에러 */}
         {!loading && !brief && (
-          <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground/40">
-            <Newspaper className="w-6 h-6" />
+          <div className="flex items-center gap-2 py-3 text-muted-foreground/40">
+            <Newspaper className="w-4 h-4" />
             <span className="text-xs">브리핑을 불러올 수 없습니다</span>
           </div>
         )}
