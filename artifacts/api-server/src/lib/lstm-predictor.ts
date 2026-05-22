@@ -1,15 +1,18 @@
 /**
- * 시장 예측 파이프라인 v6  — LSTM + GBDT 앙상블 + 외부 피처 + 수급
+ * 시장 예측 파이프라인 v7  — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 지표 9 + 매크로 3 + 수급 3 = 총 N_FEATURES = 15
+ * 기술적 9 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 18
  *
  * [기술적 9]  수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
- * [매크로  3]  S&P500 전일 등락 (Yahoo Finance ^GSPC)
- *             원/달러 환율 변화율 (Yahoo Finance USDKRW=X)
- *             국고채 3년 금리     (FRED IRLTLT01KRM156N)
- * [수급    3]  외국인 순매수 (KRX MDCSTAT02303) → 외국인 수급 직접 지표
- *             기관 순매수   (KRX MDCSTAT02303) → 기관 수급 직접 지표
- *             공매도 비율   (KRX MDCSTAT05001) → 하락 압력 선행지표
+ * [매크로  3]  S&P500 전일 등락 (^GSPC) / DXY (SNP용)
+ *             원/달러 환율 변화율 (USDKRW=X)
+ *             국고채 3년 금리 (KR FRED) / 미국10Y (SNP용)
+ * [수급    3]  외국인 순매수 (KRX, KOSPI/KOSDAQ만)
+ *             기관 순매수   (KRX, KOSPI/KOSDAQ만)
+ *             공매도 비율   (KRX, KOSPI/KOSDAQ만) / SNP는 0
+ * [글로벌 3]  VIX 레벨 — 공포/탐욕 레짐 감지 (전 시장 공통)  ← NEW
+ *             VIX 일별 변화율 — 공포 가속도 감지              ← NEW
+ *             미국 10Y-2Y 금리차 — 경기 선행 사이클          ← NEW
  */
 import fs   from "node:fs";
 import path from "node:path";
@@ -47,7 +50,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 20;
 const PRED_H       = 3;
-const N_FEATURES   = 15;   // 9 기술적 + 3 매크로 + 3 수급
+const N_FEATURES   = 18;   // 9 기술적 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 32;
@@ -58,7 +61,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 11;
+const MODEL_VERSION = 12;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -77,11 +80,11 @@ interface IndexHP {
 }
 
 const INDEX_HP: Record<string, IndexHP> = {
-  /** KOSPI — 안정적인 대형주 지수, 보수적 설정 */
+  /** KOSPI — VIX 피처 추가로 레짐 감지 강화, 앙상블·에폭 확대 */
   KS11: {
-    gbdtTrees: 60,  gbdtLR: 0.05,  gbdtDepth: 3, gbdtLeaf: 20,
-    gbdtFsub: 0.55, gbdtSsub: 0.80, nEnsemble: 2,
-    lstmEpochs: 20, lstmLR: 0.001,  lstmDrop: 0.20,
+    gbdtTrees: 120, gbdtLR: 0.04,  gbdtDepth: 4, gbdtLeaf: 15,
+    gbdtFsub: 0.60, gbdtSsub: 0.80, nEnsemble: 4,
+    lstmEpochs: 60, lstmLR: 0.001,  lstmDrop: 0.20,
     recentWindow: 30,
   },
   /** KOSDAQ — 변동성 높은 성장주 지수, 더 깊고 많은 트리 + 긴 학습 */
@@ -379,12 +382,15 @@ async function fetchKRXMarketShort(
 // ─── External data (매크로 + 수급) ───────────────────────────────────────────
 
 interface ExtPoint {
-  sp500Ret:   number;   // S&P500 전일 등락률 (소수)
+  sp500Ret:    number;   // S&P500 전일 등락률 (소수) / SNP용: DXY 등락
   usdkrwRet:  number;   // 원/달러 변화율 (소수)
-  bond3y:     number;   // 국고채 3년 금리 % (/10 scaled)
-  foreignNet: number;   // 외국인 순매수 (억원, 표준화)
-  instNet:    number;   // 기관 순매수 (억원, 표준화)
-  shortRatio: number;   // 공매도 비율 % (/10 scaled)
+  bond3y:     number;   // 국고채 3년 금리 % / SNP용: 미국10Y
+  foreignNet: number;   // 외국인 순매수 (KRX 정규화, −1~+1) / SNP는 0
+  instNet:    number;   // 기관 순매수   (KRX 정규화, −1~+1) / SNP는 0
+  shortRatio: number;   // 공매도 비율 % / SNP는 0
+  vixLevel:   number;   // [NEW] VIX 레벨 (0~50+, 전 시장 공통)
+  vixRet:     number;   // [NEW] VIX 일별 변화율 (공포 가속도)
+  yieldSpread: number;  // [NEW] 미국 10Y-2Y 금리차 (%) — 경기 선행
 }
 
 async function fetchYahooSeries(ticker: string, years: number): Promise<{ date: string; close: number }[]> {
@@ -486,24 +492,30 @@ async function fetchExternalData(
 
       const yieldSpread = lastBond10 - lastBond2;   // 10Y-2Y 금리차 (보통 -2 ~ +3%)
       result.set(date, {
-        sp500Ret:   lastDXY,                // DXY 등락 (달러 강도)
-        usdkrwRet:  lastUSDKRW,             // USDKRW 변화율
-        bond3y:     lastBond10,             // 미국 10Y 금리
-        foreignNet: lastVixLevel / 50,      // VIX 레벨 정규화 (50=극공포 상한)
-        instNet:    lastVixRet,             // VIX 일별 변화율 (-0.3 ~ +0.3)
-        shortRatio: yieldSpread,            // 10Y-2Y 장단기 금리차 (scaler가 표준화)
+        sp500Ret:    lastDXY,          // DXY 등락 (달러 강도)
+        usdkrwRet:   lastUSDKRW,       // USDKRW 변화율
+        bond3y:      lastBond10,       // 미국 10Y 금리
+        foreignNet:  0,                // SNP에는 KRX 수급 없음
+        instNet:     0,
+        shortRatio:  0,
+        vixLevel:    lastVixLevel,     // [NEW] VIX 레벨
+        vixRet:      lastVixRet,       // [NEW] VIX 일별 변화율
+        yieldSpread: yieldSpread,      // [NEW] 10Y-2Y 장단기 금리차
       });
     }
     console.log(`[ext] 완료(SNP) — DXY ${dxyRows.length}행, 환율 ${usdkrwRows.length}행, 미국10Y ${bond10Rows.length}행, VIX ${vixRows.length}행, 미국2Y ${bond2Rows.length}행`);
     return result;
   }
 
-  const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows] = await Promise.all([
+  const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows, vixRows, usb10Rows, usb2Rows] = await Promise.all([
     fetchYahooSeries("^GSPC", years),
     fetchYahooSeries("USDKRW=X", years),
     fredFetchSeries("IRLTLT01KRM156N", startISO),  // 한국 장기국채 (월별, OECD) – 3Y ≈ 10Y – 0.4pp
     fetchKRXMarketInvestor(market, startKRX, endKRX),
     fetchKRXMarketShort(market, startKRX, endKRX),
+    fetchYahooSeries("^VIX", years),               // [NEW] VIX 공포지수
+    fredFetchSeries("DGS10", startISO),            // [NEW] 미국 10Y 국채금리
+    fredFetchSeries("DGS2",  startISO),            // [NEW] 미국 2Y 국채금리
   ]);
 
   // ── S&P500 일별 수익률 Map ──
@@ -537,19 +549,40 @@ async function fetchExternalData(
   const fnetScale = fnetVals.length > 0 ? (fnetVals.sort((a,b)=>a-b)[Math.floor(fnetVals.length*0.95)] || 10000) : 10000;
   const inetScale = inetVals.length > 0 ? (inetVals.sort((a,b)=>a-b)[Math.floor(inetVals.length*0.95)] || 10000) : 10000;
 
-  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행`);
+  // ── [NEW] VIX Map (레벨 + 일별 변화율) ──
+  const vixLevelMap2 = new Map<string, number>();
+  const vixRetMap2   = new Map<string, number>();
+  for (let i = 0; i < vixRows.length; i++) {
+    vixLevelMap2.set(vixRows[i].date, vixRows[i].close);
+    if (i > 0)
+      vixRetMap2.set(vixRows[i].date, (vixRows[i].close - vixRows[i-1].close) / (vixRows[i-1].close || 1));
+  }
 
-  // ── KOSPI 날짜에 맞춰 forward-fill ──
+  // ── [NEW] 미국 10Y-2Y 금리차 Map (forward-fill) ──
+  const usb10Entries = usb10Rows.sort((a, b) => a.date.localeCompare(b.date));
+  const usb2Entries  = usb2Rows.sort((a, b) => a.date.localeCompare(b.date));
+
+  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행, VIX ${vixRows.length}행`);
+
+  // ── KOSPI/KOSDAQ 날짜에 맞춰 forward-fill ──
   const result = new Map<string, ExtPoint>();
   let lastSP500 = 0, lastUSDKRW = 0, lastBond = 3.0;
   let lastForeign = 0, lastInst = 0, lastShort = 2.0;
-  let bondIdx = 0;
+  let lastVixLevel2 = 20, lastVixRet2 = 0;
+  let lastUsb10 = 4.5, lastUsb2 = 4.0;
+  let bondIdx = 0, b10Idx2 = 0, b2Idx2 = 0;
 
   for (const date of dates) {
     // 국고채 forward-fill
     while (bondIdx < bondEntries.length && bondEntries[bondIdx].date <= date) {
-      lastBond = bondEntries[bondIdx].value;
-      bondIdx++;
+      lastBond = bondEntries[bondIdx].value; bondIdx++;
+    }
+    // [NEW] 미국 금리 forward-fill
+    while (b10Idx2 < usb10Entries.length && usb10Entries[b10Idx2].date <= date) {
+      lastUsb10 = usb10Entries[b10Idx2].value; b10Idx2++;
+    }
+    while (b2Idx2 < usb2Entries.length && usb2Entries[b2Idx2].date <= date) {
+      lastUsb2 = usb2Entries[b2Idx2].value; b2Idx2++;
     }
     if (sp500RetMap.has(date))   lastSP500  = sp500RetMap.get(date)!;
     if (usdkrwRetMap.has(date))  lastUSDKRW = usdkrwRetMap.get(date)!;
@@ -558,15 +591,20 @@ async function fetchExternalData(
       lastForeign = iv.foreignNet;
       lastInst    = iv.instNet;
     }
-    if (shortMap.has(date)) lastShort = shortMap.get(date)!;
+    if (shortMap.has(date))        lastShort      = shortMap.get(date)!;
+    if (vixLevelMap2.has(date))    lastVixLevel2  = vixLevelMap2.get(date)!;
+    if (vixRetMap2.has(date))      lastVixRet2    = vixRetMap2.get(date)!;
 
     result.set(date, {
-      sp500Ret:   lastSP500,
-      usdkrwRet:  lastUSDKRW,
-      bond3y:     lastBond,
-      foreignNet: lastForeign / fnetScale,  // ≈ −1 ~ +1
-      instNet:    lastInst    / inetScale,  // ≈ −1 ~ +1
-      shortRatio: lastShort,                // % (scaler가 표준화)
+      sp500Ret:    lastSP500,
+      usdkrwRet:   lastUSDKRW,
+      bond3y:      lastBond,
+      foreignNet:  lastForeign / fnetScale,  // ≈ −1 ~ +1
+      instNet:     lastInst    / inetScale,  // ≈ −1 ~ +1
+      shortRatio:  lastShort,                // % (scaler가 표준화)
+      vixLevel:    lastVixLevel2,            // [NEW] VIX 레벨
+      vixRet:      lastVixRet2,             // [NEW] VIX 일별 변화율
+      yieldSpread: lastUsb10 - lastUsb2,    // [NEW] 10Y-2Y 금리차
     });
   }
 
@@ -608,7 +646,7 @@ function buildFeatures(
       : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
-    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0 };
+    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0, vixLevel:20, vixRet:0, yieldSpread:0.5 };
     return new Float64Array([
       // ── 기술적 (9) ──
       rets[i],
@@ -620,13 +658,17 @@ function buildFeatures(
       Math.max(0, Math.min(1, bband)),
       mom5, mom10,
       // ── 매크로 (3) ──
-      ext.sp500Ret,          // S&P500 등락 (−0.05 ~ 0.05)
+      ext.sp500Ret,          // S&P500 등락 (−0.05 ~ 0.05) / SNP용: DXY
       ext.usdkrwRet,         // 환율 변화 (−0.03 ~ 0.03)
-      ext.bond3y / 10,       // 국고채3Y /10 → 0 ~ 1 스케일
+      ext.bond3y / 10,       // 국고채3Y /10 → 0~1 / SNP용: 미국10Y/10
       // ── 수급 (3) ──
-      ext.foreignNet,        // 외국인 순매수 (95th pct 기준 정규화, −1~+1)
-      ext.instNet,           // 기관 순매수   (동일 정규화)
-      ext.shortRatio / 10,   // 공매도비율 /10 (0~1 스케일)
+      ext.foreignNet,        // 외국인 순매수 (정규화 −1~+1) / SNP는 0
+      ext.instNet,           // 기관 순매수   (동일 정규화) / SNP는 0
+      ext.shortRatio / 10,   // 공매도비율 /10 (0~1)       / SNP는 0
+      // ── 글로벌 변동성/금리 (3) [NEW] ──
+      ext.vixLevel / 50,     // VIX 레벨 (20=평온, 50=극공포, →0~1 정규화)
+      ext.vixRet,            // VIX 일별 변화율 (공포 가속도, −0.3~+0.3)
+      ext.yieldSpread / 3,   // 10Y-2Y 금리차 /3 (보통 −1~+1 범위)
     ]);
   });
   return { feats, closes, dates };
