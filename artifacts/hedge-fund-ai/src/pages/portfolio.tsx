@@ -403,7 +403,7 @@ interface DailyBrief {
 }
 
 /** analysis_steps content가 JSON 문자열일 수 있어 파싱 후 읽기 좋은 텍스트 추출 */
-function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
+function cleanStepText(raw: string | null | undefined): string {
   if (!raw) return "";
   let s = raw.trim();
 
@@ -418,17 +418,17 @@ function cleanStepText(raw: string | null | undefined, maxLen = 400): string {
         // summary > key_issue > description 순서로 가장 의미 있는 텍스트 추출
         for (const key of ["summary", "key_issue", "description", "content", "text", "analysis"]) {
           if (typeof obj[key] === "string" && obj[key].length > 20)
-            return obj[key].replace(/\*\*/g, "").replace(/\\n/g, "\n").slice(0, maxLen);
+            return obj[key].replace(/\*\*/g, "").replace(/\\n/g, "\n");
         }
         // 그래도 없으면 긴 문자열 값들을 이어붙임
         const parts = Object.values(obj)
           .filter((v): v is string => typeof v === "string" && v.length > 20)
           .join("\n");
-        if (parts) return parts.replace(/\*\*/g, "").slice(0, maxLen);
+        if (parts) return parts.replace(/\*\*/g, "");
       }
     } catch { /* JSON 파싱 실패 — 아래 일반 처리로 */ }
   }
-  return s.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "").slice(0, maxLen);
+  return s.replace(/^#{1,4}\s*/gm, "").replace(/\*\*/g, "");
 }
 
 /** 섹션 텍스트에 JSON/코드펜스가 섞여 있을 때 읽기 좋은 텍스트로 정제 */
@@ -1011,7 +1011,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{isEn ? "Key Catalysts" : "핵심 촉매"}</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {cleanStepText(a.catalysts, 400)}
+                    {cleanStepText(a.catalysts)}
                   </p>
                 </div>
               )}
@@ -1024,7 +1024,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">{isEn ? "Key Risks" : "주요 리스크"}</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {cleanStepText(a.risks, 400)}
+                    {cleanStepText(a.risks)}
                   </p>
                 </div>
               )}
@@ -1037,7 +1037,7 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                     <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">{isEn ? "Investment Strategy" : "투자 전략"}</span>
                   </div>
                   <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {cleanStepText(a.strategy, 500)}
+                    {cleanStepText(a.strategy)}
                   </p>
                 </div>
               )}
