@@ -3,6 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
 import { getApiUrl } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Clock, Globe, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale, FileText, Activity } from "lucide-react";
 import { useLanguage } from "@/lib/language-context";
@@ -26,7 +27,7 @@ const STEPS_KO = [
   { num: 2, name: "매크로·산업 분석",       icon: Globe2,      desc: "산업 구조, 성장률, 경쟁 구도" },
   { num: 3, name: "투자 촉매·수급 분석",    icon: Zap,         desc: "주가 촉매, 세력 움직임" },
   { num: 4, name: "실적 전망",              icon: PieChart,    desc: "재무 분석 + Base 실적 추정" },
-  { num: 5, name: "적정주가 산출",          icon: Scale,       desc: "종목 특성에 맞는 방법론 자동 선정 (DCF·rNPV·EV/EBITDA 등)" },
+  { num: 5, name: "적정주가 산출",          icon: Scale,       desc: "DCF·rNPV·EV/EBITDA 등 종목별 최적 방법론 자동 선정" },
   { num: 6, name: "기술적 분석",            icon: BarChart2,   desc: "차트, 진입 구간, 손절 전략" },
   { num: 7, name: "최종 결론",              icon: ShieldCheck, desc: "통합 검토 → 최종 투자 전략" },
 ];
@@ -36,7 +37,7 @@ const STEPS_EN = [
   { num: 2, name: "Macro & Industry",       icon: Globe2,      desc: "Industry structure, growth rate, competitive landscape" },
   { num: 3, name: "Catalysts & Flow",       icon: Zap,         desc: "Price catalysts, institutional activity" },
   { num: 4, name: "Earnings Outlook",       icon: PieChart,    desc: "Financial analysis + earnings estimate" },
-  { num: 5, name: "Valuation",              icon: Scale,       desc: "Auto-selects best method: DCF, rNPV, EV/EBITDA, etc." },
+  { num: 5, name: "Valuation",              icon: Scale,       desc: "DCF, rNPV, EV/EBITDA — best method auto-selected" },
   { num: 6, name: "Technical Analysis",     icon: BarChart2,   desc: "Chart patterns, entry zones, stop-loss strategy" },
   { num: 7, name: "Final Conclusion",       icon: ShieldCheck, desc: "Integrated review → final investment strategy" },
 ];
@@ -45,6 +46,8 @@ const STEPS_EN = [
 export default function Landing() {
   const { isSignedIn, isLoaded } = useUser();
   const [, setLocation] = useLocation();
+  const qc = useQueryClient();
+  const [fromKakao] = useState(() => new URLSearchParams(window.location.search).get("from") === "kakao");
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
   const { isEn, language, setLanguage } = useLanguage();
@@ -55,7 +58,11 @@ export default function Landing() {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
     if (ref) localStorage.setItem("pending_referral", ref);
-  }, []);
+    // 카카오 OAuth 완료 후 리다이렉트: auth 캐시 강제 갱신
+    if (params.get("from") === "kakao") {
+      qc.invalidateQueries({ queryKey: ["auth/me"] });
+    }
+  }, [qc]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) { setLocation("/analysis/new"); return; }
@@ -76,6 +83,16 @@ export default function Landing() {
     window.location.href = "/analysis/new";
   };
 
+
+  // 카카오 OAuth 완료 후 auth 체크 중 — 로딩 스피너 표시
+  if (fromKakao && kakaoLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+        <div className="w-8 h-8 rounded-full border-2 border-[#FF8A7A] border-t-transparent animate-spin" />
+        <p className="text-[13px] text-muted-foreground">로그인 확인 중...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -303,7 +320,7 @@ export default function Landing() {
                             </span>
                           )}
                         </span>
-                        <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug">{step.desc}</p>
+                        <p className="text-[12px] text-muted-foreground/65 mt-0.5 leading-snug line-clamp-1">{step.desc}</p>
                       </div>
                     </div>
                   );

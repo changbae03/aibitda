@@ -139,8 +139,8 @@ router.get("/auth/kakao/callback", async (req, res) => {
     } catch (_) {}
 
     console.log("[Kakao] login success, user:", user.id, user.nickname);
-    console.log("[Kakao] redirecting to:", `${frontendOrigin}/`);
-    res.redirect(`${frontendOrigin}/`);
+    console.log("[Kakao] redirecting to:", `${frontendOrigin}/?from=kakao`);
+    res.redirect(`${frontendOrigin}/?from=kakao`);
   } catch (err) {
     console.error("[Kakao] callback exception:", err);
     res.status(500).send("카카오 로그인 처리 중 오류 발생");
