@@ -43,6 +43,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
 import SummaryCardsB from "@/components/SummaryCardsB";
+import ETFSection from "@/components/ETFSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -2059,6 +2060,22 @@ export default function AnalysisDetail() {
           </div>
         )}
       </div>
+
+      {/* ETF 편입 현황 — 한국 종목 분석 완료 후 표시 */}
+      {isComplete && !isUSTicker(analysis.ticker) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut", delay: 0.3 }}
+          className="mt-4 print:hidden"
+        >
+          <ETFSection
+            ticker={analysis.ticker}
+            companyName={analysis.companyName}
+            industry={analysis.industry ?? undefined}
+          />
+        </motion.div>
+      )}
 
       {/* 보관하기 · 공유하기 + Disclaimer — 분석 완료 후 페이드인 */}
       <AnimatePresence>

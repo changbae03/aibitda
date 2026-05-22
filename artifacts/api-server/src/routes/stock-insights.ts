@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
 import { correctKoreanTicker } from "../lib/krx-cache.js";
+import { fetchETFsForStock, isPykrxEnabled } from "../lib/pykrx-client.js";
+import { cache } from "../lib/mem-cache.js";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
@@ -12,6 +14,8 @@ const ai = new GoogleGenAI({
     httpOptions: { baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL! },
   }),
 });
+
+const TTL_ETF = 6 * 60 * 60 * 1000; // 6시간
 
 const router: IRouter = Router();
 
@@ -71,78 +75,45 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
     /* optional */
   }
 
-  // 2) Gemini로 국내 주요 ETF 편입 추정
+  // 2) pykrx 실데이터로 국내 ETF 편입 조회 (캐시 6시간)
   let domesticEtfs: Array<{
-    code: string; name: string; manager: string; indexBasis: string;
-    confidence: "high" | "medium" | "low"; reason: string;
-    estimatedWeight: string | null; weightBasis: string | null;
+    code: string; name: string; manager: string; category: string;
+    weight: number; dataSource: "real";
   }> = [];
 
-  try {
-    let marketCapLabel = "불명";
-    try {
-      const q = await yahooFinance.quote(resolvedSymbol);
-      const mc = q.marketCap;
-      if (mc) {
-        const mcTril = mc / 1e12;
-        if (mcTril >= 5) marketCapLabel = `대형주 (${mcTril.toFixed(0)}조원)`;
-        else if (mcTril >= 0.5) marketCapLabel = `중형주 (${(mc / 1e8).toFixed(0)}억원)`;
-        else marketCapLabel = `소형주 (${(mc / 1e8).toFixed(0)}억원)`;
+  if (koreanCode && isPykrxEnabled()) {
+    const cacheKey = `etf-inclusion:${koreanCode}`;
+    const cached = cache.get<typeof domesticEtfs>(cacheKey);
+    if (cached) {
+      domesticEtfs = cached;
+    } else {
+      try {
+        const holdings = await fetchETFsForStock(koreanCode);
+        domesticEtfs = holdings.map(h => ({
+          code:       h.etfCode,
+          name:       h.etfName,
+          manager:    h.manager,
+          category:   h.category,
+          weight:     h.weight,
+          dataSource: "real" as const,
+        }));
+        cache.set(cacheKey, domesticEtfs, TTL_ETF);
+        console.log(`[etf-inclusion] ${koreanCode}: ${domesticEtfs.length}개 ETF 실데이터`);
+      } catch (e: any) {
+        console.warn("[etf-inclusion] pykrx 실패:", e?.message);
       }
-    } catch { /* optional */ }
-
-    const prompt = `당신은 한국 ETF 시장 전문가입니다.
-아래 주식에 대해 국내 상장 ETF 편입 현황을 분석해 JSON으로 응답하세요.
-
-종목 정보:
-- 티커: ${ticker}${companyName ? ` (${companyName})` : ""}
-- 업종: ${industry ?? "불명"}
-- 거래소: ${exchange}
-- 시가총액 구분: ${marketCapLabel}
-
-다음 JSON 스키마로만 응답하세요:
-{"etfs": [{"code": "ETF코드", "name": "ETF명", "manager": "운용사", "indexBasis": "추종지수", "confidence": "high|medium|low", "reason": "편입 근거", "estimatedWeight": "추정비중% 또는 null", "weightBasis": "비중 추정 근거 또는 null"}], "notes": "참고사항 (선택)"}
-
-규칙:
-- 실제 존재하는 국내 ETF만 포함 (KODEX, TIGER, KBSTAR, HANARO, ARIRANG 등)
-- confidence: high=확실히 편입, medium=편입 가능성 높음, low=편입 가능성 있음
-- 3~6개 ETF 선정`;
-
-    const result = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        maxOutputTokens: 2048,
-        responseMimeType: "application/json",
-      },
-    });
-
-    const raw = result.text ?? "{}";
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch { /* ignore */ }
-
-    if (parsed?.etfs) {
-      domesticEtfs = parsed.etfs ?? [];
     }
-
-    res.json({
-      ticker,
-      exchange,
-      globalFunds,
-      domesticEtfs,
-      notes: parsed?.notes ?? null,
-    });
-    return;
-  } catch (err: any) {
-    console.error("ETF inclusion error:", err?.message ?? err);
-    res.json({
-      ticker,
-      exchange,
-      globalFunds,
-      domesticEtfs,
-      notes: null,
-    });
   }
+
+  res.json({
+    ticker,
+    exchange,
+    globalFunds,
+    domesticEtfs,
+    notes: domesticEtfs.length === 0 && !koreanCode
+      ? "미국·글로벌 주식은 국내 ETF 편입 데이터를 제공하지 않습니다."
+      : null,
+  });
 });
 
 // ── 연관기업 (Peer Group) 분석 ─────────────────────────────────────────────────

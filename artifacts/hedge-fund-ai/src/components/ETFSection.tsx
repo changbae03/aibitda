@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BarChart3, Info, Sparkles, Globe, AlertCircle } from "lucide-react";
+import { BarChart3, Globe, AlertCircle, Tag } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
 interface GlobalFund {
@@ -14,11 +14,9 @@ interface DomesticEtf {
   code: string;
   name: string;
   manager: string;
-  indexBasis: string;
-  confidence: "high" | "medium" | "low";
-  reason: string;
-  estimatedWeight: string | null;
-  weightBasis: string | null;
+  category: string;
+  weight: number;
+  dataSource: "real";
 }
 
 interface ETFData {
@@ -29,11 +27,32 @@ interface ETFData {
   notes: string | null;
 }
 
-const CONFIDENCE_CONFIG: Record<string, { label: string; color: string }> = {
-  high: { label: "편입 확실", color: "text-success bg-success/10 border-success/20" },
-  medium: { label: "편입 가능", color: "text-warning bg-warning/10 border-warning/20" },
-  low: { label: "테마 가능", color: "text-muted-foreground bg-muted border-border" },
+const CATEGORY_COLOR: Record<string, string> = {
+  "시장전체":        "text-sky-600 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-900/20 dark:border-sky-800/40",
+  "반도체·IT":       "text-violet-600 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-900/20 dark:border-violet-800/40",
+  "2차전지":         "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-900/20 dark:border-emerald-800/40",
+  "바이오·헬스케어": "text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-900/20 dark:border-rose-800/40",
+  "자동차·모빌리티": "text-orange-600 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-900/20 dark:border-orange-800/40",
+  "금융":            "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/20 dark:border-amber-800/40",
+  "에너지·화학":     "text-teal-600 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-900/20 dark:border-teal-800/40",
+  "방산·우주":       "text-indigo-600 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-900/20 dark:border-indigo-800/40",
+  "조선·기계":       "text-cyan-600 bg-cyan-50 border-cyan-200 dark:text-cyan-400 dark:bg-cyan-900/20 dark:border-cyan-800/40",
+  "건설·인프라":     "text-stone-600 bg-stone-50 border-stone-200 dark:text-stone-400 dark:bg-stone-900/20 dark:border-stone-800/40",
+  "소비재":          "text-pink-600 bg-pink-50 border-pink-200 dark:text-pink-400 dark:bg-pink-900/20 dark:border-pink-800/40",
+  "미디어·엔터":     "text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200 dark:text-fuchsia-400 dark:bg-fuchsia-900/20 dark:border-fuchsia-800/40",
+  "고배당":          "text-yellow-600 bg-yellow-50 border-yellow-200 dark:text-yellow-500 dark:bg-yellow-900/20 dark:border-yellow-800/40",
+  "ESG·테마":        "text-green-600 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/20 dark:border-green-800/40",
 };
+
+function CategoryBadge({ category }: { category: string }) {
+  const cls = CATEGORY_COLOR[category] ?? "text-muted-foreground bg-muted border-border";
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap", cls)}>
+      <Tag className="w-2.5 h-2.5" />
+      {category}
+    </span>
+  );
+}
 
 export default function ETFSection({
   ticker,
@@ -65,10 +84,11 @@ export default function ETFSection({
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="w-4 h-4 text-primary" />
           <h3 className="font-display font-semibold text-base">편입 ETF 현황</h3>
+          <span className="text-[10px] text-muted-foreground animate-pulse ml-1">KRX 실데이터 조회 중…</span>
         </div>
         <div className="space-y-2">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-12 rounded-lg bg-muted/50 animate-pulse" />
+            <div key={i} className="h-10 rounded-lg bg-muted/50 animate-pulse" />
           ))}
         </div>
       </div>
@@ -106,59 +126,50 @@ export default function ETFSection({
       </div>
 
       <div className="space-y-5">
-        {/* 국내 ETF (AI 추정) */}
+        {/* 국내 ETF — KRX 실데이터 */}
         {hasDomestic && (
           <div>
             <div className="flex items-center gap-1.5 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-semibold text-foreground">국내 주요 ETF</span>
-              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono border border-border">AI 추정</span>
+              <BarChart3 className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-semibold text-foreground">국내 ETF 편입 현황</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded font-semibold border border-emerald-200 dark:border-emerald-800/40">
+                KRX 실데이터
+              </span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{data.domesticEtfs.length}개</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[480px]">
+              <table className="w-full text-xs min-w-[400px]">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left text-muted-foreground font-medium pb-2 pr-2">ETF명</th>
-                    <th className="text-center text-muted-foreground font-medium pb-2 px-2 w-20">편입 가능성</th>
-                    <th className="text-right text-muted-foreground font-medium pb-2 px-2 w-24">추정 비중</th>
-                    <th className="text-left text-muted-foreground font-medium pb-2 pl-2">비중 근거</th>
+                    <th className="text-center text-muted-foreground font-medium pb-2 px-2 w-28">카테고리</th>
+                    <th className="text-right text-muted-foreground font-medium pb-2 pl-2 w-20">편입 비중</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {data.domesticEtfs.map(etf => {
-                    const conf = CONFIDENCE_CONFIG[etf.confidence] ?? CONFIDENCE_CONFIG.low;
-                    return (
-                      <tr key={etf.code} className="hover:bg-muted/20 transition-colors group">
-                        <td className="py-2.5 pr-2">
-                          <div className="font-semibold text-foreground leading-tight">{etf.name}</div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="font-mono text-[10px] text-muted-foreground">{etf.code}</span>
-                            <span className="text-[10px] text-muted-foreground">·</span>
-                            <span className="text-[10px] text-muted-foreground">{etf.manager}</span>
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-2 text-center">
-                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap", conf.color)}>
-                            {conf.label}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-2 text-right">
-                          {etf.estimatedWeight ? (
-                            <span className="font-mono font-semibold text-primary text-[11px]">{etf.estimatedWeight}</span>
-                          ) : (
-                            <span className="text-muted-foreground text-[11px]">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 pl-2 text-muted-foreground leading-tight">
-                          {etf.weightBasis ?? etf.indexBasis}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {data.domesticEtfs.map(etf => (
+                    <tr key={etf.code} className="hover:bg-muted/20 transition-colors">
+                      <td className="py-2.5 pr-2">
+                        <div className="font-semibold text-foreground leading-tight">{etf.name}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono text-[10px] text-muted-foreground">{etf.code}</span>
+                          <span className="text-[10px] text-muted-foreground">·</span>
+                          <span className="text-[10px] text-muted-foreground">{etf.manager}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-2 text-center">
+                        <CategoryBadge category={etf.category} />
+                      </td>
+                      <td className="py-2.5 pl-2 text-right">
+                        <span className="font-mono font-semibold text-primary text-[12px]">
+                          {etf.weight.toFixed(2)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-            {/* 선정 근거 아코디언 제거하고 툴팁 형태로 접근 — 간소화 */}
           </div>
         )}
 
@@ -168,16 +179,18 @@ export default function ETFSection({
             <div className="flex items-center gap-1.5 mb-3">
               <Globe className="w-3.5 h-3.5 text-blue-500" />
               <span className="text-xs font-semibold text-foreground">글로벌 운용사 편입</span>
-              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono border border-border">실데이터</span>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded font-semibold border border-blue-200 dark:border-blue-800/40">
+                실데이터
+              </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[440px]">
+              <table className="w-full text-xs min-w-[380px]">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left text-muted-foreground font-medium pb-2 pr-3">펀드명</th>
                     <th className="text-left text-muted-foreground font-medium pb-2 px-2 w-20">티커</th>
                     <th className="text-right text-muted-foreground font-medium pb-2 px-2 w-20">편입 비중</th>
-                    <th className="text-right text-muted-foreground font-medium pb-2 pl-2 w-24">기준월</th>
+                    <th className="text-right text-muted-foreground font-medium pb-2 pl-2 w-20">기준월</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
@@ -205,16 +218,16 @@ export default function ETFSection({
 
         {!hasGlobal && !hasDomestic && (
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-muted/30 border border-border/50">
-            <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <AlertCircle className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              이 종목에 대한 ETF 편입 데이터가 없습니다. 소형주 또는 신규 상장 종목의 경우 주요 ETF에 편입되지 않았을 수 있습니다.
+              조회한 주요 ETF에서 이 종목을 찾을 수 없습니다. 소형주·신규 상장 종목이거나, 조회 대상 ETF에 포함되지 않은 경우일 수 있습니다.
             </p>
           </div>
         )}
 
         {data.notes && (
           <div className="flex items-start gap-2 text-xs text-muted-foreground pt-1 border-t border-border/50">
-            <Info className="w-3 h-3 mt-0.5 shrink-0" />
+            <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
             <span className="leading-relaxed">{data.notes}</span>
           </div>
         )}

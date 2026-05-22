@@ -132,6 +132,87 @@ def main():
                 })
             emit(result)
 
+        # ── 종목이 포함된 ETF 검색 (병렬) ──────────────────────────────────
+        elif data_type == "etf_search":
+            import concurrent.futures
+
+            # market_arg = 6자리 종목코드 (예: "005930")
+            stock_code = market_arg.strip()
+
+            # 핵심 ETF 목록 — 시장 커버리지 높은 20개 엄선
+            MAJOR_ETFS = [
+                # ─ 시장 전체 ─
+                ("069500", "KODEX 200",            "삼성자산운용",    "시장전체"),
+                ("102110", "TIGER 200",            "미래에셋자산운용","시장전체"),
+                ("229200", "KODEX KOSDAQ150",      "삼성자산운용",    "시장전체"),
+                ("232080", "TIGER KOSDAQ150",      "미래에셋자산운용","시장전체"),
+                ("152100", "ARIRANG 200",          "한화자산운용",    "시장전체"),
+                # ─ 반도체·IT ─
+                ("091160", "KODEX 반도체",         "삼성자산운용",    "반도체·IT"),
+                ("091230", "TIGER 반도체",         "미래에셋자산운용","반도체·IT"),
+                ("371130", "TIGER KRX반도체",      "미래에셋자산운용","반도체·IT"),
+                # ─ 2차전지 ─
+                ("305720", "KODEX 2차전지산업",    "삼성자산운용",    "2차전지"),
+                ("364960", "TIGER 2차전지테마",    "미래에셋자산운용","2차전지"),
+                # ─ 바이오·헬스케어 ─
+                ("143860", "TIGER 헬스케어",       "미래에셋자산운용","바이오·헬스케어"),
+                ("244580", "KODEX 헬스케어",       "삼성자산운용",    "바이오·헬스케어"),
+                # ─ 자동차 ─
+                ("091180", "KODEX 자동차",         "삼성자산운용",    "자동차"),
+                # ─ 금융 ─
+                ("091170", "KODEX 은행",           "삼성자산운용",    "금융"),
+                ("091210", "KODEX 증권",           "삼성자산운용",    "금융"),
+                # ─ 방산 ─
+                ("425030", "TIGER K-방산",         "미래에셋자산운용","방산·우주"),
+                ("425040", "KODEX K-방산",         "삼성자산운용",    "방산·우주"),
+                # ─ 대형주 ─
+                ("337140", "KODEX 코스피대형주",   "삼성자산운용",    "시장전체"),
+                # ─ 에너지·화학 ─
+                ("117460", "KODEX 에너지화학",     "삼성자산운용",    "에너지·화학"),
+                # ─ 미디어·엔터 ─
+                ("102970", "KODEX 미디어&엔터테인먼트","삼성자산운용","미디어·엔터"),
+            ]
+
+            # pykrx는 이미 main()에서 import + KRX 로그인 완료 상태
+            # 스레드 안전: StdoutToStderr 사용 금지 (global sys.stdout 경쟁 방지)
+            # 개별 ETF PDF 조회는 로그인 후 무음(silent) 호출
+            _real_stdout = sys.stdout
+
+            def check_etf(etf_tuple):
+                etf_code, etf_name, manager, category = etf_tuple
+                try:
+                    df = krx.get_etf_portfolio_deposit_file(etf_code)
+                    if df.empty or stock_code not in df.index:
+                        return None
+                    weight = float(df.loc[stock_code, "비중"]) if "비중" in df.columns else 0.0
+                    return {
+                        "etfCode":  etf_code,
+                        "etfName":  etf_name,
+                        "manager":  manager,
+                        "category": category,
+                        "weight":   round(weight, 4),
+                    }
+                except Exception as ex:
+                    print(f"[etf_search] skip {etf_code}: {ex}", file=sys.stderr)
+                    return None
+
+            result = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+                futures = [pool.submit(check_etf, etf) for etf in MAJOR_ETFS]
+                for future in concurrent.futures.as_completed(futures, timeout=55):
+                    try:
+                        hit = future.result()
+                        if hit is not None:
+                            result.append(hit)
+                    except Exception:
+                        pass
+            # 스레드 완료 후 stdout이 혹시 변경됐을 경우 복원
+            sys.stdout = _real_stdout
+
+            # 비중 내림차순 정렬
+            result.sort(key=lambda x: x["weight"], reverse=True)
+            emit(result)
+
         else:
             emit({"error": f"Unknown type: {data_type}"})
             sys.exit(1)

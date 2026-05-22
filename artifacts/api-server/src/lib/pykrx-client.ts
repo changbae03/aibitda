@@ -31,11 +31,12 @@ async function callPykrx(
   fromDate: string,
   toDate: string,
   market = "KOSPI",
+  timeoutMs = 45000,
 ): Promise<any[]> {
   return new Promise((resolve) => {
     const proc = spawn("python3", [SCRIPT, type, fromDate, toDate, market], {
       env: { ...process.env },
-      timeout: 45000,
+      timeout: timeoutMs,
     });
 
     let stdout = "";
@@ -46,18 +47,27 @@ async function callPykrx(
 
     proc.on("close", (code) => {
       if (stderr) console.warn(`[pykrx][${type}] stderr:`, stderr.slice(0, 300));
-      try {
-        const parsed = JSON.parse(stdout.trim());
-        if (Array.isArray(parsed)) {
-          resolve(parsed);
-        } else {
-          console.warn("[pykrx] non-array result:", parsed);
-          resolve([]);
+      // pykrx가 stdout에 에러/경고 메시지를 섞어 출력할 수 있으므로
+      // 마지막 유효한 JSON 줄(배열/객체로 시작)을 역순 탐색
+      const lines = stdout.split("\n").reverse();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || (!trimmed.startsWith("[") && !trimmed.startsWith("{"))) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            resolve(parsed);
+          } else {
+            console.warn("[pykrx] non-array result:", parsed);
+            resolve([]);
+          }
+          return;
+        } catch {
+          // 이 줄은 유효한 JSON이 아님 — 계속 탐색
         }
-      } catch {
-        console.warn("[pykrx] JSON parse error, stdout:", stdout.slice(0, 200));
-        resolve([]);
       }
+      console.warn("[pykrx] JSON parse error, stdout:", stdout.slice(0, 200));
+      resolve([]);
     });
 
     proc.on("error", (e) => {
@@ -146,4 +156,31 @@ export async function fetchStockOHLCV(
 /** pykrx 사용 가능 여부 확인 */
 export function isPykrxEnabled(): boolean {
   return !!(process.env.KRX_ID && process.env.KRX_PW);
+}
+
+export interface EtfHolding {
+  etfCode: string;
+  etfName: string;
+  manager: string;
+  category: string;
+  /** ETF 내 편입 비중 (%) */
+  weight: number;
+}
+
+/** 6자리 종목코드가 편입된 주요 국내 ETF 목록 조회 (캐시 6시간) */
+export async function fetchETFsForStock(
+  stockCode: string,
+): Promise<EtfHolding[]> {
+  if (!process.env.KRX_ID || !process.env.KRX_PW) {
+    console.warn("[pykrx] KRX_ID/KRX_PW 미설정 — ETF 검색 스킵");
+    return [];
+  }
+  // 날짜 인자는 사용되지 않지만 callPykrx 시그니처 맞추기 위해 오늘 날짜 전달
+  // ETF 병렬 스캔은 ~25초 소요 → 타임아웃 60초로 설정
+  const today = toKRXDate(new Date());
+  const rows = await callPykrx("etf_search", today, today, stockCode, 60000);
+  return (rows as any[]).filter(
+    (r): r is EtfHolding =>
+      typeof r.etfCode === "string" && typeof r.weight === "number",
+  );
 }
