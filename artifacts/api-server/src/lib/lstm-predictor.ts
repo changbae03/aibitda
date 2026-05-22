@@ -1249,20 +1249,27 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       fetchExternalData(snpRows.map((r:{date:string;close:number})=>r.date), "SNP"),
     ]);
 
+    // lastUpdated에서 날짜 부분만 추출 (anchor 날짜는 YYYY-MM-DD 형식)
+    // PRED_H일 전까지 포함: 해당 anchor의 actual이 이제 available할 수 있음
+    const lastUpdatedDate = lastUpdated.slice(0, 10);  // "YYYY-MM-DD"
+
     function newSamples(rows:{date:string;close:number}[], extMap:Map<string,ExtPoint>, store:StoredModelFile) {
       const {feats,closes,dates}=buildFeatures(rows,extMap);
       const {X,y,anchorDateIdxs}=makeSeqs(feats,closes,LOOKBACK,PRED_H);
-      const idxs=X.map((_,k)=>k).filter(k=>(dates[anchorDateIdxs[k]]??"")>lastUpdated);
+      // anchor 날짜 >= lastUpdated 날짜인 것을 모두 포함
+      // (이전에 actual이 없어서 못 썼던 anchor도 이제 포함)
+      const idxs=X.map((_,k)=>k).filter(k=>(dates[anchorDateIdxs[k]]??"")>=lastUpdatedDate);
       if(!idxs.length)return null;
       const gbdtMu=new Float64Array(store.gbdtScaler.mu), gbdtSig=new Float64Array(store.gbdtScaler.sigma);
       const XteN=applyStd(idxs.map(k=>X[k]),gbdtMu,gbdtSig);
-      return{XteN,yNew:new Float64Array(idxs.map(k=>y[k]))};
+      return{XteN,yNew:new Float64Array(idxs.map(k=>y[k])),feats,closes,dates};
     }
 
     const kNew=newSamples(kospiRows,kospiExtMap,kospiStore);
     const qNew=newSamples(kosdaqRows,kosdaqExtMap,kosdaqStore);
     const sNew=newSamples(snpRows,snpExtMap,snpStore);
-    if(!kNew&&!qNew&&!sNew){console.log("[gbdt] 신규 데이터 없음");return;}
+    // 신규 GBDT 학습 샘플이 없어도 결과 표시는 최신 데이터로 갱신
+    if(!kNew&&!qNew&&!sNew){console.log("[gbdt] 신규 GBDT 학습 샘플 없음 — 표시만 갱신");}
 
     const seed=Date.now()%10000;
     const ksHP = getHP("^KS11"), kqHP = getHP("^KQ11"), gspcHP = getHP("^GSPC");

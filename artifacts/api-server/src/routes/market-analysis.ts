@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getStatus, runPipeline } from "../lib/lstm-predictor.js";
+import { getStatus, runPipeline, runDailyIncrementalUpdate } from "../lib/lstm-predictor.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
 import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { GoogleGenAI } from "@google/genai";
@@ -507,6 +507,21 @@ router.post("/run", async (req, res) => {
   }
   runPipeline(force).catch(e => console.error("[market-analysis/run]", e));
   res.json({ ok: true, message: "파이프라인 시작" });
+});
+
+// POST /api/market-analysis/update — 증분 업데이트 (최신 장마감 데이터 반영)
+router.post("/update", async (req, res) => {
+  const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+  if (!isLocalhost && !(await requireAdmin(req, res))) return;
+  const status = getStatus();
+  if (status.running) {
+    res.json({ ok: true, message: "이미 학습 중입니다" });
+    return;
+  }
+  runDailyIncrementalUpdate()
+    .then(() => console.log("[market-analysis/update] 증분 완료"))
+    .catch(e => console.error("[market-analysis/update]", e));
+  res.json({ ok: true, message: "증분 업데이트 시작" });
 });
 
 // GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (4시간 캐시)
