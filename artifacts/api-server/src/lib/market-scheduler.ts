@@ -95,15 +95,23 @@ export function startMarketScheduler() {
     console.log("[scheduler] 디스크 모델 없음 — DB 캐시 시도...");
     const dbOk = await tryRestoreFromDB();
     if (dbOk) {
-      console.log("[scheduler] DB 캐시 복원 성공 — 백그라운드로 최신 학습 시작");
-      // DB 캐시는 즉시 표시하되, 최신 데이터로 백그라운드 재학습도 진행
-      runPipeline(true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
+      // DB 캐시는 즉시 표시하되, 최신 데이터로 백그라운드 재학습도 진행.
+      // TF.js 학습은 Node.js 이벤트 루프를 블로킹하므로, Cloud Run 헬스체크가
+      // 먼저 통과할 수 있도록 60초 지연 후 학습 시작.
+      console.log("[scheduler] DB 캐시 복원 성공 — 60초 후 백그라운드 재학습 시작 (헬스체크 우선)");
+      setTimeout(() => {
+        console.log("[scheduler] 백그라운드 재학습 시작");
+        runPipeline(true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
+      }, 60_000);
       return;
     }
 
-    // 1-c. 캐시 없음 — 즉시 전체 학습 시작 (사용자 방문 대기 안 함)
-    console.log("[scheduler] 캐시 없음 — 즉시 전체 학습 시작 (~90초)");
-    runPipeline(false).catch(e => console.error("[scheduler] 초기 학습 실패:", e?.message));
+    // 1-c. 캐시 없음 — 60초 후 전체 학습 시작 (헬스체크 우선 통과)
+    console.log("[scheduler] 캐시 없음 — 60초 후 전체 학습 시작 (~90초)");
+    setTimeout(() => {
+      console.log("[scheduler] 초기 전체 학습 시작");
+      runPipeline(false).catch(e => console.error("[scheduler] 초기 학습 실패:", e?.message));
+    }, 60_000);
   })();
 
   // 2. 1분마다 스케줄 조건 확인

@@ -107,6 +107,11 @@ const adminLimiter = rateLimit({
   message: { error: "관리자 API 요청이 너무 많습니다." },
 });
 
+// ─── 헬스체크 (Clerk·Rate-limit 미들웨어 이전 등록) ──────────────────────────
+// Cloud Run 시작 프로브가 /api/healthz에 도달해야 배포가 성공함.
+// clerkMiddleware()가 JWK 네트워크 호출로 block되는 경우를 방지.
+app.get("/api/healthz", (_req, res) => res.json({ status: "ok" }));
+
 // ─── 기본 미들웨어 ─────────────────────────────────────────────────────────
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
