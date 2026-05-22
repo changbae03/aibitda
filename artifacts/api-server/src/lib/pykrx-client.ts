@@ -6,8 +6,15 @@ import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT = path.join(__dirname, "pykrx_fetcher.py");
+// esbuild CJS 번들에서는 import.meta.url이 undefined → fileURLToPath가 throw됨
+// try/catch로 안전하게 처리: dev(ESM)에서는 실제 경로, prod(CJS 번들)에서는 cwd 기준 경로 사용
+const SCRIPT = (() => {
+  try {
+    return path.join(path.dirname(fileURLToPath(import.meta.url)), "pykrx_fetcher.py");
+  } catch {
+    return path.resolve(process.cwd(), "artifacts/api-server/src/lib/pykrx_fetcher.py");
+  }
+})();
 
 export interface InvestorRow {
   date: string;
