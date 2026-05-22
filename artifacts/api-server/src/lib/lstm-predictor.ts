@@ -1,18 +1,19 @@
 /**
- * 시장 예측 파이프라인 v7  — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성
+ * 시장 예측 파이프라인 v8  — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 9 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 18
+ * 기술적 11 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 20
  *
- * [기술적 9]  수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
+ * [기술적 11] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
+ *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price  ← NEW v14
  * [매크로  3]  S&P500 전일 등락 (^GSPC) / DXY (SNP용)
  *             원/달러 환율 변화율 (USDKRW=X)
  *             국고채 3년 금리 (KR FRED) / 미국10Y (SNP용)
  * [수급    3]  외국인 순매수 (KRX, KOSPI/KOSDAQ만)
  *             기관 순매수   (KRX, KOSPI/KOSDAQ만)
- *             공매도 비율   (KRX, KOSPI/KOSDAQ만) / SNP는 0
- * [글로벌 3]  VIX 레벨 — 공포/탐욕 레짐 감지 (전 시장 공통)  ← NEW
- *             VIX 일별 변화율 — 공포 가속도 감지              ← NEW
- *             미국 10Y-2Y 금리차 — 경기 선행 사이클          ← NEW
+ *             공매도 IQR정규화 (KRX, KOSPI/KOSDAQ만) / SNP는 0  ← v14 IQR
+ * [글로벌 3]  VIX 5일 모멘텀 — 공포/탐욕 레짐 감지 (전 시장 공통)
+ *             VIX 일별 변화율 — 공포 가속도 감지
+ *             미국 10Y-2Y 금리차 — 경기 선행 사이클
  */
 import fs   from "node:fs";
 import path from "node:path";
@@ -50,7 +51,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 20;
 const PRED_H       = 3;
-const N_FEATURES   = 18;   // 9 기술적 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
+const N_FEATURES   = 20;   // 11 기술적(+MACD2) + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 32;
@@ -61,7 +62,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 13;
+const MODEL_VERSION = 14;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -540,9 +541,17 @@ async function fetchExternalData(
   const investorMap = new Map<string, { foreignNet: number; instNet: number }>();
   for (const r of investorRows) investorMap.set(r.date, { foreignNet: r.foreignNet, instNet: r.instNet });
 
-  // ── KRX 공매도 Map ──
+  // ── KRX 공매도 Map + IQR 정규화 기준 계산 ──
   const shortMap = new Map<string, number>();
   for (const r of shortRows) shortMap.set(r.date, r.shortRatio);
+
+  // 공매도 IQR 정규화: (x - median) / IQR → 이상치에 강건한 스케일링
+  const shortVals = shortRows.map(r => r.shortRatio).filter(v => v > 0 && isFinite(v)).sort((a, b) => a - b);
+  const shortMedian = shortVals.length > 0 ? shortVals[Math.floor(shortVals.length * 0.50)] : 2.0;
+  const shortQ1     = shortVals.length > 3  ? shortVals[Math.floor(shortVals.length * 0.25)] : Math.max(0, shortMedian - 1);
+  const shortQ3     = shortVals.length > 3  ? shortVals[Math.floor(shortVals.length * 0.75)] : shortMedian + 1;
+  const shortIQR    = Math.max(shortQ3 - shortQ1, 0.2);  // 최소 IQR 0.2% 보장
+  console.log(`[ext] 공매도 IQR 정규화: median=${shortMedian.toFixed(2)}% Q1=${shortQ1.toFixed(2)} Q3=${shortQ3.toFixed(2)} IQR=${shortIQR.toFixed(2)}`);
 
   // ── 정규화 기준값 계산 (외국인/기관 순매수 스케일) ──
   const fnetVals = investorRows.map(r => Math.abs(r.foreignNet)).filter(v => v > 0);
@@ -569,7 +578,7 @@ async function fetchExternalData(
   // ── KOSPI/KOSDAQ 날짜에 맞춰 forward-fill ──
   const result = new Map<string, ExtPoint>();
   let lastSP500 = 0, lastUSDKRW = 0, lastBond = 3.0;
-  let lastForeign = 0, lastInst = 0, lastShort = 2.0;
+  let lastForeign = 0, lastInst = 0, lastShort = 0.0;  // IQR 정규화 후 초기값=0(중앙값)
   let lastVix5dMom2 = 0, lastVixRet2 = 0;
   let lastUsb10 = 4.5, lastUsb2 = 4.0;
   let bondIdx = 0, b10Idx2 = 0, b2Idx2 = 0;
@@ -591,7 +600,7 @@ async function fetchExternalData(
       lastForeign = iv.foreignNet;
       lastInst    = iv.instNet;
     }
-    if (shortMap.has(date))        lastShort      = shortMap.get(date)!;
+    if (shortMap.has(date))        lastShort      = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
     if (vix5dMomMap2.has(date))    lastVix5dMom2  = vix5dMomMap2.get(date)!;
     if (vixRetMap2.has(date))      lastVixRet2    = vixRetMap2.get(date)!;
 
@@ -601,7 +610,7 @@ async function fetchExternalData(
       bond3y:      lastBond,
       foreignNet:  lastForeign / fnetScale,  // ≈ −1 ~ +1
       instNet:     lastInst    / inetScale,  // ≈ −1 ~ +1
-      shortRatio:  lastShort,                // %
+      shortRatio:  lastShort,                // IQR 정규화 (−3~+3)
       vix5dMom:    lastVix5dMom2,            // [v13] VIX 5일 모멘텀 (음수=회복신호)
       vixRet:      lastVixRet2,              // VIX 일별 변화율
       yieldSpread: lastUsb10 - lastUsb2,     // 10Y-2Y 금리차
@@ -635,6 +644,24 @@ function buildFeatures(
   const closes = rows.map(r => r.close);
   const dates  = rows.map(r => r.date);
   const rets   = closes.map((c, i) => i === 0 ? 0 : (c - closes[i-1]) / closes[i-1]);
+
+  // ── MACD: EMA12, EMA26, Signal(EMA9 of MACD) ──────────────────────────────
+  const a12 = 2 / (12 + 1), a26 = 2 / (26 + 1), a9 = 2 / (9 + 1);
+  const ema12 = new Float64Array(closes.length);
+  const ema26 = new Float64Array(closes.length);
+  const macdLine   = new Float64Array(closes.length);
+  const macdSignal = new Float64Array(closes.length);
+  ema12[0] = closes[0]; ema26[0] = closes[0];
+  for (let i = 1; i < closes.length; i++) {
+    ema12[i]    = a12 * closes[i] + (1 - a12) * ema12[i-1];
+    ema26[i]    = a26 * closes[i] + (1 - a26) * ema26[i-1];
+    macdLine[i] = ema12[i] - ema26[i];
+  }
+  macdSignal[0] = macdLine[0];
+  for (let i = 1; i < closes.length; i++) {
+    macdSignal[i] = a9 * macdLine[i] + (1 - a9) * macdSignal[i-1];
+  }
+
   const feats  = rows.map((row, i): Float64Array => {
     const ma5       = rollingMean(closes, 5,  i);
     const ma20      = rollingMean(closes, 20, i);
@@ -646,9 +673,10 @@ function buildFeatures(
       : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
-    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0, vix5dMom:0, vixRet:0, yieldSpread:0.5 };
+    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:0, vix5dMom:0, vixRet:0, yieldSpread:0.5 };
+    const p     = closes[i] || 1e-8;
     return new Float64Array([
-      // ── 기술적 (9) ──
+      // ── 기술적 (11) ──
       rets[i],
       ma5>0  ? closes[i]/ma5  - 1 : 0,
       ma20>0 ? closes[i]/ma20 - 1 : 0,
@@ -657,6 +685,8 @@ function buildFeatures(
       rollingStdFn(rets, 20, i),
       Math.max(0, Math.min(1, bband)),
       mom5, mom10,
+      macdLine[i]   / p,     // [v14] MACD Line / price (트렌드 강도)
+      macdSignal[i] / p,     // [v14] MACD Signal / price (트렌드 방향 확인)
       // ── 매크로 (3) ──
       ext.sp500Ret,          // S&P500 등락 / SNP용: DXY
       ext.usdkrwRet,         // 환율 변화율
@@ -664,8 +694,8 @@ function buildFeatures(
       // ── 수급 (3) ──
       ext.foreignNet,        // 외국인 순매수 (−1~+1) / SNP=0
       ext.instNet,           // 기관 순매수   (−1~+1) / SNP=0
-      ext.shortRatio / 10,   // 공매도비율 /10        / SNP=0
-      // ── 글로벌 변동성/금리 (3) [v13] ──
+      ext.shortRatio,        // [v14] 공매도 IQR정규화 (−3~+3) / SNP=0
+      // ── 글로벌 변동성/금리 (3) ──
       Math.max(-1, Math.min(1, ext.vix5dMom / 0.3)), // VIX 5일 모멘텀 (낙폭=음수=회복신호, ±30% → ±1)
       ext.vixRet,            // VIX 일별 변화율 (당일 공포 가속도, −0.2~+0.2)
       ext.yieldSpread / 3,   // 10Y-2Y 금리차 /3 (−1~+1 범위)
@@ -965,10 +995,18 @@ function buildResultFromModel(
   const testPreds = new Float64Array(gbdtPreds.length);
   for (let i = 0; i < testPreds.length; i++) testPreds[i] = alpha * safeLstmPreds[i] + (1-alpha) * gbdtPreds[i];
 
-  const nTest = testPreds.length;
-  const wfMid = Math.floor(nTest / 2);
-  const wf1 = dirAccRate(testPreds.slice(0, wfMid), Array.from(yte).slice(0, wfMid));
-  const wf2 = dirAccRate(testPreds.slice(wfMid),    Array.from(yte).slice(wfMid));
+  // ── 5-폴드 시계열 워크포워드 검증 ────────────────────────────────────────────
+  // 테스트 예측을 동일 크기 5구간으로 나눠 각 구간 정확도 평균 → 시간축 안정성 측정
+  const nTest  = testPreds.length;
+  const K_WF   = 5;
+  const wfWin  = Math.max(1, Math.floor(nTest / K_WF));
+  const wfAccs: number[] = [];
+  for (let k = 0; k < K_WF; k++) {
+    const s = k * wfWin;
+    const e = k < K_WF - 1 ? s + wfWin : nTest;
+    if (e > s) wfAccs.push(dirAccRate(testPreds.slice(s, e), Array.from(yte).slice(s, e)));
+  }
+  const wfDirAccVal = wfAccs.length > 0 ? wfAccs.reduce((a, b) => a + b, 0) / wfAccs.length : 0;
 
   let mae = 0;
   for (let i = 0; i < nTest; i++) mae += Math.abs(testPreds[i] - yte[i]);
@@ -1033,7 +1071,7 @@ function buildResultFromModel(
     trend: forecastReturn>=0?"up":"down",
     testMae: +(mae*100).toFixed(3),
     testDirAcc: +(dirAccRate(testPreds,yte)*100).toFixed(1),
-    wfDirAcc: +((wf1+wf2)/2*100).toFixed(1),
+    wfDirAcc: +(wfDirAccVal*100).toFixed(1),
     rolling30dDirAcc: +(dirAccRate(last30Preds,last30Actual)*100).toFixed(1),
     predErrStd: +(stddev(recentErrors)*100).toFixed(3),
     recentPerf,
