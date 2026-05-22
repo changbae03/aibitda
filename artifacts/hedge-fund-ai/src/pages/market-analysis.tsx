@@ -167,12 +167,16 @@ function MarketBriefSection({
                 ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
                 : brief.sessionType === "midday"
                 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                : brief.sessionType === "weekend"
+                ? "text-violet-400 bg-violet-500/10 border-violet-500/20"
                 : "text-sky-400 bg-sky-500/10 border-sky-500/20",
             )}>
               {brief.sessionType === "morning"
                 ? "🌅 장전 브리핑"
                 : brief.sessionType === "midday"
                 ? "☀️ 장중 브리핑"
+                : brief.sessionType === "weekend"
+                ? "📅 주말 브리핑"
                 : "🌆 장마감 브리핑"}
             </span>
           )}

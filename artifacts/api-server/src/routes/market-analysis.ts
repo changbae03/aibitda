@@ -103,7 +103,7 @@ export function invalidateBriefCache() {
 export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
-  sessionType: "morning" | "closing";
+  sessionType: "morning" | "midday" | "closing" | "weekend";
   leadParagraph: string;
   storyLine: string;
   marketEvents: {
@@ -287,13 +287,16 @@ async function fetchRecentIndexData() {
  *
  * 한국 증시 종료: 15:30 KST = 06:30 UTC
  */
-function detectSession(): "morning" | "midday" | "closing" {
+function detectSession(): "morning" | "midday" | "closing" | "weekend" {
   const now = new Date();
-  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  // KST 기준 요일 (UTC+9)
+  const kstDay = new Date(now.getTime() + 9 * 3600_000).getUTCDay(); // 0=일, 6=토
+  if (kstDay === 0 || kstDay === 6) return "weekend";
 
-  const MORNING_START = 21 * 60;  // 06:00 KST
-  const MIDDAY_START  =  2 * 60;  // 11:00 KST
-  const CLOSE_START   =  6 * 60 + 30;  // 15:30 KST — 장 종료
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const MORNING_START = 21 * 60;      // 06:00 KST
+  const MIDDAY_START  =  2 * 60;      // 11:00 KST
+  const CLOSE_START   =  6 * 60 + 30; // 15:30 KST — 장 종료
 
   if (utcMin >= MORNING_START || utcMin < MIDDAY_START) return "morning";
   if (utcMin < CLOSE_START)  return "midday";
@@ -587,7 +590,80 @@ ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
-  const prompt = session === "morning" ? morningPrompt : session === "midday" ? middayPrompt : closingPrompt;
+  // ── 주말 프롬프트 ─────────────────────────────────────────────────────────
+  const weekendPrompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}으로, 주말이라 한국 주식시장은 휴장 중이에요.
+이번 주 증시를 되돌아보고, 다음 주에 어떤 것들을 주목해야 할지 정리해 주세요.
+
+[이번 주 KOSPI 주요 흐름 (금요일 종가 포함)]
+${kospiHistory}
+
+[이번 주 KOSDAQ 주요 흐름 (금요일 종가 포함)]
+${kosdaqHistory}
+
+[AI 모델 예측 (다음 주 초 기준)]
+KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"}
+
+[미국 주요 지수 (최근 마감)]
+${usIndicesBlock || "데이터 없음"}
+
+[거시경제 지표]
+${macroBlock || "데이터 없음"}
+
+[주요 뉴스/이슈]
+${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요 이슈를 판단하세요"}
+
+아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
+{
+  "summary": "이번 주 증시 한 줄 요약 (20자 내외, 명사형)",
+  "sentiment": "bullish 또는 bearish 또는 neutral",
+  "leadParagraph": "이번 주 코스피·코스닥이 어떻게 움직였는지, 주요 원인은 무엇이었는지 2문장. 수치 포함. (80~120자)",
+  "storyLine": "이번 주 증시 스토리: 어떤 이슈가 시장을 움직였는지, 다음 주 어떻게 될 것 같은지. AI 예측 포함. 국내·해외 이슈 모두 언급. (200~280자)",
+  "marketEvents": [
+    { "title": "이번 주 핵심 이슈 (15자)", "impact": "이 이슈가 왜 시장에 영향을 줬는지 (50~70자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2", "impact": "...", "direction": "..." },
+    { "title": "이슈3", "impact": "...", "direction": "..." },
+    { "title": "이슈4", "impact": "...", "direction": "..." },
+    { "title": "이슈5", "impact": "...", "direction": "..." }
+  ],
+  "macroFactors": [
+    { "factor": "지표명", "status": "수치", "implication": "내 주식에 왜 중요한지 (40~60자)" },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." }
+  ],
+  "forwardLook": [
+    { "point": "다음 주 가장 중요한 것 (15자)", "detail": "AI 예측 포함, 근거와 전망 (50~70자)", "watchFor": "꼭 봐야 할 것 (25자)" },
+    { "point": "...", "detail": "...", "watchFor": "..." },
+    { "point": "...", "detail": "...", "watchFor": "..." }
+  ],
+  "upcomingMacroEvents": [
+    { "date": "구체적 날짜", "title": "다음 주 이벤트명 (20자)", "description": "쉬운 설명 (60~80자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
+  ],
+${keyTopicsSchema},
+  "keyRisk": "다음 주 가장 조심해야 할 것 한 줄 (40~60자)",
+  "recentIssues": ["이번 주 이슈 요약1", "이슈2", "이슈3", "이슈4"],
+  "outlook": ["다음 주 전망1", "전망2", "전망3"]
+}
+
+작성 원칙:
+- 이번 주 코스피·코스닥 수치를 구체적으로 인용하세요
+- marketEvents에 이번 주 삼성전자·현대차·SK하이닉스 같은 기업 이슈와 정치·글로벌 이슈를 반드시 포함하세요
+- upcomingMacroEvents는 다음 주 예정 이벤트 (FOMC, CPI, 관세, 기업 실적 등) 중심으로
+- '이번 주', '지난 주', '다음 주 월요일' 등 주말 맥락에 맞는 표현을 사용하세요
+- AI 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"})을 다음 주 전망에 자연스럽게 포함하세요
+${keyTopicsRule}
+- 절대 금지: 전문 용어 설명 없이 사용 금지
+- 문체: 친근한 해요체`;
+
+  const prompt = session === "morning"  ? morningPrompt
+               : session === "midday"   ? middayPrompt
+               : session === "weekend"  ? weekendPrompt
+               :                         closingPrompt;
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
