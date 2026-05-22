@@ -128,6 +128,11 @@ export interface MarketBriefResult {
     impact: "high" | "medium" | "low";
     direction: "positive" | "negative" | "neutral";
   }[];
+  keyTopics: {
+    keyword: string;
+    category: "정치" | "기업" | "경제" | "글로벌" | "산업";
+    description: string;
+  }[];
   keyRisk: string;
   recentIssues: string[];
   outlook: string[];
@@ -138,6 +143,64 @@ export interface MarketBriefResult {
   kospiChange: number | null;
   kosdaqChange: number | null;
   snp500Change: number | null;
+}
+
+// ─── 실시간 시장 뉴스 수집 ───────────────────────────────────────────────────
+
+/** Google News RSS + 네이버 금융 뉴스로 최신 한국 시장 뉴스 헤드라인 수집 */
+async function fetchMarketNews(): Promise<string> {
+  const queries = [
+    "코스피 코스닥 증시 주식 이슈",
+    "삼성전자 SK하이닉스 현대차 LG 기업",
+    "한국 경제 정치 금리 환율 관세",
+  ];
+
+  function parseRssItems(xml: string, maxItems = 8): string[] {
+    const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
+    return items.slice(0, maxItems).flatMap(item => {
+      const cdataTitle = item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/)?.[1];
+      const plainTitle = item.match(/<title>([\s\S]*?)<\/title>/)?.[1];
+      const title = (cdataTitle ?? plainTitle ?? "").trim().replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+      const source = (item.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] ?? "").trim();
+      return title.length > 8 ? [`• ${title}${source ? ` [${source}]` : ""}`] : [];
+    });
+  }
+
+  const settled = await Promise.allSettled(
+    queries.map(async q => {
+      const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ko&gl=KR&ceid=KR:ko`;
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) return "";
+      const xml = await res.text();
+      return parseRssItems(xml, 8).join("\n");
+    })
+  );
+
+  // 네이버 금융 뉴스 RSS (추가 소스)
+  const naverSettled = await Promise.allSettled([
+    fetch("https://finance.naver.com/news/news_list.nhn?mode=LSS3D&section_id=101&section_id2=258&section_id3=401", {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(7000),
+    }).then(r => r.text()).then(html => {
+      const titles = [...html.matchAll(/class="ti"[^>]*>([\s\S]*?)<\/a>/g)]
+        .slice(0, 6)
+        .map(m => `• ${m[1].replace(/<[^>]+>/g, "").trim()} [네이버금융]`)
+        .filter(t => t.length > 10);
+      return titles.join("\n");
+    }),
+  ]);
+
+  const allLines = [
+    ...settled.filter(r => r.status === "fulfilled").map(r => (r as any).value as string),
+    ...naverSettled.filter(r => r.status === "fulfilled").map(r => (r as any).value as string),
+  ].filter(Boolean);
+
+  const combined = allLines.join("\n");
+  console.log(`[market-brief] 뉴스 수집: ${combined.split("\n").filter(l => l.startsWith("•")).length}건`);
+  return combined || "";
 }
 
 // ─── 시장 데이터 수집 헬퍼 ──────────────────────────────────────────────────
@@ -249,18 +312,20 @@ async function generateBrief(): Promise<MarketBriefResult> {
   });
   const session = detectSession();
 
-  // 병렬로 데이터 수집
-  const [indexData, fredData, ecosData, pipelineStatus] = await Promise.allSettled([
+  // 병렬로 데이터 수집 (뉴스 포함)
+  const [indexData, fredData, ecosData, pipelineStatus, newsResult] = await Promise.allSettled([
     fetchRecentIndexData(),
     fetchFREDMacro(),
     fetchECOSMacro(),
     Promise.resolve(getStatus()),
+    fetchMarketNews(),
   ]);
 
   const idx      = indexData.status === "fulfilled" ? indexData.value : null;
   const fred     = fredData.status  === "fulfilled" ? fredData.value  : null;
   const ecos     = ecosData.status  === "fulfilled" ? ecosData.value  : null;
   const pipeline = pipelineStatus.status === "fulfilled" ? pipelineStatus.value : null;
+  const newsBlock = newsResult.status === "fulfilled" ? newsResult.value : "";
 
   // KOSPI/KOSDAQ 최신값
   const kospiLatest  = idx?.kospi?.at(-1)  ?? null;
@@ -309,6 +374,17 @@ async function generateBrief(): Promise<MarketBriefResult> {
     ecos?.cpiYoY   != null ? `한국 CPI ${ecos.cpiYoY}% YoY`   : null,
   ].filter(Boolean).join(" | ");
 
+  // ── 공통 JSON 스키마 (keyTopics 포함) ─────────────────────────────────────
+  const keyTopicsSchema = `  "keyTopics": [
+    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 시장에 왜 중요한지 (40~50자)" },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." }
+  ]`;
+
+  const keyTopicsRule = `- keyTopics: 뉴스 헤드라인과 현재 시황을 바탕으로 오늘 시장을 움직이는 핵심 키워드 5개 선정. 삼성전자 파업·실적, 미중 관세, FOMC, 반도체 업황, 환율 등 구체적 이슈 포함.`;
+
   // ── 장전 프롬프트 ──────────────────────────────────────────────────────────
   const morningPrompt = `당신은 개인 투자자의 친근한 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장 개장 전입니다.
 간밤에 미국 시장에서 무슨 일이 있었는지, 그리고 오늘 우리 시장에 어떤 영향이 올지를 쉽게 설명해 주세요.
@@ -329,27 +405,31 @@ ${kosdaqHistory}
 [AI 모델 3일 예측]
 KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"}
 
+[실시간 뉴스/이슈 헤드라인]
+${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요 이슈를 판단하세요"}
+
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
   "summary": "간밤 미국 시장 한 줄 요약 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
-  "leadParagraph": "간밤 미국 시장 전체 분위기를 2문장으로. 주요 지수 등락 수치 포함. 예: '간밤 미국 시장은 기술주 중심으로 강하게 올랐어요. 나스닥이 1.5% 오르고 S&P500도 0.8% 상승하며 투자자들의 기대감이 커졌어요.' (80~120자)",
-  "storyLine": "왜 미국 시장이 그렇게 움직였는지, 어떤 이슈가 있었는지, 그래서 오늘 우리 한국 시장에 어떤 영향이 예상되는지를 이야기처럼 써주세요. SOX(반도체 지수)나 달러 움직임 같은 한국 주식과 직접 연결되는 내용을 꼭 포함해주세요. 예: '어제 미국에서 엔비디아가 실적을 잘 내면서 반도체 주식들이 많이 올랐어요. 필라델피아 반도체 지수(SOX)가 2% 넘게 오른 게 삼성전자·SK하이닉스에도 좋은 신호예요. 달러가 살짝 약해져서 우리나라 원화 가치도 올라갈 수 있고, 외국인 투자자들이 우리 시장에 돈을 더 넣을 가능성이 있어요. AI 예측으로는 오늘 코스피가 ${kospiPred ?? "N/A"} 움직임을 보일 것 같아요.' (180~250자)",
+  "leadParagraph": "간밤 미국 시장 전체 분위기를 2문장으로. 주요 지수 등락 수치 포함. (80~120자)",
+  "storyLine": "왜 미국 시장이 그렇게 움직였는지, 어떤 이슈가 있었는지(뉴스 헤드라인 참고), 그래서 오늘 한국 시장에 어떤 영향이 예상되는지 이야기처럼. SOX·달러 움직임도 포함. AI 예측(KOSPI: ${kospiPred ?? "N/A"}) 포함. (200~280자)",
   "marketEvents": [
-    { "title": "간밤 미국 이슈 제목 (15자 이내)", "impact": "이게 오늘 우리 시장에 왜 중요한지 쉽게 (40~60자)", "direction": "positive 또는 negative 또는 neutral" },
+    { "title": "간밤 핵심 이슈 (15자)", "impact": "오늘 우리 시장에 왜 중요한지 쉽게 (50~70자)", "direction": "positive 또는 negative 또는 neutral" },
     { "title": "이슈2", "impact": "...", "direction": "..." },
     { "title": "이슈3", "impact": "...", "direction": "..." },
-    { "title": "이슈4", "impact": "...", "direction": "..." }
+    { "title": "이슈4", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (국내 기업·정치 이슈)", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
-    { "factor": "지표명 (나스닥, SOX, 달러인덱스, 국채금리, VIX 등)", "status": "수치와 전일비 포함", "implication": "오늘 한국 주식에 미치는 영향 한 줄 (40~60자)" },
+    { "factor": "지표명 (나스닥, SOX, 달러인덱스, 국채금리, VIX 등)", "status": "수치와 전일비 포함", "implication": "오늘 한국 주식에 미치는 영향 (40~60자)" },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." },
     { "factor": "...", "status": "...", "implication": "..." }
   ],
   "forwardLook": [
-    { "point": "오늘 장에서 가장 중요한 것 (15자)", "detail": "AI 예측 포함해서 오늘 어떨지 쉽게 (50~70자)", "watchFor": "꼭 체크해야 할 것 한 가지 (25자)" },
+    { "point": "오늘 장 핵심 포인트 (15자)", "detail": "AI 예측 포함해서 오늘 어떨지 쉽게 (50~70자)", "watchFor": "꼭 체크해야 할 것 한 가지 (25자)" },
     { "point": "...", "detail": "...", "watchFor": "..." },
     { "point": "...", "detail": "...", "watchFor": "..." }
   ],
@@ -359,8 +439,9 @@ KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pr
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
+${keyTopicsSchema},
   "keyRisk": "오늘 한국 시장에서 가장 조심해야 할 것 한 줄 (40~60자)",
-  "recentIssues": ["간밤 미국 이슈 요약1", "이슈2", "이슈3"],
+  "recentIssues": ["간밤 미국 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["오늘 전망1", "전망2", "전망3"]
 }
 
@@ -368,6 +449,8 @@ KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pr
 - 미국 지수 수치(S&P500, 나스닥, 다우, SOX)와 달러인덱스를 구체적으로 인용하세요
 - SOX(필라델피아 반도체)는 삼성전자·SK하이닉스와 직결되므로 반드시 포함하세요
 - 달러 강약이 원화·수출주에 미치는 영향을 설명하세요
+- marketEvents에 국내 기업 이슈(실적·파업·인수합병 등)와 정치 이슈(관세·규제·선거)를 반드시 1~2개 포함하세요
+${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지 ("수급", "밸류에이션" 등)
 - 문체: 친근한 해요체`;
 
@@ -390,16 +473,21 @@ ${usIndicesBlock || "데이터 없음"}
 [거시경제 지표]
 ${macroBlock || "데이터 없음"}
 
+[실시간 뉴스/이슈 헤드라인]
+${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요 이슈를 판단하세요"}
+
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
   "summary": "오늘 시장 분위기를 한 줄로 (20자 내외, 명사형 또는 짧은 문장)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
   "leadParagraph": "오늘 코스피·코스닥이 어떻게 움직였는지, 왜 그랬는지 2문장으로. 수치 포함. (80~120자)",
-  "storyLine": "오늘 하루 어떤 일이 있었고, 왜 시장이 그렇게 움직였는지, 그래서 내일·이번 주에 어떻게 될 것 같은지 이야기처럼. AI 예측 포함. (150~220자)",
+  "storyLine": "오늘 하루 어떤 대내외 이슈가 있었고(뉴스 헤드라인 참고), 왜 시장이 그렇게 움직였는지, 내일·이번 주에 어떻게 될 것 같은지 이야기처럼. 국내 기업·정치 이슈와 글로벌 이슈를 모두 언급. AI 예측 포함. (200~280자)",
   "marketEvents": [
-    { "title": "오늘 시장 이슈 제목 (15자)", "impact": "이 이슈가 왜 주가에 영향을 줬는지 (40~60자)", "direction": "positive/negative/neutral" },
-    { "title": "이슈2", "impact": "...", "direction": "..." },
-    { "title": "이슈3", "impact": "...", "direction": "..." }
+    { "title": "오늘 핵심 이슈 (15자)", "impact": "이 이슈가 왜 주가에 영향을 줬는지 (50~70자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2 (기업 이슈)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (정치/경제)", "impact": "...", "direction": "..." },
+    { "title": "이슈4 (글로벌)", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (산업/섹터)", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
     { "factor": "지표명", "status": "수치와 전일비", "implication": "내 주식에 왜 중요한지 (40~60자)" },
@@ -420,14 +508,17 @@ ${macroBlock || "데이터 없음"}
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
+${keyTopicsSchema},
   "keyRisk": "지금 가장 조심해야 할 것 한 줄 (40~60자)",
-  "recentIssues": ["이슈 요약1", "이슈2", "이슈3"],
-  "outlook": ["전망1", "전망2", "전망3"]
+  "recentIssues": ["오늘 이슈 요약1", "이슈2", "이슈3", "이슈4"],
+  "outlook": ["내일 전망1", "전망2", "전망3"]
 }
 
 작성 원칙:
 - 오늘 코스피·코스닥 수치를 구체적으로 인용하세요
+- marketEvents에 삼성전자·현대차·SK하이닉스 같은 기업 이슈, 정치 이슈(관세·규제·파업 등)를 반드시 포함하세요
 - upcomingMacroEvents는 향후 3~5거래일 예정 이벤트 (FOMC, CPI, 관세, 정치 이슈 등)
+${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
@@ -450,16 +541,20 @@ ${usIndicesBlock || "데이터 없음"}
 [거시경제 지표]
 ${macroBlock || "데이터 없음"}
 
+[실시간 뉴스/이슈 헤드라인]
+${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요 이슈를 판단하세요"}
+
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
   "summary": "지금 장 분위기 한 줄로 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
-  "leadParagraph": "오전 코스피·코스닥 흐름을 2문장으로. 수치 포함. 예: '오늘 오전 코스피는 2,590선에서 강보합 흐름이에요. 반도체주가 오르면서 지수를 끌어올리고 있어요.' (80~120자)",
-  "storyLine": "왜 오전에 이렇게 움직였는지, 오후에는 어떻게 될 것 같은지, 마감까지 무엇을 지켜봐야 하는지 이야기처럼. AI 예측도 포함. (150~220자)",
+  "leadParagraph": "오전 코스피·코스닥 흐름을 2문장으로. 수치 포함. (80~120자)",
+  "storyLine": "왜 오전에 이렇게 움직였는지(뉴스 헤드라인 참고), 국내외 어떤 이슈가 있었는지, 오후에는 어떻게 될 것 같은지, 마감까지 무엇을 지켜봐야 하는지 이야기처럼. AI 예측도 포함. (200~280자)",
   "marketEvents": [
-    { "title": "오늘 장 중 이슈 제목 (15자)", "impact": "이 이슈가 왜 지금 주가에 영향 주는지 (40~60자)", "direction": "positive/negative/neutral" },
-    { "title": "이슈2", "impact": "...", "direction": "..." },
-    { "title": "이슈3", "impact": "...", "direction": "..." }
+    { "title": "오늘 장 중 이슈 (15자)", "impact": "이 이슈가 왜 지금 주가에 영향 주는지 (50~70자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2 (기업 이슈)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (정치/경제)", "impact": "...", "direction": "..." },
+    { "title": "이슈4", "impact": "...", "direction": "..." }
   ],
   "macroFactors": [
     { "factor": "지표명", "status": "수치와 전일비", "implication": "오후 장에 왜 중요한지 (40~60자)" },
@@ -477,15 +572,18 @@ ${macroBlock || "데이터 없음"}
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
+${keyTopicsSchema},
   "keyRisk": "오후 장에서 가장 조심해야 할 것 한 줄 (40~60자)",
-  "recentIssues": ["오전 이슈 요약1", "이슈2", "이슈3"],
+  "recentIssues": ["오전 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["오후 전망1", "전망2", "전망3"]
 }
 
 작성 원칙:
 - 현재 코스피·코스닥 수치를 구체적으로 인용하세요
+- marketEvents에 삼성전자·현대차·SK하이닉스 같은 기업 이슈, 정치 이슈를 반드시 포함하세요
 - '지금', '오후에', '마감 전' 등 시간감 있는 표현을 사용하세요
-- AI 3일 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"}, S&P500: ${snp500Pred ?? "N/A"})을 storyLine과 forwardLook에 반드시 포함하세요
+- AI 3일 예측(KOSPI: ${kospiPred ?? "N/A"}, KOSDAQ: ${kosdaqPred ?? "N/A"})을 storyLine과 forwardLook에 반드시 포함하세요
+${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
@@ -495,8 +593,8 @@ ${macroBlock || "데이터 없음"}
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 2000,
-      temperature: 0.5,
+      maxOutputTokens: 3000,
+      temperature: 0.6,
       topP: 0.9,
       thinkingConfig: { thinkingBudget: 0 },
     },
@@ -517,10 +615,11 @@ ${macroBlock || "데이터 없음"}
     sessionType:          session,
     leadParagraph:        parsed?.leadParagraph        ?? "",
     storyLine:            parsed?.storyLine            ?? "",
-    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 4),
+    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 5),
     macroFactors:         safeArr(parsed?.macroFactors).slice(0, 5),
     forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),
     upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 5),
+    keyTopics:            safeArr(parsed?.keyTopics).slice(0, 5),
     keyRisk:              parsed?.keyRisk              ?? "",
     recentIssues:         safeArr(parsed?.recentIssues).slice(0, 4),
     outlook:              safeArr(parsed?.outlook).slice(0, 4),

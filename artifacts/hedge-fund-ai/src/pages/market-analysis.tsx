@@ -67,6 +67,11 @@ interface MarketBrief {
     impact: "high" | "medium" | "low";
     direction: "positive" | "negative" | "neutral";
   }[];
+  keyTopics?: {
+    keyword: string;
+    category: "정치" | "기업" | "경제" | "글로벌" | "산업";
+    description: string;
+  }[];
   keyRisk?: string;
   recentIssues: string[];
   outlook: string[];
@@ -344,6 +349,49 @@ function MarketBriefSection({
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 오늘 시장 핵심 키워드 */}
+                {(brief.keyTopics?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" /> 오늘 시장 핵심 키워드
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {brief.keyTopics!.map((topic, i) => {
+                        const catColor: Record<string, string> = {
+                          "정치": "bg-purple-500/10 border-purple-500/25 text-purple-400",
+                          "기업": "bg-blue-500/10 border-blue-500/25 text-blue-400",
+                          "경제": "bg-green-500/10 border-green-500/25 text-green-400",
+                          "글로벌": "bg-orange-500/10 border-orange-500/25 text-orange-400",
+                          "산업": "bg-cyan-500/10 border-cyan-500/25 text-cyan-400",
+                        };
+                        const cls = catColor[topic.category] ?? "bg-muted/40 border-border text-muted-foreground";
+                        return (
+                          <div key={i} className={cn("group relative flex-shrink-0 cursor-default select-none rounded-xl border px-3 py-1.5", cls)}>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold opacity-60">{topic.category}</span>
+                              <span className="text-[13px] font-semibold leading-tight">{topic.keyword}</span>
+                            </div>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 hidden group-hover:block w-56 bg-popover border border-border rounded-xl shadow-lg px-3 py-2.5 pointer-events-none">
+                              <p className="text-[11px] text-foreground/80 leading-relaxed">{topic.description}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="space-y-1.5">
+                      {brief.keyTopics!.map((topic, i) => (
+                        <div key={i} className="flex items-start gap-2.5 px-1">
+                          <span className="shrink-0 text-[10px] font-bold text-primary/50 mt-[3px] w-4 text-right">{i + 1}</span>
+                          <div>
+                            <span className="text-[12px] font-semibold text-foreground mr-2">{topic.keyword}</span>
+                            <span className="text-[11px] text-foreground/55 leading-relaxed">{topic.description}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

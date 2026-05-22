@@ -61,7 +61,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 12;
+const MODEL_VERSION = 13;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -388,9 +388,9 @@ interface ExtPoint {
   foreignNet: number;   // 외국인 순매수 (KRX 정규화, −1~+1) / SNP는 0
   instNet:    number;   // 기관 순매수   (KRX 정규화, −1~+1) / SNP는 0
   shortRatio: number;   // 공매도 비율 % / SNP는 0
-  vixLevel:   number;   // [NEW] VIX 레벨 (0~50+, 전 시장 공통)
-  vixRet:     number;   // [NEW] VIX 일별 변화율 (공포 가속도)
-  yieldSpread: number;  // [NEW] 미국 10Y-2Y 금리차 (%) — 경기 선행
+  vix5dMom:   number;   // [v13] VIX 5일 모멘텀 — 낙폭=음수=공포완화=회복신호
+  vixRet:     number;   // VIX 일별 변화율 (당일 공포 가속도)
+  yieldSpread: number;  // 미국 10Y-2Y 금리차 (%) — 경기 선행
 }
 
 async function fetchYahooSeries(ticker: string, years: number): Promise<{ date: string; close: number }[]> {
@@ -461,13 +461,14 @@ async function fetchExternalData(
     for (let i = 1; i < usdkrwRows.length; i++)
       usdkrwRetMap.set(usdkrwRows[i].date, (usdkrwRows[i].close - usdkrwRows[i-1].close) / usdkrwRows[i-1].close);
 
-    // VIX: 레벨 맵 + 일별 변화율 맵
-    const vixLevelMap = new Map<string, number>();
+    // VIX: 5일 모멘텀(회복신호) + 일별 변화율 맵
+    const vix5dMomMap = new Map<string, number>();
     const vixRetMap   = new Map<string, number>();
     for (let i = 0; i < vixRows.length; i++) {
-      vixLevelMap.set(vixRows[i].date, vixRows[i].close);
       if (i > 0)
         vixRetMap.set(vixRows[i].date, (vixRows[i].close - vixRows[i-1].close) / (vixRows[i-1].close || 1));
+      if (i >= 5)
+        vix5dMomMap.set(vixRows[i].date, (vixRows[i].close - vixRows[i-5].close) / (vixRows[i-5].close || 1));
     }
 
     const bond10Entries = bond10Rows.sort((a, b) => a.date.localeCompare(b.date));
@@ -475,7 +476,7 @@ async function fetchExternalData(
 
     const result = new Map<string, ExtPoint>();
     let lastDXY = 0, lastUSDKRW = 0, lastBond10 = 4.5, lastBond2 = 4.0;
-    let lastVixLevel = 20, lastVixRet = 0;
+    let lastVix5dMom = 0, lastVixRet = 0;
     let b10Idx = 0, b2Idx = 0;
 
     for (const date of dates) {
@@ -485,10 +486,10 @@ async function fetchExternalData(
       while (b2Idx < bond2Entries.length && bond2Entries[b2Idx].date <= date) {
         lastBond2 = bond2Entries[b2Idx].value; b2Idx++;
       }
-      if (dxyRetMap.has(date))    lastDXY      = dxyRetMap.get(date)!;
-      if (usdkrwRetMap.has(date)) lastUSDKRW   = usdkrwRetMap.get(date)!;
-      if (vixLevelMap.has(date))  lastVixLevel = vixLevelMap.get(date)!;
-      if (vixRetMap.has(date))    lastVixRet   = vixRetMap.get(date)!;
+      if (dxyRetMap.has(date))    lastDXY       = dxyRetMap.get(date)!;
+      if (usdkrwRetMap.has(date)) lastUSDKRW    = usdkrwRetMap.get(date)!;
+      if (vix5dMomMap.has(date))  lastVix5dMom  = vix5dMomMap.get(date)!;
+      if (vixRetMap.has(date))    lastVixRet    = vixRetMap.get(date)!;
 
       const yieldSpread = lastBond10 - lastBond2;   // 10Y-2Y 금리차 (보통 -2 ~ +3%)
       result.set(date, {
@@ -498,9 +499,9 @@ async function fetchExternalData(
         foreignNet:  0,                // SNP에는 KRX 수급 없음
         instNet:     0,
         shortRatio:  0,
-        vixLevel:    lastVixLevel,     // [NEW] VIX 레벨
-        vixRet:      lastVixRet,       // [NEW] VIX 일별 변화율
-        yieldSpread: yieldSpread,      // [NEW] 10Y-2Y 장단기 금리차
+        vix5dMom:    lastVix5dMom,     // [v13] VIX 5일 모멘텀 (음수=공포완화=회복)
+        vixRet:      lastVixRet,       // VIX 일별 변화율
+        yieldSpread: yieldSpread,      // 10Y-2Y 장단기 금리차
       });
     }
     console.log(`[ext] 완료(SNP) — DXY ${dxyRows.length}행, 환율 ${usdkrwRows.length}행, 미국10Y ${bond10Rows.length}행, VIX ${vixRows.length}행, 미국2Y ${bond2Rows.length}행`);
@@ -549,13 +550,14 @@ async function fetchExternalData(
   const fnetScale = fnetVals.length > 0 ? (fnetVals.sort((a,b)=>a-b)[Math.floor(fnetVals.length*0.95)] || 10000) : 10000;
   const inetScale = inetVals.length > 0 ? (inetVals.sort((a,b)=>a-b)[Math.floor(inetVals.length*0.95)] || 10000) : 10000;
 
-  // ── [NEW] VIX Map (레벨 + 일별 변화율) ──
-  const vixLevelMap2 = new Map<string, number>();
+  // ── [v13] VIX 5일 모멘텀(회복신호) + 일별 변화율 ──
+  const vix5dMomMap2 = new Map<string, number>();
   const vixRetMap2   = new Map<string, number>();
   for (let i = 0; i < vixRows.length; i++) {
-    vixLevelMap2.set(vixRows[i].date, vixRows[i].close);
     if (i > 0)
       vixRetMap2.set(vixRows[i].date, (vixRows[i].close - vixRows[i-1].close) / (vixRows[i-1].close || 1));
+    if (i >= 5)
+      vix5dMomMap2.set(vixRows[i].date, (vixRows[i].close - vixRows[i-5].close) / (vixRows[i-5].close || 1));
   }
 
   // ── [NEW] 미국 10Y-2Y 금리차 Map (forward-fill) ──
@@ -568,31 +570,29 @@ async function fetchExternalData(
   const result = new Map<string, ExtPoint>();
   let lastSP500 = 0, lastUSDKRW = 0, lastBond = 3.0;
   let lastForeign = 0, lastInst = 0, lastShort = 2.0;
-  let lastVixLevel2 = 20, lastVixRet2 = 0;
+  let lastVix5dMom2 = 0, lastVixRet2 = 0;
   let lastUsb10 = 4.5, lastUsb2 = 4.0;
   let bondIdx = 0, b10Idx2 = 0, b2Idx2 = 0;
 
   for (const date of dates) {
-    // 국고채 forward-fill
     while (bondIdx < bondEntries.length && bondEntries[bondIdx].date <= date) {
       lastBond = bondEntries[bondIdx].value; bondIdx++;
     }
-    // [NEW] 미국 금리 forward-fill
     while (b10Idx2 < usb10Entries.length && usb10Entries[b10Idx2].date <= date) {
       lastUsb10 = usb10Entries[b10Idx2].value; b10Idx2++;
     }
     while (b2Idx2 < usb2Entries.length && usb2Entries[b2Idx2].date <= date) {
       lastUsb2 = usb2Entries[b2Idx2].value; b2Idx2++;
     }
-    if (sp500RetMap.has(date))   lastSP500  = sp500RetMap.get(date)!;
-    if (usdkrwRetMap.has(date))  lastUSDKRW = usdkrwRetMap.get(date)!;
+    if (sp500RetMap.has(date))   lastSP500      = sp500RetMap.get(date)!;
+    if (usdkrwRetMap.has(date))  lastUSDKRW     = usdkrwRetMap.get(date)!;
     if (investorMap.has(date)) {
       const iv = investorMap.get(date)!;
       lastForeign = iv.foreignNet;
       lastInst    = iv.instNet;
     }
     if (shortMap.has(date))        lastShort      = shortMap.get(date)!;
-    if (vixLevelMap2.has(date))    lastVixLevel2  = vixLevelMap2.get(date)!;
+    if (vix5dMomMap2.has(date))    lastVix5dMom2  = vix5dMomMap2.get(date)!;
     if (vixRetMap2.has(date))      lastVixRet2    = vixRetMap2.get(date)!;
 
     result.set(date, {
@@ -601,10 +601,10 @@ async function fetchExternalData(
       bond3y:      lastBond,
       foreignNet:  lastForeign / fnetScale,  // ≈ −1 ~ +1
       instNet:     lastInst    / inetScale,  // ≈ −1 ~ +1
-      shortRatio:  lastShort,                // % (scaler가 표준화)
-      vixLevel:    lastVixLevel2,            // [NEW] VIX 레벨
-      vixRet:      lastVixRet2,             // [NEW] VIX 일별 변화율
-      yieldSpread: lastUsb10 - lastUsb2,    // [NEW] 10Y-2Y 금리차
+      shortRatio:  lastShort,                // %
+      vix5dMom:    lastVix5dMom2,            // [v13] VIX 5일 모멘텀 (음수=회복신호)
+      vixRet:      lastVixRet2,              // VIX 일별 변화율
+      yieldSpread: lastUsb10 - lastUsb2,     // 10Y-2Y 금리차
     });
   }
 
@@ -646,7 +646,7 @@ function buildFeatures(
       : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
-    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0, vixLevel:20, vixRet:0, yieldSpread:0.5 };
+    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:2.0, vix5dMom:0, vixRet:0, yieldSpread:0.5 };
     return new Float64Array([
       // ── 기술적 (9) ──
       rets[i],
@@ -658,17 +658,17 @@ function buildFeatures(
       Math.max(0, Math.min(1, bband)),
       mom5, mom10,
       // ── 매크로 (3) ──
-      ext.sp500Ret,          // S&P500 등락 (−0.05 ~ 0.05) / SNP용: DXY
-      ext.usdkrwRet,         // 환율 변화 (−0.03 ~ 0.03)
-      ext.bond3y / 10,       // 국고채3Y /10 → 0~1 / SNP용: 미국10Y/10
+      ext.sp500Ret,          // S&P500 등락 / SNP용: DXY
+      ext.usdkrwRet,         // 환율 변화율
+      ext.bond3y / 10,       // 국고채3Y /10 / SNP용: 미국10Y/10
       // ── 수급 (3) ──
-      ext.foreignNet,        // 외국인 순매수 (정규화 −1~+1) / SNP는 0
-      ext.instNet,           // 기관 순매수   (동일 정규화) / SNP는 0
-      ext.shortRatio / 10,   // 공매도비율 /10 (0~1)       / SNP는 0
-      // ── 글로벌 변동성/금리 (3) [NEW] ──
-      ext.vixLevel / 50,     // VIX 레벨 (20=평온, 50=극공포, →0~1 정규화)
-      ext.vixRet,            // VIX 일별 변화율 (공포 가속도, −0.3~+0.3)
-      ext.yieldSpread / 3,   // 10Y-2Y 금리차 /3 (보통 −1~+1 범위)
+      ext.foreignNet,        // 외국인 순매수 (−1~+1) / SNP=0
+      ext.instNet,           // 기관 순매수   (−1~+1) / SNP=0
+      ext.shortRatio / 10,   // 공매도비율 /10        / SNP=0
+      // ── 글로벌 변동성/금리 (3) [v13] ──
+      Math.max(-1, Math.min(1, ext.vix5dMom / 0.3)), // VIX 5일 모멘텀 (낙폭=음수=회복신호, ±30% → ±1)
+      ext.vixRet,            // VIX 일별 변화율 (당일 공포 가속도, −0.2~+0.2)
+      ext.yieldSpread / 3,   // 10Y-2Y 금리차 /3 (−1~+1 범위)
     ]);
   });
   return { feats, closes, dates };
