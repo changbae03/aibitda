@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
-import { correctKoreanTicker } from "../lib/krx-cache.js";
+import { correctKoreanTicker, getKRXCache } from "../lib/krx-cache.js";
 import { fetchETFsForStock, isPykrxEnabled } from "../lib/pykrx-client.js";
 import { cache } from "../lib/mem-cache.js";
 
@@ -26,9 +26,12 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
   const { companyName, industry } = req.query as { companyName?: string; industry?: string };
   const koreanCode = ticker.match(/^(\d{6})\.(KS|KQ)$/)?.[1]
     ?? ticker.match(/^(\d{6})$/)?.[1];
-  const exchange = ticker.includes(".KQ") ? "KOSDAQ" : "KOSPI";
-  const resolvedSymbol = ticker.includes(".") ? ticker
-    : koreanCode ? `${koreanCode}.KS` : ticker;
+  // KRX 캐시로 정확한 거래소 판별 (티커 포맷 오류 방지)
+  const krxEntry = koreanCode ? getKRXCache().find(e => e.code === koreanCode) : null;
+  const exchange: string = krxEntry?.exchange
+    ?? (ticker.includes(".KQ") ? "KOSDAQ" : ticker.includes(".KS") ? "KOSPI" : "KOSPI");
+  const resolvedSymbol = krxEntry?.symbol
+    ?? (ticker.includes(".") ? ticker : koreanCode ? `${koreanCode}.KS` : ticker);
 
   // 1) Yahoo Finance 글로벌 펀드 편입 (실데이터)
   let globalFunds: Array<{
