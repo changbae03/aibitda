@@ -308,7 +308,7 @@ interface PipelineCtx {
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
-const QC_STEPS = new Set<AgentKey>(["company_analysis", "relative_valuation"]);
+const QC_STEPS = new Set<AgentKey>(["relative_valuation"]);
 
 async function runQCCheck(
   stepKey: AgentKey,
@@ -457,6 +457,10 @@ ${excerpt}
 
 // Debate는 목표주가 산출(relative_valuation)에만 유지 — company_analysis는 QC 검증으로 대체
 const DEBATE_STEPS = new Set<AgentKey>(["relative_valuation"]);
+
+// ── 사전 수집 캐시: company_analysis 실행 중 피어 데이터를, relative_valuation 실행 중 주봉 MA를 미리 수집 ──
+const preFetchedPeerData = new Map<number, Promise<{ peers: any[]; data: string }>>();
+const preFetchedWeeklyMA = new Map<number, Promise<string>>();
 
 async function runDebateChallenge(
   stepKey: "company_analysis" | "relative_valuation",
@@ -4346,6 +4350,75 @@ async function executeStep(
   const agent = AGENTS[stepKey];
   let enrichedContext = analysis.additionalContext ?? null;
 
+  // ── 사전 수집 트리거 ──────────────────────────────────────────────────────
+  // company_analysis 시작 → relative_valuation용 피어 데이터를 백그라운드에서 미리 수집
+  if (stepKey === "company_analysis" && !preFetchedPeerData.has(id)) {
+    const prevCtx = existingSteps.map(s => s.content).join("\n").slice(0, 5000);
+    const snapName = analysis.companyName;
+    const snapIndustry = analysis.industry;
+    const snapTicker = analysis.ticker;
+    const peerPromise: Promise<{ peers: any[]; data: string }> = (async () => {
+      try {
+        let peers = await selectPeerTickers(snapName, snapIndustry, prevCtx, snapTicker);
+        if (peers.length === 0) {
+          peers = await selectPeerTickers(snapName, snapIndustry ?? "일반", prevCtx.slice(0, 3000), snapTicker);
+        }
+        if (peers.length === 0 && !/^\d{6}/.test(snapTicker)) {
+          const mapped = US_PEER_MAP[snapTicker.toUpperCase()];
+          if (mapped?.length) peers = mapped;
+        }
+        const data = peers.length > 0 ? await fetchPeerFinancials(peers) : "";
+        console.log(`[pre-fetch-peers] #${id} 완료 — ${peers.length}개 피어, ${data.length}chars`);
+        return { peers, data };
+      } catch (err) {
+        console.error(`[pre-fetch-peers] #${id} 실패:`, err);
+        return { peers: [] as any[], data: "" };
+      }
+    })();
+    preFetchedPeerData.set(id, peerPromise);
+  }
+
+  // relative_valuation 시작 → market_analysis용 주봉 MA를 백그라운드에서 미리 수집
+  if (stepKey === "relative_valuation" && !preFetchedWeeklyMA.has(id)) {
+    const snapTicker = analysis.ticker;
+    const wkPromise: Promise<string> = (async () => {
+      try {
+        const wkStart = new Date();
+        wkStart.setFullYear(wkStart.getFullYear() - 2);
+        const wkHistory = await yahooFinance
+          .historical(snapTicker, { period1: wkStart.toISOString().slice(0, 10), interval: "1wk" }, { validateResult: false })
+          .catch(() => null);
+        if (!wkHistory || wkHistory.length < 20) return "";
+        const closes = wkHistory.map((q: any) => q.adjClose ?? q.close).filter((c: any) => c != null && c > 0) as number[];
+        const calcMA = (arr: number[], n: number) => arr.length < n ? null : arr.slice(-n).reduce((a: number, b: number) => a + b, 0) / n;
+        const ma20w = calcMA(closes, 20);
+        const ma60w = calcMA(closes, 60);
+        const latestClose = closes[closes.length - 1];
+        const lines = ["\n[📊 주봉 이동평균 데이터 (서버 계산)]"];
+        lines.push(`현재가(최근 주봉 종가): ${latestClose?.toLocaleString()}원`);
+        if (ma20w != null) {
+          const d = ((latestClose - ma20w) / ma20w * 100).toFixed(1);
+          lines.push(`20주 이동평균(20주선): ${Math.round(ma20w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
+        }
+        if (ma60w != null) {
+          const d = ((latestClose - ma60w) / ma60w * 100).toFixed(1);
+          lines.push(`60주 이동평균(60주선): ${Math.round(ma60w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
+        }
+        if (ma20w != null && ma60w != null) {
+          lines.push(`주봉 추세 판단: 현재가가 20주선 ${latestClose > ma20w ? "위" : "아래"}, 60주선 ${latestClose > ma60w ? "위" : "아래"} — ${latestClose > ma20w && latestClose > ma60w ? "중기 상승 추세" : latestClose < ma20w && latestClose < ma60w ? "중기 하락 추세" : "혼조"}`);
+        }
+        lines.push(`(데이터 기준: 최근 ${closes.length}주 주봉 종가 기반 계산)`);
+        console.log(`[pre-fetch-wkma] #${id} 완료 — ma20=${ma20w?.toFixed(0)}, ma60=${ma60w?.toFixed(0)}`);
+        return lines.join("\n");
+      } catch (err: any) {
+        console.warn(`[pre-fetch-wkma] #${id} 실패:`, err?.message?.slice(0, 80));
+        return "";
+      }
+    })();
+    preFetchedWeeklyMA.set(id, wkPromise);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // ── 소프트 앵커: 동일 종목 직전 분석 결과를 참고 ────────────────────────────
   // 밸류에이션 단계는 더 긴 스니펫 + 더 강한 일관성 지시 사용
   const isValuationStep = ["intrinsic_valuation", "relative_valuation"].includes(stepKey);
@@ -4955,19 +5028,31 @@ async function executeStep(
   // ── relative_valuation: 피어 데이터 자동 수집 ────────────────────────────
   if (stepKey === "relative_valuation") {
     try {
-      // prevContext를 5000자로 확장 — 기업 브리핑·산업 분석이 충분히 포함되도록
-      const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 5000);
       onEvent?.({ t: "" }); // keep connection alive
 
-      let peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext, analysis.ticker);
-      console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
+      // 사전 수집 캐시 우선 사용 (company_analysis 실행 중 미리 수집한 결과)
+      let peers: Array<{ ticker: string; name: string; exchange: string; reason?: string }> = [];
+      let preFetchedData = "";
+      const preFetchPromise = preFetchedPeerData.get(id);
+      if (preFetchPromise) {
+        preFetchedPeerData.delete(id); // 사용 후 즉시 cleanup
+        const prefetch = await preFetchPromise;
+        peers = prefetch.peers;
+        preFetchedData = prefetch.data;
+        console.log(`[peer-select] 사전 수집 결과 사용 — ${peers.length}개 피어`);
+      }
 
-      // 피어 선정 실패 시 1회 재시도 (더 많은 컨텍스트)
-      if (peers.length === 0) {
-        console.warn("[peer-select] 1st attempt returned 0 peers — retrying with full context");
-        const fullContext = existingSteps.map((s) => s.content).join("\n").slice(0, 3000);
-        peers = await selectPeerTickers(analysis.companyName, analysis.industry ?? "바이오/제약", fullContext, analysis.ticker);
-        console.log(`[peer-select] Retry selected ${peers.length} peers`);
+      // 사전 수집 실패·미수집 시 폴백: 직접 수집
+      if (peers.length === 0 && !preFetchedData) {
+        const prevContext = existingSteps.map((s) => s.content).join("\n").slice(0, 5000);
+        peers = await selectPeerTickers(analysis.companyName, analysis.industry, prevContext, analysis.ticker);
+        console.log(`[peer-select] Selected ${peers.length} peers:`, peers.map((p) => p.ticker).join(", "));
+        if (peers.length === 0) {
+          console.warn("[peer-select] 1st attempt returned 0 peers — retrying with full context");
+          const fullContext = existingSteps.map((s) => s.content).join("\n").slice(0, 3000);
+          peers = await selectPeerTickers(analysis.companyName, analysis.industry ?? "바이오/제약", fullContext, analysis.ticker);
+          console.log(`[peer-select] Retry selected ${peers.length} peers`);
+        }
       }
 
       // 한국 주식: KRX 실데이터 기반 업종 PBR 주입 (1시간 캐시)
@@ -5039,7 +5124,11 @@ async function executeStep(
         }
       }
 
-      if (peers.length > 0) {
+      // 사전 수집 데이터가 이미 있으면 그대로 주입, 없으면 직접 fetchPeerFinancials 호출
+      if (preFetchedData) {
+        enrichedContext = enrichedContext ? enrichedContext + preFetchedData : preFetchedData;
+        console.log(`[peer-fetch] 사전 수집 데이터 주입 완료 (${preFetchedData.length}chars)`);
+      } else if (peers.length > 0) {
         const peerData = await fetchPeerFinancials(peers);
         if (peerData) {
           enrichedContext = enrichedContext ? enrichedContext + peerData : peerData;
@@ -5059,53 +5148,59 @@ async function executeStep(
     }
   }
 
-  // ── 기술적 분석 전용: 주봉 이동평균(20주선·60주선) 계산 및 주입 ──────────────
+
+  // ── 기술적 분析 전용: 주봉 이동평균(20주선·60주선) — 사전 수집 캐시 우선 사용 ──
   if (stepKey === "market_analysis") {
     try {
-      const wkStart = new Date();
-      wkStart.setFullYear(wkStart.getFullYear() - 2); // 60주선 = 약 15개월, 여유 있게 2년치
-      const wkPeriod1 = wkStart.toISOString().slice(0, 10);
-      const wkHistory = await yahooFinance
-        .historical(analysis.ticker, { period1: wkPeriod1, interval: "1wk" }, { validateResult: false })
-        .catch(() => null);
-
-      if (wkHistory && wkHistory.length >= 20) {
-        const closes = wkHistory
-          .map((q: any) => (q as any).adjClose ?? (q as any).close)
-          .filter((c: any) => c != null && c > 0) as number[];
-
-        const calcMA = (arr: number[], period: number): number | null => {
-          if (arr.length < period) return null;
-          const slice = arr.slice(-period);
-          return slice.reduce((a, b) => a + b, 0) / period;
-        };
-
-        const ma20w = calcMA(closes, 20);
-        const ma60w = calcMA(closes, 60);
-        const latestClose = closes[closes.length - 1];
-
-        const wkLines: string[] = ["\n[📊 주봉 이동평균 데이터 (서버 계산)]"];
-        wkLines.push(`현재가(최근 주봉 종가): ${latestClose?.toLocaleString()}원`);
-        if (ma20w != null) {
-          const diff20 = ((latestClose - ma20w) / ma20w * 100).toFixed(1);
-          wkLines.push(`20주 이동평균(20주선): ${Math.round(ma20w).toLocaleString()}원 (현재가 대비 ${parseFloat(diff20) >= 0 ? "+" : ""}${diff20}%)`);
-        }
-        if (ma60w != null) {
-          const diff60 = ((latestClose - ma60w) / ma60w * 100).toFixed(1);
-          wkLines.push(`60주 이동평균(60주선): ${Math.round(ma60w).toLocaleString()}원 (현재가 대비 ${parseFloat(diff60) >= 0 ? "+" : ""}${diff60}%)`);
-        }
-        if (ma20w != null && ma60w != null) {
-          wkLines.push(`주봉 추세 판단: 현재가가 20주선 ${latestClose > ma20w ? "위" : "아래"}, 60주선 ${latestClose > ma60w ? "위" : "아래"} — ${latestClose > ma20w && latestClose > ma60w ? "중기 상승 추세" : latestClose < ma20w && latestClose < ma60w ? "중기 하락 추세" : "혼조"}`);
-        }
-        wkLines.push(`(데이터 기준: 최근 ${closes.length}주 주봉 종가 기반 계산)`);
-        const wkBlock = wkLines.join("\n");
-        enrichedContext = enrichedContext ? enrichedContext + wkBlock : wkBlock;
-        console.log(`[weekly-ma] Injected 20w/60w MA for ${analysis.ticker}: ma20=${ma20w?.toFixed(0)}, ma60=${ma60w?.toFixed(0)}`);
-      } else {
-        console.warn(`[weekly-ma] 주봉 데이터 부족 (${wkHistory?.length ?? 0}주) — 주봉 MA 주입 생략`);
+      const wkPromise = preFetchedWeeklyMA.get(id);
+      let wkBlock = "";
+      if (wkPromise) {
+        preFetchedWeeklyMA.delete(id); // 사용 후 cleanup
+        wkBlock = await wkPromise;
+        if (wkBlock) console.log(`[weekly-ma] 사전 수집 데이터 주입 (${wkBlock.length}chars)`);
       }
+      // 사전 수집 실패 시 폴백: 직접 계산
+      if (!wkBlock) {
+        const wkStart = new Date();
+        wkStart.setFullYear(wkStart.getFullYear() - 2);
+        const wkPeriod1 = wkStart.toISOString().slice(0, 10);
+        const wkHistory = await yahooFinance
+          .historical(analysis.ticker, { period1: wkPeriod1, interval: "1wk" }, { validateResult: false })
+          .catch(() => null);
+        if (wkHistory && wkHistory.length >= 20) {
+          const closes = wkHistory
+            .map((q: any) => (q as any).adjClose ?? (q as any).close)
+            .filter((c: any) => c != null && c > 0) as number[];
+          const calcMA = (arr: number[], period: number): number | null => {
+            if (arr.length < period) return null;
+            return arr.slice(-period).reduce((a, b) => a + b, 0) / period;
+          };
+          const ma20w = calcMA(closes, 20);
+          const ma60w = calcMA(closes, 60);
+          const latestClose = closes[closes.length - 1];
+          const wkLines: string[] = ["\n[📊 주봉 이동평균 데이터 (서버 계산)]"];
+          wkLines.push(`현재가(최근 주봉 종가): ${latestClose?.toLocaleString()}원`);
+          if (ma20w != null) {
+            const d = ((latestClose - ma20w) / ma20w * 100).toFixed(1);
+            wkLines.push(`20주 이동평균(20주선): ${Math.round(ma20w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
+          }
+          if (ma60w != null) {
+            const d = ((latestClose - ma60w) / ma60w * 100).toFixed(1);
+            wkLines.push(`60주 이동평균(60주선): ${Math.round(ma60w).toLocaleString()}원 (현재가 대비 ${parseFloat(d) >= 0 ? "+" : ""}${d}%)`);
+          }
+          if (ma20w != null && ma60w != null) {
+            wkLines.push(`주봉 추세 판단: 현재가가 20주선 ${latestClose > ma20w ? "위" : "아래"}, 60주선 ${latestClose > ma60w ? "위" : "아래"} — ${latestClose > ma20w && latestClose > ma60w ? "중기 상승 추세" : latestClose < ma20w && latestClose < ma60w ? "중기 하락 추세" : "혼조"}`);
+          }
+          wkLines.push(`(데이터 기준: 최근 ${closes.length}주 주봉 종가 기반 계산)`);
+          wkBlock = wkLines.join("\n");
+          console.log(`[weekly-ma] 폴백 계산 완료 (${wkBlock.length}chars)`);
+        } else {
+          console.warn(`[weekly-ma] 주봉 데이터 부족 (${wkHistory?.length ?? 0}주) — 주봉 MA 주입 생략`);
+        }
+      }
+      if (wkBlock) enrichedContext = enrichedContext ? enrichedContext + wkBlock : wkBlock;
     } catch (err: any) {
-      console.warn("[weekly-ma] 주봉 MA 계산 실패:", err?.message?.slice(0, 80));
+      console.warn("[weekly-ma] 주봉 MA 처리 실패:", err?.message?.slice(0, 80));
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -5300,7 +5395,7 @@ async function executeStep(
               : `\n\n---\n[Round 1 초안 — 아래 초안을 기반으로 수정하세요]\n${content}\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서의 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)과 분량을 그대로 유지하면서(줄이지 마세요) 최종 완성본을 작성하세요.`);
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
-          const synthesisMaxTokens = 24576; // Debate 합성: 24k (잘림 방지 + 비용 절감 절충)
+          const synthesisMaxTokens = 16384; // Debate 합성: 16k (속도·품질 균형)
 
           await geminiSemaphore.acquire();
           let synthesizedContent = "";
