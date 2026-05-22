@@ -1,10 +1,11 @@
 /**
  * 시장 예측 파이프라인 v8  — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 11 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 20
+ * 기술적 11 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 23
  *
  * [기술적 11] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
- *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price  ← NEW v14
+ *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price
+ * [거래량  3] 거래량 5일 모멘텀, 상대거래량(vs MA20), 방향가중 거래량   ← NEW v15
  * [매크로  3]  S&P500 전일 등락 (^GSPC) / DXY (SNP용)
  *             원/달러 환율 변화율 (USDKRW=X)
  *             국고채 3년 금리 (KR FRED) / 미국10Y (SNP용)
@@ -51,7 +52,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 20;
 const PRED_H       = 3;
-const N_FEATURES   = 20;   // 11 기술적(+MACD2) + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
+const N_FEATURES   = 23;   // 11 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 32;
@@ -62,7 +63,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 14;
+const MODEL_VERSION = 15;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -638,11 +639,12 @@ function rsiNorm(rets: number[], w: number, i: number) {
 }
 
 function buildFeatures(
-  rows: { date: string; close: number }[],
+  rows: { date: string; close: number; volume: number }[],
   extMap: Map<string, ExtPoint>,
 ): { feats: Float64Array[]; closes: number[]; dates: string[] } {
-  const closes = rows.map(r => r.close);
-  const dates  = rows.map(r => r.date);
+  const closes  = rows.map(r => r.close);
+  const volumes = rows.map(r => r.volume);
+  const dates   = rows.map(r => r.date);
   const rets   = closes.map((c, i) => i === 0 ? 0 : (c - closes[i-1]) / closes[i-1]);
 
   // ── MACD: EMA12, EMA26, Signal(EMA9 of MACD) ──────────────────────────────
@@ -675,6 +677,12 @@ function buildFeatures(
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
     const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:0, vix5dMom:0, vixRet:0, yieldSpread:0.5 };
     const p     = closes[i] || 1e-8;
+    // ── 거래량 피처 ──
+    const volMa5   = rollingMean(volumes, 5,  i);
+    const volMa20  = rollingMean(volumes, 20, i);
+    const volRet5  = volMa5  > 0 ? volumes[i] / volMa5  - 1 : 0;  // 거래량 5일 모멘텀
+    const relVol20 = volMa20 > 0 ? volumes[i] / volMa20 - 1 : 0;  // 상대 거래량 (vs MA20)
+    const signedVol = Math.max(-1, Math.min(1, Math.sign(rets[i]) * Math.max(0, relVol20))); // 방향 가중 거래량
     return new Float64Array([
       // ── 기술적 (11) ──
       rets[i],
@@ -685,8 +693,12 @@ function buildFeatures(
       rollingStdFn(rets, 20, i),
       Math.max(0, Math.min(1, bband)),
       mom5, mom10,
-      macdLine[i]   / p,     // [v14] MACD Line / price (트렌드 강도)
-      macdSignal[i] / p,     // [v14] MACD Signal / price (트렌드 방향 확인)
+      macdLine[i]   / p,     // MACD Line / price (트렌드 강도)
+      macdSignal[i] / p,     // MACD Signal / price (트렌드 방향 확인)
+      // ── 거래량 (3) [v15] ──
+      Math.max(-3, Math.min(3, volRet5)),    // 거래량 5일 모멘텀 (급등=양수)
+      Math.max(-3, Math.min(3, relVol20)),   // 상대 거래량 vs MA20
+      signedVol,                             // 방향 가중 거래량 (−1~+1)
       // ── 매크로 (3) ──
       ext.sp500Ret,          // S&P500 등락 / SNP용: DXY
       ext.usdkrwRet,         // 환율 변화율
@@ -832,16 +844,37 @@ function makeSeqs3D(
   return{X3d,y:new Float64Array(ys),anchorDateIdxs:anchors};
 }
 
-function buildLSTMArch(drop = 0.2): tf.Sequential {
-  const model = tf.sequential();
-  model.add(tf.layers.lstm({
-    units: LSTM_UNITS, inputShape: [LOOKBACK, N_FEATURES],
-    returnSequences: false, dropout: drop, recurrentDropout: drop / 2,
-  }));
-  model.add(tf.layers.dense({ units: LSTM_DENSE, activation: "relu" }));
-  model.add(tf.layers.dropout({ rate: drop / 2 }));
-  model.add(tf.layers.dense({ units: 1 }));
-  return model;
+function buildLSTMArch(drop = 0.2): tf.LayersModel {
+  const input = tf.input({ shape: [LOOKBACK, N_FEATURES] });
+
+  // LSTM — returnSequences=true for attention
+  const lstmOut = tf.layers.lstm({
+    units: LSTM_UNITS, returnSequences: true,
+    dropout: drop, recurrentDropout: drop / 2,
+  }).apply(input) as tf.SymbolicTensor;                             // [B, T, LSTM_UNITS]
+
+  // Additive self-attention: score per timestep
+  const attnLogits = tf.layers.timeDistributed({
+    layer: tf.layers.dense({ units: 1, activation: "tanh" }),
+  }).apply(lstmOut) as tf.SymbolicTensor;                           // [B, T, 1]
+  const attnFlat    = tf.layers.reshape({ targetShape: [LOOKBACK] })
+                        .apply(attnLogits)   as tf.SymbolicTensor; // [B, T]
+  const attnWeights = tf.layers.softmax()
+                        .apply(attnFlat)     as tf.SymbolicTensor; // [B, T]
+
+  // Weighted context: [B,1,T] · [B,T,D] → [B,1,D] → [B,D]
+  const attnRow = tf.layers.reshape({ targetShape: [1, LOOKBACK] })
+                    .apply(attnWeights) as tf.SymbolicTensor;      // [B, 1, T]
+  const ctxRaw  = tf.layers.dot({ axes: [2, 1] })
+                    .apply([attnRow, lstmOut]) as tf.SymbolicTensor; // [B, 1, D]
+  const context = tf.layers.reshape({ targetShape: [LSTM_UNITS] })
+                    .apply(ctxRaw) as tf.SymbolicTensor;           // [B, D]
+
+  const dense1  = tf.layers.dense({ units: LSTM_DENSE, activation: "relu" }).apply(context) as tf.SymbolicTensor;
+  const dropped = tf.layers.dropout({ rate: drop / 2 }).apply(dense1) as tf.SymbolicTensor;
+  const output  = tf.layers.dense({ units: 1 }).apply(dropped) as tf.SymbolicTensor;
+
+  return tf.model({ inputs: input, outputs: output });
 }
 
 function saveLSTMWeights(model: tf.LayersModel): LSTMWeightLayer[][] {
@@ -850,7 +883,7 @@ function saveLSTMWeights(model: tf.LayersModel): LSTMWeightLayer[][] {
   );
 }
 
-function loadLSTMFromWeights(weightsData: LSTMWeightLayer[][]): tf.Sequential {
+function loadLSTMFromWeights(weightsData: LSTMWeightLayer[][]): tf.LayersModel {
   const model = buildLSTMArch();
   model.layers.forEach((layer, i) => {
     if (weightsData[i]?.length > 0) {
@@ -865,7 +898,7 @@ async function trainLSTM(
   X3d_train: number[][][], y_train: Float64Array,
   X3d_val:   number[][][], y_val:   Float64Array,
   hp: IndexHP,
-): Promise<tf.Sequential> {
+): Promise<tf.LayersModel> {
   await tf.ready();
   const model = buildLSTMArch(hp.lstmDrop);
   model.compile({ optimizer: tf.train.adam(hp.lstmLR), loss: "meanSquaredError" });
@@ -919,7 +952,7 @@ async function trainLSTM(
   return model;
 }
 
-function lstmPredict(model: tf.Sequential, X3d: number[][][]): Float64Array {
+function lstmPredict(model: tf.LayersModel, X3d: number[][][]): Float64Array {
   if (X3d.length === 0) return new Float64Array(0);
   const input = tf.tensor3d(X3d);
   const output = model.predict(input) as tf.Tensor;
@@ -937,17 +970,21 @@ async function fetchHistory(symbol: string, years = YEARS_DATA) {
   const r = await (yahoo as any).chart(symbol, { period1: start, period2: end, interval: "1d" });
   return (r.quotes ?? [])
     .filter((q: any) => q.close != null)
-    .map((q: any) => ({ date: new Date(q.date).toISOString().slice(0,10), close: q.close as number }));
+    .map((q: any) => ({
+      date:   new Date(q.date).toISOString().slice(0, 10),
+      close:  q.close  as number,
+      volume: (q.volume ?? 0) as number,
+    }));
 }
 
 // ─── Core result builder ──────────────────────────────────────────────────────
 
 function buildResultFromModel(
   symbol: string, name: string,
-  rows: { date: string; close: number }[],
+  rows: { date: string; close: number; volume: number }[],
   extMap: Map<string, ExtPoint>,
   gbdtModels: GBDTModel[], gbdtScaler: { mu: Float64Array; sigma: Float64Array },
-  lstmModel: tf.Sequential, lstmScaler: { mu: Float64Array; sigma: Float64Array },
+  lstmModel: tf.LayersModel, lstmScaler: { mu: Float64Array; sigma: Float64Array },
   storedAlpha: number,
   recentWindow = 30,
 ): IndexResult {
@@ -978,8 +1015,22 @@ function buildResultFromModel(
   const lstmSkill = Math.max(0, l30 - 0.50);
   const gbdtSkill = Math.max(0, g30 - 0.50);
   const rawAlpha  = lstmSkill + gbdtSkill > 1e-6 ? lstmSkill / (lstmSkill + gbdtSkill) : 0.5;
-  // 최소 10% LSTM 참여 보장 (완전히 0이 되지 않도록)
-  const alpha = Math.max(0.10, rawAlpha);
+
+  // ── 레짐 감지: 실현 변동성 백분위로 시장 상태 분류 ──────────────────────────
+  // calm(<33%ile)  → GBDT 주도 (추세추종 유효)
+  // normal(33~67%) → 균형 앙상블
+  // crisis(>67%ile)→ LSTM 주도 (패닉 패턴 기억)
+  const histRets  = closes.map((c, i) => i === 0 ? 0 : (c - closes[i-1]) / closes[i-1]);
+  const allVol20  = histRets.map((_, i) => rollingStdFn(histRets, 20, i)).filter(v => v > 1e-10);
+  const sortedVol = [...allVol20].sort((a, b) => a - b);
+  const curVol20  = rollingStdFn(histRets, 20, histRets.length - 1);
+  const volPct    = sortedVol.length > 0 ? sortedVol.filter(v => v <= curVol20).length / sortedVol.length : 0.5;
+  const [alphaMin, alphaMax] = volPct < 0.33 ? [0.05, 0.40]   // calm  — GBDT 모드
+                             : volPct > 0.67 ? [0.20, 0.75]   // crisis — LSTM 모드
+                             :                 [0.10, 0.60];   // normal — 균형
+  const regimeLabel = volPct < 0.33 ? "calm" : volPct > 0.67 ? "crisis" : "normal";
+  const alpha = Math.max(alphaMin, Math.min(alphaMax, rawAlpha));
+  console.log(`[regime] ${symbol} volPct=${(volPct*100).toFixed(0)}% regime=${regimeLabel} α=[${alphaMin}~${alphaMax}]→${alpha.toFixed(3)}`);
 
   // 안전장치: LSTM 예측이 GBDT 대비 3배 초과하면 방향 유지 채 압축
   // (LSTM이 역방향 큰 값을 예측할 때 앙상블 플립 방지)
@@ -1085,7 +1136,7 @@ function buildResultFromModel(
 
 async function trainFull(
   symbol: string, name: string,
-  rows: { date: string; close: number }[],
+  rows: { date: string; close: number; volume: number }[],
   market: "KOSPI" | "KOSDAQ" | "SNP",
 ) {
   const hp = getHP(symbol);
@@ -1333,7 +1384,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     // PRED_H일 전까지 포함: 해당 anchor의 actual이 이제 available할 수 있음
     const lastUpdatedDate = lastUpdated.slice(0, 10);  // "YYYY-MM-DD"
 
-    function newSamples(rows:{date:string;close:number}[], extMap:Map<string,ExtPoint>, store:StoredModelFile) {
+    function newSamples(rows:{date:string;close:number;volume:number}[], extMap:Map<string,ExtPoint>, store:StoredModelFile) {
       const {feats,closes,dates}=buildFeatures(rows,extMap);
       const {X,y,anchorDateIdxs}=makeSeqs(feats,closes,LOOKBACK,PRED_H);
       // anchor 날짜 >= lastUpdated 날짜인 것을 모두 포함
