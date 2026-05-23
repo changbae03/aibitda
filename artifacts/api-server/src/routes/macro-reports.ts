@@ -90,10 +90,13 @@ router.post("/admin/macro-reports", async (req, res) => {
 });
 
 // POST /api/admin/macro-reports/generate — AI 자동 보고서 생성 (관리자)
+// body: { topic?: string }  — topic 없으면 오늘의 핵심 이슈 자동 선정
 router.post("/admin/macro-reports/generate", async (req, res) => {
   await ensureTable();
   const userId = getUserId(req);
   if (!(await isAdmin(userId))) { res.status(403).json({ error: "관리자 전용" }); return; }
+
+  const { topic } = req.body as { topic?: string };
 
   try {
     const [fredResult, ecosResult] = await Promise.allSettled([
@@ -127,18 +130,21 @@ router.post("/admin/macro-reports/generate", async (req, res) => {
       ecos?.bondYield10Y != null ? `한국 국고채 10년 ${ecos.bondYield10Y}%` : null,
     ].filter(Boolean).join("\n");
 
+    const topicLine = topic?.trim()
+      ? `\n분석 주제: 관리자가 다음 주제로 보고서를 요청했습니다 → **"${topic.trim()}"**\n위 주제를 중심으로 현재 거시경제 환경과 연결하여 심층 분석하세요.`
+      : `\n지금 시점에서 가장 중요한 매크로 이슈 1가지를 직접 선정하여 분석하세요.`;
+
     const prompt = `당신은 글로벌 헤지펀드 소속의 매크로 전략 수석 애널리스트입니다.
 오늘 날짜: ${today}
+${topicLine}
 
-현재 주요 거시경제 지표:
+현재 주요 거시경제 지표 (참고 데이터):
 ${macroCtx || "(지표 데이터 없음)"}
 
-위 데이터와 현재 글로벌 경제 환경을 바탕으로, 지금 시점에서 가장 중요한 매크로 이슈 1가지를 선정하여 심층 분석 보고서를 작성하세요.
-
-보고서는 다음 구조를 따르되, 각 섹션은 **굵은 제목**으로 구분하세요:
+다음 구조로 심층 분석 보고서를 작성하세요. 각 섹션은 **굵은 제목**으로 구분합니다:
 
 **이슈 요약**
-현재 발생하고 있는 핵심 매크로 이슈를 2~3문장으로 명확히 서술
+현재 발생하고 있는 핵심 이슈를 2~3문장으로 명확히 서술
 
 **배경**
 이 이슈가 등장하게 된 역사적·구조적 맥락. 최소 3~4개 문단으로 충분히 서술
@@ -147,15 +153,15 @@ ${macroCtx || "(지표 데이터 없음)"}
 최근 발표된 지표, 정책 결정, 시장 반응 등 구체적 데이터와 함께 서술
 
 **원인 분석**
-이 이슈의 근본 원인과 심층 구조적 요인 분석. 복수의 각도에서 접근
+근본 원인과 심층 구조적 요인 분석. 복수의 각도에서 접근
 
 **시장 영향**
 주식, 채권, 외환, 원자재 시장에 미치는 영향. 섹터별 명암 포함
 
 **전망 및 투자 시사점**
-향후 전개 시나리오(기본/낙관/비관), 주목해야 할 지표와 이벤트, 포트폴리오 관점의 시사점
+향후 시나리오(기본/낙관/비관), 주목해야 할 지표·이벤트, 포트폴리오 관점 시사점
 
-보고서는 전문적이고 분석적인 톤으로, 구체적 수치와 근거를 최대한 포함하여 최소 1,500자 이상 작성하세요.
+전문적이고 분석적인 톤으로, 구체적 수치와 근거를 최대한 포함하여 최소 1,500자 이상 작성하세요.
 마지막에 아래 JSON을 출력하세요:
 <JSON>
 {"title": "보고서 제목(이슈 핵심을 담은 15자 내외)", "summary": "카드 미리보기용 요약 2문장(100자 내외)"}
