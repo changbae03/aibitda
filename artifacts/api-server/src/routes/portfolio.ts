@@ -1359,29 +1359,42 @@ interface NewsItem {
 const newsCache = new Map<string, { ts: number; items: NewsItem[] }>();
 const NEWS_CACHE_TTL = 15 * 60 * 1000; // 15분
 
+// Yahoo Finance 검색 API로 뉴스 가져오기
 async function fetchNewsForTicker(ticker: string, companyName: string): Promise<NewsItem[]> {
-  const query = encodeURIComponent(companyName);
-  const rssUrl = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`;
-  try {
-    const res = await fetch(rssUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" },
+  // 한국 6자리 → .KS 추가, .KQ 이미 있으면 유지
+  let yTicker = ticker;
+  if (/^\d{6}$/.test(ticker))        yTicker = `${ticker}.KS`;
+  else if (/^\d{6}\.KQ$/i.test(ticker)) yTicker = ticker.toUpperCase();
+
+  const query  = encodeURIComponent(yTicker);
+  const url    = `https://query1.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=8&enableFuzzyQuery=false&quotesCount=0`;
+  const url2   = `https://query2.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=8&enableFuzzyQuery=false&quotesCount=0`;
+
+  const tryFetch = async (endpoint: string) => {
+    const r = await fetch(endpoint, {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return [];
-    const xml = await res.text();
-    const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json() as Promise<any>;
+  };
+
+  try {
+    let data: any;
+    try { data = await tryFetch(url); }
+    catch { data = await tryFetch(url2); }
+
+    const newsArr: any[] = data?.news ?? [];
     const result: NewsItem[] = [];
-    for (const item of items.slice(0, 8)) {
-      const cdataTitle  = item.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/)?.[1];
-      const plainTitle  = item.match(/<title>([^<]+)<\/title>/)?.[1];
-      const title       = (cdataTitle ?? plainTitle ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
-      const pubDateRaw  = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] ?? "";
-      const source      = item.match(/<source[^>]*>(?:<!\[CDATA\[)?([^\]<]+)(?:\]\]>)?<\/source>/)?.[1]?.trim() ?? "";
-      const link        = item.match(/<link>([^<]+)<\/link>/)?.[1]?.trim()
-                       ?? item.match(/<guid[^>]*>([^<]+)<\/guid>/)?.[1]?.trim() ?? "";
+    for (const n of newsArr.slice(0, 8)) {
+      const title   = String(n.title ?? "").trim();
+      const source  = String(n.publisher ?? "").trim();
+      const link    = String(n.link ?? "").trim();
+      const ts      = typeof n.providerPublishTime === "number"
+        ? new Date(n.providerPublishTime * 1000).toISOString()
+        : new Date().toISOString();
       if (!title) continue;
-      const pubDate = pubDateRaw ? new Date(pubDateRaw).toISOString() : new Date().toISOString();
-      result.push({ ticker, companyName, title, source, pubDate, url: link });
+      result.push({ ticker, companyName, title, source, pubDate: ts, url: link });
     }
     return result;
   } catch {
@@ -1393,9 +1406,10 @@ router.get("/portfolio/news", async (req, res) => {
   const userId = getUserId(req);
   if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
 
-  // 캐시 확인
+  // 캐시 확인 (force=true 이면 캐시 무시)
+  const force = req.query.force === "true";
   const cached = newsCache.get(userId);
-  if (cached && Date.now() - cached.ts < NEWS_CACHE_TTL) {
+  if (!force && cached && Date.now() - cached.ts < NEWS_CACHE_TTL) {
     res.json({ items: cached.items, cachedAt: new Date(cached.ts).toISOString() });
     return;
   }
