@@ -41,28 +41,6 @@ function isVeryNew(iso: string) {
   return Date.now() - new Date(iso).getTime() < 30 * 60 * 1000;
 }
 
-/* ── 종목 태그 뱃지 ─────────────────────────────────────────────────────── */
-const STOCK_SET = new Set([
-  "삼성전자", "SK하이닉스", "LG에너지솔루션", "현대차", "기아",
-  "POSCO", "포스코", "카카오", "네이버", "셀트리온", "삼성바이오로직스",
-  "현대모비스", "LG화학", "삼성SDI", "SK이노베이션", "한화", "롯데",
-  "크래프톤", "넷마블", "두산에너빌리티", "HD현대", "KT", "SK텔레콤", "LG전자",
-]);
-
-function TagBadge({ tag }: { tag: string }) {
-  const isStock = STOCK_SET.has(tag);
-  return (
-    <span className={cn(
-      "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-      isStock
-        ? "bg-sky-500/10 text-sky-400 border border-sky-500/20"
-        : "bg-muted/60 text-muted-foreground/70 border border-border/60",
-    )}>
-      {tag}
-    </span>
-  );
-}
-
 /* ── 뉴스 카드 ──────────────────────────────────────────────────────────── */
 function NewsCard({ item }: { item: MacroNewsItem }) {
   const breaking = isBreaking(item.pubDate);
@@ -114,14 +92,6 @@ function NewsCard({ item }: { item: MacroNewsItem }) {
           <span className="text-[10px] text-muted-foreground/45 shrink-0">{item.source}</span>
           <span className="text-[10px] text-muted-foreground/30">·</span>
           <span className="text-[10px] text-muted-foreground/45">{relTime(item.pubDate)}</span>
-          {(item.tags?.length ?? 0) > 0 && (
-            <>
-              <span className="text-[10px] text-muted-foreground/30">·</span>
-              <div className="flex items-center gap-1 flex-wrap">
-                {item.tags.slice(0, 4).map(t => <TagBadge key={t} tag={t} />)}
-              </div>
-            </>
-          )}
           <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover:text-muted-foreground/50 ml-auto shrink-0 transition-colors" />
         </div>
       </div>
