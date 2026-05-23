@@ -829,7 +829,7 @@ export default function MarketAnalysis() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">
-            오늘의 AI 시장 분석
+            AI 시장 예측
           </h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             코스피·코스닥의 3일 앞을 AI가 예측합니다

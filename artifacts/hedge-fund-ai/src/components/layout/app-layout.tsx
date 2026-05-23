@@ -107,7 +107,7 @@ const NAV_GROUPS = [
     label: "매크로 분석",
     labelEn: "Macro",
     items: [
-      { href: "/market-analysis", label: "시장분석",     labelEn: "Market Analysis", Icon: LineChart },
+      { href: "/market-analysis", label: "AI시장예측",    labelEn: "AI Forecast",     Icon: LineChart },
       { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
     ],
   },
