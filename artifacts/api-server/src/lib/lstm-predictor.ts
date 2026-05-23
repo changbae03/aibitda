@@ -1030,6 +1030,8 @@ async function trainLSTM(
               model.stopTraining = true;
             }
           }
+          // 매 에포크마다 이벤트 루프에 제어권 양보 — HTTP 요청(보고서 생성 등)이 블로킹되지 않도록
+          await new Promise(r => setImmediate(r));
         },
       },
     });
@@ -1403,6 +1405,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
     // NASDAQ은 S&P500과 동일한 외부 피처 사용 (SNP 타입)
     const nasdaqExtMap = await fetchExternalData(nasdaqRows.map((r: { date: string; close: number }) => r.date), "SNP");
 
+    const yield_ = () => new Promise(r => setImmediate(r));
     const kospi = buildResultFromModel(
       "^KS11","KOSPI",kospiRows,kospiExtMap,
       kospiStore.gbdtModels,
@@ -1411,6 +1414,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
       kospiStore.ensembleAlpha, getHP("^KS11").recentWindow,
     );
+    await yield_();
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,
       kosdaqStore.gbdtModels,
@@ -1419,6 +1423,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
       kosdaqStore.ensembleAlpha, getHP("^KQ11").recentWindow,
     );
+    await yield_();
     const snp500 = buildResultFromModel(
       "^GSPC","S&P500",snpRows,snpExtMap,
       snpStore.gbdtModels,
@@ -1427,6 +1432,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       {mu:new Float64Array(snpStore.lstmScaler.mu),sigma:new Float64Array(snpStore.lstmScaler.sigma)},
       snpStore.ensembleAlpha, getHP("^GSPC").recentWindow,
     );
+    await yield_();
     const nasdaq = ixicStore?.lstmWeights ? buildResultFromModel(
       "^IXIC","NASDAQ",nasdaqRows,nasdaqExtMap,
       ixicStore.gbdtModels,
@@ -1435,6 +1441,7 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
       {mu:new Float64Array(ixicStore.lstmScaler.mu),sigma:new Float64Array(ixicStore.lstmScaler.sigma)},
       ixicStore.ensembleAlpha, getHP("^IXIC").recentWindow,
     ) : undefined;
+    await yield_();
 
     _lastRun = Date.now();
     _status = {
@@ -1571,6 +1578,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       getComponentLiveAccuracy("^IXIC").catch(() => undefined),
     ]);
 
+    const yield2_ = () => new Promise(r => setImmediate(r));
     const kospi = buildResultFromModel(
       "^KS11","KOSPI",kospiRows,kospiExtMap,updKospi,
       {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
@@ -1578,6 +1586,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
       kospiStore.ensembleAlpha, ksHP.recentWindow, ksLive,
     );
+    await yield2_();
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,updKosdaq,
       {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
@@ -1585,6 +1594,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
       kosdaqStore.ensembleAlpha, kqHP.recentWindow, kqLive,
     );
+    await yield2_();
     const snp500 = buildResultFromModel(
       "^GSPC","S&P500",snpRows,snpExtMap,updSnp,
       {mu:new Float64Array(snpStore.gbdtScaler.mu),sigma:new Float64Array(snpStore.gbdtScaler.sigma)},
@@ -1592,6 +1602,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       {mu:new Float64Array(snpStore.lstmScaler.mu),sigma:new Float64Array(snpStore.lstmScaler.sigma)},
       snpStore.ensembleAlpha, gspcHP.recentWindow, gspcLive,
     );
+    await yield2_();
     const nasdaq = (ixicStore&&updIxic) ? buildResultFromModel(
       "^IXIC","NASDAQ",nasdaqRows,nasdaqExtMap,updIxic,
       {mu:new Float64Array(ixicStore.gbdtScaler.mu),sigma:new Float64Array(ixicStore.gbdtScaler.sigma)},
@@ -1599,6 +1610,7 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
       {mu:new Float64Array(ixicStore.lstmScaler.mu),sigma:new Float64Array(ixicStore.lstmScaler.sigma)},
       ixicStore.ensembleAlpha, ixicHP.recentWindow, ixicLive,
     ) : _status.nasdaq;
+    await yield2_();
     const now=new Date().toISOString();
     saveMeta({
       ...(meta??{lastTrained:now,nSamples:{},dirAcc:{},wfDirAcc:{},rolling30dDirAcc:{},updateCount:0}),
