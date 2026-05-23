@@ -92,7 +92,21 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
     } else {
       try {
         const holdings = await fetchETFsForStock(koreanCode);
-        domesticEtfs = holdings.map(h => ({
+
+        // KOSDAQ 전용 ETF는 이름에 "KOSDAQ" 또는 "코스닥" 포함 → KOSPI 종목 제외
+        // KOSPI 전용 지수 ETF는 KOSDAQ 종목에서 제외
+        const isKosdaqStock = exchange === "KOSDAQ";
+        const filtered = holdings.filter(h => {
+          const nameUp = h.etfName.toUpperCase();
+          const isKosdaqEtf = nameUp.includes("KOSDAQ") || h.etfName.includes("코스닥");
+          if (isKosdaqEtf && !isKosdaqStock) {
+            console.log(`[etf-inclusion] 제외(KOSPI→KOSDAQ ETF): ${h.etfName} (${koreanCode})`);
+            return false;
+          }
+          return true;
+        });
+
+        domesticEtfs = filtered.map(h => ({
           code:       h.etfCode,
           name:       h.etfName,
           manager:    h.manager,
@@ -101,7 +115,7 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
           dataSource: "real" as const,
         }));
         cache.set(cacheKey, domesticEtfs, TTL_ETF);
-        console.log(`[etf-inclusion] ${koreanCode}: ${domesticEtfs.length}개 ETF 실데이터`);
+        console.log(`[etf-inclusion] ${koreanCode}(${exchange}): ${domesticEtfs.length}개 ETF 실데이터 (원본 ${holdings.length}개)`);
       } catch (e: any) {
         console.warn("[etf-inclusion] pykrx 실패:", e?.message);
       }
