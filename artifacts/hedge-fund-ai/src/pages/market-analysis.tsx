@@ -127,6 +127,18 @@ function formatDate(dateStr: string, short = false): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/* ── 섹션 레이블 (에디토리얼 구분선) ────────────────────────────────────── */
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-[10px] font-semibold text-foreground/35 tracking-[0.16em] uppercase shrink-0">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-border/60" />
+    </div>
+  );
+}
+
 /* ── AI 브리핑 카드 ──────────────────────────────────────────────────────── */
 function MarketBriefSection({
   brief, loading, onRefresh, showRefresh = true,
@@ -242,54 +254,72 @@ function MarketBriefSection({
         {brief && !brief.generating && (
           <>
             {/* 헤드라인 + 리드 */}
-            <div className="space-y-3">
-              <h3 className="text-[15px] font-bold text-foreground leading-snug">{brief.summary}</h3>
+            <div className="space-y-2.5">
+              <h3 className="text-[16px] font-bold text-foreground leading-snug tracking-tight">
+                {brief.summary}
+              </h3>
               {brief.leadParagraph && (
-                <p className="text-[13px] text-foreground/75 leading-relaxed border-l-2 border-primary/40 pl-3">
+                <p className="text-[13.5px] text-foreground/70 leading-[1.8] border-l-[2.5px] border-foreground/20 pl-3.5">
                   {brief.leadParagraph}
                 </p>
               )}
             </div>
 
             {/* AI 해설 — 과거→현재→미래 내러티브 */}
-            {brief.storyLine && (
-              <div className="bg-primary/[0.06] border border-primary/15 rounded-2xl px-4 py-4 space-y-2">
-                <p className="text-[10px] font-bold text-primary/50 uppercase tracking-widest flex items-center gap-1.5">
-                  <span>✦</span> AI 시장 해설
-                </p>
-                <div className="space-y-3">
-                  {brief.storyLine.split(/\n\n+/).map((para, i) => (
-                    <p key={i} className="text-[13px] text-foreground/85 leading-[1.75]">
-                      {para.trim()}
-                    </p>
-                  ))}
+            {brief.storyLine && (() => {
+              // 인삿말·날짜 서두 제거 (캐시된 구버전 응답 대응)
+              const cleaned = brief.storyLine
+                .replace(/^(안녕하세요[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+                .replace(/^(개인\s*투자자\s*여러분[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+                .replace(/^(\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^。！!?\n]*[。！!?]\s*)/i, "")
+                .replace(/^(오늘도[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+                .replace(/^(주말\s*잘\s*보내[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+                .replace(/^(반갑습니다[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+                .trim();
+              const paras = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+              return (
+                <div className="space-y-1 pt-1">
+                  <SectionLabel label="시장 해설" />
+                  <div className="space-y-3.5 pt-2">
+                    {paras.map((para, i) => (
+                      <p
+                        key={i}
+                        className={cn(
+                          "leading-[1.85]",
+                          i === 0
+                            ? "text-[13.5px] text-foreground/85 font-medium"
+                            : "text-[13px] text-foreground/65"
+                        )}
+                      >
+                        {para}
+                      </p>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* 풍부한 섹션이 있을 때만 표시 */}
             {hasRich && (
               <>
                 {/* 최근 시장 이슈 */}
                 {(brief.marketEvents?.length ?? 0) > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
-                      <Newspaper className="w-3.5 h-3.5" /> 요즘 시장에 무슨 일이?
-                    </p>
-                    <div className="space-y-1.5">
+                  <div className="space-y-3 pt-1">
+                    <SectionLabel label="이번 주 무슨 일이" />
+                    <div className="divide-y divide-border/50">
                       {brief.marketEvents!.map((ev, i) => {
                         const dc = dirCfg(ev.direction);
                         return (
-                          <div key={i} className="flex gap-3 items-start bg-muted/30 rounded-xl px-3.5 py-3">
-                            <span className={cn("mt-[5px] shrink-0 w-2 h-2 rounded-full", dc.dot)} />
+                          <div key={i} className="flex gap-3 items-start py-3 first:pt-0">
+                            <span className={cn("mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", dc.badge)}>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
                                   {dc.label}
                                 </span>
                               </div>
-                              <p className="text-xs text-foreground/60 leading-relaxed">{ev.impact}</p>
+                              <p className="text-[12px] text-foreground/55 leading-relaxed">{ev.impact}</p>
                             </div>
                           </div>
                         );
@@ -300,18 +330,14 @@ function MarketBriefSection({
 
                 {/* 거시 팩터 */}
                 {(brief.macroFactors?.length ?? 0) > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5" /> 지금 경제 지표는?
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="space-y-3 pt-1">
+                    <SectionLabel label="경제 지표" />
+                    <div className="grid grid-cols-2 gap-2">
                       {brief.macroFactors!.map((mf, i) => (
-                        <div key={i} className="bg-muted/30 rounded-xl px-3.5 py-3 space-y-2">
-                          <div>
-                            <p className="text-[10px] text-muted-foreground/45 font-medium mb-0.5">{mf.factor}</p>
-                            <p className="text-[14px] font-bold text-foreground leading-tight">{mf.status}</p>
-                          </div>
-                          <p className="text-xs text-foreground/60 leading-relaxed border-t border-border pt-2">
+                        <div key={i} className="border border-border rounded-xl px-3.5 py-3 space-y-1.5 bg-card">
+                          <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">{mf.factor}</p>
+                          <p className="text-[15px] font-bold text-foreground leading-tight">{mf.status}</p>
+                          <p className="text-[11px] text-foreground/50 leading-relaxed">
                             {mf.implication}
                           </p>
                         </div>
@@ -322,21 +348,19 @@ function MarketBriefSection({
 
                 {/* 향후 전망 */}
                 {(brief.forwardLook?.length ?? 0) > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
-                      <CalendarDays className="w-3.5 h-3.5" /> 앞으로 3거래일, 뭘 봐야 하나?
-                    </p>
-                    <div className="space-y-2">
+                  <div className="space-y-3 pt-1">
+                    <SectionLabel label="앞으로 3거래일" />
+                    <div className="space-y-4">
                       {brief.forwardLook!.map((fw, i) => (
-                        <div key={i} className="flex gap-3 items-start bg-muted/30 rounded-xl px-3.5 py-3">
-                          <div className="shrink-0 w-5 h-5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mt-0.5">
-                            {i + 1}
-                          </div>
+                        <div key={i} className="flex gap-4 items-start">
+                          <span className="shrink-0 text-[12px] font-black text-foreground/18 tabular-nums leading-none mt-[3px]">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
                           <div className="flex-1 space-y-1">
-                            <p className="text-[13px] font-semibold text-foreground leading-snug">{fw.point}</p>
-                            <p className="text-xs text-foreground/60 leading-relaxed">{fw.detail}</p>
-                            <p className="text-[11px] text-primary/50 font-medium flex items-center gap-1 pt-0.5">
-                              <span className="text-muted-foreground/35">체크포인트 →</span> {fw.watchFor}
+                            <p className="text-[13.5px] font-semibold text-foreground leading-snug">{fw.point}</p>
+                            <p className="text-[12px] text-foreground/58 leading-relaxed">{fw.detail}</p>
+                            <p className="text-[11px] text-foreground/35 flex items-center gap-1 pt-0.5">
+                              체크 <ChevronRight className="w-2.5 h-2.5 inline" /> {fw.watchFor}
                             </p>
                           </div>
                         </div>
@@ -347,29 +371,24 @@ function MarketBriefSection({
 
                 {/* 향후 3~5거래일 주목 매크로 이벤트 */}
                 {(brief.upcomingMacroEvents?.length ?? 0) > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5" /> 이번 주 놓치면 안 될 글로벌 이벤트
-                    </p>
-                    <div className="space-y-1.5">
+                  <div className="space-y-3 pt-1">
+                    <SectionLabel label="글로벌 이벤트" />
+                    <div className="divide-y divide-border/50">
                       {brief.upcomingMacroEvents!.map((ev, i) => {
                         const dc = dirCfg(ev.direction);
                         const ic = impactCfg(ev.impact);
                         return (
-                          <div key={i} className="flex gap-3 items-start bg-muted/30 rounded-xl px-3.5 py-3">
-                            <span className={cn("mt-[5px] shrink-0 w-2 h-2 rounded-full", dc.dot)} />
+                          <div key={i} className="flex gap-3 items-start py-3 first:pt-0">
+                            <span className={cn("mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="text-[11px] font-semibold text-primary/50 shrink-0">{ev.date}</span>
+                                <span className="text-[11px] font-semibold text-foreground/35 shrink-0">{ev.date}</span>
                                 <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", ic.cls)}>
+                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>
                                   {ic.label}
                                 </span>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border", dc.badge)}>
-                                  {dc.label}
-                                </span>
                               </div>
-                              <p className="text-xs text-foreground/60 leading-relaxed">{ev.description}</p>
+                              <p className="text-[12px] text-foreground/55 leading-relaxed">{ev.description}</p>
                             </div>
                           </div>
                         );
@@ -380,11 +399,9 @@ function MarketBriefSection({
 
                 {/* 오늘 시장 핵심 키워드 */}
                 {(brief.keyTopics?.length ?? 0) > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wide flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" /> 오늘 시장 핵심 키워드
-                    </p>
-                    <div className="flex flex-wrap gap-2">
+                  <div className="space-y-3 pt-1">
+                    <SectionLabel label="핵심 키워드" />
+                    <div className="space-y-2.5">
                       {brief.keyTopics!.map((topic, i) => {
                         const catColor: Record<string, string> = {
                           "정치": "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-500/10 dark:border-purple-500/25 dark:text-purple-400",
@@ -395,57 +412,43 @@ function MarketBriefSection({
                         };
                         const cls = catColor[topic.category] ?? "bg-stone-100 border-stone-300 text-stone-600 dark:bg-muted/40 dark:border-border dark:text-muted-foreground";
                         return (
-                          <div key={i} className={cn("group relative flex-shrink-0 cursor-default select-none rounded-xl border px-3 py-1.5", cls)}>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-bold opacity-60">{topic.category}</span>
-                              <span className="text-[13px] font-semibold leading-tight">{topic.keyword}</span>
-                            </div>
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 hidden group-hover:block w-56 bg-popover border border-border rounded-xl shadow-lg px-3 py-2.5 pointer-events-none">
-                              <p className="text-[11px] text-foreground/80 leading-relaxed">{topic.description}</p>
+                          <div key={i} className="flex items-start gap-3">
+                            <span className={cn("shrink-0 mt-[1px] text-[9px] font-bold px-1.5 py-0.5 rounded border", cls)}>
+                              {topic.category}
+                            </span>
+                            <div className="flex-1">
+                              <span className="text-[13px] font-semibold text-foreground mr-2">{topic.keyword}</span>
+                              <span className="text-[12px] text-foreground/55 leading-relaxed">{topic.description}</span>
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-                    <div className="space-y-1.5">
-                      {brief.keyTopics!.map((topic, i) => (
-                        <div key={i} className="flex items-start gap-2.5 px-1">
-                          <span className="shrink-0 text-[10px] font-bold text-primary/50 mt-[3px] w-4 text-right">{i + 1}</span>
-                          <div>
-                            <span className="text-[12px] font-semibold text-foreground mr-2">{topic.keyword}</span>
-                            <span className="text-[11px] text-foreground/55 leading-relaxed">{topic.description}</span>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )}
 
                 {/* 핵심 리스크 */}
                 {brief.keyRisk && (
-                  <div className="flex items-start gap-3 bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3.5 py-3">
-                    <AlertCircle className="w-4 h-4 text-amber-500/70 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400/60 mb-1 uppercase tracking-wide">지금 가장 조심해야 할 것</p>
-                      <p className="text-xs text-amber-900/70 dark:text-amber-100/55 leading-relaxed">{brief.keyRisk}</p>
-                    </div>
+                  <div className="border-l-[2.5px] border-amber-400/60 dark:border-amber-500/40 pl-3.5 py-0.5">
+                    <p className="text-[10px] font-bold text-amber-600/70 dark:text-amber-400/50 mb-1.5 tracking-[0.12em] uppercase">주의</p>
+                    <p className="text-[12.5px] text-foreground/65 leading-relaxed">{brief.keyRisk}</p>
                   </div>
                 )}
               </>
             )}
 
-            {/* 풍부한 데이터 없을 때 폴백: 기존 리스트 */}
+            {/* 풍부한 데이터 없을 때 폴백 */}
             {!hasRich && (brief.recentIssues.length > 0 || brief.outlook.length > 0) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {brief.recentIssues.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <Newspaper className="w-3.5 h-3.5" /> 최근 이슈
-                    </p>
-                    <ul className="space-y-1.5">
+                    <SectionLabel label="최근 이슈" />
+                    <ul className="space-y-2.5 pt-1">
                       {brief.recentIssues.map((issue, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
-                          <span className="shrink-0 w-4 h-4 rounded-full bg-muted border border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
+                        <li key={i} className="flex items-start gap-3 text-[12.5px] text-foreground/70 leading-relaxed">
+                          <span className="shrink-0 text-[10px] font-black text-foreground/20 tabular-nums mt-[2px]">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
                           {issue}
                         </li>
                       ))}
@@ -454,13 +457,13 @@ function MarketBriefSection({
                 )}
                 {brief.outlook.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <CalendarDays className="w-3.5 h-3.5" /> 전망
-                    </p>
-                    <ul className="space-y-1.5">
+                    <SectionLabel label="전망" />
+                    <ul className="space-y-2.5 pt-1">
                       {brief.outlook.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed">
-                          <span className="shrink-0 w-4 h-4 rounded-full bg-muted border border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground mt-0.5">{i + 1}</span>
+                        <li key={i} className="flex items-start gap-3 text-[12.5px] text-foreground/70 leading-relaxed">
+                          <span className="shrink-0 text-[10px] font-black text-foreground/20 tabular-nums mt-[2px]">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
                           {item}
                         </li>
                       ))}
