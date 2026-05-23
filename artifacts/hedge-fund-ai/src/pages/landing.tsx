@@ -98,12 +98,14 @@ export default function Landing() {
   };
 
 
-  // 카카오 OAuth 완료 후 auth 체크 중 — 로딩 스피너 표시
-  if (fromKakao && kakaoLoading) {
+  // 인증 상태 확인 중 — 항상 스피너 표시 (로그인된 사용자는 이후 /analysis/new로 자동 이동)
+  if (kakaoLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <div className="w-8 h-8 rounded-full border-2 border-[#FF8A7A] border-t-transparent animate-spin" />
-        <p className="text-[13px] text-muted-foreground">로그인 확인 중...</p>
+        <p className="text-[13px] text-muted-foreground">
+          {fromKakao ? "로그인 확인 중..." : ""}
+        </p>
       </div>
     );
   }
