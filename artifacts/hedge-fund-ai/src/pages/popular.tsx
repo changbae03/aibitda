@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Target, Globe, Loader2, Clock, TrendingUp, TrendingDown, Minus, CalendarDays } from "lucide-react";
+import { BarChart3, Target, Globe, Loader2, Clock, CalendarDays } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
@@ -458,12 +458,6 @@ export default function Popular() {
               const dirColor = p.directionAccuracy != null
                 ? p.directionAccuracy >= 60 ? "text-emerald-600" : p.directionAccuracy >= 50 ? "text-amber-600" : "text-red-500"
                 : "text-muted-foreground/40";
-              const returnColor = p.avgReturn != null
-                ? p.avgReturn > 0 ? "text-emerald-600" : p.avgReturn < 0 ? "text-red-500" : "text-muted-foreground"
-                : "text-muted-foreground/40";
-              const ReturnIcon = p.avgReturn != null
-                ? p.avgReturn > 0 ? TrendingUp : p.avgReturn < 0 ? TrendingDown : Minus
-                : Minus;
 
               return (
                 <motion.div
@@ -485,7 +479,7 @@ export default function Popular() {
                   </div>
 
                   {hasData && (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       {/* 방향 정확도 */}
                       <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
                         <p className="text-[10px] text-muted-foreground mb-1">{t("방향 정확도", "Direction Accuracy")}</p>
@@ -497,20 +491,6 @@ export default function Popular() {
                             {p.directionCorrectCount}/{p.directionTotalCount}{t("건 정확", " correct")}
                           </p>
                         )}
-                      </div>
-
-                      {/* 평균 수익률 */}
-                      <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                        <p className="text-[10px] text-muted-foreground mb-1">{t("평균 수익률", "Avg Return")}</p>
-                        <div className={cn("flex items-center gap-0.5", returnColor)}>
-                          <ReturnIcon className="w-3.5 h-3.5 shrink-0" />
-                          <p className="text-[18px] font-black tabular-nums leading-none">
-                            {p.avgReturn != null
-                              ? `${p.avgReturn >= 0 ? "+" : ""}${p.avgReturn.toFixed(1)}%`
-                              : "—"}
-                          </p>
-                        </div>
-                        <p className="text-[9px] text-muted-foreground/50 mt-1">{t("진입가 기준", "From entry")}</p>
                       </div>
 
                       {/* 분석 건수 */}
