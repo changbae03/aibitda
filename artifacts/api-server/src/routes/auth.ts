@@ -123,24 +123,22 @@ router.get("/auth/kakao/callback", async (req, res) => {
       path: "/",
     }));
 
-    // 카카오 닉네임·이메일 → user_credits 저장 (kakao_ 접두사로 통일)
-    // getUserId()도 kakao_${id} 형식을 반환하므로 동일한 키를 사용해야 중복 방지
-    const prefixedUserId = `kakao_${user.id}`;
-    try {
-      await pool.query(
-        `INSERT INTO user_credits (user_id, display_name, email, last_login_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (user_id) DO UPDATE
-           SET display_name = COALESCE(user_credits.display_name, EXCLUDED.display_name),
-               email = COALESCE(user_credits.email, EXCLUDED.email),
-               last_login_at = NOW()`,
-        [prefixedUserId, user.nickname || null, user.email || null]
-      );
-    } catch (_) {}
-
+    // 쿠키 설정 즉시 리다이렉트 — DB 저장은 백그라운드 fire-and-forget (hang 방지)
     console.log("[Kakao] login success, user:", user.id, user.nickname);
     console.log("[Kakao] redirecting to:", `${frontendOrigin}/?from=kakao`);
     res.redirect(`${frontendOrigin}/?from=kakao`);
+
+    // 카카오 닉네임·이메일 → user_credits 저장 (리다이렉트 후 비동기 처리)
+    const prefixedUserId = `kakao_${user.id}`;
+    pool.query(
+      `INSERT INTO user_credits (user_id, display_name, email, last_login_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id) DO UPDATE
+         SET display_name = COALESCE(user_credits.display_name, EXCLUDED.display_name),
+             email = COALESCE(user_credits.email, EXCLUDED.email),
+             last_login_at = NOW()`,
+      [prefixedUserId, user.nickname || null, user.email || null]
+    ).catch((e: any) => console.warn("[Kakao] user_credits 저장 실패 (무시):", e?.message?.slice(0, 60)));
   } catch (err) {
     console.error("[Kakao] callback exception:", err);
     res.status(500).send("카카오 로그인 처리 중 오류 발생");
