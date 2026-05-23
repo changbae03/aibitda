@@ -652,7 +652,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                         : "border-border text-muted-foreground/50 hover:text-foreground"
                     )}
                   >
-                    {tickerNameMap.get(t) || t}
+                    {/^\d+$/.test(t) ? (tickerNameMap.get(t) || t) : t}
                   </button>
                 ))}
               </div>
@@ -684,7 +684,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                       "shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border",
                       getColor(item.ticker)
                     )}>
-                      {item.companyName || item.ticker}
+                      {/^\d+$/.test(item.ticker) ? (item.companyName || item.ticker) : item.ticker}
                     </span>
                     {/* 제목 + 메타 */}
                     <div className="flex-1 min-w-0">
