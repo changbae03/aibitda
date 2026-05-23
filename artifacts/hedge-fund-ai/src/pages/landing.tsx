@@ -217,7 +217,7 @@ export default function Landing() {
                     className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all disabled:opacity-50"
                   >
                     <span>🛠</span>
-                    {isEn ? "Preview account login" : "미리보기 계정으로 로그인"}
+                    {isEn ? "Admin account login" : "관리자 계정으로 로그인"}
                   </button>
                 </div>
               )}

@@ -144,7 +144,7 @@ export default function Login() {
               className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-[13px] font-semibold border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all disabled:opacity-60"
             >
               <span className="text-[15px]">🛠</span>
-              {isEn ? "Preview account login" : "미리보기 계정으로 로그인"}
+              {isEn ? "Admin account login" : "관리자 계정으로 로그인"}
             </button>
           </div>
         )}

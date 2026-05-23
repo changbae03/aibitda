@@ -202,20 +202,29 @@ router.post("/auth/logout", (req, res) => {
 if (process.env.NODE_ENV !== "production") {
   router.post("/auth/dev-login", async (req, res) => {
     const devUser = {
-      id: "dev_preview",
-      nickname: "미리보기 계정",
+      id: "dev_admin",
+      nickname: "관리자",
       profileImage: null,
-      email: "dev@aibitda.kr",
+      email: "admin@aibitda.kr",
     };
     const token = jwt.sign(devUser, JWT_SECRET, { expiresIn: "7d" });
+    const userId = `kakao_${devUser.id}`;
 
     // user_credits 행 생성 (없으면 insert)
     try {
       await pool.query(
         `INSERT INTO user_credits (user_id, display_name, email, daily_limit)
-         VALUES ($1, $2, $3, 99)
-         ON CONFLICT (user_id) DO UPDATE SET daily_limit = 99`,
-        [`kakao_${devUser.id}`, devUser.nickname, devUser.email]
+         VALUES ($1, $2, $3, 9999)
+         ON CONFLICT (user_id) DO UPDATE SET daily_limit = 9999, display_name = $2`,
+        [userId, devUser.nickname, devUser.email]
+      );
+    } catch (_) {}
+
+    // admins 테이블에 등록 (없으면 insert)
+    try {
+      await pool.query(
+        `INSERT INTO admins (user_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+        [userId]
       );
     } catch (_) {}
 
