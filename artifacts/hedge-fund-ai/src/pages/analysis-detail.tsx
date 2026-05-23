@@ -3088,9 +3088,10 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
+      exit={{ opacity: 0, y: -4, transition: { duration: 0.3 } }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="bg-card border border-border rounded-xl border-l-4"
       style={{ borderLeftColor: color }}
     >
@@ -3105,27 +3106,38 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
         </div>
       </div>
 
-      {/* 로딩 바디 — 콘텐츠 없음, 단계 상태만 표시 */}
-      <div className="flex flex-col items-center justify-center py-8 px-5">
-        {/* 단계 상태 아이콘 + 라벨 */}
-        <div className={cn("flex items-center gap-2.5 text-sm font-medium", cfg.color)}>
-          <PhaseIcon
-            className={cn("w-5 h-5 shrink-0", cfg.spin && "animate-spin", cfg.pulse && "animate-pulse")}
-          />
-          <span className="text-center">{cfg.label}</span>
-        </div>
-        {/* 단계별 설명 — writing 단계에서 agent description 표시 */}
-        {phase === "writing" && (agent.descriptionEn || agent.description) && (
-          <p className="mt-2 text-[11px] text-muted-foreground/60 text-center font-mono tracking-wide">
-            {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
-          </p>
-        )}
-        {/* 세부 메시지 — 고정 높이 영역으로 레이아웃 안정화 */}
-        <div className="mt-3 min-h-[36px] flex items-center justify-center px-4 w-full">
-          {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} isEn={isEn} />}
-          {phase === "challenging" && <RotatingDebateMessage phase="challenging" isEn={isEn} />}
-          {phase === "checking" && <RotatingDebateMessage phase="checking" isEn={isEn} />}
-        </div>
+      {/* 로딩 바디 — 단계 상태만 표시, 페이즈 전환 시 크로스페이드 */}
+      <div className="flex flex-col items-center justify-center py-8 px-5 min-h-[120px]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={phase}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4, ease: "easeInOut" }}
+            className="flex flex-col items-center w-full"
+          >
+            {/* 단계 상태 아이콘 + 라벨 */}
+            <div className={cn("flex items-center gap-2.5 text-sm font-medium", cfg.color)}>
+              <PhaseIcon
+                className={cn("w-5 h-5 shrink-0", cfg.spin && "animate-spin", cfg.pulse && "animate-pulse")}
+              />
+              <span className="text-center">{cfg.label}</span>
+            </div>
+            {/* 단계별 설명 — writing 단계에서 agent description 표시 */}
+            {phase === "writing" && (agent.descriptionEn || agent.description) && (
+              <p className="mt-2 text-[11px] text-muted-foreground/60 text-center font-mono tracking-wide">
+                {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
+              </p>
+            )}
+            {/* 세부 메시지 — 고정 높이 영역으로 레이아웃 안정화 */}
+            <div className="mt-3 min-h-[36px] flex items-center justify-center px-4 w-full">
+              {phase === "writing" && <RotatingAnalysisMessage stepKey={stepKey} isEn={isEn} />}
+              {phase === "challenging" && <RotatingDebateMessage phase="challenging" isEn={isEn} />}
+              {phase === "checking" && <RotatingDebateMessage phase="checking" isEn={isEn} />}
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </motion.div>
   );
@@ -3797,9 +3809,9 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
+      transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       className="bg-card border border-border rounded-xl border-l-4 overflow-hidden"
       style={{ borderLeftColor: color }}
     >

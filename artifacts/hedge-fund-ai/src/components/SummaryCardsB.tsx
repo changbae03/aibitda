@@ -945,10 +945,10 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
           {/* 카드 본문 슬라이드 */}
           <AnimatePresence mode="wait">
             <motion.div key={currentStepKey}
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.18 }}>
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.32, ease: "easeInOut" }}>
               <StepSummaryCard
                 stepKey={currentStepKey}
                 step={stepMap[currentStepKey] ?? null}
