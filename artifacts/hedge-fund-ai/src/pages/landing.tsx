@@ -260,21 +260,6 @@ export default function Landing() {
             </div>
 
             <div className="relative">
-              {/* 수직 연결선 */}
-              <div
-                className="absolute left-[19px] top-5 w-px z-0"
-                style={{ height: "calc(100% - 40px)" }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FF8A7A]/30 via-[#FF8A7A]/15 to-transparent" />
-                <motion.div
-                  className="absolute top-0 left-0 w-full bg-[#FF8A7A]"
-                  animate={{
-                    height: `${((activeStep + 1) / 6) * 100}%`,
-                    opacity: 0.6,
-                  }}
-                  transition={{ duration: 0.5, ease: "easeInOut" }}
-                />
-              </div>
 
               <div className="space-y-1">
                 {STEPS.map((step, idx) => {
