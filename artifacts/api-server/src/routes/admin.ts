@@ -168,7 +168,7 @@ router.get("/batch-status", async (req, res) => {
   const todayEnd   = `CURRENT_DATE AT TIME ZONE 'Asia/Seoul' + INTERVAL '1 day'`;
 
   const [cacheRows, lockRow, todayRows, historyRows, totalRow,
-         qaAvgRow, calibRow, peerIssueRow, coverageKrRow, coverageUsRow] = await Promise.all([
+         qaAvgRow, peerIssueRow, coverageKrRow, coverageUsRow] = await Promise.all([
     pool.query(`SELECT data FROM system_cache WHERE key = 'auto_batch_last_run'`),
     pool.query(`SELECT expires_at FROM system_cache WHERE key = 'auto_batch_lock' AND expires_at > NOW()`),
     pool.query(`
@@ -198,14 +198,6 @@ router.get("/batch-status", async (req, res) => {
       WHERE user_id IS NULL AND status = 'completed'
         AND created_at >= ${todayStart} AND created_at < ${todayEnd}
         AND qa_score IS NOT NULL
-    `),
-    // 오늘 AI 보고서 중 보정메모가 있는 종목 수
-    pool.query(`
-      SELECT COUNT(*) FROM analyses a
-      JOIN ticker_notes tn ON tn.ticker = a.ticker
-      WHERE a.user_id IS NULL AND a.status = 'completed'
-        AND a.created_at >= ${todayStart} AND a.created_at < ${todayEnd}
-        AND tn.calibration_note IS NOT NULL
     `),
     // 오늘 피어 이슈 감지 수
     pool.query(`
@@ -269,7 +261,6 @@ router.get("/batch-status", async (req, res) => {
     totalAutoAnalyses: parseInt(totalRow.rows[0].count, 10),
     dailyTarget:       DAILY_TARGET,
     qaAvgToday:        qaAvgRow.rows[0]?.avg_qa ? parseFloat(qaAvgRow.rows[0].avg_qa) : null,
-    calibCountToday:   parseInt(calibRow.rows[0].count, 10),
     peerIssueCountToday: parseInt(peerIssueRow.rows[0].count, 10),
     coverageKr:        parseInt(coverageKrRow.rows[0].count, 10),
     coverageUs:        parseInt(coverageUsRow.rows[0].count, 10),
@@ -289,7 +280,6 @@ router.get("/batch-reports", async (req, res) => {
   const offset      = (page - 1) * limit;
   const dateFilter  = String(req.query.date    ?? "").slice(0, 10) || null;
   const verdictFilter = String(req.query.verdict ?? "") || null;
-  const hasCalib    = req.query.hasCalib    === "1";
   const hasPeerIssue = req.query.hasPeerIssue === "1";
 
   const conditions: string[] = ["a.user_id IS NULL"];
@@ -306,10 +296,6 @@ router.get("/batch-reports", async (req, res) => {
   if (hasPeerIssue) {
     conditions.push(`a.peer_flags IS NOT NULL AND a.peer_flags::jsonb ->> 'hasIssues' = 'true'`);
   }
-  if (hasCalib) {
-    conditions.push(`tn.calibration_note IS NOT NULL`);
-  }
-
   const where = conditions.join(" AND ");
 
   params.push(limit, offset);
@@ -319,18 +305,14 @@ router.get("/batch-reports", async (req, res) => {
   const [itemsRes, countRes] = await Promise.all([
     pool.query(`
       SELECT a.id, a.ticker, a.company_name, a.status, a.investment_verdict,
-             a.created_at, a.qa_score, a.qa_flags, a.peer_flags,
-             tn.calibration_note IS NOT NULL AS has_calib,
-             tn.calibration_note
+             a.created_at, a.qa_score, a.qa_flags, a.peer_flags
       FROM analyses a
-      LEFT JOIN ticker_notes tn ON tn.ticker = a.ticker
       WHERE ${where}
       ORDER BY a.created_at DESC
       LIMIT $${limitParam} OFFSET $${offsetParam}
     `, params),
     pool.query(`
       SELECT COUNT(*) FROM analyses a
-      LEFT JOIN ticker_notes tn ON tn.ticker = a.ticker
       WHERE ${where}
     `, params.slice(0, params.length - 2)),
   ]);
@@ -345,8 +327,6 @@ router.get("/batch-reports", async (req, res) => {
     qaScore:      r.qa_score ?? null,
     qaFlags:      r.qa_flags ? JSON.parse(r.qa_flags) : [],
     peerResult:   r.peer_flags ? JSON.parse(r.peer_flags) : null,
-    hasCalib:     r.has_calib === true,
-    calibNote:    r.calibration_note ?? null,
   }));
 
   res.json({

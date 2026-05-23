@@ -2149,7 +2149,6 @@ export function buildPrompt(
   industry: string,
   additionalContext: string | null | undefined,
   previousSteps: Array<{ stepKey: string; agentName: string; content: string }>,
-  calibrationContext?: string | null,
   language?: "ko" | "en"
 ): { systemPrompt: string; userPrompt: string } {
   const sectorTemplate    = getSectorTemplate(industry, companyName);
@@ -6001,10 +6000,6 @@ This analysis report MUST be written ENTIRELY in English. Every section heading,
 
   let systemPrompt = result.systemPrompt;
   let userPrompt = result.userPrompt;
-
-  if (calibrationContext && (stepKey === 'relative_valuation' || stepKey === 'investment_strategy')) {
-    systemPrompt = systemPrompt + '\n\n' + calibrationContext;
-  }
 
   if (language === 'en') {
     if (stepKey === 'company_intro') {

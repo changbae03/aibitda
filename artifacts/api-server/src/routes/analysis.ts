@@ -29,7 +29,6 @@ import { fetchDartBusinessContent } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
-import { runCalibrationAgent, saveCalibrationNote, getCalibrationNote } from "../lib/calibration-agent.js";
 import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
 import { getSectorLearningNote } from "../lib/sector-learning.js";
 
@@ -301,7 +300,7 @@ const pendingDataFetch = new Set<number>();
 
 // ── 파이프라인 세션 공통 컨텍스트 (스텝마다 중복 DB 조회 방지) ───────────────
 interface PipelineCtx {
-  tickerNote: { memo?: string | null; calibration_note?: string | null } | null;
+  tickerNote: { memo?: string | null } | null;
   regimeNote: string | null;
   sectorNote: string | null;
 }
@@ -4456,7 +4455,7 @@ async function executeStep(
   try {
     const row = pipelineCtx !== undefined
       ? pipelineCtx.tickerNote
-      : ((await rawQuery(`SELECT memo, calibration_note FROM ticker_notes WHERE ticker = $1`, [analysis.ticker]))[0] ?? null);
+      : ((await rawQuery(`SELECT memo FROM ticker_notes WHERE ticker = $1`, [analysis.ticker]))[0] ?? null);
 
     // ① 운영자 수동 메모
     if (row?.memo) {
@@ -4465,12 +4464,6 @@ async function executeStep(
       console.log(`[ticker-note] Injected operator memo ${memoBlock.length}chars for ${analysis.ticker}`);
     }
 
-    // ② AI 자동 보정 메모 — 이전 분析 QA 검토 결과
-    if (row?.calibration_note) {
-      const calibBlock = `\n\n[🔧 AI 자동 보정 메모 — ${analysis.companyName}(${analysis.ticker}) 이전 분析 QA 검토 결과 — 이번 분析에서 반드시 개선하세요]\n${row.calibration_note}`;
-      enrichedContext = enrichedContext ? enrichedContext + calibBlock : calibBlock;
-      console.log(`[ticker-note] Injected calibration note ${calibBlock.length}chars for ${analysis.ticker}`);
-    }
   } catch {
     // 실패해도 분析 진행
   }
@@ -5768,29 +5761,6 @@ async function executeStep(
             console.log(`[qa] #${id} 자동 채점 완료: ${qaResult.score}점 (${qaResult.grade})`);
           }
 
-          // ③ 보정메모 생성 — QA + 피어검증 모두 완료된 후 실행
-          if (qaResult && (qaResult.score < 95 || qaResult.flags.length > 0)) {
-            try {
-              const calibNote = await runCalibrationAgent({
-                analysisId:  id,
-                ticker:      analysis.ticker ?? "",
-                companyName: analysis.companyName ?? "",
-                qaScore:     qaResult.score,
-                qaGrade:     qaResult.grade,
-                qaFlags:     qaResult.flags,
-                peerFlags:   pvRes,   // 피어 검증 결과 직접 전달 (DB 재조회 불필요)
-                steps: sRes.rows.map((r: any) => ({ stepKey: r.step_key, content: r.content ?? "" })),
-              });
-              if (calibNote) {
-                await saveCalibrationNote(analysis.ticker ?? "", calibNote);
-                console.log(`[calibration] #${id} ${analysis.ticker} 보정메모 저장 완료 (${calibNote.length}자)`);
-              }
-            } catch (ce) {
-              console.error(`[calibration] #${id} 보정메모 생성 실패:`, ce);
-            }
-          } else if (qaResult) {
-            console.log(`[calibration] #${id} QA ${qaResult.score}점 — 보정메모 생략 (기준 이상)`);
-          }
         } catch (e) {
           console.error(`[qa+peer+calib] #${id} 백그라운드 처리 실패:`, e);
         }
@@ -5902,7 +5872,7 @@ async function runPipelineBackground(id: number): Promise<void> {
     if (firstAnalysis) {
       const isKrw = /^\d{6}$/.test(firstAnalysis.ticker);
       const [noteRows, regimeNote, sectorNote] = await Promise.all([
-        rawQuery(`SELECT memo, calibration_note FROM ticker_notes WHERE ticker = $1`, [firstAnalysis.ticker]),
+        rawQuery(`SELECT memo FROM ticker_notes WHERE ticker = $1`, [firstAnalysis.ticker]),
         isKrw ? getLatestMarketRegime().catch(() => null) : Promise.resolve(null),
         isKrw ? getSectorLearningNote(firstAnalysis.ticker, firstAnalysis.industry ?? null).catch(() => null) : Promise.resolve(null),
       ]);

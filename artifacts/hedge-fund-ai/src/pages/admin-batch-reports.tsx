@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Bot, RefreshCw, Loader2, CheckCircle2, XCircle, Clock,
-  ChevronLeft, ChevronRight, AlertTriangle, FileText, ShieldCheck,
-  Target, TrendingUp, Zap, Filter,
+  ChevronLeft, ChevronRight, AlertTriangle, ShieldCheck,
+  Target, TrendingUp, Filter,
 } from "lucide-react";
 import { useLanguage } from "@/lib/language-context";
 import {
@@ -33,7 +33,6 @@ interface BatchStatus {
   totalAutoAnalyses: number;
   dailyTarget: number;
   qaAvgToday: number | null;
-  calibCountToday: number;
   peerIssueCountToday: number;
   coverageKr: number;
   coverageUs: number;
@@ -49,8 +48,6 @@ interface ReportItem {
   qaScore: number | null;
   qaFlags: string[];
   peerResult: { hasIssues: boolean; validPeerCount: number; issues: { type: string }[] } | null;
-  hasCalib: boolean;
-  calibNote: string | null;
 }
 
 interface ReportsPage {
@@ -118,7 +115,6 @@ export default function AdminBatchReports() {
   const [page, setPage]         = useState(1);
   const [dateFilter, setDateFilter] = useState("");
   const [verdictFilter, setVerdictFilter] = useState("");
-  const [calibFilter, setCalibFilter] = useState(false);
   const [peerFilter, setPeerFilter]   = useState(false);
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -139,16 +135,15 @@ export default function AdminBatchReports() {
         limit: "30",
         ...(dateFilter   ? { date: dateFilter } : {}),
         ...(verdictFilter ? { verdict: verdictFilter } : {}),
-        ...(calibFilter  ? { hasCalib: "1" } : {}),
         ...(peerFilter   ? { hasPeerIssue: "1" } : {}),
       });
       const r = await fetch(getApiUrl(`/api/admin/batch-reports?${params}`), { credentials: "include" });
       if (r.ok) setReports(await r.json());
     } finally { setReportsLoading(false); }
-  }, [page, dateFilter, verdictFilter, calibFilter, peerFilter]);
+  }, [page, dateFilter, verdictFilter, peerFilter]);
 
   useEffect(() => { loadBatch(); }, []);
-  useEffect(() => { setPage(1); }, [dateFilter, verdictFilter, calibFilter, peerFilter]);
+  useEffect(() => { setPage(1); }, [dateFilter, verdictFilter, peerFilter]);
   useEffect(() => { loadReports(); }, [loadReports]);
 
   const todayKST = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -283,16 +278,6 @@ export default function AdminBatchReports() {
               </div>
             </div>
             <div className="rounded-xl border border-border bg-card p-3.5 flex items-start gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-0.5">보정메모 생성</p>
-                <p className="text-xl font-black tabular-nums">{batch.calibCountToday}개</p>
-                <p className="text-[9px] text-muted-foreground">오늘 기준</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-3.5 flex items-start gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
               </div>
@@ -384,16 +369,6 @@ export default function AdminBatchReports() {
             ))}
           </select>
           <button
-            onClick={() => setCalibFilter(v => !v)}
-            className={cn("px-2.5 py-1.5 text-xs rounded-lg border transition-colors",
-              calibFilter
-                ? "bg-amber-500/15 border-amber-500/40 text-amber-400 font-semibold"
-                : "border-border text-muted-foreground hover:bg-muted"
-            )}
-          >
-            보정메모 있음
-          </button>
-          <button
             onClick={() => setPeerFilter(v => !v)}
             className={cn("px-2.5 py-1.5 text-xs rounded-lg border transition-colors",
               peerFilter
@@ -403,9 +378,9 @@ export default function AdminBatchReports() {
           >
             피어 이슈
           </button>
-          {(dateFilter || verdictFilter || calibFilter || peerFilter) && (
+          {(dateFilter || verdictFilter || peerFilter) && (
             <button
-              onClick={() => { setDateFilter(""); setVerdictFilter(""); setCalibFilter(false); setPeerFilter(false); }}
+              onClick={() => { setDateFilter(""); setVerdictFilter(""); setPeerFilter(false); }}
               className="px-2.5 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors"
             >
               초기화
@@ -437,7 +412,6 @@ export default function AdminBatchReports() {
                   <th className="text-left px-3 py-2.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">판정</th>
                   <th className="text-left px-3 py-2.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">QA</th>
                   <th className="text-center px-3 py-2.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">피어</th>
-                  <th className="text-center px-3 py-2.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">보정메모</th>
                 </tr>
               </thead>
               <tbody>
@@ -486,15 +460,10 @@ export default function AdminBatchReports() {
                           )
                         ) : <span className="text-muted-foreground/30 text-[10px]">—</span>}
                       </td>
-                      <td className="px-3 py-2 text-center">
-                        {item.hasCalib ? (
-                          <FileText className="w-3.5 h-3.5 text-amber-400 mx-auto" title="보정메모 있음" />
-                        ) : <span className="text-muted-foreground/30 text-[10px]">—</span>}
-                      </td>
                     </tr>
                     {expandedId === item.id && (
                       <tr key={`${item.id}-detail`} className="bg-muted/10">
-                        <td colSpan={8} className="px-4 py-3">
+                        <td colSpan={7} className="px-4 py-3">
                           <div className="grid gap-3 sm:grid-cols-2">
                             {/* QA 플래그 */}
                             {item.qaFlags.length > 0 && (
@@ -516,13 +485,6 @@ export default function AdminBatchReports() {
                                     <p key={i} className="text-xs text-orange-400">• {iss.type}</p>
                                   ))}
                                 </div>
-                              </div>
-                            )}
-                            {/* 보정메모 */}
-                            {item.calibNote && (
-                              <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 sm:col-span-2">
-                                <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wide mb-1.5">AI 보정메모</p>
-                                <p className="text-xs text-foreground/80 whitespace-pre-wrap leading-relaxed">{item.calibNote}</p>
                               </div>
                             )}
                             {/* 보고서 링크 */}
