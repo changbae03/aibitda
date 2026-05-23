@@ -31,6 +31,7 @@ const AboutPage        = lazy(() => import("@/pages/about"));
 const SharePage        = lazy(() => import("@/pages/share"));
 const CalendarPage     = lazy(() => import("@/pages/calendar"));
 const MarketAnalysis   = lazy(() => import("@/pages/market-analysis"));
+const MacroReports     = lazy(() => import("@/pages/macro-reports"));
 const Portfolio        = lazy(() => import("@/pages/portfolio"));
 const MyPage           = lazy(() => import("@/pages/mypage"));
 const PrivacyPage      = lazy(() => import("@/pages/privacy"));
@@ -291,6 +292,7 @@ function Router() {
                 <Route path="/admin/batch-reports" component={AdminBatchReports} />
                 <Route path="/admin/portfolios" component={AdminPortfolios} />
                 <Route path="/market-analysis" component={MarketAnalysis} />
+                <Route path="/macro-reports" component={MacroReports} />
                 <Route path="/portfolio" component={Portfolio} />
                 <Route path="/mypage" component={MyPage} />
                 <Route path="/disclaimer" component={DisclaimerPage} />
