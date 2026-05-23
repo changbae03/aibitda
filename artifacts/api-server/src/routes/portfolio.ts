@@ -1359,17 +1359,57 @@ interface NewsItem {
 const newsCache = new Map<string, { ts: number; items: NewsItem[] }>();
 const NEWS_CACHE_TTL = 15 * 60 * 1000; // 15분
 
-// Yahoo Finance 검색 API로 뉴스 가져오기
-async function fetchNewsForTicker(ticker: string, companyName: string): Promise<NewsItem[]> {
-  // 한국 6자리 → .KS 추가, .KQ 이미 있으면 유지
-  let yTicker = ticker;
-  if (/^\d{6}$/.test(ticker))        yTicker = `${ticker}.KS`;
-  else if (/^\d{6}\.KQ$/i.test(ticker)) yTicker = ticker.toUpperCase();
+// HTML entity 디코드 (서버 사이드)
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+}
 
-  const query  = encodeURIComponent(yTicker);
-  // 더 많이 가져와서 필터링 — 20개 요청 후 관련성 높은 것만
-  const url    = `https://query1.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=20&enableFuzzyQuery=false&quotesCount=0`;
-  const url2   = `https://query2.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=20&enableFuzzyQuery=false&quotesCount=0`;
+// 네이버 증권 뉴스 API (한국 종목 전용)
+async function fetchNaverNews(code: string, ticker: string, companyName: string): Promise<NewsItem[]> {
+  const url = `https://m.stock.naver.com/api/news/stock/${code}?page=1&pageSize=10`;
+  try {
+    const r = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const groups: any[] = await r.json();
+    // 응답: 배열 of { total, items: [...] }
+    const result: NewsItem[] = [];
+    for (const group of groups) {
+      for (const n of (group.items ?? [])) {
+        const raw   = String(n.title ?? "").trim();
+        const title = decodeHtmlEntities(raw);
+        const source = String(n.officeName ?? "").trim();
+        const link   = String(n.mobileNewsUrl ?? "").trim();
+        // datetime: "YYYYMMDDHHMI" → ISO
+        const dt = String(n.datetime ?? "");
+        let ts = new Date().toISOString();
+        if (dt.length >= 12) {
+          const d = `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}T${dt.slice(8,10)}:${dt.slice(10,12)}:00+09:00`;
+          const parsed = new Date(d);
+          if (!isNaN(parsed.getTime())) ts = parsed.toISOString();
+        }
+        if (!title) continue;
+        result.push({ ticker, companyName, title, source, pubDate: ts, url: link });
+        if (result.length >= 6) break;
+      }
+      if (result.length >= 6) break;
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+// Yahoo Finance 검색 API (미국/해외 종목)
+async function fetchYahooNews(ticker: string, companyName: string): Promise<NewsItem[]> {
+  const query = encodeURIComponent(ticker);
+  const url   = `https://query1.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=20&enableFuzzyQuery=false&quotesCount=0`;
+  const url2  = `https://query2.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=20&enableFuzzyQuery=false&quotesCount=0`;
 
   const tryFetch = async (endpoint: string) => {
     const r = await fetch(endpoint, {
@@ -1386,18 +1426,17 @@ async function fetchNewsForTicker(ticker: string, companyName: string): Promise<
     catch { data = await tryFetch(url2); }
 
     const newsArr: any[] = data?.news ?? [];
-    const tickerUpper = yTicker.toUpperCase();
+    const tickerUpper = ticker.toUpperCase();
 
-    // 관련성 점수: relatedTickers[0]이 해당 티커면 높은 점수
+    // relatedTickers[0] === 해당 티커 = 주인공 기사 우선
     const scored = newsArr.map((n: any) => {
       const related: string[] = (n.relatedTickers ?? []).map((t: string) => t.toUpperCase());
       let score = 0;
-      if (related[0] === tickerUpper)    score = 3; // 주인공 기사
-      else if (related.includes(tickerUpper)) score = 1; // 언급만
+      if (related[0] === tickerUpper)         score = 3;
+      else if (related.includes(tickerUpper)) score = 1;
       return { n, score };
     });
 
-    // score >= 3인 기사 우선, 부족하면 score >= 1로 보충 — 최대 6개
     const primary   = scored.filter(s => s.score >= 3).slice(0, 6);
     const secondary = scored.filter(s => s.score === 1).slice(0, Math.max(0, 6 - primary.length));
     const picked    = [...primary, ...secondary];
@@ -1417,6 +1456,15 @@ async function fetchNewsForTicker(ticker: string, companyName: string): Promise<
   } catch {
     return [];
   }
+}
+
+// 종목별 뉴스 fetch — 한국 종목은 네이버, 해외는 Yahoo Finance
+async function fetchNewsForTicker(ticker: string, companyName: string): Promise<NewsItem[]> {
+  const krCode = ticker.match(/^(\d{6})(\.KS|\.KQ)?$/i)?.[1];
+  if (krCode) {
+    return fetchNaverNews(krCode, ticker, companyName);
+  }
+  return fetchYahooNews(ticker, companyName);
 }
 
 router.get("/portfolio/news", async (req, res) => {
