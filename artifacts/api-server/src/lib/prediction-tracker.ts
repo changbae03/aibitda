@@ -1,13 +1,9 @@
 /**
- * prediction-tracker.ts
- * ─────────────────────
- * 매일 예측값을 DB에 저장하고, 3거래일 후 실제 결과를 비교·기록하는 모듈.
- *
- * 테이블: index_predictions
- *   - 예측 저장  : savePrediction()
- *   - 결과 확인  : resolveExpiredPredictions()
- *   - 라이브 정확도 조회: getLiveAccuracy()
- *   - 자동 재학습 판단: shouldTriggerRetrain()
+ * prediction-tracker.ts  — 3가지 피드백 루프 인프라
+ * ──────────────────────────────────────────────────
+ * [#2] 앙상블 가중치 실시간 조정 : GBDT / LSTM 개별 예측 저장 → 컴포넌트별 라이브 정확도 → alpha 보정
+ * [#1] 오차 컨텍스트 저장        : VIX / 변동성 기록 → 나중에 "어떤 상황에서 틀리나" 분석용
+ *      (데이터 2주+ 쌓이면 자동 활성화)
  */
 
 import { pool } from "@workspace/db";
@@ -22,16 +18,36 @@ export async function initPredictionTable(): Promise<void> {
       predicted_at     DATE         NOT NULL,
       target_date      DATE         NOT NULL,
       predicted_return FLOAT        NOT NULL,
-      predicted_dir    SMALLINT     NOT NULL,  -- 1=상승, -1=하락
+      predicted_dir    SMALLINT     NOT NULL,
       price_at_pred    FLOAT        NOT NULL,
       actual_return    FLOAT,
       actual_dir       SMALLINT,
       correct          BOOLEAN,
       resolved_at      TIMESTAMPTZ,
       model_version    SMALLINT     NOT NULL DEFAULT 0,
+      gbdt_ret         FLOAT,
+      lstm_ret         FLOAT,
+      gbdt_correct     BOOLEAN,
+      lstm_correct     BOOLEAN,
+      vix_at_pred      FLOAT,
+      volatility_at_pred FLOAT,
       UNIQUE(symbol, predicted_at)
     )
   `);
+  // 기존 테이블에 컬럼 추가 (없으면 추가, 있으면 무시)
+  const cols = [
+    ["gbdt_ret",           "FLOAT"],
+    ["lstm_ret",           "FLOAT"],
+    ["gbdt_correct",       "BOOLEAN"],
+    ["lstm_correct",       "BOOLEAN"],
+    ["vix_at_pred",        "FLOAT"],
+    ["volatility_at_pred", "FLOAT"],
+  ] as const;
+  for (const [col, typ] of cols) {
+    await pool.query(
+      `ALTER TABLE index_predictions ADD COLUMN IF NOT EXISTS ${col} ${typ}`
+    ).catch(() => {});
+  }
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_ip_symbol_predicted
     ON index_predictions(symbol, predicted_at DESC)
@@ -62,20 +78,20 @@ function todayKST(): string {
 
 // ─── 예측 저장 ─────────────────────────────────────────────────────────────────
 
-/**
- * 오늘의 예측을 저장한다. UPSERT — 같은 날 여러 번 호출돼도 최신값으로 갱신.
- * @param symbol     ^KS11 | ^KQ11 | ^GSPC | ^IXIC
- * @param predictedReturn3d  3일 후 예측 수익률 (%)
- * @param currentPrice       오늘 종가
- * @param modelVersion       모델 버전
- * @param predHorizon        예측 기간 (영업일, 기본 3)
- */
+export interface PredictionContext {
+  gbdtReturn?:    number;   // GBDT 단독 예측 수익률 (%)
+  lstmReturn?:    number;   // LSTM 단독 예측 수익률 (%)
+  vixAtPred?:     number;   // 예측 시점 VIX 수준
+  volatilityAtPred?: number; // 예측 시점 20일 실현 변동성 (일별 std, %)
+}
+
 export async function savePrediction(
   symbol: string,
   predictedReturn3d: number,
   currentPrice: number,
   modelVersion: number,
   predHorizon = 3,
+  ctx: PredictionContext = {},
 ): Promise<void> {
   const predictedAt = todayKST();
   const targetDate  = addTradingDays(predictedAt, predHorizon);
@@ -84,27 +100,30 @@ export async function savePrediction(
   await pool.query(
     `INSERT INTO index_predictions
        (symbol, predicted_at, target_date, predicted_return, predicted_dir,
-        price_at_pred, model_version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+        price_at_pred, model_version,
+        gbdt_ret, lstm_ret, vix_at_pred, volatility_at_pred)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (symbol, predicted_at)
      DO UPDATE SET
-       predicted_return = EXCLUDED.predicted_return,
-       predicted_dir    = EXCLUDED.predicted_dir,
-       price_at_pred    = EXCLUDED.price_at_pred,
-       target_date      = EXCLUDED.target_date,
-       model_version    = EXCLUDED.model_version`,
-    [symbol, predictedAt, targetDate, predictedReturn3d, dir, currentPrice, modelVersion],
+       predicted_return     = EXCLUDED.predicted_return,
+       predicted_dir        = EXCLUDED.predicted_dir,
+       price_at_pred        = EXCLUDED.price_at_pred,
+       target_date          = EXCLUDED.target_date,
+       model_version        = EXCLUDED.model_version,
+       gbdt_ret             = EXCLUDED.gbdt_ret,
+       lstm_ret             = EXCLUDED.lstm_ret,
+       vix_at_pred          = EXCLUDED.vix_at_pred,
+       volatility_at_pred   = EXCLUDED.volatility_at_pred`,
+    [
+      symbol, predictedAt, targetDate, predictedReturn3d, dir, currentPrice, modelVersion,
+      ctx.gbdtReturn ?? null, ctx.lstmReturn ?? null,
+      ctx.vixAtPred ?? null, ctx.volatilityAtPred ?? null,
+    ],
   );
 }
 
 // ─── 만료된 예측 결과 확인 ──────────────────────────────────────────────────────
 
-/**
- * target_date ≤ 오늘인 미결 예측에 실제 결과를 기록한다.
- * @param symbol  지수 심볼
- * @param rows    fetchHistory 결과 ({ date, close } 배열)
- * @returns       이번에 결과를 기록한 건수
- */
 export async function resolveExpiredPredictions(
   symbol: string,
   rows: { date: string; close: number }[],
@@ -116,9 +135,12 @@ export async function resolveExpiredPredictions(
     predicted_at: string;
     target_date: string;
     predicted_dir: number;
+    gbdt_ret: number | null;
+    lstm_ret: number | null;
     price_at_pred: number;
   }>(
-    `SELECT id, predicted_at::text, target_date::text, predicted_dir, price_at_pred
+    `SELECT id, predicted_at::text, target_date::text,
+            predicted_dir, gbdt_ret, lstm_ret, price_at_pred
      FROM index_predictions
      WHERE symbol = $1
        AND correct IS NULL
@@ -129,12 +151,10 @@ export async function resolveExpiredPredictions(
 
   if (pending.length === 0) return 0;
 
-  // date → close 맵 생성
   const priceMap = new Map<string, number>(rows.map(r => [r.date, r.close]));
-
   let resolved = 0;
+
   for (const row of pending) {
-    // target_date 이후 최초로 데이터가 있는 날 찾기 (공휴일 보정)
     let actualPrice: number | null = null;
     const target = new Date(row.target_date + "T12:00:00Z");
     for (let offset = 0; offset <= 5; offset++) {
@@ -149,11 +169,20 @@ export async function resolveExpiredPredictions(
     const actualDir    = actualReturn >= 0 ? 1 : -1;
     const correct      = actualDir === row.predicted_dir;
 
+    // GBDT / LSTM 개별 정확도도 기록
+    const gbdtCorrect = row.gbdt_ret !== null ? (row.gbdt_ret >= 0 ? 1 : -1) === actualDir : null;
+    const lstmCorrect = row.lstm_ret !== null ? (row.lstm_ret >= 0 ? 1 : -1) === actualDir : null;
+
     await pool.query(
       `UPDATE index_predictions
-       SET actual_return = $1, actual_dir = $2, correct = $3, resolved_at = NOW()
-       WHERE id = $4`,
-      [actualReturn, actualDir, correct, row.id],
+       SET actual_return  = $1,
+           actual_dir     = $2,
+           correct        = $3,
+           gbdt_correct   = $4,
+           lstm_correct   = $5,
+           resolved_at    = NOW()
+       WHERE id = $6`,
+      [actualReturn, actualDir, correct, gbdtCorrect, lstmCorrect, row.id],
     );
     resolved++;
   }
@@ -171,12 +200,15 @@ export interface LiveAccuracy {
   correct:  number;
   total:    number;
   pending:  number;
-  accuracy: number | null;   // null = 샘플 부족
+  accuracy: number | null;
 }
 
-/**
- * 최근 n개 resolved 예측의 실제 적중률을 반환한다.
- */
+export interface ComponentLiveAccuracy {
+  gbdtAcc:  number | null;   // GBDT 단독 라이브 적중률 (0~1)
+  lstmAcc:  number | null;   // LSTM 단독 라이브 적중률 (0~1)
+  nSamples: number;          // resolved 샘플 수
+}
+
 export async function getLiveAccuracy(
   symbol: string,
   n = 30,
@@ -211,8 +243,42 @@ export async function getLiveAccuracy(
 }
 
 /**
- * 전체 심볼 라이브 정확도 한번에 조회
+ * [#2] GBDT / LSTM 개별 라이브 적중률 → buildResultFromModel alpha 보정용
  */
+export async function getComponentLiveAccuracy(
+  symbol: string,
+  n = 20,
+): Promise<ComponentLiveAccuracy> {
+  const { rows } = await pool.query<{
+    gbdt_correct: boolean | null;
+    lstm_correct: boolean | null;
+  }>(
+    `SELECT gbdt_correct, lstm_correct
+     FROM index_predictions
+     WHERE symbol = $1
+       AND correct IS NOT NULL
+       AND gbdt_correct IS NOT NULL
+       AND lstm_correct IS NOT NULL
+     ORDER BY predicted_at DESC
+     LIMIT $2`,
+    [symbol, n],
+  );
+
+  if (rows.length < 5) {
+    return { gbdtAcc: null, lstmAcc: null, nSamples: rows.length };
+  }
+
+  const gbdtCorrect = rows.filter(r => r.gbdt_correct).length;
+  const lstmCorrect = rows.filter(r => r.lstm_correct).length;
+  const total = rows.length;
+
+  return {
+    gbdtAcc:  gbdtCorrect / total,
+    lstmAcc:  lstmCorrect / total,
+    nSamples: total,
+  };
+}
+
 export async function getAllLiveAccuracy(): Promise<Record<string, LiveAccuracy>> {
   const symbols = ["^KS11", "^KQ11", "^GSPC", "^IXIC"];
   const results = await Promise.all(symbols.map(s => getLiveAccuracy(s)));
@@ -231,6 +297,12 @@ export interface PredictionRecord {
   actual_return:   number | null;
   actual_dir:      number | null;
   correct:         boolean | null;
+  gbdt_ret:        number | null;
+  lstm_ret:        number | null;
+  gbdt_correct:    boolean | null;
+  lstm_correct:    boolean | null;
+  vix_at_pred:     number | null;
+  volatility_at_pred: number | null;
   model_version:   number;
 }
 
@@ -248,6 +320,12 @@ export async function getPredictionHistory(
             actual_return,
             actual_dir,
             correct,
+            gbdt_ret,
+            lstm_ret,
+            gbdt_correct,
+            lstm_correct,
+            vix_at_pred,
+            volatility_at_pred,
             model_version
      FROM index_predictions
      WHERE symbol = $1
@@ -260,10 +338,6 @@ export async function getPredictionHistory(
 
 // ─── 자동 재학습 판단 ──────────────────────────────────────────────────────────
 
-/**
- * 최근 10개 이상 resolved 예측 중 정확도가 retrain_threshold 미만이면 true.
- * 정상 상태에서는 항상 false (샘플 부족 시도 false).
- */
 export async function shouldTriggerRetrain(
   symbol: string,
   minSamples = 10,

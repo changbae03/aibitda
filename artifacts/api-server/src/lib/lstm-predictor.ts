@@ -25,7 +25,10 @@ import * as tf from "@tensorflow/tfjs";
 import YahooFinance from "yahoo-finance2";
 import { pool } from "@workspace/db";
 import { fetchInvestorData, fetchShortRatio, isPykrxEnabled } from "./pykrx-client.js";
-import { savePrediction, resolveExpiredPredictions, shouldTriggerRetrain } from "./prediction-tracker.js";
+import {
+  savePrediction, resolveExpiredPredictions, shouldTriggerRetrain,
+  getComponentLiveAccuracy, type ComponentLiveAccuracy, type PredictionContext,
+} from "./prediction-tracker.js";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -40,6 +43,10 @@ export interface IndexResult {
   wfDirAcc: number; rolling30dDirAcc: number; predErrStd: number;
   recentPerf: RecentPerfPoint[];
   lstmDirAcc: number; gbdtDirAcc: number; ensembleAlpha: number;
+  gbdtForecastRet?: number;
+  lstmForecastRet?: number;
+  curVol20?: number;
+  lastVix5dMom?: number;
 }
 export interface PipelineStep {
   key: string; label: string;
@@ -846,14 +853,44 @@ function buildNode(X:Float64Array[],res:number[],idxs:number[],depth:number,minL
     right:buildNode(X,res,bestRight,depth-1,minLeaf,rng,ff,nBins)};
 }
 
-function gbdtFit(X:Float64Array[],y:Float64Array,seed:number,hp:IndexHP):GBDTModel {
+// ─── [#3] 지수 감쇠 샘플 가중치 ────────────────────────────────────────────────
+// 최신 데이터일수록 높은 가중치 → 시장 레짐 변화에 빠른 적응
+function expDecayWeights(n: number, halfLifeDays = 252): Float64Array {
+  const w = new Float64Array(n);
+  const decay = Math.log(2) / halfLifeDays;
+  for (let i = 0; i < n; i++) w[i] = Math.exp(-decay * (n - 1 - i));
+  return w;
+}
+// 가중치 기반 행 샘플링 (CDF inverse 방식)
+function weightedRowBag(n: number, size: number, w: Float64Array, rng: () => number): number[] {
+  const wSum = w.reduce((a, b) => a + b, 0);
+  const cdf = new Float64Array(n);
+  let cum = 0;
+  for (let i = 0; i < n; i++) { cum += w[i] / wSum; cdf[i] = cum; }
+  const result: number[] = [];
+  for (let k = 0; k < size; k++) {
+    const r = rng();
+    let lo = 0, hi = n - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (cdf[mid] < r) lo = mid + 1; else hi = mid; }
+    result.push(lo);
+  }
+  return result;
+}
+
+function gbdtFit(X:Float64Array[],y:Float64Array,seed:number,hp:IndexHP,sampleWeights?:Float64Array):GBDTModel {
   const rng=makeRng(seed),n=X.length;
-  let basePred=0;for(let i=0;i<n;i++)basePred+=y[i];basePred/=n;
+  // [#3] 가중 평균으로 basePred 계산
+  let basePred=0;
+  if(sampleWeights){let wSum=0;for(let i=0;i<n;i++){basePred+=sampleWeights[i]*y[i];wSum+=sampleWeights[i];}basePred/=wSum;}
+  else{for(let i=0;i<n;i++)basePred+=y[i];basePred/=n;}
   const preds=new Float64Array(n).fill(basePred),trees:any[]=[];
   const rowBag=Math.floor(n*hp.gbdtSsub);
   for(let t=0;t<hp.gbdtTrees;t++){
     const res=Array.from({length:n},(_,i)=>y[i]-preds[i]);
-    const idxs=Array.from({length:n},(_,i)=>i).sort(()=>rng()-0.5).slice(0,rowBag);
+    // [#3] 최근 데이터가 더 자주 선택되도록 가중 샘플링
+    const idxs=sampleWeights
+      ? weightedRowBag(n,rowBag,sampleWeights,rng)
+      : Array.from({length:n},(_,i)=>i).sort(()=>rng()-0.5).slice(0,rowBag);
     const tree=buildNode(X,res,idxs,hp.gbdtDepth,hp.gbdtLeaf,rng,hp.gbdtFsub,GBDT_BINS);
     trees.push(tree);
     for(let i=0;i<n;i++)preds[i]+=hp.gbdtLR*dtPredict(tree,X[i]);
@@ -1048,6 +1085,8 @@ function buildResultFromModel(
   lstmModel: tf.LayersModel, lstmScaler: { mu: Float64Array; sigma: Float64Array },
   storedAlpha: number,
   recentWindow = 30,
+  // [#2] 라이브 적중률 기반 alpha 실시간 조정용
+  liveComp?: ComponentLiveAccuracy,
 ): IndexResult {
   const { feats, closes, dates } = buildFeatures(rows, extMap);
 
@@ -1090,7 +1129,20 @@ function buildResultFromModel(
                              : volPct > 0.67 ? [0.20, 0.75]   // crisis — LSTM 모드
                              :                 [0.10, 0.60];   // normal — 균형
   const regimeLabel = volPct < 0.33 ? "calm" : volPct > 0.67 ? "crisis" : "normal";
-  const alpha = Math.max(alphaMin, Math.min(alphaMax, rawAlpha));
+  let alpha = Math.max(alphaMin, Math.min(alphaMax, rawAlpha));
+
+  // [#2] 라이브 적중률 기반 alpha 실시간 조정
+  // GBDT/LSTM 개별 라이브 정확도가 충분히 쌓이면 walk-forward alpha를 보정
+  // liveWeight: 최대 40% (50샘플 이후 포화), 나머지는 walk-forward alpha 유지
+  if (liveComp && liveComp.nSamples >= 5 && liveComp.gbdtAcc !== null && liveComp.lstmAcc !== null) {
+    const lGbdt = Math.max(0, liveComp.gbdtAcc - 0.50);
+    const lLstm = Math.max(0, liveComp.lstmAcc - 0.50);
+    const liveRaw = lGbdt + lLstm > 1e-6 ? lLstm / (lGbdt + lLstm) : 0.5;
+    const liveAlpha = Math.max(alphaMin, Math.min(alphaMax, liveRaw));
+    const liveWeight = Math.min(0.40, liveComp.nSamples / 50 * 0.40);
+    alpha = (1 - liveWeight) * alpha + liveWeight * liveAlpha;
+    console.log(`[live-alpha] ${symbol} nSamples=${liveComp.nSamples} gbdtAcc=${(liveComp.gbdtAcc*100).toFixed(0)}% lstmAcc=${(liveComp.lstmAcc*100).toFixed(0)}% liveAlpha=${liveAlpha.toFixed(3)} blend=${liveWeight.toFixed(2)} → finalAlpha=${alpha.toFixed(3)}`);
+  }
   console.log(`[regime] ${symbol} volPct=${(volPct*100).toFixed(0)}% regime=${regimeLabel} α=[${alphaMin}~${alphaMax}]→${alpha.toFixed(3)}`);
 
   // 안전장치: LSTM 예측이 GBDT 대비 3배 초과하면 방향 유지 채 압축
@@ -1159,6 +1211,13 @@ function buildResultFromModel(
     : lstmForecastRaw;
   // 교정 계수 적용: 방향 유지, 진폭을 실제 시장 수준으로 스케일업
   const forecastReturn = (alpha * lstmForecast + (1-alpha) * gbdtForecast) * calibFactor;
+  // [#2] 개별 컴포넌트 예측값 (savePrediction으로 전달 → 컴포넌트별 라이브 적중률 추적)
+  const gbdtForecastRetPct = gbdtForecast * calibFactor * 100;
+  const lstmForecastRetPct = lstmForecast * calibFactor * 100;
+  // [#1] 오차 컨텍스트: 현재 VIX 5일 모멘텀 추출
+  const lastDate = dates[dates.length - 1];
+  const lastExt  = extMap.get(lastDate);
+  const lastVix5dMom = lastExt?.vix5dMom ?? null;
 
   const curVal    = closes[closes.length-1];
   const pred3d    = curVal * (1 + forecastReturn);
@@ -1190,6 +1249,10 @@ function buildResultFromModel(
     lstmDirAcc: +(l30*100).toFixed(1),
     gbdtDirAcc: +(g30*100).toFixed(1),
     ensembleAlpha: +alpha.toFixed(3),
+    gbdtForecastRet: +gbdtForecastRetPct.toFixed(2),
+    lstmForecastRet: +lstmForecastRetPct.toFixed(2),
+    curVol20: +(curVol20 * 100).toFixed(3),
+    lastVix5dMom: lastVix5dMom !== null ? +lastVix5dMom.toFixed(4) : undefined,
   };
 }
 
@@ -1209,7 +1272,9 @@ async function trainFull(
   const { X, y } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length, trainEnd = Math.floor(n*0.80);
   const { Xn: XtrN, mu: gbdtMu, sigma: gbdtSig } = standardize(X.slice(0, trainEnd));
-  const gbdtModels = Array.from({length:hp.nEnsemble}, (_,e) => gbdtFit(XtrN, y.slice(0,trainEnd), e*37+13, hp));
+  // [#3] 지수 감쇠 샘플 가중치: 최근 1년(252일) 반감기로 최신 데이터 우선
+  const sampleWeights = expDecayWeights(trainEnd);
+  const gbdtModels = Array.from({length:hp.nEnsemble}, (_,e) => gbdtFit(XtrN, y.slice(0,trainEnd), e*37+13, hp, sampleWeights));
 
   const lstmScaler = computeLSTMScaler(feats.slice(0, trainEnd+LOOKBACK));
   const { X3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
@@ -1230,12 +1295,15 @@ async function trainFull(
     ensembleAlpha: 0.5,
   });
 
+  // [#2] 훈련 완료 후 라이브 적중률 조회해서 alpha 보정
+  const liveComp = await getComponentLiveAccuracy(symbol).catch(() => undefined);
   const result = buildResultFromModel(
     symbol, name, rows, extMap,
     gbdtModels, { mu: gbdtMu, sigma: gbdtSig },
     lstmModel, { mu: lstmScaler.mu, sigma: lstmScaler.sigma },
     0.5,
     hp.recentWindow,
+    liveComp,
   );
   lstmModel.dispose();
   return result;
@@ -1427,12 +1495,12 @@ export async function runPipeline(force=false): Promise<void> {
     console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | S&P500 ${snp500Result.testDirAcc}% | NASDAQ ${nasdaqResult.testDirAcc}%`);
     // 재배포 후에도 즉시 표시될 수 있도록 DB에 저장
     saveResultsToDB(kospiResult, kosdaqResult, snp500Result, nasdaqResult).catch(() => {});
-    // 오늘 예측 기록 저장 (라이브 적중률 추적)
+    // [#1][#2] 오늘 예측 기록 저장 — 개별 컴포넌트 예측 + 오차 컨텍스트(VIX, 변동성) 포함
     Promise.all([
-      savePrediction("^KS11", kospiResult.predictedReturn3d,  kospiResult.currentValue,  MODEL_VERSION),
-      savePrediction("^KQ11", kosdaqResult.predictedReturn3d, kosdaqResult.currentValue, MODEL_VERSION),
-      savePrediction("^GSPC", snp500Result.predictedReturn3d, snp500Result.currentValue, MODEL_VERSION),
-      savePrediction("^IXIC", nasdaqResult.predictedReturn3d, nasdaqResult.currentValue, MODEL_VERSION),
+      savePrediction("^KS11", kospiResult.predictedReturn3d,  kospiResult.currentValue,  MODEL_VERSION, 3, { gbdtReturn: kospiResult.gbdtForecastRet,  lstmReturn: kospiResult.lstmForecastRet,  volatilityAtPred: kospiResult.curVol20,  vixAtPred: kospiResult.lastVix5dMom  }),
+      savePrediction("^KQ11", kosdaqResult.predictedReturn3d, kosdaqResult.currentValue, MODEL_VERSION, 3, { gbdtReturn: kosdaqResult.gbdtForecastRet, lstmReturn: kosdaqResult.lstmForecastRet, volatilityAtPred: kosdaqResult.curVol20, vixAtPred: kosdaqResult.lastVix5dMom }),
+      savePrediction("^GSPC", snp500Result.predictedReturn3d, snp500Result.currentValue, MODEL_VERSION, 3, { gbdtReturn: snp500Result.gbdtForecastRet, lstmReturn: snp500Result.lstmForecastRet, volatilityAtPred: snp500Result.curVol20, vixAtPred: snp500Result.lastVix5dMom }),
+      savePrediction("^IXIC", nasdaqResult.predictedReturn3d, nasdaqResult.currentValue, MODEL_VERSION, 3, { gbdtReturn: nasdaqResult.gbdtForecastRet, lstmReturn: nasdaqResult.lstmForecastRet, volatilityAtPred: nasdaqResult.curVol20, vixAtPred: nasdaqResult.lastVix5dMom }),
     ]).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
@@ -1495,33 +1563,41 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     saveModelFile("GSPC",{...snpStore,    gbdtModels:updSnp,    nFeatures:N_FEATURES});
     if(ixicStore&&updIxic) saveModelFile("IXIC",{...ixicStore, gbdtModels:updIxic, nFeatures:N_FEATURES});
 
+    // [#2] buildResultFromModel 호출 전 라이브 적중률 일괄 조회
+    const [ksLive, kqLive, gspcLive, ixicLive] = await Promise.all([
+      getComponentLiveAccuracy("^KS11").catch(() => undefined),
+      getComponentLiveAccuracy("^KQ11").catch(() => undefined),
+      getComponentLiveAccuracy("^GSPC").catch(() => undefined),
+      getComponentLiveAccuracy("^IXIC").catch(() => undefined),
+    ]);
+
     const kospi = buildResultFromModel(
       "^KS11","KOSPI",kospiRows,kospiExtMap,updKospi,
       {mu:new Float64Array(kospiStore.gbdtScaler.mu),sigma:new Float64Array(kospiStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(kospiStore.lstmWeights),
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
-      kospiStore.ensembleAlpha, ksHP.recentWindow,
+      kospiStore.ensembleAlpha, ksHP.recentWindow, ksLive,
     );
     const kosdaq = buildResultFromModel(
       "^KQ11","KOSDAQ",kosdaqRows,kosdaqExtMap,updKosdaq,
       {mu:new Float64Array(kosdaqStore.gbdtScaler.mu),sigma:new Float64Array(kosdaqStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(kosdaqStore.lstmWeights),
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
-      kosdaqStore.ensembleAlpha, kqHP.recentWindow,
+      kosdaqStore.ensembleAlpha, kqHP.recentWindow, kqLive,
     );
     const snp500 = buildResultFromModel(
       "^GSPC","S&P500",snpRows,snpExtMap,updSnp,
       {mu:new Float64Array(snpStore.gbdtScaler.mu),sigma:new Float64Array(snpStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(snpStore.lstmWeights),
       {mu:new Float64Array(snpStore.lstmScaler.mu),sigma:new Float64Array(snpStore.lstmScaler.sigma)},
-      snpStore.ensembleAlpha, gspcHP.recentWindow,
+      snpStore.ensembleAlpha, gspcHP.recentWindow, gspcLive,
     );
     const nasdaq = (ixicStore&&updIxic) ? buildResultFromModel(
       "^IXIC","NASDAQ",nasdaqRows,nasdaqExtMap,updIxic,
       {mu:new Float64Array(ixicStore.gbdtScaler.mu),sigma:new Float64Array(ixicStore.gbdtScaler.sigma)},
       loadLSTMFromWeights(ixicStore.lstmWeights),
       {mu:new Float64Array(ixicStore.lstmScaler.mu),sigma:new Float64Array(ixicStore.lstmScaler.sigma)},
-      ixicStore.ensembleAlpha, ixicHP.recentWindow,
+      ixicStore.ensembleAlpha, ixicHP.recentWindow, ixicLive,
     ) : _status.nasdaq;
     const now=new Date().toISOString();
     saveMeta({
@@ -1535,12 +1611,12 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     _lastRun=Date.now();
     _status={..._status,ready:true,kospi,kosdaq,snp500,nasdaq};
     saveResultsToDB(kospi,kosdaq,snp500,nasdaq??undefined).catch(()=>{});
-    // 오늘 예측 저장
+    // [#1][#2] 오늘 예측 저장 — 개별 컴포넌트 예측 + 오차 컨텍스트 포함
     Promise.all([
-      savePrediction("^KS11", kospi.predictedReturn3d,  kospi.currentValue,  MODEL_VERSION),
-      savePrediction("^KQ11", kosdaq.predictedReturn3d, kosdaq.currentValue, MODEL_VERSION),
-      savePrediction("^GSPC", snp500.predictedReturn3d, snp500.currentValue, MODEL_VERSION),
-      ...(nasdaq ? [savePrediction("^IXIC", nasdaq.predictedReturn3d, nasdaq.currentValue, MODEL_VERSION)] : []),
+      savePrediction("^KS11", kospi.predictedReturn3d,  kospi.currentValue,  MODEL_VERSION, 3, { gbdtReturn: kospi.gbdtForecastRet,  lstmReturn: kospi.lstmForecastRet,  volatilityAtPred: kospi.curVol20,  vixAtPred: kospi.lastVix5dMom  }),
+      savePrediction("^KQ11", kosdaq.predictedReturn3d, kosdaq.currentValue, MODEL_VERSION, 3, { gbdtReturn: kosdaq.gbdtForecastRet, lstmReturn: kosdaq.lstmForecastRet, volatilityAtPred: kosdaq.curVol20, vixAtPred: kosdaq.lastVix5dMom }),
+      savePrediction("^GSPC", snp500.predictedReturn3d, snp500.currentValue, MODEL_VERSION, 3, { gbdtReturn: snp500.gbdtForecastRet, lstmReturn: snp500.lstmForecastRet, volatilityAtPred: snp500.curVol20, vixAtPred: snp500.lastVix5dMom }),
+      ...(nasdaq ? [savePrediction("^IXIC", nasdaq.predictedReturn3d, nasdaq.currentValue, MODEL_VERSION, 3, { gbdtReturn: nasdaq.gbdtForecastRet, lstmReturn: nasdaq.lstmForecastRet, volatilityAtPred: nasdaq.curVol20, vixAtPred: nasdaq.lastVix5dMom })] : []),
     ]).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
     // 만료된 예측 결과 확인 → 자동 재학습 체크
     Promise.all([
