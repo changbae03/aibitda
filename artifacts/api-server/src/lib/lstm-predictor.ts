@@ -66,15 +66,15 @@ const PRED_H       = 3;
 const N_FEATURES   = 27;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
-const LSTM_UNITS   = 32;
-const LSTM_DENSE   = 16;
+const LSTM_UNITS   = 48;   // [v18] 32→48: KOSPI 복잡 패턴 대응 용량 확대
+const LSTM_DENSE   = 24;   // [v18] 16→24
 const LSTM_BATCH   = 32;
 const YEARS_DATA   = 5;
 const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 17;
+const MODEL_VERSION = 18;  // [v18] LSTM 용량↑ + KOSPI HP 전면 재조정 + 최근 레짐 집중
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -90,36 +90,49 @@ interface IndexHP {
   lstmLR:       number;
   lstmDrop:     number;
   recentWindow: number;   // 최근 적중률 계산 창 (알파 동적 조정용)
+  halfLifeDays: number;   // [v18] 지수감쇠 반감기(일) — 짧을수록 최근 레짐에 집중
 }
 
 const INDEX_HP: Record<string, IndexHP> = {
-  /** KOSPI — VIX 피처 추가로 레짐 감지 강화, 앙상블·에폭 확대 */
+  /**
+   * KOSPI [v18] — 전면 재조정
+   * · GBDT: 트리 200개 + LR 0.02 (더 많은 약분류기, 천천히 학습 → 일반화↑)
+   * · depth 5 / leaf 8: 더 세밀한 분할 (과적합 방지는 트리 수와 LR로 제어)
+   * · nEnsemble 8: 무작위 시드 다양성 극대화
+   * · LSTM: epochs 100 + dropout 0.30 + lr 0.0008 (용량 48 units에 맞게 더 신중하게)
+   * · halfLifeDays 126: 6개월 반감기 → 2025 관세전쟁 이후 레짐에 집중
+   * · recentWindow 15: alpha 조정창 축소 → 최근 정확도에 빠르게 반응
+   */
   KS11: {
-    gbdtTrees: 120, gbdtLR: 0.04,  gbdtDepth: 4, gbdtLeaf: 15,
-    gbdtFsub: 0.60, gbdtSsub: 0.80, nEnsemble: 4,
-    lstmEpochs: 60, lstmLR: 0.001,  lstmDrop: 0.20,
-    recentWindow: 30,
+    gbdtTrees: 200, gbdtLR: 0.02,   gbdtDepth: 5, gbdtLeaf: 8,
+    gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 8,
+    lstmEpochs: 100, lstmLR: 0.0008, lstmDrop: 0.30,
+    recentWindow: 15,
+    halfLifeDays: 126,
   },
-  /** KOSDAQ — 변동성 높은 성장주 지수, 더 깊고 많은 트리 + 긴 학습 */
+  /** KOSDAQ — 변동성 높은 성장주 지수 */
   KQ11: {
-    gbdtTrees: 120, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 10,
-    gbdtFsub: 0.65, gbdtSsub: 0.75, nEnsemble: 4,
-    lstmEpochs: 40, lstmLR: 0.001, lstmDrop: 0.15,
-    recentWindow: 20,   // 최근 20일로 빠르게 반응
+    gbdtTrees: 150, gbdtLR: 0.02,  gbdtDepth: 4, gbdtLeaf: 10,
+    gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 6,
+    lstmEpochs: 80, lstmLR: 0.0009, lstmDrop: 0.25,
+    recentWindow: 20,
+    halfLifeDays: 180,
   },
-  /** S&P500 — 유동성 높은 미국 대형주 지수, VIX+금리차+나스닥/러셀 피처 강화 (v16) */
+  /** S&P500 — 유동성 높은 미국 대형주 지수 */
   GSPC: {
     gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
     gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.25,
-    recentWindow: 20,   // 최근 20일로 빠르게 반응 (v16)
+    recentWindow: 20,
+    halfLifeDays: 252,
   },
-  /** NASDAQ — 기술주 중심 지수, 변동성 높아 LSTM 가중치 증가 */
+  /** NASDAQ — 기술주 중심 지수 */
   IXIC: {
     gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
     gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
-    lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.30,   // 드롭아웃 높게 (고변동성)
+    lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.30,
     recentWindow: 20,
+    halfLifeDays: 252,
   },
 };
 
@@ -1007,7 +1020,8 @@ async function trainLSTM(
   const yVal   = tf.tensor2d(Array.from(y_val),   [y_val.length,   1]);
 
   // Early stopping: val_loss가 patience 에포크 연속 개선 없으면 조기 종료
-  let bestValLoss = Infinity, patience = 10, noImproveCount = 0;
+  // [v18] patience 10→15: LSTM_UNITS 확대로 수렴이 더 느려짐에 맞춰 조정
+  let bestValLoss = Infinity, patience = 15, noImproveCount = 0;
   let bestWeights: LSTMWeightLayer[][] | null = null;
 
   try {
@@ -1274,8 +1288,9 @@ async function trainFull(
   const { X, y } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length, trainEnd = Math.floor(n*0.80);
   const { Xn: XtrN, mu: gbdtMu, sigma: gbdtSig } = standardize(X.slice(0, trainEnd));
-  // [#3] 지수 감쇠 샘플 가중치: 최근 1년(252일) 반감기로 최신 데이터 우선
-  const sampleWeights = expDecayWeights(trainEnd);
+  // [v18] 지수 감쇠 샘플 가중치: hp.halfLifeDays 반감기로 최신 데이터 우선
+  // KOSPI는 126일(6개월) → 2025 관세전쟁 이후 새 레짐 집중
+  const sampleWeights = expDecayWeights(trainEnd, hp.halfLifeDays);
   const gbdtModels = Array.from({length:hp.nEnsemble}, (_,e) => gbdtFit(XtrN, y.slice(0,trainEnd), e*37+13, hp, sampleWeights));
 
   const lstmScaler = computeLSTMScaler(feats.slice(0, trainEnd+LOOKBACK));
