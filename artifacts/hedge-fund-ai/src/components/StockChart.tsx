@@ -232,17 +232,20 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
   const nxtIsUp = (nxtInfo?.changePercent ?? 0) >= 0;
 
   const useLongDate = period === "5y" || period === "2y" || period === "1y";
-  const chartData = data?.candles?.map((c) => ({
+  const chartData = useMemo(() => data?.candles?.map((c) => ({
     ...c,
     close: parseFloat(c.close.toFixed(2)),
     dateLabel: useLongDate ? c.date.slice(0, 10) : c.date.slice(5),
-  })) ?? [];
+  })) ?? [], [data?.candles, useLongDate]);
 
   const minSwingPct = period === "5y" ? 8 : period === "2y" ? 6 : 4;
-  const swings = chartData.length > 1 ? detectPriceSwings(chartData, minSwingPct, 5) : [];
+  const swings = useMemo(
+    () => chartData.length > 1 ? detectPriceSwings(chartData, minSwingPct, 5) : [],
+    [chartData, minSwingPct]
+  );
 
-  const swingDateSet = new Set(swings.map(s => s.dateLabel));
-  const chartDataWithSwings = chartData.map((d, i) => {
+  const swingDateSet = useMemo(() => new Set(swings.map(s => s.dateLabel)), [swings]);
+  const chartDataWithSwings = useMemo(() => chartData.map((d) => {
     const swing = swings.find(s => s.dateLabel === d.dateLabel);
     if (!swing) return d;
     return {
@@ -251,7 +254,7 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
       _swingIsUp: swing.changePercent > 0,
       _swingPct: swing.changePercent,
     };
-  });
+  }), [chartData, swings]);
 
   const currentPrice = data?.currentPrice ?? 0;
   const MAX_LEVEL_RATIO = 1.5;

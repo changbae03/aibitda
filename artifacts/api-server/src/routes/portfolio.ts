@@ -58,65 +58,91 @@ async function fetchPrice(ticker: string): Promise<{ price: number | null; curre
 }
 
 // ── 최신 분석 조회 (현재 유저 본인 분석만) ────────────────────────────────────
+// ── 단건 조회 (포트폴리오 외 단일 종목 조회용) ───────────────────────────────
 async function fetchLatestAnalysis(ticker: string, userId: string) {
-  const { rows } = await pool.query(`
-    SELECT id, target_price, entry_price, stop_loss, investment_verdict,
-           qa_score, created_at, risk_reward_ratio, industry,
-           (SELECT content FROM analysis_steps
-            WHERE analysis_id = analyses.id AND step_key = 'key_catalysts'
-            LIMIT 1) AS catalysts,
-           (SELECT content FROM analysis_steps
-            WHERE analysis_id = analyses.id AND step_key = 'risk_factors'
-            LIMIT 1) AS risks,
-           (SELECT content FROM analysis_steps
-            WHERE analysis_id = analyses.id AND step_key = 'investment_strategy'
-            LIMIT 1) AS strategy
-    FROM analyses
-    WHERE ticker = $1 AND user_id = $2 AND status = 'completed'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `, [ticker, userId]);
-  return rows[0] ?? null;
+  const map = await fetchLatestAnalysesBatch([ticker], userId);
+  return map.get(ticker) ?? null;
 }
-
-// ── 멀티뷰 평균 목표가 (최근 30일 완성 분석의 평균) ──────────────────────────
-async function fetchCollectiveAvgTarget(ticker: string): Promise<{ avgTarget: number | null; analystCount: number }> {
-  const { rows } = await pool.query(`
-    SELECT ROUND(AVG(target_price::numeric)) AS avg_target,
-           COUNT(DISTINCT user_id) AS analyst_count
-    FROM analyses
-    WHERE ticker = $1
-      AND status = 'completed'
-      AND target_price IS NOT NULL
-      AND created_at >= NOW() - INTERVAL '30 days'
-  `, [ticker]);
-  const row = rows[0];
-  return {
-    avgTarget: row?.avg_target ? parseFloat(row.avg_target) : null,
-    analystCount: row?.analyst_count ? parseInt(row.analyst_count) : 0,
-  };
-}
-
-// ── 집단지성 분석 조회 (모든 유저, 최신 완성 분석 우선) ───────────────────────
 async function fetchBestAnalysis(ticker: string) {
-  const { rows } = await pool.query(`
-    SELECT id, target_price, entry_price, stop_loss, investment_verdict,
-           risk_reward_ratio, industry, company_name, qa_score, created_at,
-           (SELECT content FROM analysis_steps
-            WHERE analysis_id = analyses.id AND step_key = 'key_catalysts'
-            LIMIT 1) AS catalysts,
-           (SELECT content FROM analysis_steps
-            WHERE analysis_id = analyses.id AND step_key = 'risk_factors'
-            LIMIT 1) AS risks,
-           (SELECT content FROM analysis_steps
-            WHERE analysis_id = analyses.id AND step_key = 'investment_strategy'
-            LIMIT 1) AS strategy
-    FROM analyses
-    WHERE ticker = $1 AND status = 'completed'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `, [ticker]);
-  return rows[0] ?? null;
+  const map = await fetchBestAnalysesBatch([ticker]);
+  return map.get(ticker) ?? null;
+}
+async function fetchCollectiveAvgTarget(ticker: string): Promise<{ avgTarget: number | null; analystCount: number }> {
+  const map = await fetchCollectiveAvgTargetsBatch([ticker]);
+  return map.get(ticker) ?? { avgTarget: null, analystCount: 0 };
+}
+
+// ── 배치 조회 (포트폴리오 N+1 방지: 전체 종목을 쿼리 3번으로 처리) ──────────
+
+async function _attachSteps(rows: any[]): Promise<any[]> {
+  if (!rows.length) return rows;
+  const ids = rows.map((r) => r.id);
+  const { rows: steps } = await pool.query(
+    `SELECT analysis_id, step_key, content
+     FROM analysis_steps
+     WHERE analysis_id = ANY($1::int[])
+       AND step_key IN ('key_catalysts','risk_factors','investment_strategy')`,
+    [ids]
+  );
+  const byId = new Map<number, Record<string, string>>();
+  for (const s of steps) {
+    if (!byId.has(s.analysis_id)) byId.set(s.analysis_id, {});
+    byId.get(s.analysis_id)![s.step_key] = s.content;
+  }
+  return rows.map((r) => {
+    const s = byId.get(r.id) ?? {};
+    return { ...r, catalysts: s["key_catalysts"] ?? null, risks: s["risk_factors"] ?? null, strategy: s["investment_strategy"] ?? null };
+  });
+}
+
+async function fetchLatestAnalysesBatch(tickers: string[], userId: string): Promise<Map<string, any>> {
+  if (!tickers.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (ticker)
+       id, ticker, target_price, entry_price, stop_loss, investment_verdict,
+       qa_score, created_at, risk_reward_ratio, industry
+     FROM analyses
+     WHERE ticker = ANY($1) AND user_id = $2 AND status = 'completed'
+     ORDER BY ticker, created_at DESC`,
+    [tickers, userId]
+  );
+  const enriched = await _attachSteps(rows);
+  return new Map(enriched.map((r) => [r.ticker, r]));
+}
+
+async function fetchBestAnalysesBatch(tickers: string[]): Promise<Map<string, any>> {
+  if (!tickers.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (ticker)
+       id, ticker, target_price, entry_price, stop_loss, investment_verdict,
+       risk_reward_ratio, industry, company_name, qa_score, created_at
+     FROM analyses
+     WHERE ticker = ANY($1) AND status = 'completed'
+     ORDER BY ticker, created_at DESC`,
+    [tickers]
+  );
+  const enriched = await _attachSteps(rows);
+  return new Map(enriched.map((r) => [r.ticker, r]));
+}
+
+async function fetchCollectiveAvgTargetsBatch(tickers: string[]): Promise<Map<string, { avgTarget: number | null; analystCount: number }>> {
+  if (!tickers.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT ticker,
+            ROUND(AVG(target_price::numeric)) AS avg_target,
+            COUNT(DISTINCT user_id) AS analyst_count
+     FROM analyses
+     WHERE ticker = ANY($1)
+       AND status = 'completed'
+       AND target_price IS NOT NULL
+       AND created_at >= NOW() - INTERVAL '30 days'
+     GROUP BY ticker`,
+    [tickers]
+  );
+  return new Map(rows.map((r) => [r.ticker, {
+    avgTarget: r.avg_target ? parseFloat(r.avg_target) : null,
+    analystCount: r.analyst_count ? parseInt(r.analyst_count) : 0,
+  }]));
 }
 
 // ── system_cache 헬퍼 ──────────────────────────────────────────────────────────
@@ -165,16 +191,24 @@ router.get("/portfolio", async (req, res) => {
   // skipPrices=true 이면 현재가 조회 생략 → 클라이언트 batch-quotes로 채움
   const skipPrices = req.query.skipPrices === "true";
 
-  // (skipPrices=false일 때) 현재가 + 내 분석 + 집단지성 평균 목표가를 병렬로 조회
-  const enriched = await Promise.all(rows.map(async (row) => {
-    const [priceData, analysis, bestAnalysis, collective] = await Promise.all([
-      skipPrices
-        ? Promise.resolve({ price: null as number | null, currency: row.currency ?? "KRW", change1d: null as number | null })
-        : fetchPrice(row.ticker),
-      fetchLatestAnalysis(row.ticker, userId),
-      fetchBestAnalysis(row.ticker),
-      fetchCollectiveAvgTarget(row.ticker),
-    ]);
+  // DB 분석 데이터는 배치 쿼리로 한 번에 조회 (N+1 방지)
+  const tickers = rows.map((r) => r.ticker);
+  const [latestMap, bestMap, collectiveMap, priceResults] = await Promise.all([
+    fetchLatestAnalysesBatch(tickers, userId),
+    fetchBestAnalysesBatch(tickers),
+    fetchCollectiveAvgTargetsBatch(tickers),
+    skipPrices
+      ? Promise.resolve(new Map<string, { price: number | null; currency: string; change1d: number | null }>())
+      : Promise.all(rows.map(async (r) => ({ ticker: r.ticker, ...(await fetchPrice(r.ticker)) }))).then(
+          (res) => new Map(res.map((x) => [x.ticker, { price: x.price, currency: x.currency, change1d: x.change1d }]))
+        ),
+  ]);
+
+  const enriched = rows.map((row) => {
+    const priceData = priceResults.get(row.ticker) ?? { price: null as number | null, currency: row.currency ?? "KRW", change1d: null as number | null };
+    const analysis = latestMap.get(row.ticker) ?? null;
+    const bestAnalysis = bestMap.get(row.ticker) ?? null;
+    const collective = collectiveMap.get(row.ticker) ?? { avgTarget: null, analystCount: 0 };
 
     const currentPrice = priceData.price;
     const avgPrice = row.avg_price ? parseFloat(row.avg_price) : null;
@@ -240,7 +274,7 @@ router.get("/portfolio", async (req, res) => {
         industry: baseAnalysis.industry ?? null,
       } : null,
     };
-  }));
+  });
 
   res.json({ holdings: enriched });
 });

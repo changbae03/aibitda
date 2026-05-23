@@ -1,5 +1,5 @@
 import app from "./app";
-import { runMigrations } from "@workspace/db";
+import { runMigrations, pool } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
 import { autoRecalibrate } from "./routes/performance.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
@@ -44,8 +44,17 @@ const server = app.listen(port, () => {
   runMigrations()
     .then(() => {
       console.log("[MIGRATION] 완료");
-      return initCalendarCache();
+      // 자주 쓰이는 컬럼에 인덱스 추가 (없으면 생성, 있으면 무시)
+      return Promise.all([
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_user_id   ON analyses(user_id)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_ticker    ON analyses(ticker)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_ticker_uid ON analyses(ticker, user_id)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_ticker_st  ON analyses(ticker, status)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_asteps_analysis_id ON analysis_steps(analysis_id)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_asteps_aid_stepkey ON analysis_steps(analysis_id, step_key)`),
+      ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
+    .then(() => initCalendarCache())
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
       // 서버 재시작 시 미완료 분석 자동 복구 (30초 후 — 다른 초기화 완료 이후)
