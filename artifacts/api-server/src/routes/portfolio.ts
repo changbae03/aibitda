@@ -1367,8 +1367,9 @@ async function fetchNewsForTicker(ticker: string, companyName: string): Promise<
   else if (/^\d{6}\.KQ$/i.test(ticker)) yTicker = ticker.toUpperCase();
 
   const query  = encodeURIComponent(yTicker);
-  const url    = `https://query1.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=8&enableFuzzyQuery=false&quotesCount=0`;
-  const url2   = `https://query2.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=8&enableFuzzyQuery=false&quotesCount=0`;
+  // 더 많이 가져와서 필터링 — 20개 요청 후 관련성 높은 것만
+  const url    = `https://query1.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=20&enableFuzzyQuery=false&quotesCount=0`;
+  const url2   = `https://query2.finance.yahoo.com/v1/finance/search?q=${query}&newsCount=20&enableFuzzyQuery=false&quotesCount=0`;
 
   const tryFetch = async (endpoint: string) => {
     const r = await fetch(endpoint, {
@@ -1385,12 +1386,28 @@ async function fetchNewsForTicker(ticker: string, companyName: string): Promise<
     catch { data = await tryFetch(url2); }
 
     const newsArr: any[] = data?.news ?? [];
+    const tickerUpper = yTicker.toUpperCase();
+
+    // 관련성 점수: relatedTickers[0]이 해당 티커면 높은 점수
+    const scored = newsArr.map((n: any) => {
+      const related: string[] = (n.relatedTickers ?? []).map((t: string) => t.toUpperCase());
+      let score = 0;
+      if (related[0] === tickerUpper)    score = 3; // 주인공 기사
+      else if (related.includes(tickerUpper)) score = 1; // 언급만
+      return { n, score };
+    });
+
+    // score >= 3인 기사 우선, 부족하면 score >= 1로 보충 — 최대 6개
+    const primary   = scored.filter(s => s.score >= 3).slice(0, 6);
+    const secondary = scored.filter(s => s.score === 1).slice(0, Math.max(0, 6 - primary.length));
+    const picked    = [...primary, ...secondary];
+
     const result: NewsItem[] = [];
-    for (const n of newsArr.slice(0, 8)) {
-      const title   = String(n.title ?? "").trim();
-      const source  = String(n.publisher ?? "").trim();
-      const link    = String(n.link ?? "").trim();
-      const ts      = typeof n.providerPublishTime === "number"
+    for (const { n } of picked) {
+      const title  = String(n.title ?? "").trim();
+      const source = String(n.publisher ?? "").trim();
+      const link   = String(n.link ?? "").trim();
+      const ts     = typeof n.providerPublishTime === "number"
         ? new Date(n.providerPublishTime * 1000).toISOString()
         : new Date().toISOString();
       if (!title) continue;
