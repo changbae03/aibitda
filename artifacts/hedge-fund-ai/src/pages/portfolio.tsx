@@ -576,6 +576,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
   useEffect(() => { load(); }, [load]);
 
   const uniqueTickers = Array.from(new Set(items.map(i => i.ticker)));
+  const tickerNameMap = new Map(items.map(i => [i.ticker, i.companyName || i.ticker]));
   const filtered = filter === "all" ? items : items.filter(i => i.ticker === filter);
   const visible  = showAll ? filtered : filtered.slice(0, 8);
 
@@ -651,7 +652,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                         : "border-border text-muted-foreground/50 hover:text-foreground"
                     )}
                   >
-                    {t}
+                    {tickerNameMap.get(t) || t}
                   </button>
                 ))}
               </div>
@@ -683,7 +684,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                       "shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border",
                       getColor(item.ticker)
                     )}>
-                      {item.ticker}
+                      {item.companyName || item.ticker}
                     </span>
                     {/* 제목 + 메타 */}
                     <div className="flex-1 min-w-0">
