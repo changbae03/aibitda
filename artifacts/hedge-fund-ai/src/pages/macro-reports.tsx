@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Children, isValidElement } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp,
@@ -77,9 +77,12 @@ function ReportCard({
         expanded ? "opacity-100" : "opacity-40 group-hover:opacity-70"
       )} />
 
-      <button
-        className="w-full text-left px-5 pt-4 pb-4 pl-6 flex items-start gap-3"
+      <div
+        role="button"
+        tabIndex={0}
+        className="w-full text-left px-5 pt-4 pb-4 pl-6 flex items-start gap-3 cursor-pointer"
         onClick={handleExpand}
+        onKeyDown={e => e.key === "Enter" && handleExpand()}
       >
         <div className="flex-1 min-w-0">
           {/* 메타 행 */}
@@ -147,7 +150,7 @@ function ReportCard({
             <ChevronDown className="w-4 h-4" />
           </div>
         </div>
-      </button>
+      </div>
 
       {/* 펼침 콘텐츠 */}
       <AnimatePresence>
@@ -165,12 +168,59 @@ function ReportCard({
                   <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중...
                 </div>
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none
-                  text-foreground/80 text-[13.5px] leading-[1.9]
-                  prose-headings:text-foreground prose-headings:font-semibold prose-headings:text-[14px] prose-headings:mt-5 prose-headings:mb-2
-                  prose-strong:text-foreground prose-strong:font-semibold
-                  prose-p:my-2.5 prose-ul:my-2 prose-li:my-0.5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div className="max-w-none space-y-0">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      // **굵은 텍스트만 있는 단락** → 섹션 헤더로 렌더링
+                      p: ({ children }) => {
+                        const arr = Children.toArray(children);
+                        const isSectionHeader =
+                          arr.length === 1 &&
+                          isValidElement(arr[0]) &&
+                          (arr[0] as any).type === "strong";
+                        if (isSectionHeader) {
+                          return (
+                            <div className="flex items-center gap-2.5 mt-7 mb-3 first:mt-0">
+                              <div className="w-1 h-4 rounded-full bg-gradient-to-b from-violet-400 to-[#FF8A7A] shrink-0" />
+                              <h4 className="text-[13.5px] font-bold text-foreground tracking-tight">
+                                {(arr[0] as any).props.children}
+                              </h4>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p className="text-[13.5px] leading-[1.95] text-foreground/75 mb-3.5">
+                            {children}
+                          </p>
+                        );
+                      },
+                      strong: ({ children }) => (
+                        <strong className="font-semibold text-foreground/90">{children}</strong>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="my-3 ml-4 space-y-1.5 list-none">{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="my-3 ml-4 space-y-1.5 list-decimal">{children}</ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="text-[13.5px] leading-[1.85] text-foreground/75 flex gap-2">
+                          <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-muted-foreground/30 shrink-0" />
+                          <span>{children}</span>
+                        </li>
+                      ),
+                      h1: ({ children }) => <h1 className="text-lg font-bold text-foreground mt-6 mb-3">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-6 mb-2.5">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-[14px] font-semibold text-foreground mt-5 mb-2">{children}</h3>,
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-2 border-violet-500/30 pl-4 my-4 text-muted-foreground/70 italic">
+                          {children}
+                        </blockquote>
+                      ),
+                      hr: () => <hr className="my-5 border-border/40" />,
+                    }}
+                  >
                     {content ?? "내용을 불러올 수 없습니다."}
                   </ReactMarkdown>
                 </div>
