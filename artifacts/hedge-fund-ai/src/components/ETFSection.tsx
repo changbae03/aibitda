@@ -42,6 +42,9 @@ const CATEGORY_COLOR: Record<string, string> = {
   "미디어·엔터":     "text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200 dark:text-fuchsia-400 dark:bg-fuchsia-900/20 dark:border-fuchsia-800/40",
   "고배당":          "text-yellow-600 bg-yellow-50 border-yellow-200 dark:text-yellow-500 dark:bg-yellow-900/20 dark:border-yellow-800/40",
   "ESG·테마":        "text-green-600 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/20 dark:border-green-800/40",
+  "나스닥100":       "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-900/20 dark:border-blue-800/40",
+  "산업재":          "text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-900/20 dark:border-slate-800/40",
+  "혁신·테마":       "text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-900/20 dark:border-purple-800/40",
 };
 
 function CategoryBadge({ category }: { category: string }) {
@@ -78,13 +81,15 @@ export default function ETFSection({
       .catch(e => { setError(e.message); setLoading(false); });
   }, [ticker]);
 
+  const isUsStock = !!(data?.exchange && (data.exchange === "NYSE/NASDAQ" || (!data?.exchange?.includes("KOS"))));
+
   if (loading) {
     return (
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="w-4 h-4 text-primary" />
           <h3 className="font-display font-semibold text-base">편입 ETF 현황</h3>
-          <span className="text-[10px] text-muted-foreground animate-pulse ml-1">KRX 실데이터 조회 중…</span>
+          <span className="text-[10px] text-muted-foreground animate-pulse ml-1">ETF 데이터 조회 중…</span>
         </div>
         <div className="space-y-2">
           {[1, 2, 3].map(i => (
@@ -126,14 +131,20 @@ export default function ETFSection({
       </div>
 
       <div className="space-y-5">
-        {/* 국내 ETF — KRX 실데이터 */}
+        {/* ETF 편입 현황 — 국내(KRX) or 미국(Yahoo Finance) */}
         {hasDomestic && (
           <div>
             <div className="flex items-center gap-1.5 mb-3">
               <BarChart3 className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-semibold text-foreground">국내 ETF 편입 현황</span>
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded font-semibold border border-emerald-200 dark:border-emerald-800/40">
-                KRX 실데이터
+              <span className="text-xs font-semibold text-foreground">
+                {isUsStock ? "미국 ETF 편입 현황" : "국내 ETF 편입 현황"}
+              </span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border ${
+                isUsStock
+                  ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/40"
+                  : "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40"
+              }`}>
+                {isUsStock ? "Yahoo Finance" : "KRX 실데이터"}
               </span>
               <span className="text-[10px] text-muted-foreground ml-auto">{data.domesticEtfs.length}개</span>
             </div>

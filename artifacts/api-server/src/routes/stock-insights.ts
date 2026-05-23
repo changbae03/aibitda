@@ -28,8 +28,9 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
     ?? ticker.match(/^(\d{6})$/)?.[1];
   // KRX 캐시로 정확한 거래소 판별 (티커 포맷 오류 방지)
   const krxEntry = koreanCode ? getKRXCache().find(e => e.code === koreanCode) : null;
+  const isUsTicker = !koreanCode && !/\.(KS|KQ)$/.test(ticker);
   const exchange: string = krxEntry?.exchange
-    ?? (ticker.includes(".KQ") ? "KOSDAQ" : ticker.includes(".KS") ? "KOSPI" : "KOSPI");
+    ?? (ticker.includes(".KQ") ? "KOSDAQ" : ticker.includes(".KS") ? "KOSPI" : isUsTicker ? "NYSE/NASDAQ" : "KOSPI");
   const resolvedSymbol = krxEntry?.symbol
     ?? (ticker.includes(".") ? ticker : koreanCode ? `${koreanCode}.KS` : ticker);
 
@@ -122,14 +123,91 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
     }
   }
 
+  // 3) 미국 주식: 주요 미국 ETF에서 해당 종목 편입 비중 조회 (Yahoo Finance topHoldings)
+  if (isUsTicker && domesticEtfs.length === 0) {
+    const baseSymbol = ticker.split(".")[0];
+    const cacheKey = `etf-inclusion-us:${baseSymbol}`;
+    const cached = cache.get<typeof domesticEtfs>(cacheKey);
+    if (cached) {
+      domesticEtfs = cached;
+    } else {
+      const US_MAJOR_ETFS = [
+        // ─ 시장 전체 ─
+        { code: "SPY",  name: "SPDR S&P 500 ETF Trust",                   manager: "State Street", category: "시장전체" },
+        { code: "VOO",  name: "Vanguard S&P 500 ETF",                      manager: "Vanguard",     category: "시장전체" },
+        { code: "IVV",  name: "iShares Core S&P 500 ETF",                  manager: "BlackRock",    category: "시장전체" },
+        { code: "VTI",  name: "Vanguard Total Stock Market ETF",           manager: "Vanguard",     category: "시장전체" },
+        // ─ 나스닥 ─
+        { code: "QQQ",  name: "Invesco QQQ Trust (Nasdaq-100)",            manager: "Invesco",      category: "나스닥100" },
+        { code: "QQQM", name: "Invesco Nasdaq-100 ETF",                    manager: "Invesco",      category: "나스닥100" },
+        // ─ 기술·반도체 ─
+        { code: "VGT",  name: "Vanguard Information Technology ETF",       manager: "Vanguard",     category: "반도체·IT" },
+        { code: "XLK",  name: "Technology Select Sector SPDR Fund",        manager: "State Street", category: "반도체·IT" },
+        { code: "SOXX", name: "iShares Semiconductor ETF",                 manager: "BlackRock",    category: "반도체·IT" },
+        { code: "SMH",  name: "VanEck Semiconductor ETF",                  manager: "VanEck",       category: "반도체·IT" },
+        { code: "IGV",  name: "iShares Expanded Tech-Software Sector ETF", manager: "BlackRock",    category: "반도체·IT" },
+        // ─ 헬스케어 ─
+        { code: "XLV",  name: "Health Care Select Sector SPDR Fund",       manager: "State Street", category: "바이오·헬스케어" },
+        { code: "IBB",  name: "iShares Biotechnology ETF",                 manager: "BlackRock",    category: "바이오·헬스케어" },
+        // ─ 금융 ─
+        { code: "XLF",  name: "Financial Select Sector SPDR Fund",         manager: "State Street", category: "금융" },
+        { code: "KRE",  name: "SPDR S&P Regional Banking ETF",             manager: "State Street", category: "금융" },
+        // ─ 에너지 ─
+        { code: "XLE",  name: "Energy Select Sector SPDR Fund",            manager: "State Street", category: "에너지·화학" },
+        // ─ 소비재 ─
+        { code: "XLY",  name: "Consumer Discretionary Select Sector SPDR", manager: "State Street", category: "소비재" },
+        { code: "XLP",  name: "Consumer Staples Select Sector SPDR",       manager: "State Street", category: "소비재" },
+        // ─ 산업재 ─
+        { code: "XLI",  name: "Industrial Select Sector SPDR Fund",        manager: "State Street", category: "산업재" },
+        // ─ 미디어·통신 ─
+        { code: "XLC",  name: "Communication Services Select Sector SPDR", manager: "State Street", category: "미디어·엔터" },
+        // ─ 혁신·테마 ─
+        { code: "ARKK", name: "ARK Innovation ETF",                        manager: "ARK Invest",   category: "혁신·테마" },
+        { code: "ARKQ", name: "ARK Autonomous Technology & Robotics ETF",  manager: "ARK Invest",   category: "혁신·테마" },
+      ];
+
+      const results = await Promise.allSettled(
+        US_MAJOR_ETFS.map(async (etf) => {
+          try {
+            const summary = await yahooFinance.quoteSummary(etf.code, {
+              modules: ["topHoldings"] as any,
+            });
+            const holdings: Array<{ symbol?: string; holdingPercent?: number }> =
+              (summary as any).topHoldings?.holdings ?? [];
+            const match = holdings.find(
+              h => h.symbol?.toUpperCase() === baseSymbol.toUpperCase()
+            );
+            if (!match) return null;
+            return {
+              code:       etf.code,
+              name:       etf.name,
+              manager:    etf.manager,
+              category:   etf.category,
+              weight:     Math.round((match.holdingPercent ?? 0) * 10000) / 100,
+              dataSource: "real" as const,
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const hits: typeof domesticEtfs = [];
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value !== null) hits.push(r.value);
+      }
+      domesticEtfs = hits.sort((a, b) => b.weight - a.weight);
+      cache.set(cacheKey, domesticEtfs, TTL_ETF);
+      console.log(`[etf-inclusion] ${baseSymbol}(US): ${domesticEtfs.length}개 ETF 실데이터`);
+    }
+  }
+
   res.json({
     ticker,
     exchange,
     globalFunds,
     domesticEtfs,
-    notes: domesticEtfs.length === 0 && !koreanCode
-      ? "미국·글로벌 주식은 국내 ETF 편입 데이터를 제공하지 않습니다."
-      : null,
+    notes: null,
   });
 });
 
