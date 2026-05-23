@@ -44,8 +44,19 @@ const THIRTY_MIN_MS = 30 * 60 * 1000;
 // ── 시장분석 서버 (TF.js 분리 — 이벤트 루프 블로킹 방지) ────────────────────
 const MARKET_INTERNAL_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
 
+// esbuild CJS 번들에서 import.meta.url === undefined → fileURLToPath가 throw됨
+// try/catch로 안전하게 처리: dev(ESM)에서는 실제 경로, prod(CJS)에서는 cwd 기준 경로 사용
+function getServerDir(): string {
+  try {
+    return dirname(fileURLToPath(import.meta.url));
+  } catch {
+    // 프로덕션 CJS 번들: 실행 파일은 artifacts/api-server/dist/index.cjs
+    return resolve(process.cwd(), "artifacts/api-server/dist");
+  }
+}
+
 function findTsxBin(): string {
-  const __dir = dirname(fileURLToPath(import.meta.url));
+  const __dir = getServerDir();
   const candidates = [
     resolve(__dir, "../../node_modules/.bin/tsx"),
     resolve(__dir, "../../../node_modules/.bin/tsx"),
@@ -61,7 +72,7 @@ let _marketChild: ChildProcess | null = null;
 
 function spawnMarketServer() {
   const isDev = process.env.NODE_ENV !== "production";
-  const __dir = dirname(fileURLToPath(import.meta.url));
+  const __dir = getServerDir();
 
   const child = isDev
     ? spawn(findTsxBin(), [resolve(__dir, "market-index.ts")], {
