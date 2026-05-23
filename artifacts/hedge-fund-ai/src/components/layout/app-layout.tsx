@@ -6,7 +6,7 @@ import {
   User, Search, ChevronRight, Download, Share, Briefcase,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
-  ShieldCheck, Shield,
+  ShieldCheck, Shield, Newspaper,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -107,8 +107,9 @@ const NAV_GROUPS = [
     label: "매크로 분석",
     labelEn: "Macro",
     items: [
-      { href: "/market-analysis", label: "AI 시장예측",      labelEn: "AI Forecast",      Icon: LineChart },
-      { href: "/calendar",        label: "마켓 캘린더",     labelEn: "Market Calendar",  Icon: CalendarDays },
+      { href: "/market-analysis", label: "AI 시장예측",  labelEn: "AI Forecast",      Icon: LineChart },
+      { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",         Icon: Newspaper },
+      { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar",  Icon: CalendarDays },
     ],
   },
 ];

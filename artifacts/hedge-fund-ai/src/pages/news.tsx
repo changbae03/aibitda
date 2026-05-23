@@ -1,450 +1,484 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Send, RefreshCw, ExternalLink, WifiOff, Zap, Pin, X } from "lucide-react";
-import { formatDistanceToNow, parseISO, format } from "date-fns";
+import { useEffect, useState, useCallback } from "react";
+import {
+  RefreshCw, ExternalLink, Zap, Newspaper,
+  ChevronDown, Filter, TrendingUp,
+} from "lucide-react";
+import { formatDistanceToNow, parseISO, format, isToday, isYesterday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { cn, getApiUrl } from "@/lib/utils";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface NewsItem {
-  id: string;
-  text: string;
-  html: string;
-  date: string;
-  link: string;
-  images: string[];
+/* ── 타입 ──────────────────────────────────────────────────────────────── */
+interface MacroNewsItem {
+  title: string;
+  source: string;
+  pubDate: string;
+  url: string;
+  category: "경제" | "증권" | "국제" | "산업" | "부동산" | "기타";
+  tags: string[];
 }
 
-function formatRelativeDate(iso: string) {
+type CategoryTab = "전체" | "속보" | "경제" | "증권" | "국제" | "부동산" | "산업";
+
+const CATEGORY_TABS: CategoryTab[] = ["전체", "속보", "경제", "증권", "국제", "부동산", "산업"];
+
+/* ── 날짜 헬퍼 ──────────────────────────────────────────────────────────── */
+function relTime(iso: string) {
+  try { return formatDistanceToNow(parseISO(iso), { addSuffix: true, locale: ko }); }
+  catch { return ""; }
+}
+
+function dateLabel(iso: string) {
   try {
-    return formatDistanceToNow(parseISO(iso), { addSuffix: true, locale: ko });
-  } catch {
-    return iso;
-  }
+    const d = parseISO(iso);
+    if (isToday(d)) return "오늘";
+    if (isYesterday(d)) return "어제";
+    return format(d, "M월 d일 (E)", { locale: ko });
+  } catch { return ""; }
 }
 
-function formatAbsDate(iso: string) {
-  try {
-    return format(parseISO(iso), "yyyy년 M월 d일 HH:mm", { locale: ko });
-  } catch {
-    return iso;
-  }
+function timeStr(iso: string) {
+  try { return format(parseISO(iso), "HH:mm"); }
+  catch { return ""; }
 }
 
-function parseTitle(text: string): { title: string; body: string } {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return { title: "", body: "" };
-  return { title: lines[0], body: lines.slice(1).join("\n").trim() };
+function isBreaking(iso: string) {
+  return Date.now() - new Date(iso).getTime() < 2 * 60 * 60 * 1000;
 }
 
-// ── Detail Panel ────────────────────────────────
-function DetailPanel({
-  item,
-  onClose,
-}: {
-  item: NewsItem | null;
-  onClose: () => void;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
+function isVeryNew(iso: string) {
+  return Date.now() - new Date(iso).getTime() < 30 * 60 * 1000;
+}
+
+/* ── 태그 색상 ──────────────────────────────────────────────────────────── */
+const STOCK_SET = new Set([
+  "삼성전자", "SK하이닉스", "LG에너지솔루션", "현대차", "기아",
+  "POSCO", "포스코", "카카오", "네이버", "셀트리온", "삼성바이오로직스",
+  "현대모비스", "LG화학", "삼성SDI", "SK이노베이션", "한화", "롯데",
+  "크래프톤", "넷마블", "두산에너빌리티", "HD현대", "KT", "SK텔레콤", "LG전자",
+]);
+
+function TagBadge({ tag }: { tag: string }) {
+  const isStock = STOCK_SET.has(tag);
+  return (
+    <span className={cn(
+      "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+      isStock
+        ? "bg-sky-500/10 text-sky-400 border border-sky-500/20"
+        : "bg-muted/60 text-muted-foreground/70 border border-border/60",
+    )}>
+      {tag}
+    </span>
+  );
+}
+
+function CategoryBadge({ cat }: { cat: MacroNewsItem["category"] }) {
+  const colors: Record<string, string> = {
+    경제: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    증권: "text-violet-400 bg-violet-500/10 border-violet-500/20",
+    국제: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    부동산: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+    산업: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+    기타: "text-muted-foreground/60 bg-muted/40 border-border/50",
+  };
+  return (
+    <span className={cn(
+      "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border",
+      colors[cat] ?? colors["기타"],
+    )}>
+      {cat}
+    </span>
+  );
+}
+
+/* ── 뉴스 카드 ──────────────────────────────────────────────────────────── */
+function NewsCard({ item }: { item: MacroNewsItem }) {
+  const breaking = isBreaking(item.pubDate);
+  const veryNew  = isVeryNew(item.pubDate);
+
+  return (
+    <motion.a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "group flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all duration-150",
+        "hover:bg-muted/30 hover:border-border",
+        veryNew
+          ? "bg-primary/[0.03] border-primary/20"
+          : "bg-transparent border-border/40",
+      )}
+    >
+      {/* 타임라인 점 */}
+      <div className="mt-[5px] shrink-0 flex flex-col items-center gap-1">
+        <div className={cn(
+          "w-1.5 h-1.5 rounded-full",
+          breaking ? "bg-primary" : "bg-muted-foreground/25",
+        )} />
+      </div>
+
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* 메타 행 */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] tabular-nums text-muted-foreground/50 shrink-0">
+            {timeStr(item.pubDate)}
+          </span>
+          {breaking && (
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+              <Zap className="w-2.5 h-2.5" />속보
+            </span>
+          )}
+          <CategoryBadge cat={item.category} />
+        </div>
+
+        {/* 제목 */}
+        <p className={cn(
+          "text-[13px] leading-snug break-keep",
+          "text-foreground/85 group-hover:text-foreground transition-colors",
+          veryNew && "font-medium",
+        )}>
+          {item.title}
+        </p>
+
+        {/* 하단 행: 출처 + 태그 + 링크 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-muted-foreground/45 shrink-0">{item.source}</span>
+          <span className="text-[10px] text-muted-foreground/30">·</span>
+          <span className="text-[10px] text-muted-foreground/45">{relTime(item.pubDate)}</span>
+          {(item.tags?.length ?? 0) > 0 && (
+            <>
+              <span className="text-[10px] text-muted-foreground/30">·</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {item.tags.slice(0, 4).map(t => <TagBadge key={t} tag={t} />)}
+              </div>
+            </>
+          )}
+          <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover:text-muted-foreground/50 ml-auto shrink-0 transition-colors" />
+        </div>
+      </div>
+    </motion.a>
+  );
+}
+
+/* ── 속보 배너 ──────────────────────────────────────────────────────────── */
+function BreakingBanner({ items }: { items: MacroNewsItem[] }) {
+  const [idx, setIdx] = useState(0);
+  const latest = items[idx];
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+    if (items.length <= 1) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % items.length), 5000);
+    return () => clearInterval(t);
+  }, [items.length]);
 
-  const { title, body } = item ? parseTitle(item.text ?? "") : { title: "", body: "" };
+  if (!latest) return null;
 
   return (
-    <AnimatePresence>
-      {item && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/30 z-40"
-            onClick={onClose}
-          />
-
-          {/* Slide panel */}
-          <motion.div
-            key="panel"
-            ref={panelRef}
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 340, damping: 34 }}
-            className="fixed right-0 top-0 h-full w-full max-w-lg bg-background shadow-2xl z-50 flex flex-col"
-          >
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-              <span className="text-xs text-muted-foreground">
-                {formatAbsDate(item.date)}
-              </span>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Panel body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-              {/* Image */}
-              {item.images[0] && (
-                <div className="rounded-xl overflow-hidden bg-muted">
-                  <img
-                    src={item.images[0]}
-                    alt=""
-                    className="w-full object-cover max-h-56"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).parentElement!.style.display = "none";
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Title */}
-              {title && (
-                <h2 className="text-lg font-bold text-foreground leading-snug">
-                  {title}
-                </h2>
-              )}
-
-              {/* Body */}
-              {body && (
-                <div className="space-y-2">
-                  {body
-                    .split("\n")
-                    .filter((l) => l.trim())
-                    .map((line, i) => {
-                      const t = line.trim();
-                      const isHeading =
-                        t.length <= 50 &&
-                        !t.startsWith("•") &&
-                        !t.startsWith("-") &&
-                        !t.startsWith("*") &&
-                        !t.match(/^https?:\/\//);
-                      return isHeading && i > 0 ? (
-                        <p key={i} className="text-sm font-semibold text-foreground/90 pt-2">
-                          {t}
-                        </p>
-                      ) : (
-                        <p key={i} className="text-sm text-muted-foreground leading-relaxed break-words">
-                          {t}
-                        </p>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-
-            {/* Panel footer */}
-            <div className="shrink-0 px-6 py-4 border-t border-border flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {formatRelativeDate(item.date)}
-              </span>
-              <a
-                href={item.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium transition-colors"
-              >
-                <Send className="w-3 h-3" />
-                원문 보기
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ── 실시간 뉴스 카드 (compact) ──────────────────
-function RadarCard({
-  item,
-  onClick,
-}: {
-  item: NewsItem;
-  onClick: () => void;
-}) {
-  const { title, body } = parseTitle(item.text ?? "");
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left group flex flex-col gap-1 px-4 py-3 hover:bg-sky-50/60 transition-colors border-b border-border last:border-0"
-    >
-      <span className="text-[11px] text-muted-foreground/60">
-        {formatRelativeDate(item.date)}
-      </span>
-      {title && (
-        <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2 group-hover:text-sky-700 transition-colors">
-          {title}
-        </p>
-      )}
-      {body && (
-        <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">
-          {body}
-        </p>
-      )}
-    </button>
-  );
-}
-
-// ── 큐레이션 카드 (rich) ────────────────────────
-function CurationCard({
-  item,
-  onClick,
-}: {
-  item: NewsItem;
-  onClick: () => void;
-}) {
-  const { title, body } = parseTitle(item.text ?? "");
-  const hasImage = item.images.length > 0;
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left group bg-background border border-border rounded-xl overflow-hidden hover:border-violet-300 hover:shadow-md transition-all duration-200"
-    >
-      {hasImage && (
-        <div className="w-full h-40 bg-muted overflow-hidden">
-          <img
-            src={item.images[0]}
-            alt=""
-            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-            onError={(e) => {
-              (e.target as HTMLImageElement).parentElement!.style.display = "none";
-            }}
-          />
-        </div>
-      )}
-      <div className="p-4 space-y-2">
-        <span className="text-[11px] text-muted-foreground/60">
-          {formatRelativeDate(item.date)}
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/20 mb-4">
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
         </span>
-        {title && (
-          <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-violet-700 transition-colors">
-            {title}
-          </p>
-        )}
-        {body && (
-          <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-            {body}
-          </p>
-        )}
-        <div className="flex items-center justify-end pt-1 border-t border-border">
-          <span className="text-[11px] text-violet-500 font-medium flex items-center gap-0.5 group-hover:gap-1 transition-all">
-            보기 <ExternalLink className="w-3 h-3" />
-          </span>
-        </div>
+        <span className="text-[10px] font-bold text-primary uppercase tracking-wider">LIVE</span>
       </div>
-    </button>
-  );
-}
-
-// ── Column wrapper ──────────────────────────────
-function NewsColumn({
-  title,
-  icon,
-  accentClass,
-  telegramUrl,
-  items,
-  loading,
-  error,
-  onRefresh,
-  refreshing,
-  cardRenderer,
-  emptyMessage,
-  compact,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  accentClass: string;
-  telegramUrl: string;
-  items: NewsItem[];
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
-  refreshing: boolean;
-  cardRenderer: (item: NewsItem) => React.ReactNode;
-  emptyMessage: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className="flex flex-col min-h-0">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className={cn("text-base font-bold flex items-center gap-1.5", accentClass)}>
-          {icon}
-          {title}
-        </h2>
-        <button
-          onClick={onRefresh}
-          disabled={loading || refreshing}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
-          title="새로고침"
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
-        </button>
+      <div className="flex-1 min-w-0">
+        <AnimatePresence mode="wait">
+          <motion.a
+            key={idx}
+            href={latest.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.3 }}
+            className="block text-[12px] font-medium text-foreground/90 hover:text-foreground truncate transition-colors"
+          >
+            {latest.title}
+          </motion.a>
+        </AnimatePresence>
       </div>
-
-      <div className={cn(
-        "overflow-y-auto max-h-[50vh] md:max-h-none md:flex-1 rounded-xl border border-border bg-background",
-        compact ? "divide-y divide-border" : "flex flex-col gap-3 p-3 bg-transparent border-0"
-      )}>
-        {loading ? (
-          <div className={cn("space-y-px", !compact && "space-y-3")}>
-            {Array.from({ length: compact ? 8 : 4 }).map((_, i) => (
-              <div key={i} className={cn(
-                "animate-pulse bg-muted/40",
-                compact ? "h-16 border-b border-border last:border-0 px-4 py-3" : "h-40 rounded-xl"
-              )} />
-            ))}
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-            <WifiOff className="w-8 h-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground mb-3">{error}</p>
-            <button
-              onClick={onRefresh}
-              className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-            >
-              다시 시도
-            </button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/50 text-sm">
-            <Send className="w-8 h-8 mb-2 opacity-30" />
-            {emptyMessage}
-          </div>
-        ) : (
-          items.map((item) => <div key={item.id}>{cardRenderer(item)}</div>)
-        )}
-      </div>
-
-      {!loading && !error && items.length > 0 && (
-        <a
-          href={telegramUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 text-center text-[11px] text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 transition-colors"
-        >
-          <Send className="w-3 h-3" />
-          텔레그램에서 더보기
-        </a>
+      <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">
+        {timeStr(latest.pubDate)}
+      </span>
+      {items.length > 1 && (
+        <span className="text-[10px] text-muted-foreground/40 shrink-0">
+          {idx + 1}/{items.length}
+        </span>
       )}
     </div>
   );
 }
 
-// ── Main Page ───────────────────────────────────
-export default function News() {
-  const [selectedItem, setSelectedItem] = useState<NewsItem | null>(null);
+/* ── 메인 뉴스 페이지 ───────────────────────────────────────────────────── */
+export default function NewsPage() {
+  const [items, setItems]           = useState<MacroNewsItem[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [cachedAt, setCachedAt]     = useState<string | null>(null);
+  const [tab, setTab]               = useState<CategoryTab>("전체");
+  const [sourceFilter, setSource]   = useState<string | null>(null);
+  const [showAllSources, setAllSrc] = useState(false);
+  const [expanded, setExpanded]     = useState(false);
+  const PAGE = 30;
 
-  const [radarItems, setRadarItems] = useState<NewsItem[]>([]);
-  const [radarLoading, setRadarLoading] = useState(true);
-  const [radarError, setRadarError] = useState<string | null>(null);
-  const [radarRefreshing, setRadarRefreshing] = useState(false);
-
-  const [researchItems, setResearchItems] = useState<NewsItem[]>([]);
-  const [researchLoading, setResearchLoading] = useState(true);
-  const [researchError, setResearchError] = useState<string | null>(null);
-  const [researchRefreshing, setResearchRefreshing] = useState(false);
-
-  const fetchRadar = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRadarRefreshing(true);
-    else setRadarLoading(true);
-    setRadarError(null);
-    try {
-      const res = await fetch(getApiUrl("/api/news/radar"));
-      if (!res.ok) throw new Error("서버 오류");
-      const data = await res.json();
-      setRadarItems(data.items ?? []);
-    } catch (e: any) {
-      setRadarError(e.message ?? "불러오지 못했습니다.");
-    } finally {
-      setRadarLoading(false);
-      setRadarRefreshing(false);
-    }
+  const load = useCallback((force = false) => {
+    setLoading(true);
+    setExpanded(false);
+    fetch(getApiUrl(`/api/macro/news${force ? "?force=true" : ""}`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.items) { setItems(d.items); setCachedAt(d.cachedAt); }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const fetchResearch = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setResearchRefreshing(true);
-    else setResearchLoading(true);
-    setResearchError(null);
-    try {
-      const res = await fetch(getApiUrl("/api/news"));
-      if (!res.ok) throw new Error("서버 오류");
-      const data = await res.json();
-      setResearchItems(data.items ?? []);
-    } catch (e: any) {
-      setResearchError(e.message ?? "불러오지 못했습니다.");
-    } finally {
-      setResearchLoading(false);
-      setResearchRefreshing(false);
-    }
-  }, []);
+  useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    fetchRadar();
-    fetchResearch();
-    const interval = setInterval(() => {
-      fetchRadar(true);
-      fetchResearch(true);
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchRadar, fetchResearch]);
+  /* ── 필터링 ── */
+  const filtered = items.filter(item => {
+    if (sourceFilter && item.source !== sourceFilter) return false;
+    if (tab === "전체") return true;
+    if (tab === "속보") return isBreaking(item.pubDate);
+    return item.category === tab;
+  });
+
+  const visible = expanded ? filtered : filtered.slice(0, PAGE);
+
+  /* ── 속보 전용 ── */
+  const breakingItems = items.filter(i => isBreaking(i.pubDate));
+
+  /* ── 소스 목록 ── */
+  const allSources = Array.from(new Set(items.map(i => i.source))).sort();
+  const sourcesToShow = showAllSources ? allSources : allSources.slice(0, 8);
+
+  /* ── 날짜 그룹핑 ── */
+  type Group = { label: string; items: MacroNewsItem[] };
+  const grouped: Group[] = [];
+  for (const item of visible) {
+    const lbl = dateLabel(item.pubDate);
+    const last = grouped[grouped.length - 1];
+    if (last?.label === lbl) last.items.push(item);
+    else grouped.push({ label: lbl, items: [item] });
+  }
 
   return (
-    <>
-      <div className="flex flex-col gap-4 md:h-[calc(100vh-8rem)]">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-5 md:flex-1 md:min-h-0">
-          {/* Left — 실시간 뉴스 */}
-          <NewsColumn
-            title="실시간 뉴스"
-            icon={<Zap className="w-4 h-4 text-sky-500 fill-sky-200" />}
-            accentClass="text-sky-700"
-            telegramUrl="https://t.me/cbstradar"
-            items={radarItems}
-            loading={radarLoading}
-            error={radarError}
-            onRefresh={() => fetchRadar(true)}
-            refreshing={radarRefreshing}
-            cardRenderer={(item) => (
-              <RadarCard item={item} onClick={() => setSelectedItem(item)} />
-            )}
-            emptyMessage="아직 뉴스가 없습니다"
-            compact
-          />
+    <div className="min-h-screen bg-background">
+      <div className="max-w-2xl mx-auto px-4 pt-8 pb-16">
 
-          {/* Right — CBST 큐레이션 */}
-          <NewsColumn
-            title="CBST 큐레이션"
-            icon={<Pin className="w-4 h-4 text-violet-500 fill-violet-200" />}
-            accentClass="text-violet-700"
-            telegramUrl="https://t.me/cbstresearch"
-            items={researchItems}
-            loading={researchLoading}
-            error={researchError}
-            onRefresh={() => fetchResearch(true)}
-            refreshing={researchRefreshing}
-            cardRenderer={(item) => (
-              <CurationCard item={item} onClick={() => setSelectedItem(item)} />
+        {/* ── 헤더 ── */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary/10">
+              <Newspaper className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-foreground leading-none">경제 뉴스피드</h1>
+              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+                한국경제 · 매일경제 · 연합뉴스 · 이데일리 · 조선비즈 등
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {cachedAt && !loading && (
+              <span className="text-[10px] text-muted-foreground/40 tabular-nums">
+                {format(parseISO(cachedAt), "HH:mm")} 기준
+              </span>
             )}
-            emptyMessage="아직 큐레이션 글이 없습니다"
-          />
+            <button
+              onClick={() => load(true)}
+              disabled={loading}
+              className="p-2 rounded-lg hover:bg-muted/40 transition-colors text-muted-foreground/50 hover:text-foreground disabled:opacity-30"
+            >
+              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Detail slide panel */}
-      <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} />
-    </>
+        {/* ── 속보 배너 ── */}
+        <AnimatePresence>
+          {breakingItems.length > 0 && !loading && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <BreakingBanner items={breakingItems} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── 카테고리 탭 ── */}
+        <div className="flex items-center gap-1 mb-4 flex-wrap">
+          {CATEGORY_TABS.map(t => {
+            const count = t === "전체"
+              ? items.length
+              : t === "속보"
+              ? breakingItems.length
+              : items.filter(i => i.category === t).length;
+            return (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setExpanded(false); }}
+                className={cn(
+                  "inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all",
+                  tab === t
+                    ? t === "속보"
+                      ? "bg-primary text-white"
+                      : "bg-muted text-foreground"
+                    : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/50",
+                )}
+              >
+                {t === "속보" && <Zap className="w-3 h-3" />}
+                {t}
+                {count > 0 && (
+                  <span className={cn(
+                    "text-[10px] tabular-nums",
+                    tab === t ? "text-foreground/60" : "text-muted-foreground/40",
+                  )}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── 소스 필터 ── */}
+        {allSources.length > 1 && (
+          <div className="mb-5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Filter className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+              <button
+                onClick={() => { setSource(null); setExpanded(false); }}
+                className={cn(
+                  "text-[11px] px-2.5 py-1 rounded-full transition-colors",
+                  sourceFilter === null
+                    ? "bg-foreground/10 text-foreground font-medium"
+                    : "text-muted-foreground/50 hover:text-foreground",
+                )}
+              >
+                전체 매체
+              </button>
+              {sourcesToShow.map(s => (
+                <button
+                  key={s}
+                  onClick={() => { setSource(s); setExpanded(false); }}
+                  className={cn(
+                    "text-[11px] px-2.5 py-1 rounded-full transition-colors",
+                    sourceFilter === s
+                      ? "bg-foreground/10 text-foreground font-medium"
+                      : "text-muted-foreground/50 hover:text-foreground",
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+              {allSources.length > 8 && (
+                <button
+                  onClick={() => setAllSrc(v => !v)}
+                  className="text-[11px] text-muted-foreground/40 hover:text-foreground px-1"
+                >
+                  {showAllSources ? "접기" : `+${allSources.length - 8}개 더`}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── 뉴스 목록 ── */}
+        {loading && items.length === 0 ? (
+          <div className="space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-border/30 p-4 space-y-2">
+                <div className="h-2.5 w-16 rounded bg-muted/50 animate-pulse" />
+                <div className="h-4 w-4/5 rounded bg-muted/50 animate-pulse" />
+                <div className="h-3 w-1/3 rounded bg-muted/40 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : grouped.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground/40">
+            <Newspaper className="w-8 h-8" />
+            <p className="text-sm">
+              {tab === "속보" ? "현재 속보가 없습니다" : "뉴스를 불러오지 못했습니다"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {grouped.map(group => (
+              <div key={group.label}>
+                {/* 날짜 구분선 */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] font-semibold text-muted-foreground/50">
+                    {group.label}
+                  </span>
+                  <div className="flex-1 h-px bg-border/50" />
+                  <span className="text-[10px] text-muted-foreground/35">{group.items.length}건</span>
+                </div>
+                <div className="space-y-1">
+                  {group.items.map((item, i) => (
+                    <NewsCard key={`${item.url}-${i}`} item={item} />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* 더보기 / 접기 */}
+            {filtered.length > PAGE && (
+              <button
+                onClick={() => setExpanded(v => !v)}
+                className="w-full py-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                    접기
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                    {filtered.length - PAGE}건 더보기
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── 요약 통계 ── */}
+        {!loading && items.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-border/40">
+            <div className="flex items-center gap-1.5 mb-3">
+              <TrendingUp className="w-3.5 h-3.5 text-muted-foreground/40" />
+              <span className="text-[11px] font-semibold text-muted-foreground/50">카테고리별 현황</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(["경제", "증권", "국제", "부동산", "산업"] as const).map(cat => {
+                const cnt = items.filter(i => i.category === cat).length;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => { setTab(cat); setSource(null); setExpanded(false); }}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <span className="text-[11px] text-muted-foreground/60">{cat}</span>
+                    <span className="text-[11px] font-semibold tabular-nums text-foreground/70">{cnt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 면책 고지 */}
+        <p className="text-[10px] text-muted-foreground/30 text-center mt-8 leading-relaxed">
+          본 뉴스피드는 각 언론사 RSS를 통해 제공되며, 투자 권유가 아닙니다.
+        </p>
+      </div>
+    </div>
   );
 }
