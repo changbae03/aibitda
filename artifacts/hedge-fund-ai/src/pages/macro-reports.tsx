@@ -440,21 +440,30 @@ export default function MacroReports() {
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
-    fetch(getApiUrl("/api/admin/dashboard"))
+    const ctrl = new AbortController();
+    fetch(getApiUrl("/api/admin/dashboard"), { signal: ctrl.signal })
       .then(r => { if (r.ok) setIsAdmin(true); })
       .catch(() => {});
+    return () => ctrl.abort();
   }, []);
 
-  const fetchReports = async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(getApiUrl("/api/macro-reports"));
-      if (r.ok) setReports(await r.json());
-    } catch {}
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchReports(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    // 8초 후 강제로 abort → finally에서 loading=false 보장
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    (async () => {
+      try {
+        const r = await fetch(getApiUrl("/api/macro-reports"), { signal: ctrl.signal });
+        if (r.ok) setReports(await r.json());
+      } catch {
+        // AbortError 포함 모든 에러 — finally에서 loading 해제
+      } finally {
+        clearTimeout(timer);
+        setLoading(false);
+      }
+    })();
+    return () => { ctrl.abort(); clearTimeout(timer); };
+  }, []);
 
   const handleGenerated = (saved: MacroReport) => {
     setReports(prev => [saved, ...prev]);
