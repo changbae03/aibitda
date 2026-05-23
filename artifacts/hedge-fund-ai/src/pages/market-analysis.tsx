@@ -831,8 +831,14 @@ export default function MarketAnalysis() {
           <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">
             오늘의 AI 시장 분석
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             코스피·코스닥의 3일 앞을 AI가 예측합니다
+            {status?.running && status?.kospi && (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                업데이트 중
+              </span>
+            )}
           </p>
         </div>
         {isAdmin && (
@@ -858,8 +864,8 @@ export default function MarketAnalysis() {
         showRefresh={!!isAdmin}
       />
 
-      {/* ── 로딩 상태 ───────────────────────────────────────────────────── */}
-      {!status?.ready && status?.running && (
+      {/* ── 로딩 상태: 데이터가 전혀 없을 때만 전체 스피너 ───────────────── */}
+      {status?.running && !status?.kospi && !status?.kosdaq && (
         <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <div className="text-center">
@@ -878,7 +884,7 @@ export default function MarketAnalysis() {
         </div>
       )}
 
-      {!status?.ready && !status?.running && !status?.error && (
+      {!status?.ready && !status?.running && !status?.error && !status?.kospi && (
         <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
           <BrainCircuit className="w-8 h-8 text-muted-foreground/40" />
           <div className="text-center">
@@ -888,9 +894,9 @@ export default function MarketAnalysis() {
         </div>
       )}
 
-      {/* ── 결과 영역 ───────────────────────────────────────────────────── */}
+      {/* ── 결과 영역: 데이터가 있으면 즉시 표시 (업데이트 중이어도) ────── */}
       <AnimatePresence>
-        {status?.ready && status.kospi && status.kosdaq && (
+        {(status?.kospi || status?.ready) && status?.kospi && status?.kosdaq && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
