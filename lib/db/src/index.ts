@@ -29,8 +29,8 @@ export const pool = new Pool({
   connectionString,
   ssl: sslDisabled ? false : { rejectUnauthorized: false },
   max: 10,
-  idleTimeoutMillis: 10_000,       // 10s — Neon 휴면 전에 연결 해제
-  connectionTimeoutMillis: 15_000, // 15s — Neon cold-start 대기
+  idleTimeoutMillis: 120_000,      // 120s — LLM 호출 중 커넥션 유지
+  connectionTimeoutMillis: 20_000, // 20s — Neon cold-start 대기
   allowExitOnIdle: true,
 });
 

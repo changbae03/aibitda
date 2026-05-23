@@ -508,16 +508,22 @@ JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총
   try {
     await geminiSemaphore.acquire();
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
-        config: {
-          maxOutputTokens: 1024,
-          temperature: 0.6,
-          topP: 0.9,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("challenger timeout")), 25_000)
+      );
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
+          config: {
+            maxOutputTokens: 1024,
+            temperature: 0.6,
+            topP: 0.9,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        }),
+        timeoutPromise,
+      ]);
       return response.text ?? "";
     } finally {
       geminiSemaphore.release();
@@ -5270,10 +5276,10 @@ async function executeStep(
 
   let content = "";
   try {
-    // 토큰 한도: company_analysis만 32k (긴 재무 테이블), relative_valuation은 16k (debate로 품질 보장)
+    // 토큰 한도: company_analysis만 32k (긴 재무 테이블), relative_valuation은 10k (debate로 품질 보장, 속도 최적화)
     const maxOutputTokens =
       stepKey === "company_analysis" ? 32768
-      : stepKey === "relative_valuation" ? 16384
+      : stepKey === "relative_valuation" ? 10240
       : 6144;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃, 429 Rate Limit) 여부 판별
@@ -5413,7 +5419,7 @@ async function executeStep(
               : `\n\n---\n[Round 1 초안]\n${draftExcerpt}\n\n---\n[Valuation Skeptic 반론]\n${challengerFeedback}\n\n[지시] WACC·성장률·멀티플 가정을 재점검하세요. 타당한 지적은 수치를 수정하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. DCF 또는 피어 테이블과 FINAL_VALUATION_DATA JSON을 포함한 최종 밸류에이션 보고서를 간결하게 작성하세요.`);
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
-          const synthesisMaxTokens = 10240; // 속도 최적화: 16k→10k (반론 반영 집중으로 분량 단축)
+          const synthesisMaxTokens = 8192; // 속도 최적화: 10k→8k (반론 반영 집중, 핵심만 수정)
 
           await geminiSemaphore.acquire();
           let synthesizedContent = "";
