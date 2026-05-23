@@ -3644,7 +3644,15 @@ router.get("/all-reports", async (req, res) => {
   }
 });
 
+const POPULAR_CACHE_KEY = "popular_feed";
+const POPULAR_TTL_MS    = 5 * 60 * 1000;
+let _popularCache: { data: any; ts: number } | null = null;
+
 router.get("/popular", async (_req, res) => {
+  if (_popularCache && Date.now() - _popularCache.ts < POPULAR_TTL_MS) {
+    res.setHeader("X-Cache", "HIT");
+    return res.json(_popularCache.data);
+  }
   try {
     const rawRows = await rawQuery(
       `SELECT id, ticker, company_name, english_name, industry, investment_verdict, target_price, entry_price, stop_loss, created_at
@@ -3731,7 +3739,10 @@ router.get("/popular", async (_req, res) => {
       { market: "미국", count: usCount },
     ].filter((m) => m.count > 0);
 
-    res.json({ items: enriched, tickerStats, verdictStats, marketStats });
+    const payload = { items: enriched, tickerStats, verdictStats, marketStats };
+    _popularCache = { data: payload, ts: Date.now() };
+    res.setHeader("X-Cache", "MISS");
+    res.json(payload);
   } catch (err: any) {
     console.error("[GET /analysis/popular]", err?.message, err?.cause?.message);
     res.status(500).json({ error: "DB error", detail: err?.message });
@@ -3809,17 +3820,24 @@ router.get("/browse", async (req, res) => {
       createdAt: r.created_at,
     }));
 
-    // 필터용 업종/판정 목록
-    const metaRows = await rawQuery(
-      `SELECT DISTINCT industry, investment_verdict
-       FROM analyses WHERE status='completed' AND is_public='true' AND investment_verdict IS NOT NULL`
-    );
-    const industries = [...new Set(metaRows.map((r: any) => r.industry).filter(Boolean))].sort() as string[];
-    const verdicts   = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"].filter(
-      (v) => metaRows.some((r: any) => r.investment_verdict === v)
-    );
+    // 필터용 업종/판정 목록 (5분 인메모리 캐시)
+    const META_KEY = "browse_meta";
+    const META_TTL = 5 * 60 * 1000;
+    let meta = cache.get<{ industries: string[]; verdicts: string[] }>(META_KEY);
+    if (!meta) {
+      const metaRows = await rawQuery(
+        `SELECT DISTINCT industry, investment_verdict
+         FROM analyses WHERE status='completed' AND is_public='true' AND investment_verdict IS NOT NULL`
+      );
+      const industries = [...new Set(metaRows.map((r: any) => r.industry).filter(Boolean))].sort() as string[];
+      const verdicts   = ["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"].filter(
+        (v) => metaRows.some((r: any) => r.investment_verdict === v)
+      );
+      meta = { industries, verdicts };
+      cache.set(META_KEY, meta, META_TTL);
+    }
 
-    res.json({ total, page, limit, items, meta: { industries, verdicts } });
+    res.json({ total, page, limit, items, meta });
   } catch (err: any) {
     console.error("[GET /analysis/browse]", err?.message);
     res.status(500).json({ error: "DB error", detail: err?.message });

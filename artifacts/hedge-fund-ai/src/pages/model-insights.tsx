@@ -69,9 +69,19 @@ export default function ModelInsights() {
       </div>
 
       {isLoading ? (
-        <div className="p-16 text-center">
-          <Loader2 className="w-7 h-7 animate-spin text-primary mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">성과 데이터 로딩 중...</p>
+        <div className="space-y-3 animate-pulse">
+          {[0,1,2].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-muted flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-32 bg-muted rounded" />
+                  <div className="h-3 w-48 bg-muted/60 rounded" />
+                  <div className="h-3 w-full bg-muted/40 rounded" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : !insights || insights.length === 0 ? (
         <div className="p-16 text-center border border-dashed border-border rounded-2xl bg-muted/20">

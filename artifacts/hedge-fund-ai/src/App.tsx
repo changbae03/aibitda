@@ -10,6 +10,7 @@ import { LanguageProvider, useLanguage } from "@/lib/language-context";
 import { AppLayout } from "@/components/layout/app-layout";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 // ── Lazy-loaded pages ──────────────────────────────────────────────────────────
 // 각 페이지를 별도 청크로 분리 → 초기 번들 대폭 감소
@@ -153,6 +154,9 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 15,
+      retry: 1,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     }
   }
 });
@@ -243,6 +247,7 @@ function ConsentGate() {
 
 function Router() {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
       <Switch>
         {/* 풀스크린 페이지 (사이드바 없음) */}
@@ -298,6 +303,7 @@ function Router() {
         </Route>
       </Switch>
     </Suspense>
+    </ErrorBoundary>
   );
 }
 

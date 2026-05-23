@@ -19,7 +19,8 @@ export function useAuth() {
       if (!res.ok) return { user: null };
       return res.json();
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 30,
     retry: false,
   });
 }

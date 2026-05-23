@@ -52,6 +52,14 @@ const server = app.listen(port, () => {
         pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_ticker_st  ON analyses(ticker, status)`),
         pool.query(`CREATE INDEX IF NOT EXISTS idx_asteps_analysis_id ON analysis_steps(analysis_id)`),
         pool.query(`CREATE INDEX IF NOT EXISTS idx_asteps_aid_stepkey ON analysis_steps(analysis_id, step_key)`),
+        // 공개 피드 / 탐색 / 인기 쿼리 최적화
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_is_public  ON analyses(is_public)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses(created_at DESC)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_verdict    ON analyses(investment_verdict)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_status_pub ON analyses(status, is_public)`),
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_industry   ON analyses(industry)`),
+        // 관리자 유저 검색 최적화
+        pool.query(`CREATE INDEX IF NOT EXISTS idx_user_credits_email  ON user_credits(email)`),
         initPredictionTable(),
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })

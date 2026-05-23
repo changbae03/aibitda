@@ -147,9 +147,25 @@ export default function Tracker() {
       )}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm text-muted-foreground">현재가 로딩 중…</p>
+        <div className="space-y-2 animate-pulse">
+          <div className="flex items-center gap-4 pb-2">
+            <div className="h-4 w-24 bg-muted rounded" />
+            <div className="h-4 w-16 bg-muted rounded" />
+            <div className="ml-auto h-4 w-20 bg-muted rounded" />
+          </div>
+          {[0,1,2,3,4].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
+              <div className="w-9 h-9 rounded-lg bg-muted flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-28 bg-muted rounded" />
+                <div className="h-3 w-16 bg-muted/60 rounded" />
+              </div>
+              <div className="space-y-1 text-right">
+                <div className="h-4 w-20 bg-muted rounded" />
+                <div className="h-3 w-14 bg-muted/60 rounded ml-auto" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : sorted.length === 0 ? (
         <div className="text-center py-20">

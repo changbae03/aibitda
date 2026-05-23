@@ -392,9 +392,20 @@ export default function Browse() {
 
       {/* 로딩 */}
       {loading && (
-        <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">{isEn ? "Loading reports…" : "불러오는 중…"}</span>
+        <div className="space-y-2 animate-pulse">
+          {[0,1,2,3,4,5].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
+              <div className="w-9 h-9 rounded-lg bg-muted flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-32 bg-muted rounded" />
+                <div className="h-3 w-20 bg-muted/60 rounded" />
+              </div>
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="h-3 w-14 bg-muted/40 rounded" />
+                <div className="h-5 w-14 bg-muted rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

@@ -86,8 +86,28 @@ export default function Stats() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" />
+      <div className="space-y-6 animate-pulse">
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-36 bg-muted rounded-lg" />
+          <div className="h-6 w-20 bg-muted rounded-full" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[0,1,2,3].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2">
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-8 w-14 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+          {[0,1,2,3,4].map(i => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="h-3 w-24 bg-muted rounded" />
+              <div className="flex-1 h-3 bg-muted/40 rounded-full" />
+              <div className="h-3 w-10 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

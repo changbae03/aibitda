@@ -139,8 +139,34 @@ export default function Popular() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" />
+      <div className="space-y-6 animate-pulse">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-40 bg-muted rounded-lg" />
+          <div className="h-6 w-24 bg-muted rounded-full" />
+        </div>
+        {/* 통계 카드 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[0,1,2,3].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2">
+              <div className="h-3 w-16 bg-muted rounded" />
+              <div className="h-7 w-12 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
+        {/* 리스트 */}
+        <div className="space-y-2">
+          {[0,1,2,3,4].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
+              <div className="w-9 h-9 rounded-lg bg-muted flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-28 bg-muted rounded" />
+                <div className="h-3 w-20 bg-muted/60 rounded" />
+              </div>
+              <div className="h-5 w-16 bg-muted rounded-full" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
