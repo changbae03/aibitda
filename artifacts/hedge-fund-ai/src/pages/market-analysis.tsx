@@ -49,6 +49,7 @@ interface PipelineStatus {
   kospi?: IndexResult;
   kosdaq?: IndexResult;
   snp500?: IndexResult;
+  nasdaq?: IndexResult;
 }
 
 interface MarketBrief {
@@ -735,7 +736,7 @@ function StatCard({
 export default function MarketAnalysis() {
   const { isEn } = useLanguage();
   const [status, setStatus]           = useState<PipelineStatus | null>(null);
-  const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq" | "snp500">("kospi");
+  const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq" | "snp500" | "nasdaq">("kospi");
   const [isStarting, setIsStarting]   = useState(false);
   const [techOpen, setTechOpen]       = useState(false);
   const [guideOpen, setGuideOpen]     = useState(false);
@@ -795,7 +796,10 @@ export default function MarketAnalysis() {
     return undefined;
   }, [status, fetchStatus, triggerRun]);
 
-  const current = activeIdx === "kospi" ? status?.kospi : activeIdx === "snp500" ? status?.snp500 : status?.kosdaq;
+  const current = activeIdx === "kospi" ? status?.kospi
+    : activeIdx === "snp500" ? status?.snp500
+    : activeIdx === "nasdaq" ? status?.nasdaq
+    : status?.kosdaq;
 
   return (
     <div className="space-y-5 pb-20">
@@ -880,8 +884,9 @@ export default function MarketAnalysis() {
                 {([
                   { id: "kospi",  data: status.kospi!  },
                   { id: "kosdaq", data: status.kosdaq! },
-                  ...(status.snp500 ? [{ id: "snp500", data: status.snp500 }] : []),
-                ] as { id: "kospi" | "kosdaq" | "snp500"; data: IndexResult }[]).map(({ id, data }) => {
+                  ...(status.snp500  ? [{ id: "snp500",  data: status.snp500  }] : []),
+                  ...(status.nasdaq  ? [{ id: "nasdaq",  data: status.nasdaq  }] : []),
+                ] as { id: "kospi" | "kosdaq" | "snp500" | "nasdaq"; data: IndexResult }[]).map(({ id, data }) => {
                   const isActive = activeIdx === id;
                   const up = data.predictedReturn3d >= 0;
                   return (
