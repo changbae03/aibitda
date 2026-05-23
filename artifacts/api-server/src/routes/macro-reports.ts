@@ -179,7 +179,19 @@ ${macroCtx || "(지표 데이터 없음)"}
       } catch {}
     }
 
-    const content = raw.replace(/<JSON>[\s\S]*?<\/JSON>/g, "").trim();
+    let content = raw.replace(/<JSON>[\s\S]*?<\/JSON>/g, "").trim();
+
+    // 미완성 마크다운 정리: 응답이 잘린 경우 처리
+    // 1) 닫히지 않은 **bold** — 마지막 줄이 `**`로 시작하고 닫히지 않으면 제거
+    content = content.replace(/\n\*\*[^*\n]*$/m, "").trimEnd();
+    // 2) 문장 중간에 잘린 경우 — 마지막 마침표/느낌표/물음표 이후 불완전한 텍스트 제거
+    const lastSentenceEnd = Math.max(
+      content.lastIndexOf("다."), content.lastIndexOf("요."),
+      content.lastIndexOf("다!"), content.lastIndexOf("다?"),
+    );
+    if (lastSentenceEnd > content.length * 0.6) {
+      content = content.slice(0, lastSentenceEnd + 2).trimEnd();
+    }
 
     const rows = await q(
       `INSERT INTO macro_reports (title, category, summary, content, is_published) VALUES ($1,$2,$3,$4,$5) RETURNING *`,

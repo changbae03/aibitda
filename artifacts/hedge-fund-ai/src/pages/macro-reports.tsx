@@ -160,9 +160,9 @@ function ReportCard({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.24, ease: "easeInOut" }}
-            className="overflow-hidden"
+            style={{ overflow: "hidden" }}
           >
-            <div className="px-5 pl-6 pb-6 border-t border-border/40 pt-4">
+            <div className="px-5 pl-6 pb-6 border-t border-border/40 pt-4 max-h-[72vh] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
               {contentLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
                   <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중...
