@@ -727,6 +727,192 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
   );
 }
 
+/* ── 예측 정확도 히스토리 ────────────────────────────────────────────────── */
+interface PredictionRecord {
+  id: number;
+  predicted_at: string;
+  target_date: string;
+  predicted_return: number;
+  predicted_dir: number;
+  price_at_pred: number;
+  actual_return: number | null;
+  actual_dir: number | null;
+  correct: boolean | null;
+  gbdt_correct: boolean | null;
+  lstm_correct: boolean | null;
+  vix_at_pred: number | null;
+  volatility_at_pred: number | null;
+  model_version: number;
+}
+
+function PredictionHistorySection({
+  symbol, liveAcc,
+}: {
+  symbol: string;
+  liveAcc: LiveAccuracy | null;
+}) {
+  const [records, setRecords]   = useState<PredictionRecord[]>([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(getApiUrl(`/api/market-analysis/prediction-history/${encodeURIComponent(symbol)}?limit=20`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setRecords(Array.isArray(d) ? d : []))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, [symbol]);
+
+  const resolved  = records.filter(r => r.correct !== null);
+  const correct   = resolved.filter(r => r.correct).length;
+  const accPct    = resolved.length > 0 ? Math.round((correct / resolved.length) * 100) : null;
+  const liveTotal = liveAcc?.total ?? 0;
+  const livePct   = liveAcc?.accuracy ?? null;
+
+  const fmtDate = (s: string) => {
+    const d = new Date(s);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      {/* 헤더 */}
+      <div className="px-4 pt-4 pb-3 border-b border-border">
+        <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest flex items-center gap-1.5">
+          <BarChart3 className="w-3.5 h-3.5" /> 예측 정확도 기록
+        </p>
+      </div>
+
+      <div className="px-4 py-4 space-y-4">
+        {/* 정확도 요약 */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* 전체 라이브 적중률 */}
+          <div className="bg-muted/20 rounded-xl px-3.5 py-3 space-y-1.5">
+            <p className="text-[10px] text-muted-foreground/50 font-medium">라이브 적중률</p>
+            <p className={cn(
+              "text-2xl font-bold",
+              livePct === null ? "text-muted-foreground/30"
+                : livePct >= 60 ? "text-emerald-500"
+                : livePct >= 50 ? "text-amber-500"
+                : "text-red-400"
+            )}>
+              {livePct !== null ? `${livePct}%` : "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground/40">{liveTotal}건 검증됨</p>
+          </div>
+
+          {/* 최근 20건 */}
+          <div className="bg-muted/20 rounded-xl px-3.5 py-3 space-y-1.5">
+            <p className="text-[10px] text-muted-foreground/50 font-medium">최근 {resolved.length}건</p>
+            <p className={cn(
+              "text-2xl font-bold",
+              accPct === null ? "text-muted-foreground/30"
+                : accPct >= 60 ? "text-emerald-500"
+                : accPct >= 50 ? "text-amber-500"
+                : "text-red-400"
+            )}>
+              {accPct !== null ? `${accPct}%` : "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground/40">{correct}/{resolved.length} 적중</p>
+          </div>
+        </div>
+
+        {/* 적중률 바 */}
+        {resolved.length > 0 && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-[10px] text-muted-foreground/40">
+              <span>최근 예측 ({resolved.length}건)</span>
+              <span>{correct} 적중 / {resolved.length - correct} 미스</span>
+            </div>
+            <div className="flex gap-0.5 h-2 rounded-full overflow-hidden">
+              {resolved.slice().reverse().map((r, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex-1 rounded-sm",
+                    r.correct ? "bg-emerald-500/70" : "bg-red-400/50"
+                  )}
+                  title={`${fmtDate(r.target_date)} ${r.correct ? "✅" : "❌"}`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 예측 목록 */}
+        {loading ? (
+          <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground/40">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span className="text-xs">불러오는 중...</span>
+          </div>
+        ) : records.length === 0 ? (
+          <p className="text-center text-xs text-muted-foreground/30 py-6">
+            아직 예측 기록이 없어요
+          </p>
+        ) : (
+          <div className="space-y-0">
+            {/* 헤더 행 */}
+            <div className="grid grid-cols-[80px_1fr_1fr_36px] gap-2 px-2 pb-1.5 text-[10px] text-muted-foreground/35 font-medium uppercase tracking-wide">
+              <span>날짜</span>
+              <span>예측</span>
+              <span>실제</span>
+              <span></span>
+            </div>
+            {records.map((r) => {
+              const isPending = r.correct === null;
+              const predUp    = r.predicted_dir > 0;
+              const actUp     = r.actual_dir !== null ? r.actual_dir > 0 : null;
+              return (
+                <div
+                  key={r.id}
+                  className="grid grid-cols-[80px_1fr_1fr_36px] gap-2 items-center px-2 py-2 rounded-lg hover:bg-muted/20 transition-colors"
+                >
+                  {/* 날짜 */}
+                  <span className="text-[11px] text-muted-foreground/50">{fmtDate(r.target_date)}</span>
+
+                  {/* 예측 */}
+                  <div className="flex items-center gap-1">
+                    {predUp
+                      ? <TrendingUp className="w-3 h-3 text-emerald-500 shrink-0" />
+                      : <TrendingDown className="w-3 h-3 text-red-400 shrink-0" />}
+                    <span className={cn("text-[12px] font-semibold tabular-nums", predUp ? "text-emerald-500" : "text-red-400")}>
+                      {r.predicted_return >= 0 ? "+" : ""}{r.predicted_return.toFixed(2)}%
+                    </span>
+                  </div>
+
+                  {/* 실제 */}
+                  {isPending ? (
+                    <span className="text-[11px] text-muted-foreground/30 italic">대기 중</span>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {actUp
+                        ? <TrendingUp className="w-3 h-3 text-emerald-500/70 shrink-0" />
+                        : <TrendingDown className="w-3 h-3 text-red-400/70 shrink-0" />}
+                      <span className={cn("text-[12px] tabular-nums", actUp ? "text-emerald-500/80" : "text-red-400/80")}>
+                        {r.actual_return !== null ? `${r.actual_return >= 0 ? "+" : ""}${r.actual_return.toFixed(2)}%` : "—"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 결과 */}
+                  <div className="flex justify-center">
+                    {isPending
+                      ? <span className="text-[10px] text-muted-foreground/25 border border-border rounded px-1 py-0.5">대기</span>
+                      : r.correct
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        : <span className="w-4 h-4 flex items-center justify-center text-red-400/70 text-sm">✕</span>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── 수치 카드 ───────────────────────────────────────────────────────────── */
 function StatCard({
   emoji, label, value, desc, highlight,
@@ -1280,6 +1466,16 @@ export default function MarketAnalysis() {
               </div>
               )}
             </div>
+
+            {/* ── 예측 정확도 히스토리 ─────────────────────────────────── */}
+            {(() => {
+              const symMap: Record<string, string> = {
+                kospi: "^KS11", kosdaq: "^KQ11", snp500: "^GSPC", nasdaq: "^IXIC",
+              };
+              const sym = symMap[activeIdx] ?? "^KS11";
+              const acc = liveAcc?.[sym] ?? null;
+              return <PredictionHistorySection symbol={sym} liveAcc={acc} />;
+            })()}
 
             {/* ── 기술 정보 (개발자용, 접어두기) ──────────────────────── */}
             <div className="rounded-2xl border border-border bg-transparent overflow-hidden">
