@@ -74,11 +74,12 @@ function toKoreanVerdict(verdict: string): string {
 }
 function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return "bg-foreground/5 text-foreground/75 border-foreground/15";
-  if (s.includes("buy"))         return "bg-foreground/5 text-foreground/60 border-foreground/12";
-  if (s.includes("strong sell")) return "bg-foreground/5 text-foreground/75 border-foreground/15";
-  if (s.includes("sell"))        return "bg-foreground/5 text-foreground/60 border-foreground/12";
-  return "bg-foreground/5 text-foreground/50 border-foreground/10";
+  // 라이트: 명확한 stone 계열 / 다크: 미세한 foreground 계열
+  if (s.includes("strong buy"))  return "bg-stone-100 text-stone-700 border-stone-300 dark:bg-foreground/5 dark:text-foreground/75 dark:border-foreground/15";
+  if (s.includes("buy"))         return "bg-stone-100 text-stone-600 border-stone-300 dark:bg-foreground/5 dark:text-foreground/60 dark:border-foreground/12";
+  if (s.includes("strong sell")) return "bg-stone-100 text-stone-700 border-stone-300 dark:bg-foreground/5 dark:text-foreground/75 dark:border-foreground/15";
+  if (s.includes("sell"))        return "bg-stone-100 text-stone-600 border-stone-300 dark:bg-foreground/5 dark:text-foreground/60 dark:border-foreground/12";
+  return "bg-stone-100 text-stone-500 border-stone-200 dark:bg-foreground/5 dark:text-foreground/50 dark:border-foreground/10";
 }
 function toEnVerdict(verdict: string): string {
   const s = verdict.toLowerCase();
@@ -712,9 +713,9 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-muted-foreground/50">{isEn ? `${list.length} Reports` : `${list.length}건`}</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground/60 border border-border/50">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
-                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground/60 border border-border/50">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground/60 border border-border/50">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-stone-600 border border-stone-300 dark:text-muted-foreground/60 dark:border-border/50">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-stone-600 border border-stone-300 dark:text-muted-foreground/60 dark:border-border/50">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-stone-600 border border-stone-300 dark:text-muted-foreground/60 dark:border-border/50">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
                 {reanalysisCount > 0 && (
                   <button
                     onClick={() => setVerdictFilter(verdictFilter === "reanalysis" ? "all" : "reanalysis")}
@@ -722,7 +723,7 @@ export default function History() {
                       "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
                       verdictFilter === "reanalysis"
                         ? "bg-foreground text-background border-foreground"
-                        : "text-muted-foreground/60 border-border/50 hover:border-foreground/30 hover:text-foreground"
+                        : "text-stone-600 border-stone-300 hover:border-stone-500 hover:text-stone-800 dark:text-muted-foreground/60 dark:border-border/50 dark:hover:border-foreground/30 dark:hover:text-foreground"
                     )}
                   >
                     {isEn ? `Re-analyze ${reanalysisCount}` : `재분석 ${reanalysisCount}`}
@@ -846,12 +847,8 @@ export default function History() {
                 className={cn(
                   "px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors border",
                   active
-                    ? isReanalysis
-                      ? "bg-orange-500 text-white border-orange-500"
-                      : "bg-foreground text-background border-foreground"
-                    : isReanalysis
-                      ? "bg-background text-orange-600 dark:text-orange-400 border-orange-400 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
-                      : "bg-background text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground"
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-background text-stone-600 border-stone-300 hover:border-stone-500 hover:text-stone-900 dark:text-muted-foreground dark:border-border dark:hover:border-foreground/40 dark:hover:text-foreground"
                 )}
               >
                 {labels[v]}

@@ -314,7 +314,7 @@ function AdminTopicCard({ onGenerated, generating, setGenerating }: {
                 "px-2.5 py-1 rounded-full text-[11.5px] border transition-all",
                 topic === s
                   ? "bg-violet-500/15 text-violet-400 border-violet-500/30"
-                  : "bg-muted/40 text-muted-foreground/60 border-border hover:bg-muted hover:text-muted-foreground"
+                  : "bg-stone-100 text-stone-600 border-stone-300 hover:bg-stone-200 hover:text-stone-800 dark:bg-muted/40 dark:text-muted-foreground/60 dark:border-border dark:hover:bg-muted dark:hover:text-muted-foreground"
               )}
             >
               {s}

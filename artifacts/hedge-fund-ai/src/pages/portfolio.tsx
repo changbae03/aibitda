@@ -635,8 +635,8 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                   className={cn(
                     "shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors",
                     filter === "all"
-                      ? "bg-foreground/10 text-foreground"
-                      : "text-muted-foreground/50 hover:text-foreground"
+                      ? "bg-stone-200 text-stone-900 dark:bg-foreground/10 dark:text-foreground"
+                      : "text-stone-500 hover:text-stone-900 dark:text-muted-foreground/50 dark:hover:text-foreground"
                   )}
                 >
                   {isEn ? "All" : "전체"}
@@ -649,7 +649,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                       "shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors",
                       filter === t
                         ? getColor(t)
-                        : "border-border text-muted-foreground/50 hover:text-foreground"
+                        : "border-stone-300 text-stone-500 hover:text-stone-900 hover:border-stone-400 dark:border-border dark:text-muted-foreground/50 dark:hover:text-foreground"
                     )}
                   >
                     {/^\d+$/.test(t) ? (tickerNameMap.get(t) || t) : t}
@@ -1877,8 +1877,8 @@ export default function Portfolio() {
                 className={cn(
                   "px-3 py-1.5 text-[11px] rounded-full transition-colors",
                   sortKey === k
-                    ? "bg-foreground/10 text-foreground font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-stone-200 text-stone-900 font-semibold dark:bg-foreground/10 dark:text-foreground"
+                    : "text-stone-500 hover:text-stone-900 dark:text-muted-foreground dark:hover:text-foreground"
                 )}
               >
                 {isEn

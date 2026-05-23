@@ -137,17 +137,17 @@ function MarketBriefSection({
   showRefresh?: boolean;
 }) {
   const sentimentConfig = brief?.sentiment === "bullish"
-    ? { color: "text-red-400 bg-red-500/10 border-red-500/20", label: "상승 우세", bar: "bg-red-400" }
+    ? { color: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "상승 우세", bar: "bg-red-500 dark:bg-red-400" }
     : brief?.sentiment === "bearish"
-    ? { color: "text-blue-400 bg-blue-500/10 border-blue-500/20", label: "하락 우세", bar: "bg-blue-400" }
-    : { color: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "방향 불확실", bar: "bg-amber-400" };
+    ? { color: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20", label: "하락 우세", bar: "bg-blue-500 dark:bg-blue-400" }
+    : { color: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20", label: "방향 불확실", bar: "bg-amber-500 dark:bg-amber-400" };
 
   const dirCfg = (d: "positive" | "negative" | "neutral") =>
     d === "positive"
-      ? { dot: "bg-red-400", badge: "text-red-400 bg-red-500/10 border-red-500/20", label: "긍정" }
+      ? { dot: "bg-red-500", badge: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "긍정" }
       : d === "negative"
-      ? { dot: "bg-blue-400", badge: "text-blue-400 bg-blue-500/10 border-blue-500/20", label: "부정" }
-      : { dot: "bg-muted-foreground/30", badge: "text-muted-foreground/50 bg-muted/60 border-border", label: "중립" };
+      ? { dot: "bg-blue-500", badge: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20", label: "부정" }
+      : { dot: "bg-stone-400 dark:bg-muted-foreground/30", badge: "text-stone-600 bg-stone-100 border-stone-300 dark:text-muted-foreground/50 dark:bg-muted/60 dark:border-border", label: "중립" };
 
   const genTime = brief?.generatedAt
     ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -157,10 +157,10 @@ function MarketBriefSection({
 
   const impactCfg = (impact: "high" | "medium" | "low") =>
     impact === "high"
-      ? { label: "HIGH", cls: "text-red-400 bg-red-500/10 border-red-500/25" }
+      ? { label: "HIGH", cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25" }
       : impact === "medium"
-      ? { label: "MED",  cls: "text-amber-400 bg-amber-500/10 border-amber-500/25" }
-      : { label: "LOW",  cls: "text-muted-foreground/50 bg-muted/50 border-border" };
+      ? { label: "MED",  cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/25" }
+      : { label: "LOW",  cls: "text-stone-500 bg-stone-100 border-stone-200 dark:text-muted-foreground/50 dark:bg-muted/50 dark:border-border" };
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -174,12 +174,12 @@ function MarketBriefSection({
             <span className={cn(
               "text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide",
               brief.sessionType === "morning"
-                ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20"
                 : brief.sessionType === "midday"
-                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20"
                 : brief.sessionType === "weekend"
-                ? "text-violet-400 bg-violet-500/10 border-violet-500/20"
-                : "text-sky-400 bg-sky-500/10 border-sky-500/20",
+                ? "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20"
+                : "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20",
             )}>
               {brief.sessionType === "morning"
                 ? "🌅 장전 브리핑"
@@ -387,13 +387,13 @@ function MarketBriefSection({
                     <div className="flex flex-wrap gap-2">
                       {brief.keyTopics!.map((topic, i) => {
                         const catColor: Record<string, string> = {
-                          "정치": "bg-purple-500/10 border-purple-500/25 text-purple-400",
-                          "기업": "bg-blue-500/10 border-blue-500/25 text-blue-400",
-                          "경제": "bg-green-500/10 border-green-500/25 text-green-400",
-                          "글로벌": "bg-orange-500/10 border-orange-500/25 text-orange-400",
-                          "산업": "bg-cyan-500/10 border-cyan-500/25 text-cyan-400",
+                          "정치": "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-500/10 dark:border-purple-500/25 dark:text-purple-400",
+                          "기업": "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-500/10 dark:border-blue-500/25 dark:text-blue-400",
+                          "경제": "bg-green-50 border-green-200 text-green-700 dark:bg-green-500/10 dark:border-green-500/25 dark:text-green-400",
+                          "글로벌": "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-500/10 dark:border-orange-500/25 dark:text-orange-400",
+                          "산업": "bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-500/10 dark:border-cyan-500/25 dark:text-cyan-400",
                         };
-                        const cls = catColor[topic.category] ?? "bg-muted/40 border-border text-muted-foreground";
+                        const cls = catColor[topic.category] ?? "bg-stone-100 border-stone-300 text-stone-600 dark:bg-muted/40 dark:border-border dark:text-muted-foreground";
                         return (
                           <div key={i} className={cn("group relative flex-shrink-0 cursor-default select-none rounded-xl border px-3 py-1.5", cls)}>
                             <div className="flex items-center gap-1.5">
@@ -532,8 +532,8 @@ function TrendBadge({ value }: { value: number }) {
   return (
     <span className={cn(
       "inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full",
-      up ? "bg-red-500/15 text-red-400 border border-red-500/25"
-         : "bg-blue-500/15 text-blue-400 border border-blue-500/25",
+      up ? "bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/25"
+         : "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/25",
     )}>
       {up ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
       {up ? "상승" : "하락"} 전망 {Math.abs(value)}%
