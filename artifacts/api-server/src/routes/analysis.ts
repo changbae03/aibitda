@@ -489,16 +489,17 @@ ${excerpt}
 
 JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총 400-700자).`
     : `당신은 AI 헤지펀드 리서치 팀의 Valuation Skeptic(밸류에이션 검증 전문가)입니다.
-아래는 ${companyName}(${ticker})의 적정주가 산출 초안입니다. 밸류에이션의 핵심 가정을 정확히 3가지 각도로 치열하게 반론하세요.
+아래는 ${companyName}(${ticker})의 적정주가 산출 초안입니다. 밸류에이션의 핵심 가정을 정확히 3가지 각도로 검증하세요.
 
 [반론 원칙]
 - "틀렸다"가 아니라 "이 가정이 성립하려면 X 조건이 필요한데 그 근거가 불충분하다"는 형식
 - 각 반론은 반드시 구체적 수치·비교 근거 포함
+- ⚠️ 핵심 제약: 이 반론의 목적은 가정의 정밀도를 높이는 것입니다. 초안의 적정주가 방향성(저평가·고평가)을 뒤집거나 목표가를 초안 대비 ±25% 초과 이동시키는 주장은 하지 마세요.
 
-[반론 3가지]
-1. 할인율·WACC 가정 반론: WACC 또는 할인율 설정이 너무 낮거나 높은 이유 (2-3문장)
-2. 성장률·멀티플 가정 반론: 터미널 성장률 또는 피어 배수 적용의 취약한 논리 (2-3문장)
-3. 목표가 도출 반론: 최종 적정주가·밴드 산출 과정에서 가장 약한 논리적 연결고리 (2-3문장)
+[검증 3가지]
+1. 할인율·WACC 가정 검증: WACC 또는 할인율 설정의 취약점 (2-3문장)
+2. 성장률·멀티플 가정 검증: 터미널 성장률 또는 피어 배수 적용의 취약한 논리 (2-3문장)
+3. 목표가 도출 검증: 최종 적정주가·밴드 산출 과정에서 가장 약한 논리적 연결고리 (2-3문장)
 
 [초안]
 ${excerpt}
@@ -517,8 +518,8 @@ JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총
           contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
           config: {
             maxOutputTokens: 1024,
-            temperature: 0.6,
-            topP: 0.9,
+            temperature: 0.25,
+            topP: 0.85,
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),
@@ -5410,13 +5411,30 @@ async function executeStep(
           const isEnLang = (analysis as any).language === 'en';
           // Round 1 초안에서 핵심 섹션만 추출 (입력 토큰 절감: 전체 초안 대신 앞 4000자만 전달)
           const draftExcerpt = content.slice(0, 4000) + (content.length > 4000 ? "\n...[중략 — 상세 테이블 생략]...\n" + content.slice(-2000) : "");
+
+          // ── Round 1 목표주가 앵커 추출 (synthesis 제약용) ──────────────────
+          let round1BaseAnchor: number | null = null;
+          const fvdMatch = content.match(/FINAL_VALUATION_DATA\s*[:：]\s*(\{[^}]{10,500}\})/);
+          if (fvdMatch) {
+            try {
+              const fvd = JSON.parse(fvdMatch[1]);
+              if (typeof fvd.base === "number" && fvd.base > 0) round1BaseAnchor = fvd.base;
+            } catch {}
+          }
+          const anchorConstraintKo = round1BaseAnchor
+            ? `\n⚠️ 목표주가 안정성 원칙: Round 1 초안의 적정주가는 ${round1BaseAnchor.toLocaleString()}원입니다. 반론을 반영하더라도 최종 FINAL_VALUATION_DATA의 base 값은 이 수치 대비 ±25% 이내(${Math.round(round1BaseAnchor * 0.75).toLocaleString()}~${Math.round(round1BaseAnchor * 1.25).toLocaleString()}원)에서 조정하세요. 이 범위를 벗어나는 수정은 허용되지 않습니다.`
+            : `\n⚠️ 목표주가 안정성 원칙: 반론을 반영하더라도 최종 적정주가(base)는 Round 1 초안 대비 ±25% 이내에서 조정하세요.`;
+          const anchorConstraintEn = round1BaseAnchor
+            ? `\n⚠️ Target Price Stability: Round 1 base target was ${round1BaseAnchor.toLocaleString()}. The final FINAL_VALUATION_DATA base value must stay within ±25% of this (${Math.round(round1BaseAnchor * 0.75).toLocaleString()}–${Math.round(round1BaseAnchor * 1.25).toLocaleString()}). Do not move the target beyond this range.`
+            : `\n⚠️ Target Price Stability: The final base target price must stay within ±25% of the Round 1 draft target.`;
+
           const synthesisInstruction = isEnLang
             ? (stepKey === "company_analysis"
               ? `\n\n---\n[Round 1 Draft]\n${draftExcerpt}\n\n---\n[Devil's Advocate Feedback]\n${challengerFeedback}\n\n[Instruction] Incorporate valid criticisms with updated figures; rebut invalid ones with evidence. Write a complete, focused final report. Do not expose challenge items as a separate section. Write ENTIRELY in English.`
-              : `\n\n---\n[Round 1 Draft]\n${draftExcerpt}\n\n---\n[Valuation Skeptic Feedback]\n${challengerFeedback}\n\n[Instruction] Re-examine WACC, growth rate, and multiple assumptions. Update figures where criticism is valid; rebut where it is not. Write a complete valuation report with DCF/peer table and FINAL_VALUATION_DATA JSON. Write ENTIRELY in English.`)
+              : `\n\n---\n[Round 1 Draft]\n${draftExcerpt}\n\n---\n[Valuation Skeptic Feedback]\n${challengerFeedback}\n\n[Instruction] Re-examine WACC, growth rate, and multiple assumptions. Update figures where criticism is valid; rebut where it is not. Write a complete valuation report with DCF/peer table and FINAL_VALUATION_DATA JSON. Write ENTIRELY in English.${anchorConstraintEn}`)
             : (stepKey === "company_analysis"
               ? `\n\n---\n[Round 1 초안]\n${draftExcerpt}\n\n---\n[Devil's Advocate 반론]\n${challengerFeedback}\n\n[지시] 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 반론 항목을 별도 섹션으로 노출하지 말고 최종 완성본을 간결하게 작성하세요.`
-              : `\n\n---\n[Round 1 초안]\n${draftExcerpt}\n\n---\n[Valuation Skeptic 반론]\n${challengerFeedback}\n\n[지시] WACC·성장률·멀티플 가정을 재점검하세요. 타당한 지적은 수치를 수정하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. DCF 또는 피어 테이블과 FINAL_VALUATION_DATA JSON을 포함한 최종 밸류에이션 보고서를 간결하게 작성하세요.`);
+              : `\n\n---\n[Round 1 초안]\n${draftExcerpt}\n\n---\n[Valuation Skeptic 반론]\n${challengerFeedback}\n\n[지시] WACC·성장률·멀티플 가정을 재점검하세요. 타당한 지적은 수치를 수정하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. DCF 또는 피어 테이블과 FINAL_VALUATION_DATA JSON을 포함한 최종 밸류에이션 보고서를 간결하게 작성하세요.${anchorConstraintKo}`);
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
           const synthesisMaxTokens = 8192; // 속도 최적화: 10k→8k (반론 반영 집중, 핵심만 수정)
