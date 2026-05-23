@@ -1,11 +1,14 @@
 /**
  * 시장 예측 파이프라인 v8  — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 11 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 23
+ * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 27
  *
- * [기술적 11] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
+ * [기술적 15] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
  *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price
- * [거래량  3] 거래량 5일 모멘텀, 상대거래량(vs MA20), 방향가중 거래량   ← NEW v15
+ *             Stochastic %K(14) — RSI 보완 고/저점 과매수·과매도  ← v17
+ *             ATR14/price       — 실제 변동성 레짐 (EMA 기반 근사)  ← v17
+ *             요일 sin/cos       — 월요일·금요일 주기 패턴            ← v17
+ * [거래량  3] 거래량 5일 모멘텀, 상대거래량(vs MA20), 방향가중 거래량   ← v15
  * [매크로  3]  S&P500 전일 등락 (^GSPC) / DXY (SNP용)
  *             원/달러 환율 변화율 (USDKRW=X)
  *             국고채 3년 금리 (KR FRED) / 미국10Y (SNP용)
@@ -50,9 +53,9 @@ export interface PipelineStatus {
 
 // ─── Hyperparameters ─────────────────────────────────────────────────────────
 
-const LOOKBACK     = 20;
+const LOOKBACK     = 25;   // [v17] 20→25: 한 달 영업일 전체 패턴 포함
 const PRED_H       = 3;
-const N_FEATURES   = 23;   // 11 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
+const N_FEATURES   = 27;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 32;
@@ -63,7 +66,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 16;
+const MODEL_VERSION = 17;
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -693,10 +696,19 @@ function buildFeatures(
     macdSignal[i] = a9 * macdLine[i] + (1 - a9) * macdSignal[i-1];
   }
 
+  // ── [v17] ATR(14) EMA 사전 계산 ─────────────────────────────────────────
+  // ATR 근사: |close - prev_close|의 EMA14 (high/low 없이 close-to-close 사용)
+  const atrAlpha = 2 / (14 + 1);
+  const atr14 = new Float64Array(closes.length);
+  atr14[0] = 0;
+  for (let i = 1; i < closes.length; i++) {
+    const tr = Math.abs(closes[i] - closes[i-1]);
+    atr14[i] = i === 1 ? tr : atrAlpha * tr + (1 - atrAlpha) * atr14[i-1];
+  }
+
   const feats  = rows.map((row, i): Float64Array => {
     const ma5       = rollingMean(closes, 5,  i);
     const ma20      = rollingMean(closes, 20, i);
-    const std20     = rollingStdFn(rets, 20, i);
     // 볼린저밴드 %B: (close - lower) / (upper - lower), price std 기반으로 수정
     const std20P    = rollingStdFn(closes, 20, i);
     const bband     = std20P > 1e-8 && ma20 > 0
@@ -709,11 +721,26 @@ function buildFeatures(
     // ── 거래량 피처 ──
     const volMa5   = rollingMean(volumes, 5,  i);
     const volMa20  = rollingMean(volumes, 20, i);
-    const volRet5  = volMa5  > 0 ? volumes[i] / volMa5  - 1 : 0;  // 거래량 5일 모멘텀
-    const relVol20 = volMa20 > 0 ? volumes[i] / volMa20 - 1 : 0;  // 상대 거래량 (vs MA20)
-    const signedVol = Math.max(-1, Math.min(1, Math.sign(rets[i]) * Math.max(0, relVol20))); // 방향 가중 거래량
+    const volRet5  = volMa5  > 0 ? volumes[i] / volMa5  - 1 : 0;
+    const relVol20 = volMa20 > 0 ? volumes[i] / volMa20 - 1 : 0;
+    const signedVol = Math.max(-1, Math.min(1, Math.sign(rets[i]) * Math.max(0, relVol20)));
+    // ── [v17] Stochastic %K(14): (close - min14) / (max14 - min14) ─────────
+    const w14start = Math.max(0, i - 13);
+    let lo14 = closes[w14start], hi14 = closes[w14start];
+    for (let k = w14start + 1; k <= i; k++) {
+      if (closes[k] < lo14) lo14 = closes[k];
+      if (closes[k] > hi14) hi14 = closes[k];
+    }
+    const stochK = hi14 > lo14 ? (closes[i] - lo14) / (hi14 - lo14) : 0.5;
+    // ── [v17] ATR14/price: 정규화 변동성 레짐 (0~0.05 범위 → /0.03 → 0~1.5) ─
+    const atrNorm = Math.min(2, atr14[i] / (p * 0.015 || 1e-8)); // 일반적 ATR ≈ 1.5% → 정규화 1.0
+    // ── [v17] 요일 sin/cos: 주기적 요일 효과 (0=월~4=금) ─────────────────────
+    const dow = new Date(row.date + "T00:00:00").getDay(); // 0=일,1=월,...,5=금,6=토
+    const tradingDow = dow === 0 ? 4 : dow === 6 ? 0 : dow - 1; // 일→금(4), 토→월(0), 월→0
+    const dowSin = Math.sin(2 * Math.PI * tradingDow / 5);
+    const dowCos = Math.cos(2 * Math.PI * tradingDow / 5);
     return new Float64Array([
-      // ── 기술적 (11) ──
+      // ── 기술적 (15) ──
       rets[i],
       ma5>0  ? closes[i]/ma5  - 1 : 0,
       ma20>0 ? closes[i]/ma20 - 1 : 0,
@@ -722,24 +749,28 @@ function buildFeatures(
       rollingStdFn(rets, 20, i),
       Math.max(0, Math.min(1, bband)),
       mom5, mom10,
-      macdLine[i]   / p,     // MACD Line / price (트렌드 강도)
-      macdSignal[i] / p,     // MACD Signal / price (트렌드 방향 확인)
+      macdLine[i]   / p,     // MACD Line / price
+      macdSignal[i] / p,     // MACD Signal / price
+      Math.max(0, Math.min(1, stochK)),   // [v17] Stochastic %K(14) (0~1)
+      Math.max(0, Math.min(2, atrNorm)),  // [v17] ATR14/price 정규화 (0~2)
+      dowSin,                             // [v17] 요일 sin (-1~+1)
+      dowCos,                             // [v17] 요일 cos (-1~+1)
       // ── 거래량 (3) [v15] ──
-      Math.max(-3, Math.min(3, volRet5)),    // 거래량 5일 모멘텀 (급등=양수)
-      Math.max(-3, Math.min(3, relVol20)),   // 상대 거래량 vs MA20
-      signedVol,                             // 방향 가중 거래량 (−1~+1)
+      Math.max(-3, Math.min(3, volRet5)),
+      Math.max(-3, Math.min(3, relVol20)),
+      signedVol,
       // ── 매크로 (3) ──
-      ext.sp500Ret,          // S&P500 등락 / SNP용: DXY
-      ext.usdkrwRet,         // 환율 변화율
-      ext.bond3y / 10,       // 국고채3Y /10 / SNP용: 미국10Y/10
+      ext.sp500Ret,
+      ext.usdkrwRet,
+      ext.bond3y / 10,
       // ── 수급 (3) / SNP전용(v16): 나스닥·러셀 ──
-      ext.foreignNet,        // 외국인 순매수 (−1~+1) / SNP=나스닥 일별 수익률 (−1~+1)
-      ext.instNet,           // 기관 순매수   (−1~+1) / SNP=러셀2000 일별 수익률 (−1~+1)
-      ext.shortRatio,        // 공매도 IQR정규화 (−3~+3) / SNP=나스닥 5일 모멘텀 (−3~+3)
+      ext.foreignNet,
+      ext.instNet,
+      ext.shortRatio,
       // ── 글로벌 변동성/금리 (3) ──
-      Math.max(-1, Math.min(1, ext.vix5dMom / 0.3)), // VIX 5일 모멘텀 (낙폭=음수=회복신호, ±30% → ±1)
-      ext.vixRet,            // VIX 일별 변화율 (당일 공포 가속도, −0.2~+0.2)
-      ext.yieldSpread / 3,   // 10Y-2Y 금리차 /3 (−1~+1 범위)
+      Math.max(-1, Math.min(1, ext.vix5dMom / 0.3)),
+      ext.vixRet,
+      ext.yieldSpread / 3,
     ]);
   });
   return { feats, closes, dates };
