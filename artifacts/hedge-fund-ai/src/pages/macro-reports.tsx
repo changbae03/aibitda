@@ -2,25 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp,
-  Loader2, BookOpen, Save, Eye, EyeOff,
+  Loader2, BookOpen, Save, Eye, EyeOff, Sparkles,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-const CATEGORIES = ["전체", "FOMC", "지정학", "원자재", "금리", "유가", "고용", "부동산", "기타"] as const;
-type Category = (typeof CATEGORIES)[number];
-
-const CATEGORY_COLORS: Record<string, string> = {
-  FOMC:    "bg-violet-500/15 text-violet-400 border-violet-500/30",
-  지정학:  "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  원자재:  "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  금리:    "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  유가:    "bg-green-500/15 text-green-400 border-green-500/30",
-  고용:    "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
-  부동산:  "bg-rose-500/15 text-rose-400 border-rose-500/30",
-  기타:    "bg-muted/60 text-muted-foreground border-border",
-};
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface MacroReport {
   id: number;
@@ -31,17 +20,6 @@ interface MacroReport {
   is_published: boolean;
   created_at: string;
   updated_at: string;
-}
-
-function CategoryBadge({ category }: { category: string }) {
-  return (
-    <span className={cn(
-      "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border",
-      CATEGORY_COLORS[category] ?? CATEGORY_COLORS["기타"]
-    )}>
-      {category}
-    </span>
-  );
 }
 
 function Skeleton({ className }: { className?: string }) {
@@ -87,10 +65,14 @@ function ReportCard({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <CategoryBadge category={report.category} />
             <span className="text-[11px] text-muted-foreground/50">
               {format(new Date(report.created_at), "yyyy. M. d.", { locale: ko })}
             </span>
+            {report.category === "AI" && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[#FF8A7A]/10 text-[#FF8A7A] border border-[#FF8A7A]/20 font-semibold">
+                <Sparkles className="w-2.5 h-2.5" /> AI 작성
+              </span>
+            )}
             {!report.is_published && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">비공개</span>
             )}
@@ -163,8 +145,13 @@ function ReportCard({
                   <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중...
                 </div>
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/85 text-[13.5px] leading-[1.85] whitespace-pre-wrap">
-                  {content ?? "내용을 불러올 수 없습니다."}
+                <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/85 text-[13.5px] leading-[1.85]
+                  prose-headings:text-foreground prose-headings:font-semibold prose-headings:mt-5 prose-headings:mb-2
+                  prose-strong:text-foreground prose-strong:font-semibold
+                  prose-p:my-2 prose-ul:my-2 prose-li:my-0.5">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {content ?? "내용을 불러올 수 없습니다."}
+                  </ReactMarkdown>
                 </div>
               )}
               {report.updated_at !== report.created_at && (
@@ -190,7 +177,6 @@ function ReportForm({
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
-  const [category, setCategory] = useState(initial?.category ?? "기타");
   const [summary, setSummary] = useState(initial?.summary ?? "");
   const [content, setContent] = useState(initial?.content ?? "");
   const [isPublished, setIsPublished] = useState(initial?.is_published ?? true);
@@ -213,7 +199,7 @@ function ReportForm({
       const r = await fetch(url, {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, category, summary, content, is_published: isPublished }),
+        body: JSON.stringify({ title, summary, content, is_published: isPublished }),
       });
       const data = await r.json();
       if (!r.ok) { setError(data.error ?? "저장 실패"); setSaving(false); return; }
@@ -237,28 +223,6 @@ function ReportForm({
         </div>
 
         <div className="p-5 space-y-4">
-          {/* 카테고리 */}
-          <div>
-            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">카테고리</label>
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.filter(c => c !== "전체").map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCategory(c)}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-[12px] font-medium border transition-all",
-                    category === c
-                      ? (CATEGORY_COLORS[c] ?? CATEGORY_COLORS["기타"]) + " ring-1 ring-current"
-                      : "bg-muted/40 text-muted-foreground border-border hover:bg-accent"
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 제목 */}
           <div>
             <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">제목 *</label>
             <input
@@ -270,7 +234,6 @@ function ReportForm({
             />
           </div>
 
-          {/* 요약 */}
           <div>
             <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">요약 (선택)</label>
             <textarea
@@ -282,19 +245,17 @@ function ReportForm({
             />
           </div>
 
-          {/* 본문 */}
           <div>
-            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">본문 *</label>
+            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">본문 * (마크다운 지원)</label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="보고서 본문 내용을 작성하세요."
+              placeholder="보고서 본문을 작성하세요. **굵게**, ## 제목 등 마크다운 사용 가능"
               rows={14}
               className="w-full px-3 py-2.5 text-[13.5px] bg-background border border-border rounded-lg resize-y focus:outline-none focus:ring-1 focus:ring-[#FF8A7A]/50 leading-relaxed font-mono"
             />
           </div>
 
-          {/* 공개 여부 */}
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <button
               type="button"
@@ -343,10 +304,11 @@ export default function MacroReports() {
   const { isEn } = useLanguage();
   const [reports, setReports] = useState<MacroReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<Category>("전체");
   const [isAdmin, setIsAdmin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<MacroReport | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
 
   useEffect(() => {
     fetch(getApiUrl("/api/admin/dashboard"))
@@ -354,19 +316,30 @@ export default function MacroReports() {
       .catch(() => {});
   }, []);
 
-  const fetchReports = async (category = activeCategory) => {
+  const fetchReports = async () => {
     setLoading(true);
     try {
-      const url = category === "전체"
-        ? getApiUrl("/api/macro-reports")
-        : getApiUrl(`/api/macro-reports?category=${encodeURIComponent(category)}`);
-      const r = await fetch(url);
+      const r = await fetch(getApiUrl("/api/macro-reports"));
       if (r.ok) setReports(await r.json());
     } catch {}
     setLoading(false);
   };
 
-  useEffect(() => { fetchReports(activeCategory); }, [activeCategory]);
+  useEffect(() => { fetchReports(); }, []);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenError("");
+    try {
+      const r = await fetch(getApiUrl("/api/admin/macro-reports/generate"), { method: "POST" });
+      const data = await r.json();
+      if (!r.ok) { setGenError(data.error ?? "AI 생성 실패"); setGenerating(false); return; }
+      setReports((prev) => [data, ...prev]);
+    } catch (e: any) {
+      setGenError(e.message ?? "AI 생성 실패");
+    }
+    setGenerating(false);
+  };
 
   const handleSave = (saved: MacroReport) => {
     setReports((prev) => {
@@ -413,34 +386,52 @@ export default function MacroReports() {
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => { setEditTarget(null); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold bg-[#FF8A7A] text-white hover:bg-[#FF8A7A]/90 transition-colors shrink-0"
-          >
-            <Plus className="w-4 h-4" /> 보고서 작성
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20 hover:bg-violet-500/15 transition-colors disabled:opacity-50"
+              title="Gemini가 오늘의 핵심 매크로 이슈를 분석하여 보고서를 작성합니다"
+            >
+              {generating
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Sparkles className="w-4 h-4" />
+              }
+              {generating ? "작성 중…" : "AI 작성"}
+            </button>
+            <button
+              onClick={() => { setEditTarget(null); setShowForm(true); }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold bg-[#FF8A7A] text-white hover:bg-[#FF8A7A]/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> 직접 작성
+            </button>
+          </div>
         )}
       </div>
 
-      {/* 카테고리 필터 */}
-      <div className="flex gap-1.5 flex-wrap mb-6">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-[12.5px] font-medium border transition-all",
-              activeCategory === cat
-                ? cat === "전체"
-                  ? "bg-foreground text-background border-foreground"
-                  : (CATEGORY_COLORS[cat] ?? CATEGORY_COLORS["기타"]) + " ring-1 ring-current"
-                : "bg-muted/30 text-muted-foreground border-border hover:bg-accent hover:text-foreground"
-            )}
+      {/* AI 생성 중 배너 */}
+      <AnimatePresence>
+        {generating && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/8 border border-violet-500/20 text-[13px] text-violet-400"
           >
-            {cat}
-          </button>
-        ))}
-      </div>
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+            <span>
+              Gemini가 현재 거시경제 지표를 분석하여 보고서를 작성하고 있습니다.
+              <span className="text-violet-400/60 ml-1">보통 20~40초 소요됩니다.</span>
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {genError && (
+        <p className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+          {genError}
+        </p>
+      )}
 
       {/* 리스트 */}
       {loading ? (
@@ -457,15 +448,25 @@ export default function MacroReports() {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <BookOpen className="w-10 h-10 text-muted-foreground/20 mb-3" />
           <p className="text-[15px] font-medium text-muted-foreground/60">
-            {activeCategory === "전체" ? "아직 작성된 보고서가 없습니다." : `${activeCategory} 카테고리 보고서가 없습니다.`}
+            아직 작성된 보고서가 없습니다.
           </p>
           {isAdmin && (
-            <button
-              onClick={() => { setEditTarget(null); setShowForm(true); }}
-              className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold bg-[#FF8A7A]/10 text-[#FF8A7A] border border-[#FF8A7A]/20 hover:bg-[#FF8A7A]/15 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> 첫 보고서 작성
-            </button>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20 hover:bg-violet-500/15 transition-colors disabled:opacity-50"
+              >
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                AI로 첫 보고서 작성
+              </button>
+              <button
+                onClick={() => { setEditTarget(null); setShowForm(true); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold bg-[#FF8A7A]/10 text-[#FF8A7A] border border-[#FF8A7A]/20 hover:bg-[#FF8A7A]/15 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> 직접 작성
+              </button>
+            </div>
           )}
         </div>
       ) : (
