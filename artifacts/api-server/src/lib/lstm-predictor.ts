@@ -126,13 +126,13 @@ const INDEX_HP: Record<string, IndexHP> = {
     recentWindow: 20,
     halfLifeDays: 252,
   },
-  /** NASDAQ — 기술주 중심 지수 */
+  /** NASDAQ — 기술주 중심 지수 [v19] 재학습: 앙상블 5→8, 트리 200→250, depth 4→5, halfLife 252→126 */
   IXIC: {
-    gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
-    gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
-    lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.30,
+    gbdtTrees: 250, gbdtLR: 0.02, gbdtDepth: 5, gbdtLeaf: 10,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 8,
+    lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.28,
     recentWindow: 20,
-    halfLifeDays: 252,
+    halfLifeDays: 126,
   },
 };
 
