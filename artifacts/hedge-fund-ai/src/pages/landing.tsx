@@ -73,18 +73,11 @@ export default function Landing() {
     return () => clearInterval(interval);
   }, []);
 
-  const [pendingNav, setPendingNav] = useState(false);
-
-  useEffect(() => {
-    if (pendingNav) {
-      window.location.href = getKakaoLoginUrl();
-    }
-  }, [pendingNav]);
-
   const handleKakaoLogin = () => {
     if (kakaoButtonLoading) return;
     setKakaoButtonLoading(true);
-    setPendingNav(true);
+    // iOS Safari: 클릭 핸들러 직접 콜스택에서 호출해야 팝업 차단 안 됨
+    window.location.href = getKakaoLoginUrl();
   };
 
   const handleDevLogin = async () => {
