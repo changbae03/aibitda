@@ -506,6 +506,225 @@ function parseBrief(summary: string) {
   return sections.length > 0 ? sections : [{ label: "Briefing", icon: "core" as const, text: cleanSectionText(summary) }];
 }
 
+// ── 포트폴리오 뉴스 피드 ──────────────────────────────────────────────────────
+interface PortfolioNewsItem {
+  ticker: string;
+  companyName: string;
+  title: string;
+  source: string;
+  pubDate: string;
+  url: string;
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 2)   return "방금";
+  if (mins < 60)  return `${mins}분 전`;
+  if (hours < 24) return `${hours}시간 전`;
+  if (days < 7)   return `${days}일 전`;
+  return new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+}
+
+const TICKER_COLORS = [
+  "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  "bg-rose-500/15 text-rose-400 border-rose-500/20",
+  "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
+  "bg-orange-500/15 text-orange-400 border-orange-500/20",
+  "bg-pink-500/15 text-pink-400 border-pink-500/20",
+];
+
+function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
+  const { isEn } = useLanguage();
+  const [items, setItems]           = useState<PortfolioNewsItem[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [cachedAt, setCachedAt]     = useState<string | null>(null);
+  const [expanded, setExpanded]     = useState(true);
+  const [showAll, setShowAll]       = useState(false);
+  const [filter, setFilter]         = useState<string>("all");
+
+  const tickerColorMap = useRef<Map<string, string>>(new Map());
+  const getColor = (ticker: string) => {
+    if (!tickerColorMap.current.has(ticker)) {
+      const idx = tickerColorMap.current.size % TICKER_COLORS.length;
+      tickerColorMap.current.set(ticker, TICKER_COLORS[idx]);
+    }
+    return tickerColorMap.current.get(ticker)!;
+  };
+
+  const load = useCallback(async (force = false) => {
+    setLoading(true);
+    try {
+      const url = force
+        ? getApiUrl("/api/portfolio/news?force=true")
+        : getApiUrl("/api/portfolio/news");
+      const r = await fetch(url, { credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        setItems(d.items ?? []);
+        setCachedAt(d.cachedAt ?? null);
+      }
+    } catch {}
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const uniqueTickers = Array.from(new Set(items.map(i => i.ticker)));
+  const filtered = filter === "all" ? items : items.filter(i => i.ticker === filter);
+  const visible  = showAll ? filtered : filtered.slice(0, 8);
+
+  if (!loading && items.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      {/* 헤더 */}
+      <div className="flex items-center gap-2.5 px-4 py-3 hover:bg-muted/30 transition-colors">
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="flex flex-1 items-center gap-2.5 min-w-0"
+        >
+          <Newspaper className="w-3.5 h-3.5 text-primary/60 shrink-0" />
+          <span className="flex-1 text-[12px] font-semibold text-foreground/70 text-left">
+            {isEn ? "Holdings News Feed" : "보유종목 뉴스"}
+          </span>
+          {loading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/40 shrink-0" />}
+          {!loading && items.length > 0 && (
+            <span className="text-[10px] text-muted-foreground/40 shrink-0">
+              {items.length}{isEn ? " articles" : "건"}
+            </span>
+          )}
+          {cachedAt && !loading && (
+            <span className="text-[10px] text-muted-foreground/30 shrink-0 hidden sm:inline">
+              {relativeTime(cachedAt)} {isEn ? "updated" : "업데이트"}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => load(true)}
+          className="p-1 rounded-md hover:bg-muted/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+          title="새로고침"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </button>
+        <button onClick={() => setExpanded(v => !v)} className="shrink-0">
+          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", expanded && "rotate-180")} />
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: "auto" }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            {/* 종목 필터 탭 */}
+            {uniqueTickers.length > 1 && (
+              <div className="border-t border-border px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+                <button
+                  onClick={() => setFilter("all")}
+                  className={cn(
+                    "shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors",
+                    filter === "all"
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground/50 hover:text-foreground"
+                  )}
+                >
+                  {isEn ? "All" : "전체"}
+                </button>
+                {uniqueTickers.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setFilter(t)}
+                    className={cn(
+                      "shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors",
+                      filter === t
+                        ? getColor(t)
+                        : "border-border text-muted-foreground/50 hover:text-foreground"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* 뉴스 목록 */}
+            <div className="border-t border-border divide-y divide-border/50">
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground/40">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-[12px]">{isEn ? "Fetching news..." : "뉴스 가져오는 중…"}</span>
+                </div>
+              ) : visible.length === 0 ? (
+                <p className="text-center text-[12px] text-muted-foreground/30 py-6">
+                  {isEn ? "No news found" : "뉴스가 없어요"}
+                </p>
+              ) : (
+                visible.map((item, i) => (
+                  <a
+                    key={i}
+                    href={item.url || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-2.5 px-4 py-3 hover:bg-muted/20 transition-colors group"
+                    onClick={e => !item.url && e.preventDefault()}
+                  >
+                    {/* 종목 뱃지 */}
+                    <span className={cn(
+                      "shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border",
+                      getColor(item.ticker)
+                    )}>
+                      {item.ticker}
+                    </span>
+                    {/* 제목 + 메타 */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] text-foreground/80 leading-snug line-clamp-2 group-hover:text-foreground transition-colors">
+                        {item.title}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground/40">
+                        {item.source && <span>{item.source}</span>}
+                        {item.source && <span>·</span>}
+                        <span>{relativeTime(item.pubDate)}</span>
+                      </div>
+                    </div>
+                    {item.url && (
+                      <ExternalLink className="w-3 h-3 text-muted-foreground/20 group-hover:text-muted-foreground/50 shrink-0 mt-1 transition-colors" />
+                    )}
+                  </a>
+                ))
+              )}
+            </div>
+
+            {/* 더보기 */}
+            {!loading && filtered.length > 8 && (
+              <div className="border-t border-border px-4 py-2.5">
+                <button
+                  onClick={() => setShowAll(v => !v)}
+                  className="w-full text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center justify-center gap-1"
+                >
+                  {showAll
+                    ? (isEn ? "Show less" : "접기")
+                    : (isEn ? `Show all ${filtered.length} articles` : `전체 ${filtered.length}건 보기`)}
+                  <ChevronDown className={cn("w-3 h-3 transition-transform", showAll && "rotate-180")} />
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ── 보유 종목 카드 ────────────────────────────────────────────────────────────
 function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDelete: (id: number) => void; onRefresh: () => void }) {
   const { isEn } = useLanguage();
@@ -1668,6 +1887,9 @@ export default function Portfolio() {
               </button>
             ))}
           </div>
+
+          {/* ── 보유종목 뉴스 피드 ── */}
+          <PortfolioNewsFeed tickers={holdings.map(h => h.ticker)} />
 
           {/* ── 보유 종목 목록 ── */}
           <div className="space-y-2.5">

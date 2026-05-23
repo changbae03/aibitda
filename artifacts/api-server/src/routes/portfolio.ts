@@ -1345,6 +1345,96 @@ router.get("/portfolio/admin/all", async (req, res) => {
   }
 });
 
+// ── GET /api/portfolio/news — 보유종목 뉴스 피드 ─────────────────────────────
+interface NewsItem {
+  ticker: string;
+  companyName: string;
+  title: string;
+  source: string;
+  pubDate: string; // ISO string
+  url: string;
+}
+
+// 메모리 캐시: user_id → { ts, items }
+const newsCache = new Map<string, { ts: number; items: NewsItem[] }>();
+const NEWS_CACHE_TTL = 15 * 60 * 1000; // 15분
+
+async function fetchNewsForTicker(ticker: string, companyName: string): Promise<NewsItem[]> {
+  const query = encodeURIComponent(companyName);
+  const rssUrl = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`;
+  try {
+    const res = await fetch(rssUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+    const result: NewsItem[] = [];
+    for (const item of items.slice(0, 8)) {
+      const cdataTitle  = item.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/)?.[1];
+      const plainTitle  = item.match(/<title>([^<]+)<\/title>/)?.[1];
+      const title       = (cdataTitle ?? plainTitle ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+      const pubDateRaw  = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] ?? "";
+      const source      = item.match(/<source[^>]*>(?:<!\[CDATA\[)?([^\]<]+)(?:\]\]>)?<\/source>/)?.[1]?.trim() ?? "";
+      const link        = item.match(/<link>([^<]+)<\/link>/)?.[1]?.trim()
+                       ?? item.match(/<guid[^>]*>([^<]+)<\/guid>/)?.[1]?.trim() ?? "";
+      if (!title) continue;
+      const pubDate = pubDateRaw ? new Date(pubDateRaw).toISOString() : new Date().toISOString();
+      result.push({ ticker, companyName, title, source, pubDate, url: link });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+router.get("/portfolio/news", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
+
+  // 캐시 확인
+  const cached = newsCache.get(userId);
+  if (cached && Date.now() - cached.ts < NEWS_CACHE_TTL) {
+    res.json({ items: cached.items, cachedAt: new Date(cached.ts).toISOString() });
+    return;
+  }
+
+  try {
+    const holdingsRes = await pool.query<{ ticker: string; company_name: string }>(
+      `SELECT ticker, company_name FROM portfolio_holdings WHERE user_id = $1 ORDER BY added_at DESC LIMIT 15`,
+      [userId]
+    );
+    const holdings = holdingsRes.rows;
+    if (holdings.length === 0) {
+      res.json({ items: [], cachedAt: new Date().toISOString() });
+      return;
+    }
+
+    // 병렬 fetch (최대 8개 동시)
+    const CONCURRENCY = 8;
+    const allItems: NewsItem[] = [];
+    for (let i = 0; i < holdings.length; i += CONCURRENCY) {
+      const batch = holdings.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(h => fetchNewsForTicker(h.ticker, h.company_name))
+      );
+      for (const r of results) allItems.push(...r);
+    }
+
+    // 날짜 내림차순 정렬
+    allItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+
+    // 최대 50개
+    const items = allItems.slice(0, 50);
+    newsCache.set(userId, { ts: Date.now(), items });
+    res.json({ items, cachedAt: new Date().toISOString() });
+  } catch (err: any) {
+    console.error("[portfolio/news] error:", err?.message);
+    res.status(500).json({ error: "뉴스를 가져오지 못했습니다" });
+  }
+});
+
 // ── DELETE /api/portfolio/:id — 종목 삭제 ────────────────────────────────────
 router.delete("/portfolio/:id", async (req, res) => {
   const userId = getUserId(req);
