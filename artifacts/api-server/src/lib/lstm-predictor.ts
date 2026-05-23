@@ -74,7 +74,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 18;  // [v18] LSTM 용량↑ + KOSPI HP 전면 재조정 + 최근 레짐 집중
+const MODEL_VERSION = 19;  // [v19] KOSPI 강세장 적응: halfLife 42일(2개월) + 앙상블 12 + 에포크 150 + 드롭아웃↓
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -95,20 +95,22 @@ interface IndexHP {
 
 const INDEX_HP: Record<string, IndexHP> = {
   /**
-   * KOSPI [v18] — 전면 재조정
-   * · GBDT: 트리 200개 + LR 0.02 (더 많은 약분류기, 천천히 학습 → 일반화↑)
-   * · depth 5 / leaf 8: 더 세밀한 분할 (과적합 방지는 트리 수와 LR로 제어)
-   * · nEnsemble 8: 무작위 시드 다양성 극대화
-   * · LSTM: epochs 100 + dropout 0.30 + lr 0.0008 (용량 48 units에 맞게 더 신중하게)
-   * · halfLifeDays 126: 6개월 반감기 → 2025 관세전쟁 이후 레짐에 집중
-   * · recentWindow 15: alpha 조정창 축소 → 최근 정확도에 빠르게 반응
+   * KOSPI [v19] — 강세장 레짐 적응 재조정
+   * · halfLifeDays 42: 2개월 반감기 → 2026년 상승 추세 레짐에 극도 집중
+   *   (v18의 126일은 하락/횡보 과거 데이터에 과도한 가중치 → 하락 편향 → 26.7% 역방향 정확도)
+   * · GBDT: 트리 300개 + LR 0.012 (더 많은 약분류기, 더 천천히 → 일반화↑)
+   * · depth 4 / leaf 10: 과적합 방지 (트리 수 증가에 따라 depth 조정)
+   * · nEnsemble 12: 시드 다양성 극대화 → 분산 감소
+   * · LSTM: epochs 150 + dropout 0.18 + lr 0.0007
+   *   (드롭아웃 낮춤 → 강세 추세 패턴 더 잘 기억)
+   * · recentWindow 30: 진짜 6주(영업일 30일) 기반 적중률 표시
    */
   KS11: {
-    gbdtTrees: 200, gbdtLR: 0.02,   gbdtDepth: 5, gbdtLeaf: 8,
-    gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 8,
-    lstmEpochs: 100, lstmLR: 0.0008, lstmDrop: 0.30,
-    recentWindow: 15,
-    halfLifeDays: 126,
+    gbdtTrees: 300, gbdtLR: 0.012,  gbdtDepth: 4, gbdtLeaf: 10,
+    gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 12,
+    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.18,
+    recentWindow: 30,
+    halfLifeDays: 42,
   },
   /** KOSDAQ — 변동성 높은 성장주 지수 */
   KQ11: {
