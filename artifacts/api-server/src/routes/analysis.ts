@@ -307,7 +307,7 @@ interface PipelineCtx {
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
-const QC_STEPS = new Set<AgentKey>([]); // debate로 품질 보장 — QC 재생성 사이클 제거
+const QC_STEPS = new Set<AgentKey>(["relative_valuation"]); // DA debate 이후 팀장 QC 추가 검증
 
 async function runQCCheck(
   stepKey: AgentKey,
