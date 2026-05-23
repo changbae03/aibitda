@@ -824,22 +824,11 @@ router.get("/brief", async (req, res) => {
     return;
   }
 
-  // ③ 캐시 없음(첫 요청 or force) → 생성해서 반환
-  try {
-    console.log("[market-brief] Gemini 브리핑 생성 중...");
-    const result = await generateBrief();
-    _briefCache = { data: result, cachedAt: Date.now() };
-    await saveBriefToDb(_briefCache);
-    console.log(`[market-brief] 완료 — sentiment: ${result.sentiment}`);
-    res.json({ ...result, cached: false });
-  } catch (err: any) {
-    console.error("[market-brief] 오류:", err?.message);
-    if (_briefCache) {
-      res.json({ ...(_briefCache.data), cached: true, stale: true });
-    } else {
-      res.status(500).json({ error: "브리핑 생성 실패" });
-    }
+  // ③ 캐시 없음(첫 요청 or force) → 블로킹하지 않고 즉시 반환 후 백그라운드 생성
+  if (!_briefRefreshing) {
+    refreshBriefInBackground("첫요청-캐시없음");
   }
+  res.json({ generating: true });
 });
 
 // GET /api/market-analysis/live-accuracy — 심볼별 실제 라이브 적중률

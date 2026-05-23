@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend,
@@ -91,6 +91,7 @@ interface MarketBrief {
   kosdaqChange: number | null;
   cached?: boolean;
   stale?: boolean;
+  generating?: boolean;
 }
 
 /* ── 색상 상수 ───────────────────────────────────────────────────────────── */
@@ -213,13 +214,20 @@ function MarketBriefSection({
       </div>
 
       <div className="p-4 space-y-5">
-        {/* 로딩 — 컴팩트 스켈레톤 (차트 렌더링 차단하지 않음) */}
+        {/* 로딩 — 컴팩트 스켈레톤 */}
         {loading && !brief && (
           <div className="space-y-2 py-3 animate-pulse">
             <div className="h-4 bg-muted/60 rounded-md w-3/4" />
             <div className="h-3 bg-muted/40 rounded-md w-full" />
             <div className="h-3 bg-muted/40 rounded-md w-5/6" />
-            <div className="h-3 bg-muted/30 rounded-md w-2/3 mt-1" />
+          </div>
+        )}
+
+        {/* 서버 브리핑 생성 중 (generating: true) */}
+        {!loading && brief?.generating && (
+          <div className="flex items-center gap-2.5 py-3 text-muted-foreground/60">
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+            <span className="text-xs">AI 분석 준비 중입니다. 잠시 후 자동으로 표시됩니다.</span>
           </div>
         )}
 
@@ -231,7 +239,7 @@ function MarketBriefSection({
           </div>
         )}
 
-        {brief && (
+        {brief && !brief.generating && (
           <>
             {/* 헤드라인 + 리드 */}
             <div className="space-y-3">
@@ -773,11 +781,21 @@ export default function MarketAnalysis() {
       .catch(() => setIsAdmin(false));
   }, []);
 
+  const briefPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchBrief = useCallback(async (force = false) => {
-    setBriefLoading(true);
+    if (!force) setBriefLoading(true);
     try {
       const r = await fetch(getApiUrl(`/api/market-analysis/brief${force ? "?force=true" : ""}`), { credentials: "include" });
-      if (r.ok) setBrief(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        setBrief(data);
+        // 아직 생성 중이면 5초 뒤 재시도
+        if (data.generating) {
+          briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
+        } else {
+          if (briefPollRef.current) clearTimeout(briefPollRef.current);
+        }
+      }
     } catch {} finally {
       setBriefLoading(false);
     }
