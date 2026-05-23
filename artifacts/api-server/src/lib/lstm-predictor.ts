@@ -172,8 +172,33 @@ export interface StoredMeta {
 
 function saveModelFile(sym: string, payload: StoredModelFile) {
   ensureDataDir();
-  fs.writeFileSync(MODEL_PATH(sym), JSON.stringify({ ...payload, version: MODEL_VERSION }));
+  const data = JSON.stringify({ ...payload, version: MODEL_VERSION });
+  fs.writeFileSync(MODEL_PATH(sym), data);
   console.log(`[gbdt] 저장: ${MODEL_PATH(sym)} (nFeatures=${payload.nFeatures}, v${MODEL_VERSION})`);
+  // DB에도 비동기 저장 (재배포 후 즉시 복원용)
+  pool.query(
+    `INSERT INTO ml_models (symbol, model_data, version, trained_at, updated_at)
+     VALUES ($1, $2, $3, NOW(), NOW())
+     ON CONFLICT (symbol) DO UPDATE
+       SET model_data = EXCLUDED.model_data,
+           version    = EXCLUDED.version,
+           updated_at = NOW()`,
+    [sym, data, MODEL_VERSION]
+  ).catch(e => console.warn(`[gbdt] DB 저장 실패 (${sym}):`, e?.message));
+}
+async function loadModelFromDb(sym: string): Promise<StoredModelFile | null> {
+  try {
+    const res = await pool.query<{ model_data: string; version: number }>(
+      `SELECT model_data, version FROM ml_models WHERE symbol = $1`, [sym]
+    );
+    if (!res.rows.length) return null;
+    const parsed = JSON.parse(res.rows[0].model_data) as StoredModelFile;
+    console.log(`[gbdt] DB 복원: ${sym} (v${res.rows[0].version})`);
+    return parsed;
+  } catch (e: any) {
+    console.warn(`[gbdt] DB 로드 실패 (${sym}):`, e?.message);
+    return null;
+  }
 }
 function loadModelFile(sym: string): StoredModelFile | null {
   const p = MODEL_PATH(sym);
@@ -184,11 +209,26 @@ function loadModelFile(sym: string): StoredModelFile | null {
 export function saveMeta(meta: StoredMeta) {
   ensureDataDir();
   fs.writeFileSync(META_PATH, JSON.stringify(meta, null, 2));
+  // DB에도 저장
+  pool.query(
+    `INSERT INTO ml_model_meta (id, meta_data, updated_at) VALUES (1, $1, NOW())
+     ON CONFLICT (id) DO UPDATE SET meta_data = EXCLUDED.meta_data, updated_at = NOW()`,
+    [JSON.stringify(meta)]
+  ).catch(e => console.warn("[gbdt] meta DB 저장 실패:", e?.message));
 }
 export function loadMeta(): StoredMeta | null {
   if (!fs.existsSync(META_PATH)) return null;
   try { return JSON.parse(fs.readFileSync(META_PATH, "utf-8")); }
   catch { return null; }
+}
+async function loadMetaFromDb(): Promise<StoredMeta | null> {
+  try {
+    const res = await pool.query<{ meta_data: string }>(
+      `SELECT meta_data FROM ml_model_meta WHERE id = 1`
+    );
+    if (!res.rows.length) return null;
+    return JSON.parse(res.rows[0].meta_data) as StoredMeta;
+  } catch { return null; }
 }
 
 // ─── Pipeline state ──────────────────────────────────────────────────────────
@@ -1385,10 +1425,37 @@ export function getStatus(): PipelineStatus & { initializing?: boolean } {
 }
 
 export async function tryRestoreFromDisk(): Promise<boolean> {
-  const meta        = loadMeta();
-  const kospiStore  = loadModelFile("KS11");
-  const kosdaqStore = loadModelFile("KQ11");
-  const snpStore    = loadModelFile("GSPC");
+  let meta        = loadMeta();
+  let kospiStore  = loadModelFile("KS11");
+  let kosdaqStore = loadModelFile("KQ11");
+  let snpStore    = loadModelFile("GSPC");
+
+  // 디스크에 없으면 DB에서 복원 시도 (재배포 후 첫 시작)
+  if (!meta || !kospiStore || !kosdaqStore || !snpStore) {
+    console.log("[gbdt] 디스크 모델 없음 → DB 복원 시도...");
+    const [dbKospi, dbKosdaq, dbSnp, dbMeta] = await Promise.all([
+      kospiStore  ? Promise.resolve(kospiStore)  : loadModelFromDb("KS11"),
+      kosdaqStore ? Promise.resolve(kosdaqStore) : loadModelFromDb("KQ11"),
+      snpStore    ? Promise.resolve(snpStore)    : loadModelFromDb("GSPC"),
+      meta        ? Promise.resolve(meta)        : loadMetaFromDb(),
+    ]);
+    if (dbKospi && dbKosdaq && dbSnp && dbMeta) {
+      // 복원된 모델을 디스크에 캐싱 (증분 업데이트가 파일을 필요로 하므로)
+      ensureDataDir();
+      if (!kospiStore)  { fs.writeFileSync(MODEL_PATH("KS11"),  JSON.stringify(dbKospi));  }
+      if (!kosdaqStore) { fs.writeFileSync(MODEL_PATH("KQ11"),  JSON.stringify(dbKosdaq)); }
+      if (!snpStore)    { fs.writeFileSync(MODEL_PATH("GSPC"),  JSON.stringify(dbSnp));    }
+      if (!meta)        { fs.writeFileSync(META_PATH, JSON.stringify(dbMeta, null, 2));    }
+      // IXIC도 있으면 복원
+      const dbIxic = await loadModelFromDb("IXIC");
+      if (dbIxic) fs.writeFileSync(MODEL_PATH("IXIC"), JSON.stringify(dbIxic));
+      kospiStore = dbKospi; kosdaqStore = dbKosdaq; snpStore = dbSnp; meta = dbMeta;
+      console.log("[gbdt] DB에서 모델 복원 완료 — 즉시 예측 서빙 가능");
+    } else {
+      console.log("[gbdt] DB에도 모델 없음 → 전체 재학습 필요");
+      return false;
+    }
+  }
   if (!meta||!kospiStore||!kosdaqStore||!snpStore) return false;
 
   if (!kospiStore.lstmWeights || !kosdaqStore.lstmWeights || !snpStore.lstmWeights) {

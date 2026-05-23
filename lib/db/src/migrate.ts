@@ -546,6 +546,23 @@ export async function runMigrations() {
         ON us_stocks (data_fetched, last_updated ASC);
     `);
 
+    // ML 모델 DB 저장 (재배포 후 즉시 복원용)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ml_models (
+        symbol      VARCHAR(10)  PRIMARY KEY,
+        model_data  TEXT         NOT NULL,
+        version     INTEGER      NOT NULL,
+        trained_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS ml_model_meta (
+        id          INTEGER      PRIMARY KEY DEFAULT 1,
+        meta_data   TEXT         NOT NULL,
+        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();
