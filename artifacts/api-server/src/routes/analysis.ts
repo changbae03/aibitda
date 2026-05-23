@@ -307,7 +307,7 @@ interface PipelineCtx {
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
-const QC_STEPS = new Set<AgentKey>(["relative_valuation"]); // DA debate 이후 팀장 QC 추가 검증
+const QC_STEPS = new Set<AgentKey>(["relative_valuation", "company_analysis"]); // DA debate 이후 팀장 QC 추가 검증
 
 async function runQCCheck(
   stepKey: AgentKey,
