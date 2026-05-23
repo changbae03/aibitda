@@ -308,7 +308,7 @@ interface PipelineCtx {
 
 // ─── Lead Portfolio Strategist QC Check ──────────────────────────────────────
 
-const QC_STEPS = new Set<AgentKey>(["relative_valuation"]);
+const QC_STEPS = new Set<AgentKey>([]); // debate로 품질 보장 — QC 재생성 사이클 제거
 
 async function runQCCheck(
   stepKey: AgentKey,
@@ -5255,10 +5255,11 @@ async function executeStep(
 
   let content = "";
   try {
-    // 토큰 한도: company_analysis·relative_valuation은 32k 유지 (잘림 방지)
-    // 나머지 5개 단계는 6k (원래 8k에서 절감)
+    // 토큰 한도: company_analysis만 32k (긴 재무 테이블), relative_valuation은 16k (debate로 품질 보장)
     const maxOutputTokens =
-      (stepKey === "company_analysis" || stepKey === "relative_valuation") ? 32768 : 6144;
+      stepKey === "company_analysis" ? 32768
+      : stepKey === "relative_valuation" ? 16384
+      : 6144;
 
     // 일시적 오류(503 UNAVAILABLE, 타임아웃, 429 Rate Limit) 여부 판별
     const isTransient = (err: unknown) => {
