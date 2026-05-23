@@ -454,8 +454,8 @@ ${excerpt}
 
 // ─── Devil's Advocate Debate (company_analysis & relative_valuation) ─────────
 
-// Debate는 목표주가 산출(relative_valuation)에만 유지 — company_analysis는 QC 검증으로 대체
-const DEBATE_STEPS = new Set<AgentKey>(["relative_valuation"]);
+// Debate 제거 — 속도 최적화 (3 Gemini 호출 → 1 Gemini 호출)
+const DEBATE_STEPS = new Set<AgentKey>([]);
 
 // ── 사전 수집 캐시: company_analysis 실행 중 피어 데이터를, relative_valuation 실행 중 주봉 MA를 미리 수집 ──
 const preFetchedPeerData = new Map<number, Promise<{ peers: any[]; data: string }>>();
