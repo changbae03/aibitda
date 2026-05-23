@@ -90,6 +90,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("framer-motion"))   return "vendor-motion";
+          if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) return "vendor-charts";
+          if (id.includes("@clerk/"))         return "vendor-clerk";
+          if (id.includes("@tanstack/"))      return "vendor-query";
+          if (id.includes("lucide-react"))    return "vendor-icons";
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
@@ -9,50 +9,64 @@ import { CommandPalette } from "@/components/ui/command-palette";
 import { LanguageProvider, useLanguage } from "@/lib/language-context";
 import { AppLayout } from "@/components/layout/app-layout";
 import { motion, AnimatePresence } from "framer-motion";
-import NotFound from "@/pages/not-found";
-
-// Pages
-import NewAnalysis from "@/pages/new-analysis";
-import AnalysisDetail from "@/pages/analysis-detail";
-import History from "@/pages/history";
-import Login from "@/pages/login";
-import Landing from "@/pages/landing";
-import ModelInsights from "@/pages/model-insights";
-import News from "@/pages/news";
-import Reports from "@/pages/reports";
-import AdminLive from "@/pages/admin-live";
-import AdminAnalyses from "@/pages/admin-analyses";
-import AdminTickerNotes from "@/pages/admin-ticker-notes";
-import AdminUsers from "@/pages/admin-users";
-import AdminFeedback from "@/pages/admin-feedback";
-import AdminUserManagement from "@/pages/admin-user-management";
-import AdminDashboard from "@/pages/admin-dashboard";
-import Stats from "@/pages/stats";
-import Tracker from "@/pages/tracker";
-import Popular from "@/pages/popular";
-import Browse from "@/pages/browse";
-import SettingsPage from "@/pages/settings";
-import AboutPage from "@/pages/about";
-import SharePage from "@/pages/share";
-import CalendarPage from "@/pages/calendar";
-import AdminPromoCodes from "@/pages/admin-promo-codes";
-import AdminSupportPage from "@/pages/admin-support";
-import AdminNoticesPage from "@/pages/admin-notices";
-import AdminCalibration from "@/pages/admin-calibration";
-import AdminQuality from "@/pages/admin-quality";
-import AdminBatchReports from "@/pages/admin-batch-reports";
-import AdminPortfolios from "@/pages/admin-portfolios";
-import PrivacyPage from "@/pages/privacy";
-import TermsPage from "@/pages/terms";
-import DisclaimerPage from "@/pages/disclaimer";
-import SupportPage from "@/pages/support";
-import NoticesPage from "@/pages/notices";
-import Portfolio from "@/pages/portfolio";
-import MarketAnalysis from "@/pages/market-analysis";
-import MyPage from "@/pages/mypage";
-import ConsentModal from "@/components/consent-modal";
 import { useAuth } from "@/lib/auth";
 
+// ── Lazy-loaded pages ──────────────────────────────────────────────────────────
+// 각 페이지를 별도 청크로 분리 → 초기 번들 대폭 감소
+const Landing          = lazy(() => import("@/pages/landing"));
+const Login            = lazy(() => import("@/pages/login"));
+const NewAnalysis      = lazy(() => import("@/pages/new-analysis"));
+const AnalysisDetail   = lazy(() => import("@/pages/analysis-detail"));
+const History          = lazy(() => import("@/pages/history"));
+const ModelInsights    = lazy(() => import("@/pages/model-insights"));
+const News             = lazy(() => import("@/pages/news"));
+const Reports          = lazy(() => import("@/pages/reports"));
+const Stats            = lazy(() => import("@/pages/stats"));
+const Tracker          = lazy(() => import("@/pages/tracker"));
+const Popular          = lazy(() => import("@/pages/popular"));
+const Browse           = lazy(() => import("@/pages/browse"));
+const SettingsPage     = lazy(() => import("@/pages/settings"));
+const AboutPage        = lazy(() => import("@/pages/about"));
+const SharePage        = lazy(() => import("@/pages/share"));
+const CalendarPage     = lazy(() => import("@/pages/calendar"));
+const MarketAnalysis   = lazy(() => import("@/pages/market-analysis"));
+const Portfolio        = lazy(() => import("@/pages/portfolio"));
+const MyPage           = lazy(() => import("@/pages/mypage"));
+const PrivacyPage      = lazy(() => import("@/pages/privacy"));
+const TermsPage        = lazy(() => import("@/pages/terms"));
+const DisclaimerPage   = lazy(() => import("@/pages/disclaimer"));
+const SupportPage      = lazy(() => import("@/pages/support"));
+const NoticesPage      = lazy(() => import("@/pages/notices"));
+const NotFound         = lazy(() => import("@/pages/not-found"));
+
+// Admin pages — 일반 사용자 접근 없으므로 별도 청크로 완전 분리
+const AdminLive            = lazy(() => import("@/pages/admin-live"));
+const AdminAnalyses        = lazy(() => import("@/pages/admin-analyses"));
+const AdminTickerNotes     = lazy(() => import("@/pages/admin-ticker-notes"));
+const AdminUsers           = lazy(() => import("@/pages/admin-users"));
+const AdminFeedback        = lazy(() => import("@/pages/admin-feedback"));
+const AdminUserManagement  = lazy(() => import("@/pages/admin-user-management"));
+const AdminDashboard       = lazy(() => import("@/pages/admin-dashboard"));
+const AdminPromoCodes      = lazy(() => import("@/pages/admin-promo-codes"));
+const AdminSupportPage     = lazy(() => import("@/pages/admin-support"));
+const AdminNoticesPage     = lazy(() => import("@/pages/admin-notices"));
+const AdminCalibration     = lazy(() => import("@/pages/admin-calibration"));
+const AdminQuality         = lazy(() => import("@/pages/admin-quality"));
+const AdminBatchReports    = lazy(() => import("@/pages/admin-batch-reports"));
+const AdminPortfolios      = lazy(() => import("@/pages/admin-portfolios"));
+
+const ConsentModal = lazy(() => import("@/components/consent-modal"));
+
+// ── Page loader fallback ───────────────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+      <div className="w-5 h-5 rounded-full border-2 border-[#FF8A7A] border-t-transparent animate-spin" />
+    </div>
+  );
+}
+
+// ── Splash screen ──────────────────────────────────────────────────────────────
 const CORAL = "#FF8A7A";
 const CHARS_KO = ["애", "빛", "다"];
 const CHARS_EN = ["A", "i", "B", "I", "T", "D", "A"];
@@ -133,6 +147,7 @@ function GlobalSplash() {
   );
 }
 
+// ── QueryClient ────────────────────────────────────────────────────────────────
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -172,8 +187,6 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function SignInPage() {
-  // To update login providers, app branding, or OAuth settings use the Auth
-  // pane in the workspace toolbar. More information can be found in the Replit docs.
   return (
     <div className="flex justify-center mt-8">
       <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-in`} />
@@ -221,62 +234,70 @@ function ConsentGate() {
   const user = data?.user;
   if (!user || user.consented || dismissed) return null;
 
-  return <ConsentModal onConsented={handleConsented} />;
+  return (
+    <Suspense fallback={null}>
+      <ConsentModal onConsented={handleConsented} />
+    </Suspense>
+  );
 }
 
 function Router() {
   return (
-    <Switch>
-      {/* 풀스크린 페이지 (사이드바 없음) */}
-      <Route path="/" component={Landing} />
-      <Route path="/login" component={Landing} />
-      <Route path="/sign-in/*?" component={SignInPage} />
-      <Route path="/share/:id" component={SharePage} />
-      <Route path="/terms" component={PublicTermsPage} />
-      <Route path="/privacy" component={PublicPrivacyPage} />
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        {/* 풀스크린 페이지 (사이드바 없음) */}
+        <Route path="/" component={Landing} />
+        <Route path="/login" component={Landing} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/share/:id" component={SharePage} />
+        <Route path="/terms" component={PublicTermsPage} />
+        <Route path="/privacy" component={PublicPrivacyPage} />
 
-      {/* 사이드바 있는 앱 페이지 */}
-      <Route>
-        <AppLayout>
-          <Switch>
-            <Route path="/analysis/new" component={NewAnalysis} />
-            <Route path="/analysis/:id" component={AnalysisDetail} />
-            <Route path="/browse" component={Browse} />
-            <Route path="/history" component={History} />
-            <Route path="/reports" component={Reports} />
-            <Route path="/model-insights" component={ModelInsights} />
-            <Route path="/news" component={News} />
-            <Route path="/stats" component={Stats} />
-            <Route path="/tracker" component={Tracker} />
-            <Route path="/popular" component={Popular} />
-            <Route path="/admin/live" component={AdminLive} />
-            <Route path="/admin/analyses" component={AdminAnalyses} />
-            <Route path="/admin/ticker-notes" component={AdminTickerNotes} />
-            <Route path="/admin/feedback" component={AdminFeedback} />
-            <Route path="/admin/users" component={AdminUsers} />
-            <Route path="/admin/user-management" component={AdminUserManagement} />
-            <Route path="/admin/dashboard" component={AdminDashboard} />
-            <Route path="/settings" component={SettingsPage} />
-            <Route path="/about" component={AboutPage} />
-            <Route path="/calendar" component={CalendarPage} />
-            <Route path="/admin/promo-codes" component={AdminPromoCodes} />
-            <Route path="/admin/support" component={AdminSupportPage} />
-            <Route path="/admin/notices" component={AdminNoticesPage} />
-            <Route path="/admin/calibration" component={AdminCalibration} />
-            <Route path="/admin/quality" component={AdminQuality} />
-            <Route path="/admin/batch-reports" component={AdminBatchReports} />
-            <Route path="/admin/portfolios" component={AdminPortfolios} />
-            <Route path="/market-analysis" component={MarketAnalysis} />
-            <Route path="/portfolio" component={Portfolio} />
-            <Route path="/mypage" component={MyPage} />
-            <Route path="/disclaimer" component={DisclaimerPage} />
-            <Route path="/support" component={SupportPage} />
-            <Route path="/notices" component={NoticesPage} />
-            <Route component={NotFound} />
-          </Switch>
-        </AppLayout>
-      </Route>
-    </Switch>
+        {/* 사이드바 있는 앱 페이지 */}
+        <Route>
+          <AppLayout>
+            <Suspense fallback={<PageLoader />}>
+              <Switch>
+                <Route path="/analysis/new" component={NewAnalysis} />
+                <Route path="/analysis/:id" component={AnalysisDetail} />
+                <Route path="/browse" component={Browse} />
+                <Route path="/history" component={History} />
+                <Route path="/reports" component={Reports} />
+                <Route path="/model-insights" component={ModelInsights} />
+                <Route path="/news" component={News} />
+                <Route path="/stats" component={Stats} />
+                <Route path="/tracker" component={Tracker} />
+                <Route path="/popular" component={Popular} />
+                <Route path="/admin/live" component={AdminLive} />
+                <Route path="/admin/analyses" component={AdminAnalyses} />
+                <Route path="/admin/ticker-notes" component={AdminTickerNotes} />
+                <Route path="/admin/feedback" component={AdminFeedback} />
+                <Route path="/admin/users" component={AdminUsers} />
+                <Route path="/admin/user-management" component={AdminUserManagement} />
+                <Route path="/admin/dashboard" component={AdminDashboard} />
+                <Route path="/settings" component={SettingsPage} />
+                <Route path="/about" component={AboutPage} />
+                <Route path="/calendar" component={CalendarPage} />
+                <Route path="/admin/promo-codes" component={AdminPromoCodes} />
+                <Route path="/admin/support" component={AdminSupportPage} />
+                <Route path="/admin/notices" component={AdminNoticesPage} />
+                <Route path="/admin/calibration" component={AdminCalibration} />
+                <Route path="/admin/quality" component={AdminQuality} />
+                <Route path="/admin/batch-reports" component={AdminBatchReports} />
+                <Route path="/admin/portfolios" component={AdminPortfolios} />
+                <Route path="/market-analysis" component={MarketAnalysis} />
+                <Route path="/portfolio" component={Portfolio} />
+                <Route path="/mypage" component={MyPage} />
+                <Route path="/disclaimer" component={DisclaimerPage} />
+                <Route path="/support" component={SupportPage} />
+                <Route path="/notices" component={NoticesPage} />
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
+          </AppLayout>
+        </Route>
+      </Switch>
+    </Suspense>
   );
 }
 
