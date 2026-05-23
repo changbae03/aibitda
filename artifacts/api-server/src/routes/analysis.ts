@@ -454,8 +454,8 @@ ${excerpt}
 
 // ─── Devil's Advocate Debate (company_analysis & relative_valuation) ─────────
 
-// Debate 제거 — 속도 최적화 (3 Gemini 호출 → 1 Gemini 호출)
-const DEBATE_STEPS = new Set<AgentKey>([]);
+// Debate는 목표주가 산출(relative_valuation)에만 유지 — company_analysis는 QC 검증으로 대체
+const DEBATE_STEPS = new Set<AgentKey>(["relative_valuation"]);
 
 // ── 사전 수집 캐시: company_analysis 실행 중 피어 데이터를, relative_valuation 실행 중 주봉 MA를 미리 수집 ──
 const preFetchedPeerData = new Map<number, Promise<{ peers: any[]; data: string }>>();
@@ -5398,16 +5398,18 @@ async function executeStep(
           onEvent?.({ debate: "synthesizing" });
 
           const isEnLang = (analysis as any).language === 'en';
+          // Round 1 초안에서 핵심 섹션만 추출 (입력 토큰 절감: 전체 초안 대신 앞 4000자만 전달)
+          const draftExcerpt = content.slice(0, 4000) + (content.length > 4000 ? "\n...[중략 — 상세 테이블 생략]...\n" + content.slice(-2000) : "");
           const synthesisInstruction = isEnLang
             ? (stepKey === "company_analysis"
-              ? `\n\n---\n[Round 1 Draft — Base this revision on the draft below]\n${content}\n\n---\n[Internal Review — Devil's Advocate Feedback]\n${challengerFeedback}\n\n[Instruction] Review the 3 challenges above. Incorporate valid criticisms by supplementing figures and arguments; rebut points you disagree with using specific evidence. Maintain the existing report format, length, and structure — do NOT shorten the report. Do not expose the challenge items as a separate section. Write the final version ENTIRELY in English.`
-              : `\n\n---\n[Round 1 초안 — 아래 초안을 기반으로 수정하세요]\n${content}\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[Instruction] Review the 3 challenges above. Re-examine WACC, growth rate, and multiple assumptions. Incorporate valid criticisms with updated figures; rebut points you disagree with using specific evidence. Maintain the existing report format (DCF table, FINAL_VALUATION_DATA JSON included). Write the final version ENTIRELY in English.`)
+              ? `\n\n---\n[Round 1 Draft]\n${draftExcerpt}\n\n---\n[Devil's Advocate Feedback]\n${challengerFeedback}\n\n[Instruction] Incorporate valid criticisms with updated figures; rebut invalid ones with evidence. Write a complete, focused final report. Do not expose challenge items as a separate section. Write ENTIRELY in English.`
+              : `\n\n---\n[Round 1 Draft]\n${draftExcerpt}\n\n---\n[Valuation Skeptic Feedback]\n${challengerFeedback}\n\n[Instruction] Re-examine WACC, growth rate, and multiple assumptions. Update figures where criticism is valid; rebut where it is not. Write a complete valuation report with DCF/peer table and FINAL_VALUATION_DATA JSON. Write ENTIRELY in English.`)
             : (stepKey === "company_analysis"
-              ? `\n\n---\n[Round 1 초안 — 아래 초안을 기반으로 수정하세요]\n${content}\n\n---\n[내부 검토 — Devil's Advocate 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 기존 보고서의 형식·구조·분량을 그대로 유지하면서(줄이지 마세요) 최종 완성본을 작성하세요. 반론 항목을 별도 섹션으로 노출하지 마세요.`
-              : `\n\n---\n[Round 1 초안 — 아래 초안을 기반으로 수정하세요]\n${content}\n\n---\n[내부 검토 — Valuation Skeptic 반론 피드백]\n${challengerFeedback}\n\n[지시] 위 3가지 반론을 검토하세요. WACC·성장률·멀티플 가정을 재점검하고, 타당한 지적은 수치를 보완하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. 기존 보고서의 형식(DCF 테이블, FINAL_VALUATION_DATA JSON 포함)과 분량을 그대로 유지하면서(줄이지 마세요) 최종 완성본을 작성하세요.`);
+              ? `\n\n---\n[Round 1 초안]\n${draftExcerpt}\n\n---\n[Devil's Advocate 반론]\n${challengerFeedback}\n\n[지시] 타당한 지적은 수치·논거를 보완하여 반영하고, 동의하지 않는 부분은 구체적 근거로 반박하세요. 반론 항목을 별도 섹션으로 노출하지 말고 최종 완성본을 간결하게 작성하세요.`
+              : `\n\n---\n[Round 1 초안]\n${draftExcerpt}\n\n---\n[Valuation Skeptic 반론]\n${challengerFeedback}\n\n[지시] WACC·성장률·멀티플 가정을 재점검하세요. 타당한 지적은 수치를 수정하여 반영, 동의하지 않으면 구체적 근거로 반박하세요. DCF 또는 피어 테이블과 FINAL_VALUATION_DATA JSON을 포함한 최종 밸류에이션 보고서를 간결하게 작성하세요.`);
 
           const synthesisUserPrompt = userPrompt + synthesisInstruction;
-          const synthesisMaxTokens = 16384; // Debate 합성: 16k (속도·품질 균형)
+          const synthesisMaxTokens = 10240; // 속도 최적화: 16k→10k (반론 반영 집중으로 분량 단축)
 
           await geminiSemaphore.acquire();
           let synthesizedContent = "";
