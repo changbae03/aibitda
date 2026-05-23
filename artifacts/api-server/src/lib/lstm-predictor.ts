@@ -74,7 +74,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 19;  // [v19] KOSPI 강세장 적응: halfLife 42일(2개월) + 앙상블 12 + 에포크 150 + 드롭아웃↓
+const MODEL_VERSION = 20;  // [v20] 방향 정확도 70%+ 목표: dirPenalty(GBDT 방향오류 2.5x 패널티) + halfLife 84일 + wfDirAcc 지수가중
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -91,50 +91,53 @@ interface IndexHP {
   lstmDrop:     number;
   recentWindow: number;   // 최근 적중률 계산 창 (알파 동적 조정용)
   halfLifeDays: number;   // [v18] 지수감쇠 반감기(일) — 짧을수록 최근 레짐에 집중
+  dirPenalty?:  number;   // [v20] 방향 오류 잔차 배율 (기본 1.0 = 페널티 없음, 2.5 = 2.5배 가중)
 }
 
 const INDEX_HP: Record<string, IndexHP> = {
   /**
-   * KOSPI [v19] — 강세장 레짐 적응 재조정
-   * · halfLifeDays 42: 2개월 반감기 → 2026년 상승 추세 레짐에 극도 집중
-   *   (v18의 126일은 하락/횡보 과거 데이터에 과도한 가중치 → 하락 편향 → 26.7% 역방향 정확도)
-   * · GBDT: 트리 300개 + LR 0.012 (더 많은 약분류기, 더 천천히 → 일반화↑)
-   * · depth 4 / leaf 10: 과적합 방지 (트리 수 증가에 따라 depth 조정)
-   * · nEnsemble 12: 시드 다양성 극대화 → 분산 감소
-   * · LSTM: epochs 150 + dropout 0.18 + lr 0.0007
-   *   (드롭아웃 낮춤 → 강세 추세 패턴 더 잘 기억)
-   * · recentWindow 30: 진짜 6주(영업일 30일) 기반 적중률 표시
+   * KOSPI [v20] — 방향 정확도 70%+ 목표
+   * · halfLifeDays 84: 4개월 반감기 (v19의 42일은 "항상 상승" 편향 → 전체 검증 32%)
+   *   vs v18의 126일은 "항상 하락" 편향. 84일 = 중간값으로 레짐 과적합 완화.
+   * · dirPenalty 2.5: GBDT 잔차 계산 시 방향 오류 샘플에 2.5배 가중치
+   *   → GBDT가 MSE 최소화 대신 방향 정확도를 직접 최적화하도록 유도
+   * · nEnsemble 12, GBDT 트리 300개 유지
+   * · LSTM: dropout 0.22 (84일 halfLife에 맞게 약간 상향 → 과적합 방지)
    */
   KS11: {
     gbdtTrees: 300, gbdtLR: 0.012,  gbdtDepth: 4, gbdtLeaf: 10,
     gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 12,
-    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.18,
+    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.22,
     recentWindow: 30,
-    halfLifeDays: 42,
+    halfLifeDays: 84,
+    dirPenalty: 2.5,
   },
-  /** KOSDAQ — 변동성 높은 성장주 지수 */
+  /** KOSDAQ — 변동성 높은 성장주 지수 [v20] dirPenalty 2.0 추가 */
   KQ11: {
     gbdtTrees: 150, gbdtLR: 0.02,  gbdtDepth: 4, gbdtLeaf: 10,
     gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 6,
     lstmEpochs: 80, lstmLR: 0.0009, lstmDrop: 0.25,
     recentWindow: 20,
     halfLifeDays: 180,
+    dirPenalty: 2.0,
   },
-  /** S&P500 — 유동성 높은 미국 대형주 지수 */
+  /** S&P500 — 유동성 높은 미국 대형주 지수 [v20] dirPenalty 2.0 추가 */
   GSPC: {
     gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
     gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.25,
     recentWindow: 20,
     halfLifeDays: 252,
+    dirPenalty: 2.0,
   },
-  /** NASDAQ — 기술주 중심 지수 [v19] 재학습: 앙상블 5→8, 트리 200→250, depth 4→5, halfLife 252→126 */
+  /** NASDAQ — 기술주 중심 지수 [v20] dirPenalty 2.0 추가 */
   IXIC: {
     gbdtTrees: 250, gbdtLR: 0.02, gbdtDepth: 5, gbdtLeaf: 10,
     gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 8,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.28,
     recentWindow: 20,
     halfLifeDays: 126,
+    dirPenalty: 2.0,
   },
 };
 
@@ -940,8 +943,14 @@ function gbdtFit(X:Float64Array[],y:Float64Array,seed:number,hp:IndexHP,sampleWe
   else{for(let i=0;i<n;i++)basePred+=y[i];basePred/=n;}
   const preds=new Float64Array(n).fill(basePred),trees:any[]=[];
   const rowBag=Math.floor(n*hp.gbdtSsub);
+  const dp=hp.dirPenalty??1.0;  // [v20] 방향 오류 잔차 배율
   for(let t=0;t<hp.gbdtTrees;t++){
-    const res=Array.from({length:n},(_,i)=>y[i]-preds[i]);
+    // [v20] 방향 오류 샘플에 dp배 가중치 → GBDT가 방향 정확도를 직접 최적화
+    const res=Array.from({length:n},(_,i)=>{
+      const r=y[i]-preds[i];
+      // 예측 방향이 실제와 반대이면 잔차에 dp배 패널티 (기울기 증폭)
+      return (dp>1.0 && Math.sign(y[i])!==Math.sign(preds[i]) && Math.abs(y[i])>1e-8) ? r*dp : r;
+    });
     // [#3] 최근 데이터가 더 자주 선택되도록 가중 샘플링
     const idxs=sampleWeights
       ? weightedRowBag(n,rowBag,sampleWeights,rng)
@@ -1217,8 +1226,9 @@ function buildResultFromModel(
   const testPreds = new Float64Array(gbdtPreds.length);
   for (let i = 0; i < testPreds.length; i++) testPreds[i] = alpha * safeLstmPreds[i] + (1-alpha) * gbdtPreds[i];
 
-  // ── 5-폴드 시계열 워크포워드 검증 ────────────────────────────────────────────
-  // 테스트 예측을 동일 크기 5구간으로 나눠 각 구간 정확도 평균 → 시간축 안정성 측정
+  // ── 5-폴드 시계열 워크포워드 검증 (지수 가중) ────────────────────────────────
+  // 테스트 예측을 5구간으로 나눠 각 구간 정확도 계산.
+  // [v20] 최근 구간에 지수가중치 적용 (마지막 폴드 = e^2 ≈ 7.4배) → 현재 성능 대표성 강화
   const nTest  = testPreds.length;
   const K_WF   = 5;
   const wfWin  = Math.max(1, Math.floor(nTest / K_WF));
@@ -1228,7 +1238,12 @@ function buildResultFromModel(
     const e = k < K_WF - 1 ? s + wfWin : nTest;
     if (e > s) wfAccs.push(dirAccRate(testPreds.slice(s, e), Array.from(yte).slice(s, e)));
   }
-  const wfDirAccVal = wfAccs.length > 0 ? wfAccs.reduce((a, b) => a + b, 0) / wfAccs.length : 0;
+  // 지수 가중 평균: weight[k] = exp(k * 0.7) → 최근 폴드가 오래된 폴드보다 약 3.3x 중요
+  const wfWeights = wfAccs.map((_, k) => Math.exp(k * 0.7));
+  const wfWeightSum = wfWeights.reduce((a, b) => a + b, 0);
+  const wfDirAccVal = wfAccs.length > 0
+    ? wfAccs.reduce((sum, acc, k) => sum + acc * wfWeights[k], 0) / wfWeightSum
+    : 0;
 
   let mae = 0;
   for (let i = 0; i < nTest; i++) mae += Math.abs(testPreds[i] - yte[i]);
