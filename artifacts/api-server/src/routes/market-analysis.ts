@@ -84,8 +84,15 @@ async function loadBriefFromDb(): Promise<void> {
         _briefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
         console.log("[market-brief] DB 캐시 복원 성공 (즉시 서빙 가능)");
       } else {
-        console.log("[market-brief] DB 캐시 만료 — 다음 요청 시 재생성");
+        // 만료된 캐시도 일단 복원해 두고 (유저가 즉시 볼 수 있도록) 백그라운드 갱신
+        _briefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
+        console.log("[market-brief] DB 캐시 만료 — 복원 후 백그라운드 갱신 시작");
+        setTimeout(() => refreshBriefInBackground("서버시작-만료캐시"), 5000);
       }
+    } else {
+      // 캐시 없음 — 서버 시작 후 바로 생성
+      console.log("[market-brief] DB 캐시 없음 — 백그라운드 생성 시작");
+      setTimeout(() => refreshBriefInBackground("서버시작-최초생성"), 8000);
     }
   } catch (err: any) {
     console.error("[market-brief] DB 복원 실패:", err?.message);
@@ -95,10 +102,27 @@ async function loadBriefFromDb(): Promise<void> {
 // 모듈 로드 시 DB 캐시 자동 복원
 loadBriefFromDb().catch(() => {});
 
-/** 스케줄러에서 호출 — 다음 요청 시 Gemini 브리핑을 새로 생성하도록 캐시 무효화 */
+/** 스케줄러에서 호출 — 백그라운드에서 즉시 브리핑 생성 시작 (유저 대기 없음) */
+export function refreshBriefInBackground(reason = "") {
+  if (_briefRefreshing) {
+    console.log("[market-brief] 이미 갱신 중 — 스킵");
+    return;
+  }
+  _briefRefreshing = true;
+  console.log(`[market-brief] 백그라운드 갱신 시작${reason ? ` (${reason})` : ""}`);
+  generateBrief()
+    .then(result => {
+      _briefCache = { data: result, cachedAt: Date.now() };
+      return saveBriefToDb(_briefCache);
+    })
+    .then(() => console.log("[market-brief] 백그라운드 갱신 완료"))
+    .catch(err => console.error("[market-brief] 백그라운드 갱신 실패:", err?.message))
+    .finally(() => { _briefRefreshing = false; });
+}
+
+/** @deprecated 캐시를 null로 만들면 다음 요청이 60~90초 대기함 — refreshBriefInBackground 사용 */
 export function invalidateBriefCache() {
-  _briefCache = null;
-  console.log("[market-brief] 캐시 초기화 — 다음 요청 시 재생성");
+  refreshBriefInBackground("스케줄러 캐시 무효화");
 }
 
 export interface MarketBriefResult {
