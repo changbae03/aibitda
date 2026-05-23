@@ -46,7 +46,7 @@ router.get("/macro-reports", async (req, res) => {
   await ensureTable();
   try {
     const rows = await q(
-      `SELECT id, title, category, summary, created_at, updated_at FROM macro_reports WHERE is_published = true ORDER BY created_at DESC`
+      `SELECT id, title, category, summary, is_published, created_at, updated_at FROM macro_reports WHERE is_published = true ORDER BY created_at DESC`
     );
     res.json(rows);
   } catch (err: any) {
