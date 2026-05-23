@@ -92,13 +92,25 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
   );
 }
 
-const NAV_ITEMS = [
-  { href: "/analysis/new",    label: "AI 기업분석",   labelEn: "AI Analysis",     Icon: Sparkles },
-  { href: "/portfolio",       label: "내 포트폴리오",  labelEn: "Portfolio",        Icon: Briefcase },
-  { href: "/history",         label: "내가 본 자료",   labelEn: "My Reports",      Icon: BookOpen },
-  { href: "/popular",         label: "애빛다 통계",    labelEn: "Statistics",      Icon: BarChart2 },
-  { href: "/market-analysis", label: "시장분석",       labelEn: "Market Analysis", Icon: LineChart },
-  { href: "/calendar",        label: "마켓 캘린더",    labelEn: "Market Calendar", Icon: CalendarDays },
+const NAV_GROUPS = [
+  {
+    label: "기업분석",
+    labelEn: "Company",
+    items: [
+      { href: "/analysis/new", label: "AI 기업분석",  labelEn: "AI Analysis", Icon: Sparkles },
+      { href: "/portfolio",    label: "내 포트폴리오", labelEn: "Portfolio",   Icon: Briefcase },
+      { href: "/history",      label: "내가 본 자료",  labelEn: "My Reports",  Icon: BookOpen },
+      { href: "/popular",      label: "애빛다 통계",   labelEn: "Statistics",  Icon: BarChart2 },
+    ],
+  },
+  {
+    label: "매크로 분석",
+    labelEn: "Macro",
+    items: [
+      { href: "/market-analysis", label: "시장분석",     labelEn: "Market Analysis", Icon: LineChart },
+      { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
+    ],
+  },
 ];
 
 const ADMIN_GROUPS = [
@@ -239,33 +251,52 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const NavLinks = ({ onSelect, expanded }: { onSelect?: () => void; expanded?: boolean }) => (
     <>
-      {NAV_ITEMS.map(({ href, label, labelEn, Icon }) => {
-        const isActive =
-          location === href || (href !== "/" && location.startsWith(href));
-        const displayLabel = isEn ? labelEn : label;
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onSelect}
-            title={!expanded ? displayLabel : undefined}
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150 overflow-hidden",
-              isActive
-                ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent"
-            )}
-          >
-            <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground/60")} />
+      {NAV_GROUPS.map((group, gi) => (
+        <div key={group.label} className={cn(gi > 0 && "mt-1")}>
+          <div className={cn(
+            "flex items-center overflow-hidden transition-[opacity,max-height,margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+            expanded
+              ? "opacity-100 max-h-8 mb-1 mt-0.5 delay-75"
+              : "opacity-0 max-h-0 mb-0 mt-0 delay-0"
+          )}>
+            {gi > 0 && <div className="mx-3 border-t border-border/60 flex-1" />}
             <span className={cn(
-              "whitespace-nowrap transition-[opacity,max-width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-              expanded ? "opacity-100 max-w-[160px] delay-75" : "opacity-0 max-w-0 overflow-hidden delay-0"
+              "text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground/50 whitespace-nowrap",
+              gi > 0 ? "px-3" : "px-3"
             )}>
-              {displayLabel}
+              {isEn ? group.labelEn : group.label}
             </span>
-          </Link>
-        );
-      })}
+            {gi === 0 && <div className="mr-3 border-t border-border/60 flex-1" />}
+          </div>
+          {group.items.map(({ href, label, labelEn, Icon }) => {
+            const isActive =
+              location === href || (href !== "/" && location.startsWith(href));
+            const displayLabel = isEn ? labelEn : label;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onSelect}
+                title={!expanded ? displayLabel : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-150 overflow-hidden",
+                  isActive
+                    ? "bg-[#FF8A7A]/12 text-[#FF8A7A] font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                )}
+              >
+                <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground/60")} />
+                <span className={cn(
+                  "whitespace-nowrap transition-[opacity,max-width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+                  expanded ? "opacity-100 max-w-[160px] delay-75" : "opacity-0 max-w-0 overflow-hidden delay-0"
+                )}>
+                  {displayLabel}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </>
   );
 
