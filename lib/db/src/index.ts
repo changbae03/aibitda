@@ -28,9 +28,15 @@ const connectionString = rawUrl
 export const pool = new Pool({
   connectionString,
   ssl: sslDisabled ? false : { rejectUnauthorized: false },
-  max: 20,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
+  max: 10,
+  idleTimeoutMillis: 10_000,       // 10s — Neon 휴면 전에 연결 해제
+  connectionTimeoutMillis: 15_000, // 15s — Neon cold-start 대기
+  allowExitOnIdle: true,
+});
+
+// 끊긴 연결 에러 전파 방지 (Neon 서버리스 환경에서 흔함)
+pool.on("error", (err) => {
+  console.warn("[DB] pool idle client error (ignored):", err.message?.slice(0, 80));
 });
 export const db = drizzle(pool, { schema });
 

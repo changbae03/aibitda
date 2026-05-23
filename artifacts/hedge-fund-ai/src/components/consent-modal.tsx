@@ -16,9 +16,12 @@ export default function ConsentModal({ onConsented }: Props) {
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleConsent() {
+    if (loading) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(getApiUrl("/api/auth/consent"), {
         method: "POST",
@@ -27,12 +30,16 @@ export default function ConsentModal({ onConsented }: Props) {
       if (res.ok) {
         await qc.invalidateQueries({ queryKey: ["auth/me"] });
         onConsented();
-        // 랜딩 또는 로그인 페이지에 있는 경우 분석 페이지로 이동
         const cur = window.location.pathname;
         if (cur === "/" || cur === "/login") {
           setLocation("/analysis/new");
         }
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body?.error ?? "오류가 발생했습니다. 다시 시도해 주세요.");
       }
+    } catch {
+      setError("네트워크 오류가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
@@ -104,14 +111,17 @@ export default function ConsentModal({ onConsented }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 pb-6 pt-2 border-t border-border shrink-0">
+        <div className="px-6 pb-6 pt-2 border-t border-border shrink-0 space-y-2">
+          {error && (
+            <p className="text-[12px] text-destructive text-center">{error}</p>
+          )}
           <button
             onClick={handleConsent}
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-[14px] bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {t("확인했습니다", "Got it, continue")}
+            {loading ? t("처리 중...", "Processing...") : t("확인했습니다", "Got it, continue")}
           </button>
         </div>
       </div>

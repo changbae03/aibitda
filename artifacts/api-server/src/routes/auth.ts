@@ -157,19 +157,35 @@ router.post("/auth/consent", async (req, res) => {
   const cookies = cookie.parse(req.headers.cookie || "");
   const token = cookies.auth_token;
   if (!token) return res.status(401).json({ error: "로그인이 필요합니다." });
+
+  let user: Record<string, any>;
   try {
-    const user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
-    // UPSERT: user_credits 행이 아직 없을 경우(비동기 INSERT 지연)에도 동의가 저장됨
-    await pool.query(
-      `INSERT INTO user_credits (user_id, display_name, consented_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (user_id) DO UPDATE SET consented_at = NOW()`,
-      [`kakao_${user.id}`, user.nickname || null]
-    );
-    res.json({ ok: true });
-  } catch (e: any) {
-    console.error("[Auth] consent 저장 실패:", e?.message?.slice(0, 80));
-    res.status(500).json({ error: "오류가 발생했습니다." });
+    user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
+  } catch {
+    return res.status(401).json({ error: "유효하지 않은 토큰입니다." });
+  }
+
+  // Neon 서버리스 cold-start 대비: 최대 2회 재시도
+  const MAX_ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await pool.query(
+        `INSERT INTO user_credits (user_id, display_name, consented_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (user_id) DO UPDATE SET consented_at = NOW()`,
+        [`kakao_${user.id}`, user.nickname || null]
+      );
+      return res.json({ ok: true });
+    } catch (e: any) {
+      const msg = e?.message?.slice(0, 80) ?? "unknown";
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[Auth] consent 저장 실패 (재시도 ${attempt}/${MAX_ATTEMPTS}):`, msg);
+        await new Promise(r => setTimeout(r, 800));
+      } else {
+        console.error("[Auth] consent 저장 실패:", msg);
+        return res.status(500).json({ error: "오류가 발생했습니다. 다시 시도해 주세요." });
+      }
+    }
   }
 });
 
