@@ -74,11 +74,11 @@ function toKoreanVerdict(verdict: string): string {
 }
 function verdictStyle(verdict: string): string {
   const s = verdict.toLowerCase();
-  if (s.includes("strong buy"))  return "dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-400 dark:border-red-700";
-  if (s.includes("buy"))         return "dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800";
-  if (s.includes("strong sell")) return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
-  if (s.includes("sell"))        return "dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700";
-  return "dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-amber-700";
+  if (s.includes("strong buy"))  return "bg-foreground/5 text-foreground/75 border-foreground/15";
+  if (s.includes("buy"))         return "bg-foreground/5 text-foreground/60 border-foreground/12";
+  if (s.includes("strong sell")) return "bg-foreground/5 text-foreground/75 border-foreground/15";
+  if (s.includes("sell"))        return "bg-foreground/5 text-foreground/60 border-foreground/12";
+  return "bg-foreground/5 text-foreground/50 border-foreground/10";
 }
 function toEnVerdict(verdict: string): string {
   const s = verdict.toLowerCase();
@@ -236,9 +236,9 @@ function PriceTrack({
     return `${gapPct >= 0 ? "+" : ""}${gapPct.toFixed(1)}%`;
   })();
 
-  const dotColor = exceeded ? "bg-emerald-500" : isPositive ? "bg-red-400" : "bg-blue-500";
-  const fillColor = exceeded ? "bg-emerald-300" : isPositive ? "bg-red-200" : "bg-blue-200";
-  const curLabelColor = exceeded ? "text-emerald-600" : isPositive ? "text-red-500" : "text-blue-600";
+  const dotColor = exceeded ? "bg-emerald-500" : "bg-foreground/50";
+  const fillColor = exceeded ? "bg-emerald-300/60" : "bg-foreground/10";
+  const curLabelColor = exceeded ? "text-emerald-500" : "text-foreground/70";
 
   // 레이블 위치: 각 마커 바로 아래 절대좌표
   // 겹침 방지: 두 마커가 너무 가까우면 벌려줌
@@ -265,7 +265,7 @@ function PriceTrack({
           animate={{ left: `${Math.min(Math.max(curX, 8), 92)}%` }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
-          <p className={cn("text-[8px] leading-none mb-0.5 tabular-nums", returnPct >= 0 ? "text-red-400" : "text-blue-400")}>
+          <p className="text-[8px] leading-none mb-0.5 tabular-nums text-muted-foreground/60">
             {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
           </p>
           <p className={cn("font-mono text-[12px] font-bold leading-none tabular-nums", curLabelColor)}>
@@ -361,9 +361,7 @@ function PerfBadge({ label, pct, daysElapsed, requiredDays }: {
   }
 
   const isPos = pct >= 0;
-  const colorCls = isPos
-    ? "bg-red-50 dark:bg-red-950/40 border-red-400 dark:border-red-700 text-red-800 dark:text-red-300"
-    : "bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-700 text-blue-800 dark:text-blue-300";
+  const colorCls = "bg-muted/50 border-border/50 text-foreground/70";
 
   return (
     <div className={cn("flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border min-w-[52px]", colorCls)}>
@@ -714,17 +712,18 @@ export default function History() {
             return (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-muted-foreground/50">{isEn ? `${list.length} Reports` : `${list.length}건`}</span>
-                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-400 dark:border-red-700">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
-                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-700">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
-                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-400 dark:border-blue-700">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
+                {buyCount > 0  && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground/60 border border-border/50">{isEn ? `Buy ${buyCount}` : `상승여력 ${buyCount}`}</span>}
+                {holdCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground/60 border border-border/50">{isEn ? `Hold ${holdCount}` : `적정수준 ${holdCount}`}</span>}
+                {sellCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground/60 border border-border/50">{isEn ? `Sell ${sellCount}` : `하락여지 ${sellCount}`}</span>}
                 {reanalysisCount > 0 && (
                   <button
                     onClick={() => setVerdictFilter(verdictFilter === "reanalysis" ? "all" : "reanalysis")}
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold border transition-colors ${
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
                       verdictFilter === "reanalysis"
-                        ? "bg-orange-500 text-white border-orange-500"
-                        : "bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border-orange-400 dark:border-orange-700 hover:bg-orange-100 dark:hover:bg-orange-950/50"
-                    }`}
+                        ? "bg-foreground text-background border-foreground"
+                        : "text-muted-foreground/60 border-border/50 hover:border-foreground/30 hover:text-foreground"
+                    )}
                   >
                     {isEn ? `Re-analyze ${reanalysisCount}` : `재분석 ${reanalysisCount}`}
                   </button>
@@ -948,22 +947,16 @@ export default function History() {
                 const effectiveEntry = entry ?? cur;
                 const isDownside = tgt < effectiveEntry;
                 const exceeded = isDownside ? cur <= tgt : cur >= tgt;
-                if (exceeded) return { label: isEn ? "🎯 Target Hit" : "🎯 목표 달성", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
+                if (exceeded) return { label: isEn ? "🎯 Target Hit" : "🎯 목표 달성", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" };
                 const distNow  = Math.abs(cur - tgt);
                 const distThen = entry != null ? Math.abs(entry - tgt) : null;
                 if (distThen == null) return null;
-                if (distNow < distThen) return { label: isEn ? "▲ Approaching" : "▲ 목표 접근", cls: "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-400 dark:border-red-700" };
-                if (distNow > distThen) return { label: isEn ? "▼ Diverging" : "▼ 목표 이탈", cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-400 dark:border-blue-700" };
+                if (distNow < distThen) return { label: isEn ? "▲ Approaching" : "▲ 목표 접근", cls: "bg-muted/50 text-muted-foreground/70 border-border/50" };
+                if (distNow > distThen) return { label: isEn ? "▼ Diverging" : "▼ 목표 이탈", cls: "bg-muted/40 text-muted-foreground/60 border-border/40" };
                 return { label: isEn ? "— Flat" : "— 보합", cls: "bg-muted/50 text-muted-foreground border-border" };
               })();
 
-              const verdictLeftBorder = (() => {
-                const v = (a.investmentVerdict ?? "").toLowerCase();
-                if (v.includes("buy")) return "border-l-red-500/50";
-                if (v.includes("sell")) return "border-l-blue-400/50";
-                if (v.includes("hold")) return "border-l-amber-400/50";
-                return "";
-              })();
+              const verdictLeftBorder = "";
 
               return (
                 <motion.div
@@ -1001,12 +994,12 @@ export default function History() {
                         <span className="text-[12px] text-muted-foreground font-mono">{a.ticker}</span>
                         {verdictBadge(a.investmentVerdict, isEn)}
                         {reanalysisLevel === "urgent" && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-400 dark:border-red-700">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground/70 border border-border/50">
                             <AlertTriangle className="w-2.5 h-2.5" /> {isEn ? "Re-analyze Now" : "긴급 재분석"}
                           </span>
                         )}
                         {reanalysisLevel === "recommend" && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border border-orange-400 dark:border-orange-700">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground/60 border border-border/40">
                             <RefreshCw className="w-2.5 h-2.5" /> {isEn ? "Re-analyze" : "재분석 추천"}
                           </span>
                         )}
