@@ -241,7 +241,7 @@ export default function Landing() {
             <div className="relative">
               {/* 수직 연결선 */}
               <div
-                className="absolute left-[19px] top-5 w-px"
+                className="absolute left-[19px] top-5 w-px z-0"
                 style={{ height: "calc(100% - 40px)" }}
               >
                 <div className="absolute inset-0 bg-gradient-to-b from-[#FF8A7A]/30 via-[#FF8A7A]/15 to-transparent" />
