@@ -12,8 +12,13 @@ import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
-import { startMarketScheduler } from "./lib/market-scheduler.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
+import { fetchECOSMacro } from "./lib/ecos-client.js";
+import { fetchFREDMacro } from "./lib/fred-client.js";
+import { spawn, type ChildProcess } from "child_process";
+import { existsSync } from "fs";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -36,11 +41,65 @@ const ONE_DAY_MS    = 24 * 60 * 60 * 1000;
 const ONE_WEEK_MS   = 7 * 24 * 60 * 60 * 1000;
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
+// ── 시장분석 서버 (TF.js 분리 — 이벤트 루프 블로킹 방지) ────────────────────
+const MARKET_INTERNAL_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
+
+function findTsxBin(): string {
+  const __dir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(__dir, "../../node_modules/.bin/tsx"),
+    resolve(__dir, "../../../node_modules/.bin/tsx"),
+    resolve(__dir, "../../../../node_modules/.bin/tsx"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return "tsx";
+}
+
+let _marketChild: ChildProcess | null = null;
+
+function spawnMarketServer() {
+  const isDev = process.env.NODE_ENV !== "production";
+  const __dir = dirname(fileURLToPath(import.meta.url));
+
+  const child = isDev
+    ? spawn(findTsxBin(), [resolve(__dir, "market-index.ts")], {
+        env: { ...process.env, PORT: MARKET_INTERNAL_PORT },
+        stdio: "inherit",
+      })
+    : spawn(process.execPath, [resolve(__dir, "market-index.cjs")], {
+        env: { ...process.env, PORT: MARKET_INTERNAL_PORT },
+        stdio: "inherit",
+      });
+
+  child.on("error", (err) =>
+    console.error(`[MARKET] 프로세스 오류:`, err.message)
+  );
+  child.on("exit", (code, signal) => {
+    if (signal === "SIGTERM" || signal === "SIGKILL") return;
+    console.error(`[MARKET] 비정상 종료 (code=${code}) — 5초 후 재시작`);
+    _marketChild = null;
+    setTimeout(spawnMarketServer, 5_000);
+  });
+  _marketChild = child;
+  console.log(`[MARKET] 시장분석 서버 시작 (내부포트 ${MARKET_INTERNAL_PORT})`);
+}
+
+spawnMarketServer();
+
 const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 
-  // 시장분석 스케줄러 (저장 모델 복원 + 일일/월간 스케줄)
-  startMarketScheduler();
+  // 시장분석 스케줄러는 market-server 자식 프로세스에서 실행됨 (TF.js 분리)
+
+  // 매크로 캐시 예열 — 분석 생성 시 ECOS/FRED 대기 없이 즉시 사용 가능
+  setTimeout(() => {
+    Promise.all([
+      fetchECOSMacro().catch(e => console.warn("[CACHE] ECOS 예열 실패:", e?.message)),
+      fetchFREDMacro().catch(e => console.warn("[CACHE] FRED 예열 실패:", e?.message)),
+    ]).then(() => console.log("[CACHE] 매크로 캐시 예열 완료 (ECOS + FRED)"));
+  }, 15_000);
 
   runMigrations()
     .then(() => {
@@ -248,6 +307,10 @@ const server = app.listen(port, () => {
 
 function gracefulShutdown(signal: string) {
   console.log(`[SHUTDOWN] ${signal} 수신 — graceful shutdown 시작`);
+  if (_marketChild) {
+    _marketChild.kill("SIGTERM");
+    _marketChild = null;
+  }
   server.close((err) => {
     if (err) {
       console.error("[SHUTDOWN] 서버 종료 중 오류:", err.message);
