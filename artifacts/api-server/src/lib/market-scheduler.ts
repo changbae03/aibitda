@@ -79,35 +79,41 @@ function checkAndRun() {
 }
 
 export function startMarketScheduler() {
-  // 1. 서버 시작 시 모델 복원: 디스크 → DB → 즉시 전체학습 순서로 시도
-  console.log("[scheduler] 시작 — 모델 복원 시도 중...");
+  // 1. 서버 시작 시 복원 순서: DB 예측 캐시(즉시) → 백그라운드 디스크 복원 → 전체학습
+  console.log("[scheduler] 시작 — DB 예측 캐시 즉시 로드 시도...");
 
   (async () => {
-    // 1-a. 디스크에 저장된 모델 시도
-    const diskOk = await tryRestoreFromDisk();
+    // ① DB 예측 캐시 먼저 — 즉시 ready=true, 사용자가 탭 열면 바로 볼 수 있음 (~100ms)
+    console.log("[scheduler] DB 예측 캐시 시도 (즉시 서빙 목표)...");
+    const dbCacheOk = await tryRestoreFromDB();
+    if (dbCacheOk) {
+      console.log("[scheduler] DB 캐시 복원 성공 → 사용자 즉시 서빙 가능");
+      // ② 백그라운드에서 디스크 모델로 최신 예측 재계산 (silent=true → 기존 데이터 유지하며 조용히 갱신)
+      setTimeout(async () => {
+        console.log("[scheduler] 백그라운드 디스크 복원 시작 (silent)...");
+        const diskOk = await tryRestoreFromDisk(true);
+        if (diskOk) {
+          console.log("[scheduler] 백그라운드 디스크 복원 완료 — 예측 갱신됨");
+        } else {
+          // 모델이 없거나 버전 불일치 → 백그라운드 전체 재학습
+          console.log("[scheduler] 디스크 모델 없음 — 백그라운드 전체 재학습 시작");
+          runPipeline(true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
+        }
+      }, 5_000);
+      return;
+    }
+
+    // ③ DB 캐시 없음 → 디스크 복원 시도 (수 분 소요 가능)
+    console.log("[scheduler] DB 캐시 없음 — 디스크 복원 시도...");
+    const diskOk = await tryRestoreFromDisk(false);
     if (diskOk) {
       const meta = loadMeta();
       console.log(`[scheduler] 디스크 복원 성공 (last_trained=${meta?.lastTrained ?? "?"})`);
       return;
     }
 
-    // 1-b. DB 캐시 시도 (재배포 후에도 이전 예측값 즉시 표시)
-    console.log("[scheduler] 디스크 모델 없음 — DB 캐시 시도...");
-    const dbOk = await tryRestoreFromDB();
-    if (dbOk) {
-      // DB 캐시는 즉시 표시하되, 최신 데이터로 백그라운드 재학습도 진행.
-      // TF.js 학습은 Node.js 이벤트 루프를 블로킹하므로, Cloud Run 헬스체크가
-      // 먼저 통과할 수 있도록 60초 지연 후 학습 시작.
-      console.log("[scheduler] DB 캐시 복원 성공 — 60초 후 백그라운드 재학습 시작 (헬스체크 우선)");
-      setTimeout(() => {
-        console.log("[scheduler] 백그라운드 재학습 시작");
-        runPipeline(true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
-      }, 60_000);
-      return;
-    }
-
-    // 1-c. 캐시 없음 — 60초 후 전체 학습 시작 (헬스체크 우선 통과)
-    console.log("[scheduler] 캐시 없음 — 60초 후 전체 학습 시작 (~90초)");
+    // ④ 모델 자체가 없음 — 60초 후 전체 학습 (헬스체크 우선 통과)
+    console.log("[scheduler] 모델 없음 — 60초 후 전체 학습 시작 (~90초)");
     setTimeout(() => {
       console.log("[scheduler] 초기 전체 학습 시작");
       runPipeline(false).catch(e => console.error("[scheduler] 초기 학습 실패:", e?.message));

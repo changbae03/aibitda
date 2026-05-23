@@ -1441,7 +1441,12 @@ export function getStatus(): PipelineStatus & { initializing?: boolean } {
   };
 }
 
-export async function tryRestoreFromDisk(): Promise<boolean> {
+/**
+ * 디스크(또는 DB 모델)에서 학습된 가중치를 불러와 예측을 재계산합니다.
+ * @param silent  true이면 기존 _status.kospi/kosdaq 등을 유지한 채로 "업데이트 중" 상태로만 전환.
+ *               false(기본)이면 ready=false로 초기화 후 복원.
+ */
+export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
   let meta        = loadMeta();
   let kospiStore  = loadModelFile("KS11");
   let kosdaqStore = loadModelFile("KQ11");
@@ -1488,8 +1493,17 @@ export async function tryRestoreFromDisk(): Promise<boolean> {
   }
 
   // ★ 복원 시작 전에 running: true 로 설정 → 프론트가 자동 재학습 트리거하지 않도록 방어
-  _status = { running: true, ready: false, steps: defaultSteps(), initializing: true } as any;
-  console.log("[gbdt] 디스크 복원 중 (nFeatures=" + N_FEATURES + ", v" + MODEL_VERSION + ")...");
+  // silent=true이면 기존 예측 데이터를 그대로 두고 "업데이트 중" 배지만 표시
+  if (silent && _status.ready) {
+    _status = {
+      ..._status,
+      running: true,
+      initializing: true,
+    } as any;
+  } else {
+    _status = { running: true, ready: false, steps: defaultSteps(), initializing: true } as any;
+  }
+  console.log(`[gbdt] 디스크 복원 중 (nFeatures=${N_FEATURES}, v${MODEL_VERSION}, silent=${silent})...`);
   try {
     const ixicStore = loadModelFile("IXIC");
     const [kospiRows, kosdaqRows, snpRows, nasdaqRows] = await Promise.all([
