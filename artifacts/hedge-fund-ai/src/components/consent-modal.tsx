@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { ShieldCheck, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
@@ -12,6 +13,7 @@ export default function ConsentModal({ onConsented }: Props) {
   const { isEn } = useLanguage();
   const t = (kr: string, en: string) => isEn ? en : kr;
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -23,8 +25,13 @@ export default function ConsentModal({ onConsented }: Props) {
         credentials: "include",
       });
       if (res.ok) {
-        qc.invalidateQueries({ queryKey: ["auth/me"] });
+        await qc.invalidateQueries({ queryKey: ["auth/me"] });
         onConsented();
+        // 랜딩 또는 로그인 페이지에 있는 경우 분석 페이지로 이동
+        const cur = window.location.pathname;
+        if (cur === "/" || cur === "/login") {
+          setLocation("/analysis/new");
+        }
       }
     } finally {
       setLoading(false);
@@ -32,8 +39,8 @@ export default function ConsentModal({ onConsented }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm">
+      <div className="w-full sm:max-w-md bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90dvh] flex flex-col">
         {/* Header */}
         <div className="bg-primary/10 px-6 py-5 flex items-center gap-3 border-b border-border">
           <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
@@ -50,7 +57,7 @@ export default function ConsentModal({ onConsented }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           <div className="space-y-2.5">
             <ConsentItem
               title={t("서비스 품질 및 고객 지원", "Service Quality & Support")}
@@ -97,7 +104,7 @@ export default function ConsentModal({ onConsented }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 pb-6">
+        <div className="px-6 pb-6 pt-2 border-t border-border shrink-0">
           <button
             onClick={handleConsent}
             disabled={loading}

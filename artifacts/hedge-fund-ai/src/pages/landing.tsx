@@ -73,9 +73,18 @@ export default function Landing() {
     return () => clearInterval(interval);
   }, []);
 
+  const [pendingNav, setPendingNav] = useState(false);
+
+  useEffect(() => {
+    if (pendingNav) {
+      window.location.href = getKakaoLoginUrl();
+    }
+  }, [pendingNav]);
+
   const handleKakaoLogin = () => {
+    if (kakaoButtonLoading) return;
     setKakaoButtonLoading(true);
-    window.location.href = getKakaoLoginUrl();
+    setPendingNav(true);
   };
 
   const handleDevLogin = async () => {

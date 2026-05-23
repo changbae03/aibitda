@@ -159,12 +159,16 @@ router.post("/auth/consent", async (req, res) => {
   if (!token) return res.status(401).json({ error: "로그인이 필요합니다." });
   try {
     const user = jwt.verify(token, JWT_SECRET) as Record<string, any>;
+    // UPSERT: user_credits 행이 아직 없을 경우(비동기 INSERT 지연)에도 동의가 저장됨
     await pool.query(
-      `UPDATE user_credits SET consented_at = NOW() WHERE user_id = $1`,
-      [`kakao_${user.id}`]
+      `INSERT INTO user_credits (user_id, display_name, consented_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET consented_at = NOW()`,
+      [`kakao_${user.id}`, user.nickname || null]
     );
     res.json({ ok: true });
-  } catch {
+  } catch (e: any) {
+    console.error("[Auth] consent 저장 실패:", e?.message?.slice(0, 80));
     res.status(500).json({ error: "오류가 발생했습니다." });
   }
 });
