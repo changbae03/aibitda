@@ -53,46 +53,46 @@ function NewsCard({ item }: { item: MacroNewsItem }) {
       rel="noopener noreferrer"
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        "group flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all duration-150",
-        "hover:bg-muted/30 hover:border-border",
-        veryNew
-          ? "bg-primary/[0.03] border-primary/20"
-          : "bg-transparent border-border/40",
-      )}
+      className="group flex gap-4 px-3 py-3.5 rounded-xl hover:bg-muted/25 transition-colors duration-150"
     >
-      <div className="mt-[5px] shrink-0">
-        <div className={cn(
-          "w-1.5 h-1.5 rounded-full",
-          breaking ? "bg-primary" : "bg-muted-foreground/25",
-        )} />
+      {/* 시간 컬럼 */}
+      <div className="w-12 shrink-0 flex flex-col items-end gap-1.5 pt-0.5">
+        <span className={cn(
+          "text-[13px] tabular-nums font-semibold leading-none",
+          veryNew ? "text-primary" : "text-muted-foreground/60",
+        )}>
+          {timeStr(item.pubDate)}
+        </span>
+        {breaking && (
+          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded leading-none">
+            <Zap className="w-2.5 h-2.5" />속보
+          </span>
+        )}
       </div>
 
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] tabular-nums text-muted-foreground/50 shrink-0">
-            {timeStr(item.pubDate)}
-          </span>
-          {breaking && (
-            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-              <Zap className="w-2.5 h-2.5" />속보
-            </span>
-          )}
-        </div>
+      {/* 구분선 */}
+      <div className="relative shrink-0 flex flex-col items-center">
+        <div className={cn(
+          "w-2 h-2 rounded-full mt-1 shrink-0 ring-2 ring-background",
+          breaking ? "bg-primary" : veryNew ? "bg-primary/50" : "bg-border",
+        )} />
+        <div className="w-px flex-1 bg-border/40 mt-1" />
+      </div>
 
+      {/* 본문 */}
+      <div className="flex-1 min-w-0 pb-1">
         <p className={cn(
-          "text-[13px] leading-snug break-keep",
-          "text-foreground/85 group-hover:text-foreground transition-colors",
-          veryNew && "font-medium",
+          "text-[14px] leading-snug break-keep mb-2",
+          "text-foreground/90 group-hover:text-foreground transition-colors",
+          veryNew && "font-semibold",
         )}>
           {item.title}
         </p>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] text-muted-foreground/45 shrink-0">{item.source}</span>
-          <span className="text-[10px] text-muted-foreground/30">·</span>
-          <span className="text-[10px] text-muted-foreground/45">{relTime(item.pubDate)}</span>
-          <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover:text-muted-foreground/50 ml-auto shrink-0 transition-colors" />
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-medium text-muted-foreground/70">{item.source}</span>
+          <span className="text-muted-foreground/30 text-[10px]">·</span>
+          <span className="text-[11px] text-muted-foreground/50">{relTime(item.pubDate)}</span>
+          <ExternalLink className="w-3 h-3 text-muted-foreground/30 group-hover:text-muted-foreground/60 ml-auto shrink-0 transition-colors" />
         </div>
       </div>
     </motion.a>
@@ -132,13 +132,13 @@ function BreakingBanner({ items }: { items: MacroNewsItem[] }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.3 }}
-            className="block text-[12px] font-medium text-foreground/90 hover:text-foreground truncate transition-colors"
+            className="block text-[13px] font-medium text-foreground/90 hover:text-foreground truncate transition-colors"
           >
             {latest.title}
           </motion.a>
         </AnimatePresence>
       </div>
-      <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">
+      <span className="text-[11px] text-muted-foreground/60 shrink-0 tabular-nums font-medium">
         {timeStr(latest.pubDate)}
       </span>
       {items.length > 1 && (
@@ -146,6 +146,26 @@ function BreakingBanner({ items }: { items: MacroNewsItem[] }) {
           {idx + 1}/{items.length}
         </span>
       )}
+    </div>
+  );
+}
+
+/* ── 스켈레톤 ───────────────────────────────────────────────────────────── */
+function SkeletonCard() {
+  return (
+    <div className="flex gap-4 px-3 py-3.5">
+      <div className="w-12 shrink-0 flex flex-col items-end gap-2 pt-1">
+        <div className="h-3.5 w-10 rounded bg-muted/50 animate-pulse" />
+      </div>
+      <div className="relative shrink-0 flex flex-col items-center">
+        <div className="w-2 h-2 rounded-full bg-muted/50 animate-pulse mt-1" />
+        <div className="w-px flex-1 bg-border/30 mt-1" />
+      </div>
+      <div className="flex-1 space-y-2 pb-1">
+        <div className="h-4 w-full rounded bg-muted/50 animate-pulse" />
+        <div className="h-4 w-3/4 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3 w-1/3 rounded bg-muted/30 animate-pulse mt-1" />
+      </div>
     </div>
   );
 }
@@ -201,7 +221,7 @@ export default function NewsPage() {
           </div>
           <div className="flex items-center gap-2">
             {cachedAt && !loading && (
-              <span className="text-[10px] text-muted-foreground/40 tabular-nums">
+              <span className="text-[11px] text-muted-foreground/50 tabular-nums">
                 {format(parseISO(cachedAt), "HH:mm")} 기준
               </span>
             )}
@@ -230,14 +250,8 @@ export default function NewsPage() {
 
         {/* 뉴스 목록 */}
         {loading && items.length === 0 ? (
-          <div className="space-y-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-border/30 p-4 space-y-2">
-                <div className="h-2.5 w-16 rounded bg-muted/50 animate-pulse" />
-                <div className="h-4 w-4/5 rounded bg-muted/50 animate-pulse" />
-                <div className="h-3 w-1/3 rounded bg-muted/40 animate-pulse" />
-              </div>
-            ))}
+          <div className="space-y-0">
+            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : grouped.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground/40">
@@ -245,15 +259,19 @@ export default function NewsPage() {
             <p className="text-sm">뉴스를 불러오지 못했습니다</p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-6">
             {grouped.map(group => (
               <div key={group.label}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[11px] font-semibold text-muted-foreground/50">{group.label}</span>
+                {/* 날짜 헤더 */}
+                <div className="flex items-center gap-3 mb-1 px-3">
+                  <span className="text-[12px] font-bold text-muted-foreground/70 tracking-wide">
+                    {group.label}
+                  </span>
                   <div className="flex-1 h-px bg-border/50" />
-                  <span className="text-[10px] text-muted-foreground/35">{group.items.length}건</span>
+                  <span className="text-[11px] text-muted-foreground/40">{group.items.length}건</span>
                 </div>
-                <div className="space-y-1">
+                {/* 아이템 목록 */}
+                <div>
                   {group.items.map((item, i) => (
                     <NewsCard key={`${item.url}-${i}`} item={item} />
                   ))}
@@ -264,7 +282,7 @@ export default function NewsPage() {
             {items.length > PAGE && (
               <button
                 onClick={() => setExpanded(v => !v)}
-                className="w-full py-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
+                className="w-full py-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
               >
                 {expanded ? (
                   <><ChevronDown className="w-3.5 h-3.5 rotate-180" />접기</>
