@@ -257,9 +257,13 @@ function MarketBriefSection({
                 <p className="text-[10px] font-bold text-primary/50 uppercase tracking-widest flex items-center gap-1.5">
                   <span>✦</span> AI 시장 해설
                 </p>
-                <p className="text-[13px] text-foreground/85 leading-[1.75] whitespace-pre-line">
-                  {brief.storyLine}
-                </p>
+                <div className="space-y-3">
+                  {brief.storyLine.split(/\n\n+/).map((para, i) => (
+                    <p key={i} className="text-[13px] text-foreground/85 leading-[1.75]">
+                      {para.trim()}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
 
