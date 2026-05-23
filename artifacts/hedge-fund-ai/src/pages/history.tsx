@@ -32,6 +32,14 @@ function isUSTicker(t: string) {
 const STORAGE_KEY = "avitda-recent-analyses";
 const MEMO_KEY = "avitda-memos";
 
+// ── 모듈 레벨 캐시 — 페이지 이동 후 돌아와도 즉시 표시 ──────────────────────────
+const TTL_QUOTES = 3 * 60 * 1000;       // 3분
+const TTL_SPARKLINES = 30 * 60 * 1000; // 30분
+const TTL_PERF = 60 * 60 * 1000;       // 1시간
+let _quotesCache: { data: Record<string, QuoteResult>; ts: number } | null = null;
+let _sparklinesCache: { data: Record<string, SparklineResult>; ts: number } | null = null;
+let _perfCache: { data: Record<number, PerfResult>; ts: number } | null = null;
+
 function getLocalRecents(): any[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
 }
@@ -412,7 +420,9 @@ export default function History() {
   const { isEn } = useLanguage();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const { data: serverAnalyses, isLoading } = useListAnalyses();
+  const { data: serverAnalyses, isLoading } = useListAnalyses({
+    query: { staleTime: 5 * 60 * 1000 },
+  });
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -420,11 +430,19 @@ export default function History() {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [localItems, setLocalItems] = useState<any[]>(() => getLocalRecents());
-  const [quotes, setQuotes] = useState<Record<string, QuoteResult>>({});
-  const [sparklines, setSparklines] = useState<Record<string, SparklineResult>>({});
-  const [perf, setPerf] = useState<Record<number, PerfResult>>({});
+  const [quotes, setQuotes] = useState<Record<string, QuoteResult>>(
+    () => (_quotesCache && Date.now() - _quotesCache.ts < TTL_QUOTES) ? _quotesCache.data : {}
+  );
+  const [sparklines, setSparklines] = useState<Record<string, SparklineResult>>(
+    () => (_sparklinesCache && Date.now() - _sparklinesCache.ts < TTL_SPARKLINES) ? _sparklinesCache.data : {}
+  );
+  const [perf, setPerf] = useState<Record<number, PerfResult>>(
+    () => (_perfCache && Date.now() - _perfCache.ts < TTL_PERF) ? _perfCache.data : {}
+  );
   const [quotesLoading, setQuotesLoading] = useState(false);
-  const [quotesUpdatedAt, setQuotesUpdatedAt] = useState<Date | null>(null);
+  const [quotesUpdatedAt, setQuotesUpdatedAt] = useState<Date | null>(
+    () => (_quotesCache && Date.now() - _quotesCache.ts < TTL_QUOTES) ? new Date(_quotesCache.ts) : null
+  );
 
   // ── Filter / Sort state ────────────────────────────────────────────────────
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("all");
@@ -452,6 +470,7 @@ export default function History() {
       items.filter((a) => a.status === "completed" && a.targetPrice != null).map((a) => a.ticker)
     )];
     if (tickers.length === 0) return;
+    if (_quotesCache && Date.now() - _quotesCache.ts < TTL_QUOTES) return;
     setQuotesLoading(true);
     try {
       const r = await fetch(getApiUrl("/api/market-data/batch-quotes"), {
@@ -459,7 +478,12 @@ export default function History() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tickers }),
       });
-      if (r.ok) { setQuotes(await r.json()); setQuotesUpdatedAt(new Date()); }
+      if (r.ok) {
+        const data = await r.json();
+        _quotesCache = { data, ts: Date.now() };
+        setQuotes(data);
+        setQuotesUpdatedAt(new Date());
+      }
     } catch {}
     setQuotesLoading(false);
   }, []);
@@ -467,24 +491,29 @@ export default function History() {
   const fetchSparklines = useCallback(async (items: any[]) => {
     const tickers = [...new Set(items.map((a) => a.ticker))];
     if (tickers.length === 0) return;
+    if (_sparklinesCache && Date.now() - _sparklinesCache.ts < TTL_SPARKLINES) return;
     try {
       const r = await fetch(getApiUrl("/api/market-data/batch-sparklines"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tickers, days: 90 }),
       });
-      if (r.ok) setSparklines(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        _sparklinesCache = { data, ts: Date.now() };
+        setSparklines(data);
+      }
     } catch {}
   }, []);
 
   const fetchPerformance = useCallback(async (items: any[]) => {
-    // 5일 이상 된 완료된 분석만 성과 조회
     const eligible = items.filter((a) => {
       if (a.status !== "completed") return false;
       const days = (Date.now() - new Date(a.createdAt).getTime()) / (1000 * 60 * 60 * 24);
       return days >= 5;
     });
     if (eligible.length === 0) return;
+    if (_perfCache && Date.now() - _perfCache.ts < TTL_PERF) return;
     try {
       const payload = eligible.map((a: any) => ({
         id: a.id,
@@ -496,7 +525,11 @@ export default function History() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (r.ok) setPerf(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        _perfCache = { data, ts: Date.now() };
+        setPerf(data);
+      }
     } catch {}
   }, []);
 

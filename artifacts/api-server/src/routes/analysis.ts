@@ -3336,7 +3336,11 @@ router.get("/", async (req, res) => {
       return;
     }
     const aRows = await rawQuery(
-      `SELECT * FROM analyses WHERE user_id = $1 ORDER BY created_at DESC`,
+      `SELECT id, user_id, ticker, company_name, english_name, industry, additional_context,
+              status, current_step, investment_verdict, target_price, start_price, entry_price,
+              stop_loss, risk_reward_ratio, memo, is_public, user_rating, user_feedback,
+              created_at, updated_at, language
+       FROM analyses WHERE user_id = $1 ORDER BY created_at DESC`,
       [userId]
     );
     if (aRows.length === 0) {
