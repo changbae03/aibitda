@@ -181,16 +181,16 @@ function ReportCard({
                           (arr[0] as any).type === "strong";
                         if (isSectionHeader) {
                           return (
-                            <div className="flex items-center gap-2.5 mt-7 mb-3 first:mt-0">
-                              <div className="w-1 h-4 rounded-full bg-gradient-to-b from-violet-400 to-[#FF8A7A] shrink-0" />
-                              <h4 className="text-[13.5px] font-bold text-foreground tracking-tight">
+                            <div className="mt-8 mb-2.5 first:mt-0">
+                              <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground/50 mb-1.5">
                                 {(arr[0] as any).props.children}
-                              </h4>
+                              </p>
+                              <div className="h-px bg-border/50" />
                             </div>
                           );
                         }
                         return (
-                          <p className="text-[13.5px] leading-[1.95] text-foreground/75 mb-3.5">
+                          <p className="text-[13.5px] leading-[2.0] text-foreground/75 mb-3">
                             {children}
                           </p>
                         );
@@ -199,26 +199,26 @@ function ReportCard({
                         <strong className="font-semibold text-foreground/90">{children}</strong>
                       ),
                       ul: ({ children }) => (
-                        <ul className="my-3 ml-4 space-y-1.5 list-none">{children}</ul>
+                        <ul className="my-3 space-y-1.5 list-none pl-0">{children}</ul>
                       ),
                       ol: ({ children }) => (
-                        <ol className="my-3 ml-4 space-y-1.5 list-decimal">{children}</ol>
+                        <ol className="my-3 space-y-1.5 pl-5 list-decimal marker:text-muted-foreground/40">{children}</ol>
                       ),
                       li: ({ children }) => (
-                        <li className="text-[13.5px] leading-[1.85] text-foreground/75 flex gap-2">
-                          <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-muted-foreground/30 shrink-0" />
+                        <li className="text-[13.5px] leading-[1.85] text-foreground/75 flex gap-2.5 items-start">
+                          <span className="mt-[9px] w-1 h-1 rounded-full bg-muted-foreground/35 shrink-0" />
                           <span>{children}</span>
                         </li>
                       ),
-                      h1: ({ children }) => <h1 className="text-lg font-bold text-foreground mt-6 mb-3">{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-base font-bold text-foreground mt-6 mb-2.5">{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-[14px] font-semibold text-foreground mt-5 mb-2">{children}</h3>,
+                      h1: ({ children }) => <h1 className="text-lg font-bold text-foreground mt-7 mb-3">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-semibold text-foreground mt-6 mb-2.5">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-[14px] font-semibold text-foreground/90 mt-5 mb-2">{children}</h3>,
                       blockquote: ({ children }) => (
-                        <blockquote className="border-l-2 border-violet-500/30 pl-4 my-4 text-muted-foreground/70 italic">
+                        <blockquote className="border-l-[2px] border-border pl-4 my-4 text-muted-foreground/60 text-[13px] italic">
                           {children}
                         </blockquote>
                       ),
-                      hr: () => <hr className="my-5 border-border/40" />,
+                      hr: () => <hr className="my-6 border-border/40" />,
                     }}
                   >
                     {content ?? "내용을 불러올 수 없습니다."}
