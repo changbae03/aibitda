@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getStatus, runPipeline, runDailyIncrementalUpdate } from "../lib/lstm-predictor.js";
+import { getAllLiveAccuracy, getPredictionHistory } from "../lib/prediction-tracker.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
 import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { GoogleGenAI } from "@google/genai";
@@ -814,6 +815,28 @@ router.get("/brief", async (req, res) => {
     } else {
       res.status(500).json({ error: "브리핑 생성 실패" });
     }
+  }
+});
+
+// GET /api/market-analysis/live-accuracy — 심볼별 실제 라이브 적중률
+router.get("/live-accuracy", async (_req, res) => {
+  try {
+    const data = await getAllLiveAccuracy();
+    res.json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
+  }
+});
+
+// GET /api/market-analysis/prediction-history/:symbol — 예측 이력
+router.get("/prediction-history/:symbol", async (req, res) => {
+  try {
+    const symbol = decodeURIComponent(req.params.symbol);
+    const limit  = Math.min(50, parseInt(String(req.query.limit ?? "20"), 10));
+    const rows   = await getPredictionHistory(symbol, limit);
+    res.json(rows);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
   }
 });
 

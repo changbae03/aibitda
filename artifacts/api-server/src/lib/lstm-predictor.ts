@@ -25,6 +25,7 @@ import * as tf from "@tensorflow/tfjs";
 import YahooFinance from "yahoo-finance2";
 import { pool } from "@workspace/db";
 import { fetchInvestorData, fetchShortRatio, isPykrxEnabled } from "./pykrx-client.js";
+import { savePrediction, resolveExpiredPredictions, shouldTriggerRetrain } from "./prediction-tracker.js";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -1426,6 +1427,13 @@ export async function runPipeline(force=false): Promise<void> {
     console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | S&P500 ${snp500Result.testDirAcc}% | NASDAQ ${nasdaqResult.testDirAcc}%`);
     // 재배포 후에도 즉시 표시될 수 있도록 DB에 저장
     saveResultsToDB(kospiResult, kosdaqResult, snp500Result, nasdaqResult).catch(() => {});
+    // 오늘 예측 기록 저장 (라이브 적중률 추적)
+    Promise.all([
+      savePrediction("^KS11", kospiResult.predictedReturn3d,  kospiResult.currentValue,  MODEL_VERSION),
+      savePrediction("^KQ11", kosdaqResult.predictedReturn3d, kosdaqResult.currentValue, MODEL_VERSION),
+      savePrediction("^GSPC", snp500Result.predictedReturn3d, snp500Result.currentValue, MODEL_VERSION),
+      savePrediction("^IXIC", nasdaqResult.predictedReturn3d, nasdaqResult.currentValue, MODEL_VERSION),
+    ]).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
     const f=_status.steps.find(s=>s.status==="running");
@@ -1527,6 +1535,29 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     _lastRun=Date.now();
     _status={..._status,ready:true,kospi,kosdaq,snp500,nasdaq};
     saveResultsToDB(kospi,kosdaq,snp500,nasdaq??undefined).catch(()=>{});
+    // 오늘 예측 저장
+    Promise.all([
+      savePrediction("^KS11", kospi.predictedReturn3d,  kospi.currentValue,  MODEL_VERSION),
+      savePrediction("^KQ11", kosdaq.predictedReturn3d, kosdaq.currentValue, MODEL_VERSION),
+      savePrediction("^GSPC", snp500.predictedReturn3d, snp500.currentValue, MODEL_VERSION),
+      ...(nasdaq ? [savePrediction("^IXIC", nasdaq.predictedReturn3d, nasdaq.currentValue, MODEL_VERSION)] : []),
+    ]).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
+    // 만료된 예측 결과 확인 → 자동 재학습 체크
+    Promise.all([
+      resolveExpiredPredictions("^KS11", kospiRows),
+      resolveExpiredPredictions("^KQ11", kosdaqRows),
+      resolveExpiredPredictions("^GSPC", snpRows),
+      resolveExpiredPredictions("^IXIC", nasdaqRows),
+    ]).then(async () => {
+      const triggers = await Promise.all([
+        shouldTriggerRetrain("^KS11"), shouldTriggerRetrain("^KQ11"),
+        shouldTriggerRetrain("^GSPC"), shouldTriggerRetrain("^IXIC"),
+      ]);
+      if (triggers.some(Boolean)) {
+        console.log("[gbdt] 라이브 적중률 기준 미달 — 자동 전체 재학습 시작");
+        runPipeline(true).catch(e => console.error("[gbdt] 자동 재학습 실패:", e?.message));
+      }
+    }).catch(e => console.error("[tracker] 결과 확인 실패:", e?.message));
     console.log(`[gbdt] 증분 완료 ${Date.now()-t0}ms | updateCount=${(meta?.updateCount??0)+1}`);
   } catch(e:any){console.error("[gbdt] 증분 실패:",e?.message??e);}
 }

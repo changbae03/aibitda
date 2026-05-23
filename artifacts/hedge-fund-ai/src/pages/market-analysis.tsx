@@ -34,6 +34,14 @@ interface IndexResult {
   gbdtDirAcc: number;
   ensembleAlpha: number;
 }
+interface LiveAccuracy {
+  symbol:   string;
+  correct:  number;
+  total:    number;
+  pending:  number;
+  accuracy: number | null;
+}
+
 interface PipelineStep {
   key: string; label: string;
   status: "pending" | "running" | "done" | "error";
@@ -742,6 +750,19 @@ export default function MarketAnalysis() {
   const [guideOpen, setGuideOpen]     = useState(false);
   const [brief, setBrief]             = useState<MarketBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
+  const [liveAcc, setLiveAcc]         = useState<Record<string, LiveAccuracy> | null>(null);
+
+  // 라이브 적중률 폴링
+  useEffect(() => {
+    const load = () =>
+      fetch(getApiUrl("/api/market-analysis/live-accuracy"), { credentials: "include" })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setLiveAcc(d))
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // 관리자 권한 확인
   const [isAdmin, setIsAdmin]         = useState<boolean | null>(null);
@@ -973,6 +994,59 @@ export default function MarketAnalysis() {
                 </div>
               </div>
             )}
+
+            {/* ── 라이브 적중률 (실제 기록) ────────────────────────────── */}
+            {current && (() => {
+              const symMap: Record<string, string> = { kospi:"^KS11", kosdaq:"^KQ11", snp500:"^GSPC", nasdaq:"^IXIC" };
+              const la = liveAcc?.[symMap[activeIdx]];
+              if (!la) return null;
+              const hasData = la.total >= 5;
+              const pctColor = la.accuracy === null ? "text-muted-foreground"
+                : la.accuracy >= 60 ? "text-emerald-400"
+                : la.accuracy >= 50 ? "text-yellow-400"
+                : "text-red-400";
+              return (
+                <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <h2 className="text-base font-bold text-foreground">실제 예측 성과 기록</h2>
+                    <span className="text-[10px] text-muted-foreground/50 ml-auto">오늘부터 매일 기록됩니다</span>
+                  </div>
+                  {!hasData ? (
+                    <div className="flex items-center gap-3 py-2">
+                      <div className="w-2 h-2 rounded-full bg-yellow-400/60 animate-pulse" />
+                      <p className="text-sm text-muted-foreground">
+                        아직 데이터 수집 중 —{" "}
+                        {la.pending > 0 ? `${la.pending}건 대기 중` : "오늘부터 예측을 기록하기 시작했어요"}.
+                        {" "}5건 이상 쌓이면 실제 적중률이 표시됩니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
+                        <span className="text-[11px] text-muted-foreground/70 font-medium">🎯 라이브 적중률</span>
+                        <span className={cn("text-2xl font-bold", pctColor)}>
+                          {la.accuracy !== null ? `${la.accuracy}%` : "—"}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground/55">실제 맞힌 비율</span>
+                      </div>
+                      <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
+                        <span className="text-[11px] text-muted-foreground/70 font-medium">📋 누적 기록</span>
+                        <span className="text-2xl font-bold text-foreground">
+                          {la.correct}/{la.total}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground/55">맞힌 수 / 전체</span>
+                      </div>
+                      <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
+                        <span className="text-[11px] text-muted-foreground/70 font-medium">⏳ 결과 대기</span>
+                        <span className="text-2xl font-bold text-foreground">{la.pending}</span>
+                        <span className="text-[11px] text-muted-foreground/55">3일 후 확인 예정</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* ── 예측 vs 실제 비교 ─────────────────────────────────────── */}
             {current && current.recentPerf && current.recentPerf.length > 0 && (

@@ -13,6 +13,7 @@ import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { startMarketScheduler } from "./lib/market-scheduler.js";
+import { initPredictionTable } from "./lib/prediction-tracker.js";
 
 console.log("[STARTUP] API Server 기동 중…");
 
@@ -44,7 +45,6 @@ const server = app.listen(port, () => {
   runMigrations()
     .then(() => {
       console.log("[MIGRATION] 완료");
-      // 자주 쓰이는 컬럼에 인덱스 추가 (없으면 생성, 있으면 무시)
       return Promise.all([
         pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_user_id   ON analyses(user_id)`),
         pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_ticker    ON analyses(ticker)`),
@@ -52,6 +52,7 @@ const server = app.listen(port, () => {
         pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_ticker_st  ON analyses(ticker, status)`),
         pool.query(`CREATE INDEX IF NOT EXISTS idx_asteps_analysis_id ON analysis_steps(analysis_id)`),
         pool.query(`CREATE INDEX IF NOT EXISTS idx_asteps_aid_stepkey ON analysis_steps(analysis_id, step_key)`),
+        initPredictionTable(),
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
     .then(() => initCalendarCache())
