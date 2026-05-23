@@ -745,6 +745,157 @@ interface PredictionRecord {
   model_version: number;
 }
 
+/* ── 매크로 뉴스 피드 ──────────────────────────────────────────────────── */
+interface MacroNewsItem {
+  title: string;
+  source: string;
+  pubDate: string;
+  url: string;
+}
+
+function MacroNewsFeed() {
+  const [items, setItems]       = useState<MacroNewsItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+
+  const load = (force = false) => {
+    setLoading(true);
+    fetch(getApiUrl(`/api/macro/news${force ? "?force=true" : ""}`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.items) { setItems(d.items); setCachedAt(d.cachedAt); }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // 날짜 그룹 헬퍼
+  const groupLabel = (iso: string) => {
+    const now = new Date();
+    const d   = new Date(iso);
+    const diffDays = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
+    if (diffDays === 0) return "오늘";
+    if (diffDays === 1) return "어제";
+    return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  };
+
+  const timeLabel = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  };
+
+  const isBreaking = (iso: string) =>
+    Date.now() - new Date(iso).getTime() < 2 * 60 * 60 * 1000;
+
+  const SHOW = 15;
+  const visible = expanded ? items : items.slice(0, SHOW);
+
+  // 날짜 그룹핑
+  type GroupedItems = { label: string; items: MacroNewsItem[] }[];
+  const grouped: GroupedItems = [];
+  for (const item of visible) {
+    const lbl = groupLabel(item.pubDate);
+    const last = grouped[grouped.length - 1];
+    if (last?.label === lbl) last.items.push(item);
+    else grouped.push({ label: lbl, items: [item] });
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-transparent overflow-hidden">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Newspaper className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold">매크로 뉴스</span>
+          {cachedAt && !loading && (
+            <span className="text-[10px] text-muted-foreground/40">
+              · {new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => load(true)}
+          disabled={loading}
+          className="p-1.5 rounded-lg hover:bg-muted/40 transition-colors text-muted-foreground/50 hover:text-foreground disabled:opacity-30"
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+        </button>
+      </div>
+
+      {/* 뉴스 리스트 */}
+      <div className="px-4 py-2">
+        {loading && items.length === 0 ? (
+          <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground/40">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />뉴스 불러오는 중…
+          </div>
+        ) : grouped.length === 0 ? (
+          <p className="py-6 text-xs text-muted-foreground/40 text-center">뉴스를 불러오지 못했습니다</p>
+        ) : (
+          grouped.map(group => (
+            <div key={group.label} className="mb-3 last:mb-0">
+              {/* 날짜 헤더 */}
+              <div className="flex items-center gap-2 mb-2 mt-1">
+                <span className="text-[11px] font-semibold text-muted-foreground/50">{group.label}</span>
+                <div className="flex-1 h-px bg-border/50" />
+              </div>
+              <div className="space-y-0">
+                {group.items.map((item, i) => (
+                  <a
+                    key={i}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-3 py-2 px-1 -mx-1 rounded-lg hover:bg-muted/30 transition-colors group"
+                  >
+                    {/* 타임라인 점 */}
+                    <div className="mt-[5px] shrink-0">
+                      <div className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        isBreaking(item.pubDate) ? "bg-primary" : "bg-muted-foreground/25"
+                      )} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-2 flex-wrap">
+                        <span className="text-[11px] tabular-nums text-muted-foreground/40 shrink-0 mt-[1px]">
+                          {timeLabel(item.pubDate)}
+                        </span>
+                        {isBreaking(item.pubDate) && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
+                            <Zap className="w-2.5 h-2.5" />속보
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[13px] leading-snug text-foreground/85 group-hover:text-foreground mt-0.5 break-keep">
+                        {item.title}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground/40 mt-0.5 block">{item.source}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+
+        {/* 더보기 / 접기 */}
+        {!loading && items.length > SHOW && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="w-full mt-2 py-2 text-xs text-muted-foreground/50 hover:text-foreground flex items-center justify-center gap-1 transition-colors"
+          >
+            {expanded
+              ? <><ChevronDown className="w-3.5 h-3.5 rotate-180" />접기</>
+              : <><ChevronDown className="w-3.5 h-3.5" />{items.length - SHOW}건 더보기</>}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PredictionHistorySection({
   symbol, liveAcc,
 }: {
@@ -1527,6 +1678,11 @@ export default function MarketAnalysis() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── 매크로 뉴스 피드 ──────────────────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto px-4 pb-4">
+        <MacroNewsFeed />
+      </div>
 
       {/* 면책 고지 */}
       <div className="max-w-2xl mx-auto px-4 pb-10">
