@@ -2061,8 +2061,8 @@ export default function AnalysisDetail() {
         )}
       </div>
 
-      {/* ETF 편입 현황 — 한국 종목 분석 완료 후 표시 */}
-      {isComplete && !isUSTicker(analysis.ticker) && (
+      {/* ETF 편입 현황 — 분석 완료 후 표시 */}
+      {isComplete && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
