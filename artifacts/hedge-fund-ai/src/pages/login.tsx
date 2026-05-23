@@ -1,8 +1,8 @@
-import { useUser } from "@clerk/react";
 import { useLocation, Link } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
+import { useAuth } from "@/lib/auth";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -17,27 +17,56 @@ function KakaoIcon() {
   );
 }
 
+function Spinner({ size = 18, color = "#3C1E1E" }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ animation: "spin 0.7s linear infinite" }}
+    >
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <circle cx="12" cy="12" r="10" stroke={color} strokeOpacity="0.25" strokeWidth="3" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export default function Login() {
-  const { isSignedIn, isLoaded } = useUser();
+  const { data: authData, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { isEn, language, setLanguage } = useLanguage();
+  const [kakaoLoading, setKakaoLoading] = useState(false);
 
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
+    if (!authLoading && authData?.user) {
       setLocation("/");
     }
-  }, [isLoaded, isSignedIn, setLocation]);
+  }, [authLoading, authData, setLocation]);
 
   const handleKakaoLogin = () => {
-    window.location.href = "/api/auth/kakao";
+    setKakaoLoading(true);
+    window.location.href = `${basePath}/api/auth/kakao`;
   };
 
   const handleDevLogin = async () => {
-    await fetch(getApiUrl("/api/auth/dev-login"), { method: "POST", credentials: "include" });
-    window.location.href = "/";
+    setKakaoLoading(true);
+    try {
+      await fetch(getApiUrl("/api/auth/dev-login"), { method: "POST", credentials: "include" });
+      window.location.href = basePath + "/";
+    } finally {
+      setKakaoLoading(false);
+    }
   };
 
+  if (authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-4" style={{ minHeight: "50vh" }}>
+        <div className="w-5 h-5 rounded-full border-2 border-[#FF8A7A] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 relative">
@@ -76,13 +105,22 @@ export default function Login() {
           {/* Kakao */}
           <button
             onClick={handleKakaoLogin}
-            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] transition-all"
+            disabled={kakaoLoading}
+            className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-semibold text-[14px] transition-all active:scale-[0.98] disabled:opacity-75"
             style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
           >
-            <KakaoIcon />
-            {isEn ? "Continue with Kakao" : "카카오로 계속하기"}
+            {kakaoLoading ? (
+              <>
+                <Spinner size={18} color="#3C1E1E" />
+                {isEn ? "Connecting…" : "연결 중…"}
+              </>
+            ) : (
+              <>
+                <KakaoIcon />
+                {isEn ? "Continue with Kakao" : "카카오로 계속하기"}
+              </>
+            )}
           </button>
-
         </div>
 
         {/* Disclaimer */}
@@ -102,7 +140,8 @@ export default function Login() {
             </p>
             <button
               onClick={handleDevLogin}
-              className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-[13px] font-semibold border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all"
+              disabled={kakaoLoading}
+              className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-[13px] font-semibold border border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all disabled:opacity-60"
             >
               <span className="text-[15px]">🛠</span>
               {isEn ? "Preview account login" : "미리보기 계정으로 로그인"}

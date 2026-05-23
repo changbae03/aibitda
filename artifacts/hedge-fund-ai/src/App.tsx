@@ -78,7 +78,7 @@ function GlobalSplash() {
   const startRef = useRef(Date.now());
 
   useEffect(() => {
-    const MIN_MS = 1800;
+    const MIN_MS = 600;
     const elapsed = Date.now() - startRef.current;
     const delay = Math.max(0, MIN_MS - elapsed);
     const timer = setTimeout(() => setVisible(false), delay);

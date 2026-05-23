@@ -1,4 +1,3 @@
-import { useUser } from "@clerk/react";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth, getKakaoLoginUrl } from "@/lib/auth";
@@ -44,12 +43,12 @@ const STEPS_EN = [
 
 
 export default function Landing() {
-  const { isSignedIn, isLoaded } = useUser();
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const [fromKakao] = useState(() => new URLSearchParams(window.location.search).get("from") === "kakao");
   const { data: kakaoAuth, isLoading: kakaoLoading } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
+  const [kakaoButtonLoading, setKakaoButtonLoading] = useState(false);
   const { isEn, language, setLanguage } = useLanguage();
 
   const STEPS = isEn ? STEPS_EN : STEPS_KO;
@@ -58,16 +57,14 @@ export default function Landing() {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
     if (ref) localStorage.setItem("pending_referral", ref);
-    // 카카오 OAuth 완료 후 리다이렉트: auth 캐시 강제 갱신
     if (params.get("from") === "kakao") {
       qc.invalidateQueries({ queryKey: ["auth/me"] });
     }
   }, [qc]);
 
   useEffect(() => {
-    if (isLoaded && isSignedIn) { setLocation("/analysis/new"); return; }
     if (!kakaoLoading && kakaoAuth?.user) setLocation("/analysis/new");
-  }, [isLoaded, isSignedIn, kakaoLoading, kakaoAuth, setLocation]);
+  }, [kakaoLoading, kakaoAuth, setLocation]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -76,11 +73,19 @@ export default function Landing() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleKakaoLogin = () => { window.location.href = getKakaoLoginUrl(); };
+  const handleKakaoLogin = () => {
+    setKakaoButtonLoading(true);
+    window.location.href = getKakaoLoginUrl();
+  };
 
   const handleDevLogin = async () => {
-    await fetch(getApiUrl("/api/auth/dev-login"), { method: "POST", credentials: "include" });
-    window.location.href = "/analysis/new";
+    setKakaoButtonLoading(true);
+    try {
+      await fetch(getApiUrl("/api/auth/dev-login"), { method: "POST", credentials: "include" });
+      window.location.href = basePath + "/analysis/new";
+    } finally {
+      setKakaoButtonLoading(false);
+    }
   };
 
 
@@ -178,13 +183,26 @@ export default function Landing() {
             <div className="space-y-3 mb-6">
               <button
                 onClick={handleKakaoLogin}
-                className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm"
+                disabled={kakaoButtonLoading}
+                className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-bold text-[14.5px] transition-all hover:opacity-90 active:scale-[0.98] shadow-sm disabled:opacity-75 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#FEE500", color: "#3C1E1E" }}
               >
-                <KakaoIcon />
-                {isEn ? "Continue with Kakao" : "카카오로 시작하기"}
+                {kakaoButtonLoading ? (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 0.7s linear infinite" }}>
+                      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                      <circle cx="12" cy="12" r="10" stroke="#3C1E1E" strokeOpacity="0.25" strokeWidth="3" />
+                      <path d="M12 2a10 10 0 0 1 10 10" stroke="#3C1E1E" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                    {isEn ? "Connecting…" : "연결 중…"}
+                  </>
+                ) : (
+                  <>
+                    <KakaoIcon />
+                    {isEn ? "Continue with Kakao" : "카카오로 시작하기"}
+                  </>
+                )}
               </button>
-
 
               {import.meta.env.DEV && (
                 <div className="pt-3 border-t border-dashed border-border/50">
@@ -193,7 +211,8 @@ export default function Landing() {
                   </p>
                   <button
                     onClick={handleDevLogin}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all"
+                    disabled={kakaoButtonLoading}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[12.5px] font-medium border border-dashed border-muted-foreground/25 text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-all disabled:opacity-50"
                   >
                     <span>🛠</span>
                     {isEn ? "Preview account login" : "미리보기 계정으로 로그인"}

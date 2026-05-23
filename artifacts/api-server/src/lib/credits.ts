@@ -4,7 +4,7 @@ import cookie from "cookie";
 import { getAuth } from "@clerk/express";
 import type { Request } from "express";
 
-const JWT_SECRET = process.env.JWT_SECRET || "cbst-ai-research-secret-2024";
+const JWT_SECRET = process.env.JWT_SECRET || "dev-only-insecure-fallback-DO-NOT-USE-IN-PROD";
 
 function getTodayKST(): string {
   const now = new Date();

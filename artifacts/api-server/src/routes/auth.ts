@@ -7,15 +7,16 @@ const router = Router();
 
 const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY ?? "";
 const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET ?? "";
-const JWT_SECRET = process.env.JWT_SECRET || "cbst-ai-research-secret-2024";
 
-// ── 서버 시작 시 환경변수 로드 확인 ──────────────────────────────────────────
-console.log("[Kakao] module loaded");
-console.log("[Kakao] KAKAO_REST_API_KEY set:", !!KAKAO_REST_API_KEY);
-console.log("[Kakao] KAKAO_REST_API_KEY length:", KAKAO_REST_API_KEY.length);
-console.log("[Kakao] KAKAO_REST_API_KEY prefix:", KAKAO_REST_API_KEY.slice(0, 6) || "(empty)");
-console.log("[Kakao] KAKAO_CLIENT_SECRET set:", !!KAKAO_CLIENT_SECRET);
-console.log("[Kakao] KAKAO_REDIRECT_URI:", process.env.KAKAO_REDIRECT_URI ?? "(not set, will auto-detect)");
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[Auth] JWT_SECRET 환경변수가 설정되지 않았습니다. 배포를 중단합니다.");
+  }
+  console.warn("[Auth] JWT_SECRET not set — using insecure dev fallback (production deployment will fail)");
+}
+const JWT_SECRET = process.env.JWT_SECRET || "dev-only-insecure-fallback-DO-NOT-USE-IN-PROD";
+
+console.log("[Kakao] module loaded, REST_API_KEY set:", !!KAKAO_REST_API_KEY, "REDIRECT_URI:", process.env.KAKAO_REDIRECT_URI ?? "(auto-detect)");
 
 // 환경변수로 redirect_uri 고정 (프록시 헤더 불일치 방지)
 function getRedirectUri(req: any): string {
@@ -50,8 +51,6 @@ router.get("/auth/kakao/callback", async (req, res) => {
   }
 
   const redirectUri = getRedirectUri(req);
-  console.log("[Kakao] /auth/kakao/callback → redirect_uri:", redirectUri);
-  console.log("[Kakao] API key prefix:", KAKAO_REST_API_KEY?.slice(0, 6) + "...");
 
   try {
     const params = new URLSearchParams({
@@ -60,14 +59,6 @@ router.get("/auth/kakao/callback", async (req, res) => {
       redirect_uri: redirectUri,
       code: code as string,
       ...(KAKAO_CLIENT_SECRET ? { client_secret: KAKAO_CLIENT_SECRET } : {}),
-    });
-
-    console.log("[Kakao] token request params:", {
-      grant_type: "authorization_code",
-      client_id: KAKAO_REST_API_KEY?.slice(0, 6) + "...",
-      redirect_uri: redirectUri,
-      code: (code as string).slice(0, 8) + "...",
-      client_secret: KAKAO_CLIENT_SECRET ? "[set]" : "[not set]",
     });
 
     const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
@@ -109,10 +100,6 @@ router.get("/auth/kakao/callback", async (req, res) => {
       (kakaoRedirectUri ? new URL(kakaoRedirectUri).origin : null) ||
       `${proto}://${host}`;
 
-    console.log("[Kakao] headers x-forwarded-host:", req.headers["x-forwarded-host"]);
-    console.log("[Kakao] headers host:", req.get("host"));
-    console.log("[Kakao] resolved frontendOrigin:", frontendOrigin);
-
     const isSecure = proto === "https" || frontendOrigin.startsWith("https://");
 
     res.setHeader("Set-Cookie", cookie.serialize("auth_token", token, {
@@ -123,9 +110,7 @@ router.get("/auth/kakao/callback", async (req, res) => {
       path: "/",
     }));
 
-    // 쿠키 설정 즉시 리다이렉트 — DB 저장은 백그라운드 fire-and-forget (hang 방지)
-    console.log("[Kakao] login success, user:", user.id, user.nickname);
-    console.log("[Kakao] redirecting to:", `${frontendOrigin}/?from=kakao`);
+    console.log(`[Kakao] login success user=${user.id}`);
     res.redirect(`${frontendOrigin}/?from=kakao`);
 
     // 카카오 닉네임·이메일 → user_credits 저장 (리다이렉트 후 비동기 처리)

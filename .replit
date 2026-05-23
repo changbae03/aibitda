@@ -36,3 +36,4 @@ KAKAO_REDIRECT_URI = "https://www.aibitda.kr/api/auth/kakao/callback"
 [userenv.shared]
 ECOS_API_KEY = "LMUYBHPGF1GS0YQQOEJW"
 FRED_API_KEY = "5f7576987d19115c8ef0c7bfe050f991"
+JWT_SECRET = "0a1b91f98f20890d17bbd4f871eec1c13088a160c308ef070f54b0bc5ff7eceb36031e5b572abf06cc41cbc9ef54fe81"

@@ -497,12 +497,22 @@ router.post("/settings", async (req, res) => {
     res.status(403).json({ error: "관리자만 접근 가능합니다" });
     return;
   }
+  const ALLOWED_SETTING_KEYS = new Set([
+    "notice_enabled", "notice_text", "notice_type",
+    "maintenance_mode", "signup_enabled", "default_daily_limit",
+    "banner_text", "banner_url", "feature_flags",
+  ]);
   const updates = req.body as Record<string, string>;
+  const invalid = Object.keys(updates).filter(k => !ALLOWED_SETTING_KEYS.has(k));
+  if (invalid.length > 0) {
+    res.status(400).json({ error: `허용되지 않은 설정 키: ${invalid.join(", ")}` });
+    return;
+  }
   for (const [key, value] of Object.entries(updates)) {
     await pool.query(
       `INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [key, String(value)]
+      [key, String(value).slice(0, 2000)]
     );
   }
   res.json({ ok: true });
