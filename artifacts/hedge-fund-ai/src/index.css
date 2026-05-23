@@ -34,24 +34,26 @@
 }
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 0 0% 5%;
+  /* 배경: 순백 대신 아주 살짝 따뜻한 크림 — 카드가 자연스럽게 떠오름 */
+  --background: 40 18% 96%;
+  --foreground: 0 0% 8%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 5%;
+  --card-foreground: 0 0% 8%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 5%;
+  --popover-foreground: 0 0% 8%;
 
-  --primary: 0 0% 5%;
+  --primary: 0 0% 8%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 0 0% 96%;
-  --secondary-foreground: 0 0% 15%;
+  --secondary: 40 12% 91%;
+  --secondary-foreground: 0 0% 18%;
 
-  --muted: 0 0% 96%;
-  --muted-foreground: 0 0% 44%;
+  /* muted: 살짝 따뜻한 톤, foreground는 훨씬 진하게 */
+  --muted: 40 10% 92%;
+  --muted-foreground: 0 0% 32%;
 
-  --accent: 0 0% 96%;
-  --accent-foreground: 0 0% 5%;
+  --accent: 40 10% 92%;
+  --accent-foreground: 0 0% 8%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -62,9 +64,10 @@
   --warning: 38 92% 48%;
   --warning-foreground: 0 0% 100%;
 
-  --border: 0 0% 90%;
-  --input: 0 0% 93%;
-  --ring: 0 0% 5%;
+  /* 보더: 훨씬 선명하게 */
+  --border: 0 0% 82%;
+  --input: 0 0% 88%;
+  --ring: 0 0% 8%;
 
   --radius: 0.5rem;
 }
@@ -135,6 +138,12 @@
   button, a, [role="button"] {
     touch-action: manipulation;
   }
+}
+
+/* ── 라이트 배경 미세 그라디언트 ── */
+body {
+  background: radial-gradient(ellipse 120% 50% at 0% 0%, hsl(40 30% 97%) 0%, hsl(40 18% 96%) 60%),
+              radial-gradient(ellipse 60% 40% at 100% 100%, hsl(220 20% 96%) 0%, transparent 60%);
 }
 
 /* ── 다크 배경 미세 그라디언트 ── */
