@@ -713,18 +713,60 @@ const OUTLOOK_CONFIG = {
   cautious: { label: "관망", text: "text-slate-400",   bg: "bg-slate-500/10",   border: "border-slate-500/20"   },
 };
 
-function MacroChip({ label, value, level }: { label: string; value: string; level: "warn" | "ok" | "info" }) {
+function MacroChip({
+  label, subtitle, value, level, signal,
+}: {
+  label: string; subtitle: string; value: string;
+  level: "warn" | "ok" | "info"; signal?: string;
+}) {
   const s = {
-    warn: "bg-orange-500/10 border-orange-500/20 text-orange-500",
+    warn: "bg-orange-500/10 border-orange-500/25 text-orange-500",
     ok:   "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
     info: "bg-muted/40 border-border text-foreground",
   }[level];
+  const dot = level === "warn" ? "bg-orange-400" : "bg-emerald-400";
   return (
-    <div className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px]", s)}>
-      <span className="opacity-60 shrink-0">{label}</span>
-      <span className="font-bold">{value}</span>
+    <div className={cn("flex flex-col gap-0.5 px-3 py-2 rounded-xl border", s)}>
+      <div className="flex items-center gap-1.5">
+        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} />
+        <span className="text-[9px] font-medium opacity-55 leading-tight">{subtitle}</span>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[14px] font-black leading-tight">{value}</span>
+        {signal && (
+          <span className="text-[9px] font-semibold opacity-60">{signal}</span>
+        )}
+      </div>
+      <span className="text-[9px] opacity-40 leading-tight">{label}</span>
     </div>
   );
+}
+
+/** 매크로 조건을 일반 투자자가 읽기 쉬운 문장으로 변환 */
+function buildMacroNarrative(macro: MacroSnapshot, env: MacroEnvironment): string {
+  const sentences: string[] = [];
+  if (env.rateLevel === "high") {
+    sentences.push(`미국 Fed 금리가 ${macro.usRate}%로 높아 대출·투자 비용 부담이 큰 환경입니다`);
+  } else if (env.rateLevel === "moderate") {
+    sentences.push(`미국 Fed 금리(${macro.usRate}%)는 중립 수준을 유지하고 있습니다`);
+  } else {
+    sentences.push(`미국 Fed 금리(${macro.usRate}%)가 낮아 유동성이 풍부한 환경입니다`);
+  }
+  if (env.inflation === "elevated") {
+    sentences.push(`물가(CPI ${macro.usCpi.toFixed(1)}%)가 Fed 목표치(2%)를 크게 웃돌아 금리 인하가 쉽지 않습니다`);
+  } else if (env.inflation === "moderate") {
+    sentences.push(`물가(CPI ${macro.usCpi.toFixed(1)}%)는 서서히 안정되고 있습니다`);
+  }
+  if (env.fxKrw === "weak") {
+    sentences.push(`원화 약세(달러당 ${macro.krwUsd.toLocaleString()}원)로 해외 ETF 투자 시 환차익 효과가 추가됩니다`);
+  } else if (env.fxKrw === "neutral") {
+    sentences.push(`원달러 환율(${macro.krwUsd.toLocaleString()}원)은 중립적입니다`);
+  }
+  if (env.oilPrice === "high") {
+    sentences.push(`국제 유가($${macro.wti.toFixed(0)})가 높아 에너지·방산주가 수혜를 받는 반면 물류·소비 비용은 늘어납니다`);
+  }
+  sentences.push("AI 인프라 투자 사이클은 꾸준히 진행 중입니다");
+  return sentences.join(". ") + ".";
 }
 
 function MomentumTab() {
@@ -801,8 +843,10 @@ function MomentumTab() {
                 {cfg.label}
               </span>
               <div className="text-right">
-                <p className="text-base font-black" style={{ color: sColor }}>{sector.score}</p>
-                <p className="text-[9px] text-muted-foreground/30 -mt-0.5">/ 100</p>
+                <p className="text-base font-black leading-tight" style={{ color: sColor }}>{sector.score}</p>
+                <p className="text-[9px] font-semibold -mt-0.5" style={{ color: sColor, opacity: 0.7 }}>
+                  {sector.score >= 75 ? "매우 유망" : sector.score >= 60 ? "유망" : "보통"}
+                </p>
               </div>
             </div>
           </div>
@@ -912,39 +956,80 @@ function MomentumTab() {
         <>
           {/* 매크로 스냅샷 */}
           <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">현재 거시 환경</p>
-            <div className="flex flex-wrap gap-1.5">
-              <MacroChip label="기준금리 KR" value={`${data.macro.krRate}%`}                                    level={data.macro.krRate > 2.5 ? "warn" : "ok"} />
-              <MacroChip label="Fed"         value={`${data.macro.usRate}%`}                                    level={data.macro.usRate > 3.0 ? "warn" : "ok"} />
-              <MacroChip label="원달러"      value={`${data.macro.krwUsd.toLocaleString()}원`}                  level={data.macro.krwUsd > 1400 ? "warn" : "ok"} />
-              <MacroChip label="CPI(US)"     value={`${data.macro.usCpi.toFixed(1)}%`}                         level={data.macro.usCpi > 3.0 ? "warn" : "ok"} />
-              <MacroChip label="WTI"         value={`$${data.macro.wti.toFixed(0)}`}                           level={data.macro.wti > 80 ? "warn" : "ok"} />
-              <MacroChip label="10Y–2Y"      value={`${data.macro.yieldSpread > 0 ? "+" : ""}${data.macro.yieldSpread.toFixed(2)}%`} level={data.macro.yieldSpread > 0.2 ? "ok" : "warn"} />
+            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">지금 시장 온도계</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              <MacroChip
+                label="한국 기준금리"
+                subtitle={data.macro.krRate > 2.5 ? "높은 수준 — 대출 부담 ↑" : "안정적 수준"}
+                value={`${data.macro.krRate}%`}
+                level={data.macro.krRate > 2.5 ? "warn" : "ok"}
+              />
+              <MacroChip
+                label="미국 Fed 금리"
+                subtitle={data.macro.usRate > 3.0 ? "고금리 — 글로벌 투자 억제" : "완화적 환경"}
+                value={`${data.macro.usRate}%`}
+                level={data.macro.usRate > 3.0 ? "warn" : "ok"}
+              />
+              <MacroChip
+                label="원/달러 환율"
+                subtitle={data.macro.krwUsd > 1400 ? "원화 약세 — 해외 ETF 유리" : "원화 안정"}
+                value={`${data.macro.krwUsd.toLocaleString()}원`}
+                level={data.macro.krwUsd > 1400 ? "warn" : "ok"}
+              />
+              <MacroChip
+                label="미국 물가(CPI)"
+                subtitle={data.macro.usCpi > 3.0 ? "목표치(2%) 초과 — 금리 인하 어려움" : "물가 안정"}
+                value={`${data.macro.usCpi.toFixed(1)}%`}
+                level={data.macro.usCpi > 3.0 ? "warn" : "ok"}
+              />
+              <MacroChip
+                label="국제 유가(WTI)"
+                subtitle={data.macro.wti > 80 ? "고유가 — 에너지·방산 수혜" : "유가 안정"}
+                value={`$${data.macro.wti.toFixed(0)}`}
+                level={data.macro.wti > 80 ? "warn" : "ok"}
+                signal={data.macro.wti > 80 ? "배럴" : "배럴"}
+              />
+              <MacroChip
+                label="장단기 금리차"
+                subtitle={data.macro.yieldSpread > 0.2 ? "정상화 — 경기침체 우려 감소" : "역전·축소 — 경기 우려 신호"}
+                value={`${data.macro.yieldSpread > 0 ? "+" : ""}${data.macro.yieldSpread.toFixed(2)}%`}
+                level={data.macro.yieldSpread > 0.2 ? "ok" : "warn"}
+                signal="10Y–2Y"
+              />
             </div>
-            <div className="flex items-start gap-2 pt-1 border-t border-border/40">
-              <Zap className="w-3 h-3 text-primary/60 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                <span className="font-semibold text-foreground">현재 테마:</span>{" "}{data.environment.theme}
+            {/* 자연어 해설 */}
+            <div className="flex items-start gap-2 pt-2 border-t border-border/40">
+              <Zap className="w-3.5 h-3.5 text-primary/60 mt-0.5 shrink-0" />
+              <p className="text-[12px] text-muted-foreground leading-relaxed">
+                {buildMacroNarrative(data.macro, data.environment)}
               </p>
             </div>
           </div>
 
           {/* 지금 올라타야 할 섹터 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Flame className="w-4 h-4 text-emerald-500" />
-              <h3 className="text-sm font-bold text-foreground">지금 올라타야 할 섹터</h3>
-              <span className="text-[10px] text-muted-foreground/40 ml-auto">현재 매크로 환경 강세</span>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-sm font-bold text-foreground">지금 올라타야 할 섹터</h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground/55 pl-6">
+                현재 금리·물가·환율 조건에서 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">지금 당장 모멘텀이 강한</span> 섹터입니다. 점수가 높을수록 현재 매크로가 유리합니다.
+              </p>
             </div>
             {data.nowSectors.map(s => <SectorCard key={s.id} sector={s} isNow={true} />)}
           </div>
 
           {/* 앞으로 유망한 섹터 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Target className="w-4 h-4 text-blue-400" />
-              <h3 className="text-sm font-bold text-foreground">앞으로 유망한 섹터</h3>
-              <span className="text-[10px] text-muted-foreground/40 ml-auto">매크로 전환 시 수혜</span>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-bold text-foreground">앞으로 주목할 섹터</h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground/55 pl-6">
+                아직 본격적이지 않지만 <span className="text-blue-500 font-semibold">향후 3개월~1년 내 매크로 전환 시</span> 수혜를 받을 가능성이 높은 섹터입니다. 미리 관심 목록에 담아두세요.
+              </p>
             </div>
             {data.futureSectors.map(s => <SectorCard key={s.id} sector={s} isNow={false} />)}
           </div>
@@ -966,7 +1051,11 @@ type Tab = "search" | "momentum";
 
 export default function ETFAnalysis() {
   const { isEn }      = useLanguage();
-  const [tab, setTab] = useState<Tab>("search");
+  const initTab = (): Tab => {
+    const p = new URLSearchParams(window.location.search).get("tab");
+    return p === "momentum" ? "momentum" : "search";
+  };
+  const [tab, setTab] = useState<Tab>(initTab);
 
   return (
     <div className="space-y-5 pb-20">
