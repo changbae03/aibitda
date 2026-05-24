@@ -4,6 +4,20 @@ import { GoogleGenAI } from "@google/genai";
 import { correctKoreanTicker, getKRXCache } from "../lib/krx-cache.js";
 import { fetchETFsForStock, isPykrxEnabled } from "../lib/pykrx-client.js";
 import { cache } from "../lib/mem-cache.js";
+import { getStockExposure } from "../lib/etf-analyzer.js";
+
+const SECTOR_TO_CATEGORY: Record<string, string> = {
+  "국내주식": "시장전체",
+  "코스닥":   "시장전체",
+  "반도체":   "반도체·IT",
+  "2차전지":  "2차전지",
+  "헬스케어": "바이오·헬스케어",
+  "금융":     "금융",
+  "IT":       "반도체·IT",
+  "해외주식": "시장전체",
+  "배당":     "고배당",
+  "원자재":   "에너지·화학",
+};
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
@@ -85,41 +99,62 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
     weight: number; dataSource: "real";
   }> = [];
 
-  if (koreanCode && isPykrxEnabled()) {
+  if (koreanCode) {
     const cacheKey = `etf-inclusion:${koreanCode}`;
     const cached = cache.get<typeof domesticEtfs>(cacheKey);
     if (cached) {
       domesticEtfs = cached;
     } else {
+      // pykrx 실데이터 시도
+      let pykrxEtfs: typeof domesticEtfs = [];
+      if (isPykrxEnabled()) {
+        try {
+          const holdings = await fetchETFsForStock(koreanCode);
+          const isKosdaqStock = exchange === "KOSDAQ";
+          const filtered = holdings.filter(h => {
+            const nameUp = h.etfName.toUpperCase();
+            const isKosdaqEtf = nameUp.includes("KOSDAQ") || h.etfName.includes("코스닥");
+            if (isKosdaqEtf && !isKosdaqStock) return false;
+            return true;
+          });
+          pykrxEtfs = filtered.map(h => ({
+            code:       h.etfCode,
+            name:       h.etfName,
+            manager:    h.manager,
+            category:   h.category,
+            weight:     h.weight,
+            dataSource: "real" as const,
+          }));
+          console.log(`[etf-inclusion] pykrx ${koreanCode}: ${pykrxEtfs.length}개`);
+        } catch (e: any) {
+          console.warn("[etf-inclusion] pykrx 실패:", e?.message);
+        }
+      }
+
+      // ETF 분석 페이지와 동일한 MAJOR_ETFS 데이터로 보완
+      let majorEtfs: typeof domesticEtfs = [];
       try {
-        const holdings = await fetchETFsForStock(koreanCode);
-
-        // KOSDAQ 전용 ETF는 이름에 "KOSDAQ" 또는 "코스닥" 포함 → KOSPI 종목 제외
-        // KOSPI 전용 지수 ETF는 KOSDAQ 종목에서 제외
-        const isKosdaqStock = exchange === "KOSDAQ";
-        const filtered = holdings.filter(h => {
-          const nameUp = h.etfName.toUpperCase();
-          const isKosdaqEtf = nameUp.includes("KOSDAQ") || h.etfName.includes("코스닥");
-          if (isKosdaqEtf && !isKosdaqStock) {
-            console.log(`[etf-inclusion] 제외(KOSPI→KOSDAQ ETF): ${h.etfName} (${koreanCode})`);
-            return false;
-          }
-          return true;
-        });
-
-        domesticEtfs = filtered.map(h => ({
-          code:       h.etfCode,
-          name:       h.etfName,
-          manager:    h.manager,
-          category:   h.category,
-          weight:     h.weight,
+        const exposure = await getStockExposure(koreanCode);
+        majorEtfs = exposure.map(({ etf, holding }) => ({
+          code:       etf.code,
+          name:       etf.name,
+          manager:    etf.issuer,
+          category:   SECTOR_TO_CATEGORY[etf.sector] ?? etf.sector,
+          weight:     holding.weight,
           dataSource: "real" as const,
         }));
-        cache.set(cacheKey, domesticEtfs, TTL_ETF);
-        console.log(`[etf-inclusion] ${koreanCode}(${exchange}): ${domesticEtfs.length}개 ETF 실데이터 (원본 ${holdings.length}개)`);
+        console.log(`[etf-inclusion] MAJOR_ETFS ${koreanCode}: ${majorEtfs.length}개`);
       } catch (e: any) {
-        console.warn("[etf-inclusion] pykrx 실패:", e?.message);
+        console.warn("[etf-inclusion] MAJOR_ETFS 조회 실패:", e?.message);
       }
+
+      // 병합: pykrx 우선, 중복(ETF코드) 제거 후 MAJOR_ETFS로 보완
+      const pykrxCodes = new Set(pykrxEtfs.map(e => e.code));
+      const supplemental = majorEtfs.filter(e => !pykrxCodes.has(e.code));
+      domesticEtfs = [...pykrxEtfs, ...supplemental].sort((a, b) => b.weight - a.weight);
+
+      cache.set(cacheKey, domesticEtfs, TTL_ETF);
+      console.log(`[etf-inclusion] ${koreanCode}(${exchange}): 최종 ${domesticEtfs.length}개 (pykrx ${pykrxEtfs.length} + 보완 ${supplemental.length})`);
     }
   }
 
