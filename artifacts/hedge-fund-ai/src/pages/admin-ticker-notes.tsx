@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Save, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, CheckCircle, Bot, PencilLine } from "lucide-react";
+import { Search, Save, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, CheckCircle, Bot, PencilLine, Eye, Brain, BarChart3, Cpu } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
 const AI_REVIEW_TAG = "[AI검수]";
@@ -33,6 +33,107 @@ function AiReviewBlock({ text }: { text: string }) {
   );
 }
 
+interface InjectionBlock {
+  type: "memo" | "autoLearning" | "sectorCalibration";
+  label: string;
+  content: string;
+}
+
+interface InjectionData {
+  ticker: string;
+  companyName: string;
+  industry: string;
+  sectorKey: string;
+  blocks: InjectionBlock[];
+  historyCount: number;
+}
+
+const BLOCK_STYLES: Record<string, { color: string; icon: React.ElementType; border: string; bg: string }> = {
+  memo:              { color: "text-amber-500 dark:text-amber-400",  icon: PencilLine, border: "border-amber-500/20", bg: "bg-amber-500/[0.04]" },
+  autoLearning:      { color: "text-blue-500 dark:text-blue-400",    icon: BarChart3,  border: "border-blue-500/20",  bg: "bg-blue-500/[0.04]"  },
+  sectorCalibration: { color: "text-violet-500 dark:text-violet-400",icon: Brain,      border: "border-violet-500/20",bg: "bg-violet-500/[0.04]" },
+};
+
+function InjectionPreview({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<InjectionData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/ticker-notes/${encodeURIComponent(ticker)}/prompt-injection`), { credentials: "include" });
+      if (r.ok) { setData(await r.json()); setLoaded(true); }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [ticker]);
+
+  if (loading && !loaded) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-muted-foreground text-xs">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" /> 프롬프트 주입 내용 로드 중…
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const isEmpty = data.blocks.length === 0;
+
+  return (
+    <div className="space-y-2.5">
+      {/* 섹터 뱃지 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border border-border bg-muted/60 text-muted-foreground">
+          <Cpu className="w-3 h-3" />
+          {data.sectorKey || "섹터 미분류"}
+        </span>
+        {data.industry && (
+          <span className="text-[10px] text-muted-foreground/60">{data.industry}</span>
+        )}
+        <span className="text-[10px] text-muted-foreground/50">
+          분석 이력 {data.historyCount}회 {data.historyCount >= 2 ? "✓ 통계 주입됨" : "(2회 이상부터 통계 주입)"}
+        </span>
+      </div>
+
+      {isEmpty ? (
+        <div className="text-xs text-muted-foreground/50 italic py-1">
+          현재 주입되는 보정 데이터 없음 — 메모 작성 또는 분석 2회 이상 완료 시 활성화됩니다.
+        </div>
+      ) : (
+        data.blocks.map((block, i) => {
+          const style = BLOCK_STYLES[block.type] ?? BLOCK_STYLES.memo;
+          const Icon = style.icon;
+          return (
+            <div key={i} className={cn("rounded-lg border p-3 text-[12px]", style.border, style.bg)}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Icon className={cn("w-3.5 h-3.5 shrink-0", style.color)} />
+                <span className={cn("text-[10px] font-bold uppercase tracking-wider", style.color)}>
+                  {block.label}
+                </span>
+              </div>
+              <pre className="text-foreground/70 leading-relaxed whitespace-pre-wrap font-sans text-[11.5px]">
+                {block.content}
+              </pre>
+            </div>
+          );
+        })
+      )}
+
+      <button
+        onClick={load}
+        className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground flex items-center gap-1 transition-colors"
+      >
+        <RefreshCw className="w-3 h-3" /> 새로고침
+      </button>
+    </div>
+  );
+}
+
 interface TickerNote {
   ticker: string;
   companyName?: string | null;
@@ -46,7 +147,6 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-/** 6자리 숫자면 국내주식 → 회사명 표시, 아니면 티커 그대로 */
 function isKoreanTicker(ticker: string) {
   return /^\d{6}$/.test(ticker);
 }
@@ -68,6 +168,7 @@ export default function AdminTickerNotes() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [injectionOpen, setInjectionOpen] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [savedOk, setSavedOk] = useState<Record<string, boolean>>({});
@@ -217,6 +318,7 @@ export default function AdminTickerNotes() {
         <div className="space-y-2">
           {filtered.map(note => {
             const isOpen = !!expanded[note.ticker];
+            const isInjectionOpen = !!injectionOpen[note.ticker];
             const memo = editing[note.ticker] ?? note.memo;
             const isDirty = memo !== note.memo;
             const displayName = isKoreanTicker(note.ticker) && note.companyName
@@ -311,10 +413,35 @@ export default function AdminTickerNotes() {
                           🤖 AI 자동학습 이력 (읽기 전용)
                         </label>
                         <pre className="mt-1.5 text-xs text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed">
-                          {note.autoLearning}
+                          {typeof note.autoLearning === "string"
+                            ? note.autoLearning
+                            : JSON.stringify(note.autoLearning, null, 2)}
                         </pre>
                       </div>
                     )}
+
+                    {/* 프롬프트 주입 미리보기 */}
+                    <div className="border-t border-border/60 pt-3">
+                      <button
+                        onClick={() => setInjectionOpen(prev => ({ ...prev, [note.ticker]: !prev[note.ticker] }))}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-violet-400" />
+                        <span className="font-semibold text-violet-500 dark:text-violet-400 uppercase tracking-wide text-[10px]">
+                          프롬프트 주입 미리보기
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/50 ml-1">— 실제 Gemini에 전달되는 보정 내용</span>
+                        {isInjectionOpen
+                          ? <ChevronUp className="w-3 h-3 ml-auto text-muted-foreground" />
+                          : <ChevronDown className="w-3 h-3 ml-auto text-muted-foreground" />}
+                      </button>
+
+                      {isInjectionOpen && (
+                        <div className="mt-3">
+                          <InjectionPreview ticker={note.ticker} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   );
                 })()}
