@@ -1282,20 +1282,46 @@ function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
   // ── 향후 유망 섹터 ──────────────────────────────────────────────────
   const future: SectorMomentum[] = [];
 
-  // 기술/성장주: 금리 인하 기대
+  // 기술/성장주: 금리·인플레이션 조건에 따라 다른 내러티브
   {
-    let s = 68;
-    if (rateLevel === "high") s += 5;    // 인하 시 상승 여력 큼
-    if (inflation === "elevated") s -= 5; // 인하 지연 리스크
-    future.push({
-      id: "growth-tech", name: "기술·성장주", icon: "🚀",
-      score: Math.min(100, Math.round(s)),
-      outlook: "bullish", horizon: "중기 (3~6개월)",
-      reason: "인플레이션 둔화 → Fed 금리 인하 사이클 진입 시 성장주 밸류에이션 급반등 예상. QQQ·VGT 선제 포지셔닝이 유효한 구간.",
-      catalysts: ["Fed 금리 인하 사이클 진입 기대", "AI 수익화 가속", "빅테크 실적 호조 지속"],
-      risks: ["CPI 재반등 시 인하 지연", "빅테크 규제 리스크"],
-      sectorTags: ["미국나스닥", "IT", "미국반도체"],
-    });
+    let s = 65;
+    // 고금리+고인플레이션: 단기 밸류에이션 부담, 인하 기대 없음
+    if (rateLevel === "high" && inflation === "elevated") {
+      s -= 5;
+      future.push({
+        id: "growth-tech", name: "기술·성장주", icon: "🚀",
+        score: Math.min(100, Math.round(s)),
+        outlook: "neutral", horizon: "중기 (3~6개월)",
+        reason: `고금리(Fed ${m.usRate}%) + 인플레이션(CPI ${m.usCpi.toFixed(1)}%) 환경에서 성장주 밸류에이션 부담 지속. 단기 금리 인하는 기대하기 어려운 상황이나, AI 실적 모멘텀이 하방을 지지 중.`,
+        catalysts: ["AI 인프라 투자 사이클 지속", "빅테크 자사주 매입 확대", "인플레이션 점진적 둔화 신호"],
+        risks: [`CPI ${m.usCpi.toFixed(1)}% 고착화 시 고금리 장기화`, "성장주 밸류에이션 추가 조정 가능성", "빅테크 규제 리스크"],
+        sectorTags: ["미국나스닥", "IT", "미국반도체"],
+      });
+    } else if (rateLevel === "high" && inflation === "moderate") {
+      // 고금리이지만 인플레이션이 잦아들고 있는 국면
+      s += 3;
+      future.push({
+        id: "growth-tech", name: "기술·성장주", icon: "🚀",
+        score: Math.min(100, Math.round(s)),
+        outlook: "bullish", horizon: "중기 (3~6개월)",
+        reason: `인플레이션이 ${m.usCpi.toFixed(1)}%로 둔화 조짐. 금리 고점 인식이 퍼지면서 성장주 밸류에이션 재평가 기대감이 형성 중. AI 수익화 본격화가 추가 상승 동력.`,
+        catalysts: ["CPI 둔화 → 금리 고점 인식", "AI 수익화 가속", "빅테크 실적 호조"],
+        risks: ["CPI 재반등 시 고금리 장기화", "빅테크 규제 리스크"],
+        sectorTags: ["미국나스닥", "IT", "미국반도체"],
+      });
+    } else {
+      // 금리 인하 사이클 진입 구간 (moderate/low rate)
+      s += 8;
+      future.push({
+        id: "growth-tech", name: "기술·성장주", icon: "🚀",
+        score: Math.min(100, Math.round(s)),
+        outlook: "bullish", horizon: "중기 (3~6개월)",
+        reason: "금리 인하 사이클에서 성장주 밸류에이션 디스카운트 해소. AI 수익화 본격화와 맞물려 나스닥 중심 랠리 기대.",
+        catalysts: ["금리 인하 → 할인율 하락", "AI 수익화 가속", "빅테크 실적 호조 지속"],
+        risks: ["경기 침체 전환 시 실적 쇼크", "빅테크 규제 리스크"],
+        sectorTags: ["미국나스닥", "IT", "미국반도체"],
+      });
+    }
   }
 
   // 2차전지: 구조적 반등
@@ -1307,41 +1333,63 @@ function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
       id: "ev-battery", name: "2차전지·EV", icon: "🔋",
       score: Math.min(100, Math.round(s)),
       outlook: "neutral", horizon: "중기 (3~6개월)",
-      reason: "단기 고금리 부담 속 현재 저평가 구간 형성 중. 중국 EV 시장 회복·글로벌 ESS 수요 확대가 구조적 반등 근거.",
+      reason: rateLevel === "high"
+        ? `고금리(${m.usRate}%) 부담으로 단기 자본 조달 비용 증가 중이나, 현재 저평가 구간 형성 중. 중국 EV 회복·ESS 수요 확대가 구조적 반등 근거.`
+        : "금리 부담 완화와 함께 중국 EV 시장 회복·글로벌 ESS 수요 확대가 구조적 반등 근거.",
       catalysts: ["중국 EV 보조금 확대", "ESS 수요 급증", "리튬·양극재 가격 반등"],
-      risks: ["미국 IRA 수혜 불확실성", "완성차 업체 EV 전략 조정"],
+      risks: [
+        rateLevel === "high" ? "고금리 장기화 시 자본 조달 부담" : "금리 반등 리스크",
+        "미국 IRA 수혜 불확실성", "완성차 업체 EV 전략 조정",
+      ],
       sectorTags: ["2차전지"],
     });
   }
 
   // 헬스케어: 방어 + 구조적 성장
   {
-    const s = 62;
+    let s = 62;
+    if (rateLevel === "high" && inflation === "elevated") s += 3; // 방어주 수요
     future.push({
       id: "healthcare", name: "헬스케어·바이오", icon: "💊",
       score: Math.min(100, Math.round(s)),
       outlook: "neutral", horizon: "장기 (6개월+)",
-      reason: "고금리 환경에서 방어적 특성 유지. 글로벌 고령화 + GLP-1 비만치료제 · AI 신약 발굴 테마가 장기 성장 동력.",
+      reason: rateLevel === "high"
+        ? `고금리·고물가 환경에서 경기 방어적 특성이 돋보이는 섹터. GLP-1 비만치료제 · AI 신약 발굴 테마가 금리와 무관한 장기 성장 동력.`
+        : "글로벌 고령화 + GLP-1 비만치료제 · AI 신약 발굴 테마가 장기 성장 동력.",
       catalysts: ["GLP-1 비만치료제 시장 확대", "AI 기반 신약 개발 단축", "노인 인구 구조적 증가"],
       risks: ["임상 실패 리스크", "미국 약가 규제 강화"],
       sectorTags: ["헬스케어", "미국헬스케어"],
     });
   }
 
-  // 배당: 금리 인하 시 재평가
+  // 배당·인컴: 금리 환경에 따라 내러티브 분기
   {
     let s = 58;
-    if (rateLevel === "high") s -= 5;
-    s += 8;
-    future.push({
-      id: "dividend", name: "배당·인컴", icon: "💰",
-      score: Math.min(100, Math.round(s)),
-      outlook: "neutral", horizon: "중기 (3~6개월)",
-      reason: "고금리 속 배당 매력 일시적 하락이지만, 금리 인하 사이클 진입 시 배당주 밸류에이션 재평가 기회. 안정 현금흐름 수요 증가.",
-      catalysts: ["금리 인하 시 배당 매력 복원", "주주환원 확대 기업 증가", "불확실성 속 방어 자산 수요"],
-      risks: ["금리 인하 지연 리스크", "기업 실적 둔화 시 배당 삭감"],
-      sectorTags: ["배당"],
-    });
+    if (rateLevel === "high" && inflation === "elevated") {
+      // 고금리·고인플레이션: 금리 인하 기대 없음 → 방어 관점 강조
+      s += 3;
+      future.push({
+        id: "dividend", name: "배당·인컴", icon: "💰",
+        score: Math.min(100, Math.round(s)),
+        outlook: "neutral", horizon: "중기 (3~6개월)",
+        reason: `고금리(${m.usRate}%) 환경에서 예금·채권과 배당주의 경쟁이 심화되지만, 주주환원 확대 기업의 안정적 현금흐름은 방어 자산으로서 매력 유지.`,
+        catalysts: ["주주환원 확대 기업 증가", "불확실성 속 방어 자산 수요", "고배당 섹터 수익 안정성"],
+        risks: [`금리 ${m.usRate}% 유지 시 예금 대비 배당 매력 약화`, "기업 실적 둔화 시 배당 삭감"],
+        sectorTags: ["배당"],
+      });
+    } else {
+      // 금리 인하 가시권 국면
+      s += 8;
+      future.push({
+        id: "dividend", name: "배당·인컴", icon: "💰",
+        score: Math.min(100, Math.round(s)),
+        outlook: "neutral", horizon: "중기 (3~6개월)",
+        reason: "금리 인하 국면에서 고정 수익 대비 배당주 매력 부각. 안정적 현금흐름 + 자본 차익 동시 기대.",
+        catalysts: ["금리 인하 → 배당 매력 복원", "주주환원 확대 기업 증가", "방어 자산 수요"],
+        risks: ["금리 인하 지연 리스크", "기업 실적 둔화 시 배당 삭감"],
+        sectorTags: ["배당"],
+      });
+    }
   }
 
   const futureTop = future.sort((a, b) => b.score - a.score).slice(0, 3);
