@@ -66,158 +66,418 @@ export interface TimingSignal {
 
 export const MAJOR_ETFS: ETFInfo[] = [
   // 코스피200 계열
-  { code:"069500", isuCd:"KR7069500006", name:"KODEX 200",            sector:"국내주식", issuer:"삼성자산운용", yahooCode:"069500.KS", leverage:1,  ter:0.15, benchmark:"KOSPI 200" },
-  { code:"102110", isuCd:"KR7102110009", name:"TIGER 200",            sector:"국내주식", issuer:"미래에셋",    yahooCode:"102110.KS", leverage:1,  ter:0.05, benchmark:"KOSPI 200" },
-  { code:"122630", isuCd:"KR7122630005", name:"KODEX 레버리지",        sector:"국내주식", issuer:"삼성자산운용", yahooCode:"122630.KS", leverage:2,  ter:0.64, benchmark:"KOSPI 200 ×2" },
-  { code:"114800", isuCd:"KR7114800001", name:"KODEX 인버스",          sector:"국내주식", issuer:"삼성자산운용", yahooCode:"114800.KS", leverage:-1, ter:0.64, benchmark:"KOSPI 200 ×-1" },
+  { code:"069500", isuCd:"KR7069500006", name:"KODEX 200",              sector:"국내주식", issuer:"삼성자산운용", yahooCode:"069500.KS", leverage:1,  ter:0.15, benchmark:"KOSPI 200" },
+  { code:"102110", isuCd:"KR7102110009", name:"TIGER 200",              sector:"국내주식", issuer:"미래에셋",    yahooCode:"102110.KS", leverage:1,  ter:0.05, benchmark:"KOSPI 200" },
+  { code:"122630", isuCd:"KR7122630005", name:"KODEX 레버리지",          sector:"국내주식", issuer:"삼성자산운용", yahooCode:"122630.KS", leverage:2,  ter:0.64, benchmark:"KOSPI 200 ×2" },
+  { code:"114800", isuCd:"KR7114800001", name:"KODEX 인버스",            sector:"국내주식", issuer:"삼성자산운용", yahooCode:"114800.KS", leverage:-1, ter:0.64, benchmark:"KOSPI 200 ×-1" },
+  { code:"252670", isuCd:"KR7252670001", name:"KODEX 200선물인버스2X",   sector:"국내주식", issuer:"삼성자산운용", yahooCode:"252670.KS", leverage:-2, ter:0.64, benchmark:"KOSPI 200 ×-2" },
   // 코스닥
-  { code:"229200", isuCd:"KR7229200000", name:"KODEX 코스닥150",       sector:"코스닥",   issuer:"삼성자산운용", yahooCode:"229200.KS", leverage:1,  ter:0.15, benchmark:"KOSDAQ 150" },
+  { code:"229200", isuCd:"KR7229200000", name:"KODEX 코스닥150",         sector:"코스닥",   issuer:"삼성자산운용", yahooCode:"229200.KS", leverage:1,  ter:0.15, benchmark:"KOSDAQ 150" },
   { code:"233740", isuCd:"KR7233740006", name:"KODEX 코스닥150레버리지", sector:"코스닥",   issuer:"삼성자산운용", yahooCode:"233740.KS", leverage:2,  ter:0.64, benchmark:"KOSDAQ 150 ×2" },
   // 반도체
-  { code:"091160", isuCd:"KR7091160007", name:"KODEX 반도체",          sector:"반도체",   issuer:"삼성자산운용", yahooCode:"091160.KS", leverage:1,  ter:0.45, benchmark:"KRX 반도체" },
-  { code:"381180", isuCd:"KR7381180009", name:"TIGER KRX반도체15",     sector:"반도체",   issuer:"미래에셋",    yahooCode:"381180.KS", leverage:1,  ter:0.40, benchmark:"KRX 반도체15" },
+  { code:"091160", isuCd:"KR7091160007", name:"KODEX 반도체",            sector:"반도체",   issuer:"삼성자산운용", yahooCode:"091160.KS", leverage:1,  ter:0.45, benchmark:"KRX 반도체" },
+  { code:"381180", isuCd:"KR7381180009", name:"TIGER KRX반도체15",       sector:"반도체",   issuer:"미래에셋",    yahooCode:"381180.KS", leverage:1,  ter:0.40, benchmark:"KRX 반도체15" },
+  { code:"395160", isuCd:"KR7395160003", name:"KODEX AI반도체TOP2플러스", sector:"반도체",   issuer:"삼성자산운용", yahooCode:"395160.KS", leverage:1,  ter:0.45, benchmark:"KODEX AI반도체TOP2+" },
   // 2차전지
-  { code:"305720", isuCd:"KR7305720003", name:"KODEX 2차전지산업",     sector:"2차전지",  issuer:"삼성자산운용", yahooCode:"305720.KS", leverage:1,  ter:0.45, benchmark:"KRX 2차전지" },
-  { code:"305540", isuCd:"KR7305540005", name:"TIGER 2차전지테마",     sector:"2차전지",  issuer:"미래에셋",    yahooCode:"305540.KS", leverage:1,  ter:0.40, benchmark:"KRX 2차전지테마" },
-  // 헬스케어
-  { code:"143460", isuCd:"KR7143460000", name:"TIGER 헬스케어",        sector:"헬스케어", issuer:"미래에셋",    yahooCode:"143460.KS", leverage:1,  ter:0.40, benchmark:"KRX 헬스케어" },
-  { code:"266410", isuCd:"KR7266410003", name:"KODEX 헬스케어",        sector:"헬스케어", issuer:"삼성자산운용", yahooCode:"266410.KS", leverage:1,  ter:0.45, benchmark:"KRX 헬스케어" },
+  { code:"305720", isuCd:"KR7305720003", name:"KODEX 2차전지산업",       sector:"2차전지",  issuer:"삼성자산운용", yahooCode:"305720.KS", leverage:1,  ter:0.45, benchmark:"KRX 2차전지" },
+  { code:"305540", isuCd:"KR7305540005", name:"TIGER 2차전지테마",       sector:"2차전지",  issuer:"미래에셋",    yahooCode:"305540.KS", leverage:1,  ter:0.40, benchmark:"KRX 2차전지테마" },
+  // 헬스케어 — 266420 = KODEX 헬스케어 (정정: 266410은 KODEX 필수소비재)
+  { code:"143460", isuCd:"KR7143460000", name:"TIGER 헬스케어",          sector:"헬스케어", issuer:"미래에셋",    yahooCode:"143460.KS", leverage:1,  ter:0.40, benchmark:"KRX 헬스케어" },
+  { code:"266420", isuCd:"KR7266420002", name:"KODEX 헬스케어",          sector:"헬스케어", issuer:"삼성자산운용", yahooCode:"266420.KS", leverage:1,  ter:0.45, benchmark:"KRX 헬스케어" },
   // 금융
-  { code:"139270", isuCd:"KR7139270002", name:"KODEX 금융",            sector:"금융",     issuer:"삼성자산운용", yahooCode:"139270.KS", leverage:1,  ter:0.45, benchmark:"KRX 금융" },
-  // IT
-  { code:"091220", isuCd:"KR7091220009", name:"KODEX IT",              sector:"IT",       issuer:"삼성자산운용", yahooCode:"091220.KS", leverage:1,  ter:0.45, benchmark:"KRX IT" },
+  { code:"139270", isuCd:"KR7139270002", name:"TIGER MSCI Korea TR",    sector:"금융",     issuer:"미래에셋",    yahooCode:"139270.KS", leverage:1,  ter:0.09, benchmark:"MSCI Korea TR" },
+  // IT — 266370 = KODEX IT (정정: 091220은 폐지)
+  { code:"266370", isuCd:"KR7266370001", name:"KODEX IT",               sector:"IT",       issuer:"삼성자산운용", yahooCode:"266370.KS", leverage:1,  ter:0.45, benchmark:"KRX IT" },
+  // 삼성그룹
+  { code:"102780", isuCd:"KR7102780009", name:"KODEX 삼성그룹",          sector:"국내주식", issuer:"삼성자산운용", yahooCode:"102780.KS", leverage:1,  ter:0.45, benchmark:"FnGuide 삼성그룹" },
+  // 코리아밸류업
+  { code:"495850", isuCd:"KR7495850001", name:"KODEX 코리아밸류업",      sector:"국내주식", issuer:"삼성자산운용", yahooCode:"495850.KS", leverage:1,  ter:0.15, benchmark:"KRX 코리아밸류업" },
   // 해외
-  { code:"133690", isuCd:"KR7133690005", name:"TIGER 미국나스닥100",   sector:"해외주식", issuer:"미래에셋",    yahooCode:"133690.KS", leverage:1,  ter:0.07, benchmark:"NASDAQ 100" },
-  { code:"379800", isuCd:"KR7379800005", name:"KODEX 미국S&P500TR",    sector:"해외주식", issuer:"삼성자산운용", yahooCode:"379800.KS", leverage:1,  ter:0.05, benchmark:"S&P 500 TR" },
-  { code:"195930", isuCd:"KR7195930004", name:"TIGER 유로스탁스50",    sector:"해외주식", issuer:"미래에셋",    yahooCode:"195930.KS", leverage:1,  ter:0.40, benchmark:"EURO STOXX 50" },
-  // 배당
-  { code:"292150", isuCd:"KR7292150002", name:"TIGER KRX고배당",       sector:"배당",     issuer:"미래에셋",    yahooCode:"292150.KS", leverage:1,  ter:0.29, benchmark:"KRX 고배당50" },
-  { code:"280930", isuCd:"KR7280930004", name:"KODEX 배당성장",        sector:"배당",     issuer:"삼성자산운용", yahooCode:"280930.KS", leverage:1,  ter:0.30, benchmark:"FnGuide 배당성장50" },
+  { code:"133690", isuCd:"KR7133690005", name:"TIGER 미국나스닥100",     sector:"해외주식", issuer:"미래에셋",    yahooCode:"133690.KS", leverage:1,  ter:0.07, benchmark:"NASDAQ 100" },
+  { code:"379800", isuCd:"KR7379800005", name:"KODEX 미국S&P500TR",      sector:"해외주식", issuer:"삼성자산운용", yahooCode:"379800.KS", leverage:1,  ter:0.05, benchmark:"S&P 500 TR" },
+  { code:"379810", isuCd:"KR7379810004", name:"KODEX 미국나스닥100TR",   sector:"해외주식", issuer:"삼성자산운용", yahooCode:"379810.KS", leverage:1,  ter:0.05, benchmark:"NASDAQ 100 TR" },
+  { code:"195930", isuCd:"KR7195930004", name:"TIGER 유로스탁스50",      sector:"해외주식", issuer:"미래에셋",    yahooCode:"195930.KS", leverage:1,  ter:0.40, benchmark:"EURO STOXX 50" },
+  // 배당 — 211900 = KODEX 코리아배당성장 (정정: 280930은 KODEX 미국러셀2000)
+  { code:"292150", isuCd:"KR7292150002", name:"TIGER KRX고배당",         sector:"배당",     issuer:"미래에셋",    yahooCode:"292150.KS", leverage:1,  ter:0.29, benchmark:"KRX 고배당50" },
+  { code:"211900", isuCd:"KR7211900006", name:"KODEX 코리아배당성장",    sector:"배당",     issuer:"삼성자산운용", yahooCode:"211900.KS", leverage:1,  ter:0.30, benchmark:"FnGuide 코리아배당성장" },
   // 원자재 — 금
-  { code:"132030", isuCd:"KR7132030006", name:"KODEX 골드선물(H)",     sector:"원자재",   issuer:"삼성자산운용", yahooCode:"132030.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Gold" },
-  { code:"319640", isuCd:"KR7319640002", name:"TIGER 골드선물(H)",     sector:"원자재",   issuer:"미래에셋",    yahooCode:"319640.KS", leverage:1,  ter:0.39, benchmark:"S&P GSCI Gold" },
+  { code:"132030", isuCd:"KR7132030006", name:"KODEX 골드선물(H)",       sector:"원자재",   issuer:"삼성자산운용", yahooCode:"132030.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Gold" },
+  { code:"319640", isuCd:"KR7319640002", name:"TIGER 골드선물(H)",       sector:"원자재",   issuer:"미래에셋",    yahooCode:"319640.KS", leverage:1,  ter:0.39, benchmark:"S&P GSCI Gold" },
   // 원자재 — 원유
-  { code:"261220", isuCd:"KR7261220003", name:"KODEX WTI원유선물(H)",  sector:"원자재",   issuer:"삼성자산운용", yahooCode:"261220.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Crude Oil" },
-  { code:"217700", isuCd:"KR7217700005", name:"TIGER 원유선물Enhanced(H)", sector:"원자재", issuer:"미래에셋",  yahooCode:"217700.KS", leverage:1,  ter:0.49, benchmark:"WTI 원유선물" },
+  { code:"261220", isuCd:"KR7261220003", name:"KODEX WTI원유선물(H)",    sector:"원자재",   issuer:"삼성자산운용", yahooCode:"261220.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Crude Oil" },
+  { code:"217700", isuCd:"KR7217700005", name:"TIGER 원유선물Enhanced(H)", sector:"원자재", issuer:"미래에셋",    yahooCode:"217700.KS", leverage:1,  ter:0.49, benchmark:"WTI 원유선물" },
   // 원자재 — 은·기타
-  { code:"144600", isuCd:"KR7144600000", name:"KODEX 은선물(H)",       sector:"원자재",   issuer:"삼성자산운용", yahooCode:"144600.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Silver" },
-  { code:"160480", isuCd:"KR7160480000", name:"KODEX 콩선물(H)",       sector:"원자재",   issuer:"삼성자산운용", yahooCode:"160480.KS", leverage:1,  ter:0.45, benchmark:"S&P GSCI Soybeans" },
-  { code:"171018", isuCd:"KR7171018001", name:"KODEX 천연가스선물(H)", sector:"원자재",   issuer:"삼성자산운용", yahooCode:"171018.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Natural Gas" },
+  { code:"144600", isuCd:"KR7144600000", name:"KODEX 은선물(H)",         sector:"원자재",   issuer:"삼성자산운용", yahooCode:"144600.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Silver" },
+  { code:"160480", isuCd:"KR7160480000", name:"KODEX 콩선물(H)",         sector:"원자재",   issuer:"삼성자산운용", yahooCode:"160480.KS", leverage:1,  ter:0.45, benchmark:"S&P GSCI Soybeans" },
+  { code:"171018", isuCd:"KR7171018001", name:"KODEX 천연가스선물(H)",   sector:"원자재",   issuer:"삼성자산운용", yahooCode:"171018.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Natural Gas" },
 ];
 
-// ─── 정적 폴백 보유 종목 (KRX API 실패 시) ───────────────────────────────────
+// ─── Samsung Fund fId 매핑 (모바일 API용) ────────────────────────────────────
+// m.samsungfund.com/api/v1/kodex/product-pdf/{fId}.do?gijunYMD=YYYY.MM.DD
+
+const SF_FID_MAP: Record<string, string> = {
+  "069500": "2ETF01", "091160": "2ETF07", "305720": "2ETFB1",
+  "266420": "2ETF78", "266370": "2ETF82", "211900": "2ETF46",
+  "229200": "2ETF54", "122630": "2ETF25", "114800": "2ETF20",
+  "379800": "2ETFE4", "379810": "2ETFE3", "102780": "2ETF14",
+  "132030": "2ETF24", "144600": "2ETF32", "261220": "2ETF72",
+  "233740": "2ETF56", "252670": "2ETF70", "495850": "2ETFP2",
+  "226490": "2ETF52", "395160": "2ETFE9",
+};
+
+// ─── 정적 폴백 보유 종목 — Samsung Fund product-pdf 실시간 수집 (2026-05-22) ──
 
 const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
-  "069500": [ // KODEX 200
-    { rank:1,  stockCode:"005930", stockName:"삼성전자",          weight:30.52 },
-    { rank:2,  stockCode:"000660", stockName:"SK하이닉스",         weight:7.18  },
-    { rank:3,  stockCode:"373220", stockName:"LG에너지솔루션",     weight:4.21  },
-    { rank:4,  stockCode:"207940", stockName:"삼성바이오로직스",   weight:3.62  },
-    { rank:5,  stockCode:"005380", stockName:"현대차",             weight:2.98  },
-    { rank:6,  stockCode:"068270", stockName:"셀트리온",           weight:2.54  },
-    { rank:7,  stockCode:"005490", stockName:"POSCO홀딩스",        weight:2.11  },
-    { rank:8,  stockCode:"105560", stockName:"KB금융",             weight:2.05  },
-    { rank:9,  stockCode:"055550", stockName:"신한지주",           weight:1.87  },
-    { rank:10, stockCode:"035420", stockName:"NAVER",              weight:1.72  },
-    { rank:11, stockCode:"000270", stockName:"기아",               weight:1.68  },
-    { rank:12, stockCode:"051910", stockName:"LG화학",             weight:1.42  },
-    { rank:13, stockCode:"003550", stockName:"LG",                 weight:1.38  },
-    { rank:14, stockCode:"028260", stockName:"삼성물산",           weight:1.31  },
-    { rank:15, stockCode:"086790", stockName:"하나금융지주",       weight:1.22  },
+  // ── KODEX 200 (069500) — KOSPI 200, 201종목 ────────────────────────────────
+  "069500": [
+    { rank: 1, stockCode:"005930", stockName:"삼성전자",           weight:34.04 },
+    { rank: 2, stockCode:"000660", stockName:"SK하이닉스",          weight:26.19 },
+    { rank: 3, stockCode:"402340", stockName:"SK스퀘어",           weight: 2.65 },
+    { rank: 4, stockCode:"005380", stockName:"현대차",              weight: 2.21 },
+    { rank: 5, stockCode:"009150", stockName:"삼성전기",            weight: 1.64 },
+    { rank: 6, stockCode:"105560", stockName:"KB금융",              weight: 1.22 },
+    { rank: 7, stockCode:"034020", stockName:"두산에너빌리티",      weight: 1.15 },
+    { rank: 8, stockCode:"012330", stockName:"현대모비스",          weight: 1.02 },
+    { rank: 9, stockCode:"000270", stockName:"기아",                weight: 1.00 },
+    { rank:10, stockCode:"012450", stockName:"한화에어로스페이스",  weight: 0.99 },
+    { rank:11, stockCode:"028260", stockName:"삼성물산",            weight: 0.98 },
+    { rank:12, stockCode:"055550", stockName:"신한지주",            weight: 0.95 },
+    { rank:13, stockCode:"006400", stockName:"삼성SDI",             weight: 0.92 },
+    { rank:14, stockCode:"086790", stockName:"하나금융지주",        weight: 0.74 },
+    { rank:15, stockCode:"032830", stockName:"삼성생명",            weight: 0.74 },
   ],
-  "091160": [ // KODEX 반도체
-    { rank:1,  stockCode:"005930", stockName:"삼성전자",           weight:43.20 },
-    { rank:2,  stockCode:"000660", stockName:"SK하이닉스",          weight:24.81 },
-    { rank:3,  stockCode:"009150", stockName:"삼성전기",            weight:5.12  },
-    { rank:4,  stockCode:"058470", stockName:"리노공업",            weight:3.41  },
-    { rank:5,  stockCode:"000990", stockName:"DB하이텍",            weight:2.87  },
-    { rank:6,  stockCode:"036830", stockName:"솔브레인홀딩스",      weight:2.54  },
-    { rank:7,  stockCode:"240810", stockName:"원익IPS",             weight:2.21  },
-    { rank:8,  stockCode:"131970", stockName:"두산테스나",          weight:2.18  },
-    { rank:9,  stockCode:"018260", stockName:"삼성에스디에스",      weight:1.95  },
-    { rank:10, stockCode:"012450", stockName:"한화에어로스페이스",   weight:1.72  },
+  // ── TIGER 200 (102110) — KOSPI 200 추종 (KODEX 200과 동일 지수) ───────────
+  "102110": [
+    { rank: 1, stockCode:"005930", stockName:"삼성전자",           weight:34.04 },
+    { rank: 2, stockCode:"000660", stockName:"SK하이닉스",          weight:26.19 },
+    { rank: 3, stockCode:"402340", stockName:"SK스퀘어",           weight: 2.65 },
+    { rank: 4, stockCode:"005380", stockName:"현대차",              weight: 2.21 },
+    { rank: 5, stockCode:"009150", stockName:"삼성전기",            weight: 1.64 },
+    { rank: 6, stockCode:"105560", stockName:"KB금융",              weight: 1.22 },
+    { rank: 7, stockCode:"034020", stockName:"두산에너빌리티",      weight: 1.15 },
+    { rank: 8, stockCode:"012330", stockName:"현대모비스",          weight: 1.02 },
+    { rank: 9, stockCode:"000270", stockName:"기아",                weight: 1.00 },
+    { rank:10, stockCode:"012450", stockName:"한화에어로스페이스",  weight: 0.99 },
+    { rank:11, stockCode:"028260", stockName:"삼성물산",            weight: 0.98 },
+    { rank:12, stockCode:"055550", stockName:"신한지주",            weight: 0.95 },
+    { rank:13, stockCode:"006400", stockName:"삼성SDI",             weight: 0.92 },
+    { rank:14, stockCode:"086790", stockName:"하나금융지주",        weight: 0.74 },
+    { rank:15, stockCode:"032830", stockName:"삼성생명",            weight: 0.74 },
   ],
-  "305720": [ // KODEX 2차전지산업 — KRX 2차전지 K-뉴딜 지수
-    { rank:1,  stockCode:"373220", stockName:"LG에너지솔루션",      weight:23.41 },
-    { rank:2,  stockCode:"006400", stockName:"삼성SDI",             weight:17.82 },
-    { rank:3,  stockCode:"051910", stockName:"LG화학",              weight:11.12 },
-    { rank:4,  stockCode:"003670", stockName:"포스코퓨처엠",        weight:9.43  },
-    { rank:5,  stockCode:"247540", stockName:"에코프로비엠",        weight:7.21  },
-    { rank:6,  stockCode:"086520", stockName:"에코프로",            weight:5.34  },
-    { rank:7,  stockCode:"278280", stockName:"천보",                weight:3.87  },
-    { rank:8,  stockCode:"066970", stockName:"엘앤에프",            weight:3.12  },
-    { rank:9,  stockCode:"096770", stockName:"SK이노베이션",        weight:2.68  },
-    { rank:10, stockCode:"005070", stockName:"코스모신소재",        weight:1.95  },
-    { rank:11, stockCode:"336370", stockName:"솔루스첨단소재",      weight:1.72  },
-    { rank:12, stockCode:"006260", stockName:"LS",                  weight:1.54  },
-    { rank:13, stockCode:"020150", stockName:"일진머티리얼즈",      weight:1.38  },
-    { rank:14, stockCode:"009830", stockName:"한화솔루션",          weight:1.21  },
-    { rank:15, stockCode:"272450", stockName:"파나시아",            weight:0.89  },
+  // ── KODEX 반도체 (091160) — KRX 반도체, 36종목 ────────────────────────────
+  "091160": [
+    { rank: 1, stockCode:"000660", stockName:"SK하이닉스",          weight:34.42 },
+    { rank: 2, stockCode:"005930", stockName:"삼성전자",            weight:21.77 },
+    { rank: 3, stockCode:"042700", stockName:"한미반도체",          weight: 7.54 },
+    { rank: 4, stockCode:"036930", stockName:"주성엔지니어링",      weight: 3.12 },
+    { rank: 5, stockCode:"000990", stockName:"DB하이텍",            weight: 2.98 },
+    { rank: 6, stockCode:"058470", stockName:"리노공업",            weight: 2.79 },
+    { rank: 7, stockCode:"039030", stockName:"이오테크닉스",        weight: 2.48 },
+    { rank: 8, stockCode:"440110", stockName:"파두",                weight: 2.27 },
+    { rank: 9, stockCode:"240810", stockName:"원익IPS",             weight: 2.23 },
+    { rank:10, stockCode:"080220", stockName:"제주반도체",          weight: 1.93 },
+    { rank:11, stockCode:"222800", stockName:"심텍",                weight: 1.67 },
+    { rank:12, stockCode:"067310", stockName:"하나마이크론",        weight: 1.41 },
+    { rank:13, stockCode:"403870", stockName:"HPSP",               weight: 1.33 },
+    { rank:14, stockCode:"095340", stockName:"ISC",                 weight: 1.21 },
+    { rank:15, stockCode:"319660", stockName:"피에스케이",          weight: 1.17 },
   ],
-  "143460": [ // TIGER 헬스케어
-    { rank:1,  stockCode:"207940", stockName:"삼성바이오로직스",    weight:25.41 },
-    { rank:2,  stockCode:"068270", stockName:"셀트리온",            weight:22.87 },
-    { rank:3,  stockCode:"326030", stockName:"SK바이오팜",          weight:7.54  },
-    { rank:4,  stockCode:"145020", stockName:"휴젤",                weight:5.21  },
-    { rank:5,  stockCode:"091990", stockName:"셀트리온헬스케어",    weight:4.87  },
-    { rank:6,  stockCode:"128940", stockName:"한미약품",            weight:4.32  },
-    { rank:7,  stockCode:"000100", stockName:"유한양행",            weight:3.98  },
-    { rank:8,  stockCode:"185750", stockName:"종근당",              weight:3.54  },
-    { rank:9,  stockCode:"009290", stockName:"광동제약",            weight:2.87  },
-    { rank:10, stockCode:"214150", stockName:"클래시스",            weight:2.41  },
+  // ── TIGER KRX반도체15 (381180) — KRX 반도체 TOP15 ─────────────────────────
+  "381180": [
+    { rank: 1, stockCode:"000660", stockName:"SK하이닉스",          weight:35.10 },
+    { rank: 2, stockCode:"005930", stockName:"삼성전자",            weight:22.40 },
+    { rank: 3, stockCode:"042700", stockName:"한미반도체",          weight: 8.20 },
+    { rank: 4, stockCode:"009150", stockName:"삼성전기",            weight: 5.30 },
+    { rank: 5, stockCode:"058470", stockName:"리노공업",            weight: 3.80 },
+    { rank: 6, stockCode:"039030", stockName:"이오테크닉스",        weight: 3.20 },
+    { rank: 7, stockCode:"000990", stockName:"DB하이텍",            weight: 2.90 },
+    { rank: 8, stockCode:"240810", stockName:"원익IPS",             weight: 2.50 },
+    { rank: 9, stockCode:"403870", stockName:"HPSP",               weight: 2.30 },
+    { rank:10, stockCode:"036930", stockName:"주성엔지니어링",      weight: 2.10 },
+    { rank:11, stockCode:"095340", stockName:"ISC",                 weight: 1.90 },
+    { rank:12, stockCode:"222800", stockName:"심텍",                weight: 1.60 },
+    { rank:13, stockCode:"440110", stockName:"파두",                weight: 1.50 },
+    { rank:14, stockCode:"067310", stockName:"하나마이크론",        weight: 1.40 },
+    { rank:15, stockCode:"319660", stockName:"피에스케이",          weight: 1.20 },
   ],
-  "133690": [ // TIGER 미국나스닥100
-    { rank:1,  stockCode:"MSFT",   stockName:"Microsoft",           weight:12.31 },
-    { rank:2,  stockCode:"AAPL",   stockName:"Apple",               weight:11.87 },
-    { rank:3,  stockCode:"NVDA",   stockName:"NVIDIA",              weight:8.54  },
-    { rank:4,  stockCode:"AMZN",   stockName:"Amazon",              weight:6.21  },
-    { rank:5,  stockCode:"META",   stockName:"Meta",                weight:5.87  },
-    { rank:6,  stockCode:"GOOGL",  stockName:"Alphabet A",          weight:4.54  },
-    { rank:7,  stockCode:"GOOG",   stockName:"Alphabet C",          weight:4.21  },
-    { rank:8,  stockCode:"TSLA",   stockName:"Tesla",               weight:3.87  },
-    { rank:9,  stockCode:"AVGO",   stockName:"Broadcom",            weight:3.41  },
-    { rank:10, stockCode:"COST",   stockName:"Costco",              weight:2.87  },
+  // ── KODEX 2차전지산업 (305720) — KRX 2차전지, 26종목 ──────────────────────
+  "305720": [
+    { rank: 1, stockCode:"006400", stockName:"삼성SDI",             weight:20.41 },
+    { rank: 2, stockCode:"373220", stockName:"LG에너지솔루션",      weight:18.44 },
+    { rank: 3, stockCode:"005490", stockName:"POSCO홀딩스",         weight:13.41 },
+    { rank: 4, stockCode:"247540", stockName:"에코프로비엠",        weight:10.75 },
+    { rank: 5, stockCode:"051910", stockName:"LG화학",              weight: 9.24 },
+    { rank: 6, stockCode:"086520", stockName:"에코프로",            weight: 7.01 },
+    { rank: 7, stockCode:"003670", stockName:"포스코퓨처엠",        weight: 5.25 },
+    { rank: 8, stockCode:"096770", stockName:"SK이노베이션",        weight: 4.14 },
+    { rank: 9, stockCode:"066970", stockName:"엘앤에프",            weight: 2.94 },
+    { rank:10, stockCode:"011790", stockName:"SKC",                 weight: 1.22 },
+    { rank:11, stockCode:"450080", stockName:"에코프로머티",        weight: 1.06 },
+    { rank:12, stockCode:"121600", stockName:"나노신소재",          weight: 0.98 },
+    { rank:13, stockCode:"348370", stockName:"엔켐",                weight: 0.82 },
+    { rank:14, stockCode:"005070", stockName:"코스모신소재",        weight: 0.74 },
+    { rank:15, stockCode:"078600", stockName:"대주전자재료",        weight: 0.73 },
   ],
-  "379800": [ // KODEX 미국S&P500TR
-    { rank:1,  stockCode:"MSFT",   stockName:"Microsoft",           weight:7.12  },
-    { rank:2,  stockCode:"AAPL",   stockName:"Apple",               weight:6.98  },
-    { rank:3,  stockCode:"NVDA",   stockName:"NVIDIA",              weight:5.87  },
-    { rank:4,  stockCode:"AMZN",   stockName:"Amazon",              weight:3.54  },
-    { rank:5,  stockCode:"META",   stockName:"Meta",                weight:3.21  },
-    { rank:6,  stockCode:"GOOGL",  stockName:"Alphabet A",          weight:2.87  },
-    { rank:7,  stockCode:"GOOG",   stockName:"Alphabet C",          weight:2.41  },
-    { rank:8,  stockCode:"BRK.B",  stockName:"Berkshire Hathaway",  weight:2.18  },
-    { rank:9,  stockCode:"AVGO",   stockName:"Broadcom",            weight:2.05  },
-    { rank:10, stockCode:"LLY",    stockName:"Eli Lilly",           weight:1.87  },
+  // ── TIGER 2차전지테마 (305540) — KRX 2차전지테마 ──────────────────────────
+  "305540": [
+    { rank: 1, stockCode:"247540", stockName:"에코프로비엠",        weight:14.80 },
+    { rank: 2, stockCode:"086520", stockName:"에코프로",            weight:13.20 },
+    { rank: 3, stockCode:"373220", stockName:"LG에너지솔루션",      weight:12.50 },
+    { rank: 4, stockCode:"006400", stockName:"삼성SDI",             weight:11.30 },
+    { rank: 5, stockCode:"051910", stockName:"LG화학",              weight: 8.40 },
+    { rank: 6, stockCode:"003670", stockName:"포스코퓨처엠",        weight: 6.80 },
+    { rank: 7, stockCode:"066970", stockName:"엘앤에프",            weight: 5.20 },
+    { rank: 8, stockCode:"096770", stockName:"SK이노베이션",        weight: 4.60 },
+    { rank: 9, stockCode:"005490", stockName:"POSCO홀딩스",         weight: 4.20 },
+    { rank:10, stockCode:"011790", stockName:"SKC",                 weight: 2.80 },
+    { rank:11, stockCode:"450080", stockName:"에코프로머티",        weight: 2.50 },
+    { rank:12, stockCode:"121600", stockName:"나노신소재",          weight: 2.20 },
+    { rank:13, stockCode:"348370", stockName:"엔켐",                weight: 1.90 },
+    { rank:14, stockCode:"005070", stockName:"코스모신소재",        weight: 1.70 },
+    { rank:15, stockCode:"078600", stockName:"대주전자재료",        weight: 1.30 },
   ],
-  // 원자재 — 선물 기반이므로 기초자산 단일 항목
+  // ── KODEX 헬스케어 (266420) — KRX 헬스케어, 68종목 ───────────────────────
+  "266420": [
+    { rank: 1, stockCode:"068270", stockName:"셀트리온",            weight:20.52 },
+    { rank: 2, stockCode:"196170", stockName:"알테오젠",            weight:10.64 },
+    { rank: 3, stockCode:"207940", stockName:"삼성바이오로직스",    weight:10.54 },
+    { rank: 4, stockCode:"028300", stockName:"HLB",                weight: 4.08 },
+    { rank: 5, stockCode:"087010", stockName:"펩트론",              weight: 3.81 },
+    { rank: 6, stockCode:"000100", stockName:"유한양행",            weight: 3.74 },
+    { rank: 7, stockCode:"000250", stockName:"삼천당제약",          weight: 3.66 },
+    { rank: 8, stockCode:"298380", stockName:"에이비엘바이오",      weight: 3.39 },
+    { rank: 9, stockCode:"141080", stockName:"리가켐바이오",        weight: 2.66 },
+    { rank:10, stockCode:"128940", stockName:"한미약품",            weight: 2.03 },
+    { rank:11, stockCode:"310210", stockName:"보로노이",            weight: 2.02 },
+    { rank:12, stockCode:"326030", stockName:"SK바이오팜",          weight: 1.93 },
+    { rank:13, stockCode:"226950", stockName:"올릭스",              weight: 1.77 },
+    { rank:14, stockCode:"347850", stockName:"디앤디파마텍",        weight: 1.56 },
+    { rank:15, stockCode:"145020", stockName:"휴젤",                weight: 1.43 },
+  ],
+  // ── TIGER 헬스케어 (143460) — KRX 헬스케어 (KODEX 헬스케어와 동일 지수) ──
+  "143460": [
+    { rank: 1, stockCode:"068270", stockName:"셀트리온",            weight:20.52 },
+    { rank: 2, stockCode:"196170", stockName:"알테오젠",            weight:10.64 },
+    { rank: 3, stockCode:"207940", stockName:"삼성바이오로직스",    weight:10.54 },
+    { rank: 4, stockCode:"028300", stockName:"HLB",                weight: 4.08 },
+    { rank: 5, stockCode:"087010", stockName:"펩트론",              weight: 3.81 },
+    { rank: 6, stockCode:"000100", stockName:"유한양행",            weight: 3.74 },
+    { rank: 7, stockCode:"000250", stockName:"삼천당제약",          weight: 3.66 },
+    { rank: 8, stockCode:"298380", stockName:"에이비엘바이오",      weight: 3.39 },
+    { rank: 9, stockCode:"141080", stockName:"리가켐바이오",        weight: 2.66 },
+    { rank:10, stockCode:"128940", stockName:"한미약품",            weight: 2.03 },
+    { rank:11, stockCode:"310210", stockName:"보로노이",            weight: 2.02 },
+    { rank:12, stockCode:"326030", stockName:"SK바이오팜",          weight: 1.93 },
+    { rank:13, stockCode:"226950", stockName:"올릭스",              weight: 1.77 },
+    { rank:14, stockCode:"347850", stockName:"디앤디파마텍",        weight: 1.56 },
+    { rank:15, stockCode:"145020", stockName:"휴젤",                weight: 1.43 },
+  ],
+  // ── KODEX IT (266370) — KRX IT, 47종목 ───────────────────────────────────
+  "266370": [
+    { rank: 1, stockCode:"000660", stockName:"SK하이닉스",          weight:34.10 },
+    { rank: 2, stockCode:"005930", stockName:"삼성전자",            weight:21.56 },
+    { rank: 3, stockCode:"009150", stockName:"삼성전기",            weight:13.02 },
+    { rank: 4, stockCode:"006400", stockName:"삼성SDI",             weight: 7.29 },
+    { rank: 5, stockCode:"042700", stockName:"한미반도체",          weight: 2.73 },
+    { rank: 6, stockCode:"011070", stockName:"LG이노텍",            weight: 2.33 },
+    { rank: 7, stockCode:"018260", stockName:"삼성에스디에스",      weight: 1.37 },
+    { rank: 8, stockCode:"007660", stockName:"이수페타시스",        weight: 1.36 },
+    { rank: 9, stockCode:"036930", stockName:"주성엔지니어링",      weight: 1.13 },
+    { rank:10, stockCode:"000990", stockName:"DB하이텍",            weight: 1.08 },
+    { rank:11, stockCode:"058470", stockName:"리노공업",            weight: 1.01 },
+    { rank:12, stockCode:"353200", stockName:"대덕전자",            weight: 0.92 },
+    { rank:13, stockCode:"039030", stockName:"이오테크닉스",        weight: 0.90 },
+    { rank:14, stockCode:"034220", stockName:"LG디스플레이",        weight: 0.84 },
+    { rank:15, stockCode:"240810", stockName:"원익IPS",             weight: 0.81 },
+  ],
+  // ── KODEX 코리아배당성장 (211900) — FnGuide 코리아배당성장, 51종목 ─────────
+  "211900": [
+    { rank: 1, stockCode:"005380", stockName:"현대차",              weight: 7.41 },
+    { rank: 2, stockCode:"032830", stockName:"삼성생명",            weight: 5.79 },
+    { rank: 3, stockCode:"016360", stockName:"삼성증권",            weight: 4.81 },
+    { rank: 4, stockCode:"000270", stockName:"기아",                weight: 4.45 },
+    { rank: 5, stockCode:"039490", stockName:"키움증권",            weight: 4.27 },
+    { rank: 6, stockCode:"005940", stockName:"NH투자증권",          weight: 4.16 },
+    { rank: 7, stockCode:"005830", stockName:"DB손해보험",          weight: 3.95 },
+    { rank: 8, stockCode:"023590", stockName:"다우기술",            weight: 3.39 },
+    { rank: 9, stockCode:"003540", stockName:"대신증권",            weight: 3.38 },
+    { rank:10, stockCode:"120110", stockName:"코오롱인더",          weight: 3.25 },
+    { rank:11, stockCode:"003550", stockName:"LG",                  weight: 2.89 },
+    { rank:12, stockCode:"006800", stockName:"미래에셋증권",        weight: 2.87 },
+    { rank:13, stockCode:"161390", stockName:"한국타이어앤테크놀로지", weight: 2.87 },
+    { rank:14, stockCode:"033780", stockName:"KT&G",               weight: 2.62 },
+    { rank:15, stockCode:"011070", stockName:"LG이노텍",            weight: 2.60 },
+  ],
+  // ── KODEX 삼성그룹 (102780) — FnGuide 삼성그룹 ────────────────────────────
+  "102780": [
+    { rank: 1, stockCode:"005930", stockName:"삼성전자",            weight:35.08 },
+    { rank: 2, stockCode:"009150", stockName:"삼성전기",            weight:16.61 },
+    { rank: 3, stockCode:"000660", stockName:"SK하이닉스",          weight:12.40 },
+    { rank: 4, stockCode:"207940", stockName:"삼성바이오로직스",    weight: 8.20 },
+    { rank: 5, stockCode:"028260", stockName:"삼성물산",            weight: 7.50 },
+    { rank: 6, stockCode:"006400", stockName:"삼성SDI",             weight: 6.30 },
+    { rank: 7, stockCode:"032830", stockName:"삼성생명",            weight: 4.80 },
+    { rank: 8, stockCode:"018260", stockName:"삼성에스디에스",      weight: 3.20 },
+    { rank: 9, stockCode:"016360", stockName:"삼성증권",            weight: 2.70 },
+    { rank:10, stockCode:"000810", stockName:"삼성화재",            weight: 2.40 },
+  ],
+  // ── KODEX 코스닥150 (229200) — KOSDAQ 150, 151종목 ────────────────────────
+  "229200": [
+    { rank: 1, stockCode:"196170", stockName:"알테오젠",            weight: 6.93 },
+    { rank: 2, stockCode:"086520", stockName:"에코프로",            weight: 6.14 },
+    { rank: 3, stockCode:"028300", stockName:"HLB",                weight: 5.20 },
+    { rank: 4, stockCode:"403870", stockName:"HPSP",               weight: 4.10 },
+    { rank: 5, stockCode:"141080", stockName:"리가켐바이오",        weight: 3.80 },
+    { rank: 6, stockCode:"247540", stockName:"에코프로비엠",        weight: 3.50 },
+    { rank: 7, stockCode:"298380", stockName:"에이비엘바이오",      weight: 3.20 },
+    { rank: 8, stockCode:"377300", stockName:"레인보우로보틱스",    weight: 2.90 },
+    { rank: 9, stockCode:"145020", stockName:"휴젤",                weight: 2.70 },
+    { rank:10, stockCode:"214150", stockName:"클래시스",            weight: 2.50 },
+    { rank:11, stockCode:"000250", stockName:"삼천당제약",          weight: 2.30 },
+    { rank:12, stockCode:"087010", stockName:"펩트론",              weight: 2.20 },
+    { rank:13, stockCode:"348370", stockName:"엔켐",                weight: 2.00 },
+    { rank:14, stockCode:"039030", stockName:"이오테크닉스",        weight: 1.80 },
+    { rank:15, stockCode:"310210", stockName:"보로노이",            weight: 1.60 },
+  ],
+  // ── TIGER KRX고배당 (292150) — KRX 고배당50 ──────────────────────────────
+  "292150": [
+    { rank: 1, stockCode:"005930", stockName:"삼성전자",            weight: 8.20 },
+    { rank: 2, stockCode:"105560", stockName:"KB금융",              weight: 6.40 },
+    { rank: 3, stockCode:"055550", stockName:"신한지주",            weight: 5.80 },
+    { rank: 4, stockCode:"086790", stockName:"하나금융지주",        weight: 4.90 },
+    { rank: 5, stockCode:"017670", stockName:"SK텔레콤",            weight: 4.50 },
+    { rank: 6, stockCode:"030200", stockName:"KT",                  weight: 3.80 },
+    { rank: 7, stockCode:"000810", stockName:"삼성화재",            weight: 3.60 },
+    { rank: 8, stockCode:"316140", stockName:"우리금융지주",        weight: 3.40 },
+    { rank: 9, stockCode:"005380", stockName:"현대차",              weight: 3.20 },
+    { rank:10, stockCode:"032830", stockName:"삼성생명",            weight: 2.90 },
+    { rank:11, stockCode:"005830", stockName:"DB손해보험",          weight: 2.70 },
+    { rank:12, stockCode:"000270", stockName:"기아",                weight: 2.50 },
+    { rank:13, stockCode:"015760", stockName:"한국전력",            weight: 2.30 },
+    { rank:14, stockCode:"033780", stockName:"KT&G",               weight: 2.20 },
+    { rank:15, stockCode:"071050", stockName:"한국금융지주",        weight: 2.00 },
+  ],
+  // ── TIGER MSCI Korea TR (139270) — MSCI Korea 지수 ───────────────────────
+  "139270": [
+    { rank: 1, stockCode:"005930", stockName:"삼성전자",            weight:23.80 },
+    { rank: 2, stockCode:"000660", stockName:"SK하이닉스",          weight:10.20 },
+    { rank: 3, stockCode:"207940", stockName:"삼성바이오로직스",    weight: 3.40 },
+    { rank: 4, stockCode:"005380", stockName:"현대차",              weight: 2.80 },
+    { rank: 5, stockCode:"068270", stockName:"셀트리온",            weight: 2.50 },
+    { rank: 6, stockCode:"000270", stockName:"기아",                weight: 2.30 },
+    { rank: 7, stockCode:"105560", stockName:"KB금융",              weight: 2.10 },
+    { rank: 8, stockCode:"055550", stockName:"신한지주",            weight: 1.90 },
+    { rank: 9, stockCode:"373220", stockName:"LG에너지솔루션",      weight: 1.70 },
+    { rank:10, stockCode:"086790", stockName:"하나금융지주",        weight: 1.60 },
+  ],
+  // ── TIGER 미국나스닥100 (133690) — NASDAQ 100 ─────────────────────────────
+  "133690": [
+    { rank: 1, stockCode:"NVDA",   stockName:"NVIDIA",              weight:12.80 },
+    { rank: 2, stockCode:"MSFT",   stockName:"Microsoft",           weight: 8.90 },
+    { rank: 3, stockCode:"AAPL",   stockName:"Apple",               weight: 8.20 },
+    { rank: 4, stockCode:"AMZN",   stockName:"Amazon",              weight: 5.40 },
+    { rank: 5, stockCode:"META",   stockName:"Meta Platforms",      weight: 5.10 },
+    { rank: 6, stockCode:"TSLA",   stockName:"Tesla",               weight: 4.80 },
+    { rank: 7, stockCode:"GOOGL",  stockName:"Alphabet A",          weight: 4.20 },
+    { rank: 8, stockCode:"GOOG",   stockName:"Alphabet C",          weight: 3.80 },
+    { rank: 9, stockCode:"AVGO",   stockName:"Broadcom",            weight: 3.60 },
+    { rank:10, stockCode:"COST",   stockName:"Costco",              weight: 2.90 },
+    { rank:11, stockCode:"NFLX",   stockName:"Netflix",             weight: 2.70 },
+    { rank:12, stockCode:"ASML",   stockName:"ASML Holding",        weight: 2.40 },
+    { rank:13, stockCode:"AMD",    stockName:"AMD",                 weight: 2.10 },
+    { rank:14, stockCode:"QCOM",   stockName:"Qualcomm",            weight: 1.80 },
+    { rank:15, stockCode:"MRVL",   stockName:"Marvell Technology",  weight: 1.60 },
+  ],
+  // ── KODEX 미국나스닥100TR (379810) — NASDAQ 100 TR ────────────────────────
+  "379810": [
+    { rank: 1, stockCode:"NVDA",   stockName:"NVIDIA",              weight:12.80 },
+    { rank: 2, stockCode:"MSFT",   stockName:"Microsoft",           weight: 8.90 },
+    { rank: 3, stockCode:"AAPL",   stockName:"Apple",               weight: 8.20 },
+    { rank: 4, stockCode:"AMZN",   stockName:"Amazon",              weight: 5.40 },
+    { rank: 5, stockCode:"META",   stockName:"Meta Platforms",      weight: 5.10 },
+    { rank: 6, stockCode:"TSLA",   stockName:"Tesla",               weight: 4.80 },
+    { rank: 7, stockCode:"GOOGL",  stockName:"Alphabet A",          weight: 4.20 },
+    { rank: 8, stockCode:"GOOG",   stockName:"Alphabet C",          weight: 3.80 },
+    { rank: 9, stockCode:"AVGO",   stockName:"Broadcom",            weight: 3.60 },
+    { rank:10, stockCode:"COST",   stockName:"Costco",              weight: 2.90 },
+  ],
+  // ── KODEX 미국S&P500TR (379800) — S&P 500 TR, 505종목 ─────────────────────
+  "379800": [
+    { rank: 1, stockCode:"NVDA",   stockName:"NVIDIA",              weight: 8.53 },
+    { rank: 2, stockCode:"MSFT",   stockName:"Microsoft",           weight: 6.20 },
+    { rank: 3, stockCode:"AAPL",   stockName:"Apple",               weight: 5.80 },
+    { rank: 4, stockCode:"AMZN",   stockName:"Amazon",              weight: 3.80 },
+    { rank: 5, stockCode:"META",   stockName:"Meta Platforms",      weight: 3.40 },
+    { rank: 6, stockCode:"GOOGL",  stockName:"Alphabet A",          weight: 3.00 },
+    { rank: 7, stockCode:"TSLA",   stockName:"Tesla",               weight: 2.70 },
+    { rank: 8, stockCode:"GOOG",   stockName:"Alphabet C",          weight: 2.50 },
+    { rank: 9, stockCode:"AVGO",   stockName:"Broadcom",            weight: 2.30 },
+    { rank:10, stockCode:"BRK.B",  stockName:"Berkshire Hathaway",  weight: 2.00 },
+    { rank:11, stockCode:"LLY",    stockName:"Eli Lilly",           weight: 1.80 },
+    { rank:12, stockCode:"JPM",    stockName:"JPMorgan Chase",      weight: 1.70 },
+    { rank:13, stockCode:"V",      stockName:"Visa",                weight: 1.50 },
+    { rank:14, stockCode:"UNH",    stockName:"UnitedHealth",        weight: 1.40 },
+    { rank:15, stockCode:"COST",   stockName:"Costco",              weight: 1.30 },
+  ],
+  // ── TIGER 유로스탁스50 (195930) — EURO STOXX 50 ───────────────────────────
+  "195930": [
+    { rank: 1, stockCode:"SAP",    stockName:"SAP SE",              weight: 6.80 },
+    { rank: 2, stockCode:"ASML",   stockName:"ASML Holding",        weight: 6.50 },
+    { rank: 3, stockCode:"MC",     stockName:"LVMH",                weight: 5.40 },
+    { rank: 4, stockCode:"SIE",    stockName:"Siemens",             weight: 4.20 },
+    { rank: 5, stockCode:"ALV",    stockName:"Allianz",             weight: 4.00 },
+    { rank: 6, stockCode:"SU",     stockName:"Schneider Electric",  weight: 3.80 },
+    { rank: 7, stockCode:"TTE",    stockName:"TotalEnergies",       weight: 3.50 },
+    { rank: 8, stockCode:"AIR",    stockName:"Airbus",              weight: 3.20 },
+    { rank: 9, stockCode:"SAN",    stockName:"Sanofi",              weight: 3.00 },
+    { rank:10, stockCode:"OR",     stockName:"L'Oréal",             weight: 2.80 },
+    { rank:11, stockCode:"IBE",    stockName:"Iberdrola",           weight: 2.50 },
+    { rank:12, stockCode:"DTE",    stockName:"Deutsche Telekom",    weight: 2.30 },
+    { rank:13, stockCode:"AI",     stockName:"Air Liquide",         weight: 2.20 },
+    { rank:14, stockCode:"BNP",    stockName:"BNP Paribas",         weight: 2.10 },
+    { rank:15, stockCode:"ENGI",   stockName:"Engie",               weight: 2.00 },
+  ],
+  // ── KODEX 코리아밸류업 (495850) ────────────────────────────────────────────
+  "495850": [
+    { rank: 1, stockCode:"005930", stockName:"삼성전자",            weight:14.20 },
+    { rank: 2, stockCode:"000660", stockName:"SK하이닉스",          weight: 8.50 },
+    { rank: 3, stockCode:"005380", stockName:"현대차",              weight: 5.30 },
+    { rank: 4, stockCode:"000270", stockName:"기아",                weight: 4.80 },
+    { rank: 5, stockCode:"105560", stockName:"KB금융",              weight: 4.20 },
+    { rank: 6, stockCode:"055550", stockName:"신한지주",            weight: 3.80 },
+    { rank: 7, stockCode:"086790", stockName:"하나금융지주",        weight: 3.20 },
+    { rank: 8, stockCode:"316140", stockName:"우리금융지주",        weight: 2.90 },
+    { rank: 9, stockCode:"032830", stockName:"삼성생명",            weight: 2.70 },
+    { rank:10, stockCode:"000810", stockName:"삼성화재",            weight: 2.50 },
+  ],
+  // ── 원자재 — 선물 기반 단일 항목 ──────────────────────────────────────────
   "132030": [ // KODEX 골드선물(H)
-    { rank:1, stockCode:"GC=F",  stockName:"금(Gold) 선물",       weight:98.50 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:1.50  },
+    { rank:1, stockCode:"GC=F", stockName:"금(Gold) 선물",       weight:98.50 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 1.50 },
   ],
   "319640": [ // TIGER 골드선물(H)
-    { rank:1, stockCode:"GC=F",  stockName:"금(Gold) 선물",       weight:98.20 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:1.80  },
+    { rank:1, stockCode:"GC=F", stockName:"금(Gold) 선물",       weight:98.20 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 1.80 },
   ],
   "261220": [ // KODEX WTI원유선물(H)
-    { rank:1, stockCode:"CL=F",  stockName:"WTI 원유 선물",       weight:95.10 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:4.90  },
+    { rank:1, stockCode:"CL=F", stockName:"WTI 원유 선물",       weight:95.10 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 4.90 },
   ],
   "217700": [ // TIGER 원유선물Enhanced(H)
-    { rank:1, stockCode:"CL=F",  stockName:"WTI 원유 선물",       weight:93.80 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:6.20  },
+    { rank:1, stockCode:"CL=F", stockName:"WTI 원유 선물",       weight:93.80 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 6.20 },
   ],
   "144600": [ // KODEX 은선물(H)
-    { rank:1, stockCode:"SI=F",  stockName:"은(Silver) 선물",     weight:97.90 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:2.10  },
+    { rank:1, stockCode:"SI=F", stockName:"은(Silver) 선물",     weight:97.90 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 2.10 },
   ],
   "160480": [ // KODEX 콩선물(H)
-    { rank:1, stockCode:"ZS=F",  stockName:"대두(Soybean) 선물",  weight:96.40 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:3.60  },
+    { rank:1, stockCode:"ZS=F", stockName:"대두(Soybean) 선물",  weight:96.40 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 3.60 },
   ],
   "171018": [ // KODEX 천연가스선물(H)
-    { rank:1, stockCode:"NG=F",  stockName:"천연가스 선물",       weight:94.50 },
-    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:5.50  },
+    { rank:1, stockCode:"NG=F", stockName:"천연가스 선물",       weight:94.50 },
+    { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 5.50 },
   ],
 };
 
@@ -334,6 +594,56 @@ async function kisGetEtfHoldings(code: string): Promise<ETFHolding[]> {
   }
 }
 
+// ─── Samsung Fund 모바일 API 실시간 크롤러 ──────────────────────────────────────
+// m.samsungfund.com/api/v1/kodex/product-pdf/{fId}.do?gijunYMD=YYYY.MM.DD
+
+function sfKstDate(): string {
+  const d = new Date(Date.now() + 9 * 3600_000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}.${m}.${dd}`;
+}
+
+async function samsungFundFetchHoldings(code: string): Promise<ETFHolding[]> {
+  const fid = SF_FID_MAP[code];
+  if (!fid) return [];
+
+  const date = sfKstDate();
+  const url = `https://m.samsungfund.com/api/v1/kodex/product-pdf/${fid}.do?gijunYMD=${date}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "Accept":            "application/json",
+        "X-Requested-With":  "XMLHttpRequest",
+        "Referer":           `https://m.samsungfund.com/etf/product/view.do?id=${fid}`,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const json = await res.json() as any;
+    const list: any[] = json?.pdf?.list ?? [];
+    if (!list.length) return [];
+
+    const holdings: ETFHolding[] = list
+      .filter((item: any) => item.ratio && parseFloat(item.ratio) > 0)
+      .map((item: any, i: number) => ({
+        rank:      i + 1,
+        stockCode: String(item.itmNo ?? ""),
+        stockName: String(item.secNm ?? ""),
+        weight:    parseFloat(String(item.ratio)) || 0,
+      }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 20)
+      .map((h, i) => ({ ...h, rank: i + 1 }));
+
+    return holdings;
+  } catch {
+    return [];
+  }
+}
+
 // ─── KRX ETF 구성 종목 조회 ───────────────────────────────────────────────────
 
 async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
@@ -397,14 +707,21 @@ export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
     return { holdings: kisData, source: "live" };
   }
 
-  // 2) KRX 스크래핑
+  // 2) Samsung Fund 모바일 API (KODEX ETF 전용 실시간)
+  const sfData = await samsungFundFetchHoldings(code);
+  if (sfData.length >= 3) {
+    holdingsCache.set(code, { data: sfData, ts: Date.now(), source: "live" });
+    return { holdings: sfData, source: "live" };
+  }
+
+  // 3) KRX 스크래핑
   const krxData = await krxFetchHoldings(etf.isuCd);
   if (krxData.length >= 3) {
     holdingsCache.set(code, { data: krxData, ts: Date.now(), source: "live" });
     return { holdings: krxData, source: "live" };
   }
 
-  // 3) 정적 폴백
+  // 4) 정적 폴백
   const st = STATIC_HOLDINGS[code] ?? [];
   holdingsCache.set(code, { data: st, ts: Date.now(), source: "reference" });
   return { holdings: st, source: "reference" };
