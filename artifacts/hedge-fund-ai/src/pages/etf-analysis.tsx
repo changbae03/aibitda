@@ -99,6 +99,66 @@ function LeverageBadge({ lev }: { lev: number }) {
   );
 }
 
+/** 펼치고 접는 개념 설명 박스 */
+function HelpTip({ label = "💡 이게 뭔가요?", children }: { label?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-[11px] text-primary/70 hover:text-primary transition-colors font-medium"
+      >
+        <span>{label}</span>
+        <ChevronRight className={cn("w-3 h-3 transition-transform", open && "rotate-90")} />
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 text-[12px] text-muted-foreground leading-relaxed space-y-1.5">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ETF 섹터별 한 줄 해설 */
+function etfDescription(etf: ETFInfo): string {
+  const leverageNote = etf.leverage === 2
+    ? " ⚠️ 2배 레버리지 상품으로, 수익과 손실 모두 2배로 증폭됩니다."
+    : etf.leverage === -1
+    ? " ⚠️ 인버스 상품으로, 지수가 하락할 때 수익이 납니다."
+    : "";
+  const base: Record<string, string> = {
+    "국내주식":  "코스피200 대형주 전반에 분산 투자하는 ETF입니다. 한국 경제 전체에 베팅하는 가장 기본적인 선택으로, 시장 전반이 오를 때 수익을 냅니다.",
+    "코스닥":   "코스닥 중소·성장주 중심 ETF입니다. 변동성이 높지만 성장 잠재력도 큰 기업들로 구성되어, 위험을 감수할 수 있는 투자자에게 적합합니다.",
+    "반도체":   "삼성전자·SK하이닉스 등 반도체 기업에 집중 투자합니다. AI·데이터센터 수요와 글로벌 반도체 경기 사이클에 민감하게 반응합니다.",
+    "2차전지":  "배터리 셀·소재·장비 기업들로 구성됩니다. 전기차(EV) 전환 속도, 리튬 등 핵심 광물 가격에 따라 크게 움직입니다.",
+    "헬스케어": "바이오·제약·의료기기 기업들을 담습니다. 임상 결과 발표, 신약 허가 여부에 따라 급등락이 잦은 고위험·고수익 섹터입니다.",
+    "금융":     "은행·보험·증권주 중심 ETF입니다. 기준금리 방향에 가장 민감한 섹터로, 금리가 오를수록 수혜를 받는 경향이 있습니다.",
+    "IT":       "소프트웨어·IT서비스·게임 기업들을 포함합니다. 플랫폼·디지털 전환 테마와 함께 움직이며, 기술주 심리에 영향을 받습니다.",
+    "해외주식": "미국 S&P500 등 글로벌 우량 기업에 투자합니다. 달러 강약에 따른 환율 효과도 함께 반영됩니다.",
+    "배당":     "고배당 우량주 중심으로 안정적인 현금흐름을 추구합니다. 변동성이 낮아 보수적인 투자자나 인컴 전략에 적합합니다.",
+    "원자재":   "금·원유·농산물 선물 가격을 추종합니다. 인플레이션 헷지나 포트폴리오 분산 목적으로 활용됩니다.",
+  };
+  return (base[etf.sector] ?? "다양한 자산에 분산 투자하는 ETF입니다.") + leverageNote;
+}
+
+/** 보유 종목 집중도 해설 */
+function holdingConcentration(holdings: ETFHolding[]): { text: string; level: "high" | "mid" | "low" } {
+  const top3 = holdings.slice(0, 3).reduce((s, h) => s + h.weight, 0);
+  if (top3 > 65) return {
+    level: "high",
+    text: `상위 3개 종목이 전체의 ${top3.toFixed(0)}%를 차지하는 고집중형 ETF입니다. 특정 종목의 주가 변동이 ETF 성과에 크게 영향을 줍니다.`,
+  };
+  if (top3 > 45) return {
+    level: "mid",
+    text: `상위 3개 종목 비중이 ${top3.toFixed(0)}%로, 핵심 종목에 어느 정도 집중된 구조입니다. 개별 종목 리스크와 분산 효과가 공존합니다.`,
+  };
+  return {
+    level: "low",
+    text: `상위 3개 종목 비중이 ${top3.toFixed(0)}%로, 비교적 균형 있게 분산된 포트폴리오입니다. 단일 종목 리스크가 낮습니다.`,
+  };
+}
+
 // ─── 탭 1: 검색 ───────────────────────────────────────────────────────────────
 
 function SearchTab() {
@@ -214,7 +274,7 @@ function SearchTab() {
       {mode === "etf" && etfResult && (
         <div className="space-y-4">
           {etfResult.etf && (
-            <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                   <h2 className="text-base font-bold text-foreground">{etfResult.etf.name}</h2>
@@ -231,6 +291,16 @@ function SearchTab() {
                   )}
                 </div>
               </div>
+              {/* ETF 해설 */}
+              <p className="text-[12px] text-muted-foreground leading-relaxed border-t border-border/50 pt-3">
+                {etfDescription(etfResult.etf)}
+              </p>
+              {/* 총보수 해설 */}
+              {etfResult.etf.ter != null && (
+                <p className="text-[11px] text-muted-foreground/60">
+                  💰 연간 총보수 {etfResult.etf.ter}% — 보유 기간 동안 자동으로 차감되는 운용 비용입니다. 낮을수록 유리합니다.
+                </p>
+              )}
             </div>
           )}
 
@@ -302,6 +372,23 @@ function SearchTab() {
                   </p>
                 </div>
               </div>
+
+              {/* 집중도 해설 */}
+              {(() => {
+                const conc = holdingConcentration(etfResult.holdings);
+                return (
+                  <div className={cn(
+                    "rounded-xl px-4 py-3 text-[12px] leading-relaxed border",
+                    conc.level === "high"
+                      ? "bg-orange-500/5 border-orange-500/20 text-orange-700 dark:text-orange-400"
+                      : conc.level === "mid"
+                      ? "bg-blue-500/5 border-blue-500/20 text-blue-700 dark:text-blue-400"
+                      : "bg-emerald-500/5 border-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+                  )}>
+                    📊 {conc.text}
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -320,6 +407,13 @@ function SearchTab() {
             </div>
           ) : (
             <>
+              {/* 노출도 요약 해설 */}
+              <div className="rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 text-[12px] text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">{stockResult[0]?.holding.stockName}</span>은(는) 현재 {stockResult.length}개 ETF에 편입되어 있습니다.
+                {" "}가장 높은 비중으로 편입된 ETF는 <span className="font-semibold text-foreground">{stockResult[0]?.etf.name}</span>으로,
+                전체 ETF 자산의 <span className="font-semibold text-foreground">{stockResult[0]?.holding.weight.toFixed(2)}%</span>를 차지합니다.
+                ETF를 통하면 이 종목에 간접적으로 분산 투자할 수 있습니다.
+              </div>
               <p className="text-xs text-muted-foreground px-1">
                 <span className="font-semibold text-foreground">{stockResult[0]?.holding.stockName}</span>을 담고 있는 ETF {stockResult.length}개
               </p>
@@ -427,6 +521,24 @@ function SectorRotationTab() {
         </button>
       </div>
 
+      {/* 섹터 로테이션 개념 설명 */}
+      <HelpTip label="💡 섹터 로테이션이란?">
+        <p>주식 시장에서는 경기 사이클에 따라 <strong className="text-foreground">강세 섹터가 계속 바뀝니다</strong>. 예를 들어 경기 회복기엔 반도체·소비재가, 경기 침체 우려 시엔 배당·헬스케어가 상대적으로 강세를 보입니다.</p>
+        <p>섹터 로테이션 전략은 <strong className="text-foreground">현재 돈이 몰리는 섹터를 파악</strong>해 ETF로 집중 투자하고, 약세 섹터는 비중을 줄이는 방식입니다.</p>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+          {[
+            { range: "70점 이상", label: "강한 상승 흐름", color: "text-emerald-500" },
+            { range: "40~70점",  label: "중립 / 추세 확인", color: "text-slate-400" },
+            { range: "40점 미만", label: "약세 · 주의", color: "text-red-400" },
+          ].map(s => (
+            <div key={s.range} className="rounded-lg bg-muted/20 px-2 py-1.5">
+              <p className={cn("text-[11px] font-bold", s.color)}>{s.range}</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </HelpTip>
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
@@ -464,6 +576,33 @@ function SectorRotationTab() {
               ))}
             </div>
           </div>
+
+          {/* 동적 시장 해석 */}
+          {top3.length > 0 && (() => {
+            const top = top3[0];
+            const bot = bottom3[0];
+            const spreadScore = top.score - (bottom3[0]?.score ?? 0);
+            const spreadDesc = spreadScore > 50 ? "매우 강한" : spreadScore > 30 ? "뚜렷한" : "보통 수준의";
+            return (
+              <div className="rounded-xl bg-muted/20 border border-border px-4 py-3 text-[12px] text-muted-foreground leading-relaxed space-y-1">
+                <p className="font-semibold text-foreground text-[13px]">📌 현재 시장 해석</p>
+                <p>
+                  현재 <span className="font-semibold text-emerald-500">{top.sector}</span> 섹터가
+                  모멘텀 스코어 <span className="font-semibold text-foreground">{top.score}점</span>으로 가장 강한 흐름을 보입니다.
+                  {" "}{top.etfName}을 통해 간접 투자할 수 있습니다.
+                </p>
+                {bot && (
+                  <p>
+                    반면 <span className="font-semibold text-red-400">{bot.sector}</span> 섹터는 스코어 {bot.score}점으로 약세입니다.
+                    현재 보유 중이라면 비중 축소를 고려해볼 수 있습니다.
+                  </p>
+                )}
+                <p className="text-muted-foreground/60">
+                  상위·하위 섹터 점수 차이 {spreadScore}점 — 섹터 간 {spreadDesc} 차별화 구간입니다.
+                </p>
+              </div>
+            );
+          })()}
 
           {/* 가로 바 차트 */}
           <div className="rounded-2xl border border-border bg-card p-4">
@@ -563,6 +702,35 @@ function TimingSignalsTab() {
           {refreshed && <span>{refreshed.getHours()}:{String(refreshed.getMinutes()).padStart(2,"0")}</span>}
         </button>
       </div>
+
+      {/* 지표 해설 */}
+      <HelpTip label="💡 지표가 무슨 뜻인가요?">
+        <div className="space-y-2">
+          <div>
+            <p className="font-semibold text-foreground">📈 신호 점수 (0~100점)</p>
+            <p>MA·RSI·모멘텀 3가지 지표를 종합한 점수입니다. 높을수록 매수에 유리한 기술적 환경입니다.</p>
+            <div className="mt-1.5 grid grid-cols-5 gap-1 text-center text-[10px]">
+              {Object.entries(SIGNAL_CONFIG).map(([k, v]) => (
+                <div key={k} className={cn("rounded px-1 py-1 border", v.bg, v.border)}>
+                  <p className={cn("font-bold", v.text)}>{v.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">📉 RSI(14) — 상대강도지수</p>
+            <p>최근 14일 상승/하락 비율입니다. <span className="text-red-400 font-medium">70 이상</span>이면 과매수(조정 주의), <span className="text-emerald-400 font-medium">30 이하</span>면 과매도(반등 기대)입니다.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">📊 MA5/MA20 — 이동평균선</p>
+            <p>5일 평균이 20일 평균을 <span className="text-red-400 font-medium">위로 돌파</span>하면 골든크로스(상승 신호), <span className="text-blue-400 font-medium">아래로 하락</span>하면 데드크로스(하락 신호)입니다.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">🕐 5일/20일 수익</p>
+            <p>최근 5거래일(약 1주), 20거래일(약 1달) 동안의 가격 변화율입니다. 단기·중기 모멘텀을 확인할 수 있습니다.</p>
+          </div>
+        </div>
+      </HelpTip>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
