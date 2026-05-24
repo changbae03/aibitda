@@ -34,11 +34,11 @@ function timeStr(iso: string) {
 }
 
 function isBreaking(iso: string) {
-  return Date.now() - new Date(iso).getTime() < 2 * 60 * 60 * 1000;
+  return Date.now() - new Date(iso).getTime() < 30 * 60 * 1000;
 }
 
 function isVeryNew(iso: string) {
-  return Date.now() - new Date(iso).getTime() < 30 * 60 * 1000;
+  return Date.now() - new Date(iso).getTime() < 10 * 60 * 1000;
 }
 
 /* ── 뉴스 카드 ──────────────────────────────────────────────────────────── */
