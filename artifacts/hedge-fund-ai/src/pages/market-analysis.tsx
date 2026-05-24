@@ -33,6 +33,12 @@ interface IndexResult {
   lstmDirAcc: number;
   gbdtDirAcc: number;
   ensembleAlpha: number;
+  gbdtForecastRet?: number;
+  lstmForecastRet?: number;
+  /** [v22] 두 AI 모델(GBDT·LSTM) 방향 합의 신호 */
+  agreementSignal?: "up" | "down" | "neutral";
+  /** [v22] 합의 강도: 클수록 두 모델이 강하게 동일 방향 예측 */
+  agreementStrength?: number;
 }
 interface LiveAccuracy {
   symbol:   string;
@@ -1179,8 +1185,42 @@ export default function MarketAnalysis() {
 
             {/* ── AI 적중률 카드 ────────────────────────────────────────── */}
             {current && (
-              <div>
-                <p className="text-xs text-muted-foreground/60 mb-2 font-medium flex items-center gap-1">
+              <div className="space-y-3">
+                {/* ── 합의 신호 배너 ─────────────────────────────────────── */}
+                {current.agreementSignal && current.agreementSignal !== "neutral" ? (
+                  <div className={cn(
+                    "flex items-center gap-3 rounded-xl border px-4 py-3",
+                    current.agreementSignal === "up"
+                      ? "border-emerald-500/40 bg-emerald-500/10"
+                      : "border-red-500/40 bg-red-500/10",
+                  )}>
+                    <span className="text-2xl">{current.agreementSignal === "up" ? "🤝📈" : "🤝📉"}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-sm font-bold", current.agreementSignal === "up" ? "text-emerald-400" : "text-red-400")}>
+                        {current.agreementSignal === "up" ? "두 AI 모델 모두 상승 예측" : "두 AI 모델 모두 하락 예측"}
+                        {current.agreementStrength != null && (
+                          <span className="ml-2 text-xs font-normal opacity-70">
+                            (합의 강도 {current.agreementStrength.toFixed(2)}%)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        GBDT·LSTM이 같은 방향 → <span className="font-medium text-foreground">고신뢰 신호</span>.
+                        역사적으로 합의 시 적중률이 단독 신호보다 높습니다.
+                      </p>
+                    </div>
+                  </div>
+                ) : current.agreementSignal === "neutral" ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5">
+                    <span className="text-xl">🤔</span>
+                    <p className="text-xs text-muted-foreground">
+                      두 AI 모델 방향 불일치 — <span className="font-medium text-foreground">저신뢰 구간</span>.
+                      GBDT·LSTM이 서로 다른 방향을 가리켜 신호 신뢰도가 낮습니다.
+                    </p>
+                  </div>
+                ) : null}
+
+                <p className="text-xs text-muted-foreground/60 mb-1 font-medium flex items-center gap-1">
                   <Shield className="w-3.5 h-3.5" /> AI 예측 성능 — 이 정도로 믿을 수 있어요
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

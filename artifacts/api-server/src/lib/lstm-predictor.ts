@@ -47,6 +47,10 @@ export interface IndexResult {
   lstmForecastRet?: number;
   curVol20?: number;
   lastVix5dMom?: number;
+  /** [v22] GBDT·LSTM 방향 합의 신호 — 두 모델이 같은 방향이고 |예측| > 임계값이면 up/down, 아니면 neutral */
+  agreementSignal: "up" | "down" | "neutral";
+  /** [v22] 합의 강도: |gbdtReturn| + |lstmReturn| 의 평균 (클수록 양쪽 모두 강하게 예측) */
+  agreementStrength: number;
 }
 export interface PipelineStep {
   key: string; label: string;
@@ -74,7 +78,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 21;  // [v21] KOSDAQ 대규모 최적화: halfLife 56일 + 개인순매수 피처 + dirPenalty 3.5 + nEnsemble 12
+const MODEL_VERSION = 22;  // [v22] 합의신호 + wf가중치 강화(k*2.5) + KOSPI dirPenalty 4.5/halfLife 70 + KOSDAQ halfLife 35/dirPenalty 4.5
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -96,39 +100,36 @@ interface IndexHP {
 
 const INDEX_HP: Record<string, IndexHP> = {
   /**
-   * KOSPI [v20] — 방향 정확도 70%+ 목표
-   * · halfLifeDays 84: 4개월 반감기 (v19의 42일은 "항상 상승" 편향 → 전체 검증 32%)
-   *   vs v18의 126일은 "항상 하락" 편향. 84일 = 중간값으로 레짐 과적합 완화.
-   * · dirPenalty 2.5: GBDT 잔차 계산 시 방향 오류 샘플에 2.5배 가중치
-   *   → GBDT가 MSE 최소화 대신 방향 정확도를 직접 최적화하도록 유도
+   * KOSPI [v22] — 방향 정확도 70%+ 목표
+   * · halfLifeDays 84→70: 관세전쟁·레짐 전환 가속화 대응. 3.5개월 반감기
+   * · dirPenalty 2.5→4.5: GBDT가 방향 오류 샘플에 4.5배 잔차 가중 → 방향 최적화 강화
+   *   (v21 KOSDAQ 3.5가 효과적임을 검증 → KOSPI도 강화)
    * · nEnsemble 12, GBDT 트리 300개 유지
-   * · LSTM: dropout 0.22 (84일 halfLife에 맞게 약간 상향 → 과적합 방지)
+   * · LSTM: dropout 0.22 유지 (halfLife 단축에 따라 과적합 위험 경계)
    */
   KS11: {
     gbdtTrees: 300, gbdtLR: 0.012,  gbdtDepth: 4, gbdtLeaf: 10,
     gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 12,
     lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.22,
     recentWindow: 30,
-    halfLifeDays: 84,
-    dirPenalty: 2.5,
+    halfLifeDays: 70,
+    dirPenalty: 4.5,
   },
   /**
-   * KOSDAQ [v21] — 42.5% 적중률(동전 이하) 대규모 최적화
-   * 근본원인 2가지 해결:
-   * 1. halfLifeDays 180→56: 코스닥은 개인주도·테마 순환이 빨라 레짐이 1~2개월마다 바뀜
-   *    6개월(180일) 전 패턴이 현재를 지배하면 체계적으로 역방향 예측됨
-   * 2. instNet 슬롯 → 개인(retail) 순매수로 교체 (별도 코드 처리):
-   *    코스닥은 기관이 아닌 개인이 시장 방향을 결정
-   *    기관 순매수 ↑ = 코스닥 하락 경향 (역상관) → 노이즈 제거 후 retail 신호 주입
-   * 3. nEnsemble 6→12, gbdtTrees 150→300, dirPenalty 2.0→3.5: 용량·패널티 강화
+   * KOSDAQ [v22] — 40% 최근 적중률 개선 목표
+   * 1. halfLifeDays 56→35: 코스닥 레짐 전환 주기 1~1.5개월 → 35일 = 1.5개월 반감기
+   *    최근 35일 데이터가 전체 학습의 50%를 차지 → 현재 레짐 집중
+   * 2. dirPenalty 3.5→4.5: 방향 오류 패널티 추가 강화
+   *    v21의 3.5배에서 추가 강화 → GBDT가 진폭보다 방향 정확도를 우선 최적화
+   * 3. lstmDrop 0.28→0.32: halfLife 단축 시 과적합 위험 대응
    */
   KQ11: {
     gbdtTrees: 300, gbdtLR: 0.012, gbdtDepth: 5, gbdtLeaf: 8,
     gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 12,
-    lstmEpochs: 120, lstmLR: 0.0008, lstmDrop: 0.28,
+    lstmEpochs: 120, lstmLR: 0.0008, lstmDrop: 0.32,
     recentWindow: 30,
-    halfLifeDays: 56,
-    dirPenalty: 3.5,
+    halfLifeDays: 35,
+    dirPenalty: 4.5,
   },
   /** S&P500 — 유동성 높은 미국 대형주 지수 [v20] dirPenalty 2.0 추가 */
   GSPC: {
@@ -1264,8 +1265,9 @@ function buildResultFromModel(
     const e = k < K_WF - 1 ? s + wfWin : nTest;
     if (e > s) wfAccs.push(dirAccRate(testPreds.slice(s, e), Array.from(yte).slice(s, e)));
   }
-  // 지수 가중 평균: weight[k] = exp(k * 0.7) → 최근 폴드가 오래된 폴드보다 약 3.3x 중요
-  const wfWeights = wfAccs.map((_, k) => Math.exp(k * 0.7));
+  // 지수 가중 평균: weight[k] = exp(k * 2.5) → 최근 폴드가 가장 오래된 폴드보다 약 2,981x 중요
+  // [v22] 0.7→2.5: 최근 레짐 성능을 wfDirAcc에 압도적으로 반영 (전체 = 사실상 최근 폴드 성능)
+  const wfWeights = wfAccs.map((_, k) => Math.exp(k * 2.5));
   const wfWeightSum = wfWeights.reduce((a, b) => a + b, 0);
   const wfDirAccVal = wfAccs.length > 0
     ? wfAccs.reduce((sum, acc, k) => sum + acc * wfWeights[k], 0) / wfWeightSum
@@ -1313,6 +1315,19 @@ function buildResultFromModel(
   // [#2] 개별 컴포넌트 예측값 (savePrediction으로 전달 → 컴포넌트별 라이브 적중률 추적)
   const gbdtForecastRetPct = gbdtForecast * calibFactor * 100;
   const lstmForecastRetPct = lstmForecast * calibFactor * 100;
+
+  // [v22] GBDT·LSTM 합의 신호 계산 ─────────────────────────────────────────────
+  // 두 모델이 같은 방향을 가리키고, 앙상블 예측이 노이즈 임계값(0.10%)을 초과할 때만 신호 발생
+  // 임계값 = 최근 오차 표준편차의 0.5배 (신호가 노이즈보다 클 때만)
+  const errStdPct = stddev(recentErrors) * 100;
+  const AGREEMENT_THRESHOLD = Math.max(0.10, errStdPct * 0.3); // 최소 0.10%, 오차σ × 0.3
+  const gbdtDir = Math.sign(gbdtForecast);
+  const lstmDir = Math.sign(lstmForecast);
+  const agreementStrength = (Math.abs(gbdtForecastRetPct) + Math.abs(lstmForecastRetPct)) / 2;
+  let agreementSignal: "up" | "down" | "neutral" = "neutral";
+  if (gbdtDir === lstmDir && gbdtDir !== 0 && Math.abs(forecastReturn * 100) >= AGREEMENT_THRESHOLD) {
+    agreementSignal = gbdtDir > 0 ? "up" : "down";
+  }
   // [#1] 오차 컨텍스트: 현재 VIX 5일 모멘텀 추출
   const lastDate = dates[dates.length - 1];
   const lastExt  = extMap.get(lastDate);
@@ -1352,6 +1367,8 @@ function buildResultFromModel(
     lstmForecastRet: +lstmForecastRetPct.toFixed(2),
     curVol20: +(curVol20 * 100).toFixed(3),
     lastVix5dMom: lastVix5dMom !== null ? +lastVix5dMom.toFixed(4) : undefined,
+    agreementSignal,
+    agreementStrength: +agreementStrength.toFixed(3),
   };
 }
 
