@@ -1189,11 +1189,40 @@ export interface SectorMomentum {
   sectorTags: string[];
 }
 
+export interface MarketSignal {
+  id: string;
+  category: "수급" | "심리" | "기술적" | "매크로" | "테마";
+  label: string;
+  description: string;
+  impact: "positive" | "negative" | "neutral";
+  strength: "strong" | "moderate" | "weak";
+  icon: string;
+}
+
+export interface ThemeKeyword {
+  label: string;
+  description: string;
+  sentiment: "hot" | "warm" | "cool";
+  relatedSectors: string[];
+}
+
+export interface MarketPulse {
+  fearGreedScore: number;
+  fearGreedLabel: string;
+  overallSentiment: "bullish" | "neutral" | "bearish";
+  signals: MarketSignal[];
+  themes: ThemeKeyword[];
+  institutionalFocus: string[];
+  retailWarning: string[];
+  marketNarrative: string;
+}
+
 export interface MomentumAnalysis {
   macro: MacroSnapshot;
   environment: MacroEnvironment;
   nowSectors: SectorMomentum[];
   futureSectors: SectorMomentum[];
+  marketPulse: MarketPulse;
   updatedAt: number;
 }
 
@@ -1347,8 +1376,8 @@ function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
     });
   }
 
-  // 상위 3개만
-  const nowTop = now.sort((a, b) => b.score - a.score).slice(0, 3);
+  // 점수 내림차순 정렬 (전체 반환)
+  const nowTop = now.sort((a, b) => b.score - a.score);
 
   // ── 향후 유망 섹터 ──────────────────────────────────────────────────
   const future: SectorMomentum[] = [];
@@ -1521,9 +1550,197 @@ function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
     });
   }
 
-  const futureTop = future.sort((a, b) => b.score - a.score).slice(0, 3);
+  const futureTop = future.sort((a, b) => b.score - a.score);
 
   return { now: nowTop, future: futureTop };
+}
+
+// ─── 시장 심리·수급 펄스 ──────────────────────────────────────────────────────
+
+function buildMarketNarrative(env: MacroEnvironment, m: MacroSnapshot, fg: number): string {
+  const parts: string[] = [];
+  if (fg < 25) parts.push("시장 심리가 '극단적 공포' 국면으로, 투자자 대부분이 현금 보유를 선호하며 위험자산을 회피하고 있습니다");
+  else if (fg < 40) parts.push("'공포' 구간으로 대부분의 투자자가 관망 중이지만, 역발상 매수 기회가 모색되는 구간입니다");
+  else if (fg < 60) parts.push("시장 심리는 중립 구간으로 방향성 없이 등락을 반복하고 있습니다");
+  else if (fg < 80) parts.push("투자 심리가 '탐욕' 구간에 진입해 위험자산 선호도가 높아졌습니다");
+  else parts.push("'극단적 탐욕' 국면으로 과열 신호가 감지됩니다. 단기 조정 가능성에 유의가 필요합니다");
+
+  if (env.rateLevel === "high" && env.inflation === "elevated") {
+    parts.push(`연준(Fed)이 ${m.usRate}% 고금리를 유지하는 가운데 물가(CPI ${m.usCpi.toFixed(1)}%)도 여전히 높아, 실적이 뒷받침되는 AI·반도체·금융주로 자금이 집중되고 있습니다`);
+  } else if (env.rateLevel === "moderate") {
+    parts.push(`Fed 금리(${m.usRate}%)가 중립 수준으로 전환되면서 성장주와 리츠 등 금리 민감 자산이 다시 주목받고 있습니다`);
+  }
+  if (env.fxKrw === "weak") {
+    parts.push(`달러당 ${m.krwUsd.toLocaleString()}원의 원화 약세는 해외 ETF 투자자에게 환차익이라는 추가 수익을 제공하며 달러 자산 수요를 높이고 있습니다`);
+  }
+  if (env.oilPrice === "high") {
+    parts.push(`WTI 유가 $${m.wti.toFixed(0)}의 고공행진은 지정학적 리스크 고조 신호로 읽히며 방산·에너지 섹터에 기관 관심이 집중되고 있습니다`);
+  }
+  return parts.join(". ") + ".";
+}
+
+function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse {
+  const { rateLevel, inflation, fxKrw, growth, oilPrice } = env;
+
+  // ── 공포·탐욕 지수 계산 ──────────────────────────────────────────────
+  let fg = 50;
+  if (rateLevel === "high")     fg -= 15;
+  else if (rateLevel === "low") fg += 10;
+  if (inflation === "elevated") fg -= 10;
+  else if (inflation === "low") fg += 8;
+  if (m.yieldSpread > 0.5)      fg += 10;
+  else if (m.yieldSpread > 0)   fg += 5;
+  else if (m.yieldSpread < -0.5) fg -= 15;
+  else if (m.yieldSpread < 0)   fg -= 8;
+  if (oilPrice === "high")      fg -= 8;
+  else if (oilPrice === "low")  fg += 5;
+  if (growth === "strong")      fg += 15;
+  else if (growth === "weak")   fg -= 10;
+  fg = Math.max(5, Math.min(95, Math.round(fg)));
+
+  const fearGreedLabel =
+    fg >= 80 ? "극단적 탐욕" : fg >= 60 ? "탐욕" :
+    fg >= 45 ? "중립" : fg >= 25 ? "공포" : "극단적 공포";
+
+  const overallSentiment: "bullish" | "neutral" | "bearish" =
+    fg >= 60 ? "bullish" : fg >= 40 ? "neutral" : "bearish";
+
+  // ── 수급·심리 시그널 ───────────────────────────────────────────────
+  const signals: MarketSignal[] = [];
+
+  // AI 사이클 (상수)
+  signals.push({
+    id: "ai-flow", category: "수급", label: "AI 인프라 기관 매집",
+    description: "빅테크 데이터센터 투자 확대에 따라 반도체·서버·전력 섹터로 기관 자금이 꾸준히 유입 중. NVIDIA 수주 모멘텀이 관련 ETF 거래량을 끌어올리는 중.",
+    impact: "positive", strength: "strong", icon: "🤖",
+  });
+
+  if (rateLevel === "high") {
+    signals.push({
+      id: "inst-fin", category: "수급", label: "기관 금융주 비중 확대",
+      description: `고금리(${m.usRate}%) 환경에서 기관투자자들이 NIM 확대 수혜를 노리고 은행·보험주 비중을 늘리는 중. 장단기 금리차 +${m.yieldSpread.toFixed(2)}% 정상화가 신뢰를 더함.`,
+      impact: "positive", strength: "strong", icon: "🏦",
+    });
+    signals.push({
+      id: "retail-caution", category: "심리", label: "개인투자자 관망 심화",
+      description: `고금리+고물가 압박으로 개인 투자 심리 위축. 은행 예금·MMF 잔고 증가 추세로 주식 시장 유입 속도 둔화. 저가 매수 기회 탐색 국면.`,
+      impact: "negative", strength: "moderate", icon: "😰",
+    });
+  }
+
+  if (fxKrw === "weak") {
+    signals.push({
+      id: "fx-usd", category: "수급", label: "달러 자산·환헤지 수요 급증",
+      description: `원달러 ${m.krwUsd.toLocaleString()}원 돌파 이후 달러 ETF·환헤지 상품 검색량 폭발적 증가. 외화 자산 비중 확대를 위한 해외 ETF 매수세 지속.`,
+      impact: "positive", strength: "strong", icon: "💵",
+    });
+  }
+
+  if (oilPrice === "high") {
+    signals.push({
+      id: "energy-inst", category: "수급", label: "에너지·방산 기관 헷지 매수",
+      description: `WTI $${m.wti.toFixed(0)} 고유가 지속으로 에너지·방산 ETF에 인플레이션 헷지 목적의 기관 매수세 유입. 지정학 리스크 프리미엄 확대.`,
+      impact: "positive", strength: "moderate", icon: "🛢️",
+    });
+    signals.push({
+      id: "gold-hedge", category: "수급", label: "금·원자재 헷지 수요",
+      description: "물가·유가 동반 상승으로 금 ETF(GLD·IAU) 및 원자재 ETF에 포트폴리오 헷지 자금 유입. 리테일·기관 동시 관심.",
+      impact: "positive", strength: "moderate", icon: "🥇",
+    });
+  }
+
+  if (m.yieldSpread > 0.3) {
+    signals.push({
+      id: "yield-normal", category: "기술적", label: "경기침체 우려 해소",
+      description: `장단기 금리차 +${m.yieldSpread.toFixed(2)}% 양전환으로 경기침체 신호 해제. 위험자산 선호 심리 회복 → 주식 ETF 자금 유입 환경 개선.`,
+      impact: "positive", strength: "moderate", icon: "📈",
+    });
+  } else if (m.yieldSpread < 0) {
+    signals.push({
+      id: "yield-inv", category: "기술적", label: "장단기 금리 역전 경고",
+      description: `10Y-2Y ${m.yieldSpread.toFixed(2)}% 역전 — 과거 평균 12~18개월 후 경기침체 선행 지표. 방어주·배당주 비중 확대 고려.`,
+      impact: "negative", strength: "strong", icon: "⚠️",
+    });
+  }
+
+  if (growth === "strong") {
+    signals.push({
+      id: "growth-momentum", category: "매크로", label: "경제 성장 모멘텀 강세",
+      description: `GDP 성장률 ${m.gdpQoQ.toFixed(1)}%로 견조. 기업 실적 개선 기대가 주식 시장 전반의 상승 동력을 제공 중.`,
+      impact: "positive", strength: "strong", icon: "📊",
+    });
+  }
+
+  // ── 테마 키워드 ───────────────────────────────────────────────────
+  const themes: ThemeKeyword[] = [];
+
+  themes.push({
+    label: "AI·반도체", description: "엔비디아·TSMC 중심 AI 인프라 투자 사이클 지속. 데이터센터·HBM 수요 관심 집중. 반도체 ETF 거래량 급증.",
+    sentiment: "hot", relatedSectors: ["반도체", "로보틱스AI", "미국반도체"],
+  });
+
+  if (oilPrice === "high") {
+    themes.push({
+      label: "에너지 안보", description: `WTI $${m.wti.toFixed(0)} 고공행진. 방산·에너지 독립 키워드가 언론·소셜 트렌드 상위권 점유. 방산 ETF 검색량 3개월 연속 상승.`,
+      sentiment: "hot", relatedSectors: ["항공우주방산", "원자재", "클린에너지"],
+    });
+  }
+
+  if (inflation === "elevated") {
+    themes.push({
+      label: "인플레이션 방어", description: `CPI ${m.usCpi.toFixed(1)}% 고공행진 속 실물 자산·배당주 관심 증가. 금·원자재·리츠 ETF 검색량 급상승.`,
+      sentiment: "hot", relatedSectors: ["원자재", "배당", "금융"],
+    });
+  }
+
+  if (fxKrw === "weak") {
+    themes.push({
+      label: "달러 강세·환헤지", description: `원달러 ${m.krwUsd.toLocaleString()}원 돌파 이후 달러 ETF·환헤지 상품 검색 폭발적 증가. SNS 재테크 채널에서 '달러 투자' 키워드 트렌딩.`,
+      sentiment: "hot", relatedSectors: ["미국시장", "해외주식"],
+    });
+  }
+
+  themes.push({
+    label: "방산·우주 경제", description: "글로벌 방위비 확대·위성 인터넷 경쟁 격화. ITA·XAR 방산 ETF 미디어 노출 증가. 각국 GDP 대비 국방비 상향 조정 뉴스 지속.",
+    sentiment: "warm", relatedSectors: ["항공우주방산"],
+  });
+
+  themes.push({
+    label: "사이버보안", description: "AI 기반 사이버 공격 급증으로 기업·정부 보안 예산 필수화. CIBR·HACK 등 사이버보안 ETF 기관 보고서 빈도 상승.",
+    sentiment: "warm", relatedSectors: ["사이버보안"],
+  });
+
+  themes.push({
+    label: "로보틱스·자동화", description: "인건비 상승 + AI 소프트웨어 융합으로 산업용 로봇 도입 가속. 글로벌 제조업 자동화 뉴스 증가, BOTZ·IRBO 거래량 상승세.",
+    sentiment: "warm", relatedSectors: ["로보틱스AI"],
+  });
+
+  if (rateLevel !== "high") {
+    themes.push({
+      label: "금리 인하 수혜주", description: "Fed 금리 인하 기대가 리츠·성장주·바이오 섹터 관심 폭발적 증가 유도. 금리 민감도 높은 자산군으로 선제 자금 이동.",
+      sentiment: "hot", relatedSectors: ["리츠", "2차전지", "헬스케어"],
+    });
+  }
+
+  // ── 기관 관심 섹터 ─────────────────────────────────────────────────
+  const institutionalFocus: string[] = ["AI·반도체"];
+  if (rateLevel === "high") institutionalFocus.push("금융·은행");
+  if (oilPrice === "high") institutionalFocus.push("에너지·방산");
+  if (fxKrw === "weak") institutionalFocus.push("미국 달러 자산");
+  institutionalFocus.push("사이버보안");
+
+  // ── 개인투자자 주의 ───────────────────────────────────────────────
+  const retailWarning: string[] = [];
+  if (rateLevel === "high") retailWarning.push("고금리 환경에서 레버리지 ETF 손실 위험 확대");
+  if (oilPrice === "high") retailWarning.push("클린에너지 ETF — 금리 인하 전 단기 조정 가능");
+  retailWarning.push("리츠·채권 ETF — 금리 방향 전환 시 가격 변동 큼");
+  if (fg > 75) retailWarning.push("탐욕 지수 과열 — 분할 매수 전략 권장");
+
+  return {
+    fearGreedScore: fg, fearGreedLabel, overallSentiment,
+    signals, themes, institutionalFocus, retailWarning,
+    marketNarrative: buildMarketNarrative(env, m, fg),
+  };
 }
 
 const momentumCache = new Map<string, { data: MomentumAnalysis; ts: number }>();
@@ -1550,8 +1767,10 @@ export async function getMomentumAnalysis(): Promise<MomentumAnalysis> {
   const environment = buildEnvironment(macro);
   const { now: nowSectors, future: futureSectors } = buildSectors(environment, macro);
 
+  const marketPulse = buildMarketPulse(environment, macro);
+
   const result: MomentumAnalysis = {
-    macro, environment, nowSectors, futureSectors, updatedAt: Date.now(),
+    macro, environment, nowSectors, futureSectors, marketPulse, updatedAt: Date.now(),
   };
 
   momentumCache.set(cacheKey, { data: result, ts: Date.now() });

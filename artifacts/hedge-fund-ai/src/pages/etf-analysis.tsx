@@ -60,11 +60,34 @@ interface SectorMomentum {
   outlook: "bullish" | "neutral" | "cautious"; horizon: string;
   reason: string; catalysts: string[]; risks: string[]; sectorTags: string[];
 }
+interface MarketSignal {
+  id: string;
+  category: "수급" | "심리" | "기술적" | "매크로" | "테마";
+  label: string; description: string;
+  impact: "positive" | "negative" | "neutral";
+  strength: "strong" | "moderate" | "weak";
+  icon: string;
+}
+interface ThemeKeyword {
+  label: string; description: string;
+  sentiment: "hot" | "warm" | "cool";
+  relatedSectors: string[];
+}
+interface MarketPulse {
+  fearGreedScore: number; fearGreedLabel: string;
+  overallSentiment: "bullish" | "neutral" | "bearish";
+  signals: MarketSignal[];
+  themes: ThemeKeyword[];
+  institutionalFocus: string[];
+  retailWarning: string[];
+  marketNarrative: string;
+}
 interface MomentumAnalysis {
   macro: MacroSnapshot;
   environment: MacroEnvironment;
   nowSectors: SectorMomentum[];
   futureSectors: SectorMomentum[];
+  marketPulse: MarketPulse;
   updatedAt: number;
 }
 
@@ -707,6 +730,160 @@ function EtfDetailPanel({
 
 // ─── 탭 2: ETF 모멘텀 분석 ───────────────────────────────────────────────────
 
+/** 공포·탐욕 게이지 */
+function FearGreedMeter({ score, label }: { score: number; label: string }) {
+  const zones = [
+    { max: 25,  color: "#ef4444", name: "극단적 공포" },
+    { max: 45,  color: "#f97316", name: "공포"       },
+    { max: 55,  color: "#eab308", name: "중립"       },
+    { max: 75,  color: "#84cc16", name: "탐욕"       },
+    { max: 100, color: "#22c55e", name: "극단적 탐욕" },
+  ];
+  const activeZone = zones.find(z => score <= z.max) ?? zones[zones.length - 1];
+  const pct = score;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">공포·탐욕 지수</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-2xl font-black leading-none" style={{ color: activeZone.color }}>{score}</span>
+          <span className="text-[11px] font-bold" style={{ color: activeZone.color }}>{label}</span>
+        </div>
+      </div>
+      {/* 그라디언트 바 */}
+      <div className="relative h-3 rounded-full overflow-hidden"
+        style={{ background: "linear-gradient(to right, #ef4444 0%, #f97316 25%, #eab308 45%, #84cc16 65%, #22c55e 100%)" }}>
+        <div className="absolute top-0 h-full w-0.5 bg-white/90 shadow-sm rounded-full transition-all"
+          style={{ left: `${pct}%`, transform: "translateX(-50%)" }} />
+      </div>
+      <div className="flex justify-between text-[8px] text-muted-foreground/30 font-medium">
+        <span>극단적 공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극단적 탐욕</span>
+      </div>
+      <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+        {score < 25 && "투자자 대부분이 공포에 질려 있습니다. 역사적으로 역발상 매수 기회가 많은 구간입니다."}
+        {score >= 25 && score < 45 && "시장 심리가 불안합니다. 분할 매수로 접근하고, 방어주 비중을 높이는 것이 유리합니다."}
+        {score >= 45 && score < 55 && "시장 방향이 불분명합니다. 뚜렷한 트리거가 나오기 전까지 관망하거나 우량 ETF 적립식 투자가 적합합니다."}
+        {score >= 55 && score < 80 && "위험자산 선호 분위기가 형성됐습니다. 모멘텀이 강한 성장 섹터 ETF에 기회가 있습니다."}
+        {score >= 80 && "과열 신호입니다. 추격 매수보다는 분할 익절 또는 분산을 고려하세요."}
+      </p>
+    </div>
+  );
+}
+
+/** 수급·심리 시그널 카드 */
+function SignalCard({ signal }: { signal: MarketSignal }) {
+  const catColor: Record<MarketSignal["category"], string> = {
+    "수급":   "bg-blue-500/10 border-blue-500/20 text-blue-500",
+    "심리":   "bg-purple-500/10 border-purple-500/20 text-purple-400",
+    "기술적": "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
+    "매크로": "bg-amber-500/10 border-amber-500/20 text-amber-500",
+    "테마":   "bg-emerald-500/10 border-emerald-500/20 text-emerald-500",
+  };
+  const impactIcon = signal.impact === "positive" ? "↑" : signal.impact === "negative" ? "↓" : "→";
+  const impactColor = signal.impact === "positive" ? "text-emerald-500" : signal.impact === "negative" ? "text-red-400" : "text-amber-400";
+  const strengthDot = signal.strength === "strong" ? "●●●" : signal.strength === "moderate" ? "●●○" : "●○○";
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-base shrink-0">{signal.icon}</span>
+          <span className="text-[12px] font-bold text-foreground leading-tight">{signal.label}</span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", catColor[signal.category])}>{signal.category}</span>
+          <span className={cn("text-[12px] font-black", impactColor)}>{impactIcon}</span>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">{signal.description}</p>
+      <div className="flex items-center gap-1">
+        <span className="text-[9px] text-muted-foreground/30">신호 강도:</span>
+        <span className="text-[9px] font-mono" style={{ color: signal.strength === "strong" ? "#22c55e" : signal.strength === "moderate" ? "#f59e0b" : "#94a3b8" }}>
+          {strengthDot}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** 테마 키워드 칩 */
+function ThemeChip({ theme, onClick }: { theme: ThemeKeyword; onClick?: () => void }) {
+  const cfg = {
+    hot:  "bg-red-500/10 border-red-500/25 text-red-500",
+    warm: "bg-amber-500/10 border-amber-500/20 text-amber-500",
+    cool: "bg-muted/30 border-border text-muted-foreground",
+  }[theme.sentiment];
+  const badge = { hot: "🔥 인기", warm: "📈 주목", cool: "💤 소강" }[theme.sentiment];
+  return (
+    <div className={cn("rounded-xl border p-3 space-y-1 cursor-default", cfg)} onClick={onClick}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] font-bold leading-tight">{theme.label}</span>
+        <span className="text-[9px] font-semibold opacity-70 shrink-0">{badge}</span>
+      </div>
+      <p className="text-[10px] opacity-65 leading-relaxed line-clamp-2">{theme.description}</p>
+      <div className="flex flex-wrap gap-1 pt-0.5">
+        {theme.relatedSectors.slice(0, 3).map(s => (
+          <span key={s} className="text-[9px] px-1.5 py-0.5 rounded-full bg-current/10 border border-current/20 opacity-70 font-medium">{s}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 전체 섹터 스코어보드 (히트맵 그리드) */
+function SectorHeatMap({
+  sectors, label, onSectorClick, selectedSectors,
+}: {
+  sectors: SectorMomentum[];
+  label: string;
+  onSectorClick: (sectorTags: string[]) => void;
+  selectedSectors?: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? sectors : sectors.slice(0, 6);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">{label}</span>
+        {sectors.length > 6 && (
+          <button onClick={() => setExpanded(v => !v)} className="text-[10px] text-primary/60 hover:text-primary transition-colors font-medium">
+            {expanded ? "접기" : `전체 ${sectors.length}개 보기`}
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {visible.map((s, i) => {
+          const sColor = s.score >= 75 ? "#16a34a" : s.score >= 60 ? "#f59e0b" : "#94a3b8";
+          const isSelected = selectedSectors?.some(t => s.sectorTags.includes(t));
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSectorClick(s.sectorTags)}
+              className={cn(
+                "flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-all hover:bg-muted/20",
+                isSelected ? "border-primary/40 bg-primary/5" : "border-border/50 bg-card",
+              )}
+            >
+              <span className="text-lg leading-none shrink-0">{s.icon}</span>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-bold text-foreground truncate">{s.name}</span>
+                  <span className="text-[12px] font-black shrink-0" style={{ color: sColor }}>{s.score}</span>
+                </div>
+                <div className="h-1 bg-muted/25 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${s.score}%`, background: sColor }} />
+                </div>
+              </div>
+              {i === 0 && <span className="text-[8px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 rounded shrink-0">TOP</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const OUTLOOK_CONFIG = {
   bullish:  { label: "강세", text: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/25" },
   neutral:  { label: "중립", text: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/25"   },
@@ -1006,32 +1183,124 @@ function MomentumTab() {
             </div>
           </div>
 
-          {/* 지금 올라타야 할 섹터 */}
+          {/* 공포·탐욕 지수 + 시장 내러티브 */}
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+            <FearGreedMeter
+              score={data.marketPulse.fearGreedScore}
+              label={data.marketPulse.fearGreedLabel}
+            />
+            <div className="flex items-start gap-2 pt-2 border-t border-border/40">
+              <Zap className="w-3.5 h-3.5 text-primary/60 mt-0.5 shrink-0" />
+              <p className="text-[12px] text-muted-foreground leading-relaxed">
+                {data.marketPulse.marketNarrative}
+              </p>
+            </div>
+          </div>
+
+          {/* 수급·심리·테마 시그널 */}
+          <div className="space-y-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-bold text-foreground">수급·심리·테마 시그널</h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground/55 pl-6">
+                현재 <span className="font-semibold text-blue-500">기관투자자·외국인·개인</span>의 자금 흐름과 시장 심리 신호들입니다.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {data.marketPulse.signals.map(sig => (
+                <SignalCard key={sig.id} signal={sig} />
+              ))}
+            </div>
+          </div>
+
+          {/* 기관 관심 섹터 & 개인 주의 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-emerald-500/15 bg-card p-3 space-y-2">
+              <p className="text-[10px] font-bold text-emerald-500/60 uppercase tracking-widest">🏛 기관 관심 섹터</p>
+              <div className="space-y-1">
+                {data.marketPulse.institutionalFocus.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-full bg-emerald-500/20 text-emerald-500 text-[8px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                    <span className="text-[11px] font-semibold text-foreground">{f}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-orange-500/15 bg-card p-3 space-y-2">
+              <p className="text-[10px] font-bold text-orange-500/60 uppercase tracking-widest">⚠ 개인 투자자 주의</p>
+              <div className="space-y-1">
+                {data.marketPulse.retailWarning.map((w, i) => (
+                  <p key={i} className="text-[10px] text-muted-foreground leading-snug">{w}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 현재 주목 테마 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-red-400" />
+              <h3 className="text-sm font-bold text-foreground">언론·소셜 주목 테마</h3>
+              <span className="text-[10px] text-muted-foreground/40 ml-auto">현재 시장 관심도 기반</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {data.marketPulse.themes.map(t => (
+                <ThemeChip key={t.label} theme={t} />
+              ))}
+            </div>
+          </div>
+
+          {/* 전체 섹터 스코어보드 */}
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+            <SectorHeatMap
+              sectors={data.nowSectors}
+              label="지금 유망 섹터 전체 랭킹"
+              onSectorClick={(tags) => {
+                const etf = allEtfs.find(e => tags.includes(e.sector));
+                if (etf) handleEtfClick(etf.code);
+              }}
+              selectedSectors={etfDetail?.etf ? [etfDetail.etf.sector] : []}
+            />
+          </div>
+          <div className="rounded-2xl border border-blue-500/10 bg-card p-4 space-y-3">
+            <SectorHeatMap
+              sectors={data.futureSectors}
+              label="앞으로 주목할 섹터 전체 랭킹"
+              onSectorClick={(tags) => {
+                const etf = allEtfs.find(e => tags.includes(e.sector));
+                if (etf) handleEtfClick(etf.code);
+              }}
+              selectedSectors={etfDetail?.etf ? [etfDetail.etf.sector] : []}
+            />
+          </div>
+
+          {/* 상위 섹터 상세 카드 */}
           <div className="space-y-3">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
                 <Flame className="w-4 h-4 text-emerald-500" />
-                <h3 className="text-sm font-bold text-foreground">지금 올라타야 할 섹터</h3>
+                <h3 className="text-sm font-bold text-foreground">TOP 3 상세 분석 — 지금</h3>
               </div>
               <p className="text-[11px] text-muted-foreground/55 pl-6">
-                현재 금리·물가·환율 조건에서 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">지금 당장 모멘텀이 강한</span> 섹터입니다. 점수가 높을수록 현재 매크로가 유리합니다.
+                현재 매크로 조건에서 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">점수 상위 3개 섹터</span>의 상세 이유·촉매·리스크와 관련 ETF입니다.
               </p>
             </div>
-            {data.nowSectors.map(s => <SectorCard key={s.id} sector={s} isNow={true} />)}
+            {data.nowSectors.slice(0, 3).map(s => <SectorCard key={s.id} sector={s} isNow={true} />)}
           </div>
 
-          {/* 앞으로 유망한 섹터 */}
           <div className="space-y-3">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-bold text-foreground">앞으로 주목할 섹터</h3>
+                <h3 className="text-sm font-bold text-foreground">TOP 3 상세 분석 — 앞으로</h3>
               </div>
               <p className="text-[11px] text-muted-foreground/55 pl-6">
-                아직 본격적이지 않지만 <span className="text-blue-500 font-semibold">향후 3개월~1년 내 매크로 전환 시</span> 수혜를 받을 가능성이 높은 섹터입니다. 미리 관심 목록에 담아두세요.
+                아직 본격적이지 않지만 <span className="text-blue-500 font-semibold">향후 3개월~1년 내 매크로 전환 시</span> 가장 크게 수혜받을 섹터입니다.
               </p>
             </div>
-            {data.futureSectors.map(s => <SectorCard key={s.id} sector={s} isNow={false} />)}
+            {data.futureSectors.slice(0, 3).map(s => <SectorCard key={s.id} sector={s} isNow={false} />)}
           </div>
 
           {/* 면책 */}
