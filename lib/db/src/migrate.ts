@@ -563,6 +563,19 @@ export async function runMigrations() {
       );
     `);
 
+    // 섹터 밸류에이션 보정 지침 (DB 편집 가능)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sector_priors (
+        sector          TEXT        PRIMARY KEY,
+        wacc_range      TEXT        NOT NULL DEFAULT '',
+        terminal_g      TEXT        NOT NULL DEFAULT '',
+        peers_note      TEXT        NOT NULL DEFAULT '',
+        bias_risk       TEXT        NOT NULL DEFAULT '',
+        specific_levers JSONB       NOT NULL DEFAULT '[]',
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
     console.log("Database migrations completed successfully");
   } finally {
     client.release();

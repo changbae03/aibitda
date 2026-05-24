@@ -3,7 +3,7 @@ import {
   Loader2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Activity, RefreshCw,
   Brain, PencilLine, Search, Eye, BarChart3, Cpu, CheckCircle,
-  StickyNote, Target, Plus,
+  StickyNote, Target, Plus, RotateCcw,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -409,16 +409,325 @@ function CoverageTab() {
   );
 }
 
+// ─── 섹터 보정 지침 탭 ───────────────────────────────────────────────────────
+
+const SECTOR_LABELS: Record<string, string> = {
+  KR_SEMICONDUCTOR:    "반도체",
+  KR_SEMICONDUCTOR_EQ: "반도체 장비·소재",
+  KR_BIOTECH:          "바이오/제약",
+  KR_FINANCIAL:        "금융/은행/보험",
+  KR_CONSTRUCTION:     "건설/주택",
+  KR_AUTO:             "자동차",
+  KR_REIT:             "리츠",
+  KR_TELECOM:          "통신",
+  KR_IT:               "IT/게임/플랫폼",
+  KR_CONSUMER:         "소비재/전자",
+  KR_ENERGY:           "에너지/화학",
+  KR_DEFENSE:          "방산/조선/기계",
+  KR_OTHER:            "기타",
+  US_TECH:             "테크/반도체",
+  US_BIOTECH:          "바이오/제약",
+  US_FINANCIAL:        "금융/은행/보험",
+  US_REIT:             "리츠",
+  US_ENERGY:           "에너지/자원",
+  US_DEFENSE:          "방산/항공",
+  US_OTHER:            "기타",
+};
+
+interface SectorPriorRow {
+  sector: string;
+  prior: {
+    waccRange: string;
+    terminalG: string;
+    peersNote: string;
+    biasRisk: string;
+    specificLevers: string[];
+    updatedAt: string | null;
+    isCustomized: boolean;
+  } | null;
+  stats: {
+    directionAccuracy: number | null;
+    avgDeviation: number | null;
+    sampleCount: number;
+    diagnosisNote: string | null;
+    lastRecalc: string | null;
+    benchmarks: any | null;
+  } | null;
+}
+
+function SectorPriorItem({ item, onRefresh }: { item: SectorPriorRow; onRefresh: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [form, setForm] = useState({
+    waccRange:  item.prior?.waccRange  ?? "",
+    terminalG:  item.prior?.terminalG  ?? "",
+    peersNote:  item.prior?.peersNote  ?? "",
+    biasRisk:   item.prior?.biasRisk   ?? "",
+    leverText:  (item.prior?.specificLevers ?? []).join("\n"),
+  });
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setForm({
+        waccRange: item.prior?.waccRange  ?? "",
+        terminalG: item.prior?.terminalG  ?? "",
+        peersNote: item.prior?.peersNote  ?? "",
+        biasRisk:  item.prior?.biasRisk   ?? "",
+        leverText: (item.prior?.specificLevers ?? []).join("\n"),
+      });
+    }
+  }, [item, isOpen]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/sector-priors/${encodeURIComponent(item.sector)}`), {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          waccRange: form.waccRange,
+          terminalG: form.terminalG,
+          peersNote: form.peersNote,
+          biasRisk:  form.biasRisk,
+          specificLevers: form.leverText.split("\n").map(s => s.trim()).filter(Boolean),
+        }),
+      });
+      if (r.ok) { setSavedOk(true); setTimeout(() => setSavedOk(false), 2000); onRefresh(); }
+    } finally { setSaving(false); }
+  };
+
+  const resetToDefault = async () => {
+    if (!item.prior?.isCustomized) return;
+    setResetting(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/admin/sector-priors/${encodeURIComponent(item.sector)}`), {
+        method: "DELETE", credentials: "include",
+      });
+      if (r.ok) { onRefresh(); setIsOpen(false); }
+    } finally { setResetting(false); }
+  };
+
+  const label = SECTOR_LABELS[item.sector] ?? item.sector;
+  const s = item.stats;
+  const accColor = s?.directionAccuracy == null ? "" : s.directionAccuracy >= 60 ? "text-emerald-500" : s.directionAccuracy >= 50 ? "text-amber-500" : "text-red-500";
+  const devColor = s?.avgDeviation == null ? "" : Math.abs(s.avgDeviation) <= 5 ? "text-emerald-500" : Math.abs(s.avgDeviation) <= 15 ? "text-amber-500" : "text-red-500";
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={() => setIsOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Brain className="w-4 h-4 text-violet-500 shrink-0" />
+          <span className="font-semibold text-sm text-foreground">{label}</span>
+          <span className="text-[10px] font-mono text-muted-foreground/60">{item.sector}</span>
+          {item.prior?.isCustomized && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase tracking-wide">수정됨</span>
+          )}
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          {s && (
+            <div className="hidden sm:flex items-center gap-3 text-[11px]">
+              {s.directionAccuracy != null && (
+                <span className={cn("font-semibold tabular-nums", accColor)}>방향 {Math.round(s.directionAccuracy)}%</span>
+              )}
+              {s.avgDeviation != null && (
+                <span className={cn("font-semibold tabular-nums", devColor)}>편향 {s.avgDeviation > 0 ? "+" : ""}{Math.round(s.avgDeviation * 10) / 10}%p</span>
+              )}
+              {s.sampleCount > 0 && (
+                <span className="text-muted-foreground">{s.sampleCount}건</span>
+              )}
+            </div>
+          )}
+          {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-border">
+          {/* 실적 통계 요약 (데이터 있을 때) */}
+          {s && s.sampleCount > 0 && (
+            <div className="px-4 py-3 bg-muted/20 border-b border-border/60 flex flex-wrap gap-4 text-[12px]">
+              {s.directionAccuracy != null && (
+                <div><span className="text-muted-foreground mr-1">방향 정확도</span><span className={cn("font-bold", accColor)}>{Math.round(s.directionAccuracy)}%</span></div>
+              )}
+              {s.avgDeviation != null && (
+                <div><span className="text-muted-foreground mr-1">목표주가 편향</span><span className={cn("font-bold", devColor)}>{s.avgDeviation > 0 ? "+" : ""}{Math.round(s.avgDeviation * 10) / 10}%p</span></div>
+              )}
+              <div><span className="text-muted-foreground mr-1">분석 이력</span><span className="font-bold">{s.sampleCount}건</span></div>
+              {s.lastRecalc && (
+                <div><span className="text-muted-foreground mr-1">마지막 갱신</span><span>{new Date(s.lastRecalc).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}</span></div>
+              )}
+              {s.benchmarks?.medianPer != null && (
+                <div><span className="text-muted-foreground mr-1">섹터 중간 PER</span><span className="font-bold">{Number(s.benchmarks.medianPer).toFixed(1)}x</span></div>
+              )}
+            </div>
+          )}
+
+          {/* 편집 폼 */}
+          <div className="px-4 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">WACC 범위</span>
+                <input
+                  value={form.waccRange}
+                  onChange={e => setForm(f => ({ ...f, waccRange: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/40"
+                  placeholder="예: WACC 11.0~14.0%"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">Terminal g</span>
+                <input
+                  value={form.terminalG}
+                  onChange={e => setForm(f => ({ ...f, terminalG: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/40"
+                  placeholder="예: Terminal g ≤ 1.5%"
+                />
+              </label>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">피어 선택 기준</span>
+              <textarea
+                value={form.peersNote}
+                onChange={e => setForm(f => ({ ...f, peersNote: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400/40"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">주요 편향 위험</span>
+              <textarea
+                value={form.biasRisk}
+                onChange={e => setForm(f => ({ ...f, biasRisk: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400/40"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">핵심 조정 레버 (한 줄에 하나씩)</span>
+              <textarea
+                value={form.leverText}
+                onChange={e => setForm(f => ({ ...f, leverText: e.target.value }))}
+                rows={4}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400/40 font-mono"
+                placeholder="조정 레버 1&#10;조정 레버 2&#10;조정 레버 3"
+              />
+              <p className="text-[10px] text-muted-foreground/60">각 줄이 하나의 레버로 저장됩니다</p>
+            </label>
+
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                {item.prior?.isCustomized && (
+                  <button
+                    onClick={resetToDefault}
+                    disabled={resetting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors border border-border"
+                  >
+                    {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    기본값으로 복원
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedOk ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                {savedOk ? "저장됨" : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectorPriorsTab() {
+  const [sectors, setSectors] = useState<SectorPriorRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [market, setMarket] = useState<"KR" | "US">("KR");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/sector-priors"), { credentials: "include" });
+      if (r.ok) setSectors(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = sectors.filter(s => s.sector.startsWith(market + "_"));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-[13px] text-muted-foreground">
+            Gemini가 분석 시 참조하는 섹터별 밸류에이션 기준입니다. 수정하면 다음 분석부터 즉시 반영됩니다.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={load} disabled={loading} className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
+            <RefreshCw className={cn("w-3.5 h-3.5 text-muted-foreground", loading && "animate-spin")} />
+          </button>
+          <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5">
+            {(["KR", "US"] as const).map(m => (
+              <button key={m} onClick={() => setMarket(m)}
+                className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-colors",
+                  market === m ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}>
+                {m === "KR" ? "🇰🇷 국내" : "🇺🇸 해외"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {loading && sectors.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> 불러오는 중…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          {market === "KR" ? "국내" : "해외"} 섹터 데이터가 없습니다
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(item => (
+            <SectorPriorItem key={item.sector} item={item} onRefresh={load} />
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] px-4 py-3 text-[12px] text-muted-foreground space-y-1">
+        <p className="font-semibold text-violet-500 dark:text-violet-400 flex items-center gap-1.5"><Brain className="w-3.5 h-3.5" /> 적용 우선순위</p>
+        <p>1. 이 탭에서 수정 저장 → DB 값 우선 적용</p>
+        <p>2. DB에 없는 섹터 → 코드 기본값 자동 사용</p>
+        <p>3. 실적 누적 3건 이상이면 목표주가 편향 보정이 추가로 주입됨</p>
+        <p>4. 기본값으로 복원 버튼을 누르면 DB 값이 삭제되어 코드 기본값으로 돌아감</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
-type Tab = "tickerNotes" | "coverage";
+type Tab = "tickerNotes" | "coverage" | "sectorPriors";
 
 export default function AdminQuality() {
   const [tab, setTab] = useState<Tab>("tickerNotes");
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: "tickerNotes", label: "종목 메모",     icon: StickyNote },
-    { key: "coverage",    label: "종목 커버리지", icon: Target },
+    { key: "tickerNotes",  label: "종목 메모",      icon: StickyNote },
+    { key: "coverage",     label: "종목 커버리지",  icon: Target },
+    { key: "sectorPriors", label: "섹터 보정 지침", icon: Brain },
   ];
 
   return (
@@ -455,8 +764,9 @@ export default function AdminQuality() {
       </div>
 
       <div>
-        {tab === "tickerNotes" && <TickerNotesTab />}
-        {tab === "coverage"    && <CoverageTab />}
+        {tab === "tickerNotes"  && <TickerNotesTab />}
+        {tab === "coverage"     && <CoverageTab />}
+        {tab === "sectorPriors" && <SectorPriorsTab />}
       </div>
     </div>
   );

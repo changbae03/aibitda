@@ -387,7 +387,7 @@ router.get("/performance/calibration", async (req, res) => {
 
 // ── 섹터별 도메인 지식 사전 보정값 ─────────────────────────────────────────────
 // 실적 데이터 30건 누적 전에도 항상 적용되는 한국 시장 특성 기반 사전 보정
-const SECTOR_PRIORS: Record<string, {
+export const SECTOR_PRIORS: Record<string, {
   waccRange: string;
   terminalG: string;
   peersNote: string;
@@ -585,8 +585,17 @@ function biasToLeverGuidance(devRounded: number, sector: string): string[] {
 
 export async function getCalibrationContext(sector: string): Promise<string | null> {
   try {
-    // ── Part 1: 섹터 도메인 사전 지식 (데이터 없어도 항상 반환) ──────────────
-    const prior = SECTOR_PRIORS[sector] ?? null;
+    // ── Part 1: 섹터 도메인 사전 지식 (DB 우선, 없으면 하드코딩 fallback) ──────
+    const priorRow = await pool.query(
+      `SELECT * FROM sector_priors WHERE sector = $1`, [sector]
+    );
+    const prior = priorRow.rows.length > 0 ? {
+      waccRange:      priorRow.rows[0].wacc_range      as string,
+      terminalG:      priorRow.rows[0].terminal_g      as string,
+      peersNote:      priorRow.rows[0].peers_note      as string,
+      biasRisk:       priorRow.rows[0].bias_risk       as string,
+      specificLevers: (priorRow.rows[0].specific_levers as string[]) ?? [],
+    } : SECTOR_PRIORS[sector] ?? null;
 
     // ── Part 2: 실적 데이터 기반 편향 보정 (3건 이상 있을 때) ──────────────
     const { rows } = await pool.query(

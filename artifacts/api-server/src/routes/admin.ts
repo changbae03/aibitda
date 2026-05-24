@@ -4,6 +4,7 @@ import { getUserId } from "../lib/credits.js";
 import { clearBatchDateForToday, runDailyAutoBatch } from "../lib/auto-batch-runner.js";
 import { loadKRXList } from "../lib/krx-cache.js";
 import { US_MASTER_LIST } from "../lib/us-full-harvester.js";
+import { SECTOR_PRIORS } from "./performance.js";
 
 const router = Router();
 
@@ -1410,6 +1411,109 @@ router.get("/ticker-coverage", async (req, res) => {
       pages,
       limit,
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// ─── 섹터 보정 지침 관리 ──────────────────────────────────────────────────────
+
+// GET /api/admin/sector-priors — 모든 섹터의 보정 지침 + 실적 통계 반환
+router.get("/sector-priors", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const [priorsRes, statsRes] = await Promise.all([
+      pool.query(`SELECT * FROM sector_priors ORDER BY sector`),
+      pool.query(`SELECT sector, direction_accuracy, avg_price_deviation, sample_count, sector_benchmarks, diagnosis_note, last_recalc_at FROM model_calibration ORDER BY sector`),
+    ]);
+
+    const dbPriorMap = new Map(priorsRes.rows.map((r: any) => [r.sector, r]));
+    const dbStatsMap = new Map(statsRes.rows.map((r: any) => [r.sector, r]));
+
+    const allSectors = new Set([
+      ...Object.keys(SECTOR_PRIORS),
+      ...priorsRes.rows.map((r: any) => r.sector),
+      ...statsRes.rows.map((r: any) => r.sector),
+    ]);
+
+    const result = Array.from(allSectors).map(sector => {
+      const dbPrior = dbPriorMap.get(sector) as any;
+      const hcPrior = SECTOR_PRIORS[sector];
+      const s = dbStatsMap.get(sector) as any;
+      return {
+        sector,
+        prior: dbPrior ? {
+          waccRange:      dbPrior.wacc_range,
+          terminalG:      dbPrior.terminal_g,
+          peersNote:      dbPrior.peers_note,
+          biasRisk:       dbPrior.bias_risk,
+          specificLevers: dbPrior.specific_levers ?? [],
+          updatedAt:      dbPrior.updated_at,
+          isCustomized:   true,
+        } : hcPrior ? {
+          waccRange:      hcPrior.waccRange,
+          terminalG:      hcPrior.terminalG,
+          peersNote:      hcPrior.peersNote,
+          biasRisk:       hcPrior.biasRisk,
+          specificLevers: hcPrior.specificLevers,
+          updatedAt:      null,
+          isCustomized:   false,
+        } : null,
+        stats: s ? {
+          directionAccuracy: s.direction_accuracy,
+          avgDeviation:      s.avg_price_deviation,
+          sampleCount:       s.sample_count,
+          diagnosisNote:     s.diagnosis_note,
+          lastRecalc:        s.last_recalc_at,
+          benchmarks:        s.sector_benchmarks,
+        } : null,
+      };
+    }).sort((a, b) => a.sector.localeCompare(b.sector));
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// PUT /api/admin/sector-priors/:sector — 섹터 보정 지침 저장 (DB 우선 적용)
+router.put("/sector-priors/:sector", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const { sector } = req.params;
+    const { waccRange, terminalG, peersNote, biasRisk, specificLevers } = req.body;
+
+    await pool.query(
+      `INSERT INTO sector_priors (sector, wacc_range, terminal_g, peers_note, bias_risk, specific_levers, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
+       ON CONFLICT (sector) DO UPDATE SET
+         wacc_range      = EXCLUDED.wacc_range,
+         terminal_g      = EXCLUDED.terminal_g,
+         peers_note      = EXCLUDED.peers_note,
+         bias_risk       = EXCLUDED.bias_risk,
+         specific_levers = EXCLUDED.specific_levers,
+         updated_at      = NOW()`,
+      [sector, waccRange ?? "", terminalG ?? "", peersNote ?? "", biasRisk ?? "", JSON.stringify(specificLevers ?? [])]
+    );
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// DELETE /api/admin/sector-priors/:sector — 커스터마이즈 삭제 (하드코딩 기본값으로 복원)
+router.delete("/sector-priors/:sector", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const { sector } = req.params;
+    await pool.query(`DELETE FROM sector_priors WHERE sector = $1`, [sector]);
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "failed" });
   }
