@@ -141,16 +141,25 @@ function etfDescription(etf: ETFInfo): string {
     ? " ⚠️ 인버스 상품으로, 지수가 하락할 때 수익이 납니다."
     : "";
   const base: Record<string, string> = {
-    "국내주식":  "코스피200 대형주 전반에 분산 투자하는 ETF입니다. 한국 경제 전체에 베팅하는 가장 기본적인 선택으로, 시장 전반이 오를 때 수익을 냅니다.",
-    "코스닥":   "코스닥 중소·성장주 중심 ETF입니다. 변동성이 높지만 성장 잠재력도 큰 기업들로 구성되어, 위험을 감수할 수 있는 투자자에게 적합합니다.",
-    "반도체":   "삼성전자·SK하이닉스 등 반도체 기업에 집중 투자합니다. AI·데이터센터 수요와 글로벌 반도체 경기 사이클에 민감하게 반응합니다.",
-    "2차전지":  "배터리 셀·소재·장비 기업들로 구성됩니다. 전기차(EV) 전환 속도, 리튬 등 핵심 광물 가격에 따라 크게 움직입니다.",
-    "헬스케어": "바이오·제약·의료기기 기업들을 담습니다. 임상 결과 발표, 신약 허가 여부에 따라 급등락이 잦은 고위험·고수익 섹터입니다.",
-    "금융":     "은행·보험·증권주 중심 ETF입니다. 기준금리 방향에 가장 민감한 섹터로, 금리가 오를수록 수혜를 받는 경향이 있습니다.",
-    "IT":       "소프트웨어·IT서비스·게임 기업들을 포함합니다. 플랫폼·디지털 전환 테마와 함께 움직이며, 기술주 심리에 영향을 받습니다.",
-    "해외주식": "미국 S&P500 등 글로벌 우량 기업에 투자합니다. 달러 강약에 따른 환율 효과도 함께 반영됩니다.",
-    "배당":     "고배당 우량주 중심으로 안정적인 현금흐름을 추구합니다. 변동성이 낮아 보수적인 투자자나 인컴 전략에 적합합니다.",
-    "원자재":   "금·원유·농산물 선물 가격을 추종합니다. 인플레이션 헷지나 포트폴리오 분산 목적으로 활용됩니다.",
+    "국내주식":    "코스피200 대형주 전반에 분산 투자하는 ETF입니다. 한국 경제 전체에 베팅하는 가장 기본적인 선택으로, 시장 전반이 오를 때 수익을 냅니다.",
+    "코스닥":      "코스닥 중소·성장주 중심 ETF입니다. 변동성이 높지만 성장 잠재력도 큰 기업들로 구성되어, 위험을 감수할 수 있는 투자자에게 적합합니다.",
+    "반도체":      "삼성전자·SK하이닉스 등 반도체 기업에 집중 투자합니다. AI·데이터센터 수요와 글로벌 반도체 경기 사이클에 민감하게 반응합니다.",
+    "2차전지":     "배터리 셀·소재·장비 기업들로 구성됩니다. 전기차(EV) 전환 속도, 리튬 등 핵심 광물 가격에 따라 크게 움직입니다.",
+    "헬스케어":    "바이오·제약·의료기기 기업들을 담습니다. 임상 결과 발표, 신약 허가 여부에 따라 급등락이 잦은 고위험·고수익 섹터입니다.",
+    "금융":        "은행·보험·증권주 중심 ETF입니다. 기준금리 방향에 가장 민감한 섹터로, 금리가 오를수록 수혜를 받는 경향이 있습니다.",
+    "IT":          "소프트웨어·IT서비스·게임 기업들을 포함합니다. 플랫폼·디지털 전환 테마와 함께 움직이며, 기술주 심리에 영향을 받습니다.",
+    "해외주식":    "미국 S&P500 등 글로벌 우량 기업에 투자합니다. 달러 강약에 따른 환율 효과도 함께 반영됩니다.",
+    "배당":        "고배당 우량주 중심으로 안정적인 현금흐름을 추구합니다. 변동성이 낮아 보수적인 투자자나 인컴 전략에 적합합니다.",
+    "원자재":      "금·원유·농산물 선물 가격을 추종합니다. 인플레이션 헷지나 포트폴리오 분산 목적으로 활용됩니다.",
+    "미국시장":    "S&P 500 대형주 500종목을 추종하는 미국 대표 ETF입니다. 미국 경제 전반에 분산 투자하는 가장 기본적인 선택입니다.",
+    "미국나스닥":  "나스닥 100 기술·성장주에 집중 투자합니다. Apple·Microsoft·NVIDIA 등 빅테크 비중이 높아 AI·반도체 테마와 동조화됩니다.",
+    "미국반도체":  "NVIDIA·AMD·TSMC 등 글로벌 반도체 기업에 집중 투자합니다. AI 인프라 수요와 글로벌 반도체 사이클을 직접 반영합니다.",
+    "미국헬스케어":"미국 제약·바이오·의료기기 기업들로 구성됩니다. 고령화·신약 개발 테마와 함께 움직이며 달러 강세에도 방어적입니다.",
+    "미국금융":    "미국 은행·보험·자산운용사 중심 ETF입니다. 미국 기준금리 방향에 민감하게 반응합니다.",
+    "미국에너지":  "미국 석유·가스·에너지 기업들을 담습니다. 유가 및 천연가스 가격 방향에 따라 크게 움직입니다.",
+    "미국혁신":    "파괴적 혁신 기업에 집중 투자하는 액티브 ETF입니다. AI·로봇·게놈 등 미래 테마에 집중되어 변동성이 매우 높습니다.",
+    "한국시장":    "미국 상장 한국 대표 기업에 투자하는 ETF입니다. 달러 기준으로 한국 증시에 투자하는 효과를 냅니다.",
+    "신흥국":      "신흥국 우량 기업 전반에 분산 투자합니다. 중국·인도·브라질 등 고성장 국가의 경제 성장을 함께 누릴 수 있습니다.",
   };
   return (base[etf.sector] ?? "다양한 자산에 분산 투자하는 ETF입니다.") + leverageNote;
 }
@@ -350,7 +359,11 @@ function SearchTab() {
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                   <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest">Top {etfResult.holdings.length} 보유 종목</p>
                   {etfResult.source === "live" ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-semibold">● KIS 실시간</span>
+                    etfResult.etf?.isuCd === etfResult.etf?.code ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-500 border border-blue-500/30 font-semibold">● Yahoo Finance</span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-semibold">● KIS 실시간</span>
+                    )
                   ) : (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30 font-semibold">참고용 데이터</span>
                   )}
@@ -380,7 +393,9 @@ function SearchTab() {
                 <div className="px-4 py-2.5 bg-muted/10 border-t border-border flex items-center justify-between gap-4">
                   <p className="text-[10px] text-muted-foreground/40">
                     {etfResult.source === "live"
-                      ? "* KIS Open API 실시간 데이터 — 기준가격 비중 기준"
+                      ? (etfResult.etf?.isuCd === etfResult.etf?.code
+                          ? "* Yahoo Finance 실시간 데이터 — 분기별 최신 비중 기준"
+                          : "* KIS Open API 실시간 데이터 — 기준가격 비중 기준")
                       : "* 참고용 정적 데이터 — 실제 비중과 차이가 있을 수 있습니다"}
                   </p>
                   {etfResult.dataDate && (
@@ -481,22 +496,45 @@ function SearchTab() {
 
       {/* 빠른 ETF 버튼 */}
       {!etfResult && !stockResult && (
-        <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground/50 font-medium px-1">인기 ETF</p>
-          <div className="flex flex-wrap gap-2">
-            {["069500","091160","305720","143460","132030","261220","144600","133690","229200","379800"].map(code => {
-              const etf = allEtfs.find(e => e.code === code);
-              if (!etf) return null;
-              return (
-                <button
-                  key={code}
-                  onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
-                >
-                  {etf.name} <LeverageBadge lev={etf.leverage} />
-                </button>
-              );
-            })}
+        <div className="space-y-4">
+          {/* 국내 ETF */}
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-foreground/50 font-medium px-1">🇰🇷 국내 인기 ETF</p>
+            <div className="flex flex-wrap gap-2">
+              {["069500","091160","305720","143460","132030","261220","144600","133690","229200","379800"].map(code => {
+                const etf = allEtfs.find(e => e.code === code);
+                if (!etf) return null;
+                return (
+                  <button
+                    key={code}
+                    onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
+                  >
+                    {etf.name} <LeverageBadge lev={etf.leverage} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* 미국 ETF */}
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-foreground/50 font-medium px-1">🇺🇸 미국 인기 ETF</p>
+            <div className="flex flex-wrap gap-2">
+              {["SPY","QQQ","SOXX","SMH","VGT","XLV","XLF","XLE","ARKK","EWY"].map(code => {
+                const etf = allEtfs.find(e => e.code === code);
+                if (!etf) return null;
+                return (
+                  <button
+                    key={code}
+                    onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-medium hover:bg-blue-500/20 transition-colors text-blue-700 dark:text-blue-400"
+                  >
+                    <span className="font-mono font-bold">{etf.code}</span>
+                    <span className="text-muted-foreground hidden sm:inline">· {etf.name.replace(/\(.*\)/, "").trim()}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

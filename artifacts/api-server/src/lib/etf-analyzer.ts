@@ -141,6 +141,37 @@ export const MAJOR_ETFS: ETFInfo[] = [
   { code:"171018", isuCd:"KR7171018001", name:"KODEX 천연가스선물(H)",   sector:"원자재",   issuer:"삼성자산운용", yahooCode:"171018.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Natural Gas" },
 ];
 
+// ─── 미국 주요 ETF 목록 ───────────────────────────────────────────────────────
+export const US_ETFS: ETFInfo[] = [
+  // 시장 전체
+  { code:"SPY",  isuCd:"SPY",  name:"SPDR S&P 500 ETF",              sector:"미국시장", issuer:"State Street", yahooCode:"SPY",  leverage:1, ter:0.0945, benchmark:"S&P 500" },
+  { code:"VOO",  isuCd:"VOO",  name:"Vanguard S&P 500 ETF",           sector:"미국시장", issuer:"Vanguard",     yahooCode:"VOO",  leverage:1, ter:0.03,   benchmark:"S&P 500" },
+  { code:"IVV",  isuCd:"IVV",  name:"iShares Core S&P 500 ETF",       sector:"미국시장", issuer:"BlackRock",    yahooCode:"IVV",  leverage:1, ter:0.03,   benchmark:"S&P 500" },
+  { code:"VTI",  isuCd:"VTI",  name:"Vanguard Total Stock Market ETF", sector:"미국시장", issuer:"Vanguard",     yahooCode:"VTI",  leverage:1, ter:0.03,   benchmark:"CRSP US Total Market" },
+  // 나스닥
+  { code:"QQQ",  isuCd:"QQQ",  name:"Invesco QQQ (Nasdaq-100)",        sector:"미국나스닥", issuer:"Invesco",    yahooCode:"QQQ",  leverage:1, ter:0.20,   benchmark:"Nasdaq-100" },
+  { code:"QQQM", isuCd:"QQQM", name:"Invesco Nasdaq-100 ETF",          sector:"미국나스닥", issuer:"Invesco",    yahooCode:"QQQM", leverage:1, ter:0.15,   benchmark:"Nasdaq-100" },
+  // 기술·반도체
+  { code:"VGT",  isuCd:"VGT",  name:"Vanguard Information Technology", sector:"미국반도체", issuer:"Vanguard",   yahooCode:"VGT",  leverage:1, ter:0.10,   benchmark:"MSCI US IMI Info Tech" },
+  { code:"XLK",  isuCd:"XLK",  name:"Technology Select Sector SPDR",   sector:"미국반도체", issuer:"State Street",yahooCode:"XLK",  leverage:1, ter:0.09,   benchmark:"S&P Tech Sector" },
+  { code:"SOXX", isuCd:"SOXX", name:"iShares Semiconductor ETF",        sector:"미국반도체", issuer:"BlackRock",  yahooCode:"SOXX", leverage:1, ter:0.35,   benchmark:"ICE Semiconductor" },
+  { code:"SMH",  isuCd:"SMH",  name:"VanEck Semiconductor ETF",         sector:"미국반도체", issuer:"VanEck",     yahooCode:"SMH",  leverage:1, ter:0.35,   benchmark:"MVIS US Listed Semiconductor" },
+  // 헬스케어
+  { code:"XLV",  isuCd:"XLV",  name:"Health Care Select Sector SPDR",   sector:"미국헬스케어", issuer:"State Street",yahooCode:"XLV", leverage:1, ter:0.09,  benchmark:"S&P Healthcare Sector" },
+  { code:"IBB",  isuCd:"IBB",  name:"iShares Biotechnology ETF",         sector:"미국헬스케어", issuer:"BlackRock",  yahooCode:"IBB", leverage:1, ter:0.44,  benchmark:"ICE Biotechnology" },
+  // 금융
+  { code:"XLF",  isuCd:"XLF",  name:"Financial Select Sector SPDR",     sector:"미국금융", issuer:"State Street", yahooCode:"XLF",  leverage:1, ter:0.09,  benchmark:"S&P Financial Sector" },
+  // 에너지
+  { code:"XLE",  isuCd:"XLE",  name:"Energy Select Sector SPDR",         sector:"미국에너지", issuer:"State Street",yahooCode:"XLE", leverage:1, ter:0.09,  benchmark:"S&P Energy Sector" },
+  // 혁신·테마
+  { code:"ARKK", isuCd:"ARKK", name:"ARK Innovation ETF",                sector:"미국혁신", issuer:"ARK Invest",  yahooCode:"ARKK", leverage:1, ter:1.26,  benchmark:"ARK Innovation" },
+  // 글로벌 신흥국
+  { code:"EWY",  isuCd:"EWY",  name:"iShares MSCI South Korea ETF",      sector:"한국시장", issuer:"BlackRock",   yahooCode:"EWY",  leverage:1, ter:0.57,  benchmark:"MSCI Korea" },
+  { code:"EEM",  isuCd:"EEM",  name:"iShares MSCI Emerging Markets ETF",  sector:"신흥국",   issuer:"BlackRock",   yahooCode:"EEM",  leverage:1, ter:0.68,  benchmark:"MSCI Emerging Markets" },
+];
+
+export const ALL_ETFS: ETFInfo[] = [...MAJOR_ETFS, ...US_ETFS];
+
 // ─── Samsung Fund fId 매핑 (모바일 API용) ────────────────────────────────────
 // m.samsungfund.com/api/v1/kodex/product-pdf/{fId}.do?gijunYMD=YYYY.MM.DD
 
@@ -723,8 +754,13 @@ function tsToKstDateStr(ts: number): string {
   return `${year}년 ${month}월 ${day}일`;
 }
 
-/** ETF 구성 종목 조회 (KIS 실시간 → KRX → 정적 폴백) */
+/** ETF 구성 종목 조회 (KIS 실시간 → KRX → 정적 폴백 / 미국 ETF는 Yahoo Finance) */
 export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
+  // 미국 ETF 분기 (알파벳 코드)
+  if (US_ETFS.find(e => e.code === code)) {
+    return getUsEtfHoldings(code);
+  }
+
   const cached = holdingsCache.get(code);
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
     return {
@@ -769,12 +805,41 @@ export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
   return { holdings: st, source: "reference", dataDate: "2026년 05월 22일" };
 }
 
-/** ETF 검색 */
+/** 미국 ETF 구성 종목 조회 (Yahoo Finance topHoldings) */
+async function getUsEtfHoldings(code: string): Promise<HoldingsResult> {
+  const cached = holdingsCache.get(code);
+  if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
+    return {
+      holdings: cached.data,
+      source: cached.source as "live" | "reference",
+      dataDate: tsToKstDateStr(cached.ts),
+    };
+  }
+  try {
+    const summary = await yf.quoteSummary(code, { modules: ["topHoldings"] as any });
+    const raw: Array<{ symbol?: string; holdingName?: string; holdingPercent?: number }> =
+      (summary as any).topHoldings?.holdings ?? [];
+    if (raw.length === 0) return { holdings: [], source: "reference", dataDate: "" };
+    const holdings: ETFHolding[] = raw.slice(0, 25).map((h, i) => ({
+      rank:      i + 1,
+      stockCode: h.symbol ?? "",
+      stockName: h.holdingName ?? h.symbol ?? "",
+      weight:    Math.round((h.holdingPercent ?? 0) * 10000) / 100,
+    }));
+    const now = Date.now();
+    holdingsCache.set(code, { data: holdings, ts: now, source: "live" });
+    return { holdings, source: "live", dataDate: tsToKstDateStr(now) };
+  } catch {
+    return { holdings: [], source: "reference", dataDate: "" };
+  }
+}
+
+/** ETF 검색 (국내 + 미국) */
 export function searchEtf(query: string): ETFInfo[] {
   const q = query.trim().toLowerCase();
-  if (!q) return MAJOR_ETFS;
-  return MAJOR_ETFS.filter(e =>
-    e.code.includes(q) || e.name.toLowerCase().includes(q) ||
+  if (!q) return ALL_ETFS;
+  return ALL_ETFS.filter(e =>
+    e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) ||
     e.sector.toLowerCase().includes(q) || e.issuer.toLowerCase().includes(q)
   );
 }

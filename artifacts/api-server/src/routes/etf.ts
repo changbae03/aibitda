@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  MAJOR_ETFS,
+  ALL_ETFS,
   searchEtf,
   getEtfHoldings,
   getStockExposure,
@@ -23,7 +23,7 @@ function cached<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T> {
 
 // GET /api/etf/list
 router.get("/etf/list", (_req, res) => {
-  res.json(MAJOR_ETFS);
+  res.json(ALL_ETFS);
 });
 
 // GET /api/etf/search?q=
@@ -87,7 +87,7 @@ router.get("/etf/:code/holdings", async (req, res) => {
   try {
     const code = req.params.code.replace(/[^0-9A-Za-z]/g, "").slice(0, 10);
     const { holdings, source, dataDate } = await getEtfHoldings(code);
-    const etf = MAJOR_ETFS.find(e => e.code === code);
+    const etf = ALL_ETFS.find(e => e.code === code);
     res.json({ etf: etf ?? null, holdings, source, dataDate });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
