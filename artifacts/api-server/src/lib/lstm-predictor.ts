@@ -78,7 +78,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 22;  // [v22] 합의신호 + wf가중치 강화(k*2.5) + KOSPI dirPenalty 4.5/halfLife 70 + KOSDAQ halfLife 35/dirPenalty 4.5
+const MODEL_VERSION = 23;  // [v23] D+1 별도 GBDT 앙상블 추가 — 내일 방향 신호 (predictedReturn1d)
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
