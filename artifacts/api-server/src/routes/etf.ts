@@ -7,6 +7,7 @@ import {
   getSectorRotation,
   getTimingSignals,
   getUnifiedSignals,
+  getMomentumAnalysis,
 } from "../lib/etf-analyzer.js";
 import { getStatus } from "../lib/lstm-predictor.js";
 
@@ -99,6 +100,16 @@ router.get("/etf/stock/:query/exposure", async (req, res) => {
   try {
     const query = decodeURIComponent(req.params.query);
     const data  = await getStockExposure(query);
+    res.json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "error" });
+  }
+});
+
+// GET /api/etf/momentum-analysis
+router.get("/etf/momentum-analysis", async (_req, res) => {
+  try {
+    const data = await cached("momentum-analysis", 30 * 60_000, getMomentumAnalysis);
     res.json(data);
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });

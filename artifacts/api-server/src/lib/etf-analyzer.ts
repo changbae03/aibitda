@@ -8,6 +8,8 @@
  */
 import YahooFinance from "yahoo-finance2";
 import { getKisAccessToken } from "./kis-client.js";
+import { fetchECOSMacro } from "./ecos-client.js";
+import { fetchFREDMacro } from "./fred-client.js";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 const KRX_BASE = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
@@ -1130,4 +1132,251 @@ export async function getUnifiedSignals(ai?: AiMarketInput): Promise<UnifiedSign
       reason:        v.reason,
     } as UnifiedSignal;
   }).sort((a, b) => b.combinedScore - a.combinedScore);
+}
+
+// ─── ETF 모멘텀 분석 (매크로 기반) ───────────────────────────────────────────
+
+export interface MacroSnapshot {
+  krRate: number;
+  usRate: number;
+  krCpi: number;
+  usCpi: number;
+  krwUsd: number;
+  wti: number;
+  gdpQoQ: number;
+  yieldSpread: number;
+}
+
+export interface MacroEnvironment {
+  rateLevel: "high" | "moderate" | "low";
+  inflation: "elevated" | "moderate" | "low";
+  fxKrw: "weak" | "neutral" | "strong";
+  growth: "strong" | "moderate" | "weak";
+  oilPrice: "high" | "moderate" | "low";
+  theme: string;
+}
+
+export interface SectorMomentum {
+  id: string;
+  name: string;
+  icon: string;
+  score: number;
+  outlook: "bullish" | "neutral" | "cautious";
+  horizon: string;
+  reason: string;
+  catalysts: string[];
+  risks: string[];
+  sectorTags: string[];
+}
+
+export interface MomentumAnalysis {
+  macro: MacroSnapshot;
+  environment: MacroEnvironment;
+  nowSectors: SectorMomentum[];
+  futureSectors: SectorMomentum[];
+  updatedAt: number;
+}
+
+function buildEnvironment(m: MacroSnapshot): MacroEnvironment {
+  const rateLevel: "high" | "moderate" | "low" =
+    m.usRate > 3.5 ? "high" : m.usRate > 2.0 ? "moderate" : "low";
+  const inflation: "elevated" | "moderate" | "low" =
+    m.usCpi > 3.5 ? "elevated" : m.usCpi > 2.0 ? "moderate" : "low";
+  const fxKrw: "weak" | "neutral" | "strong" =
+    m.krwUsd > 1400 ? "weak" : m.krwUsd > 1200 ? "neutral" : "strong";
+  const growth: "strong" | "moderate" | "weak" =
+    m.gdpQoQ > 2.0 ? "strong" : m.gdpQoQ > 0.5 ? "moderate" : "weak";
+  const oilPrice: "high" | "moderate" | "low" =
+    m.wti > 90 ? "high" : m.wti > 60 ? "moderate" : "low";
+
+  const themes: string[] = [];
+  if (rateLevel === "high") themes.push("고금리 지속");
+  if (inflation === "elevated") themes.push("인플레이션 상승");
+  if (fxKrw === "weak") themes.push("원화 약세");
+  if (oilPrice === "high") themes.push("유가 강세");
+  themes.push("AI 투자 사이클 진행 중");
+
+  return { rateLevel, inflation, fxKrw, growth, oilPrice, theme: themes.slice(0, 4).join(" · ") };
+}
+
+function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
+  now: SectorMomentum[];
+  future: SectorMomentum[];
+} {
+  const { rateLevel, inflation, fxKrw, growth, oilPrice } = env;
+
+  // ── 지금 유망 섹터 ──────────────────────────────────────────────────
+  const now: SectorMomentum[] = [];
+
+  // 반도체: AI cycle 주도
+  {
+    let s = 65;
+    s += 20;                                // AI 인프라 수요
+    if (rateLevel === "high") s -= 8;       // 고금리 밸류에이션 부담
+    if (growth !== "weak") s += 5;
+    now.push({
+      id: "semi", name: "반도체", icon: "🔬",
+      score: Math.min(100, Math.round(s)),
+      outlook: "bullish", horizon: "단기~중기",
+      reason: `AI 데이터센터 투자 사이클이 반도체 수요를 강력히 견인 중. HBM·고사양 메모리 공급 부족 지속으로 가격 우위 유지.`,
+      catalysts: ["AI 서버 투자 확대", "HBM 가격 상승 지속", "글로벌 반도체 재고 정상화"],
+      risks: ["고금리로 인한 성장주 밸류에이션 부담", "중국 반도체 규제 불확실성"],
+      sectorTags: ["반도체", "미국반도체"],
+    });
+  }
+
+  // 미국시장: 약원화 = 환차익
+  {
+    let s = 60;
+    if (fxKrw === "weak") s += 20;
+    if (rateLevel === "high") s -= 5;
+    if (growth !== "weak") s += 8;
+    now.push({
+      id: "us-market", name: "미국시장", icon: "🇺🇸",
+      score: Math.min(100, Math.round(s)),
+      outlook: "bullish", horizon: "단기",
+      reason: `원/달러 ${m.krwUsd.toLocaleString()}원 수준의 원화 약세로 해외 투자 시 환차익 효과 극대화. 미국 경제의 상대적 강세 유지.`,
+      catalysts: ["원화 약세 → 환차익 기대", "S&P500 실적 견조", "미국 경제 연착륙 기대"],
+      risks: ["환율 반전 시 수익 감소", "미국 소비 둔화 가능성"],
+      sectorTags: ["미국시장", "미국나스닥", "해외주식"],
+    });
+  }
+
+  // 원자재/에너지: 고유가 + 인플레이션
+  {
+    let s = 55;
+    if (oilPrice === "high") s += 18;
+    if (inflation === "elevated") s += 12;
+    if (fxKrw === "weak") s -= 5;
+    now.push({
+      id: "commodity", name: "원자재·에너지", icon: "🛢️",
+      score: Math.min(100, Math.round(s)),
+      outlook: s >= 70 ? "bullish" : "neutral", horizon: "단기",
+      reason: `WTI $${m.wti.toFixed(0)} 수준의 고유가와 물가 상승 압력이 원자재·에너지 섹터를 지지. 인플레이션 헷지 수요 유입 중.`,
+      catalysts: ["유가 강세 지속", "인플레이션 헷지 수요", "OPEC+ 감산 기조 유지"],
+      risks: ["경기 침체 시 에너지 수요 급감", "신재생에너지 전환 가속"],
+      sectorTags: ["원자재", "미국에너지"],
+    });
+  }
+
+  // 금융: 고금리 수혜
+  {
+    let s = 55;
+    if (rateLevel === "high") s += 18;
+    if (m.yieldSpread > 0.3) s += 10;
+    if (growth !== "weak") s += 5;
+    now.push({
+      id: "financial", name: "금융", icon: "🏦",
+      score: Math.min(100, Math.round(s)),
+      outlook: s >= 70 ? "bullish" : "neutral", horizon: "단기~중기",
+      reason: `미국 기준금리 ${m.usRate}%, 한국 ${m.krRate}% 고점 유지로 은행 순이자마진(NIM) 극대화. 장단기 금리차 정상 유지(+${m.yieldSpread.toFixed(2)}%).`,
+      catalysts: ["NIM 확대 수혜", "장단기 금리차 정상화", "주주환원 배당 확대"],
+      risks: ["대출 연체율 상승 우려", "금리 인하 시 NIM 축소 전환"],
+      sectorTags: ["금융", "미국금융"],
+    });
+  }
+
+  // 상위 3개만
+  const nowTop = now.sort((a, b) => b.score - a.score).slice(0, 3);
+
+  // ── 향후 유망 섹터 ──────────────────────────────────────────────────
+  const future: SectorMomentum[] = [];
+
+  // 기술/성장주: 금리 인하 기대
+  {
+    let s = 68;
+    if (rateLevel === "high") s += 5;    // 인하 시 상승 여력 큼
+    if (inflation === "elevated") s -= 5; // 인하 지연 리스크
+    future.push({
+      id: "growth-tech", name: "기술·성장주", icon: "🚀",
+      score: Math.min(100, Math.round(s)),
+      outlook: "bullish", horizon: "중기 (3~6개월)",
+      reason: "인플레이션 둔화 → Fed 금리 인하 사이클 진입 시 성장주 밸류에이션 급반등 예상. QQQ·VGT 선제 포지셔닝이 유효한 구간.",
+      catalysts: ["Fed 금리 인하 사이클 진입 기대", "AI 수익화 가속", "빅테크 실적 호조 지속"],
+      risks: ["CPI 재반등 시 인하 지연", "빅테크 규제 리스크"],
+      sectorTags: ["미국나스닥", "IT", "미국반도체"],
+    });
+  }
+
+  // 2차전지: 구조적 반등
+  {
+    let s = 60;
+    if (rateLevel === "high") s -= 5;
+    s += 10; // 중국 EV 회복
+    future.push({
+      id: "ev-battery", name: "2차전지·EV", icon: "🔋",
+      score: Math.min(100, Math.round(s)),
+      outlook: "neutral", horizon: "중기 (3~6개월)",
+      reason: "단기 고금리 부담 속 현재 저평가 구간 형성 중. 중국 EV 시장 회복·글로벌 ESS 수요 확대가 구조적 반등 근거.",
+      catalysts: ["중국 EV 보조금 확대", "ESS 수요 급증", "리튬·양극재 가격 반등"],
+      risks: ["미국 IRA 수혜 불확실성", "완성차 업체 EV 전략 조정"],
+      sectorTags: ["2차전지"],
+    });
+  }
+
+  // 헬스케어: 방어 + 구조적 성장
+  {
+    const s = 62;
+    future.push({
+      id: "healthcare", name: "헬스케어·바이오", icon: "💊",
+      score: Math.min(100, Math.round(s)),
+      outlook: "neutral", horizon: "장기 (6개월+)",
+      reason: "고금리 환경에서 방어적 특성 유지. 글로벌 고령화 + GLP-1 비만치료제 · AI 신약 발굴 테마가 장기 성장 동력.",
+      catalysts: ["GLP-1 비만치료제 시장 확대", "AI 기반 신약 개발 단축", "노인 인구 구조적 증가"],
+      risks: ["임상 실패 리스크", "미국 약가 규제 강화"],
+      sectorTags: ["헬스케어", "미국헬스케어"],
+    });
+  }
+
+  // 배당: 금리 인하 시 재평가
+  {
+    let s = 58;
+    if (rateLevel === "high") s -= 5;
+    s += 8;
+    future.push({
+      id: "dividend", name: "배당·인컴", icon: "💰",
+      score: Math.min(100, Math.round(s)),
+      outlook: "neutral", horizon: "중기 (3~6개월)",
+      reason: "고금리 속 배당 매력 일시적 하락이지만, 금리 인하 사이클 진입 시 배당주 밸류에이션 재평가 기회. 안정 현금흐름 수요 증가.",
+      catalysts: ["금리 인하 시 배당 매력 복원", "주주환원 확대 기업 증가", "불확실성 속 방어 자산 수요"],
+      risks: ["금리 인하 지연 리스크", "기업 실적 둔화 시 배당 삭감"],
+      sectorTags: ["배당"],
+    });
+  }
+
+  const futureTop = future.sort((a, b) => b.score - a.score).slice(0, 3);
+
+  return { now: nowTop, future: futureTop };
+}
+
+const momentumCache = new Map<string, { data: MomentumAnalysis; ts: number }>();
+const MOMENTUM_TTL = 30 * 60_000;
+
+export async function getMomentumAnalysis(): Promise<MomentumAnalysis> {
+  const cacheKey = "momentum";
+  const hit = momentumCache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < MOMENTUM_TTL) return hit.data;
+
+  const [ecos, fred] = await Promise.all([fetchECOSMacro(), fetchFREDMacro()]);
+
+  const macro: MacroSnapshot = {
+    krRate:      ecos.baseRate       ?? 2.5,
+    usRate:      fred.fedTargetUpper ?? 3.75,
+    krCpi:       ecos.cpiYoY        ?? 2.5,
+    usCpi:       fred.cpiYoY        ?? 3.5,
+    krwUsd:      ecos.usdKrw        ?? 1350,
+    wti:         fred.wtiOil        ?? 75,
+    gdpQoQ:      ecos.gdpQoQ        ?? 1.0,
+    yieldSpread: fred.yieldSpread   ?? 0,
+  };
+
+  const environment = buildEnvironment(macro);
+  const { now: nowSectors, future: futureSectors } = buildSectors(environment, macro);
+
+  const result: MomentumAnalysis = {
+    macro, environment, nowSectors, futureSectors, updatedAt: Date.now(),
+  };
+
+  momentumCache.set(cacheKey, { data: result, ts: Date.now() });
+  return result;
 }

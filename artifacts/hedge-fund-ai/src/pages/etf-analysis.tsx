@@ -7,6 +7,7 @@ import {
   Search, TrendingUp, TrendingDown, Loader2, RefreshCw,
   BarChart3, Zap, LayoutGrid, ChevronRight, Info,
   Building2, Globe, ArrowUpDown, Brain, Sparkles,
+  Flame, Target, Activity, X,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -41,6 +42,30 @@ interface AiContext {
   kospi: { direction: "up" | "down" | "neutral"; strength: number };
   nasdaq: { direction: "up" | "down" | "neutral"; strength: number };
   ready: boolean;
+}
+interface MacroSnapshot {
+  krRate: number; usRate: number; krCpi: number; usCpi: number;
+  krwUsd: number; wti: number; gdpQoQ: number; yieldSpread: number;
+}
+interface MacroEnvironment {
+  rateLevel: "high" | "moderate" | "low";
+  inflation: "elevated" | "moderate" | "low";
+  fxKrw: "weak" | "neutral" | "strong";
+  growth: "strong" | "moderate" | "weak";
+  oilPrice: "high" | "moderate" | "low";
+  theme: string;
+}
+interface SectorMomentum {
+  id: string; name: string; icon: string; score: number;
+  outlook: "bullish" | "neutral" | "cautious"; horizon: string;
+  reason: string; catalysts: string[]; risks: string[]; sectorTags: string[];
+}
+interface MomentumAnalysis {
+  macro: MacroSnapshot;
+  environment: MacroEnvironment;
+  nowSectors: SectorMomentum[];
+  futureSectors: SectorMomentum[];
+  updatedAt: number;
 }
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
@@ -233,19 +258,22 @@ function SearchTab() {
   return (
     <div className="space-y-5">
       {/* 모드 토글 */}
-      <div className="flex gap-2">
+      <div className="flex gap-1 p-1 rounded-2xl bg-muted/30 border border-border">
         {(["etf","stock"] as const).map(m => (
           <button
             key={m}
             onClick={() => { setMode(m); setQuery(""); setEtfResult(null); setStockResult(null); setShowList(false); }}
             className={cn(
-              "flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border",
+              "flex-1 flex flex-col items-center py-2.5 px-2 rounded-xl text-xs font-semibold transition-all",
               mode === m
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50",
+                ? "bg-card text-foreground shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {m === "etf" ? "🏦 ETF 검색 → 구성 종목" : "🔍 종목 검색 → ETF 노출도"}
+            <span className="font-bold">{m === "etf" ? "ETF 검색" : "종목 검색"}</span>
+            <span className={cn("text-[10px] mt-0.5 font-normal", mode === m ? "text-muted-foreground/60" : "text-muted-foreground/40")}>
+              {m === "etf" ? "→ 구성 종목 분석" : "→ ETF 편입 현황"}
+            </span>
           </button>
         ))}
       </div>
@@ -298,17 +326,42 @@ function SearchTab() {
           {etfResult.etf && (
             <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
               <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <h2 className="text-base font-bold text-foreground">{etfResult.etf.name}</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {etfResult.etf.code} · {etfResult.etf.issuer} · {etfResult.etf.benchmark}
-                  </p>
+                <div className="flex items-start gap-3 min-w-0">
+                  {/* 섹터 컬러 표시 */}
+                  <div
+                    className="w-1 self-stretch rounded-full shrink-0 mt-0.5"
+                    style={{ background: SECTOR_COLORS[etfResult.etf.sector] ?? "#94a3b8" }}
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-base font-bold text-foreground">{etfResult.etf.name}</h2>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="text-[11px] text-muted-foreground/50">{etfResult.etf.code}</span>
+                      <span className="text-muted-foreground/30">·</span>
+                      <span className="text-[11px] text-muted-foreground/50">{etfResult.etf.issuer}</span>
+                      {etfResult.etf.benchmark && (
+                        <>
+                          <span className="text-muted-foreground/30">·</span>
+                          <span className="text-[11px] text-muted-foreground/40 truncate max-w-[180px]">{etfResult.etf.benchmark}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  <span
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full border"
+                    style={{
+                      background: `${SECTOR_COLORS[etfResult.etf.sector] ?? "#94a3b8"}18`,
+                      borderColor: `${SECTOR_COLORS[etfResult.etf.sector] ?? "#94a3b8"}40`,
+                      color: SECTOR_COLORS[etfResult.etf.sector] ?? "#94a3b8",
+                    }}
+                  >
+                    {etfResult.etf.sector}
+                  </span>
                   <LeverageBadge lev={etfResult.etf.leverage} />
                   {etfResult.etf.ter != null && (
                     <span className="text-[11px] text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full border border-border">
-                      총보수 {etfResult.etf.ter}%
+                      보수 {etfResult.etf.ter}%
                     </span>
                   )}
                 </div>
@@ -319,7 +372,7 @@ function SearchTab() {
               </p>
               {/* 총보수 해설 */}
               {etfResult.etf.ter != null && (
-                <p className="text-[11px] text-muted-foreground/60">
+                <p className="text-[11px] text-muted-foreground/55 bg-muted/20 rounded-lg px-3 py-2 border border-border/50">
                   💰 연간 총보수 {etfResult.etf.ter}% — 보유 기간 동안 자동으로 차감되는 운용 비용입니다. 낮을수록 유리합니다.
                 </p>
               )}
@@ -508,8 +561,12 @@ function SearchTab() {
                   <button
                     key={code}
                     onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 hover:border-primary/25 transition-all"
                   >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ background: SECTOR_COLORS[etf.sector] ?? "#94a3b8" }}
+                    />
                     {etf.name} <LeverageBadge lev={etf.leverage} />
                   </button>
                 );
@@ -527,10 +584,14 @@ function SearchTab() {
                   <button
                     key={code}
                     onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-medium hover:bg-blue-500/20 transition-colors text-blue-700 dark:text-blue-400"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 hover:border-primary/25 transition-all"
                   >
-                    <span className="font-mono font-bold">{etf.code}</span>
-                    <span className="text-muted-foreground hidden sm:inline">· {etf.name.replace(/\(.*\)/, "").trim()}</span>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ background: SECTOR_COLORS[etf.sector] ?? "#94a3b8" }}
+                    />
+                    <span className="font-mono font-bold text-foreground">{etf.code}</span>
+                    <span className="text-muted-foreground/60 hidden sm:inline">· {etf.name.replace(/\(.*\)/, "").trim()}</span>
                   </button>
                 );
               })}
@@ -542,104 +603,267 @@ function SearchTab() {
   );
 }
 
-// ─── AI 방향 뱃지 ─────────────────────────────────────────────────────────────
+// ─── ETF 상세 패널 ────────────────────────────────────────────────────────────
 
-function AiDirChip({ dir, strength, label }: {
-  dir: "up" | "down" | "neutral"; strength: number; label: string;
+function EtfDetailPanel({
+  code, detail, loading, allEtfs, onClose,
+}: {
+  code: string;
+  detail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
+  loading: boolean;
+  allEtfs: ETFInfo[];
+  onClose: () => void;
 }) {
-  const cfg =
-    dir === "up"   ? { text: "text-red-500",   bg: "bg-red-500/10",   border: "border-red-500/30",   icon: "▲", emoji: "📈" } :
-    dir === "down" ? { text: "text-blue-500",  bg: "bg-blue-500/10",  border: "border-blue-500/30",  icon: "▼", emoji: "📉" } :
-                     { text: "text-slate-400", bg: "bg-slate-500/10", border: "border-slate-500/20", icon: "–", emoji: "➡️" };
-  const pct = Math.round(strength * 100);
-  const conviction = strength > 0.7 ? "고신뢰" : strength > 0.4 ? "중신뢰" : "저신뢰";
-  return (
-    <div className={cn("flex items-center gap-2 rounded-xl border px-3 py-2.5", cfg.bg, cfg.border)}>
-      <span className="text-lg">{cfg.emoji}</span>
-      <div>
-        <p className="text-[11px] text-muted-foreground/60 font-medium">{label}</p>
-        <p className={cn("text-sm font-bold", cfg.text)}>
-          {dir === "up" ? "상승 예측" : dir === "down" ? "하락 예측" : "중립"}
-          {dir !== "neutral" && <span className="ml-1.5 text-[11px] font-normal opacity-70">{conviction} {pct}%</span>}
-        </p>
-      </div>
-    </div>
-  );
-}
+  const etf      = detail?.etf ?? allEtfs.find(e => e.code === code) ?? null;
+  const holdings = detail?.holdings ?? [];
 
-// ─── 미니 3단 스코어 바 ───────────────────────────────────────────────────────
-
-function ScoreBreakdown({ tech, sector, ai, combined, aiBonus }: {
-  tech: number; sector: number; ai: number; combined: number; aiBonus: number;
-}) {
-  const bars: { label: string; value: number; color: string; weight: string }[] = [
-    { label: "기술적", value: tech,   color: "#3b82f6", weight: "55%" },
-    { label: "섹터강도", value: sector, color: "#8b5cf6", weight: "25%" },
-    { label: "AI예측", value: ai,    color: "#f59e0b", weight: "20%" },
-  ];
-  const bonusColor = aiBonus > 0 ? "text-red-400" : aiBonus < 0 ? "text-blue-400" : "text-muted-foreground/40";
   return (
-    <div className="space-y-1.5">
-      {bars.map(b => (
-        <div key={b.label} className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground/50 w-12 shrink-0">{b.label}</span>
-          <div className="flex-1 h-1 bg-muted/30 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${b.value}%`, background: b.color }} />
-          </div>
-          <span className="text-[10px] font-bold w-5 text-right" style={{ color: b.color }}>{b.value}</span>
+    <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 space-y-3">
+      {/* 헤더 */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          {etf ? (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-foreground">{etf.name}</h3>
+                <span className="text-[10px] text-muted-foreground/40">{etf.code}</span>
+                <LeverageBadge lev={etf.leverage} />
+                {etf.ter != null && (
+                  <span className="text-[10px] text-muted-foreground/50 bg-muted/30 px-1.5 py-0.5 rounded border border-border">
+                    보수 {etf.ter}%
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground/50 mt-0.5">{etf.issuer} · {etf.sector}</p>
+            </>
+          ) : (
+            <p className="text-sm font-bold text-foreground">{code}</p>
+          )}
         </div>
-      ))}
-      {aiBonus !== 0 && (
-        <p className={cn("text-[10px] font-medium", bonusColor)}>
-          AI 보정: {aiBonus > 0 ? "+" : ""}{aiBonus}pt
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-muted/30 transition-all shrink-0"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {etf && (
+        <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-border/30 pt-2.5">
+          {etfDescription(etf)}
         </p>
       )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-primary/50" />
+        </div>
+      ) : holdings.length > 0 ? (
+        <div className="space-y-2.5">
+          <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+            주요 구성 종목 (Top {Math.min(holdings.length, 10)})
+          </p>
+          <div className="space-y-1.5">
+            {holdings.slice(0, 10).map(h => (
+              <div key={h.rank} className="flex items-center gap-2.5">
+                <span className="text-[10px] text-muted-foreground/30 w-4 text-right shrink-0">{h.rank}</span>
+                <span className="text-[11px] font-medium text-foreground flex-1 truncate min-w-0">{h.stockName}</span>
+                <div className="w-20 h-1 bg-muted/30 rounded-full overflow-hidden shrink-0">
+                  <div className="h-full rounded-full bg-primary/60" style={{ width: `${Math.min(100, h.weight * 3)}%` }} />
+                </div>
+                <span className="text-[11px] font-bold text-foreground w-10 text-right shrink-0">{h.weight.toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+          {(() => {
+            const conc = holdingConcentration(holdings);
+            return (
+              <div className={cn(
+                "rounded-xl px-3 py-2 text-[11px] leading-relaxed border",
+                conc.level === "high" ? "bg-orange-500/5 border-orange-500/20 text-orange-600 dark:text-orange-400"
+                : conc.level === "mid" ? "bg-blue-500/5 border-blue-500/20 text-blue-600 dark:text-blue-400"
+                : "bg-emerald-500/5 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+              )}>
+                📊 {conc.text}
+              </div>
+            );
+          })()}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-// ─── 탭 2: AI 통합 신호 ──────────────────────────────────────────────────────
+// ─── 탭 2: ETF 모멘텀 분석 ───────────────────────────────────────────────────
 
-function UnifiedSignalsTab() {
-  const [data, setData]         = useState<UnifiedSignal[]>([]);
-  const [aiCtx, setAiCtx]       = useState<AiContext | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [refreshed, setRefreshed] = useState<Date | null>(null);
+const OUTLOOK_CONFIG = {
+  bullish:  { label: "강세", text: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/25" },
+  neutral:  { label: "중립", text: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/25"   },
+  cautious: { label: "관망", text: "text-slate-400",   bg: "bg-slate-500/10",   border: "border-slate-500/20"   },
+};
+
+function MacroChip({ label, value, level }: { label: string; value: string; level: "warn" | "ok" | "info" }) {
+  const s = {
+    warn: "bg-orange-500/10 border-orange-500/20 text-orange-500",
+    ok:   "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+    info: "bg-muted/40 border-border text-foreground",
+  }[level];
+  return (
+    <div className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px]", s)}>
+      <span className="opacity-60 shrink-0">{label}</span>
+      <span className="font-bold">{value}</span>
+    </div>
+  );
+}
+
+function MomentumTab() {
+  const [data, setData]               = useState<MomentumAnalysis | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [refreshed, setRefreshed]     = useState<Date | null>(null);
+  const [allEtfs, setAllEtfs]         = useState<ETFInfo[]>([]);
+  const [selectedEtfCode, setSelectedEtfCode] = useState<string | null>(null);
+  const [etfDetail, setEtfDetail]     = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null>(null);
+  const [loadingEtf, setLoadingEtf]   = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(getApiUrl("/api/etf/unified-signals"), { credentials: "include" });
-      if (r.ok) {
-        const j = await r.json();
-        setData(Array.isArray(j.signals) ? j.signals : []);
-        setAiCtx(j.aiContext ?? null);
-        setRefreshed(new Date());
-      }
-    } finally {
-      setLoading(false);
-    }
+      const [r1, r2] = await Promise.all([
+        fetch(getApiUrl("/api/etf/momentum-analysis"), { credentials: "include" }),
+        fetch(getApiUrl("/api/etf/list"),              { credentials: "include" }),
+      ]);
+      if (r1.ok) { setData(await r1.json()); setRefreshed(new Date()); }
+      if (r2.ok) { const d = await r2.json(); setAllEtfs(Array.isArray(d) ? d : []); }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const top3    = data.slice(0, 3);
-  const bottom3 = [...data].reverse().slice(0, 3);
+  const getEtfsForSector = useCallback(
+    (tags: string[]) => allEtfs.filter(e => tags.includes(e.sector)).slice(0, 6),
+    [allEtfs],
+  );
 
-  // 섹터별 집계 (바 차트용)
-  const sectorData = (() => {
-    const map: Record<string, { scores: number[]; rank: number[]; color: string }> = {};
-    data.forEach(s => {
-      if (!map[s.sector]) map[s.sector] = { scores: [], rank: [], color: SECTOR_COLORS[s.sector] ?? "#94a3b8" };
-      map[s.sector].scores.push(s.combinedScore);
-      map[s.sector].rank.push(s.sectorRank);
-    });
-    return Object.entries(map).map(([sector, v]) => ({
-      sector,
-      score: Math.round(v.scores.reduce((a, b) => a + b, 0) / v.scores.length),
-      color: v.color,
-    })).sort((a, b) => b.score - a.score);
-  })();
+  const closeDetail = useCallback(() => { setSelectedEtfCode(null); setEtfDetail(null); }, []);
+
+  const handleEtfClick = useCallback(async (code: string) => {
+    if (selectedEtfCode === code) { closeDetail(); return; }
+    setSelectedEtfCode(code);
+    setEtfDetail(null);
+    setLoadingEtf(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/etf/${encodeURIComponent(code)}/holdings`), { credentials: "include" });
+      if (r.ok) setEtfDetail(await r.json());
+    } finally { setLoadingEtf(false); }
+  }, [selectedEtfCode, closeDetail]);
+
+  function SectorCard({ sector, isNow }: { sector: SectorMomentum; isNow: boolean }) {
+    const cfg    = OUTLOOK_CONFIG[sector.outlook];
+    const etfs   = getEtfsForSector(sector.sectorTags);
+    const sColor = sector.score >= 75 ? "#16a34a" : sector.score >= 60 ? "#f59e0b" : "#94a3b8";
+    const hasSel = etfs.some(e => e.code === selectedEtfCode);
+
+    return (
+      <>
+        <div className={cn(
+          "rounded-2xl border bg-card p-4 space-y-3 transition-all",
+          isNow ? "border-emerald-500/15 hover:border-emerald-500/25"
+                : "border-blue-500/10 hover:border-blue-500/20",
+          hasSel && "ring-1 ring-primary/20",
+        )}>
+          {/* 섹터 헤더 */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl leading-none">{sector.icon}</span>
+              <div>
+                <p className="text-sm font-bold text-foreground">{sector.name}</p>
+                {!isNow && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Target className="w-2.5 h-2.5 text-blue-400/60" />
+                    <span className="text-[10px] text-blue-400/70">{sector.horizon}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", cfg.bg, cfg.border, cfg.text)}>
+                {cfg.label}
+              </span>
+              <div className="text-right">
+                <p className="text-base font-black" style={{ color: sColor }}>{sector.score}</p>
+                <p className="text-[9px] text-muted-foreground/30 -mt-0.5">/ 100</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 점수 바 */}
+          <div className="h-1 bg-muted/25 rounded-full overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${sector.score}%`, background: sColor }} />
+          </div>
+
+          {/* 핵심 이유 */}
+          <p className="text-[12px] text-muted-foreground leading-relaxed">{sector.reason}</p>
+
+          {/* 촉매 */}
+          <div className="flex flex-wrap gap-1.5">
+            {sector.catalysts.map(c => (
+              <span key={c} className={cn(
+                "inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full border font-medium",
+                isNow ? "bg-emerald-500/8 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                      : "bg-blue-500/8 border-blue-500/20 text-blue-600 dark:text-blue-400",
+              )}>↑ {c}</span>
+            ))}
+          </div>
+
+          {/* 리스크 */}
+          <div className="flex flex-wrap gap-1.5">
+            {sector.risks.map(r => (
+              <span key={r} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-muted/20 border-border/60 text-muted-foreground/55 font-medium">
+                ⚠ {r}
+              </span>
+            ))}
+          </div>
+
+          {/* 관련 ETF */}
+          {etfs.length > 0 && (
+            <div className="pt-2.5 border-t border-border/40 space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground/35 uppercase tracking-widest">관련 ETF 바로가기</p>
+              <div className="flex flex-wrap gap-1.5">
+                {etfs.map(etf => (
+                  <button
+                    key={etf.code}
+                    onClick={() => handleEtfClick(etf.code)}
+                    className={cn(
+                      "flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all",
+                      selectedEtfCode === etf.code
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-muted/30 border-border text-foreground hover:bg-muted/50 hover:border-primary/30",
+                    )}
+                  >
+                    <span className="truncate max-w-[110px]">
+                      {etf.name.replace(/^(KODEX|TIGER|KBSTAR|HANARO|ARIRANG)\s/, "").substring(0, 15)}
+                    </span>
+                    <LeverageBadge lev={etf.leverage} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ETF 상세: 카드 바로 아래 */}
+        {hasSel && (
+          <EtfDetailPanel
+            code={selectedEtfCode!}
+            detail={etfDetail}
+            loading={loadingEtf}
+            allEtfs={allEtfs}
+            onClose={closeDetail}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -647,228 +871,77 @@ function UnifiedSignalsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-bold text-foreground flex items-center gap-1.5">
-            <Brain className="w-4 h-4 text-primary" />
-            AI 통합 시장 신호
+            <Activity className="w-4 h-4 text-primary" />
+            ETF 모멘텀 분석
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            기술적 지표(55%) + 섹터 상대강도(25%) + AI 방향 예측(20%) 종합
+            거시 지표 기반 섹터 기회 선별 · 유망 ETF 추천
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40">
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >
           <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-          {refreshed && <span>{refreshed.getHours()}:{String(refreshed.getMinutes()).padStart(2,"0")}</span>}
+          {refreshed && <span>{refreshed.getHours()}:{String(refreshed.getMinutes()).padStart(2, "0")}</span>}
         </button>
       </div>
 
-      {/* 개념 설명 */}
-      <HelpTip label="💡 AI 통합 신호란?">
-        <p>세 가지 신호를 결합해 ETF별 종합 점수를 계산합니다.</p>
-        <div className="mt-2 space-y-1.5 text-[11px]">
-          <div className="flex items-start gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0" />
-            <span><strong className="text-foreground">기술적 신호 (55%)</strong> — MA 골든/데드크로스, RSI, 5일·20일 모멘텀</span>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="w-2 h-2 rounded-full bg-purple-500 mt-1 shrink-0" />
-            <span><strong className="text-foreground">섹터 상대강도 (25%)</strong> — 전체 ETF 대비 해당 섹터의 상대 모멘텀 퍼센타일</span>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-500 mt-1 shrink-0" />
-            <span><strong className="text-foreground">AI 방향 예측 (20%)</strong> — LSTM+GBDT 앙상블이 예측한 KOSPI/NASDAQ 방향성 보정</span>
-          </div>
-        </div>
-        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-          {[
-            { range: "70점 이상", label: "강력 매수 신호", color: "text-emerald-500" },
-            { range: "40~70점",   label: "중립 / 관망",   color: "text-slate-400"   },
-            { range: "40점 미만", label: "약세 · 주의",   color: "text-red-400"     },
-          ].map(s => (
-            <div key={s.range} className="rounded-lg bg-muted/20 px-2 py-1.5">
-              <p className={cn("text-[11px] font-bold", s.color)}>{s.range}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </HelpTip>
-
-      {/* AI 예측 배너 */}
-      {aiCtx && (
-        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <p className="text-[12px] font-bold text-foreground">
-              현재 AI 시장 방향 예측
-              {!aiCtx.ready && <span className="ml-2 text-[10px] font-normal text-muted-foreground/60">(모델 학습 중…)</span>}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <AiDirChip dir={aiCtx.kospi.direction} strength={aiCtx.kospi.strength} label="KOSPI (한국 주식)" />
-            <AiDirChip dir={aiCtx.nasdaq.direction} strength={aiCtx.nasdaq.strength} label="NASDAQ (미국 주식)" />
-          </div>
-          {(aiCtx.kospi.direction !== "neutral" || aiCtx.nasdaq.direction !== "neutral") && (
-            <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
-              AI 예측 방향이 ETF 종합 점수에 반영됩니다.
-              국내 ETF는 KOSPI, 해외 ETF는 NASDAQ 예측을 활용하며,
-              레버리지/인버스 ETF는 해당 배율로 증폭됩니다.
-            </p>
-          )}
-        </div>
-      )}
-
       {loading ? (
-        <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
+          <p className="text-xs text-muted-foreground/50">매크로 데이터 분석 중...</p>
         </div>
-      ) : data.length === 0 ? (
+      ) : !data ? (
         <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          데이터를 불러오는 중입니다...
+          데이터를 불러오지 못했습니다
         </div>
       ) : (
         <>
-          {/* 상위/하위 요약 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
-              <p className="text-[11px] font-bold text-emerald-500/70 uppercase tracking-widest">🚀 TOP 신호</p>
-              {top3.map(s => (
-                <div key={s.code} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SECTOR_COLORS[s.sector] ?? "#94a3b8" }} />
-                    <span className="text-xs font-medium text-foreground truncate">{s.name.replace("KODEX ","").replace("TIGER ","")}</span>
-                  </div>
-                  <span className="text-[11px] font-bold text-emerald-500 shrink-0">{s.combinedScore}점</span>
-                </div>
-              ))}
+          {/* 매크로 스냅샷 */}
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">현재 거시 환경</p>
+            <div className="flex flex-wrap gap-1.5">
+              <MacroChip label="기준금리 KR" value={`${data.macro.krRate}%`}                                    level={data.macro.krRate > 2.5 ? "warn" : "ok"} />
+              <MacroChip label="Fed"         value={`${data.macro.usRate}%`}                                    level={data.macro.usRate > 3.0 ? "warn" : "ok"} />
+              <MacroChip label="원달러"      value={`${data.macro.krwUsd.toLocaleString()}원`}                  level={data.macro.krwUsd > 1400 ? "warn" : "ok"} />
+              <MacroChip label="CPI(US)"     value={`${data.macro.usCpi.toFixed(1)}%`}                         level={data.macro.usCpi > 3.0 ? "warn" : "ok"} />
+              <MacroChip label="WTI"         value={`$${data.macro.wti.toFixed(0)}`}                           level={data.macro.wti > 80 ? "warn" : "ok"} />
+              <MacroChip label="10Y–2Y"      value={`${data.macro.yieldSpread > 0 ? "+" : ""}${data.macro.yieldSpread.toFixed(2)}%`} level={data.macro.yieldSpread > 0.2 ? "ok" : "warn"} />
             </div>
-            <div className="rounded-2xl border border-red-400/30 bg-red-400/5 p-4 space-y-2">
-              <p className="text-[11px] font-bold text-red-400/70 uppercase tracking-widest">⚠️ 주의 신호</p>
-              {bottom3.map(s => (
-                <div key={s.code} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SECTOR_COLORS[s.sector] ?? "#94a3b8" }} />
-                    <span className="text-xs font-medium text-foreground truncate">{s.name.replace("KODEX ","").replace("TIGER ","")}</span>
-                  </div>
-                  <span className="text-[11px] font-bold text-red-400 shrink-0">{s.combinedScore}점</span>
-                </div>
-              ))}
+            <div className="flex items-start gap-2 pt-1 border-t border-border/40">
+              <Zap className="w-3 h-3 text-primary/60 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">현재 테마:</span>{" "}{data.environment.theme}
+              </p>
             </div>
           </div>
 
-          {/* 섹터 바 차트 */}
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest mb-4">섹터별 종합 점수</p>
-            <ResponsiveContainer width="100%" height={sectorData.length * 40 + 20}>
-              <BarChart
-                layout="vertical"
-                data={sectorData}
-                margin={{ left: 10, right: 50, top: 4, bottom: 4 }}
-              >
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="sector" tick={{ fontSize: 12 }} width={60} />
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
-                <Tooltip
-                  formatter={(_v: any, _n: any, props: any) => [
-                    `종합 ${props.payload.score}점`,
-                    props.payload.sector,
-                  ]}
-                />
-                <Bar dataKey="score" radius={[0, 6, 6, 0]} maxBarSize={22}>
-                  {sectorData.map((s, i) => (
-                    <Cell key={i} fill={s.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          {/* 지금 올라타야 할 섹터 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Flame className="w-4 h-4 text-emerald-500" />
+              <h3 className="text-sm font-bold text-foreground">지금 올라타야 할 섹터</h3>
+              <span className="text-[10px] text-muted-foreground/40 ml-auto">현재 매크로 환경 강세</span>
+            </div>
+            {data.nowSectors.map(s => <SectorCard key={s.id} sector={s} isNow={true} />)}
           </div>
 
-          {/* ETF 카드 목록 */}
-          <div className="grid grid-cols-1 gap-3">
-            {data.map(s => {
-              const cfg = SIGNAL_CONFIG[s.signal as keyof typeof SIGNAL_CONFIG] ?? SIGNAL_CONFIG.hold;
-              const aiDirCfg =
-                s.aiDirection === "up"   ? { icon: "📈", text: "text-red-400"  } :
-                s.aiDirection === "down" ? { icon: "📉", text: "text-blue-400" } :
-                                           { icon: "➡️", text: "text-muted-foreground/40" };
-              return (
-                <div key={s.code} className={cn(
-                  "rounded-2xl border bg-card p-4 transition-all",
-                  cfg.border,
-                )}>
-                  {/* 헤더 */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-bold text-foreground">{s.name}</h3>
-                        <span className="text-[10px] text-muted-foreground/40">{s.code}</span>
-                        {s.leverage !== 1 && (
-                          <span className={cn(
-                            "text-[10px] font-bold px-1.5 py-0.5 rounded border",
-                            s.leverage === 2 ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
-                                             : "bg-blue-500/10 border-blue-500/30 text-blue-500",
-                          )}>
-                            {s.leverage === 2 ? "2×" : "인버스"}
-                          </span>
-                        )}
-                        <span className={cn("text-[10px] font-medium", aiDirCfg.text)}>
-                          {aiDirCfg.icon} AI
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className="text-lg font-bold text-foreground">{s.price.toLocaleString()}</span>
-                        <Pct v={s.change1d} />
-                        <span className="text-[10px] text-muted-foreground/50">{s.sector} · {s.issuer}</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground/60 mt-1 leading-relaxed">{s.reason}</p>
-                    </div>
-                    <div className="text-right space-y-1 shrink-0">
-                      <SignalBadge signal={s.signal} />
-                      <div className="w-24">
-                        <ScoreBar score={s.combinedScore} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3단 스코어 분해 */}
-                  <div className="mt-3 pt-3 border-t border-border/40">
-                    <ScoreBreakdown
-                      tech={s.techScore} sector={s.sectorRank}
-                      ai={s.aiScore} combined={s.combinedScore} aiBonus={s.aiBonus}
-                    />
-                  </div>
-
-                  {/* 보조 지표 */}
-                  <div className="grid grid-cols-4 gap-2 mt-3 pt-2 border-t border-border/30">
-                    {[
-                      { label: "5일", value: <Pct v={s.return5d} /> },
-                      { label: "20일", value: <Pct v={s.return20d} /> },
-                      { label: "RSI(14)", value: (
-                        <span className={cn(
-                          "font-bold",
-                          s.rsi14 > 70 ? "text-red-400" : s.rsi14 < 30 ? "text-emerald-400" : "text-foreground",
-                        )}>
-                          {s.rsi14}
-                        </span>
-                      )},
-                      { label: "MA교차", value: (
-                        <span className={cn("font-bold text-xs", s.ma5 > s.ma20 ? "text-red-400" : "text-blue-400")}>
-                          {s.ma5 > s.ma20 ? "골든" : "데드"}
-                        </span>
-                      )},
-                    ].map(({ label, value }) => (
-                      <div key={label} className="text-center">
-                        <p className="text-[10px] text-muted-foreground/40 mb-0.5">{label}</p>
-                        <p className="text-sm">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+          {/* 앞으로 유망한 섹터 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-blue-400" />
+              <h3 className="text-sm font-bold text-foreground">앞으로 유망한 섹터</h3>
+              <span className="text-[10px] text-muted-foreground/40 ml-auto">매크로 전환 시 수혜</span>
+            </div>
+            {data.futureSectors.map(s => <SectorCard key={s.id} sector={s} isNow={false} />)}
           </div>
 
-          {/* 면책 고지 */}
+          {/* 면책 */}
           <div className="flex items-start gap-2 text-[11px] text-muted-foreground/50 bg-muted/20 rounded-xl px-3 py-2.5 border border-border/50">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            <p>AI 통합 신호는 참고용 투자 보조 지표입니다. 투자 결정의 유일한 근거로 사용하지 마세요. 실제 투자 손실에 대해 애빛다는 책임지지 않습니다.</p>
+            <p>ETF 모멘텀 분석은 거시 지표 기반 참고용 투자 보조 지표입니다. 실제 투자 손실에 대해 애빛다는 책임지지 않습니다.</p>
           </div>
         </>
       )}
@@ -878,16 +951,11 @@ function UnifiedSignalsTab() {
 
 // ─── 메인 페이지 ──────────────────────────────────────────────────────────────
 
-type Tab = "search" | "unified";
+type Tab = "search" | "momentum";
 
 export default function ETFAnalysis() {
   const { isEn }      = useLanguage();
   const [tab, setTab] = useState<Tab>("search");
-
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "search",  label: "ETF / 종목 검색", icon: <Search className="w-4 h-4" /> },
-    { id: "unified", label: "AI 통합 신호",    icon: <Brain className="w-4 h-4" /> },
-  ];
 
   return (
     <div className="space-y-5 pb-20">
@@ -897,32 +965,41 @@ export default function ETFAnalysis() {
           ETF 분석
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          국내·해외 주요 ETF 구성 종목 · 섹터 모멘텀 · AI 통합 타이밍 신호
+          국내·해외 ETF 구성 종목 · 매크로 기반 섹터 모멘텀 분석
         </p>
       </div>
 
       {/* 탭 */}
       <div className="flex gap-1 p-1 rounded-2xl bg-muted/30 border border-border">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all",
-              tab === t.id
-                ? "bg-card text-foreground shadow-sm border border-border"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.icon}
-            <span className="hidden sm:inline">{t.label}</span>
-          </button>
-        ))}
+        <button
+          onClick={() => setTab("search")}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+            tab === "search"
+              ? "bg-card text-foreground shadow-sm border border-border"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span>ETF / 종목 검색</span>
+        </button>
+        <button
+          onClick={() => setTab("momentum")}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+            tab === "momentum"
+              ? "bg-card text-foreground shadow-sm border border-border"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Activity className="w-3.5 h-3.5" />
+          <span>ETF 모멘텀 분석</span>
+        </button>
       </div>
 
       {/* 탭 콘텐츠 */}
-      {tab === "search"  && <SearchTab />}
-      {tab === "unified" && <UnifiedSignalsTab />}
+      {tab === "search"   && <SearchTab />}
+      {tab === "momentum" && <MomentumTab />}
     </div>
   );
 }
