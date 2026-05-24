@@ -33,17 +33,36 @@ function timeStr(iso: string) {
   catch { return ""; }
 }
 
-function isBreaking(iso: string) {
-  return Date.now() - new Date(iso).getTime() < 30 * 60 * 1000;
+const BREAKING_KEYWORDS = [
+  // 명시적 속보 표현
+  "속보", "긴급", "긴급속보", "[속보]", "[긴급]", "★속보",
+  // 시장 급변
+  "폭등", "폭락", "급등", "급락", "급반등", "급반락", "서킷브레이커", "사이드카",
+  // 금융 위기
+  "파산", "부도", "디폴트", "채무불이행", "뱅크런", "금융위기",
+  // 금리·통화정책 결정
+  "금리 인상", "금리 인하", "기준금리 인상", "기준금리 인하",
+  "금리인상", "금리인하", "기준금리인상", "기준금리인하",
+  "FOMC 결정", "금통위 결정", "피벗",
+  // 거시 충격
+  "쇼크", "경제충격", "오일쇼크", "관세 폭탄", "전쟁 선포", "계엄",
+  // 주요 인사 긴급
+  "긴급 회견", "긴급회의", "긴급 성명", "전격",
+];
+
+const BREAKING_RE = new RegExp(BREAKING_KEYWORDS.join("|"));
+
+function isBreaking(title: string) {
+  return BREAKING_RE.test(title);
 }
 
 function isVeryNew(iso: string) {
-  return Date.now() - new Date(iso).getTime() < 10 * 60 * 1000;
+  return Date.now() - new Date(iso).getTime() < 30 * 60 * 1000;
 }
 
 /* ── 뉴스 카드 ──────────────────────────────────────────────────────────── */
 function NewsCard({ item }: { item: MacroNewsItem }) {
-  const breaking = isBreaking(item.pubDate);
+  const breaking = isBreaking(item.title);
   const veryNew  = isVeryNew(item.pubDate);
 
   return (
@@ -190,7 +209,7 @@ export default function NewsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const breakingItems = items.filter(i => isBreaking(i.pubDate));
+  const breakingItems = items.filter(i => isBreaking(i.title));
   const visible = expanded ? items : items.slice(0, PAGE);
 
   type Group = { label: string; items: MacroNewsItem[] };
