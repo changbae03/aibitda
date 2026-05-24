@@ -1662,18 +1662,18 @@ function PortfolioHero({
             <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "AI Verdict" : "AI 판정"}</p>
             <div className="flex items-center gap-1.5">
               {buyCount > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{buyCount} {isEn ? "Buy" : "매수"}
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 inline-block" />{buyCount} {isEn ? "Buy" : "매수"}
                 </span>
               )}
               {holdCount > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />{holdCount} {isEn ? "Hold" : "홀드"}
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-400 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 inline-block" />{holdCount} {isEn ? "Hold" : "홀드"}
                 </span>
               )}
               {sellCount > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-red-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />{sellCount} {isEn ? "Sell" : "매도"}
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-red-400 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0 inline-block" />{sellCount} {isEn ? "Sell" : "매도"}
                 </span>
               )}
               {buyCount + holdCount + sellCount === 0 && (
