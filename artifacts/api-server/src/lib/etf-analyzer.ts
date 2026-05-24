@@ -91,6 +91,16 @@ export const MAJOR_ETFS: ETFInfo[] = [
   // 배당
   { code:"292150", isuCd:"KR7292150002", name:"TIGER KRX고배당",       sector:"배당",     issuer:"미래에셋",    yahooCode:"292150.KS", leverage:1,  ter:0.29, benchmark:"KRX 고배당50" },
   { code:"280930", isuCd:"KR7280930004", name:"KODEX 배당성장",        sector:"배당",     issuer:"삼성자산운용", yahooCode:"280930.KS", leverage:1,  ter:0.30, benchmark:"FnGuide 배당성장50" },
+  // 원자재 — 금
+  { code:"132030", isuCd:"KR7132030006", name:"KODEX 골드선물(H)",     sector:"원자재",   issuer:"삼성자산운용", yahooCode:"132030.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Gold" },
+  { code:"319640", isuCd:"KR7319640002", name:"TIGER 골드선물(H)",     sector:"원자재",   issuer:"미래에셋",    yahooCode:"319640.KS", leverage:1,  ter:0.39, benchmark:"S&P GSCI Gold" },
+  // 원자재 — 원유
+  { code:"261220", isuCd:"KR7261220003", name:"KODEX WTI원유선물(H)",  sector:"원자재",   issuer:"삼성자산운용", yahooCode:"261220.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Crude Oil" },
+  { code:"217700", isuCd:"KR7217700005", name:"TIGER 원유선물Enhanced(H)", sector:"원자재", issuer:"미래에셋",  yahooCode:"217700.KS", leverage:1,  ter:0.49, benchmark:"WTI 원유선물" },
+  // 원자재 — 은·기타
+  { code:"144600", isuCd:"KR7144600000", name:"KODEX 은선물(H)",       sector:"원자재",   issuer:"삼성자산운용", yahooCode:"144600.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Silver" },
+  { code:"160480", isuCd:"KR7160480000", name:"KODEX 콩선물(H)",       sector:"원자재",   issuer:"삼성자산운용", yahooCode:"160480.KS", leverage:1,  ter:0.45, benchmark:"S&P GSCI Soybeans" },
+  { code:"171018", isuCd:"KR7171018001", name:"KODEX 천연가스선물(H)", sector:"원자재",   issuer:"삼성자산운용", yahooCode:"171018.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Natural Gas" },
 ];
 
 // ─── 정적 폴백 보유 종목 (KRX API 실패 시) ───────────────────────────────────
@@ -172,6 +182,35 @@ const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
     { rank:8,  stockCode:"BRK.B",  stockName:"Berkshire Hathaway",  weight:2.18  },
     { rank:9,  stockCode:"AVGO",   stockName:"Broadcom",            weight:2.05  },
     { rank:10, stockCode:"LLY",    stockName:"Eli Lilly",           weight:1.87  },
+  ],
+  // 원자재 — 선물 기반이므로 기초자산 단일 항목
+  "132030": [ // KODEX 골드선물(H)
+    { rank:1, stockCode:"GC=F",  stockName:"금(Gold) 선물",       weight:98.50 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:1.50  },
+  ],
+  "319640": [ // TIGER 골드선물(H)
+    { rank:1, stockCode:"GC=F",  stockName:"금(Gold) 선물",       weight:98.20 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:1.80  },
+  ],
+  "261220": [ // KODEX WTI원유선물(H)
+    { rank:1, stockCode:"CL=F",  stockName:"WTI 원유 선물",       weight:95.10 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:4.90  },
+  ],
+  "217700": [ // TIGER 원유선물Enhanced(H)
+    { rank:1, stockCode:"CL=F",  stockName:"WTI 원유 선물",       weight:93.80 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:6.20  },
+  ],
+  "144600": [ // KODEX 은선물(H)
+    { rank:1, stockCode:"SI=F",  stockName:"은(Silver) 선물",     weight:97.90 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:2.10  },
+  ],
+  "160480": [ // KODEX 콩선물(H)
+    { rank:1, stockCode:"ZS=F",  stockName:"대두(Soybean) 선물",  weight:96.40 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:3.60  },
+  ],
+  "171018": [ // KODEX 천연가스선물(H)
+    { rank:1, stockCode:"NG=F",  stockName:"천연가스 선물",       weight:94.50 },
+    { rank:2, stockCode:"CASH",  stockName:"현금·파생 증거금",    weight:5.50  },
   ],
 };
 
@@ -336,6 +375,7 @@ export async function getSectorRotation(): Promise<SectorScore[]> {
     "국내주식": "069500", "코스닥": "229200", "반도체": "091160",
     "2차전지": "305720", "헬스케어": "143460", "금융": "139270",
     "IT": "091220",      "해외주식": "133690",  "배당": "292150",
+    "원자재": "132030",  // KODEX 골드선물(H) — 대표 원자재 ETF
   };
 
   const rows = await Promise.allSettled(

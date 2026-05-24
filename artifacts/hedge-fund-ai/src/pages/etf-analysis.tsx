@@ -46,6 +46,7 @@ const SECTOR_COLORS: Record<string, string> = {
   "국내주식": "#3b82f6", "코스닥": "#8b5cf6", "반도체": "#f59e0b",
   "2차전지":  "#22c55e", "헬스케어":"#ec4899", "금융": "#06b6d4",
   "IT":       "#f97316", "해외주식": "#6366f1", "배당": "#10b981",
+  "원자재":   "#d97706",
 };
 
 // ─── 유틸 컴포넌트 ────────────────────────────────────────────────────────────
@@ -362,7 +363,7 @@ function SearchTab() {
         <div className="space-y-2">
           <p className="text-[11px] text-muted-foreground/50 font-medium px-1">인기 ETF</p>
           <div className="flex flex-wrap gap-2">
-            {["069500","091160","305720","143460","133690","229200","122630","379800"].map(code => {
+            {["069500","091160","305720","143460","132030","261220","144600","133690","229200","379800"].map(code => {
               const etf = allEtfs.find(e => e.code === code);
               if (!etf) return null;
               return (
