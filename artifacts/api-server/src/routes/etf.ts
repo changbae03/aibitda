@@ -86,9 +86,9 @@ router.get("/etf/unified-signals", async (_req, res) => {
 router.get("/etf/:code/holdings", async (req, res) => {
   try {
     const code = req.params.code.replace(/[^0-9A-Za-z]/g, "").slice(0, 10);
-    const { holdings, source } = await getEtfHoldings(code);
+    const { holdings, source, dataDate } = await getEtfHoldings(code);
     const etf = MAJOR_ETFS.find(e => e.code === code);
-    res.json({ etf: etf ?? null, holdings, source });
+    res.json({ etf: etf ?? null, holdings, source, dataDate });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
   }

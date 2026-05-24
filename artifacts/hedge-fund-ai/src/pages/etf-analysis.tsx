@@ -178,7 +178,7 @@ function SearchTab() {
   const [mode, setMode]           = useState<"etf" | "stock">("etf");
   const [query, setQuery]         = useState("");
   const [loading, setLoading]     = useState(false);
-  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null>(null);
+  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string; dataDate?: string } | null>(null);
   const [stockResult, setStockResult] = useState<{ etf: ETFInfo; holding: ETFHolding }[] | null>(null);
   const [searchList, setSearchList]   = useState<ETFInfo[]>([]);
   const [showList, setShowList]       = useState(false);
@@ -377,12 +377,17 @@ function SearchTab() {
                     </div>
                   ))}
                 </div>
-                <div className="px-4 py-2.5 bg-muted/10 border-t border-border">
+                <div className="px-4 py-2.5 bg-muted/10 border-t border-border flex items-center justify-between gap-4">
                   <p className="text-[10px] text-muted-foreground/40">
                     {etfResult.source === "live"
                       ? "* KIS Open API 실시간 데이터 — 기준가격 비중 기준"
                       : "* 참고용 정적 데이터 — 실제 비중과 차이가 있을 수 있습니다"}
                   </p>
+                  {etfResult.dataDate && (
+                    <p className="text-[10px] text-muted-foreground/50 shrink-0">
+                      기준일 {etfResult.dataDate}
+                    </p>
+                  )}
                 </div>
               </div>
 

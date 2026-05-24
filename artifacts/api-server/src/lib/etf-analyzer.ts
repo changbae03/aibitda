@@ -714,46 +714,59 @@ async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────────
 
-export type HoldingsResult = { holdings: ETFHolding[]; source: "live" | "reference" };
+export type HoldingsResult = { holdings: ETFHolding[]; source: "live" | "reference"; dataDate: string };
+
+function tsToKstDateStr(ts: number): string {
+  const d = new Date(ts + 9 * 3600_000);
+  const y = d.toISOString().slice(0, 10);
+  const [year, month, day] = y.split("-");
+  return `${year}년 ${month}월 ${day}일`;
+}
 
 /** ETF 구성 종목 조회 (KIS 실시간 → KRX → 정적 폴백) */
 export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
   const cached = holdingsCache.get(code);
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
-    return { holdings: cached.data, source: cached.source as "live" | "reference" };
+    return {
+      holdings: cached.data,
+      source: cached.source as "live" | "reference",
+      dataDate: tsToKstDateStr(cached.ts),
+    };
   }
 
   const etf = MAJOR_ETFS.find(e => e.code === code);
   if (!etf) {
     const st = STATIC_HOLDINGS[code] ?? [];
-    return { holdings: st, source: "reference" };
+    return { holdings: st, source: "reference", dataDate: "2026년 05월 22일" };
   }
+
+  const now = Date.now();
 
   // 1) KIS API (실시간)
   const kisData = await kisGetEtfHoldings(code);
   if (kisData.length >= 3) {
-    holdingsCache.set(code, { data: kisData, ts: Date.now(), source: "live" });
-    return { holdings: kisData, source: "live" };
+    holdingsCache.set(code, { data: kisData, ts: now, source: "live" });
+    return { holdings: kisData, source: "live", dataDate: tsToKstDateStr(now) };
   }
 
   // 2) Samsung Fund 모바일 API (KODEX ETF 전용 실시간)
   const sfData = await samsungFundFetchHoldings(code);
   if (sfData.length >= 3) {
-    holdingsCache.set(code, { data: sfData, ts: Date.now(), source: "live" });
-    return { holdings: sfData, source: "live" };
+    holdingsCache.set(code, { data: sfData, ts: now, source: "live" });
+    return { holdings: sfData, source: "live", dataDate: tsToKstDateStr(now) };
   }
 
   // 3) KRX 스크래핑
   const krxData = await krxFetchHoldings(etf.isuCd);
   if (krxData.length >= 3) {
-    holdingsCache.set(code, { data: krxData, ts: Date.now(), source: "live" });
-    return { holdings: krxData, source: "live" };
+    holdingsCache.set(code, { data: krxData, ts: now, source: "live" });
+    return { holdings: krxData, source: "live", dataDate: tsToKstDateStr(now) };
   }
 
   // 4) 정적 폴백
   const st = STATIC_HOLDINGS[code] ?? [];
-  holdingsCache.set(code, { data: st, ts: Date.now(), source: "reference" });
-  return { holdings: st, source: "reference" };
+  holdingsCache.set(code, { data: st, ts: now, source: "reference" });
+  return { holdings: st, source: "reference", dataDate: "2026년 05월 22일" };
 }
 
 /** ETF 검색 */
