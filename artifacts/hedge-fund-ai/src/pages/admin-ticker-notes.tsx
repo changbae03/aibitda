@@ -407,18 +407,49 @@ export default function AdminTickerNotes() {
                     </div>
 
                     {/* AI 자동학습 이력 (읽기 전용) */}
-                    {note.autoLearning && (
-                      <div className="rounded-lg bg-muted/50 p-3">
-                        <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-                          🤖 AI 자동학습 이력 (읽기 전용)
-                        </label>
-                        <pre className="mt-1.5 text-xs text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed">
-                          {typeof note.autoLearning === "string"
-                            ? note.autoLearning
-                            : JSON.stringify(note.autoLearning, null, 2)}
-                        </pre>
-                      </div>
-                    )}
+                    {note.autoLearning && (() => {
+                      let hist: any[] = [];
+                      try {
+                        const parsed = typeof note.autoLearning === "string"
+                          ? JSON.parse(note.autoLearning)
+                          : note.autoLearning;
+                        hist = parsed?.history ?? [];
+                      } catch { return null; }
+                      if (hist.length === 0) return null;
+                      return (
+                        <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                          <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                            🤖 AI 자동학습 이력 ({hist.length}회, 읽기 전용)
+                          </label>
+                          <div className="space-y-1.5 mt-1">
+                            {hist.map((h: any, i: number) => (
+                              <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground border-l-2 border-blue-400/30 pl-2">
+                                <span className="font-mono text-muted-foreground/60">{h.date?.slice(0, 10) ?? "-"}</span>
+                                <span className={cn("font-semibold",
+                                  /Buy/i.test(h.verdict ?? "") ? "text-emerald-500 dark:text-emerald-400" :
+                                  /Sell/i.test(h.verdict ?? "") ? "text-red-500 dark:text-red-400" :
+                                  "text-amber-500 dark:text-amber-400"
+                                )}>{h.verdict ?? "-"}</span>
+                                <span>진입 {h.entryPrice?.toLocaleString() ?? "-"}</span>
+                                <span>→ 목표 {h.targetPrice?.toLocaleString() ?? "-"}</span>
+                                <span className={cn("font-medium", (h.upsidePct ?? 0) >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
+                                  {(h.upsidePct ?? 0) >= 0 ? "+" : ""}{h.upsidePct?.toFixed(1) ?? "-"}%
+                                </span>
+                                {h.actualReturn !== undefined && (
+                                  <span className="text-muted-foreground/50">
+                                    실제 {h.actualReturn >= 0 ? "+" : ""}{Number(h.actualReturn).toFixed(1)}%
+                                    {h.daysElapsed ? ` (${h.daysElapsed}일)` : ""}
+                                  </span>
+                                )}
+                                {h.directionMatch !== undefined && h.directionMatch !== null && (
+                                  <span>{h.directionMatch ? "✓ 방향일치" : "✗ 방향불일치"}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* 프롬프트 주입 미리보기 */}
                     <div className="border-t border-border/60 pt-3">
