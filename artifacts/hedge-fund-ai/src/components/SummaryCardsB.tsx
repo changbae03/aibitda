@@ -922,11 +922,11 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
           <span className="text-base font-semibold text-foreground">
             {isEn ? "Key Takeaways" : "바쁜 분들을 위한 핵심 요약"}
           </span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border/50 text-muted-foreground/60 bg-muted/50">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border text-muted-foreground bg-muted">
             {completedCount}/{total}
           </span>
         </div>
-        <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
+        <p className="text-[12px] text-muted-foreground leading-relaxed">
           {streamingStepKey
             ? (isEn
                 ? "Report is being written. Check the key points of each step so far."

@@ -407,7 +407,7 @@ const MD_TABLE_COMPONENTS = {
       <table className="w-full text-[12.5px] border-collapse">{children}</table>
     </div>
   ),
-  thead: ({ children }: any) => <thead className="bg-muted/60 border-b border-border/60">{children}</thead>,
+  thead: ({ children }: any) => <thead className="bg-muted border-b border-border">{children}</thead>,
   tbody: ({ children }: any) => <RoadmapTbody>{children}</RoadmapTbody>,
   tr: ({ children, ...props }: any) => {
     const firstCell = Array.isArray(children) ? children[0] : children;
@@ -425,7 +425,7 @@ const MD_TABLE_COMPONENTS = {
                        : isReSignal   ? "bg-blue-500/8 dark:bg-blue-500/10 hover:bg-blue-500/15"
                        : "hover:bg-muted/20";
     return (
-      <tr className={cn("border-b border-border/30 last:border-0 transition-colors", isSubRow ? "sub-metric-row" : "", signalClass)} {...props}>
+      <tr className={cn("border-b border-border/60 last:border-0 transition-colors", isSubRow ? "sub-metric-row" : "", signalClass)} {...props}>
         {children}
       </tr>
     );
@@ -545,7 +545,7 @@ function toKoreanVerdict(verdict: string | null | undefined): string {
 }
 
 function verdictStyle(verdict: string | null | undefined, isEn = false) {
-  if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted/40", border: "border-border" };
+  if (!verdict) return { label: "—", color: "text-muted-foreground", bg: "bg-muted", border: "border-border" };
   const s = verdict.toLowerCase();
   if (s.includes("strong buy"))  return { label: isEn ? "Strong Upside" : "높은 상승여력", color: "text-emerald-800 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-400 dark:border-emerald-700" };
   if (s.includes("buy"))         return { label: isEn ? "Upside"        : "상승여력",      color: "text-green-800 dark:text-green-300",     bg: "bg-green-50 dark:bg-green-950/40",     border: "border-green-400 dark:border-green-700" };
@@ -705,7 +705,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 </div>
               )}
             </div>
-            <div className="bg-muted/50 px-4 py-1.5 flex items-center gap-1.5">
+            <div className="bg-muted/70 px-4 py-1.5 flex items-center gap-1.5">
               <svg className="w-3 h-3 text-muted-foreground flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
@@ -788,7 +788,7 @@ function ShareModal({ analysis, onClose }: { analysis: any; onClose: () => void 
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/60 border border-border"
+                className="mx-5 mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted border border-border"
               >
                 <Zap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <span className="text-[12px] text-muted-foreground">
@@ -1035,7 +1035,7 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted/50">
+                <tr className="bg-muted">
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{isEn ? "Ticker" : "종목"}</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/B</th>
                   <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">P/E</th>
@@ -1727,9 +1727,9 @@ export default function AnalysisDetail() {
                 isComplete
                   ? "bg-success/10 text-success border-success/20"
                   : isError
-                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 dark:border-red-500/20"
                     : analysis.status === 'queued'
-                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse"
+                      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 dark:border-blue-500/20 animate-pulse"
                       : "bg-warning/10 text-warning border-warning/20 animate-pulse"
               )}>
                 {isComplete
@@ -1774,7 +1774,7 @@ export default function AnalysisDetail() {
 
           {/* Verdict Card */}
           {isComplete && effectiveVerdict && (
-            <div ref={verdictRef} className="bg-primary/5 border border-primary/20 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
+            <div ref={verdictRef} className="bg-primary/8 border border-primary/30 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
               {(() => {
                 const isSellVerdict = ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase());
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
@@ -1963,7 +1963,7 @@ export default function AnalysisDetail() {
             className="print:hidden bg-card border border-blue-500/20 rounded-xl p-5 flex items-center gap-4"
           >
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+              <Loader2 className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-spin" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
@@ -1975,7 +1975,7 @@ export default function AnalysisDetail() {
                   : '현재 서버가 분석 중입니다. 슬롯이 열리면 자동으로 시작됩니다.'}
               </p>
             </div>
-            <div className="text-xs text-blue-400 font-mono animate-pulse shrink-0">
+            <div className="text-xs text-blue-500 dark:text-blue-400 font-mono animate-pulse shrink-0">
               {isEn ? 'Waiting…' : '대기 중…'}
             </div>
           </motion.div>
@@ -1989,7 +1989,7 @@ export default function AnalysisDetail() {
             className="print:hidden bg-card border border-red-500/20 rounded-xl p-5 flex items-center gap-4"
           >
             <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+              <svg className="w-5 h-5 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
@@ -2030,7 +2030,7 @@ export default function AnalysisDetail() {
                   className="bg-card border border-border rounded-xl border-l-4"
                   style={{ borderLeftColor: color }}
                 >
-                  <div className="bg-muted/40 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
+                  <div className="bg-muted/70 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
                       <agent.icon className="w-4.5 h-4.5" style={{ color }} />
                     </div>
@@ -2038,7 +2038,7 @@ export default function AnalysisDetail() {
                       <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
                       <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground/50 font-mono">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
+                    <span className="text-[10px] text-muted-foreground/70 font-mono">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center py-8 px-5">
                     <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
@@ -2046,7 +2046,7 @@ export default function AnalysisDetail() {
                       <span>{isEn ? 'Writing analysis report...' : '분석 리포트 작성 중...'}</span>
                     </div>
                     {agent.description && (
-                      <p className="mt-2 text-[11px] text-muted-foreground/60 text-center font-mono tracking-wide">
+                      <p className="mt-2 text-[11px] text-muted-foreground/80 text-center font-mono tracking-wide">
                         {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
                       </p>
                     )}
@@ -2282,7 +2282,7 @@ export default function AnalysisDetail() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-muted/50 border border-border px-5 py-4 space-y-2">
+              <div className="rounded-xl bg-muted/70 border border-border px-5 py-4 space-y-2">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Legal Disclaimer" : "투자 유의사항 (Legal Disclaimer)"}</p>
                 {isEn ? (
                   <>
@@ -3096,7 +3096,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       style={{ borderLeftColor: color }}
     >
       {/* 헤더 */}
-      <div className="bg-muted/40 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
+      <div className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
         <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
           <agent.icon className="w-4 h-4" style={{ color }} />
         </div>
@@ -3126,7 +3126,7 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
             </div>
             {/* 단계별 설명 — writing 단계에서 agent description 표시 */}
             {phase === "writing" && (agent.descriptionEn || agent.description) && (
-              <p className="mt-2 text-[11px] text-muted-foreground/60 text-center font-mono tracking-wide">
+              <p className="mt-2 text-[11px] text-muted-foreground/80 text-center font-mono tracking-wide">
                 {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
               </p>
             )}
@@ -3217,7 +3217,7 @@ function MarketSignalChips({ signals, isEn = false }: { signals: MarketSignals; 
   return (
     <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-border">
       <span className={cn("text-[11px] font-bold px-3 py-1.5 rounded-full", tc.cls)}>{tc.label}</span>
-      <div className="flex items-center gap-1.5 bg-muted/60 border border-border rounded-full px-3 py-1.5">
+      <div className="flex items-center gap-1.5 bg-muted border border-border rounded-full px-3 py-1.5">
         <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">52W</span>
         <div className="w-14 h-1.5 bg-muted-foreground/20 rounded-full overflow-hidden">
           <div className="h-full rounded-full bg-foreground/60 transition-all" style={{ width: `${signals.position52w}%` }} />
@@ -3226,7 +3226,7 @@ function MarketSignalChips({ signals, isEn = false }: { signals: MarketSignals; 
       </div>
       <span className={cn("text-[11px] font-bold px-3 py-1.5 rounded-full", sc.cls)}>{sc.label}</span>
       {signals.rrRatio > 0 && (
-        <div className="flex items-center gap-1.5 bg-muted/60 border border-border rounded-full px-3 py-1.5">
+        <div className="flex items-center gap-1.5 bg-muted border border-border rounded-full px-3 py-1.5">
           <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">R/R</span>
           <span className="text-[11px] font-mono font-bold text-foreground">{signals.rrRatio.toFixed(1)} : 1</span>
         </div>
@@ -3445,12 +3445,12 @@ function ForwardEstimatesTable({ ticker, isEn = false }: { ticker: string; isEn?
       <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[340px] text-xs border-collapse">
           <thead>
-            <tr className="bg-muted/60">
-              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Year" : "연도"}</th>
+            <tr className="bg-muted">
+              <th className="px-3 py-2 text-left font-semibold text-foreground/80 border-b border-border">{isEn ? "Year" : "연도"}</th>
               <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">{isEn ? "Revenue" : "매출"}</th>
-              <th className="px-3 py-2 text-right font-semibold text-foreground/50 border-b border-border">YoY</th>
+              <th className="px-3 py-2 text-right font-semibold text-foreground/70 border-b border-border">YoY</th>
               <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">{isEn ? "Op. Income" : "영업이익"}</th>
-              <th className="px-3 py-2 text-right font-semibold text-foreground/50 border-b border-border">OPM</th>
+              <th className="px-3 py-2 text-right font-semibold text-foreground/70 border-b border-border">OPM</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -3491,8 +3491,8 @@ function SegmentForecastTable({ data, isEn = false }: { data: SegmentForecastDat
       <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[380px] text-xs border-collapse">
           <thead>
-            <tr className="bg-muted/60">
-              <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Segment" : "사업부"}</th>
+            <tr className="bg-muted">
+              <th className="px-3 py-2 text-left font-semibold text-foreground/80 border-b border-border">{isEn ? "Segment" : "사업부"}</th>
               <th className="px-3 py-2 text-right font-semibold text-indigo-500 border-b border-border">{isEn ? "Rev(26E)" : "매출(26E)"}</th>
               <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">{isEn ? "Op.(26E)" : "영업익(26E)"}</th>
               {has27 && <th className="px-3 py-2 text-right font-semibold text-indigo-400 border-b border-border">{isEn ? "Rev(27E)" : "매출(27E)"}</th>}
@@ -3817,7 +3817,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
     >
       {/* ⑪ Accordion header */}
       <div
-        className="bg-muted/40 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl cursor-pointer hover:bg-muted/60 transition-colors select-none"
+        className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl cursor-pointer hover:bg-muted/90 transition-colors select-none"
         onClick={() => setCollapsed(c => !c)}
       >
         <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
@@ -3827,7 +3827,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
           <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
-        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/70 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
       </div>
 
       <AnimatePresence initial={false}>
@@ -3906,7 +3906,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                 <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
                   <button
                     onClick={() => setShowModelAssumptions(v => !v)}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
                   >
                     <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
                     <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Model Assumptions" : "모델 가정 수립"}</span>
@@ -3918,7 +3918,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                         WACC {waccVal}
                       </span>
                     )}
-                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showModelAssumptions && "rotate-180")} />
+                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showModelAssumptions && "rotate-180")} />
                   </button>
                   <AnimatePresence initial={false}>
                     {showModelAssumptions && (
@@ -3968,11 +3968,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
             <button
               onClick={() => setShowValuationMetrics(v => !v)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
             >
               <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
               <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Metrics" : "밸류에이션 핵심 지표"}</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showValuationMetrics && "rotate-180")} />
+              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showValuationMetrics && "rotate-180")} />
             </button>
             <AnimatePresence initial={false}>
               {showValuationMetrics && (
@@ -4026,11 +4026,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           <div className="mt-3 border border-border/50 rounded-lg overflow-hidden">
             <button
               onClick={() => setShowKeyAssumptions(v => !v)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors text-left"
             >
               <Table2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
               <span className="text-[12px] font-semibold text-muted-foreground flex-1">{isEn ? "Key Valuation Assumptions" : "핵심 밸류에이션 가정 요약"}</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 shrink-0", showKeyAssumptions && "rotate-180")} />
+              <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-200 shrink-0", showKeyAssumptions && "rotate-180")} />
             </button>
             <AnimatePresence initial={false}>
               {showKeyAssumptions && (
@@ -4227,7 +4227,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
 
               {/* 현재가 + 조율 업사이드 칩 */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
+                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
                   <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(fv.current, priceCurrency, isEn)}</span>
                 </div>
@@ -4238,10 +4238,10 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                     {isUp ? "+" : ""}{upside.toFixed(1)}%
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 bg-muted/50 rounded-lg px-3 py-1.5">
+                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
                   <span className="text-[11px] text-muted-foreground">{isEn ? "Band" : "밴드"}</span>
                   <span className="text-[11px] font-mono text-rose-500">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
-                  <span className="text-[10px] text-muted-foreground/50">~</span>
+                  <span className="text-[10px] text-muted-foreground/60">~</span>
                   <span className="text-[11px] font-mono text-blue-500">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
                 </div>
               </div>
@@ -4250,8 +4250,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
                 <table className="w-full min-w-[300px] text-xs border-collapse">
                   <thead>
-                    <tr className="bg-muted/60">
-                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "구분"}</th>
+                    <tr className="bg-muted">
+                      <th className="px-3 py-2 text-left font-semibold text-foreground/80 border-b border-border">{isEn ? "Method" : "구분"}</th>
                       <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
                       <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
                       <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
@@ -4304,7 +4304,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
 
               {/* 현재가 + 평균 업사이드 요약 칩 */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-muted/60 rounded-lg px-3 py-1.5">
+                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
                   <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency, isEn)}</span>
                 </div>
@@ -4318,7 +4318,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               </div>
 
               {/* 레인지 바 시각화 */}
-              <div className="bg-muted/30 dark:bg-muted/10 rounded-xl px-4 pt-2 pb-1 mb-3 border border-border/50">
+              <div className="bg-muted/60 dark:bg-muted/15 rounded-xl px-4 pt-2 pb-1 mb-3 border border-border/70">
                 {/* 범례 */}
                 <div className="flex items-center gap-4 mb-2 pb-2 border-b border-border/40">
                   <div className="flex items-center gap-1.5">
@@ -4347,8 +4347,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
                 <table className="w-full min-w-[300px] text-xs border-collapse">
                   <thead>
-                    <tr className="bg-muted/60">
-                      <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "방법론"}</th>
+                    <tr className="bg-muted">
+                      <th className="px-3 py-2 text-left font-semibold text-foreground/80 border-b border-border">{isEn ? "Method" : "방법론"}</th>
                       <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
                       <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
                       <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>

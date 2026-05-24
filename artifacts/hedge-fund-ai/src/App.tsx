@@ -331,7 +331,7 @@ function ClerkProviderWithRoutes() {
 
 function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
       <WouterRouter base={basePath}>
         <LanguageProvider>
           <GlobalSplash />
