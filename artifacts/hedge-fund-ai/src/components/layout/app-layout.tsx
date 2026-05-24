@@ -135,18 +135,16 @@ const ADMIN_GROUPS = [
     items: [
       { href: "/admin/analyses",     label: "전체 보고서",    Icon: FileText },
       { href: "/admin/portfolios",   label: "유저 포트폴리오", Icon: LayoutGrid },
-      { href: "/admin/ticker-notes", label: "종목 보정 메모", Icon: StickyNote },
       { href: "/admin/notices",      label: "공지사항",       Icon: Megaphone },
     ],
   },
   {
     label: "운영",
     items: [
-      { href: "/admin/feedback",    label: "유저 피드백",   Icon: MessageSquare },
-      { href: "/admin/support",     label: "고객 문의",    Icon: Headphones },
-      { href: "/admin/calibration", label: "모델 보정",    Icon: SlidersHorizontal },
-      { href: "/admin/quality",     label: "AI 품질 관리", Icon: ShieldCheck },
-      { href: "/admin/users",       label: "관리자 관리",  Icon: Shield },
+      { href: "/admin/feedback", label: "유저 피드백",  Icon: MessageSquare },
+      { href: "/admin/support",  label: "고객 문의",    Icon: Headphones },
+      { href: "/admin/quality",  label: "AI 관리",      Icon: ShieldCheck },
+      { href: "/admin/users",    label: "관리자 관리",  Icon: Shield },
     ],
   },
 ];

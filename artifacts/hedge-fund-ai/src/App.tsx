@@ -43,7 +43,6 @@ const NotFound         = lazy(() => import("@/pages/not-found"));
 // Admin pages — 일반 사용자 접근 없으므로 별도 청크로 완전 분리
 const AdminLive            = lazy(() => import("@/pages/admin-live"));
 const AdminAnalyses        = lazy(() => import("@/pages/admin-analyses"));
-const AdminTickerNotes     = lazy(() => import("@/pages/admin-ticker-notes"));
 const AdminUsers           = lazy(() => import("@/pages/admin-users"));
 const AdminFeedback        = lazy(() => import("@/pages/admin-feedback"));
 const AdminUserManagement  = lazy(() => import("@/pages/admin-user-management"));
@@ -51,7 +50,6 @@ const AdminDashboard       = lazy(() => import("@/pages/admin-dashboard"));
 const AdminPromoCodes      = lazy(() => import("@/pages/admin-promo-codes"));
 const AdminSupportPage     = lazy(() => import("@/pages/admin-support"));
 const AdminNoticesPage     = lazy(() => import("@/pages/admin-notices"));
-const AdminCalibration     = lazy(() => import("@/pages/admin-calibration"));
 const AdminQuality         = lazy(() => import("@/pages/admin-quality"));
 const AdminBatchReports    = lazy(() => import("@/pages/admin-batch-reports"));
 const AdminPortfolios      = lazy(() => import("@/pages/admin-portfolios"));
@@ -275,7 +273,6 @@ function Router() {
                 <Route path="/popular" component={Popular} />
                 <Route path="/admin/live" component={AdminLive} />
                 <Route path="/admin/analyses" component={AdminAnalyses} />
-                <Route path="/admin/ticker-notes" component={AdminTickerNotes} />
                 <Route path="/admin/feedback" component={AdminFeedback} />
                 <Route path="/admin/users" component={AdminUsers} />
                 <Route path="/admin/user-management" component={AdminUserManagement} />
@@ -286,7 +283,6 @@ function Router() {
                 <Route path="/admin/promo-codes" component={AdminPromoCodes} />
                 <Route path="/admin/support" component={AdminSupportPage} />
                 <Route path="/admin/notices" component={AdminNoticesPage} />
-                <Route path="/admin/calibration" component={AdminCalibration} />
                 <Route path="/admin/quality" component={AdminQuality} />
                 <Route path="/admin/batch-reports" component={AdminBatchReports} />
                 <Route path="/admin/portfolios" component={AdminPortfolios} />

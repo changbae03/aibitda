@@ -3,11 +3,14 @@ import {
   Loader2, AlertTriangle, Clock, BarChart2, Plus, Edit3, Trash2,
   CheckCircle2, X, Save, ChevronDown, ChevronUp, Activity, FlaskConical,
   ShieldCheck, RefreshCw, ExternalLink, Users, XCircle,
+  Brain, TrendingUp, TrendingDown, Minus, History,
+  PencilLine, Search, Eye, BarChart3, Cpu, CheckCircle, Bot,
+  StickyNote, SlidersHorizontal,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, LineChart, ReferenceLine,
 } from "recharts";
 
 // ─── 타입 ───────────────────────────────────────────────────────────────────
@@ -973,33 +976,483 @@ function PeerIssuesTab() {
   );
 }
 
+// ─── 섹터 모델 보정 탭 ───────────────────────────────────────────────────────
+
+const SECTOR_LABELS: Record<string, string> = {
+  KR_BIOTECH: "한국 · 바이오/제약", KR_SEMICONDUCTOR: "한국 · 반도체",
+  KR_FINANCIAL: "한국 · 금융/은행/보험", KR_CONSTRUCTION: "한국 · 건설/주택",
+  KR_TELECOM: "한국 · 통신", KR_REIT: "한국 · 리츠", KR_AUTO: "한국 · 자동차",
+  KR_OTHER: "한국 · 기타",
+  US_BIOTECH: "미국 · 바이오/제약", US_TECH: "미국 · 테크/반도체",
+  US_FINANCIAL: "미국 · 금융/은행/보험", US_REIT: "미국 · 리츠",
+  US_ENERGY: "미국 · 에너지/자원", US_DEFENSE: "미국 · 방산/항공",
+  US_TELECOM: "미국 · 통신", US_UTILITIES: "미국 · 유틸리티", US_OTHER: "미국 · 기타",
+};
+
+function AccuracyBadge({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-foreground text-xs">데이터 없음</span>;
+  const pct = Math.round(value);
+  const color = pct >= 60 ? "text-emerald-600 bg-emerald-50 border-emerald-200" : pct >= 50 ? "text-amber-600 bg-amber-50 border-amber-200" : "text-red-600 bg-red-50 border-red-200";
+  const Icon = pct >= 60 ? CheckCircle2 : pct >= 50 ? Minus : AlertTriangle;
+  return <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border", color)}><Icon className="w-3 h-3" />{pct}%</span>;
+}
+
+function DeviationBadge({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-foreground text-xs">데이터 없음</span>;
+  const rounded = Math.round(value * 10) / 10;
+  const abs = Math.abs(rounded);
+  const isOver = rounded > 0;
+  const severity = abs >= 10 ? "strong" : abs >= 5 ? "mild" : "low";
+  const color = severity === "strong" ? (isOver ? "text-red-600 bg-red-50 border-red-200" : "text-blue-600 bg-blue-50 border-blue-200") : severity === "mild" ? "text-amber-600 bg-amber-50 border-amber-200" : "text-emerald-600 bg-emerald-50 border-emerald-200";
+  return <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border", color)}>{isOver ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}{isOver ? `+${rounded}%p 낙관` : `${rounded}%p 비관`}</span>;
+}
+
+function CalibGuideText({ acc, dev }: { acc: number | null; dev: number | null }) {
+  if (acc === null && dev === null) return null;
+  const lines: string[] = [];
+  if (acc !== null && acc < 50) lines.push("방향 예측 불확실 → 중립 의견 가중치 증가");
+  if (dev !== null && Math.abs(dev) >= 10) lines.push(dev > 0 ? `목표주가 ${Math.min(15, Math.round(Math.abs(dev) * 0.6))}% 하향 보정 적용 중` : `목표주가 ${Math.min(15, Math.round(Math.abs(dev) * 0.6))}% 상향 보정 적용 중`);
+  else if (dev !== null && Math.abs(dev) >= 5) lines.push("소폭 편향 감지 → 하단 시나리오 가중치 증가 적용 중");
+  if (lines.length === 0) lines.push("보정 미적용 (편향 허용 범위 내)");
+  return <div className="text-[11px] text-muted-foreground mt-1 space-y-0.5">{lines.map((l, i) => <p key={i}>→ {l}</p>)}</div>;
+}
+
+function SectorHistoryChart({ sector, label }: { sector: string; label: string }) {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setLoading(true);
+    fetch(getApiUrl(`/api/performance/calibration-history?sector=${encodeURIComponent(sector)}`), { credentials: "include" })
+      .then(r => r.json()).then(d => setData(Array.isArray(d) ? d : [])).catch(() => setData([])).finally(() => setLoading(false));
+  }, [sector]);
+  if (loading) return <div className="flex items-center justify-center h-32"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>;
+  if (data.length < 2) return <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">히스토리 데이터 부족 (재계산 2회 이상 필요)</div>;
+  return (
+    <div className="mt-4 space-y-4">
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1"><History className="w-3 h-3" /> {label} · 성과 추이 ({data.length}회)</p>
+      <div>
+        <p className="text-[10px] text-muted-foreground mb-1">방향 정확도 (%)</p>
+        <ResponsiveContainer width="100%" height={110}>
+          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(v: number) => [`${v?.toFixed(1)}%`, "정확도"]} />
+            <ReferenceLine y={60} stroke="hsl(var(--chart-2))" strokeDasharray="4 2" />
+            <ReferenceLine y={50} stroke="hsl(var(--destructive)/0.5)" strokeDasharray="4 2" />
+            <Line type="monotone" dataKey="direction_accuracy" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} name="정확도" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted-foreground mb-1">목표주가 편향 (%p)</p>
+        <ResponsiveContainer width="100%" height={110}>
+          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(v: number) => [`${v?.toFixed(1)}%p`, "편향"]} />
+            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 2" />
+            <Line type="monotone" dataKey="avg_price_deviation" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={{ r: 3 }} name="편향" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function CalibrationTab() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [recalcResult, setRecalcResult] = useState<any>(null);
+  const [recalcError, setRecalcError] = useState<string | null>(null);
+  const [expandedSector, setExpandedSector] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/performance/calibration"), { credentials: "include" });
+      const data = await r.json();
+      setRows(Array.isArray(data) ? data : []);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runRecalc = async () => {
+    setRecalcLoading(true); setRecalcResult(null); setRecalcError(null);
+    try {
+      const r = await fetch(getApiUrl("/api/performance/recalculate"), { method: "POST", credentials: "include" });
+      const data = await r.json();
+      if (!r.ok) setRecalcError(data.error ?? "재계산 실패");
+      else { setRecalcResult(data); load(); }
+    } catch (e) { setRecalcError(String(e)); } finally { setRecalcLoading(false); }
+  };
+
+  const krRows = rows.filter(r => r.market === "KR");
+  const usRows = rows.filter(r => r.market === "US");
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-[13px] text-muted-foreground">30일 이상 된 분석의 실제 주가 성과를 비교해 섹터별 편향을 측정합니다. 보정값은 이후 분석 프롬프트에 자동 주입됩니다.</p>
+        <button onClick={runRecalc} disabled={recalcLoading} className="shrink-0 flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors">
+          {recalcLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} 보정 재계산
+        </button>
+      </div>
+      {recalcResult && <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><p className="font-semibold">{recalcResult.message}</p><p className="text-[12px] mt-0.5 text-emerald-600 dark:text-emerald-400">분석 처리 {recalcResult.analysesProcessed}건 · 섹터 업데이트 {recalcResult.sectorsUpdated}개</p></div>}
+      {recalcError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{recalcError}</div>}
+      {loading ? (
+        <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-xl border border-border bg-muted/30 px-6 py-10 text-center space-y-2">
+          <Brain className="w-8 h-8 text-muted-foreground mx-auto" />
+          <p className="font-medium text-foreground">아직 보정 데이터가 없습니다</p>
+          <p className="text-[13px] text-muted-foreground">30일 이상 된 완료 분석이 쌓인 후 "보정 재계산"을 눌러 시작하세요.</p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {[{ label: "한국 시장 (KR)", data: krRows }, { label: "미국 시장 (US)", data: usRows }].map(group =>
+            group.data.length > 0 && (
+              <section key={group.label}>
+                <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">{group.label}</h2>
+                <div className="space-y-2">
+                  {group.data.map((row: any) => {
+                    const sectorLabel = SECTOR_LABELS[row.sector] ?? row.sector;
+                    const isExpanded = expandedSector === row.sector;
+                    return (
+                      <div key={row.sector} className="rounded-xl border border-border bg-background px-4 py-3.5">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground">{sectorLabel}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">샘플 {row.sample_count}건 · 최종 업데이트: {new Date(row.last_recalc_at).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <div className="text-right"><p className="text-[10px] text-muted-foreground mb-1">방향 정확도</p><AccuracyBadge value={row.direction_accuracy} /></div>
+                            <div className="text-right"><p className="text-[10px] text-muted-foreground mb-1">목표주가 편향</p><DeviationBadge value={row.avg_price_deviation} /></div>
+                            <button onClick={() => setExpandedSector(isExpanded ? null : row.sector)} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:bg-muted transition-colors">
+                              <History className="w-3 h-3" /><ChevronDown className={cn("w-3 h-3 transition-transform", isExpanded && "rotate-180")} />
+                            </button>
+                          </div>
+                        </div>
+                        {row.sample_count >= 3 ? <CalibGuideText acc={row.direction_accuracy} dev={row.avg_price_deviation} /> : <p className="text-[11px] text-amber-600 mt-1">→ 샘플 3건 미만 — 보정 미적용</p>}
+                        {isExpanded && <div className="mt-3 pt-3 border-t border-border/50"><SectorHistoryChart sector={row.sector} label={sectorLabel} /></div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )
+          )}
+        </div>
+      )}
+      <div className="rounded-xl border border-border bg-muted/20 px-4 py-4 space-y-2">
+        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">보정 동작 기준</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px] text-muted-foreground">
+          <p>· 샘플 3건 이상 시 보정 활성화</p>
+          <p>· 목표주가 편향 ±10%p 이상 → 강력 보정</p>
+          <p>· 방향 정확도 50% 미만 → 투자의견 보수화</p>
+          <p>· 편향 ±5~10%p → 하단 시나리오 가중치 증가</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 종목 보정 메모 탭 ───────────────────────────────────────────────────────
+
+const AI_REVIEW_TAG = "[AI검수]";
+
+function splitMemo(raw: string) {
+  if (!raw.trim()) return { aiBlocks: [] as string[], adminBlocks: [] as string[] };
+  const chunks = raw.split(/\n\n---\n\n/);
+  const aiBlocks: string[] = [], adminBlocks: string[] = [];
+  for (const chunk of chunks) {
+    const t = chunk.trim();
+    if (!t) continue;
+    if (t.startsWith(AI_REVIEW_TAG)) aiBlocks.push(t); else adminBlocks.push(t);
+  }
+  return { aiBlocks, adminBlocks };
+}
+
+function AiReviewBlock({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const header = lines[0] ?? "", body = lines.slice(1).join("\n").trim();
+  return (
+    <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.04] p-2.5 text-[12px]">
+      <div className="flex items-center gap-1.5 mb-1.5"><Bot className="w-3 h-3 text-sky-400 shrink-0" /><span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">{header}</span></div>
+      <p className="text-foreground/70 leading-relaxed whitespace-pre-wrap">{body}</p>
+    </div>
+  );
+}
+
+const INJECTION_BLOCK_STYLES: Record<string, { color: string; icon: React.ElementType; border: string; bg: string }> = {
+  memo:              { color: "text-amber-500 dark:text-amber-400",   icon: PencilLine, border: "border-amber-500/20",  bg: "bg-amber-500/[0.04]"  },
+  autoLearning:      { color: "text-blue-500 dark:text-blue-400",     icon: BarChart3,  border: "border-blue-500/20",   bg: "bg-blue-500/[0.04]"   },
+  sectorCalibration: { color: "text-violet-500 dark:text-violet-400", icon: Brain,      border: "border-violet-500/20", bg: "bg-violet-500/[0.04]" },
+};
+
+function InjectionPreview({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const load = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/ticker-notes/${encodeURIComponent(ticker)}/prompt-injection`), { credentials: "include" });
+      if (r.ok) { setData(await r.json()); setLoaded(true); }
+    } finally { setLoading(false); }
+  }, [ticker]);
+  useEffect(() => { load(); }, [ticker]);
+  if (loading && !loaded) return <div className="flex items-center gap-2 py-3 text-muted-foreground text-xs"><Loader2 className="w-3.5 h-3.5 animate-spin" /> 로드 중…</div>;
+  if (!data) return null;
+  const isEmpty = (data.blocks ?? []).length === 0;
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border border-border bg-muted/60 text-muted-foreground"><Cpu className="w-3 h-3" />{data.sectorKey || "섹터 미분류"}</span>
+        {data.industry && <span className="text-[10px] text-muted-foreground/60">{data.industry}</span>}
+        <span className="text-[10px] text-muted-foreground/50">분석 이력 {data.historyCount}회{data.historyCount >= 2 ? " ✓ 통계 주입됨" : " (2회 이상부터 통계 주입)"}</span>
+      </div>
+      {isEmpty ? (
+        <div className="text-xs text-muted-foreground/50 italic py-1">현재 주입되는 보정 데이터 없음</div>
+      ) : (data.blocks ?? []).map((block: any, i: number) => {
+        const style = INJECTION_BLOCK_STYLES[block.type] ?? INJECTION_BLOCK_STYLES.memo;
+        const Icon = style.icon;
+        return (
+          <div key={i} className={cn("rounded-lg border p-3 text-[12px]", style.border, style.bg)}>
+            <div className="flex items-center gap-1.5 mb-2"><Icon className={cn("w-3.5 h-3.5 shrink-0", style.color)} /><span className={cn("text-[10px] font-bold uppercase tracking-wider", style.color)}>{block.label}</span></div>
+            <pre className="text-foreground/70 leading-relaxed whitespace-pre-wrap font-sans text-[11.5px]">{block.content}</pre>
+          </div>
+        );
+      })}
+      <button onClick={load} className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground flex items-center gap-1 transition-colors"><RefreshCw className="w-3 h-3" /> 새로고침</button>
+    </div>
+  );
+}
+
+function TickerNoteItem({ note, onSaved }: { note: any; onSaved: (ticker: string, memo: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isInjectionOpen, setIsInjectionOpen] = useState(false);
+  const [editMemo, setEditMemo] = useState(note.memo ?? "");
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const { aiBlocks, adminBlocks } = splitMemo(editMemo);
+  const adminOnly = adminBlocks.join("\n\n---\n\n");
+  const isDirty = editMemo !== note.memo;
+  const isKR = /^\d{6}$/.test(note.ticker);
+  const displayName = isKR && note.companyName ? note.companyName : note.ticker;
+
+  useEffect(() => { if (!isOpen) setEditMemo(note.memo ?? ""); }, [note.memo]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/ticker-notes/${encodeURIComponent(note.ticker)}`), {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo: editMemo }),
+      });
+      if (r.ok) { onSaved(note.ticker, editMemo); setSavedOk(true); setTimeout(() => setSavedOk(false), 2000); }
+    } finally { setSaving(false); }
+  };
+
+  let hist: any[] = [];
+  try {
+    const parsed = typeof note.autoLearning === "string" ? JSON.parse(note.autoLearning) : note.autoLearning;
+    hist = parsed?.history ?? [];
+  } catch {}
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <button onClick={() => { setIsOpen(o => !o); if (!isOpen) setEditMemo(note.memo ?? ""); }} className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors">
+        <div className="flex items-center gap-3 min-w-0">
+          {isKR && note.companyName ? (
+            <span className="flex items-center gap-1.5"><span className="font-bold text-sm text-foreground">{note.companyName}</span><span className="text-xs font-mono text-muted-foreground/60">{note.ticker}</span></span>
+          ) : (
+            <span className="font-mono font-bold text-sm text-foreground">{note.ticker}</span>
+          )}
+          {note.memo ? <span className="text-xs text-muted-foreground truncate max-w-[220px]">{note.memo}</span> : <span className="text-xs text-muted-foreground/50 italic">메모 없음</span>}
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <span className="text-[11px] text-muted-foreground">{note.updatedAt ? new Date(note.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</span>
+          {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border">
+          {aiBlocks.length > 0 && (
+            <div className="pt-3 space-y-2">
+              <div className="flex items-center gap-1.5"><Bot className="w-3.5 h-3.5 text-sky-400" /><label className="text-xs font-semibold text-sky-500 dark:text-sky-400 uppercase tracking-wide">AI 자체 검수 결과</label><span className="text-[10px] text-muted-foreground/50">(자동 생성, 읽기 전용)</span></div>
+              {aiBlocks.map((block, i) => <AiReviewBlock key={i} text={block} />)}
+            </div>
+          )}
+          <div className={aiBlocks.length > 0 ? "" : "pt-3"}>
+            <div className="flex items-center gap-1.5 mb-1.5"><PencilLine className="w-3.5 h-3.5 text-amber-400" /><label className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">관리자 보정 메모 (AI 분석에 반영됨)</label></div>
+            <textarea
+              value={adminOnly}
+              onChange={e => {
+                const newAdminPart = e.target.value;
+                const combined = [...aiBlocks, newAdminPart].map(s => s.trim()).filter(Boolean).join("\n\n---\n\n");
+                setEditMemo(combined);
+              }}
+              rows={4}
+              placeholder={`${displayName}에 대한 보정 정보\n예) 발행주식수: 5,969,782,550주`}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[11px] text-muted-foreground">{adminOnly.length}/1000자</span>
+              <button
+                onClick={save} disabled={saving || !isDirty}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", isDirty ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-muted text-muted-foreground cursor-default")}
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedOk ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                {savedOk ? "저장됨" : "저장"}
+              </button>
+            </div>
+          </div>
+          {hist.length > 0 && (
+            <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+              <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">🤖 AI 자동학습 이력 ({hist.length}회, 읽기 전용)</label>
+              <div className="space-y-1.5">
+                {hist.map((h: any, i: number) => (
+                  <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground border-l-2 border-blue-400/30 pl-2">
+                    <span className="font-mono text-muted-foreground/60">{h.date?.slice(0, 10) ?? "-"}</span>
+                    <span className={cn("font-semibold", /Buy/i.test(h.verdict ?? "") ? "text-emerald-500" : /Sell/i.test(h.verdict ?? "") ? "text-red-500" : "text-amber-500")}>{h.verdict ?? "-"}</span>
+                    <span>진입 {h.entryPrice?.toLocaleString() ?? "-"} → 목표 {h.targetPrice?.toLocaleString() ?? "-"}</span>
+                    <span className={cn("font-medium", (h.upsidePct ?? 0) >= 0 ? "text-emerald-500" : "text-red-500")}>{(h.upsidePct ?? 0) >= 0 ? "+" : ""}{h.upsidePct?.toFixed(1) ?? "-"}%</span>
+                    {h.actualReturn !== undefined && <span className="text-muted-foreground/50">실제 {h.actualReturn >= 0 ? "+" : ""}{Number(h.actualReturn).toFixed(1)}%{h.daysElapsed ? ` (${h.daysElapsed}일)` : ""}</span>}
+                    {h.directionMatch !== undefined && h.directionMatch !== null && <span>{h.directionMatch ? "✓ 방향일치" : "✗ 방향불일치"}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="border-t border-border/60 pt-3">
+            <button onClick={() => setIsInjectionOpen(o => !o)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full">
+              <Eye className="w-3.5 h-3.5 text-violet-400" />
+              <span className="font-semibold text-violet-500 dark:text-violet-400 uppercase tracking-wide text-[10px]">프롬프트 주입 미리보기</span>
+              <span className="text-[10px] text-muted-foreground/50 ml-1">— 실제 Gemini에 전달되는 보정 내용</span>
+              {isInjectionOpen ? <ChevronUp className="w-3 h-3 ml-auto" /> : <ChevronDown className="w-3 h-3 ml-auto" />}
+            </button>
+            {isInjectionOpen && <div className="mt-3"><InjectionPreview ticker={note.ticker} /></div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TickerNotesTab() {
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [newTicker, setNewTicker] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/ticker-notes"), { credentials: "include" });
+      if (r.ok) setNotes(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const addTicker = async () => {
+    const t = newTicker.trim().toUpperCase();
+    if (!t) return;
+    if (notes.find(n => n.ticker === t)) { setNewTicker(""); return; }
+    setAdding(true);
+    try {
+      const r = await fetch(getApiUrl(`/api/ticker-notes/${encodeURIComponent(t)}`), {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo: "" }),
+      });
+      if (r.ok) {
+        setNotes(prev => [{ ticker: t, companyName: null, memo: "", autoLearning: "", updatedAt: new Date().toISOString() }, ...prev]);
+        setNewTicker("");
+      }
+    } finally { setAdding(false); }
+  };
+
+  const q = search.toUpperCase();
+  const filtered = notes.filter(n =>
+    !search || n.ticker.includes(q) || (n.companyName ?? "").toLowerCase().includes(search.toLowerCase()) || n.memo.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-muted-foreground">종목별 AI 분석에 반영되는 관리자 보정 메모, AI 자동학습 이력, 프롬프트 주입 내용을 확인합니다.</p>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input type="text" value={newTicker} onChange={e => setNewTicker(e.target.value)} onKeyDown={e => e.key === "Enter" && addTicker()} placeholder="티커 추가 (예: 005930, AAPL)" className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 uppercase" />
+        </div>
+        <button onClick={addTicker} disabled={adding || !newTicker.trim()} className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium disabled:opacity-50 hover:bg-primary/90 transition-colors">
+          {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : "추가"}
+        </button>
+        <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-muted/80 transition-colors">
+          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+        </button>
+      </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="종목명·티커·메모 검색" className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      </div>
+      {loading && notes.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" /> 불러오는 중…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground text-sm">{search ? "검색 결과가 없습니다" : "등록된 메모가 없습니다"}</div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(note => (
+            <TickerNoteItem
+              key={note.ticker}
+              note={note}
+              onSaved={(ticker, memo) => setNotes(prev => prev.map(n => n.ticker === ticker ? { ...n, memo, updatedAt: new Date().toISOString() } : n))}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
-type Tab = "monitoring" | "qa" | "prompts" | "peers";
+type Tab = "monitoring" | "qa" | "prompts" | "peers" | "calibration" | "tickerNotes";
 
 export default function AdminQuality() {
   const [tab, setTab] = useState<Tab>("monitoring");
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: "monitoring", label: "분석 모니터링", icon: Activity },
-    { key: "qa",         label: "QA 채점",       icon: ShieldCheck },
-    { key: "peers",      label: "피어 이상",      icon: Users },
-    { key: "prompts",    label: "프롬프트 버전",  icon: FlaskConical },
+    { key: "monitoring",  label: "분석 모니터링", icon: Activity },
+    { key: "qa",          label: "QA 채점",       icon: ShieldCheck },
+    { key: "peers",       label: "피어 이상",      icon: Users },
+    { key: "calibration", label: "섹터 보정",      icon: Brain },
+    { key: "tickerNotes", label: "종목 메모",      icon: StickyNote },
+    { key: "prompts",     label: "프롬프트 버전",  icon: FlaskConical },
   ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" /> AI 품질 관리
+          <Activity className="w-5 h-5 text-primary" /> AI 관리
         </h1>
         <p className="text-[13px] text-muted-foreground mt-1">
-          오류율 모니터링, 리포트 자동 QA 채점, 프롬프트 버전 관리를 한 곳에서.
+          오류율 모니터링, QA 채점, 섹터 모델 보정, 종목별 메모 관리를 한 곳에서.
         </p>
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-1 border-b border-border pb-0">
+      <div className="flex flex-wrap gap-1 border-b border-border pb-0">
         {tabs.map(t => {
           const Icon = t.icon;
           return (
@@ -1007,7 +1460,7 @@ export default function AdminQuality() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={cn(
-                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+                "flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
                 tab === t.key
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -1021,10 +1474,12 @@ export default function AdminQuality() {
       </div>
 
       <div>
-        {tab === "monitoring" && <MonitoringTab />}
-        {tab === "qa"         && <QATab />}
-        {tab === "peers"      && <PeerIssuesTab />}
-        {tab === "prompts"    && <PromptVersionTab />}
+        {tab === "monitoring"  && <MonitoringTab />}
+        {tab === "qa"          && <QATab />}
+        {tab === "peers"       && <PeerIssuesTab />}
+        {tab === "calibration" && <CalibrationTab />}
+        {tab === "tickerNotes" && <TickerNotesTab />}
+        {tab === "prompts"     && <PromptVersionTab />}
       </div>
     </div>
   );
