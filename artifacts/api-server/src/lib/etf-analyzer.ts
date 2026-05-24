@@ -848,10 +848,14 @@ export function searchEtf(query: string): ETFInfo[] {
 export async function getStockExposure(
   query: string,
 ): Promise<{ etf: ETFInfo; holding: ETFHolding }[]> {
-  const q = query.trim().replace(/^A/, "");
-  // 주요 ETF들의 보유 종목 병렬 조회 (캐시 활용)
+  const raw = query.trim();
+  // 한국 종목 코드의 "A" 접두어만 제거 (AAPL 같은 미국 티커는 그대로)
+  const q = /^A\d{6}$/.test(raw) ? raw.slice(1) : raw;
+  const qLow = q.toLowerCase();
+
+  // 국내 ETF는 즉시 (캐시 기반), US ETF는 병렬 조회
   const results = await Promise.allSettled(
-    MAJOR_ETFS.map(async etf => {
+    ALL_ETFS.map(async etf => {
       const { holdings } = await getEtfHoldings(etf.code);
       return { etf, holdings };
     })
@@ -862,9 +866,9 @@ export async function getStockExposure(
     if (r.status !== "fulfilled") continue;
     const { etf, holdings } = r.value;
     const match = holdings.find(h =>
-      h.stockCode.toLowerCase() === q.toLowerCase() ||
-      h.stockName.includes(q) ||
-      h.stockName.toLowerCase() === q.toLowerCase()
+      h.stockCode.toLowerCase() === qLow ||
+      h.stockName.toLowerCase() === qLow ||
+      h.stockName.toLowerCase().includes(qLow)
     );
     if (match) found.push({ etf, holding: match });
   }
