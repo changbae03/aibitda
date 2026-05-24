@@ -901,7 +901,7 @@ function buildMacroNarrative(macro: MacroSnapshot, env: MacroEnvironment): strin
 // ─── 섹터 아코디언 행 ─────────────────────────────────────────────────────────
 
 function SectorAccordionRow({
-  sector, isNow, rank, etfs, levEtfs,
+  sector, isNow, rank, etfs, levEtfs, invEtfs,
   handleEtfClick, selectedEtfCode, etfDetail, loadingEtf, closeDetail, allEtfs,
 }: {
   sector: SectorMomentum;
@@ -909,6 +909,7 @@ function SectorAccordionRow({
   rank: number;
   etfs: ETFInfo[];
   levEtfs: ETFInfo[];
+  invEtfs: ETFInfo[];
   handleEtfClick: (code: string) => void;
   selectedEtfCode: string | null;
   etfDetail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
@@ -919,7 +920,7 @@ function SectorAccordionRow({
   const [expanded, setExpanded] = useState(rank === 0);
   const cfg    = OUTLOOK_CONFIG[sector.outlook];
   const sColor = sector.score >= 75 ? "#16a34a" : sector.score >= 60 ? "#f59e0b" : "#94a3b8";
-  const hasSel = [...etfs, ...levEtfs].some(e => e.code === selectedEtfCode);
+  const hasSel = [...etfs, ...levEtfs, ...invEtfs].some(e => e.code === selectedEtfCode);
   const previewEtfs = etfs.slice(0, 3);
   const previewLev  = levEtfs.slice(0, 2);
 
@@ -1058,6 +1059,35 @@ function SectorAccordionRow({
             </div>
           )}
 
+          {/* 역발상·인버스 ETF */}
+          {invEtfs.length > 0 && (
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-sky-500/70 uppercase tracking-widest">
+                  🔄 역발상 {sector.outlook === "cautious" ? "· 하락 베팅" : "· 하락 헷지"}
+                </span>
+                <span className="text-[9px] text-sky-400/50 font-medium">지수 하락 시 수익</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {invEtfs.map(etf => (
+                  <button
+                    key={etf.code}
+                    onClick={e => { e.stopPropagation(); handleEtfClick(etf.code); }}
+                    className={cn(
+                      "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all",
+                      selectedEtfCode === etf.code
+                        ? "bg-sky-500 text-white border-sky-500 shadow-sm"
+                        : "bg-sky-500/10 border-sky-500/25 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20",
+                    )}
+                  >
+                    <span className="truncate max-w-[90px]">{etf.code}</span>
+                    <LeverageBadge lev={etf.leverage} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ETF 상세 패널 */}
           {hasSel && (
             <EtfDetailPanel
@@ -1078,15 +1108,16 @@ function SectorAccordionRow({
 
 function PulseAccordionRow({
   icon, label, description, badgeText, badgeClass,
-  impactIcon, impactClass, rank,
-  etfs, levEtfs,
+  impactIcon, impactClass, rank, isNegative,
+  etfs, levEtfs, invEtfs,
   handleEtfClick, selectedEtfCode, etfDetail, loadingEtf, closeDetail, allEtfs,
 }: {
   icon: string; label: string; description: string;
   badgeText: string; badgeClass: string;
   impactIcon: string; impactClass: string;
   rank: number;
-  etfs: ETFInfo[]; levEtfs: ETFInfo[];
+  isNegative?: boolean;
+  etfs: ETFInfo[]; levEtfs: ETFInfo[]; invEtfs: ETFInfo[];
   handleEtfClick: (code: string) => void;
   selectedEtfCode: string | null;
   etfDetail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
@@ -1095,7 +1126,7 @@ function PulseAccordionRow({
   allEtfs: ETFInfo[];
 }) {
   const [expanded, setExpanded] = useState(rank === 0);
-  const hasSel = [...etfs, ...levEtfs].some(e => e.code === selectedEtfCode);
+  const hasSel = [...etfs, ...levEtfs, ...invEtfs].some(e => e.code === selectedEtfCode);
   const previewEtfs = etfs.slice(0, 3);
   const previewLev  = levEtfs.slice(0, 2);
 
@@ -1190,6 +1221,35 @@ function PulseAccordionRow({
             </div>
           )}
 
+          {/* 역발상·인버스 ETF */}
+          {invEtfs.length > 0 && (
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-sky-500/70 uppercase tracking-widest">
+                  🔄 역발상 {isNegative ? "· 하락 베팅" : "· 하락 헷지"}
+                </span>
+                <span className="text-[9px] text-sky-400/50 font-medium">지수 하락 시 수익</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {invEtfs.map(etf => (
+                  <button
+                    key={etf.code}
+                    onClick={e => { e.stopPropagation(); handleEtfClick(etf.code); }}
+                    className={cn(
+                      "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all",
+                      selectedEtfCode === etf.code
+                        ? "bg-sky-500 text-white border-sky-500 shadow-sm"
+                        : "bg-sky-500/10 border-sky-500/25 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20",
+                    )}
+                  >
+                    <span className="truncate max-w-[90px]">{etf.code}</span>
+                    <LeverageBadge lev={etf.leverage} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {hasSel && (
             <EtfDetailPanel
               code={selectedEtfCode!}
@@ -1233,10 +1293,11 @@ function MomentumTab() {
 
   const getEtfsForSector = useCallback(
     (tags: string[]) => {
-      const matched = allEtfs.filter(e => tags.includes(e.sector));
+      const matched  = allEtfs.filter(e => tags.includes(e.sector));
       const regular  = matched.filter(e => e.leverage === 1).slice(0, 6);
-      const leveraged = matched.filter(e => Math.abs(e.leverage) >= 2);
-      return { regular, leveraged };
+      const leveraged = matched.filter(e => e.leverage >= 2);
+      const inverse  = matched.filter(e => e.leverage < 0);
+      return { regular, leveraged, inverse };
     },
     [allEtfs],
   );
@@ -1338,7 +1399,7 @@ function MomentumTab() {
                   <span className="text-[10px] text-muted-foreground/40 ml-auto">현재 매크로 기준 · 클릭해서 ETF 확인</span>
                 </div>
                 {data.nowSectors.map((s, i) => {
-                  const { regular, leveraged } = getEtfsForSector(s.sectorTags);
+                  const { regular, leveraged, inverse } = getEtfsForSector(s.sectorTags);
                   return (
                     <SectorAccordionRow
                       key={s.id}
@@ -1347,6 +1408,7 @@ function MomentumTab() {
                       rank={i}
                       etfs={regular}
                       levEtfs={leveraged}
+                      invEtfs={inverse}
                       handleEtfClick={handleEtfClick}
                       selectedEtfCode={selectedEtfCode}
                       etfDetail={etfDetail}
@@ -1366,7 +1428,7 @@ function MomentumTab() {
                   <span className="text-[10px] text-muted-foreground/40 ml-auto">향후 3–12개월 관점</span>
                 </div>
                 {data.futureSectors.map((s, i) => {
-                  const { regular, leveraged } = getEtfsForSector(s.sectorTags);
+                  const { regular, leveraged, inverse } = getEtfsForSector(s.sectorTags);
                   return (
                     <SectorAccordionRow
                       key={s.id}
@@ -1375,6 +1437,7 @@ function MomentumTab() {
                       rank={i}
                       etfs={regular}
                       levEtfs={leveraged}
+                      invEtfs={inverse}
                       handleEtfClick={handleEtfClick}
                       selectedEtfCode={selectedEtfCode}
                       etfDetail={etfDetail}
@@ -1431,7 +1494,7 @@ function MomentumTab() {
                   <span className="text-[10px] text-muted-foreground/40 ml-auto">클릭해서 ETF 확인</span>
                 </div>
                 {data.marketPulse.signals.map((sig, i) => {
-                  const { regular, leveraged } = getEtfsForSector(sig.sectorTags ?? []);
+                  const { regular, leveraged, inverse } = getEtfsForSector(sig.sectorTags ?? []);
                   const catColor: Record<typeof sig.category, string> = {
                     "수급":  "bg-blue-500/10 border-blue-500/20 text-blue-500",
                     "심리":  "bg-purple-500/10 border-purple-500/20 text-purple-400",
@@ -1452,8 +1515,10 @@ function MomentumTab() {
                       impactIcon={impactIcon}
                       impactClass={impactClass}
                       rank={i}
+                      isNegative={sig.impact === "negative"}
                       etfs={regular}
                       levEtfs={leveraged}
+                      invEtfs={inverse}
                       handleEtfClick={handleEtfClick}
                       selectedEtfCode={selectedEtfCode}
                       etfDetail={etfDetail}
@@ -1473,7 +1538,7 @@ function MomentumTab() {
                   <span className="text-[10px] text-muted-foreground/40 ml-auto">현재 시장 관심도 기반</span>
                 </div>
                 {data.marketPulse.themes.map((t, i) => {
-                  const { regular, leveraged } = getEtfsForSector(t.relatedSectors);
+                  const { regular, leveraged, inverse } = getEtfsForSector(t.relatedSectors);
                   const sentimentCfg = {
                     hot:  { text: "🔥 인기", cls: "bg-red-500/10 border-red-500/25 text-red-500",       icon: "↑", iconCls: "text-emerald-500"  },
                     warm: { text: "📈 주목", cls: "bg-amber-500/10 border-amber-500/20 text-amber-500",  icon: "→", iconCls: "text-amber-400"    },
@@ -1493,8 +1558,10 @@ function MomentumTab() {
                       impactIcon={sentimentCfg.icon}
                       impactClass={sentimentCfg.iconCls}
                       rank={i}
+                      isNegative={t.sentiment === "cool"}
                       etfs={regular}
                       levEtfs={leveraged}
+                      invEtfs={inverse}
                       handleEtfClick={handleEtfClick}
                       selectedEtfCode={selectedEtfCode}
                       etfDetail={etfDetail}

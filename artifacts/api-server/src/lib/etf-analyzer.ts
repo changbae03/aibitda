@@ -220,6 +220,30 @@ export const US_ETFS: ETFInfo[] = [
   { code:"278530", isuCd:"KR7278530007", name:"KODEX 미국나스닥100레버리지(합성 H)",  sector:"미국나스닥", issuer:"삼성자산운용", yahooCode:"278530.KS", leverage:2, ter:0.58, benchmark:"Nasdaq-100 ×2 (환헤지)" },
   { code:"304940", isuCd:"KR7304940005", name:"TIGER 미국S&P500레버리지(합성 H)",    sector:"미국시장",   issuer:"미래에셋",     yahooCode:"304940.KS", leverage:2, ter:0.58, benchmark:"S&P 500 ×2 (환헤지)" },
   { code:"261270", isuCd:"KR7261270000", name:"KODEX 미국나스닥100선물레버리지",     sector:"미국나스닥", issuer:"삼성자산운용", yahooCode:"261270.KS", leverage:2, ter:0.58, benchmark:"Nasdaq-100 선물 ×2" },
+
+  // ── 인버스 ETF (미국) ──────────────────────────────────────────────────────
+  // S&P 500 인버스
+  { code:"SH",   isuCd:"SH",   name:"ProShares Short S&P500 -1X",           sector:"미국시장",   issuer:"ProShares",  yahooCode:"SH",   leverage:-1, ter:0.88, benchmark:"S&P 500 ×-1" },
+  { code:"SDS",  isuCd:"SDS",  name:"ProShares UltraShort S&P500 -2X",      sector:"미국시장",   issuer:"ProShares",  yahooCode:"SDS",  leverage:-2, ter:0.89, benchmark:"S&P 500 ×-2" },
+  { code:"SPXS", isuCd:"SPXS", name:"Direxion Daily S&P500 Bear 3X",        sector:"미국시장",   issuer:"Direxion",   yahooCode:"SPXS", leverage:-3, ter:1.01, benchmark:"S&P 500 ×-3" },
+  // 나스닥 인버스
+  { code:"PSQ",  isuCd:"PSQ",  name:"ProShares Short QQQ -1X",              sector:"미국나스닥", issuer:"ProShares",  yahooCode:"PSQ",  leverage:-1, ter:0.95, benchmark:"Nasdaq-100 ×-1" },
+  { code:"QID",  isuCd:"QID",  name:"ProShares UltraShort QQQ -2X",         sector:"미국나스닥", issuer:"ProShares",  yahooCode:"QID",  leverage:-2, ter:0.95, benchmark:"Nasdaq-100 ×-2" },
+  { code:"SQQQ", isuCd:"SQQQ", name:"ProShares UltraPro Short QQQ -3X",     sector:"미국나스닥", issuer:"ProShares",  yahooCode:"SQQQ", leverage:-3, ter:0.95, benchmark:"Nasdaq-100 ×-3" },
+  // 반도체 인버스
+  { code:"SOXS", isuCd:"SOXS", name:"Direxion Daily Semiconductors Bear 3X",sector:"미국반도체", issuer:"Direxion",   yahooCode:"SOXS", leverage:-3, ter:0.76, benchmark:"ICE Semiconductor ×-3" },
+  { code:"TECS", isuCd:"TECS", name:"Direxion Daily Technology Bear 3X",    sector:"미국반도체", issuer:"Direxion",   yahooCode:"TECS", leverage:-3, ter:1.08, benchmark:"S&P Tech Sector ×-3" },
+  // 금융 인버스
+  { code:"FAZ",  isuCd:"FAZ",  name:"Direxion Daily Financial Bear 3X",     sector:"미국금융",   issuer:"Direxion",   yahooCode:"FAZ",  leverage:-3, ter:1.01, benchmark:"Russell 1000 Financial ×-3" },
+  // 에너지 인버스
+  { code:"ERY",  isuCd:"ERY",  name:"Direxion Daily Energy Bear 2X",        sector:"미국에너지", issuer:"Direxion",   yahooCode:"ERY",  leverage:-2, ter:1.01, benchmark:"Energy Select Sector ×-2" },
+  // 바이오 인버스
+  { code:"LABD", isuCd:"LABD", name:"Direxion Daily S&P Biotech Bear 3X",   sector:"미국헬스케어",issuer:"Direxion",  yahooCode:"LABD", leverage:-3, ter:1.02, benchmark:"S&P Biotechnology ×-3" },
+  // FANG+ 인버스
+  { code:"FNGD", isuCd:"FNGD", name:"MicroSectors FANG+Index -3X Inverse",  sector:"미국혁신",   issuer:"Bank of Montreal",yahooCode:"FNGD",leverage:-3,ter:0.95, benchmark:"NYSE FANG+ ×-3" },
+
+  // ── 인버스 ETF (국내) ──────────────────────────────────────────────────────
+  { code:"233740", isuCd:"KR7233740003", name:"KODEX 코스닥150선물인버스",   sector:"코스닥",    issuer:"삼성자산운용", yahooCode:"233740.KS", leverage:-1, ter:0.64, benchmark:"KOSDAQ 150 ×-1" },
 ];
 
 export const ALL_ETFS: ETFInfo[] = [...MAJOR_ETFS, ...US_ETFS];
