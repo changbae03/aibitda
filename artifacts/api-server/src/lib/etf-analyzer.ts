@@ -62,6 +62,35 @@ export interface TimingSignal {
   reason: string;
 }
 
+export interface UnifiedSignal {
+  code: string;
+  name: string;
+  sector: string;
+  issuer: string;
+  leverage: number;
+  price: number;
+  change1d: number;
+  return5d: number;
+  return20d: number;
+  rsi14: number;
+  ma5: number;
+  ma20: number;
+  techScore: number;      // 0-100 기술적 점수 (55% 가중)
+  sectorRank: number;     // 0-100 섹터 상대강도 (25% 가중)
+  aiScore: number;        // 0-100 AI 방향 반영 (20% 가중)
+  aiBonus: number;        // -20 ~ +20 AI 보정 포인트
+  combinedScore: number;  // 0-100 종합 점수
+  signal: "strong_buy" | "buy" | "hold" | "sell" | "strong_sell";
+  aiDirection: "up" | "down" | "neutral";
+  aiStrength: number;     // 0-1
+  reason: string;
+}
+
+export interface AiMarketInput {
+  kospi: { direction: "up" | "down" | "neutral"; strength: number };
+  nasdaq: { direction: "up" | "down" | "neutral"; strength: number };
+}
+
 // ─── 주요 ETF 목록 ────────────────────────────────────────────────────────────
 
 export const MAJOR_ETFS: ETFInfo[] = [
@@ -768,9 +797,9 @@ export async function getStockExposure(
 export async function getSectorRotation(): Promise<SectorScore[]> {
   const sectorMap: Record<string, string> = {
     "국내주식": "069500", "코스닥": "229200", "반도체": "091160",
-    "2차전지": "305720", "헬스케어": "143460", "금융": "139270",
-    "IT": "091220",      "해외주식": "133690",  "배당": "292150",
-    "원자재": "132030",  // KODEX 골드선물(H) — 대표 원자재 ETF
+    "2차전지": "305720", "헬스케어": "266420", "금융": "139270",
+    "IT": "266370",      "해외주식": "133690",  "배당": "211900",
+    "원자재": "132030",
   };
 
   const rows = await Promise.allSettled(
@@ -824,7 +853,7 @@ export async function getSectorRotation(): Promise<SectorScore[]> {
 /** 주요 ETF 타이밍 신호 */
 export async function getTimingSignals(): Promise<TimingSignal[]> {
   const targets = MAJOR_ETFS.filter(e =>
-    ["069500","229200","091160","305720","143460","133690","379800","122630","114800"].includes(e.code)
+    ["069500","229200","091160","305720","266420","266370","211900","133690","379800","122630","114800"].includes(e.code)
   );
 
   const rows = await Promise.allSettled(
@@ -886,4 +915,137 @@ export async function getTimingSignals(): Promise<TimingSignal[]> {
     .filter(r => r.status === "fulfilled" && r.value)
     .map(r => (r as any).value)
     .sort((a, b) => b.signalScore - a.signalScore);
+}
+
+// ─── AI 통합 신호 ─────────────────────────────────────────────────────────────
+
+const KOREAN_SECTORS = new Set(["국내주식","코스닥","반도체","2차전지","헬스케어","금융","IT","배당"]);
+const FOREIGN_SECTORS = new Set(["해외주식"]);
+
+function calcAiBonus(
+  dir: "up" | "down" | "neutral",
+  strength: number,
+  leverage: number,
+): number {
+  if (dir === "neutral") return 0;
+  const base   = dir === "up" ? 1 : -1;
+  const mag    = strength > 0.7 ? 20 : strength > 0.4 ? 13 : 7;
+  const raw    = base * mag;
+  if (leverage === 2)  return Math.max(-40, Math.min(40, raw * 2));
+  if (leverage === -1) return -raw;
+  if (leverage === -2) return Math.max(-40, Math.min(40, -raw * 2));
+  return raw;
+}
+
+/** 섹터 로테이션 + 기술적 신호 + AI 예측 방향을 통합한 ETF 종합 점수 */
+export async function getUnifiedSignals(ai?: AiMarketInput): Promise<UnifiedSignal[]> {
+  const TARGETS = [
+    "069500","229200","091160","305720","266420","266370","211900",
+    "133690","379800","132030","122630","114800",
+  ];
+  const etfs = MAJOR_ETFS.filter(e => TARGETS.includes(e.code));
+
+  const rows = await Promise.allSettled(
+    etfs.map(async etf => {
+      const prices = await fetchPrices(etf.yahooCode, 60);
+      if (prices.length < 22) return null;
+
+      const n    = prices.length;
+      const last = prices[n - 1];
+      const p1   = prices[n - 2] ?? last;
+      const p5   = prices[n - 6] ?? prices[0];
+      const p20  = prices[n - 21] ?? prices[0];
+
+      const ret1d  = ((last / p1)  - 1) * 100;
+      const ret5d  = ((last / p5)  - 1) * 100;
+      const ret20d = ((last / p20) - 1) * 100;
+      const ma5    = prices.slice(-5).reduce((s, v) => s + v, 0) / 5;
+      const ma20   = prices.slice(-20).reduce((s, v) => s + v, 0) / 20;
+      const rsi    = calcRsi(prices);
+      const maCross = ma5 > ma20 ? 1 : 0;
+      const maDist  = ((last / ma20) - 1) * 100;
+
+      const techScore = Math.round(
+        normalize(ret20d, -20, 20) * 0.35 +
+        normalize(ret5d,  -10, 10) * 0.30 +
+        normalize(rsi,    20,  80) * 0.20 +
+        maCross * 15,
+      );
+
+      let reason = "";
+      if (ret20d > 5)    reason += "20일 강한 상승 모멘텀. ";
+      if (ret5d  > 3)    reason += "5일 단기 상승세. ";
+      if (rsi    > 70)   reason += "RSI 과매수 구간. ";
+      if (rsi    < 30)   reason += "RSI 과매도 — 반등 주목. ";
+      if (maCross > 0)   reason += "골든크로스. ";
+      else               reason += "데드크로스. ";
+      if (maDist < -5)   reason += "20일선 크게 하회. ";
+      if (!reason.trim()) reason = "특이 신호 없음.";
+
+      return { etf, last, ret1d, ret5d, ret20d, ma5: Math.round(ma5), ma20: Math.round(ma20), rsi, techScore, reason: reason.trim() };
+    })
+  );
+
+  const valid = rows
+    .filter(r => r.status === "fulfilled" && r.value)
+    .map(r => (r as any).value);
+
+  if (!valid.length) return [];
+
+  // 상대 섹터 강도: 모든 ETF 대비 5d/20d 수익 퍼센타일
+  const all5d  = valid.map((v: any) => v.ret5d);
+  const all20d = valid.map((v: any) => v.ret20d);
+  const min5  = Math.min(...all5d),  max5  = Math.max(...all5d);
+  const min20 = Math.min(...all20d), max20 = Math.max(...all20d);
+
+  return valid.map((v: any) => {
+    const sectorRank = Math.round(
+      normalize(v.ret5d, min5, max5) * 0.6 +
+      normalize(v.ret20d, min20, max20) * 0.4
+    );
+
+    // AI 방향 보정
+    const isKorean  = KOREAN_SECTORS.has(v.etf.sector);
+    const isForeign = FOREIGN_SECTORS.has(v.etf.sector);
+    const aiSig = ai
+      ? (isKorean ? ai.kospi : isForeign ? ai.nasdaq : null)
+      : null;
+
+    const aiBonus = aiSig
+      ? calcAiBonus(aiSig.direction, aiSig.strength, v.etf.leverage)
+      : 0;
+    const aiDirection  = aiSig?.direction ?? "neutral";
+    const aiStrength   = aiSig?.strength  ?? 0;
+
+    // AI 점수 (0-100 스케일): 50 + aiBonus(±20~40 범위)
+    const aiScore = Math.max(0, Math.min(100, 50 + aiBonus));
+
+    const combinedScore = Math.max(0, Math.min(100, Math.round(
+      v.techScore * 0.55 + sectorRank * 0.25 + aiScore * 0.20
+    )));
+
+    return {
+      code:          v.etf.code,
+      name:          v.etf.name,
+      sector:        v.etf.sector,
+      issuer:        v.etf.issuer,
+      leverage:      v.etf.leverage,
+      price:         Math.round(v.last),
+      change1d:      Math.round(v.ret1d  * 100) / 100,
+      return5d:      Math.round(v.ret5d  * 100) / 100,
+      return20d:     Math.round(v.ret20d * 100) / 100,
+      rsi14:         v.rsi,
+      ma5:           v.ma5,
+      ma20:          v.ma20,
+      techScore:     v.techScore,
+      sectorRank,
+      aiScore,
+      aiBonus,
+      combinedScore,
+      signal:        toSignal(combinedScore),
+      aiDirection,
+      aiStrength,
+      reason:        v.reason,
+    } as UnifiedSignal;
+  }).sort((a, b) => b.combinedScore - a.combinedScore);
 }

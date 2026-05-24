@@ -6,7 +6,9 @@ import {
   getStockExposure,
   getSectorRotation,
   getTimingSignals,
+  getUnifiedSignals,
 } from "../lib/etf-analyzer.js";
+import { getStatus } from "../lib/lstm-predictor.js";
 
 const router = Router();
 
@@ -45,6 +47,36 @@ router.get("/etf/timing-signals", async (_req, res) => {
   try {
     const data = await cached("timing-signals", TTL.signals, getTimingSignals);
     res.json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "error" });
+  }
+});
+
+// GET /api/etf/unified-signals
+router.get("/etf/unified-signals", async (_req, res) => {
+  try {
+    // AI 예측 방향 추출 (없으면 neutral)
+    const status = getStatus();
+    const toAiSig = (idx: any) => ({
+      direction: (idx?.agreementSignal ?? "neutral") as "up" | "down" | "neutral",
+      strength:  idx?.agreementStrength ?? 0,
+    });
+    const aiSignals = {
+      kospi:  toAiSig(status.kospi),
+      nasdaq: toAiSig(status.nasdaq),
+    };
+
+    const cacheKey = `unified-signals:${aiSignals.kospi.direction}:${aiSignals.nasdaq.direction}`;
+    const data = await cached(cacheKey, TTL.signals, () => getUnifiedSignals(aiSignals));
+
+    res.json({
+      signals:   data,
+      aiContext: {
+        kospi:  aiSignals.kospi,
+        nasdaq: aiSignals.nasdaq,
+        ready:  status.ready ?? false,
+      },
+    });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
   }
