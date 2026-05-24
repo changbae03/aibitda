@@ -74,7 +74,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 20;  // [v20] 방향 정확도 70%+ 목표: dirPenalty(GBDT 방향오류 2.5x 패널티) + halfLife 84일 + wfDirAcc 지수가중
+const MODEL_VERSION = 21;  // [v21] KOSDAQ 대규모 최적화: halfLife 56일 + 개인순매수 피처 + dirPenalty 3.5 + nEnsemble 12
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -112,14 +112,23 @@ const INDEX_HP: Record<string, IndexHP> = {
     halfLifeDays: 84,
     dirPenalty: 2.5,
   },
-  /** KOSDAQ — 변동성 높은 성장주 지수 [v20] dirPenalty 2.0 추가 */
+  /**
+   * KOSDAQ [v21] — 42.5% 적중률(동전 이하) 대규모 최적화
+   * 근본원인 2가지 해결:
+   * 1. halfLifeDays 180→56: 코스닥은 개인주도·테마 순환이 빨라 레짐이 1~2개월마다 바뀜
+   *    6개월(180일) 전 패턴이 현재를 지배하면 체계적으로 역방향 예측됨
+   * 2. instNet 슬롯 → 개인(retail) 순매수로 교체 (별도 코드 처리):
+   *    코스닥은 기관이 아닌 개인이 시장 방향을 결정
+   *    기관 순매수 ↑ = 코스닥 하락 경향 (역상관) → 노이즈 제거 후 retail 신호 주입
+   * 3. nEnsemble 6→12, gbdtTrees 150→300, dirPenalty 2.0→3.5: 용량·패널티 강화
+   */
   KQ11: {
-    gbdtTrees: 150, gbdtLR: 0.02,  gbdtDepth: 4, gbdtLeaf: 10,
-    gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 6,
-    lstmEpochs: 80, lstmLR: 0.0009, lstmDrop: 0.25,
-    recentWindow: 20,
-    halfLifeDays: 180,
-    dirPenalty: 2.0,
+    gbdtTrees: 300, gbdtLR: 0.012, gbdtDepth: 5, gbdtLeaf: 8,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 12,
+    lstmEpochs: 120, lstmLR: 0.0008, lstmDrop: 0.28,
+    recentWindow: 30,
+    halfLifeDays: 56,
+    dirPenalty: 3.5,
   },
   /** S&P500 — 유동성 높은 미국 대형주 지수 [v20] dirPenalty 2.0 추가 */
   GSPC: {
@@ -387,15 +396,20 @@ async function fetchKRXMarketInvestor(
   market: "KOSPI" | "KOSDAQ",
   startYYYYMMDD: string,
   endYYYYMMDD:   string,
-): Promise<{ date: string; foreignNet: number; instNet: number }[]> {
-  // ① pykrx (KRX_ID/KRX_PW 있을 때)
+): Promise<{ date: string; foreignNet: number; instNet: number; individualNet: number }[]> {
+  // ① pykrx (KRX_ID/KRX_PW 있을 때) — 외국인/기관/개인 3종 모두 포함
   if (isPykrxEnabled()) {
     const fromISO = `${startYYYYMMDD.slice(0,4)}-${startYYYYMMDD.slice(4,6)}-${startYYYYMMDD.slice(6,8)}`;
     const toISO   = `${endYYYYMMDD.slice(0,4)}-${endYYYYMMDD.slice(4,6)}-${endYYYYMMDD.slice(6,8)}`;
     const rows = await fetchInvestorData(market, fromISO, toISO);
     if (rows.length) {
-      console.log(`[ext] pykrx 투자자 ${rows.length}행 (${market})`);
-      return rows.map(r => ({ date: r.date, foreignNet: r.foreign, instNet: r.institution }));
+      console.log(`[ext] pykrx 투자자 ${rows.length}행 (${market}) — 외국인/기관/개인 포함`);
+      return rows.map(r => ({
+        date:          r.date,
+        foreignNet:    r.foreign,
+        instNet:       r.institution,
+        individualNet: r.individual,   // [v21] 개인 순매수 — KOSDAQ instNet 슬롯에 사용
+      }));
     }
     console.warn(`[ext] pykrx 투자자 0행 (${market}) — KRX OTP fallback`);
   }
@@ -408,11 +422,13 @@ async function fetchKRXMarketInvestor(
   if (!rows.length) { console.warn(`[ext] KRX 투자자 0행 (${market})`); return []; }
   console.log(`[ext] KRX OTP 투자자 ${rows.length}행 (${market})`);
   return rows.map((r: any) => ({
-    date:       krxDateToISO(r.TRD_DD ?? r.trdDd ?? r["일자"]),
-    foreignNet: parseKRXNum(r.FRGN_NETBUY_TRDVAL ?? r.frgnNetbuyTrdval
-                  ?? r.FRGN_NETBYTD_AMT ?? r["외국인_순매수거래대금"] ?? 0),
-    instNet:    parseKRXNum(r.INST_NETBUY_TRDVAL  ?? r.instNetbuyTrdval
-                  ?? r.INST_NETBYTD_AMT ?? r["기관계_순매수거래대금"] ?? 0),
+    date:          krxDateToISO(r.TRD_DD ?? r.trdDd ?? r["일자"]),
+    foreignNet:    parseKRXNum(r.FRGN_NETBUY_TRDVAL ?? r.frgnNetbuyTrdval
+                     ?? r.FRGN_NETBYTD_AMT ?? r["외국인_순매수거래대금"] ?? 0),
+    instNet:       parseKRXNum(r.INST_NETBUY_TRDVAL  ?? r.instNetbuyTrdval
+                     ?? r.INST_NETBYTD_AMT ?? r["기관계_순매수거래대금"] ?? 0),
+    individualNet: parseKRXNum(r.INDV_NETBUY_TRDVAL  ?? r.indvNetbuyTrdval
+                     ?? r.INDV_NETBYTD_AMT ?? r["개인_순매수거래대금"]   ?? 0), // [v21]
   })).filter(r => r.date.length === 10);
 }
 
@@ -636,9 +652,13 @@ async function fetchExternalData(
     .map(r => ({ date: r.date, value: r.value - 0.4 }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // ── KRX 투자자 Map ──
-  const investorMap = new Map<string, { foreignNet: number; instNet: number }>();
-  for (const r of investorRows) investorMap.set(r.date, { foreignNet: r.foreignNet, instNet: r.instNet });
+  // ── KRX 투자자 Map (외국인/기관/개인 3종) ──
+  const investorMap = new Map<string, { foreignNet: number; instNet: number; individualNet: number }>();
+  for (const r of investorRows) investorMap.set(r.date, {
+    foreignNet:    r.foreignNet,
+    instNet:       r.instNet,
+    individualNet: r.individualNet ?? 0,   // [v21] 개인 순매수 — KOSDAQ용
+  });
 
   // ── KRX 공매도 Map + IQR 정규화 기준 계산 ──
   const shortMap = new Map<string, number>();
@@ -654,9 +674,13 @@ async function fetchExternalData(
 
   // ── 정규화 기준값 계산 (외국인/기관 순매수 스케일) ──
   const fnetVals = investorRows.map(r => Math.abs(r.foreignNet)).filter(v => v > 0);
-  const inetVals = investorRows.map(r => Math.abs(r.instNet)).filter(v => v > 0);
+  // [v21] KOSDAQ: instNet 슬롯 = 개인 순매수 → scale도 개인 기준으로 계산
+  const inetRawVals = market === "KOSDAQ"
+    ? investorRows.map(r => Math.abs(r.individualNet ?? 0)).filter(v => v > 0)
+    : investorRows.map(r => Math.abs(r.instNet)).filter(v => v > 0);
   const fnetScale = fnetVals.length > 0 ? (fnetVals.sort((a,b)=>a-b)[Math.floor(fnetVals.length*0.95)] || 10000) : 10000;
-  const inetScale = inetVals.length > 0 ? (inetVals.sort((a,b)=>a-b)[Math.floor(inetVals.length*0.95)] || 10000) : 10000;
+  const inetScale = inetRawVals.length > 0 ? (inetRawVals.sort((a,b)=>a-b)[Math.floor(inetRawVals.length*0.95)] || 10000) : 10000;
+  if (market === "KOSDAQ") console.log(`[ext-v21] KOSDAQ instNet 슬롯 = 개인순매수 (scale=${inetScale})`);
 
   // ── [v13] VIX 5일 모멘텀(회복신호) + 일별 변화율 ──
   const vix5dMomMap2 = new Map<string, number>();
@@ -697,7 +721,9 @@ async function fetchExternalData(
     if (investorMap.has(date)) {
       const iv = investorMap.get(date)!;
       lastForeign = iv.foreignNet;
-      lastInst    = iv.instNet;
+      // [v21] KOSDAQ: 기관(instNet)이 아닌 개인(individualNet)이 시장 방향 주도
+      // 기관은 코스닥 상승 시 오히려 차익실현 경향 → 역상관 노이즈 제거
+      lastInst = market === "KOSDAQ" ? (iv.individualNet ?? iv.instNet) : iv.instNet;
     }
     if (shortMap.has(date))        lastShort      = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
     if (vix5dMomMap2.has(date))    lastVix5dMom2  = vix5dMomMap2.get(date)!;
