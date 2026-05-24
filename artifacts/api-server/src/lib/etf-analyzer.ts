@@ -167,6 +167,26 @@ export const US_ETFS: ETFInfo[] = [
   { code:"XLE",  isuCd:"XLE",  name:"Energy Select Sector SPDR",         sector:"미국에너지", issuer:"State Street",yahooCode:"XLE", leverage:1, ter:0.09,  benchmark:"S&P Energy Sector" },
   // 혁신·테마
   { code:"ARKK", isuCd:"ARKK", name:"ARK Innovation ETF",                sector:"미국혁신", issuer:"ARK Invest",  yahooCode:"ARKK", leverage:1, ter:1.26,  benchmark:"ARK Innovation" },
+  // 항공우주·방산
+  { code:"ITA",  isuCd:"ITA",  name:"iShares U.S. Aerospace & Defense",  sector:"항공우주방산", issuer:"BlackRock",  yahooCode:"ITA",  leverage:1, ter:0.40, benchmark:"Dow Jones U.S. Select Aerospace & Defense" },
+  { code:"XAR",  isuCd:"XAR",  name:"SPDR S&P Aerospace & Defense ETF",  sector:"항공우주방산", issuer:"State Street",yahooCode:"XAR",  leverage:1, ter:0.35, benchmark:"S&P Aerospace & Defense Select Industry" },
+  // 로보틱스·AI
+  { code:"BOTZ", isuCd:"BOTZ", name:"Global X Robotics & AI ETF",        sector:"로보틱스AI",  issuer:"Global X",   yahooCode:"BOTZ", leverage:1, ter:0.68, benchmark:"Indxx Global Robotics & AI Thematic" },
+  { code:"IRBO", isuCd:"IRBO", name:"iShares Robotics and AI Multisector",sector:"로보틱스AI",  issuer:"BlackRock",  yahooCode:"IRBO", leverage:1, ter:0.47, benchmark:"NYSE FactSet Global Robotics & AI" },
+  { code:"ROBO", isuCd:"ROBO", name:"ROBO Global Robotics & Automation",  sector:"로보틱스AI",  issuer:"ROBO Global", yahooCode:"ROBO", leverage:1, ter:0.95, benchmark:"ROBO Global Robotics & Automation" },
+  // 사이버보안
+  { code:"CIBR", isuCd:"CIBR", name:"First Trust Cybersecurity ETF",     sector:"사이버보안",  issuer:"First Trust", yahooCode:"CIBR", leverage:1, ter:0.60, benchmark:"Nasdaq CTA Cybersecurity" },
+  { code:"HACK", isuCd:"HACK", name:"ETFMG Prime Cyber Security ETF",    sector:"사이버보안",  issuer:"ETFMG",       yahooCode:"HACK", leverage:1, ter:0.60, benchmark:"Prime Cyber Defense" },
+  // 양자컴퓨팅 (국내)
+  { code:"481180", isuCd:"KR7481180005", name:"KODEX 미국AI반도체",       sector:"양자컴퓨팅",  issuer:"삼성자산운용", yahooCode:"481180.KS", leverage:1, ter:0.45, benchmark:"솔랙티브 미국 AI 반도체" },
+  // 양자컴퓨팅 (미국)
+  { code:"QTUM", isuCd:"QTUM", name:"Defiance Quantum ETF",              sector:"양자컴퓨팅",  issuer:"Defiance",    yahooCode:"QTUM", leverage:1, ter:0.40, benchmark:"BlueStar Quantum Computing & Machine Learning" },
+  // 클린에너지
+  { code:"ICLN", isuCd:"ICLN", name:"iShares Global Clean Energy ETF",   sector:"클린에너지",  issuer:"BlackRock",  yahooCode:"ICLN", leverage:1, ter:0.40, benchmark:"S&P Global Clean Energy" },
+  { code:"QCLN", isuCd:"QCLN", name:"First Trust NASDAQ Clean Energy",   sector:"클린에너지",  issuer:"First Trust", yahooCode:"QCLN", leverage:1, ter:0.60, benchmark:"NASDAQ Clean Edge Green Energy" },
+  // 리츠·부동산
+  { code:"VNQ",  isuCd:"VNQ",  name:"Vanguard Real Estate ETF",          sector:"리츠",        issuer:"Vanguard",    yahooCode:"VNQ",  leverage:1, ter:0.13, benchmark:"MSCI US Investable Market Real Estate" },
+  { code:"IYR",  isuCd:"IYR",  name:"iShares U.S. Real Estate ETF",      sector:"리츠",        issuer:"BlackRock",   yahooCode:"IYR",  leverage:1, ter:0.39, benchmark:"Dow Jones U.S. Real Estate" },
   // 글로벌 신흥국
   { code:"EWY",  isuCd:"EWY",  name:"iShares MSCI South Korea ETF",      sector:"한국시장", issuer:"BlackRock",   yahooCode:"EWY",  leverage:1, ter:0.57,  benchmark:"MSCI Korea" },
   { code:"EEM",  isuCd:"EEM",  name:"iShares MSCI Emerging Markets ETF",  sector:"신흥국",   issuer:"BlackRock",   yahooCode:"EEM",  leverage:1, ter:0.68,  benchmark:"MSCI Emerging Markets" },
@@ -1276,6 +1296,57 @@ function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
     });
   }
 
+  // 항공우주·방산: 고유가·지정학 리스크
+  {
+    let s = 52;
+    if (oilPrice === "high") s += 15;    // 고유가 = 지정학 긴장 프록시
+    if (growth !== "weak") s += 8;
+    if (fxKrw === "weak") s += 5;        // 달러 강세 = 방산 수출 유리
+    now.push({
+      id: "aerospace", name: "항공우주·방산", icon: "🛸",
+      score: Math.min(100, Math.round(s)),
+      outlook: s >= 68 ? "bullish" : "neutral", horizon: "단기~중기",
+      reason: `유가 $${m.wti.toFixed(0)} 고공행진이 지정학 리스크 고조 신호. 글로벌 방위비 증가 기조와 우주·위성 인프라 투자 확대가 ITA·XAR 모멘텀을 지지.`,
+      catalysts: ["글로벌 방위비 지출 확대", "우주 경제 인프라 투자", "달러 강세 방산 수출 유리"],
+      risks: ["지정학 완화 시 방산주 조정", "금리 부담으로 장기 프로젝트 비용 증가"],
+      sectorTags: ["항공우주방산"],
+    });
+  }
+
+  // 로보틱스·AI: AI 인프라 사이클
+  {
+    let s = 60;
+    s += 12;                              // AI 인프라 수요 항상 플러스
+    if (rateLevel === "high") s -= 5;    // 고금리 밸류에이션 부담
+    if (growth !== "weak") s += 5;
+    now.push({
+      id: "robotics-ai", name: "로보틱스·AI", icon: "🤖",
+      score: Math.min(100, Math.round(s)),
+      outlook: s >= 68 ? "bullish" : "neutral", horizon: "단기~중기",
+      reason: "산업용 로봇 도입 가속 + AI 소프트웨어 수익화 본격화로 BOTZ·IRBO 수혜. 제조업 자동화 투자는 금리와 무관한 구조적 수요.",
+      catalysts: ["제조업 자동화 투자 사이클", "AI 추론·에지 컴퓨팅 수요", "인건비 상승 → 로봇 대체 가속"],
+      risks: ["고금리로 초기 도입 비용 부담", "AI 기대 밸류에이션 거품 우려"],
+      sectorTags: ["로보틱스AI"],
+    });
+  }
+
+  // 사이버보안: 방어적 + 구조적 성장
+  {
+    let s = 58;
+    s += 8;                               // 디지털 전환 지속
+    if (rateLevel === "high") s -= 3;
+    if (inflation === "elevated") s += 3; // 불확실성 = 보안 수요 증가
+    now.push({
+      id: "cybersecurity", name: "사이버보안", icon: "🔐",
+      score: Math.min(100, Math.round(s)),
+      outlook: "neutral", horizon: "단기~중기",
+      reason: "AI·클라우드 확산에 비례해 사이버 위협도 급증. 기업·정부의 보안 예산은 경기와 무관한 필수 지출로 CIBR·HACK 방어주 특성 부각.",
+      catalysts: ["AI 기반 사이버 공격 증가", "클라우드 보안 의무화", "정부·방산 사이버 예산 확대"],
+      risks: ["빅테크 보안 내재화로 전문 업체 위협", "M&A 프리미엄 소멸 리스크"],
+      sectorTags: ["사이버보안"],
+    });
+  }
+
   // 상위 3개만
   const nowTop = now.sort((a, b) => b.score - a.score).slice(0, 3);
 
@@ -1390,6 +1461,64 @@ function buildSectors(env: MacroEnvironment, m: MacroSnapshot): {
         sectorTags: ["배당"],
       });
     }
+  }
+
+  // 양자컴퓨팅: 장기 구조적 테마
+  {
+    let s = 55;
+    s += 10;                              // 구조적 성장 기본값
+    if (rateLevel === "high") s -= 8;    // 고금리 = 초기 단계 기업 할인율 부담
+    if (growth !== "weak") s += 5;
+    future.push({
+      id: "quantum", name: "양자컴퓨팅", icon: "⚛️",
+      score: Math.min(100, Math.round(s)),
+      outlook: rateLevel !== "high" ? "bullish" : "neutral", horizon: "장기 (1년+)",
+      reason: rateLevel === "high"
+        ? `고금리(${m.usRate}%) 환경에서 수익화 초기 단계인 양자컴퓨팅 기업들의 밸류에이션 부담 존재. 그러나 Google·IBM·MS의 실용 양자 칩 경쟁이 장기 모멘텀 유지.`
+        : "금리 부담 완화 시 미래 기술 밸류에이션 재평가. 구글·IBM 양자 우위 경쟁, 방산·암호화·신약 분야 적용 가속.",
+      catalysts: ["Google·IBM 양자 우위 발표", "방산·암호화 분야 조기 적용", "빅테크 양자 R&D 투자 확대"],
+      risks: ["상용화 일정 지연 리스크", rateLevel === "high" ? "고금리로 성장주 밸류에이션 압박" : "기술 표준화 불확실성"],
+      sectorTags: ["양자컴퓨팅"],
+    });
+  }
+
+  // 클린에너지: 금리 인하 + 고유가 역설
+  {
+    let s = 52;
+    if (rateLevel !== "high") s += 12;   // 저금리 = 자본 집약적 재생에너지 유리
+    if (oilPrice === "high") s += 8;     // 고유가 = 대체에너지 경쟁력 증가
+    if (growth === "strong") s += 5;
+    future.push({
+      id: "clean-energy", name: "클린에너지", icon: "🌱",
+      score: Math.min(100, Math.round(s)),
+      outlook: rateLevel === "high" ? "cautious" : "neutral", horizon: "중기~장기 (6개월+)",
+      reason: rateLevel === "high"
+        ? `고금리(${m.usRate}%)는 대규모 자본이 필요한 재생에너지 프로젝트에 직접 타격. 유가 $${m.wti.toFixed(0)} 고공행진은 장기 대체에너지 수요를 자극하지만, 금리 인하 전까지 투자 지연.`
+        : `유가 $${m.wti.toFixed(0)} 고공행진이 클린에너지 경쟁력을 부각. 금리 완화 + IRA 보조금 + 글로벌 탄소 중립 목표가 맞물려 구조적 성장.`,
+      catalysts: ["IRA·탄소세 정책 강화", `유가 $${m.wti.toFixed(0)} 고공행진 → 대체에너지 수요`, "전력망 현대화 투자"],
+      risks: [rateLevel === "high" ? "고금리 장기화 시 프로젝트 경제성 악화" : "보조금 정책 변동 리스크", "원자재 공급망 불안"],
+      sectorTags: ["클린에너지"],
+    });
+  }
+
+  // 리츠: 금리 인하 가시권
+  {
+    let s = 48;
+    if (rateLevel === "high") s -= 8;    // 고금리 = 리츠 부채 비용 증가
+    if (rateLevel === "moderate") s += 10;
+    if (rateLevel === "low") s += 18;
+    if (growth !== "weak") s += 5;
+    future.push({
+      id: "reit", name: "리츠·부동산", icon: "🏢",
+      score: Math.min(100, Math.round(s)),
+      outlook: rateLevel === "high" ? "cautious" : "neutral", horizon: "중기 (3~6개월)",
+      reason: rateLevel === "high"
+        ? `기준금리 ${m.usRate}% 고점에서 리츠의 부채 조달 비용 부담 극대화. 금리 인하 전환 시점이 리츠 투자 적기로, 현재는 선제 포지셔닝을 고려하는 국면.`
+        : "금리 인하 사이클에서 리츠 부채 비용 완화 + 자산 가치 재평가. 데이터센터·물류 리츠는 AI 수요와 맞물려 추가 모멘텀.",
+      catalysts: ["금리 인하 기대 → 자산 재평가", "데이터센터·물류 리츠 AI 수요", "임대료 인상 가격 결정력"],
+      risks: [rateLevel === "high" ? `금리 ${m.usRate}% 장기 유지 시 분배금 압박` : "경기 침체 시 공실률 상승", "상업용 부동산 구조적 약세"],
+      sectorTags: ["리츠"],
+    });
   }
 
   const futureTop = future.sort((a, b) => b.score - a.score).slice(0, 3);
