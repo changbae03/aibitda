@@ -48,11 +48,11 @@
   --secondary: 40 12% 91%;
   --secondary-foreground: 0 0% 18%;
 
-  /* muted: 살짝 따뜻한 톤, foreground는 훨씬 진하게 */
-  --muted: 40 10% 92%;
-  --muted-foreground: 0 0% 32%;
+  /* muted: 살짝 따뜻한 톤, foreground는 충분히 진하게 — /60 오파시티와 겹쳐도 읽힘 */
+  --muted: 40 10% 90%;
+  --muted-foreground: 0 0% 22%;
 
-  --accent: 40 10% 92%;
+  --accent: 40 8% 89%;
   --accent-foreground: 0 0% 8%;
 
   --destructive: 0 72% 51%;
@@ -64,9 +64,9 @@
   --warning: 38 92% 48%;
   --warning-foreground: 0 0% 100%;
 
-  /* 보더: 훨씬 선명하게 */
-  --border: 0 0% 82%;
-  --input: 0 0% 88%;
+  /* 보더: 선명하게 */
+  --border: 0 0% 78%;
+  --input: 0 0% 84%;
   --ring: 0 0% 8%;
 
   --radius: 0.5rem;

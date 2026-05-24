@@ -286,7 +286,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 )}
               >
-                <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground/60")} />
+                <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#FF8A7A]" : "text-muted-foreground")} />
                 <span className={cn(
                   "whitespace-nowrap transition-[opacity,max-width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
                   expanded ? "opacity-100 max-w-[160px] delay-75" : "opacity-0 max-w-0 overflow-hidden delay-0"
