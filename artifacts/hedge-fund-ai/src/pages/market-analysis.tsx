@@ -551,8 +551,16 @@ function TrendBadge({ value }: { value: number }) {
 }
 
 /* ── 메인 차트 ───────────────────────────────────────────────────────────── */
-function IndexChart({ result }: { result: IndexResult }) {
+function IndexChart({ result, predHistory = [] }: { result: IndexResult; predHistory?: PredictionRecord[] }) {
   const cc = useChartColors();
+
+  // 과거 예측 이력을 target_date → {price, correct} 맵으로 변환
+  const predMap = new Map<string, { price: number; correct: boolean | null }>();
+  for (const rec of predHistory) {
+    const price = rec.price_at_pred * (1 + rec.predicted_return / 100);
+    predMap.set(rec.target_date, { price: Math.round(price), correct: rec.correct });
+  }
+
   const chartData = [
     ...result.historical.map(h => ({
       date: h.date,
@@ -562,6 +570,8 @@ function IndexChart({ result }: { result: IndexResult }) {
       lower: undefined as number | undefined,
       upper: undefined as number | undefined,
       isPrediction: false,
+      pastPred: predMap.get(h.date)?.price,
+      pastPredCorrect: predMap.get(h.date)?.correct ?? null,
     })),
     ...result.predictions.map(p => ({
       date: p.date,
@@ -571,89 +581,141 @@ function IndexChart({ result }: { result: IndexResult }) {
       lower: p.lower,
       upper: p.upper,
       isPrediction: true,
+      pastPred: predMap.get(p.date)?.price,
+      pastPredCorrect: predMap.get(p.date)?.correct ?? null,
     })),
   ];
 
   const allValues = [
     ...result.historical.map(h => h.value),
     ...result.predictions.flatMap(p => [p.lower, p.upper]),
-  ];
-  const minVal = Math.min(...allValues) * 0.998;
-  const maxVal = Math.max(...allValues) * 1.002;
+    ...Array.from(predMap.values()).map(v => v.price),
+  ].filter(v => v != null) as number[];
+  const minVal = Math.min(...allValues) * 0.997;
+  const maxVal = Math.max(...allValues) * 1.003;
 
   const lastHistDate = result.historical[result.historical.length - 1]?.date;
   const predColor = result.trend === "up" ? RISE : FALL;
+
+  // 과거 예측 점 커스텀 렌더러
+  const PastPredDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload?.pastPred == null || cx == null || cy == null) return null;
+    const c = payload.pastPredCorrect === true ? "#22c55e"
+            : payload.pastPredCorrect === false ? "#ef4444"
+            : "#94a3b8";
+    return (
+      <g key={`ppd-${payload.date}`}>
+        <circle cx={cx} cy={cy} r={5} fill={c} stroke="white" strokeWidth={1.5} opacity={0.9} />
+      </g>
+    );
+  };
 
   const customTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     const d = payload[0]?.payload;
     const val = d?.historical ?? d?.predicted;
-    if (val == null) return null;
+    if (val == null && d?.pastPred == null) return null;
     return (
-      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg">
-        <p className="text-muted-foreground mb-1">{d.date}</p>
-        <p className="font-bold text-foreground">{val.toLocaleString()}</p>
+      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
+        <p className="text-muted-foreground">{d.date}</p>
+        {val != null && <p className="font-bold text-foreground">{val.toLocaleString()}</p>}
         {d.isPrediction && d.lower != null && (
-          <p className="text-muted-foreground">
-            범위: {d.lower.toLocaleString()} ~ {d.upper.toLocaleString()}
-          </p>
+          <p className="text-muted-foreground">범위: {d.lower.toLocaleString()} ~ {d.upper.toLocaleString()}</p>
         )}
-        {d.isPrediction && <p className="text-primary text-[10px] mt-0.5">AI 예측값 (오차 범위 포함)</p>}
+        {d.isPrediction && <p className="text-primary text-[10px]">AI 예측값 (오차 범위 포함)</p>}
+        {d.pastPred != null && (
+          <div className="border-t border-border/50 pt-1 mt-1">
+            <p className="text-[10px] text-muted-foreground">
+              과거 예측 {d.pastPred.toLocaleString()}
+              {d.pastPredCorrect === true && " ✅ 방향 적중"}
+              {d.pastPredCorrect === false && " ❌ 방향 불일치"}
+              {d.pastPredCorrect === null && " ⏳ 검증 대기"}
+            </p>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id={`confGrad-${result.symbol}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={predColor} stopOpacity={0.18} />
-            <stop offset="100%" stopColor={predColor} stopOpacity={0.03} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10, fill: cc.tickFill }}
-          tickLine={false} axisLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          domain={[minVal, maxVal]}
-          tickFormatter={v => v.toLocaleString()}
-          tick={{ fontSize: 10, fill: cc.tickFill }}
-          tickLine={false} axisLine={false} width={58}
-        />
-        <Tooltip content={customTooltip} />
-        {lastHistDate && (
-          <ReferenceLine
-            x={formatDate(lastHistDate, true)}
-            stroke={cc.refLineStroke}
-            strokeDasharray="4 4"
-            label={{ value: "오늘", fill: cc.tickFill, fontSize: 10, position: "insideTopLeft" }}
+    <div className="space-y-2">
+      <ResponsiveContainer width="100%" height={240}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`confGrad-${result.symbol}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={predColor} stopOpacity={0.18} />
+              <stop offset="100%" stopColor={predColor} stopOpacity={0.03} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 10, fill: cc.tickFill }}
+            tickLine={false} axisLine={false}
+            interval="preserveStartEnd"
           />
-        )}
-        <Area dataKey="upper" stroke="none" fill={`url(#confGrad-${result.symbol})`}
-          isAnimationActive={false} legendType="none" activeDot={false} />
-        <Area dataKey="lower" stroke="none" fill="transparent"
-          isAnimationActive={false} legendType="none" activeDot={false} />
-        <Line
-          dataKey="historical"
-          stroke={cc.histLineStroke}
-          strokeWidth={1.5} dot={false} name="실제 흐름"
-          connectNulls={false} isAnimationActive animationDuration={800}
-        />
-        <Line
-          dataKey="predicted"
-          stroke={predColor} strokeWidth={2} strokeDasharray="5 3"
-          dot={{ r: 3, fill: predColor, stroke: predColor }}
-          name="AI 예측" connectNulls={false}
-          isAnimationActive animationDuration={800} animationBegin={400}
-        />
-        <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 8, color: cc.legendColor }} />
-      </ComposedChart>
-    </ResponsiveContainer>
+          <YAxis
+            domain={[minVal, maxVal]}
+            tickFormatter={v => v.toLocaleString()}
+            tick={{ fontSize: 10, fill: cc.tickFill }}
+            tickLine={false} axisLine={false} width={58}
+          />
+          <Tooltip content={customTooltip} />
+          {lastHistDate && (
+            <ReferenceLine
+              x={formatDate(lastHistDate, true)}
+              stroke={cc.refLineStroke}
+              strokeDasharray="4 4"
+              label={{ value: "오늘", fill: cc.tickFill, fontSize: 10, position: "insideTopLeft" }}
+            />
+          )}
+          <Area dataKey="upper" stroke="none" fill={`url(#confGrad-${result.symbol})`}
+            isAnimationActive={false} legendType="none" activeDot={false} />
+          <Area dataKey="lower" stroke="none" fill="transparent"
+            isAnimationActive={false} legendType="none" activeDot={false} />
+          <Line
+            dataKey="historical"
+            stroke={cc.histLineStroke}
+            strokeWidth={1.5} dot={false} name="실제 흐름"
+            connectNulls={false} isAnimationActive animationDuration={800}
+          />
+          <Line
+            dataKey="predicted"
+            stroke={predColor} strokeWidth={2} strokeDasharray="5 3"
+            dot={{ r: 3, fill: predColor, stroke: predColor }}
+            name="AI 예측 (D+3)" connectNulls={false}
+            isAnimationActive animationDuration={800} animationBegin={400}
+          />
+          {/* 연속 예측 리본 — 과거 예측 점 (선 없이 점만 표시) */}
+          <Line
+            dataKey="pastPred"
+            stroke="transparent" strokeWidth={0}
+            dot={<PastPredDot />}
+            activeDot={false}
+            name="연속 예측"
+            connectNulls={false}
+            isAnimationActive={false}
+            legendType="none"
+          />
+          <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 8, color: cc.legendColor }} />
+        </ComposedChart>
+      </ResponsiveContainer>
+      {/* 예측 리본 범례 */}
+      {predHistory.length > 0 && (
+        <div className="flex items-center gap-3 px-1 text-[10px] text-muted-foreground/60">
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 예측 적중
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" /> 방향 불일치
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" /> 검증 대기
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -959,6 +1021,7 @@ export default function MarketAnalysis() {
   const [brief, setBrief]             = useState<MarketBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [liveAcc, setLiveAcc]         = useState<Record<string, LiveAccuracy> | null>(null);
+  const [predHistory, setPredHistory] = useState<Record<string, PredictionRecord[]>>({});
 
   // 라이브 적중률 폴링
   useEffect(() => {
@@ -971,6 +1034,17 @@ export default function MarketAnalysis() {
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // 예측 이력 fetch (지수 전환 시마다)
+  useEffect(() => {
+    const symMap: Record<string, string> = { kospi:"^KS11", kosdaq:"^KQ11", snp500:"^GSPC", nasdaq:"^IXIC" };
+    const sym = symMap[activeIdx];
+    if (!sym) return;
+    fetch(getApiUrl(`/api/market-analysis/prediction-history/${encodeURIComponent(sym)}?limit=20`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then((d: PredictionRecord[]) => setPredHistory(prev => ({ ...prev, [sym]: Array.isArray(d) ? d : [] })))
+      .catch(() => {});
+  }, [activeIdx]);
 
   // 관리자 권한 확인
   const [isAdmin, setIsAdmin]         = useState<boolean | null>(null);
@@ -1174,12 +1248,15 @@ export default function MarketAnalysis() {
                       {current.name} — 최근 흐름과 AI 예측
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      실선 = 실제 지수 흐름 · 점선 = AI가 예측한 3일 · 반투명 영역 = 오차 범위
+                      실선 = 실제 흐름 · 점선 = D+3 예측 · 점(●) = 연속 예측 기록
                     </p>
                   </div>
                   <TrendBadge value={current.predictedReturn3d} />
                 </div>
-                <IndexChart result={current} />
+                <IndexChart
+                  result={current}
+                  predHistory={predHistory[{ kospi:"^KS11", kosdaq:"^KQ11", snp500:"^GSPC", nasdaq:"^IXIC" }[activeIdx] ?? "^KS11"] ?? []}
+                />
               </div>
             )}
 
