@@ -8,13 +8,23 @@ const router = Router();
 const yahooFinance = new YahooFinance();
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY ?? "" });
 
-// ── lazy migration: diagnosis_note 컬럼 자동 추가 ─────────────────────────────
+// ── lazy migration ────────────────────────────────────────────────────────────
 (async () => {
   try {
     await pool.query(`
       ALTER TABLE model_calibration
         ADD COLUMN IF NOT EXISTS diagnosis_note TEXT,
         ADD COLUMN IF NOT EXISTS diagnosis_updated_at TIMESTAMPTZ
+    `);
+  } catch { /* already exists */ }
+})();
+
+(async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE sector_priors
+        ADD COLUMN IF NOT EXISTS is_auto_updated  BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS auto_update_notes TEXT
     `);
   } catch { /* already exists */ }
 })();
@@ -173,6 +183,158 @@ ${caseBlocks}
     console.error("[diagnosis-agent] 실패:", (e as Error)?.message ?? e);
     return null;
   }
+}
+
+// ── 섹터 선행 지식 자동 업데이트 (Gemini가 실적 기반으로 지침 재작성) ────────────────
+
+async function runSectorPriorUpdateAgent(
+  sector: string,
+  currentPrior: { waccRange: string; terminalG: string; peersNote: string; biasRisk: string; specificLevers: string[] } | null,
+  directionAccuracy: number | null,
+  avgDeviation: number | null,
+  sampleCount: number,
+  diagnosisNote: string | null,
+): Promise<{ prior: { waccRange: string; terminalG: string; peersNote: string; biasRisk: string; specificLevers: string[] }; notes: string } | null> {
+  try {
+    const p = currentPrior ?? { waccRange: "", terminalG: "", peersNote: "", biasRisk: "", specificLevers: [] };
+    const accStr = directionAccuracy !== null ? `${Math.round(directionAccuracy)}%` : "N/A";
+    const devStr = avgDeviation !== null
+      ? `${avgDeviation > 0 ? "+" : ""}${avgDeviation.toFixed(1)}%p (${avgDeviation > 0 ? "과대평가" : "과소평가"} 경향)`
+      : "N/A";
+
+    const prompt = `당신은 AI 주식 분석 시스템의 섹터 밸류에이션 보정 전문가입니다.
+
+[섹터: ${sector}] [분석 이력: ${sampleCount}건]
+
+## 현재 밸류에이션 보정 지침
+WACC 범위: ${p.waccRange || "(없음)"}
+Terminal g: ${p.terminalG || "(없음)"}
+피어 선택 기준: ${p.peersNote || "(없음)"}
+주요 편향 위험: ${p.biasRisk || "(없음)"}
+핵심 조정 레버:
+${(p.specificLevers ?? []).map(l => `• ${l}`).join("\n") || "(없음)"}
+
+## AI 실적 데이터 (${sampleCount}건)
+방향 예측 정확도: ${accStr}
+목표주가 편향: ${devStr}
+
+## 실패 사례 오류 진단
+${diagnosisNote || "(아직 없음)"}
+
+## 요청
+위 실적 데이터와 오류 진단을 바탕으로, 보정 지침을 개선하세요.
+아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요:
+
+{
+  "waccRange": "...",
+  "terminalG": "...",
+  "peersNote": "...",
+  "biasRisk": "...",
+  "specificLevers": ["...", "...", "..."],
+  "updateNotes": "주요 변경 사항 요약 (2~3문장, 한국어)"
+}
+
+규칙:
+1. 편향이 크면(|편향| > 10%p) WACC 범위 상단을 0.5~1.5%p 조정
+2. 방향 정확도 < 55%이면 biasRisk에 투자의견 보수화 지침 강화
+3. 진단 메모에서 반복 패턴 발견 시 specificLevers에 해당 교정 레버 추가
+4. 기존 지침이 여전히 유효하면 그대로 유지
+5. updateNotes: 무엇을 왜 바꿨는지 구체적으로 (아무것도 안 바꿨으면 "기존 지침이 유효하여 변경 없음")`;
+
+    const response = await genai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { temperature: 0.2, maxOutputTokens: 800 },
+    });
+
+    const raw = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.waccRange || !parsed.terminalG) return null;
+
+    return {
+      prior: {
+        waccRange:      parsed.waccRange      ?? p.waccRange,
+        terminalG:      parsed.terminalG      ?? p.terminalG,
+        peersNote:      parsed.peersNote      ?? p.peersNote,
+        biasRisk:       parsed.biasRisk       ?? p.biasRisk,
+        specificLevers: parsed.specificLevers ?? p.specificLevers,
+      },
+      notes: parsed.updateNotes ?? "",
+    };
+  } catch (e) {
+    console.error("[prior-update-agent] 실패:", (e as Error)?.message ?? e);
+    return null;
+  }
+}
+
+export async function autoUpdateAllSectorPriors(): Promise<{ updated: number; skipped: number }> {
+  const { rows: qualifying } = await pool.query(
+    `SELECT sector, direction_accuracy, avg_price_deviation, sample_count, diagnosis_note
+     FROM model_calibration
+     WHERE sample_count >= 5
+     ORDER BY sample_count DESC`
+  );
+
+  if (qualifying.length === 0) {
+    console.log("[prior-update] 조건 충족 섹터 없음 (sample_count >= 5)");
+    return { updated: 0, skipped: 0 };
+  }
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const row of qualifying) {
+    const sector = row.sector as string;
+    try {
+      const priorRow = await pool.query(`SELECT * FROM sector_priors WHERE sector = $1`, [sector]);
+      const dbPrior = priorRow.rows[0];
+      const currentPrior = dbPrior ? {
+        waccRange:      dbPrior.wacc_range      as string,
+        terminalG:      dbPrior.terminal_g      as string,
+        peersNote:      dbPrior.peers_note      as string,
+        biasRisk:       dbPrior.bias_risk       as string,
+        specificLevers: (dbPrior.specific_levers as string[]) ?? [],
+      } : SECTOR_PRIORS[sector] ?? null;
+
+      const result = await runSectorPriorUpdateAgent(
+        sector, currentPrior,
+        row.direction_accuracy as number | null,
+        row.avg_price_deviation as number | null,
+        row.sample_count as number,
+        row.diagnosis_note as string | null,
+      );
+
+      if (!result) { skipped++; continue; }
+
+      await pool.query(
+        `INSERT INTO sector_priors (sector, wacc_range, terminal_g, peers_note, bias_risk, specific_levers, is_auto_updated, auto_update_notes, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, TRUE, $7, NOW())
+         ON CONFLICT (sector) DO UPDATE SET
+           wacc_range        = EXCLUDED.wacc_range,
+           terminal_g        = EXCLUDED.terminal_g,
+           peers_note        = EXCLUDED.peers_note,
+           bias_risk         = EXCLUDED.bias_risk,
+           specific_levers   = EXCLUDED.specific_levers,
+           is_auto_updated   = TRUE,
+           auto_update_notes = EXCLUDED.auto_update_notes,
+           updated_at        = NOW()`,
+        [sector, result.prior.waccRange, result.prior.terminalG, result.prior.peersNote,
+         result.prior.biasRisk, JSON.stringify(result.prior.specificLevers ?? []), result.notes]
+      );
+
+      console.log(`[prior-update] ${sector} 자동 업데이트 완료: ${result.notes.slice(0, 60)}`);
+      updated++;
+    } catch (e) {
+      console.error(`[prior-update] ${sector} 실패:`, (e as Error)?.message ?? e);
+      skipped++;
+    }
+  }
+
+  console.log(`[prior-update] 완료 — ${updated}개 업데이트, ${skipped}개 스킵`);
+  return { updated, skipped };
 }
 
 // ── 자동 재보정 핵심 로직 (스케줄러 + 어드민 라우트 공용) ─────────────────────────

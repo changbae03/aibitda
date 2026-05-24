@@ -3,7 +3,7 @@ import {
   Loader2, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Activity, RefreshCw,
   Brain, PencilLine, Search, Eye, BarChart3, Cpu, CheckCircle,
-  StickyNote, Target, Plus, RotateCcw,
+  StickyNote, Target, Plus, RotateCcw, Wand2, Sparkles,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 
@@ -444,6 +444,8 @@ interface SectorPriorRow {
     specificLevers: string[];
     updatedAt: string | null;
     isCustomized: boolean;
+    isAutoUpdated: boolean;
+    autoUpdateNotes: string | null;
   } | null;
   stats: {
     directionAccuracy: number | null;
@@ -524,7 +526,12 @@ function SectorPriorItem({ item, onRefresh }: { item: SectorPriorRow; onRefresh:
           <Brain className="w-4 h-4 text-violet-500 shrink-0" />
           <span className="font-semibold text-sm text-foreground">{label}</span>
           <span className="text-[10px] font-mono text-muted-foreground/60">{item.sector}</span>
-          {item.prior?.isCustomized && (
+          {item.prior?.isAutoUpdated && (
+            <span className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/20 uppercase tracking-wide">
+              <Sparkles className="w-2.5 h-2.5" />AI 최적화
+            </span>
+          )}
+          {item.prior?.isCustomized && !item.prior?.isAutoUpdated && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase tracking-wide">수정됨</span>
           )}
         </div>
@@ -564,6 +571,23 @@ function SectorPriorItem({ item, onRefresh }: { item: SectorPriorRow; onRefresh:
               {s.benchmarks?.medianPer != null && (
                 <div><span className="text-muted-foreground mr-1">섹터 중간 PER</span><span className="font-bold">{Number(s.benchmarks.medianPer).toFixed(1)}x</span></div>
               )}
+            </div>
+          )}
+
+          {/* AI 자동 최적화 노트 */}
+          {item.prior?.isAutoUpdated && item.prior?.autoUpdateNotes && (
+            <div className="px-4 py-3 bg-violet-500/[0.05] border-b border-violet-500/10 flex gap-2.5 text-[12px]">
+              <Sparkles className="w-3.5 h-3.5 text-violet-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-violet-500 dark:text-violet-400 mb-0.5 text-[10px] uppercase tracking-wide">AI 자동 최적화 변경 사항</p>
+                <p className="text-muted-foreground leading-relaxed">{item.prior.autoUpdateNotes}</p>
+                {item.prior.updatedAt && (
+                  <p className="text-muted-foreground/50 text-[10px] mt-1">
+                    {new Date(item.prior.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} 자동 업데이트
+                    <span className="ml-2 text-muted-foreground/40">수동 저장 시 AI 최적화 플래그가 해제됩니다</span>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -652,6 +676,8 @@ function SectorPriorsTab() {
   const [sectors, setSectors] = useState<SectorPriorRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [market, setMarket] = useState<"KR" | "US">("KR");
+  const [autoUpdating, setAutoUpdating] = useState(false);
+  const [autoUpdateResult, setAutoUpdateResult] = useState<{ updated: number; skipped: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -663,7 +689,23 @@ function SectorPriorsTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  const runAutoUpdate = async () => {
+    setAutoUpdating(true);
+    setAutoUpdateResult(null);
+    try {
+      const r = await fetch(getApiUrl("/api/admin/sector-priors/auto-update"), {
+        method: "POST", credentials: "include",
+      });
+      const json = await r.json();
+      if (r.ok) {
+        setAutoUpdateResult({ updated: json.updated ?? 0, skipped: json.skipped ?? 0 });
+        await load();
+      }
+    } finally { setAutoUpdating(false); }
+  };
+
   const filtered = sectors.filter(s => s.sector.startsWith(market + "_"));
+  const autoUpdatedCount = filtered.filter(s => s.prior?.isAutoUpdated).length;
 
   return (
     <div className="space-y-4">
@@ -674,6 +716,17 @@ function SectorPriorsTab() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={runAutoUpdate}
+            disabled={autoUpdating || loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+            title="실적 데이터 5건 이상인 섹터만 자동 최적화됩니다"
+          >
+            {autoUpdating
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 최적화 중…</>
+              : <><Wand2 className="w-3.5 h-3.5" /> AI 자동 최적화</>
+            }
+          </button>
           <button onClick={load} disabled={loading} className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
             <RefreshCw className={cn("w-3.5 h-3.5 text-muted-foreground", loading && "animate-spin")} />
           </button>
@@ -689,6 +742,22 @@ function SectorPriorsTab() {
           </div>
         </div>
       </div>
+
+      {autoUpdateResult && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-[12px]">
+          <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+          <span className="text-violet-600 dark:text-violet-400 font-semibold">자동 최적화 완료</span>
+          <span className="text-muted-foreground">{autoUpdateResult.updated}개 섹터 업데이트, {autoUpdateResult.skipped}개 스킵</span>
+          <button onClick={() => setAutoUpdateResult(null)} className="ml-auto text-muted-foreground/50 hover:text-muted-foreground">×</button>
+        </div>
+      )}
+
+      {autoUpdatedCount > 0 && (
+        <div className="flex items-center gap-1.5 text-[11px] text-violet-500 dark:text-violet-400">
+          <Sparkles className="w-3 h-3" />
+          <span>{autoUpdatedCount}개 섹터가 AI 자동 최적화 상태입니다. 수동 저장 시 일반 수정으로 전환됩니다.</span>
+        </div>
+      )}
 
       {loading && sectors.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -707,11 +776,12 @@ function SectorPriorsTab() {
       )}
 
       <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] px-4 py-3 text-[12px] text-muted-foreground space-y-1">
-        <p className="font-semibold text-violet-500 dark:text-violet-400 flex items-center gap-1.5"><Brain className="w-3.5 h-3.5" /> 적용 우선순위</p>
+        <p className="font-semibold text-violet-500 dark:text-violet-400 flex items-center gap-1.5"><Brain className="w-3.5 h-3.5" /> 적용 우선순위 &amp; 자동화</p>
         <p>1. 이 탭에서 수정 저장 → DB 값 우선 적용</p>
         <p>2. DB에 없는 섹터 → 코드 기본값 자동 사용</p>
         <p>3. 실적 누적 3건 이상이면 목표주가 편향 보정이 추가로 주입됨</p>
         <p>4. 기본값으로 복원 버튼을 누르면 DB 값이 삭제되어 코드 기본값으로 돌아감</p>
+        <p className="flex items-center gap-1 pt-0.5 border-t border-violet-500/10 mt-1"><Sparkles className="w-3 h-3 text-violet-400" /><span className="font-semibold text-violet-500 dark:text-violet-400">AI 자동 최적화:</span> 분석 이력 5건 이상 섹터에 대해 Gemini가 WACC·Terminal g·레버를 실적 기반으로 재조정합니다. 매주 자동 실행 또는 버튼으로 수동 트리거 가능.</p>
       </div>
     </div>
   );

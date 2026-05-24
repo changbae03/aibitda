@@ -1,7 +1,7 @@
 import app from "./app";
 import { runMigrations, pool } from "@workspace/db";
 import { triggerModelReview } from "./routes/model-insights.js";
-import { autoRecalibrate } from "./routes/performance.js";
+import { autoRecalibrate, autoUpdateAllSectorPriors } from "./routes/performance.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
@@ -191,6 +191,22 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] 일일 섹터 재보정 실패:", e?.message ?? e)
     );
   }, ONE_DAY_MS);
+
+  // ── 주간 섹터 선행 지식 자동 최적화 (Gemini가 실적 기반으로 WACC·terminalG·레버 갱신) ──
+  // autoRecalibrate 후 1시간 뒤 첫 실행(통계가 최신 상태여야 함), 이후 7일마다 반복
+  setTimeout(() => {
+    console.log("[SCHEDULER] 섹터 선행 지식 자동 최적화 시작");
+    autoUpdateAllSectorPriors().catch((e) =>
+      console.error("[SCHEDULER] 섹터 선행 지식 자동 최적화 실패:", e?.message ?? e)
+    );
+  }, 60 * 60 * 1000); // 서버 시작 1시간 후 첫 실행
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 주간 섹터 선행 지식 자동 최적화 시작");
+    autoUpdateAllSectorPriors().catch((e) =>
+      console.error("[SCHEDULER] 주간 섹터 선행 지식 자동 최적화 실패:", e?.message ?? e)
+    );
+  }, 7 * ONE_DAY_MS);
 
   // ── 동적 시장 학습 시스템 ────────────────────────────────────────────────────
   // Layer 1: 매일 KOSPI/코스닥 트렌드 읽어 시장 레짐 컨텍스트 생성

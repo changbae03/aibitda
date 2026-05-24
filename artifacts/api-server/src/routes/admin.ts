@@ -1445,13 +1445,15 @@ router.get("/sector-priors", async (req, res) => {
       return {
         sector,
         prior: dbPrior ? {
-          waccRange:      dbPrior.wacc_range,
-          terminalG:      dbPrior.terminal_g,
-          peersNote:      dbPrior.peers_note,
-          biasRisk:       dbPrior.bias_risk,
-          specificLevers: dbPrior.specific_levers ?? [],
-          updatedAt:      dbPrior.updated_at,
-          isCustomized:   true,
+          waccRange:        dbPrior.wacc_range,
+          terminalG:        dbPrior.terminal_g,
+          peersNote:        dbPrior.peers_note,
+          biasRisk:         dbPrior.bias_risk,
+          specificLevers:   dbPrior.specific_levers ?? [],
+          updatedAt:        dbPrior.updated_at,
+          isCustomized:     true,
+          isAutoUpdated:    dbPrior.is_auto_updated ?? false,
+          autoUpdateNotes:  dbPrior.auto_update_notes ?? null,
         } : hcPrior ? {
           waccRange:      hcPrior.waccRange,
           terminalG:      hcPrior.terminalG,
@@ -1488,18 +1490,58 @@ router.put("/sector-priors/:sector", async (req, res) => {
     const { waccRange, terminalG, peersNote, biasRisk, specificLevers } = req.body;
 
     await pool.query(
-      `INSERT INTO sector_priors (sector, wacc_range, terminal_g, peers_note, bias_risk, specific_levers, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
+      `INSERT INTO sector_priors (sector, wacc_range, terminal_g, peers_note, bias_risk, specific_levers, is_auto_updated, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, FALSE, NOW())
        ON CONFLICT (sector) DO UPDATE SET
          wacc_range      = EXCLUDED.wacc_range,
          terminal_g      = EXCLUDED.terminal_g,
          peers_note      = EXCLUDED.peers_note,
          bias_risk       = EXCLUDED.bias_risk,
          specific_levers = EXCLUDED.specific_levers,
+         is_auto_updated = FALSE,
          updated_at      = NOW()`,
       [sector, waccRange ?? "", terminalG ?? "", peersNote ?? "", biasRisk ?? "", JSON.stringify(specificLevers ?? [])]
     );
     res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// POST /api/admin/sector-priors/auto-update — 전체 섹터 자동 최적화 트리거 (sample_count >= 5인 섹터만)
+router.post("/sector-priors/auto-update", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const { autoUpdateAllSectorPriors } = await import("./performance.js");
+    const result = await autoUpdateAllSectorPriors();
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// POST /api/admin/sector-priors/:sector/auto-update — 단일 섹터 자동 최적화
+router.post("/sector-priors/:sector/auto-update", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const { sector } = req.params;
+    const { autoUpdateAllSectorPriors } = await import("./performance.js");
+    // 해당 섹터의 model_calibration을 1건만 확인 후 함수 재사용
+    const statsRes = await pool.query(
+      `SELECT sample_count FROM model_calibration WHERE sector = $1`, [sector]
+    );
+    const sampleCount = statsRes.rows[0]?.sample_count ?? 0;
+    if (sampleCount < 5) {
+      res.json({ ok: false, reason: `분석 이력 부족 (현재 ${sampleCount}건, 최소 5건 필요)` });
+      return;
+    }
+    // 전체 함수를 호출하되 결과에서 해당 섹터 확인
+    const result = await autoUpdateAllSectorPriors();
+    res.json({ ok: true, sector, ...result });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "failed" });
   }
