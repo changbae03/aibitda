@@ -155,12 +155,21 @@ function ScoreBar({ score }: { score: number }) {
 
 function LeverageBadge({ lev }: { lev: number }) {
   if (lev === 1) return null;
+  if (lev < 0) {
+    return (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/30 text-blue-500">
+        인버스
+      </span>
+    );
+  }
   return (
     <span className={cn(
       "text-[10px] font-bold px-1.5 py-0.5 rounded border",
-      lev === 2 ? "bg-orange-500/10 border-orange-500/30 text-orange-500" : "bg-blue-500/10 border-blue-500/30 text-blue-500",
+      lev >= 3
+        ? "bg-red-500/10 border-red-500/30 text-red-500"
+        : "bg-orange-500/10 border-orange-500/30 text-orange-500",
     )}>
-      {lev === 2 ? "2×" : "인버스"}
+      {lev}×
     </span>
   );
 }
