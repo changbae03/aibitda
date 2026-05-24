@@ -2,6 +2,8 @@ import { Router } from "express";
 import { pool } from "@workspace/db";
 import { getUserId } from "../lib/credits.js";
 import { clearBatchDateForToday, runDailyAutoBatch } from "../lib/auto-batch-runner.js";
+import { loadKRXList } from "../lib/krx-cache.js";
+import { US_MASTER_LIST } from "../lib/us-full-harvester.js";
 
 const router = Router();
 
@@ -1323,6 +1325,93 @@ router.get("/analysis/:id/text", async (req, res) => {
   } catch (err: any) {
     console.error("[admin/analysis/:id/text] error:", err?.message);
     res.status(500).send("Server error");
+  }
+});
+
+// GET /api/admin/ticker-coverage — 종목 커버리지 (KR / US)
+router.get("/ticker-coverage", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "관리자만 접근 가능합니다" });
+    return;
+  }
+
+  const market  = String(req.query.market  ?? "KR").toUpperCase() as "KR" | "US";
+  const search  = String(req.query.search  ?? "").trim().toLowerCase();
+  const status  = String(req.query.status  ?? "all") as "all" | "covered" | "uncovered";
+  const page    = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10));
+  const limit   = Math.min(100, Math.max(10, parseInt(String(req.query.limit ?? "50"), 10)));
+
+  try {
+    // DB에서 AI 자동 분석이 있는 종목별 통계 조회
+    const covRows = await pool.query(`
+      SELECT ticker,
+             COUNT(*)                                        AS report_count,
+             MAX(created_at AT TIME ZONE 'Asia/Seoul')::date AS last_date
+      FROM analyses
+      WHERE user_id IS NULL
+      GROUP BY ticker
+    `);
+
+    const covMap = new Map<string, { reportCount: number; lastDate: string }>();
+    for (const r of covRows.rows) {
+      covMap.set(r.ticker, {
+        reportCount: parseInt(r.report_count, 10),
+        lastDate: String(r.last_date).slice(0, 10),
+      });
+    }
+
+    // 마스터 목록 로드
+    type MasterEntry = { ticker: string; name: string; exchange: string };
+    let masterList: MasterEntry[] = [];
+
+    if (market === "KR") {
+      const krxList = await loadKRXList();
+      masterList = krxList.map(e => ({ ticker: e.code, name: e.name, exchange: e.exchange }));
+    } else {
+      masterList = US_MASTER_LIST.map(e => ({ ticker: e.ticker, name: e.name, exchange: e.exchange }));
+    }
+
+    // 검색 + 상태 필터
+    let filtered = masterList.filter(e => {
+      if (search) {
+        const t = e.ticker.toLowerCase();
+        const n = e.name.toLowerCase();
+        if (!t.includes(search) && !n.includes(search)) return false;
+      }
+      if (status === "covered")   return covMap.has(e.ticker);
+      if (status === "uncovered") return !covMap.has(e.ticker);
+      return true;
+    });
+
+    const total     = filtered.length;
+    const totalFull = masterList.length;
+    const coveredFull = masterList.filter(e => covMap.has(e.ticker)).length;
+    const pages     = Math.max(1, Math.ceil(total / limit));
+    const offset    = (page - 1) * limit;
+    const slice     = filtered.slice(offset, offset + limit);
+
+    const tickers = slice.map(e => ({
+      ticker:      e.ticker,
+      name:        e.name,
+      exchange:    e.exchange,
+      isCovered:   covMap.has(e.ticker),
+      reportCount: covMap.get(e.ticker)?.reportCount ?? 0,
+      lastDate:    covMap.get(e.ticker)?.lastDate ?? null,
+    }));
+
+    res.json({
+      tickers,
+      total,
+      totalFull,
+      covered: coveredFull,
+      uncovered: totalFull - coveredFull,
+      page,
+      pages,
+      limit,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
   }
 });
 

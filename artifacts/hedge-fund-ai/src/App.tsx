@@ -51,7 +51,6 @@ const AdminPromoCodes      = lazy(() => import("@/pages/admin-promo-codes"));
 const AdminSupportPage     = lazy(() => import("@/pages/admin-support"));
 const AdminNoticesPage     = lazy(() => import("@/pages/admin-notices"));
 const AdminQuality         = lazy(() => import("@/pages/admin-quality"));
-const AdminBatchReports    = lazy(() => import("@/pages/admin-batch-reports"));
 const AdminPortfolios      = lazy(() => import("@/pages/admin-portfolios"));
 
 const ConsentModal = lazy(() => import("@/components/consent-modal"));
@@ -284,7 +283,6 @@ function Router() {
                 <Route path="/admin/support" component={AdminSupportPage} />
                 <Route path="/admin/notices" component={AdminNoticesPage} />
                 <Route path="/admin/quality" component={AdminQuality} />
-                <Route path="/admin/batch-reports" component={AdminBatchReports} />
                 <Route path="/admin/portfolios" component={AdminPortfolios} />
                 <Route path="/market-analysis" component={MarketAnalysis} />
                 <Route path="/portfolio" component={Portfolio} />

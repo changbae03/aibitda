@@ -120,7 +120,6 @@ const ADMIN_GROUPS = [
     items: [
       { href: "/admin/dashboard",     label: "대시보드",       Icon: LayoutDashboard },
       { href: "/admin/live",          label: "실시간 분석",    Icon: Activity },
-      { href: "/admin/batch-reports", label: "AI 자동 보고서", Icon: Bot },
     ],
   },
   {

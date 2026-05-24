@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Loader2, AlertTriangle, Clock, BarChart2, Plus, Edit3, Trash2,
-  CheckCircle2, X, Save, ChevronDown, ChevronUp, Activity, FlaskConical,
+  CheckCircle2, X, Save, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  Activity, FlaskConical,
   ShieldCheck, RefreshCw, ExternalLink, Users, XCircle,
   Brain, TrendingUp, TrendingDown, Minus, History,
   PencilLine, Search, Eye, BarChart3, Cpu, CheckCircle, Bot,
-  StickyNote, SlidersHorizontal,
+  StickyNote, SlidersHorizontal, Target,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import {
@@ -1162,31 +1163,6 @@ function CalibrationTab() {
 
 // ─── 종목 보정 메모 탭 ───────────────────────────────────────────────────────
 
-const AI_REVIEW_TAG = "[AI검수]";
-
-function splitMemo(raw: string) {
-  if (!raw.trim()) return { aiBlocks: [] as string[], adminBlocks: [] as string[] };
-  const chunks = raw.split(/\n\n---\n\n/);
-  const aiBlocks: string[] = [], adminBlocks: string[] = [];
-  for (const chunk of chunks) {
-    const t = chunk.trim();
-    if (!t) continue;
-    if (t.startsWith(AI_REVIEW_TAG)) aiBlocks.push(t); else adminBlocks.push(t);
-  }
-  return { aiBlocks, adminBlocks };
-}
-
-function AiReviewBlock({ text }: { text: string }) {
-  const lines = text.split("\n");
-  const header = lines[0] ?? "", body = lines.slice(1).join("\n").trim();
-  return (
-    <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.04] p-2.5 text-[12px]">
-      <div className="flex items-center gap-1.5 mb-1.5"><Bot className="w-3 h-3 text-sky-400 shrink-0" /><span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">{header}</span></div>
-      <p className="text-foreground/70 leading-relaxed whitespace-pre-wrap">{body}</p>
-    </div>
-  );
-}
-
 const INJECTION_BLOCK_STYLES: Record<string, { color: string; icon: React.ElementType; border: string; bg: string }> = {
   memo:              { color: "text-amber-500 dark:text-amber-400",   icon: PencilLine, border: "border-amber-500/20",  bg: "bg-amber-500/[0.04]"  },
   autoLearning:      { color: "text-blue-500 dark:text-blue-400",     icon: BarChart3,  border: "border-blue-500/20",   bg: "bg-blue-500/[0.04]"   },
@@ -1239,8 +1215,6 @@ function TickerNoteItem({ note, onSaved }: { note: any; onSaved: (ticker: string
   const [editMemo, setEditMemo] = useState(note.memo ?? "");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
-  const { aiBlocks, adminBlocks } = splitMemo(editMemo);
-  const adminOnly = adminBlocks.join("\n\n---\n\n");
   const isDirty = editMemo !== note.memo;
   const isKR = /^\d{6}$/.test(note.ticker);
   const displayName = isKR && note.companyName ? note.companyName : note.ticker;
@@ -1284,27 +1258,17 @@ function TickerNoteItem({ note, onSaved }: { note: any; onSaved: (ticker: string
 
       {isOpen && (
         <div className="px-4 pb-4 space-y-3 border-t border-border">
-          {aiBlocks.length > 0 && (
-            <div className="pt-3 space-y-2">
-              <div className="flex items-center gap-1.5"><Bot className="w-3.5 h-3.5 text-sky-400" /><label className="text-xs font-semibold text-sky-500 dark:text-sky-400 uppercase tracking-wide">AI 자체 검수 결과</label><span className="text-[10px] text-muted-foreground/50">(자동 생성, 읽기 전용)</span></div>
-              {aiBlocks.map((block, i) => <AiReviewBlock key={i} text={block} />)}
-            </div>
-          )}
-          <div className={aiBlocks.length > 0 ? "" : "pt-3"}>
+          <div className="pt-3">
             <div className="flex items-center gap-1.5 mb-1.5"><PencilLine className="w-3.5 h-3.5 text-amber-400" /><label className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">관리자 보정 메모 (AI 분석에 반영됨)</label></div>
             <textarea
-              value={adminOnly}
-              onChange={e => {
-                const newAdminPart = e.target.value;
-                const combined = [...aiBlocks, newAdminPart].map(s => s.trim()).filter(Boolean).join("\n\n---\n\n");
-                setEditMemo(combined);
-              }}
+              value={editMemo}
+              onChange={e => setEditMemo(e.target.value)}
               rows={4}
               placeholder={`${displayName}에 대한 보정 정보\n예) 발행주식수: 5,969,782,550주`}
               className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/40"
             />
             <div className="flex items-center justify-between mt-2">
-              <span className="text-[11px] text-muted-foreground">{adminOnly.length}/1000자</span>
+              <span className="text-[11px] text-muted-foreground">{editMemo.length}/1000자</span>
               <button
                 onClick={save} disabled={saving || !isDirty}
                 className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", isDirty ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-muted text-muted-foreground cursor-default")}
@@ -1424,9 +1388,185 @@ function TickerNotesTab() {
   );
 }
 
+// ─── 종목 커버리지 탭 ────────────────────────────────────────────────────────
+
+interface CoverageItem {
+  ticker: string;
+  name: string;
+  exchange: string;
+  isCovered: boolean;
+  reportCount: number;
+  lastDate: string | null;
+}
+
+interface CoverageData {
+  tickers: CoverageItem[];
+  total: number;
+  totalFull: number;
+  covered: number;
+  uncovered: number;
+  page: number;
+  pages: number;
+  limit: number;
+}
+
+function CoverageTab() {
+  const [market, setMarket]   = useState<"KR" | "US">("KR");
+  const [search, setSearch]   = useState("");
+  const [status, setStatus]   = useState<"all" | "covered" | "uncovered">("all");
+  const [page, setPage]       = useState(1);
+  const [data, setData]       = useState<CoverageData | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ market, search, status, page: String(page), limit: "50" });
+      const r = await fetch(getApiUrl(`/api/admin/ticker-coverage?${params}`), { credentials: "include" });
+      if (r.ok) setData(await r.json());
+    } finally { setLoading(false); }
+  }, [market, search, status, page]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const coverPct = data ? Math.round((data.covered / Math.max(1, data.totalFull)) * 100) : 0;
+
+  return (
+    <div className="space-y-5">
+      {/* 헤더 + 마켓 토글 */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" /> 종목 커버리지
+          </h2>
+          <p className="text-[12px] text-muted-foreground mt-0.5">AI 자동 분석 대상 종목 및 보고서 현황</p>
+        </div>
+        <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5">
+          {(["KR", "US"] as const).map(m => (
+            <button key={m} onClick={() => setMarket(m)}
+              className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-colors",
+                market === m ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}>
+              {m === "KR" ? "🇰🇷 국내" : "🇺🇸 해외"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 커버리지 요약 */}
+      {data && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <p className="text-[10px] text-muted-foreground mb-0.5">전체 대상</p>
+              <p className="text-xl font-black tabular-nums">{data.totalFull.toLocaleString()}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-muted-foreground mb-0.5">보고서 있음</p>
+              <p className="text-xl font-black tabular-nums text-green-400">{data.covered.toLocaleString()}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-muted-foreground mb-0.5">미분석</p>
+              <p className="text-xl font-black tabular-nums text-muted-foreground/60">{data.uncovered.toLocaleString()}</p>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+              <span>커버리지</span>
+              <span className="font-semibold text-foreground">{coverPct}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${coverPct}%`, background: "linear-gradient(90deg, #FF8A7A, #ff6b58)" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 필터 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="종목명 / 코드 검색"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5">
+          {([["all", "전체"], ["covered", "보고서 있음"], ["uncovered", "미분석"]] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setStatus(v)}
+              className={cn("px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors",
+                status === v ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+      </div>
+
+      {/* 목록 */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {/* 헤더 */}
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-muted/40 border-b border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span>종목</span>
+          <span className="text-right">거래소</span>
+          <span className="text-right w-16">보고서</span>
+          <span className="text-right w-20">최근 분석</span>
+        </div>
+        {!data || data.tickers.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            {loading ? "로딩 중…" : "조건에 맞는 종목이 없습니다"}
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {data.tickers.map(t => (
+              <div key={t.ticker} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2.5 items-center hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.isCovered ? "bg-green-400" : "bg-muted-foreground/30")} />
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{t.ticker}</span>
+                  <span className="text-sm text-foreground truncate">{t.name}</span>
+                </div>
+                <span className="text-[11px] text-muted-foreground/70 text-right">{t.exchange}</span>
+                <span className={cn("text-xs font-semibold tabular-nums text-right w-16",
+                  t.reportCount > 0 ? "text-green-400" : "text-muted-foreground/30")}>
+                  {t.reportCount > 0 ? `${t.reportCount}건` : "—"}
+                </span>
+                <span className="text-[11px] text-muted-foreground text-right w-20">
+                  {t.lastDate ? t.lastDate.slice(5) : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 페이지네이션 */}
+      {data && data.pages > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{data.total.toLocaleString()}개 중 {(page - 1) * data.limit + 1}–{Math.min(page * data.limit, data.total)}개</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="px-2 font-mono">{page} / {data.pages}</span>
+            <button onClick={() => setPage(p => Math.min(data.pages, p + 1))} disabled={page >= data.pages}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
-type Tab = "monitoring" | "qa" | "prompts" | "peers" | "calibration" | "tickerNotes";
+type Tab = "monitoring" | "qa" | "prompts" | "peers" | "calibration" | "tickerNotes" | "coverage";
 
 export default function AdminQuality() {
   const [tab, setTab] = useState<Tab>("monitoring");
@@ -1437,6 +1577,7 @@ export default function AdminQuality() {
     { key: "peers",       label: "피어 이상",      icon: Users },
     { key: "calibration", label: "섹터 보정",      icon: Brain },
     { key: "tickerNotes", label: "종목 메모",      icon: StickyNote },
+    { key: "coverage",    label: "종목 커버리지",  icon: Target },
     { key: "prompts",     label: "프롬프트 버전",  icon: FlaskConical },
   ];
 
@@ -1479,6 +1620,7 @@ export default function AdminQuality() {
         {tab === "peers"       && <PeerIssuesTab />}
         {tab === "calibration" && <CalibrationTab />}
         {tab === "tickerNotes" && <TickerNotesTab />}
+        {tab === "coverage"    && <CoverageTab />}
         {tab === "prompts"     && <PromptVersionTab />}
       </div>
     </div>
