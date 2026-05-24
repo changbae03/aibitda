@@ -215,7 +215,7 @@ export default function NewsPage() {
             <div>
               <h1 className="text-lg font-bold text-foreground leading-none">경제 뉴스피드</h1>
               <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                한국경제 · 매일경제 · 연합뉴스 · 이데일리 · 조선비즈 등
+                한국경제 · 매일경제 · 연합뉴스 · 뉴시스 · 서울경제 등
               </p>
             </div>
           </div>

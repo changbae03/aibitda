@@ -46,13 +46,10 @@ const RSS_SOURCES: RssSource[] = [
   // 연합뉴스
   { url: "https://www.yna.co.kr/rss/economy.xml",       source: "연합뉴스",       category: "경제" },
   { url: "https://www.yna.co.kr/rss/finance.xml",       source: "연합뉴스(금융)", category: "증권" },
-  // 이데일리
-  { url: "https://rss.edaily.co.kr/edaily/sec/EDeconomy.xml",      source: "이데일리",       category: "경제" },
-  { url: "https://rss.edaily.co.kr/edaily/sec/EDstockMarket.xml",  source: "이데일리(증권)", category: "증권" },
-  // 조선비즈
-  { url: "https://biz.chosun.com/site/data/rss/rss.xml",           source: "조선비즈",       category: "경제" },
-  // 서울경제
-  { url: "https://www.sedaily.com/RSSList/Economy",                 source: "서울경제",       category: "경제" },
+  // 뉴시스
+  { url: "https://www.newsis.com/RSS/economy.xml",      source: "뉴시스",         category: "경제" },
+  // 서울경제 (URL 수정)
+  { url: "https://www.sedaily.com/RSS/Economy",         source: "서울경제",       category: "경제" },
 ];
 
 /* ── 관련 태그 추출 ────────────────────────────────────────────────────── */
@@ -204,13 +201,27 @@ router.get("/macro/news", async (req, res) => {
 
   try {
     const results = await Promise.all(RSS_SOURCES.map(s => fetchRss(s)));
-    const all = results.flat();
 
-    // 중복 제거 (URL 또는 제목 앞 20자 기준)
+    // 소스별 최대 20건 제한 (특정 언론사 독점 방지)
+    const SOURCE_MAX = 20;
+    const sourceCount = new Map<string, number>();
+    const balanced: MacroNewsItem[] = [];
+    for (const items of results) {
+      // 각 소스 결과를 최신순 정렬 후 상위 SOURCE_MAX건만 취함
+      const sorted = [...items].sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+      for (const item of sorted) {
+        const cnt = sourceCount.get(item.source) ?? 0;
+        if (cnt >= SOURCE_MAX) continue;
+        sourceCount.set(item.source, cnt + 1);
+        balanced.push(item);
+      }
+    }
+
+    // 중복 제거 (URL 또는 제목 앞 24자 기준)
     const seenUrls = new Set<string>();
     const seenTitles = new Set<string>();
     const deduped: MacroNewsItem[] = [];
-    for (const item of all) {
+    for (const item of balanced) {
       const tk = item.title.slice(0, 24);
       if (item.url && seenUrls.has(item.url)) continue;
       if (seenTitles.has(tk)) continue;
@@ -221,7 +232,7 @@ router.get("/macro/news", async (req, res) => {
 
     // 최신순 정렬
     deduped.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-    const items = deduped.slice(0, 120);
+    const items = deduped.slice(0, 150);
 
     macroNewsCache.set("global", { ts: Date.now(), items });
     res.json({ items, cachedAt: new Date().toISOString() });
