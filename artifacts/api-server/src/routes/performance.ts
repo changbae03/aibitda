@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "@workspace/db";
 import YahooFinance from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
+import { getUserId } from "../lib/credits.js";
 
 const router = Router();
 const yahooFinance = new YahooFinance();
@@ -332,11 +333,12 @@ export async function autoRecalibrate(): Promise<{
 
 router.post("/performance/recalculate", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const adminCheck = await pool.query(
       `SELECT 1 FROM admins WHERE user_id = $1`,
-      [(req as any).session?.userId]
+      [userId]
     );
-    if (adminCheck.rowCount === 0) {
+    if (!userId || adminCheck.rowCount === 0) {
       return res.status(403).json({ error: "관리자 권한이 필요합니다" });
     }
 
