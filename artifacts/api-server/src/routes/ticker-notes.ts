@@ -30,23 +30,7 @@ router.get("/", async (_req, res) => {
   }
 });
 
-// GET /api/ticker-notes/:ticker — 종목별 관리자 메모 조회
-router.get("/:ticker", async (req, res) => {
-  const ticker = (req.params.ticker ?? "").toUpperCase();
-  if (!ticker) return res.status(400).json({ error: "ticker required" });
-  try {
-    const result = await pool.query(
-      `SELECT memo, updated_at FROM ticker_notes WHERE ticker = $1`,
-      [ticker]
-    );
-    const row = result.rows[0];
-    res.json({ ticker, memo: row?.memo ?? "", updatedAt: row?.updated_at ?? null });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "failed" });
-  }
-});
-
-// GET /api/ticker-notes/:ticker/prompt-injection — 실제 프롬프트 주입 내용 미리보기
+// GET /api/ticker-notes/:ticker/prompt-injection — 실제 프롬프트 주입 내용 미리보기 (반드시 /:ticker보다 먼저 등록)
 router.get("/:ticker/prompt-injection", async (req, res) => {
   const ticker = (req.params.ticker ?? "").toUpperCase();
   if (!ticker) return res.status(400).json({ error: "ticker required" });
@@ -153,6 +137,22 @@ router.get("/:ticker/prompt-injection", async (req, res) => {
       ].filter(Boolean),
       historyCount: hist.length,
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// GET /api/ticker-notes/:ticker — 종목별 관리자 메모 조회
+router.get("/:ticker", async (req, res) => {
+  const ticker = (req.params.ticker ?? "").toUpperCase();
+  if (!ticker) return res.status(400).json({ error: "ticker required" });
+  try {
+    const result = await pool.query(
+      `SELECT memo, updated_at FROM ticker_notes WHERE ticker = $1`,
+      [ticker]
+    );
+    const row = result.rows[0];
+    res.json({ ticker, memo: row?.memo ?? "", updatedAt: row?.updated_at ?? null });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "failed" });
   }
