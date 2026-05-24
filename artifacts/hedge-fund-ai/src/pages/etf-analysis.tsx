@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, PieChart, Pie, Legend,
@@ -252,6 +252,8 @@ function holdingConcentration(holdings: ETFHolding[]): { text: string; level: "h
 
 // ─── 탭 1: 검색 ───────────────────────────────────────────────────────────────
 
+interface StockSuggestion { symbol: string; shortname: string; englishName?: string; exchange: string; quoteType: string; }
+
 function SearchTab() {
   const [mode, setMode]           = useState<"etf" | "stock">("etf");
   const [query, setQuery]         = useState("");
@@ -262,6 +264,11 @@ function SearchTab() {
   const [showList, setShowList]       = useState(false);
   const [allEtfs, setAllEtfs]         = useState<ETFInfo[]>([]);
 
+  const [stockSuggestions, setStockSuggestions] = useState<StockSuggestion[]>([]);
+  const [showStockDrop, setShowStockDrop]       = useState(false);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const stockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     fetch(getApiUrl("/api/etf/list"), { credentials: "include" })
       .then(r => r.ok ? r.json() : [])
@@ -269,10 +276,28 @@ function SearchTab() {
       .catch(() => {});
   }, []);
 
+  const fetchStockSuggestions = useCallback(async (q: string) => {
+    if (!q.trim()) { setStockSuggestions([]); setShowStockDrop(false); return; }
+    setIsFetchingSuggestions(true);
+    try {
+      const res = await fetch(getApiUrl(`/api/market-data/search/${encodeURIComponent(q.trim())}`));
+      if (res.ok) {
+        const data: StockSuggestion[] = await res.json();
+        setStockSuggestions(data.slice(0, 8));
+        setShowStockDrop(data.length > 0);
+      }
+    } catch {
+      setStockSuggestions([]);
+    } finally {
+      setIsFetchingSuggestions(false);
+    }
+  }, []);
+
   const handleSearch = useCallback(async (q: string) => {
     if (!q.trim()) return;
     setLoading(true);
     setShowList(false);
+    setShowStockDrop(false);
     try {
       if (mode === "etf") {
         const r = await fetch(getApiUrl(`/api/etf/${encodeURIComponent(q.trim())}/holdings`), { credentials: "include" });
@@ -288,14 +313,20 @@ function SearchTab() {
 
   const onInput = (v: string) => {
     setQuery(v);
-    if (mode === "etf" && v.trim()) {
-      const filtered = allEtfs.filter(e =>
-        e.name.toLowerCase().includes(v.toLowerCase()) || e.code.includes(v)
-      );
-      setSearchList(filtered.slice(0, 8));
-      setShowList(true);
+    if (mode === "etf") {
+      if (v.trim()) {
+        const filtered = allEtfs.filter(e =>
+          e.name.toLowerCase().includes(v.toLowerCase()) || e.code.includes(v)
+        );
+        setSearchList(filtered.slice(0, 8));
+        setShowList(true);
+      } else {
+        setShowList(false);
+      }
     } else {
-      setShowList(false);
+      if (stockTimerRef.current) clearTimeout(stockTimerRef.current);
+      const delay = /^\d{2,}$/.test(v.trim()) ? 150 : 350;
+      stockTimerRef.current = setTimeout(() => fetchStockSuggestions(v), delay);
     }
   };
 
@@ -306,7 +337,7 @@ function SearchTab() {
         {(["etf","stock"] as const).map(m => (
           <button
             key={m}
-            onClick={() => { setMode(m); setQuery(""); setEtfResult(null); setStockResult(null); setShowList(false); }}
+            onClick={() => { setMode(m); setQuery(""); setEtfResult(null); setStockResult(null); setShowList(false); setShowStockDrop(false); setStockSuggestions([]); }}
             className={cn(
               "flex-1 flex flex-col items-center py-2.5 px-2 rounded-xl text-xs font-semibold transition-all",
               mode === m
@@ -333,9 +364,9 @@ function SearchTab() {
               value={query}
               onChange={e => onInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleSearch(query)}
-              onBlur={() => setTimeout(() => setShowList(false), 150)}
+              onBlur={() => { setTimeout(() => { setShowList(false); setShowStockDrop(false); }, 150); }}
             />
-            {/* 자동완성 드롭다운 */}
+            {/* ETF 자동완성 드롭다운 */}
             {showList && searchList.length > 0 && (
               <div className="absolute top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-xl z-20 overflow-hidden">
                 {searchList.map(etf => (
@@ -351,6 +382,36 @@ function SearchTab() {
                     <LeverageBadge lev={etf.leverage} />
                   </button>
                 ))}
+              </div>
+            )}
+            {/* 종목 자동완성 드롭다운 */}
+            {showStockDrop && stockSuggestions.length > 0 && (
+              <div className="absolute top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-xl z-20 overflow-hidden">
+                {isFetchingSuggestions && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground border-b border-border/50">
+                    <Loader2 className="w-3 h-3 animate-spin" /> 검색 중...
+                  </div>
+                )}
+                {stockSuggestions.map(s => {
+                  const displayName = s.shortname || s.symbol;
+                  const isKR = /^\d{6}(\.KS|\.KQ)?$/.test(s.symbol);
+                  const code = isKR ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
+                  return (
+                    <button
+                      key={s.symbol}
+                      className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-muted/40 text-left transition-colors"
+                      onMouseDown={() => { setQuery(code); setShowStockDrop(false); handleSearch(code); }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{displayName}</p>
+                        <p className="text-[11px] text-muted-foreground">{code} · {s.exchange}</p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground/50 bg-muted/40 px-1.5 py-0.5 rounded font-mono">
+                        {s.quoteType === "EQUITY" ? "주식" : s.quoteType === "ETF" ? "ETF" : s.quoteType}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -591,58 +652,6 @@ function SearchTab() {
         </div>
       )}
 
-      {/* 빠른 ETF 버튼 */}
-      {!etfResult && !stockResult && (
-        <div className="space-y-4">
-          {/* 국내 ETF */}
-          <div className="space-y-2">
-            <p className="text-[11px] text-muted-foreground/50 font-medium px-1">🇰🇷 국내 인기 ETF</p>
-            <div className="flex flex-wrap gap-2">
-              {["069500","091160","305720","143460","132030","261220","144600","133690","229200","379800"].map(code => {
-                const etf = allEtfs.find(e => e.code === code);
-                if (!etf) return null;
-                return (
-                  <button
-                    key={code}
-                    onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 hover:border-primary/25 transition-all"
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: SECTOR_COLORS[etf.sector] ?? "#94a3b8" }}
-                    />
-                    {etf.name} <LeverageBadge lev={etf.leverage} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {/* 미국 ETF */}
-          <div className="space-y-2">
-            <p className="text-[11px] text-muted-foreground/50 font-medium px-1">🇺🇸 미국 인기 ETF</p>
-            <div className="flex flex-wrap gap-2">
-              {["SPY","QQQ","SOXX","SMH","VGT","XLV","XLF","XLE","ARKK","EWY"].map(code => {
-                const etf = allEtfs.find(e => e.code === code);
-                if (!etf) return null;
-                return (
-                  <button
-                    key={code}
-                    onClick={() => { setMode("etf"); setQuery(code); handleSearch(code); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 border border-border text-xs font-medium hover:bg-muted/50 hover:border-primary/25 transition-all"
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: SECTOR_COLORS[etf.sector] ?? "#94a3b8" }}
-                    />
-                    <span className="font-mono font-bold text-foreground">{etf.code}</span>
-                    <span className="text-muted-foreground/60 hidden sm:inline">· {etf.name.replace(/\(.*\)/, "").trim()}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
