@@ -1227,6 +1227,7 @@ export interface MarketSignal {
   impact: "positive" | "negative" | "neutral";
   strength: "strong" | "moderate" | "weak";
   icon: string;
+  sectorTags: string[];
 }
 
 export interface ThemeKeyword {
@@ -1643,6 +1644,7 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
     id: "ai-flow", category: "수급", label: "AI 인프라 기관 매집",
     description: "빅테크 데이터센터 투자 확대에 따라 반도체·서버·전력 섹터로 기관 자금이 꾸준히 유입 중. NVIDIA 수주 모멘텀이 관련 ETF 거래량을 끌어올리는 중.",
     impact: "positive", strength: "strong", icon: "🤖",
+    sectorTags: ["반도체", "미국반도체", "로보틱스AI"],
   });
 
   if (rateLevel === "high") {
@@ -1650,11 +1652,13 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
       id: "inst-fin", category: "수급", label: "기관 금융주 비중 확대",
       description: `고금리(${m.usRate}%) 환경에서 기관투자자들이 NIM 확대 수혜를 노리고 은행·보험주 비중을 늘리는 중. 장단기 금리차 +${m.yieldSpread.toFixed(2)}% 정상화가 신뢰를 더함.`,
       impact: "positive", strength: "strong", icon: "🏦",
+      sectorTags: ["금융", "미국금융"],
     });
     signals.push({
       id: "retail-caution", category: "심리", label: "개인투자자 관망 심화",
       description: `고금리+고물가 압박으로 개인 투자 심리 위축. 은행 예금·MMF 잔고 증가 추세로 주식 시장 유입 속도 둔화. 저가 매수 기회 탐색 국면.`,
       impact: "negative", strength: "moderate", icon: "😰",
+      sectorTags: ["배당", "리츠"],
     });
   }
 
@@ -1663,6 +1667,7 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
       id: "fx-usd", category: "수급", label: "달러 자산·환헤지 수요 급증",
       description: `원달러 ${m.krwUsd.toLocaleString()}원 돌파 이후 달러 ETF·환헤지 상품 검색량 폭발적 증가. 외화 자산 비중 확대를 위한 해외 ETF 매수세 지속.`,
       impact: "positive", strength: "strong", icon: "💵",
+      sectorTags: ["미국시장", "미국나스닥", "해외주식"],
     });
   }
 
@@ -1671,11 +1676,13 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
       id: "energy-inst", category: "수급", label: "에너지·방산 기관 헷지 매수",
       description: `WTI $${m.wti.toFixed(0)} 고유가 지속으로 에너지·방산 ETF에 인플레이션 헷지 목적의 기관 매수세 유입. 지정학 리스크 프리미엄 확대.`,
       impact: "positive", strength: "moderate", icon: "🛢️",
+      sectorTags: ["원자재", "미국에너지", "항공우주방산"],
     });
     signals.push({
       id: "gold-hedge", category: "수급", label: "금·원자재 헷지 수요",
       description: "물가·유가 동반 상승으로 금 ETF(GLD·IAU) 및 원자재 ETF에 포트폴리오 헷지 자금 유입. 리테일·기관 동시 관심.",
       impact: "positive", strength: "moderate", icon: "🥇",
+      sectorTags: ["원자재"],
     });
   }
 
@@ -1684,12 +1691,14 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
       id: "yield-normal", category: "기술적", label: "경기침체 우려 해소",
       description: `장단기 금리차 +${m.yieldSpread.toFixed(2)}% 양전환으로 경기침체 신호 해제. 위험자산 선호 심리 회복 → 주식 ETF 자금 유입 환경 개선.`,
       impact: "positive", strength: "moderate", icon: "📈",
+      sectorTags: ["미국시장", "국내주식", "코스닥"],
     });
   } else if (m.yieldSpread < 0) {
     signals.push({
       id: "yield-inv", category: "기술적", label: "장단기 금리 역전 경고",
       description: `10Y-2Y ${m.yieldSpread.toFixed(2)}% 역전 — 과거 평균 12~18개월 후 경기침체 선행 지표. 방어주·배당주 비중 확대 고려.`,
       impact: "negative", strength: "strong", icon: "⚠️",
+      sectorTags: ["배당", "리츠", "헬스케어"],
     });
   }
 
@@ -1698,6 +1707,7 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
       id: "growth-momentum", category: "매크로", label: "경제 성장 모멘텀 강세",
       description: `GDP 성장률 ${m.gdpQoQ.toFixed(1)}%로 견조. 기업 실적 개선 기대가 주식 시장 전반의 상승 동력을 제공 중.`,
       impact: "positive", strength: "strong", icon: "📊",
+      sectorTags: ["미국시장", "미국나스닥", "국내주식"],
     });
   }
 
