@@ -34,26 +34,26 @@
 }
 
 :root {
-  /* 배경: 순백 대신 아주 살짝 따뜻한 크림 — 카드가 자연스럽게 떠오름 */
-  --background: 40 18% 96%;
-  --foreground: 0 0% 8%;
+  /* 배경: 쿨 화이트 — 황색 크림 제거, 산뜻하고 모던한 블루-화이트 톤 */
+  --background: 220 25% 97%;
+  --foreground: 222 20% 10%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 8%;
+  --card-foreground: 222 20% 10%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 8%;
+  --popover-foreground: 222 20% 10%;
 
-  --primary: 0 0% 8%;
+  --primary: 222 20% 10%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 40 12% 91%;
-  --secondary-foreground: 0 0% 18%;
+  --secondary: 220 18% 93%;
+  --secondary-foreground: 222 16% 20%;
 
-  /* muted: 살짝 따뜻한 톤, foreground는 충분히 진하게 — /60 오파시티와 겹쳐도 읽힘 */
-  --muted: 40 10% 90%;
-  --muted-foreground: 0 0% 22%;
+  /* muted: 쿨 톤, foreground는 충분히 진하게 */
+  --muted: 220 16% 93%;
+  --muted-foreground: 220 10% 36%;
 
-  --accent: 40 8% 89%;
-  --accent-foreground: 0 0% 8%;
+  --accent: 220 14% 91%;
+  --accent-foreground: 222 20% 10%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -64,10 +64,10 @@
   --warning: 38 92% 48%;
   --warning-foreground: 0 0% 100%;
 
-  /* 보더: 선명하게 */
-  --border: 0 0% 78%;
-  --input: 0 0% 84%;
-  --ring: 0 0% 8%;
+  /* 보더: 쿨 톤으로 통일, 살짝 밝게 */
+  --border: 220 14% 87%;
+  --input: 220 14% 91%;
+  --ring: 222 20% 10%;
 
   --radius: 0.5rem;
 }
