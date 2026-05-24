@@ -946,6 +946,108 @@ function buildMacroNarrative(macro: MacroSnapshot, env: MacroEnvironment): strin
   return sentences.join(". ") + ".";
 }
 
+const LEVERAGE_GROUPS = [
+  { label: "나스닥·S&P500", icon: "📊", codes: ["TQQQ","QLD","UPRO","SPXL","SSO"],  desc: "시장 방향성 베팅 — 상승장 단기 공략" },
+  { label: "반도체·기술",   icon: "🔬", codes: ["SOXL","TECL","NVDL","NVDU","ROM"], desc: "AI 사이클 강세 시 집중 레버리지"    },
+  { label: "FANG+·인터넷", icon: "🌐", codes: ["FNGU","WEBL"],                        desc: "메가캡 빅테크 3배 — 변동성 극대"    },
+  { label: "금융·에너지",   icon: "🏦", codes: ["FAS","ERX"],                         desc: "금리 인하·고유가 국면 수혜"          },
+  { label: "바이오",        icon: "💊", codes: ["LABU"],                               desc: "임상 이벤트 드리븐 단기 전략"       },
+];
+
+function LeverageETFPanel({
+  nowSectors, allEtfs, getEtfsForSector, handleEtfClick, selectedEtfCode,
+}: {
+  nowSectors: SectorMomentum[];
+  allEtfs: ETFInfo[];
+  getEtfsForSector: (tags: string[]) => { regular: ETFInfo[]; leveraged: ETFInfo[] };
+  handleEtfClick: (code: string) => void;
+  selectedEtfCode: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-orange-500/20 bg-card p-4 space-y-4">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-base">⚡</span>
+          <h3 className="text-sm font-bold text-foreground">레버리지 ETF 전략</h3>
+          <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-500">고위험</span>
+        </div>
+        <p className="text-[11px] text-muted-foreground/60 leading-relaxed pl-6">
+          레버리지 ETF는 <span className="font-semibold text-orange-400">일일 수익률의 2~3배</span>를 추종합니다.
+          장기 보유 시 변동성 잠식(decay)으로 손실이 날 수 있어 <span className="font-semibold text-red-400">단기 방향성 매매 전용</span>으로 활용하세요.
+        </p>
+      </div>
+
+      {/* 지금 유망 섹터 기반 레버리지 추천 */}
+      {nowSectors.length > 0 && (
+        <div className="rounded-xl border border-orange-500/15 bg-orange-500/5 p-3 space-y-2">
+          <p className="text-[10px] font-bold text-orange-500/60 uppercase tracking-widest">📌 지금 점수 기반 추천</p>
+          <div className="space-y-2">
+            {nowSectors.slice(0, 3).map(s => {
+              const { leveraged } = getEtfsForSector(s.sectorTags);
+              if (leveraged.length === 0) return null;
+              const sColor = s.score >= 75 ? "#16a34a" : "#f59e0b";
+              return (
+                <div key={s.id} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm shrink-0">{s.icon}</span>
+                  <span className="text-[11px] font-bold text-foreground">{s.name}</span>
+                  <span className="text-[10px] font-black shrink-0" style={{ color: sColor }}>점수 {s.score}</span>
+                  <span className="text-muted-foreground/30 text-[9px]">→</span>
+                  {leveraged.map(etf => (
+                    <button key={etf.code} onClick={() => handleEtfClick(etf.code)}
+                      className={cn("flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg border transition-all",
+                        selectedEtfCode === etf.code
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20")}>
+                      {etf.code} <LeverageBadge lev={etf.leverage} />
+                    </button>
+                  ))}
+                </div>
+              );
+            }).filter(Boolean)}
+          </div>
+        </div>
+      )}
+
+      {/* 카테고리별 레버리지 ETF 그리드 */}
+      <div className="space-y-3">
+        {LEVERAGE_GROUPS.map(group => {
+          const etfs = allEtfs.filter(e => group.codes.includes(e.code) && Math.abs(e.leverage) >= 2);
+          if (etfs.length === 0) return null;
+          return (
+            <div key={group.label} className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">{group.icon}</span>
+                <span className="text-[11px] font-bold text-foreground">{group.label}</span>
+                <span className="text-[10px] text-muted-foreground/35 ml-auto truncate max-w-[140px]">{group.desc}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {etfs.map(etf => (
+                  <button key={etf.code} onClick={() => handleEtfClick(etf.code)}
+                    className={cn("flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-xl border transition-all",
+                      selectedEtfCode === etf.code
+                        ? "bg-orange-500 text-white border-orange-500 shadow-sm"
+                        : "bg-muted/20 border-border hover:border-orange-500/30 hover:bg-orange-500/5")}>
+                    <div className="flex items-center gap-1">
+                      <span className={cn("text-[12px] font-black", selectedEtfCode === etf.code ? "text-white" : "text-foreground")}>{etf.code}</span>
+                      <LeverageBadge lev={etf.leverage} />
+                    </div>
+                    <span className={cn("text-[9px]", selectedEtfCode === etf.code ? "text-white/60" : "text-muted-foreground/35")}>{etf.issuer}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-start gap-2 text-[10px] text-red-400/60 bg-red-500/5 rounded-xl px-3 py-2 border border-red-500/15">
+        <Info className="w-3 h-3 mt-0.5 shrink-0 text-red-400/50" />
+        <p>레버리지 ETF는 변동성이 2~3배 크며, 횡보장에서는 지수 제자리여도 손실이 납니다. 포트폴리오의 10% 이내, 반드시 손절선 설정 후 매매하세요.</p>
+      </div>
+    </div>
+  );
+}
+
 function MomentumTab() {
   const [data, setData]               = useState<MomentumAnalysis | null>(null);
   const [loading, setLoading]         = useState(true);
@@ -970,7 +1072,12 @@ function MomentumTab() {
   useEffect(() => { load(); }, [load]);
 
   const getEtfsForSector = useCallback(
-    (tags: string[]) => allEtfs.filter(e => tags.includes(e.sector)).slice(0, 6),
+    (tags: string[]) => {
+      const matched = allEtfs.filter(e => tags.includes(e.sector));
+      const regular  = matched.filter(e => e.leverage === 1).slice(0, 6);
+      const leveraged = matched.filter(e => Math.abs(e.leverage) >= 2);
+      return { regular, leveraged };
+    },
     [allEtfs],
   );
 
@@ -989,9 +1096,9 @@ function MomentumTab() {
 
   function SectorCard({ sector, isNow }: { sector: SectorMomentum; isNow: boolean }) {
     const cfg    = OUTLOOK_CONFIG[sector.outlook];
-    const etfs   = getEtfsForSector(sector.sectorTags);
+    const { regular: etfs, leveraged: levEtfs } = getEtfsForSector(sector.sectorTags);
     const sColor = sector.score >= 75 ? "#16a34a" : sector.score >= 60 ? "#f59e0b" : "#94a3b8";
-    const hasSel = etfs.some(e => e.code === selectedEtfCode);
+    const hasSel = [...etfs, ...levEtfs].some(e => e.code === selectedEtfCode);
 
     return (
       <>
@@ -1057,28 +1164,57 @@ function MomentumTab() {
           </div>
 
           {/* 관련 ETF */}
-          {etfs.length > 0 && (
-            <div className="pt-2.5 border-t border-border/40 space-y-2">
-              <p className="text-[10px] font-semibold text-muted-foreground/35 uppercase tracking-widest">관련 ETF 바로가기</p>
-              <div className="flex flex-wrap gap-1.5">
-                {etfs.map(etf => (
-                  <button
-                    key={etf.code}
-                    onClick={() => handleEtfClick(etf.code)}
-                    className={cn(
-                      "flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all",
-                      selectedEtfCode === etf.code
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-muted/30 border-border text-foreground hover:bg-muted/50 hover:border-primary/30",
-                    )}
-                  >
-                    <span className="truncate max-w-[110px]">
-                      {etf.name.replace(/^(KODEX|TIGER|KBSTAR|HANARO|ARIRANG)\s/, "").substring(0, 15)}
-                    </span>
-                    <LeverageBadge lev={etf.leverage} />
-                  </button>
-                ))}
-              </div>
+          {(etfs.length > 0 || levEtfs.length > 0) && (
+            <div className="pt-2.5 border-t border-border/40 space-y-2.5">
+              {etfs.length > 0 && (
+                <>
+                  <p className="text-[10px] font-semibold text-muted-foreground/35 uppercase tracking-widest">관련 ETF 바로가기</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {etfs.map(etf => (
+                      <button
+                        key={etf.code}
+                        onClick={() => handleEtfClick(etf.code)}
+                        className={cn(
+                          "flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all",
+                          selectedEtfCode === etf.code
+                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-muted/30 border-border text-foreground hover:bg-muted/50 hover:border-primary/30",
+                        )}
+                      >
+                        <span className="truncate max-w-[110px]">
+                          {etf.name.replace(/^(KODEX|TIGER|KBSTAR|HANARO|ARIRANG)\s/, "").substring(0, 15)}
+                        </span>
+                        <LeverageBadge lev={etf.leverage} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {levEtfs.length > 0 && (
+                <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-orange-500/70 uppercase tracking-widest">⚡ 레버리지 ETF</span>
+                    <span className="text-[9px] text-orange-400/50 font-medium">고위험·단기매매 전용</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {levEtfs.map(etf => (
+                      <button
+                        key={etf.code}
+                        onClick={() => handleEtfClick(etf.code)}
+                        className={cn(
+                          "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all",
+                          selectedEtfCode === etf.code
+                            ? "bg-orange-500 text-white border-orange-500 shadow-sm"
+                            : "bg-orange-500/10 border-orange-500/25 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20",
+                        )}
+                      >
+                        <span className="truncate max-w-[90px]">{etf.code}</span>
+                        <LeverageBadge lev={etf.leverage} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1251,6 +1387,15 @@ function MomentumTab() {
               ))}
             </div>
           </div>
+
+          {/* 레버리지 ETF 전략 */}
+          <LeverageETFPanel
+            nowSectors={data.nowSectors}
+            allEtfs={allEtfs}
+            getEtfsForSector={getEtfsForSector}
+            handleEtfClick={handleEtfClick}
+            selectedEtfCode={selectedEtfCode}
+          />
 
           {/* 전체 섹터 스코어보드 */}
           <div className="rounded-2xl border border-border bg-card p-4 space-y-3">

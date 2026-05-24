@@ -190,6 +190,36 @@ export const US_ETFS: ETFInfo[] = [
   // 글로벌 신흥국
   { code:"EWY",  isuCd:"EWY",  name:"iShares MSCI South Korea ETF",      sector:"한국시장", issuer:"BlackRock",   yahooCode:"EWY",  leverage:1, ter:0.57,  benchmark:"MSCI Korea" },
   { code:"EEM",  isuCd:"EEM",  name:"iShares MSCI Emerging Markets ETF",  sector:"신흥국",   issuer:"BlackRock",   yahooCode:"EEM",  leverage:1, ter:0.68,  benchmark:"MSCI Emerging Markets" },
+
+  // ── 레버리지 ETF (미국) ─────────────────────────────────────────────────────
+  // 나스닥 레버리지
+  { code:"TQQQ", isuCd:"TQQQ", name:"ProShares UltraPro QQQ 3X",          sector:"미국나스닥", issuer:"ProShares",   yahooCode:"TQQQ", leverage:3, ter:0.88, benchmark:"Nasdaq-100 ×3" },
+  { code:"QLD",  isuCd:"QLD",  name:"ProShares Ultra QQQ 2X",              sector:"미국나스닥", issuer:"ProShares",   yahooCode:"QLD",  leverage:2, ter:0.95, benchmark:"Nasdaq-100 ×2" },
+  // S&P 500 레버리지
+  { code:"UPRO", isuCd:"UPRO", name:"ProShares UltraPro S&P500 3X",        sector:"미국시장",  issuer:"ProShares",   yahooCode:"UPRO", leverage:3, ter:0.91, benchmark:"S&P 500 ×3" },
+  { code:"SPXL", isuCd:"SPXL", name:"Direxion Daily S&P500 Bull 3X",       sector:"미국시장",  issuer:"Direxion",    yahooCode:"SPXL", leverage:3, ter:1.01, benchmark:"S&P 500 ×3" },
+  { code:"SSO",  isuCd:"SSO",  name:"ProShares Ultra S&P500 2X",           sector:"미국시장",  issuer:"ProShares",   yahooCode:"SSO",  leverage:2, ter:0.91, benchmark:"S&P 500 ×2" },
+  // 반도체 레버리지
+  { code:"SOXL", isuCd:"SOXL", name:"Direxion Daily Semiconductors Bull 3X", sector:"미국반도체", issuer:"Direxion",  yahooCode:"SOXL", leverage:3, ter:0.76, benchmark:"ICE Semiconductor ×3" },
+  { code:"NVDL", isuCd:"NVDL", name:"GraniteShares 2X Long NVDA",           sector:"미국반도체", issuer:"GraniteShares",yahooCode:"NVDL", leverage:2, ter:1.15, benchmark:"NVDA ×2" },
+  { code:"NVDU", isuCd:"NVDU", name:"Direxion Daily NVDA Bull 2X",          sector:"미국반도체", issuer:"Direxion",   yahooCode:"NVDU", leverage:2, ter:1.07, benchmark:"NVDA ×2" },
+  // 기술주 레버리지
+  { code:"TECL", isuCd:"TECL", name:"Direxion Daily Technology Bull 3X",    sector:"미국반도체", issuer:"Direxion",   yahooCode:"TECL", leverage:3, ter:0.95, benchmark:"S&P Tech Sector ×3" },
+  { code:"ROM",  isuCd:"ROM",  name:"ProShares Ultra Technology 2X",        sector:"미국반도체", issuer:"ProShares",  yahooCode:"ROM",  leverage:2, ter:0.95, benchmark:"S&P Tech Sector ×2" },
+  // 금융 레버리지
+  { code:"FAS",  isuCd:"FAS",  name:"Direxion Daily Financial Bull 3X",     sector:"미국금융",  issuer:"Direxion",   yahooCode:"FAS",  leverage:3, ter:1.01, benchmark:"Russell 1000 Financial ×3" },
+  // 에너지 레버리지
+  { code:"ERX",  isuCd:"ERX",  name:"Direxion Daily Energy Bull 2X",        sector:"미국에너지", issuer:"Direxion",  yahooCode:"ERX",  leverage:2, ter:0.97, benchmark:"Energy Select Sector ×2" },
+  // 바이오 레버리지
+  { code:"LABU", isuCd:"LABU", name:"Direxion Daily S&P Biotech Bull 3X",   sector:"미국헬스케어", issuer:"Direxion", yahooCode:"LABU", leverage:3, ter:1.04, benchmark:"S&P Biotechnology Select Industry ×3" },
+  // FANG+ 레버리지
+  { code:"FNGU", isuCd:"FNGU", name:"MicroSectors FANG+Index 3X Leveraged", sector:"미국혁신",  issuer:"Bank of Montreal", yahooCode:"FNGU", leverage:3, ter:0.95, benchmark:"NYSE FANG+ ×3" },
+  { code:"WEBL", isuCd:"WEBL", name:"Direxion Daily Dow Jones Internet Bull 3X", sector:"미국혁신", issuer:"Direxion", yahooCode:"WEBL", leverage:3, ter:1.07, benchmark:"Dow Jones Internet Composite ×3" },
+
+  // ── 국내 레버리지 ETF (추가) ────────────────────────────────────────────────
+  { code:"278530", isuCd:"KR7278530007", name:"KODEX 미국나스닥100레버리지(합성 H)",  sector:"미국나스닥", issuer:"삼성자산운용", yahooCode:"278530.KS", leverage:2, ter:0.58, benchmark:"Nasdaq-100 ×2 (환헤지)" },
+  { code:"304940", isuCd:"KR7304940005", name:"TIGER 미국S&P500레버리지(합성 H)",    sector:"미국시장",   issuer:"미래에셋",     yahooCode:"304940.KS", leverage:2, ter:0.58, benchmark:"S&P 500 ×2 (환헤지)" },
+  { code:"261270", isuCd:"KR7261270000", name:"KODEX 미국나스닥100선물레버리지",     sector:"미국나스닥", issuer:"삼성자산운용", yahooCode:"261270.KS", leverage:2, ter:0.58, benchmark:"Nasdaq-100 선물 ×2" },
 ];
 
 export const ALL_ETFS: ETFInfo[] = [...MAJOR_ETFS, ...US_ETFS];
