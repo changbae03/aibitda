@@ -95,9 +95,9 @@ export function startMarketScheduler() {
         if (diskOk) {
           console.log("[scheduler] 백그라운드 디스크 복원 완료 — 예측 갱신됨");
         } else {
-          // 모델이 없거나 버전 불일치 → 백그라운드 전체 재학습
-          console.log("[scheduler] 디스크 모델 없음 — 백그라운드 전체 재학습 시작");
-          runPipeline(true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
+          // 모델이 없거나 버전 불일치 → 백그라운드 전체 재학습 (기존 DB 캐시 데이터는 유지)
+          console.log("[scheduler] 디스크 모델 없음 — 백그라운드 전체 재학습 시작 (기존 데이터 유지)");
+          runPipeline(true, true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
         }
       }, 5_000);
       return;

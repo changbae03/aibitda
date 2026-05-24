@@ -1567,12 +1567,17 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
   } catch(e:any) { console.warn("[gbdt] 복원 실패:",e?.message); return false; }
 }
 
-export async function runPipeline(force=false): Promise<void> {
+export async function runPipeline(force=false, keepExisting=false): Promise<void> {
   const now = Date.now();
   if (_status.running) return;
   if (!force&&_status.ready&&now-_lastRun<CACHE_TTL) return;
 
-  _status = { running:true, ready:false, steps:defaultSteps() };
+  // keepExisting=true: 기존 예측 데이터를 유지하며 백그라운드 갱신 (스피너 없이 "업데이트 중" 배지만 표시)
+  if (keepExisting && (_status.kospi || _status.kosdaq)) {
+    _status = { ..._status, running:true, steps:defaultSteps() };
+  } else {
+    _status = { running:true, ready:false, steps:defaultSteps() };
+  }
   const t0 = Date.now();
 
   try {
