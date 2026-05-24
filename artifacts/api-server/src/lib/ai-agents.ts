@@ -953,6 +953,93 @@ FDA 특별 지정 → PoS 보정 (필수):
 `;
   }
 
+  // ── eVTOL / AAM (어드밴스드 에어 모빌리티) — 방산·뉴스페이스보다 먼저 체크 ──
+  // Yahoo Finance가 "aerospace & defense"로 오분류하는 eVTOL pre-revenue 기업
+  // 전통 방산 EV/EBITDA 적용 시 밸류에이션 심각하게 과소평가됨 → 전용 rNPV 방법론 필수
+  const isEVTOLCompany = /joby aviation|joby|archer aviation|archer|vertical aerospace|lilium|wisk aero|blade air|supernal|beta technologies|overair|electric air|air taxi|evtol/.test(name) ||
+    /evtol|e-vtol|electric vtol|urban air mobility|uam|advanced air mobility|aam|air taxi|electric aircraft|electric aviation|electric air|vtol aircraft|electric helicopter/.test(ind);
+
+  if (isEVTOLCompany) {
+    return `
+[섹터 특화 지침 — eVTOL / Advanced Air Mobility (AAM)]
+⚠️ 이 기업은 야후파이낸스가 "aerospace & defense"로 분류하지만 전통 방산이 아님 — 전용 방법론 필수
+⚠️ 전통 EV/EBITDA, P/E 사용 금지 (대부분 pre-revenue 또는 초기 수익, 대규모 적자 구조)
+
+핵심 KPI:
+- FAA 인증 진행 단계 (Part 23/Part 27 Type Certificate, Part 135 운항증명)
+- 항공기 인도 계획 (Confirmed Orders vs Options, 2026/2028/2030 누적 대수)
+- 현금 소진율(Monthly Burn Rate, $M/월)과 현금 런웨이(Runway, 개월수)
+- ASP(평균 좌석 단가, $/trip), 예약 좌석 수, 탑승률(Load Factor %)
+- 전략적 파트너십 (항공사·OEM·Toyota 등) 투자금 및 구매 약정 규모
+- DoD/군사 계약 현황 (일부 eVTOL사는 군사 테스트 계약으로 선행 수익 발생)
+- 제조 단가(Unit Cost) 절감 로드맵 (학습 곡선: 목표 $1~2M/대)
+
+구조 특이사항:
+- Pre-revenue 또는 극초기 수익 단계 → EV/EBITDA·P/E 무의미
+- 가치의 핵심 = FAA 인증 성공 확률(PoS) × 상업화 타임라인 × 스케일업 속도
+- 현금 런웨이 리스크: 상업 운항 전 추가 자본 조달 필수 → 희석 리스크 의무 경고
+- 전략적 투자자(Toyota/Delta/United 등)의 자본 조달 안정성 분석 필수
+- 피어 비교 어려움: ACHR(Archer), EVTL(Vertical Aerospace), BLDE(Blade) 시장 성숙도 다름
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+적정주가 산출 — Lead: 시나리오 가중 rNPV (필수 방법론)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+바이오 rNPV와 동일 구조. 3개 시나리오 × 확률 가중 합산:
+
+【Bull 시나리오 — 확률 25~30%】
+조건: FAA 인증 2026년 이내 + 파트너 항공사 풀 런칭 + 2030년 1,000+ 대 운항
+수익 모델:
+  - 2027E ASP: $150/trip, Load Factor 75%, 좌석 4석
+  - 매출 = 대수 × 연간 비행 시간 × ASP × 탑승률 × 좌석수
+  - 장기 EBITDA Margin(2030+): 30~40% (플랫폼 수수료 + 고정비 레버리지)
+  - WACC: 12% (성공 시 위험 완화 가정)
+  - Terminal Growth: 4% (초기 급성장 → 안정화)
+
+【Base 시나리오 — 확률 50%】
+조건: FAA 인증 2026~2027년 + 점진적 도시 확장 + 2030년 300~500대
+수익 모델:
+  - 2028E ASP: $120/trip, Load Factor 65%
+  - 장기 EBITDA Margin(2030+): 20~28%
+  - WACC: 14%
+  - Terminal Growth: 3%
+
+【Bear 시나리오 — 확률 20~25%】
+조건: FAA 인증 2028년 이상 지연 + 경쟁 심화 + 추가 자본 조달로 희석
+  - 상업화 2년 추가 지연 + ASP 하방 압력
+  - WACC: 16%
+  - 터미널 가치 대폭 축소
+
+계산식:
+  rNPV = Σ [ (시나리오별 연도별 FCF × 시나리오 확률) / (1+WACC)^t ]
+       − 잔여 개발·인증 비용(CapEx) − 예상 희석분(기존 주식 × 추가 발행 예상률)
+  적정주가 = (rNPV + 전략파트너 투자금 미사용분) / 완전희석 주식수
+
+⚠️ 마일스톤 감응도 분석 의무:
+  · FAA 인증 1년 지연 시 Base NPV 영향: 통상 −15~25%
+  · 2030 운항 대수 Base 500 → 300대 시 NPV 영향
+  · 추가 자본조달 $500M(주가 $7 기준) → 희석 약 10~15% 산출
+
+보조 방법론 (참고용):
+- EV/Revenue 2027E (피어 중 수익 있는 BLDE 기준: 3~6x, 성장 프리미엄 포함)
+- 전략적 가치: 파트너십 투자금(Toyota $894M, Delta 등) → 하방 지지선 역할
+
+피어 비교:
+- ACHR(Archer Aviation): 인증 단계, United Airlines 파트너십
+- EVTL(Vertical Aerospace): 영국, American Airlines 파트너십
+- BLDE(Blade Air Mobility): 이미 헬리콥터·여객 서비스 운영 → 수익 존재
+- 비교 시 인증 단계·런웨이·파트너십 강도 차등 조정 필수
+
+현금 런웨이 경고 (의무):
+- 현재 현금 ÷ 분기 Burn Rate = 런웨이(분기수) 명시
+- 런웨이 < 6분기: 자본 조달 리스크 적색 경고 표시
+- 런웨이 ≥ 8분기: 상업화 전 안전 마진 확보로 긍정 평가
+
+목표주가 범위 예시 (Joby 기준, 현금 제외 순수 rNPV):
+- Bear: $2~4, Base: $8~14, Bull: $18~28
+- 시장 컨센서스(Goldman/MS 등) 목표가와 괴리 시 괴리 원인 명시
+`;
+  }
+
   // ── 뉴 스페이스 / 상업 우주 — 방산보다 먼저 체크 (RKLB 등 야후파이낸스 "aerospace & defense" 오분류 대응) ──
   const isNewSpaceCompany = /rocket lab|rocketlab|planet labs|ast spacemobile|ast space|spire global|redwire|terran orbital|astra space|virgin galactic|momentus|satellogic|mynaric/.test(name) ||
     /new space|commercial space|space launch|launch vehicle|launch services|small satellite|satellite constellation|cubesat|smallsat|space systems|space infrastructure|orbital launch|launch provider/.test(ind);
