@@ -105,7 +105,7 @@ function SearchTab() {
   const [mode, setMode]           = useState<"etf" | "stock">("etf");
   const [query, setQuery]         = useState("");
   const [loading, setLoading]     = useState(false);
-  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[] } | null>(null);
+  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null>(null);
   const [stockResult, setStockResult] = useState<{ etf: ETFInfo; holding: ETFHolding }[] | null>(null);
   const [searchList, setSearchList]   = useState<ETFInfo[]>([]);
   const [showList, setShowList]       = useState(false);
@@ -264,8 +264,13 @@ function SearchTab() {
 
               {/* 테이블 */}
               <div className="rounded-2xl border border-border bg-card overflow-hidden">
-                <div className="px-4 py-3 border-b border-border">
+                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                   <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest">Top {etfResult.holdings.length} 보유 종목</p>
+                  {etfResult.source === "live" ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-semibold">● KIS 실시간</span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30 font-semibold">참고용 데이터</span>
+                  )}
                 </div>
                 <div className="divide-y divide-border/50">
                   {etfResult.holdings.map(h => (
@@ -290,7 +295,11 @@ function SearchTab() {
                   ))}
                 </div>
                 <div className="px-4 py-2.5 bg-muted/10 border-t border-border">
-                  <p className="text-[10px] text-muted-foreground/40">* 운용사 공시 기준, 실제 비중과 차이가 있을 수 있습니다</p>
+                  <p className="text-[10px] text-muted-foreground/40">
+                    {etfResult.source === "live"
+                      ? "* KIS Open API 실시간 데이터 — 기준가격 비중 기준"
+                      : "* 참고용 정적 데이터 — 실제 비중과 차이가 있을 수 있습니다"}
+                  </p>
                 </div>
               </div>
             </div>

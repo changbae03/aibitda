@@ -7,9 +7,11 @@
  * - 개별 종목의 ETF 노출도
  */
 import YahooFinance from "yahoo-finance2";
+import { getKisAccessToken } from "./kis-client.js";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 const KRX_BASE = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
+const KIS_BASE = "https://openapi.koreainvestment.com:9443";
 
 // ─── 타입 정의 ────────────────────────────────────────────────────────────────
 
@@ -135,17 +137,22 @@ const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
     { rank:9,  stockCode:"018260", stockName:"삼성에스디에스",      weight:1.95  },
     { rank:10, stockCode:"012450", stockName:"한화에어로스페이스",   weight:1.72  },
   ],
-  "305720": [ // KODEX 2차전지산업
-    { rank:1,  stockCode:"373220", stockName:"LG에너지솔루션",      weight:25.41 },
-    { rank:2,  stockCode:"051910", stockName:"LG화학",              weight:14.32 },
-    { rank:3,  stockCode:"006400", stockName:"삼성SDI",             weight:12.87 },
-    { rank:4,  stockCode:"247540", stockName:"에코프로비엠",        weight:8.54  },
-    { rank:5,  stockCode:"086520", stockName:"에코프로",            weight:6.21  },
-    { rank:6,  stockCode:"003670", stockName:"포스코퓨처엠",        weight:5.87  },
-    { rank:7,  stockCode:"028670", stockName:"팬오션",              weight:3.21  },
-    { rank:8,  stockCode:"259960", stockName:"크래프톤",            weight:2.98  },
-    { rank:9,  stockCode:"011970", stockName:"STX엔진",             weight:2.41  },
-    { rank:10, stockCode:"298040", stockName:"효성중공업",          weight:2.18  },
+  "305720": [ // KODEX 2차전지산업 — KRX 2차전지 K-뉴딜 지수
+    { rank:1,  stockCode:"373220", stockName:"LG에너지솔루션",      weight:23.41 },
+    { rank:2,  stockCode:"006400", stockName:"삼성SDI",             weight:17.82 },
+    { rank:3,  stockCode:"051910", stockName:"LG화학",              weight:11.12 },
+    { rank:4,  stockCode:"003670", stockName:"포스코퓨처엠",        weight:9.43  },
+    { rank:5,  stockCode:"247540", stockName:"에코프로비엠",        weight:7.21  },
+    { rank:6,  stockCode:"086520", stockName:"에코프로",            weight:5.34  },
+    { rank:7,  stockCode:"278280", stockName:"천보",                weight:3.87  },
+    { rank:8,  stockCode:"066970", stockName:"엘앤에프",            weight:3.12  },
+    { rank:9,  stockCode:"096770", stockName:"SK이노베이션",        weight:2.68  },
+    { rank:10, stockCode:"005070", stockName:"코스모신소재",        weight:1.95  },
+    { rank:11, stockCode:"336370", stockName:"솔루스첨단소재",      weight:1.72  },
+    { rank:12, stockCode:"006260", stockName:"LS",                  weight:1.54  },
+    { rank:13, stockCode:"020150", stockName:"일진머티리얼즈",      weight:1.38  },
+    { rank:14, stockCode:"009830", stockName:"한화솔루션",          weight:1.21  },
+    { rank:15, stockCode:"272450", stockName:"파나시아",            weight:0.89  },
   ],
   "143460": [ // TIGER 헬스케어
     { rank:1,  stockCode:"207940", stockName:"삼성바이오로직스",    weight:25.41 },
@@ -216,7 +223,7 @@ const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
 
 // ─── 캐시 ─────────────────────────────────────────────────────────────────────
 
-const holdingsCache = new Map<string, { data: ETFHolding[]; ts: number }>();
+const holdingsCache = new Map<string, { data: ETFHolding[]; ts: number; source: string }>();
 const priceCache    = new Map<string, { prices: number[]; ts: number }>();
 const HOLDINGS_TTL  = 6 * 3600_000;
 const PRICE_TTL     = 30 * 60_000;
@@ -277,6 +284,56 @@ function normalize(val: number, min: number, max: number): number {
   return Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
 }
 
+// ─── KIS ETF 구성 종목 조회 (실시간 우선) ────────────────────────────────────
+
+async function kisGetEtfHoldings(code: string): Promise<ETFHolding[]> {
+  try {
+    const token = await getKisAccessToken();
+    const url = new URL(`${KIS_BASE}/uapi/domestic-stock/v1/quotations/inquire-etf-component`);
+    url.searchParams.set("FID_INPUT_ISCD", code);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey:        process.env.KIS_APP_KEY!,
+        appsecret:     process.env.KIS_APP_SECRET!,
+        tr_id:         "FHKST132400C0",
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      // 404는 KIS가 미지원 — 조용히 폴백
+      if (res.status !== 404) {
+        console.warn(`[kis-etf] ${code} 구성종목 조회 실패: ${res.status}`);
+      }
+      return [];
+    }
+
+    const json = await res.json();
+    if (json?.rt_cd !== "0") {
+      console.warn(`[kis-etf] ${code} rt_cd=${json?.rt_cd} msg=${json?.msg1}`);
+      return [];
+    }
+
+    const rows: any[] = json?.output1 ?? [];
+    return rows
+      .map((r: any, i: number) => ({
+        rank:      i + 1,
+        stockCode: String(r.stck_shrn_iscd ?? "").replace(/^A/, ""),
+        stockName: String(r.hts_kor_isnm ?? ""),
+        weight:    parseFloat(String(r.bprc_wt ?? r.evlu_prc_wt ?? 0)) || 0,
+      }))
+      .filter(h => h.weight > 0)
+      .sort((a, b) => b.weight - a.weight)
+      .map((h, i) => ({ ...h, rank: i + 1 }));
+  } catch (e: any) {
+    console.warn("[kis-etf] holdings 조회 예외:", e?.message);
+    return [];
+  }
+}
+
 // ─── KRX ETF 구성 종목 조회 ───────────────────────────────────────────────────
 
 async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
@@ -318,18 +375,39 @@ async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────────
 
-/** ETF 구성 종목 조회 (KRX 우선, 정적 폴백) */
-export async function getEtfHoldings(code: string): Promise<ETFHolding[]> {
+export type HoldingsResult = { holdings: ETFHolding[]; source: "live" | "reference" };
+
+/** ETF 구성 종목 조회 (KIS 실시간 → KRX → 정적 폴백) */
+export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
   const cached = holdingsCache.get(code);
-  if (cached && Date.now() - cached.ts < HOLDINGS_TTL) return cached.data;
+  if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
+    return { holdings: cached.data, source: cached.source as "live" | "reference" };
+  }
 
   const etf = MAJOR_ETFS.find(e => e.code === code);
-  if (!etf) return STATIC_HOLDINGS[code] ?? [];
+  if (!etf) {
+    const st = STATIC_HOLDINGS[code] ?? [];
+    return { holdings: st, source: "reference" };
+  }
 
-  const live = await krxFetchHoldings(etf.isuCd);
-  const data = live.length >= 3 ? live : (STATIC_HOLDINGS[code] ?? live);
-  holdingsCache.set(code, { data, ts: Date.now() });
-  return data;
+  // 1) KIS API (실시간)
+  const kisData = await kisGetEtfHoldings(code);
+  if (kisData.length >= 3) {
+    holdingsCache.set(code, { data: kisData, ts: Date.now(), source: "live" });
+    return { holdings: kisData, source: "live" };
+  }
+
+  // 2) KRX 스크래핑
+  const krxData = await krxFetchHoldings(etf.isuCd);
+  if (krxData.length >= 3) {
+    holdingsCache.set(code, { data: krxData, ts: Date.now(), source: "live" });
+    return { holdings: krxData, source: "live" };
+  }
+
+  // 3) 정적 폴백
+  const st = STATIC_HOLDINGS[code] ?? [];
+  holdingsCache.set(code, { data: st, ts: Date.now(), source: "reference" });
+  return { holdings: st, source: "reference" };
 }
 
 /** ETF 검색 */
@@ -350,7 +428,7 @@ export async function getStockExposure(
   // 주요 ETF들의 보유 종목 병렬 조회 (캐시 활용)
   const results = await Promise.allSettled(
     MAJOR_ETFS.map(async etf => {
-      const holdings = await getEtfHoldings(etf.code);
+      const { holdings } = await getEtfHoldings(etf.code);
       return { etf, holdings };
     })
   );

@@ -44,6 +44,8 @@ async function saveTokenToDB(token: KISToken): Promise<void> {
   }
 }
 
+export async function getKisAccessToken(): Promise<string> { return getAccessToken(); }
+
 async function getAccessToken(): Promise<string> {
   // 1) 인메모리 캐시 확인
   if (_tokenCache && Date.now() < _tokenCache.expires_at) {
