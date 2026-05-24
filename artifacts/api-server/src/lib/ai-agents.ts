@@ -1040,6 +1040,93 @@ FDA 특별 지정 → PoS 보정 (필수):
 `;
   }
 
+  // ── 양자컴퓨팅 (Quantum Computing) — 반도체·하드웨어보다 먼저 체크 ──
+  // Yahoo Finance가 "computer hardware" / "technology" 등으로 오분류
+  // EV/EBITDA 적용 시 적자 구조로 밸류에이션 심각 과소평가 → 전용 방법론 필수
+  const isQuantumComputing = /ionq|ion q|rigetti|d-wave|dwave|quantinuum|ibm quantum|google quantum|quera|psiquantum|quantum computing inc|arqit|infleqtion|atom computing|pasqal|iqm quantum|alice.*bob|quantum machines|classiq/.test(name) ||
+    /quantum comput|quantum hardware|quantum processor|quantum software|qubit|trapped ion|superconducting qubit|photonic quantum|quantum annealing|quantum error correction|fault.tolerant quantum/.test(ind);
+
+  if (isQuantumComputing) {
+    return `
+[섹터 특화 지침 — 양자컴퓨팅 (Quantum Computing)]
+⚠️ 야후파이낸스 "computer hardware" / "technology" 분류와 무관하게 전용 방법론 필수
+⚠️ EV/EBITDA, P/E 사용 금지 — 전 기업 대규모 적자, EBITDA 음수. 적용 시 밸류에이션 불가 또는 심각 과소평가
+
+핵심 KPI (양자컴퓨팅 고유):
+- #AQ (Algorithmic Qubit): IonQ의 핵심 성능 지표 — 실제 알고리즘 실행 가능 등가 큐비트 수
+- 물리 큐비트 수 vs 논리 큐비트 수 (오류 정정 수준 반영)
+- 게이트 충실도(Gate Fidelity, %): 큐비트 연산 정확도 — 99.9%+ = 상업화 문턱
+- 양자 볼륨(Quantum Volume) / Circuit Layer Operations per Second (CLOPS)
+- 연간 반복률(Coherence Time): 큐비트 상태 유지 시간 (㎲~㎳)
+- 클라우드 접속량 (AWS Braket, Azure Quantum, Google Cloud 월간 Tasks 수)
+- 정부·연구기관·엔터프라이즈 계약 ACV (연간 계약가치, $M)
+- 현금 런웨이 (Cash / 분기 Burn Rate): 상업화 전 추가 자본조달 필요성
+- Bookings / Backlog (계약 수주 파이프라인): 매출 가시성 지표
+
+구조 특이사항:
+- 수익 대부분: 정부 계약(DoD·DARPA·DOE·NASA) + 클라우드 퀀텀 액세스 + 연구기관
+- 상업화 단계: "NISQ(노이즈 중간 규모 양자) → 오류정정 → 내결함성(Fault-Tolerant)" 로드맵
+- 내결함성 달성 전까지 고전 컴퓨터 대비 실질적 "양자 우위(Quantum Advantage)" 입증 필요
+- 기술 경쟁: IBM(초전도), Google(초전도), IonQ(트랩 이온), Rigetti(초전도), D-Wave(어닐링)
+  각 방식별 장단점 다르며 승자 불명 → 복수 플랫폼 베팅 전략 일반적
+- Dilution 리스크: 지속적 자본 조달로 주식 희석 불가피 → 완전희석 기준 주식수 적용 필수
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+적정주가 산출 — 이중 접근법 (필수)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【방법 1 — EV/Revenue 피어 배수 (현재 가시 매출 기반)】
+양자컴퓨팅 상장사 피어: IONQ, RGTI(Rigetti), QBTS(D-Wave), QUBT(Quantum Computing Inc)
+적용 배수 가이드:
+  · 매출 성장률 100%+ YoY, 정부 계약 파이프라인 강함: 30~60x Fwd Revenue
+  · 매출 성장 50~100% YoY, 차별화 기술 입증: 15~30x Fwd Revenue
+  · 성장 둔화 또는 기술 경쟁력 의문: 8~15x Fwd Revenue
+⚠️ 피어 배수 자체가 극단적으로 높음 → 반드시 "투기적 프리미엄" 경고 명시
+계산: EV = Fwd Revenue (1~2년) × 피어 배수 → 주가 = (EV + 현금 − 부채) / 완전희석 주식수
+
+【방법 2 — 시나리오 가중 옵션가치 (내결함성 양자 도달 시 장기 TAM 기반)】
+글로벌 양자컴퓨팅 TAM 예측: $450B(2030E, McKinsey) → $1T+(2035E+)
+IonQ 잠재 점유율: Bull 8~12%, Base 3~5%, Bear 0.5~1% (기술 승자 불확실성)
+
+  【Bull — 25% 확률】
+  조건: 2027~2028년 내결함성 달성 + 엔터프라이즈 대규모 도입
+  - 2030E 매출: $800M~1.5B / EBITDA Margin 장기 35%+
+  - WACC: 12%, Terminal Growth: 5%
+  - 적정주가: $35~60+
+
+  【Base — 50% 확률】
+  조건: 2029~2031년 내결함성 달성 + 정부·금융·제약 수직 시장 선도
+  - 2030E 매출: $300~600M / 흑자 전환 2031~2032년
+  - WACC: 14%, Terminal Growth: 4%
+  - 적정주가: $15~30
+
+  【Bear — 25% 확률】
+  조건: IBM·Google 등 대형사가 내결함성 독식 + IonQ 기술 경쟁력 상실
+  - 상업화 지연 + 지속적 자본 희석
+  - 적정주가: 현금가치 수준 $3~7
+
+가중 적정주가 = Bull × 0.25 + Base × 0.50 + Bear × 0.25
+
+현금 런웨이 분석 (의무):
+- 현금÷분기 Burn = 런웨이 분기 수 명시
+- 런웨이 < 4분기: 긴급 자본조달 리스크 → 적색 경고
+- 런웨이 ≥ 8분기: 내결함성 달성 전 안전마진 확보 평가
+
+감응도 (의무 표시):
+- #AQ 2025 목표 달성 여부 → Base 시나리오 확률 ±10%p
+- 정부 계약 $100M+ 신규 수주 → Base 주가 상단 15~20% 상승
+- 피어(IBM·Google) 양자우위 조기 달성 → Bear 확률 +15%p
+
+피어 요약 비교 (필수):
+| 기업 | 기술방식 | 2024E 매출 | EV/Rev | 특징 |
+|------|--------|-----------|--------|------|
+| IonQ(IONQ) | 트랩 이온 | $43M | ~100x | 정밀도 최고, 확장성 도전 |
+| Rigetti(RGTI) | 초전도 | $12M | ~70x | IBM 동일방식, 소규모 |
+| D-Wave(QBTS) | 어닐링 | $9M | ~30x | 특화 최적화 문제 상업화 |
+| IBM Quantum | 초전도 | N/A(비상장) | — | 1000+ 큐비트, 표준 생태계 |
+`;
+  }
+
   // ── 뉴 스페이스 / 상업 우주 — 방산보다 먼저 체크 (RKLB 등 야후파이낸스 "aerospace & defense" 오분류 대응) ──
   const isNewSpaceCompany = /rocket lab|rocketlab|planet labs|ast spacemobile|ast space|spire global|redwire|terran orbital|astra space|virgin galactic|momentus|satellogic|mynaric/.test(name) ||
     /new space|commercial space|space launch|launch vehicle|launch services|small satellite|satellite constellation|cubesat|smallsat|space systems|space infrastructure|orbital launch|launch provider/.test(ind);
