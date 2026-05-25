@@ -821,7 +821,8 @@ async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────────
 
-export type HoldingsResult = { holdings: ETFHolding[]; source: "live" | "reference"; dataDate: string };
+export type DataSource = "kis" | "samsung" | "krx" | "yahoo" | "reference";
+export type HoldingsResult = { holdings: ETFHolding[]; source: DataSource; dataDate: string };
 
 function tsToKstDateStr(ts: number): string {
   const d = new Date(ts + 9 * 3600_000);
@@ -841,7 +842,7 @@ export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
     return {
       holdings: cached.data,
-      source: cached.source as "live" | "reference",
+      source: cached.source as DataSource,
       dataDate: tsToKstDateStr(cached.ts),
     };
   }
@@ -857,22 +858,22 @@ export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
   // 1) KIS API (실시간)
   const kisData = await kisGetEtfHoldings(code);
   if (kisData.length >= 3) {
-    holdingsCache.set(code, { data: kisData, ts: now, source: "live" });
-    return { holdings: kisData, source: "live", dataDate: tsToKstDateStr(now) };
+    holdingsCache.set(code, { data: kisData, ts: now, source: "kis" });
+    return { holdings: kisData, source: "kis", dataDate: tsToKstDateStr(now) };
   }
 
-  // 2) Samsung Fund 모바일 API (KODEX ETF 전용 실시간)
+  // 2) Samsung Fund 모바일 API (KODEX ETF 전용)
   const sfData = await samsungFundFetchHoldings(code);
   if (sfData.length >= 3) {
-    holdingsCache.set(code, { data: sfData, ts: now, source: "live" });
-    return { holdings: sfData, source: "live", dataDate: tsToKstDateStr(now) };
+    holdingsCache.set(code, { data: sfData, ts: now, source: "samsung" });
+    return { holdings: sfData, source: "samsung", dataDate: tsToKstDateStr(now) };
   }
 
   // 3) KRX 스크래핑
   const krxData = await krxFetchHoldings(etf.isuCd);
   if (krxData.length >= 3) {
-    holdingsCache.set(code, { data: krxData, ts: now, source: "live" });
-    return { holdings: krxData, source: "live", dataDate: tsToKstDateStr(now) };
+    holdingsCache.set(code, { data: krxData, ts: now, source: "krx" });
+    return { holdings: krxData, source: "krx", dataDate: tsToKstDateStr(now) };
   }
 
   // 4) 정적 폴백
@@ -887,7 +888,7 @@ async function getUsEtfHoldings(code: string): Promise<HoldingsResult> {
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
     return {
       holdings: cached.data,
-      source: cached.source as "live" | "reference",
+      source: cached.source as DataSource,
       dataDate: tsToKstDateStr(cached.ts),
     };
   }
@@ -903,8 +904,8 @@ async function getUsEtfHoldings(code: string): Promise<HoldingsResult> {
       weight:    Math.round((h.holdingPercent ?? 0) * 10000) / 100,
     }));
     const now = Date.now();
-    holdingsCache.set(code, { data: holdings, ts: now, source: "live" });
-    return { holdings, source: "live", dataDate: tsToKstDateStr(now) };
+    holdingsCache.set(code, { data: holdings, ts: now, source: "yahoo" });
+    return { holdings, source: "yahoo", dataDate: tsToKstDateStr(now) };
   } catch {
     return { holdings: [], source: "reference", dataDate: "" };
   }

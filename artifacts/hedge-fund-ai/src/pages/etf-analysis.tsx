@@ -623,15 +623,9 @@ function SearchTab() {
               <div className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                   <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest">Top {etfResult.holdings.length} 보유 종목</p>
-                  {etfResult.source === "live" ? (
-                    etfResult.etf?.isuCd === etfResult.etf?.code ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-500 border border-blue-500/30 font-semibold">● Yahoo Finance</span>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-semibold">● KIS 실시간</span>
-                    )
-                  ) : (
+                  {etfResult.source === "reference" ? (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30 font-semibold">참고용 데이터</span>
-                  )}
+                  ) : null}
                 </div>
                 <div className="divide-y divide-border/50">
                   {etfResult.holdings.map(h => (
@@ -656,15 +650,15 @@ function SearchTab() {
                   ))}
                 </div>
                 <div className="px-4 py-2.5 bg-muted/10 border-t border-border flex items-center justify-between gap-4">
-                  <p className="text-[10px] text-muted-foreground/40">
-                    {etfResult.source === "live"
-                      ? (etfResult.etf?.isuCd === etfResult.etf?.code
-                          ? "* Yahoo Finance 실시간 데이터 — 분기별 최신 비중 기준"
-                          : "* KIS Open API 실시간 데이터 — 기준가격 비중 기준")
-                      : "* 참고용 정적 데이터 — 실제 비중과 차이가 있을 수 있습니다"}
+                  <p className="text-[10px] text-muted-foreground/50">
+                    {etfResult.source === "kis"      && "* KIS Open API"}
+                    {etfResult.source === "samsung"  && "* 삼성자산운용 공시"}
+                    {etfResult.source === "krx"      && "* KRX 공시"}
+                    {etfResult.source === "yahoo"    && "* Yahoo Finance — 분기별 비중 기준"}
+                    {etfResult.source === "reference" && "* 참고용 — 실제 비중과 차이가 있을 수 있습니다"}
                   </p>
                   {etfResult.dataDate && (
-                    <p className="text-[10px] text-muted-foreground/50 shrink-0">
+                    <p className="text-[10px] text-muted-foreground/60 shrink-0 font-medium">
                       기준일 {etfResult.dataDate}
                     </p>
                   )}
