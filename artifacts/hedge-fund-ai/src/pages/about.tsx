@@ -253,8 +253,8 @@ export default function AboutPage() {
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           {(isEn
-            ? ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "17 Valuation Models", "7-Step AI Pipeline", "Live Macro Data"]
-            : ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "16개 전용 밸류에이션 모델", "7단계 AI 파이프라인", "실시간 거시지표"]
+            ? ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "17 Valuation Models", "7-Step AI Pipeline", "Live Macro Data", "AI Market Outlook"]
+            : ["KOSPI·KOSDAQ", "NYSE·NASDAQ", "16개 전용 밸류에이션 모델", "7단계 AI 파이프라인", "실시간 거시지표", "AI 시장 전망"]
           ).map((tag) => (
             <span key={tag} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
               {tag}
@@ -696,6 +696,161 @@ export default function AboutPage() {
             )}
           </div>
         )}
+      </section>
+
+      {/* 매크로 분석 활용 */}
+      <section>
+        <h2 className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-3 px-1">
+          {t("매크로 분석 — AI가 거시환경을 읽는 방법", "Macro Analysis — How AI Reads the Macro Environment")}
+        </h2>
+        <p className="text-[12px] text-muted-foreground/60 px-1 mb-3 leading-relaxed">
+          {t(
+            "주식 가치는 기업 내부만으로 결정되지 않습니다. 금리·환율·경기 사이클·섹터 자금 흐름이 DCF 할인율과 투자자 심리를 동시에 움직입니다. 애빛다는 거시 데이터를 단순 참고가 아닌 분석 파이프라인에 직접 내재화합니다.",
+            "Stock value is not determined by a company's internals alone. Interest rates, FX, business cycles, and sector fund flows simultaneously drive DCF discount rates and investor sentiment. AiBITDA embeds macro data directly into the analysis pipeline — not merely as a reference."
+          )}
+        </p>
+
+        <div className="space-y-3">
+          {/* WACC 실시간 연동 */}
+          <div className="rounded-xl border border-border bg-card px-4 py-4 flex gap-3.5 border-l-4 border-l-blue-500">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">📐</div>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <p className="text-[13.5px] font-bold text-foreground">
+                {t("WACC에 실시간 거시지표 자동 반영", "Macro Data Wired Live into WACC")}
+              </p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                {t(
+                  "무위험수익률(Rf)을 고정값이 아닌 실시간으로 갱신합니다. 한국 주식은 ECOS 기준금리 및 국고채 10Y, 미국 주식은 FRED 10년 국채(DGS10)를 Rf로 자동 채택합니다. 금리가 1%p 오르면 WACC가 오르고, 목표주가는 하락합니다 — 이 연산이 분석마다 자동으로 실행됩니다.",
+                  "The risk-free rate (Rf) is updated in real-time, not fixed. Korean stocks use the Bank of Korea base rate and KTB 10Y via ECOS; US stocks use FRED's DGS10. When rates rise 1%p, WACC increases and target prices fall — this calculation runs automatically on every analysis."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  t("ECOS 기준금리", "ECOS Base Rate"),
+                  t("KTB 10Y", "KTB 10Y"),
+                  "FRED DGS10",
+                  t("ERP 5~6%", "ERP 5–6%"),
+                ].map((tag) => (
+                  <span key={tag} className="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 장단기 금리차 */}
+          <div className="rounded-xl border border-border bg-card px-4 py-4 flex gap-3.5 border-l-4 border-l-red-500">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">📉</div>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <p className="text-[13.5px] font-bold text-foreground">
+                {t("장단기 금리차 — 경기침체 조기 경보", "Yield Curve — Early Warning System")}
+              </p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                {t(
+                  "미국 10Y-2Y 국채 스프레드는 역사적으로 가장 신뢰도 높은 경기침체 선행 지표입니다. 스프레드가 역전(음수)되면 리스크 분석 단계에서 매크로 리스크를 자동으로 상향 반영하며, 섹터별 DCF 성장률 가정을 보수적으로 조정합니다. 현재 스프레드 상태는 소개 페이지 하단 대시보드에서 실시간으로 확인할 수 있습니다.",
+                  "The US 10Y-2Y Treasury spread is historically the most reliable leading indicator of recessions. When the spread inverts (goes negative), macro risk in the risk analysis step is automatically elevated and sector-specific DCF growth assumptions are adjusted conservatively. The current spread is visible in real-time on the macro dashboard below."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  t("10Y-2Y 스프레드", "10Y-2Y Spread"),
+                  t("역전 시 리스크 상향", "Risk Elevated on Inversion"),
+                  t("성장률 보수 조정", "Conservative Growth Adj."),
+                ].map((tag) => (
+                  <span key={tag} className="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ETF 섹터 모멘텀 */}
+          <div className="rounded-xl border border-border bg-card px-4 py-4 flex gap-3.5 border-l-4 border-l-emerald-500">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">🔄</div>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <p className="text-[13.5px] font-bold text-foreground">
+                {t("ETF 섹터 모멘텀 — 자금 흐름 지도", "ETF Sector Momentum — Capital Flow Map")}
+              </p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                {t(
+                  "KOSPI·KOSDAQ·미국 주요 ETF의 가격 모멘텀(1M·3M·6M 스코어 가중 평균)을 계산해 자금이 어떤 섹터로 유입·유출되는지 지속적으로 추적합니다. 섹터 로테이션 신호는 개별 종목 분석 시 업종 매크로 배경 설명에 자동 반영됩니다. ETF 탭에서 실시간 모멘텀 순위를 확인할 수 있습니다.",
+                  "Price momentum scores (1M/3M/6M weighted average) are computed across major KOSPI, KOSDAQ, and US ETFs to continuously track which sectors are attracting or shedding capital. Sector rotation signals are automatically incorporated into the macro backdrop description for individual stock analyses. Real-time momentum rankings are available in the ETF tab."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  t("1M·3M·6M 모멘텀", "1M·3M·6M Momentum"),
+                  t("섹터 로테이션", "Sector Rotation"),
+                  t("ETF 리밸런싱 추적", "ETF Rebalancing Tracker"),
+                  t("실시간 순위", "Live Rankings"),
+                ].map((tag) => (
+                  <span key={tag} className="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* KOSPI·KOSDAQ AI 전망 */}
+          <div className="rounded-xl border border-border bg-card px-4 py-4 flex gap-3.5 border-l-4 border-l-violet-500">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">🤖</div>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <p className="text-[13.5px] font-bold text-foreground">
+                {t("KOSPI·KOSDAQ AI 지수 전망 (LSTM + GBDT 앙상블)", "KOSPI·KOSDAQ AI Outlook (LSTM + GBDT Ensemble)")}
+              </p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                {t(
+                  "LSTM(장단기 메모리 신경망)과 GBDT(그래디언트 부스팅)를 앙상블해 KOSPI·KOSDAQ의 3일 예측 수익률과 두 모델의 방향 일치 여부를 산출합니다. 두 모델이 동일한 방향(상승/하락)을 가리킬 때 신호 신뢰도가 높아집니다. 이 지수 전망은 ETF 탭 상단에 표시되며, 개별 종목 분석 시 시장 전체 환경 맥락으로 활용됩니다.",
+                  "An ensemble of LSTM (Long Short-Term Memory neural network) and GBDT (Gradient Boosting Decision Trees) produces 3-day predicted returns and a directional agreement signal for KOSPI and KOSDAQ. When both models point in the same direction, signal confidence is higher. This index outlook appears at the top of the ETF tab and provides broader market context for individual stock analyses."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  "LSTM",
+                  "GBDT",
+                  t("앙상블 예측", "Ensemble Forecast"),
+                  t("3일 예측 수익률", "3-Day Return Forecast"),
+                  t("방향 일치 신호", "Agreement Signal"),
+                ].map((tag) => (
+                  <span key={tag} className="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-200 dark:border-violet-700">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 리스크 분석 매크로 축 */}
+          <div className="rounded-xl border border-border bg-card px-4 py-4 flex gap-3.5 border-l-4 border-l-amber-500">
+            <div className="text-[20px] leading-none mt-0.5 shrink-0 select-none">⚠️</div>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <p className="text-[13.5px] font-bold text-foreground">
+                {t("리스크 분석 5축 — 매크로가 첫 번째", "5-Axis Risk Analysis — Macro Comes First")}
+              </p>
+              <p className="text-[12px] text-muted-foreground/75 leading-relaxed">
+                {t(
+                  "7단계 파이프라인의 리스크 분석(6단계)은 매크로·규제·경쟁·재무·이벤트 5개 축을 평가합니다. 특히 매크로 축에서는 금리 상승 민감도, 환율 익스포저, 원자재 가격 연동성, 경기 사이클 민감도를 정량화합니다. 고금리 환경에서 고평가 성장주와 고부채 기업의 리스크는 자동으로 가중됩니다.",
+                  "The risk analysis step (step 6) of the 7-stage pipeline evaluates five axes: macro, regulatory, competitive, financial, and event-driven. The macro axis specifically quantifies interest rate sensitivity, FX exposure, commodity price linkage, and business cycle sensitivity. In a high-rate environment, overvalued growth stocks and highly leveraged companies are automatically weighted with greater risk."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  t("금리 민감도", "Rate Sensitivity"),
+                  t("환율 익스포저", "FX Exposure"),
+                  t("원자재 연동", "Commodity Linkage"),
+                  t("경기 사이클", "Business Cycle"),
+                ].map((tag) => (
+                  <span key={tag} className="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* 투자 유의사항 */}
