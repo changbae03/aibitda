@@ -221,6 +221,60 @@ def main():
             result.sort(key=lambda x: x["weight"], reverse=True)
             emit(result)
 
+        # ── ETF 구성종목(PDF) 조회 ──────────────────────────────────────────
+        elif data_type == "etf_holdings":
+            # market_arg = 6자리 ETF 종목코드 (예: "148020")
+            etf_code = market_arg.strip()
+            with StdoutToStderr():
+                df = krx.get_etf_portfolio_deposit_file(etf_code)
+
+            if df is None or df.empty:
+                emit([])
+                return
+
+            rows_raw = []
+            total_weight = 0.0
+            total_qty    = 0.0
+            for idx, row in df.iterrows():
+                stock_code = str(idx)
+                stock_name = str(row.get("구성종목명", row.get("종목명", "")))
+                if stock_name == "nan" or not stock_name:
+                    stock_name = stock_code
+                weight = float(row.get("비중", 0))
+                qty    = float(row.get("계약수", 0))
+                rows_raw.append({"stockCode": stock_code, "stockName": stock_name, "weight": weight, "qty": qty})
+                total_weight += weight
+                total_qty    += qty
+
+            # 비중이 모두 0이면 계약수 비례로 추정 (미국 ETF 등 해외 구성종목)
+            if total_weight < 0.01 and total_qty > 0:
+                for r in rows_raw:
+                    r["weight"] = round(r["qty"] / total_qty * 100, 4) if r["qty"] > 0 else 0.0
+
+            # 비중 > 0 필터링 후 내림차순 정렬
+            result = [r for r in rows_raw if r["weight"] > 0]
+            result.sort(key=lambda x: x["weight"], reverse=True)
+
+            # 유효성 검증: 동일 종목코드가 여러 회사에 중복 사용되면 KRX 플레이스홀더 데이터
+            # (미국 ETF는 비알파숫자 코드 허용 — 해외 종목 KRX 고유 식별자이므로 정상)
+            from collections import Counter
+            codes = [r["stockCode"] for r in result]
+            code_freq = Counter(codes)
+            dup_count = sum(v - 1 for v in code_freq.values() if v > 1)
+            if result and dup_count > len(result) * 0.15:
+                print(
+                    f"[etf_holdings] {etf_code}: 중복 종목코드 감지 "
+                    f"(dup={dup_count}/{len(result)}) → 신뢰할 수 없는 데이터 제외",
+                    file=sys.stderr,
+                )
+                emit([])
+                return
+
+            for i, r in enumerate(result):
+                r["rank"] = i + 1
+                del r["qty"]   # 내부 필드 제거
+            emit(result[:30])  # 상위 30개
+
         else:
             emit({"error": f"Unknown type: {data_type}"})
             sys.exit(1)

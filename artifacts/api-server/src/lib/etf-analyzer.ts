@@ -10,6 +10,7 @@ import YahooFinance from "yahoo-finance2";
 import { getKisAccessToken } from "./kis-client.js";
 import { fetchECOSMacro } from "./ecos-client.js";
 import { fetchFREDMacro } from "./fred-client.js";
+import { fetchEtfHoldingsPykrx } from "./pykrx-client.js";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 const KRX_BASE = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
@@ -149,6 +150,53 @@ export const MAJOR_ETFS: ETFInfo[] = [
   { code:"144600", isuCd:"KR7144600000", name:"KODEX 은선물(H)",         sector:"원자재",   issuer:"삼성자산운용", yahooCode:"144600.KS", leverage:1,  ter:0.68, benchmark:"S&P GSCI Silver" },
   { code:"160480", isuCd:"KR7160480000", name:"KODEX 콩선물(H)",         sector:"원자재",   issuer:"삼성자산운용", yahooCode:"160480.KS", leverage:1,  ter:0.45, benchmark:"S&P GSCI Soybeans" },
   { code:"171018", isuCd:"KR7171018001", name:"KODEX 천연가스선물(H)",   sector:"원자재",   issuer:"삼성자산운용", yahooCode:"171018.KS", leverage:1,  ter:0.35, benchmark:"S&P GSCI Natural Gas" },
+
+  // ── TIMEFOLIO (타임폴리오자산운용) ──────────────────────────────────────────
+  { code:"426030", isuCd:"KR7426030003", name:"TIME 미국나스닥100액티브",         sector:"해외주식", issuer:"TIMEFOLIO", yahooCode:"426030.KS", leverage:1, ter:0.80, benchmark:"NASDAQ 100 (액티브)" },
+  { code:"426020", isuCd:"KR7426020004", name:"TIME 미국S&P500액티브",           sector:"해외주식", issuer:"TIMEFOLIO", yahooCode:"426020.KS", leverage:1, ter:0.80, benchmark:"S&P 500 (액티브)" },
+  { code:"456600", isuCd:"KR7456600006", name:"TIME 글로벌AI인공지능액티브",     sector:"테마",     issuer:"TIMEFOLIO", yahooCode:"456600.KS", leverage:1, ter:0.80, benchmark:"글로벌 AI 인공지능 (액티브)" },
+  { code:"494180", isuCd:"KR7494180003", name:"TIME 글로벌소비트렌드액티브",     sector:"테마",     issuer:"TIMEFOLIO", yahooCode:"494180.KS", leverage:1, ter:0.80, benchmark:"글로벌 소비트렌드 (액티브)" },
+  { code:"485810", isuCd:"KR7485810006", name:"TIME 글로벌바이오액티브",         sector:"헬스케어", issuer:"TIMEFOLIO", yahooCode:"485810.KS", leverage:1, ter:0.80, benchmark:"글로벌 바이오 (액티브)" },
+  { code:"478150", isuCd:"KR7478150006", name:"TIME 글로벌우주테크&방산액티브", sector:"테마",     issuer:"TIMEFOLIO", yahooCode:"478150.KS", leverage:1, ter:0.80, benchmark:"글로벌 우주테크&방산 (액티브)" },
+
+  // ── RISE ETF (KB자산운용, 구 KBSTAR) ─────────────────────────────────────
+  { code:"148020", isuCd:"KR7148020001", name:"RISE 200",                          sector:"국내주식", issuer:"KB자산운용", yahooCode:"148020.KS", leverage:1,  ter:0.07, benchmark:"KOSPI 200" },
+  { code:"361580", isuCd:"KR7361580004", name:"RISE 200TR",                        sector:"국내주식", issuer:"KB자산운용", yahooCode:"361580.KS", leverage:1,  ter:0.07, benchmark:"KOSPI 200 TR" },
+  { code:"292050", isuCd:"KR7292050002", name:"RISE KRX300",                       sector:"국내주식", issuer:"KB자산운용", yahooCode:"292050.KS", leverage:1,  ter:0.14, benchmark:"KRX 300" },
+  { code:"252400", isuCd:"KR7252400007", name:"RISE 200선물레버리지",              sector:"국내주식", issuer:"KB자산운용", yahooCode:"252400.KS", leverage:2,  ter:0.60, benchmark:"KOSPI 200 ×2" },
+  { code:"368590", isuCd:"KR7368590006", name:"RISE 미국나스닥100",                sector:"해외주식", issuer:"KB자산운용", yahooCode:"368590.KS", leverage:1,  ter:0.07, benchmark:"NASDAQ 100" },
+  { code:"379780", isuCd:"KR7379780000", name:"RISE 미국S&P500",                   sector:"해외주식", issuer:"KB자산운용", yahooCode:"379780.KS", leverage:1,  ter:0.07, benchmark:"S&P 500" },
+  { code:"315960", isuCd:"KR7315960005", name:"RISE 대형고배당10TR",               sector:"배당",     issuer:"KB자산운용", yahooCode:"315960.KS", leverage:1,  ter:0.20, benchmark:"FnGuide 대형고배당10" },
+  { code:"388420", isuCd:"KR7388420002", name:"RISE 비메모리반도체액티브",         sector:"반도체",   issuer:"KB자산운용", yahooCode:"388420.KS", leverage:1,  ter:0.50, benchmark:"비메모리반도체 (액티브)" },
+  { code:"367760", isuCd:"KR7367760006", name:"RISE 네트워크인프라",               sector:"테마",     issuer:"KB자산운용", yahooCode:"367760.KS", leverage:1,  ter:0.45, benchmark:"FnGuide 네트워크인프라" },
+  { code:"417450", isuCd:"KR7417450004", name:"RISE 글로벌수소경제",               sector:"테마",     issuer:"KB자산운용", yahooCode:"417450.KS", leverage:1,  ter:0.45, benchmark:"글로벌 수소경제" },
+  { code:"490590", isuCd:"KR7490590007", name:"RISE 미국AI밸류체인데일리고정커버드콜", sector:"테마", issuer:"KB자산운용", yahooCode:"490590.KS", leverage:1, ter:0.50, benchmark:"미국 AI 밸류체인" },
+  { code:"475720", isuCd:"KR7475720009", name:"RISE 200위클리커버드콜",            sector:"국내주식", issuer:"KB자산운용", yahooCode:"475720.KS", leverage:1,  ter:0.30, benchmark:"KOSPI 200 위클리 커버드콜" },
+  { code:"495050", isuCd:"KR7495050007", name:"RISE 코리아밸류업",                 sector:"국내주식", issuer:"KB자산운용", yahooCode:"495050.KS", leverage:1,  ter:0.15, benchmark:"KRX 코리아밸류업" },
+  { code:"290130", isuCd:"KR7290130004", name:"RISE ESG사회책임투자",              sector:"국내주식", issuer:"KB자산운용", yahooCode:"290130.KS", leverage:1,  ter:0.30, benchmark:"KRX ESG 사회책임투자" },
+  { code:"105780", isuCd:"KR7105780001", name:"RISE 5대그룹주",                   sector:"국내주식", issuer:"KB자산운용", yahooCode:"105780.KS", leverage:1,  ter:0.40, benchmark:"FnGuide 5대그룹" },
+
+  // ── PLUS ETF (한화자산운용, 구 ARIRANG) ──────────────────────────────────
+  { code:"152100", isuCd:"KR7152100004", name:"PLUS 200",                          sector:"국내주식", issuer:"한화자산운용", yahooCode:"152100.KS", leverage:1,  ter:0.04, benchmark:"KOSPI 200" },
+  { code:"251350", isuCd:"KR7251350005", name:"PLUS 200TR",                        sector:"국내주식", issuer:"한화자산운용", yahooCode:"251350.KS", leverage:1,  ter:0.04, benchmark:"KOSPI 200 TR" },
+  { code:"161510", isuCd:"KR7161510003", name:"PLUS 고배당주",                     sector:"배당",     issuer:"한화자산운용", yahooCode:"161510.KS", leverage:1,  ter:0.23, benchmark:"FnGuide 고배당주" },
+  { code:"489030", isuCd:"KR7489030007", name:"PLUS 고배당주위클리커버드콜",       sector:"배당",     issuer:"한화자산운용", yahooCode:"489030.KS", leverage:1,  ter:0.30, benchmark:"고배당주 위클리 커버드콜" },
+  { code:"451600", isuCd:"KR7451600001", name:"PLUS 국고채30년액티브",             sector:"채권",     issuer:"한화자산운용", yahooCode:"451600.KS", leverage:1,  ter:0.05, benchmark:"국고채 30년 (액티브)" },
+  { code:"453010", isuCd:"KR7453010001", name:"PLUS KOFR금리액티브",               sector:"채권",     issuer:"한화자산운용", yahooCode:"453010.KS", leverage:1,  ter:0.03, benchmark:"KOFR 금리" },
+  { code:"449450", isuCd:"KR7449450006", name:"PLUS K방산",                        sector:"테마",     issuer:"한화자산운용", yahooCode:"449450.KS", leverage:1,  ter:0.45, benchmark:"FnGuide K방산" },
+  { code:"421320", isuCd:"KR7421320003", name:"PLUS 우주항공&UAM",                 sector:"테마",     issuer:"한화자산운용", yahooCode:"421320.KS", leverage:1,  ter:0.45, benchmark:"글로벌 우주항공&UAM" },
+
+  // ── ACE ETF (한국투자신탁운용) ────────────────────────────────────────────
+  { code:"360750", isuCd:"KR7360750004", name:"ACE 미국나스닥100",                 sector:"해외주식", issuer:"한국투자신탁운용", yahooCode:"360750.KS", leverage:1, ter:0.07, benchmark:"NASDAQ 100" },
+  { code:"360200", isuCd:"KR7360200000", name:"ACE 미국S&P500",                    sector:"해외주식", issuer:"한국투자신탁운용", yahooCode:"360200.KS", leverage:1, ter:0.07, benchmark:"S&P 500" },
+  { code:"396520", isuCd:"KR7396520009", name:"ACE 미국빅테크TOP7Plus",            sector:"해외주식", issuer:"한국투자신탁운용", yahooCode:"396520.KS", leverage:1, ter:0.45, benchmark:"미국 빅테크 TOP7" },
+  { code:"448130", isuCd:"KR7448130005", name:"ACE 미국테크TOP10INDXX",            sector:"해외주식", issuer:"한국투자신탁운용", yahooCode:"448130.KS", leverage:1, ter:0.45, benchmark:"Indxx 미국테크 TOP10" },
+  { code:"411060", isuCd:"KR7411060007", name:"ACE KRX금현물",                     sector:"원자재",   issuer:"한국투자신탁운용", yahooCode:"411060.KS", leverage:1, ter:0.30, benchmark:"KRX 금현물" },
+  { code:"464190", isuCd:"KR7464190008", name:"ACE 미국AI반도체",                  sector:"반도체",   issuer:"한국투자신탁운용", yahooCode:"464190.KS", leverage:1, ter:0.45, benchmark:"미국 AI 반도체" },
+  { code:"469070", isuCd:"KR7469070007", name:"ACE 글로벌인공지능산업",            sector:"테마",     issuer:"한국투자신탁운용", yahooCode:"469070.KS", leverage:1, ter:0.45, benchmark:"글로벌 인공지능 산업" },
+  { code:"480810", isuCd:"KR7480810001", name:"ACE 글로벌인공지능&로보틱스",      sector:"테마",     issuer:"한국투자신탁운용", yahooCode:"480810.KS", leverage:1, ter:0.45, benchmark:"글로벌 AI & 로보틱스" },
+  { code:"491830", isuCd:"KR7491830006", name:"ACE 미국AI반도체팹리스액티브",     sector:"반도체",   issuer:"한국투자신탁운용", yahooCode:"491830.KS", leverage:1, ter:0.80, benchmark:"미국 AI 반도체 팹리스 (액티브)" },
+  { code:"498100", isuCd:"KR7498100007", name:"ACE 미국AI반도체&전력인프라TOP10", sector:"테마",     issuer:"한국투자신탁운용", yahooCode:"498100.KS", leverage:1, ter:0.45, benchmark:"미국 AI 반도체 & 전력인프라 TOP10" },
 ];
 
 // ─── 미국 주요 ETF 목록 ───────────────────────────────────────────────────────
@@ -631,6 +679,32 @@ const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
     { rank:1, stockCode:"NG=F", stockName:"천연가스 선물",       weight:94.50 },
     { rank:2, stockCode:"CASH", stockName:"현금·파생 증거금",    weight: 5.50 },
   ],
+  // ── ACE 미국빅테크TOP7Plus (396520) — 미국 빅테크 7개 + 알파 (한국투자신탁운용) ──
+  "396520": [
+    { rank: 1, stockCode:"AAPL",  stockName:"Apple Inc",                weight:15.20 },
+    { rank: 2, stockCode:"MSFT",  stockName:"Microsoft Corp",           weight:14.80 },
+    { rank: 3, stockCode:"NVDA",  stockName:"NVIDIA Corp",              weight:14.30 },
+    { rank: 4, stockCode:"AMZN",  stockName:"Amazon.com Inc",           weight:12.10 },
+    { rank: 5, stockCode:"META",  stockName:"Meta Platforms Inc",       weight:11.50 },
+    { rank: 6, stockCode:"GOOGL", stockName:"Alphabet Inc Cl A",        weight: 9.80 },
+    { rank: 7, stockCode:"TSLA",  stockName:"Tesla Inc",                weight: 8.40 },
+    { rank: 8, stockCode:"AVGO",  stockName:"Broadcom Inc",             weight: 5.20 },
+    { rank: 9, stockCode:"ORCL",  stockName:"Oracle Corp",              weight: 4.10 },
+    { rank:10, stockCode:"CASH",  stockName:"현금·기타",                weight: 4.60 },
+  ],
+  // ── ACE 미국AI반도체&전력인프라TOP10 (498100) — AI 반도체 + 전력인프라 (한국투자신탁운용) ──
+  "498100": [
+    { rank: 1, stockCode:"NVDA",  stockName:"NVIDIA Corp",              weight:20.50 },
+    { rank: 2, stockCode:"AVGO",  stockName:"Broadcom Inc",             weight:12.30 },
+    { rank: 3, stockCode:"AMD",   stockName:"Advanced Micro Devices",   weight:10.20 },
+    { rank: 4, stockCode:"TSM",   stockName:"Taiwan Semiconductor ADR", weight: 9.80 },
+    { rank: 5, stockCode:"ETN",   stockName:"Eaton Corp",               weight: 9.10 },
+    { rank: 6, stockCode:"GEV",   stockName:"GE Vernova Inc",           weight: 8.70 },
+    { rank: 7, stockCode:"PWR",   stockName:"Quanta Services Inc",      weight: 8.20 },
+    { rank: 8, stockCode:"CEG",   stockName:"Constellation Energy",     weight: 7.90 },
+    { rank: 9, stockCode:"VST",   stockName:"Vistra Corp",              weight: 7.30 },
+    { rank:10, stockCode:"INTC",  stockName:"Intel Corp",               weight: 6.00 },
+  ],
 };
 
 // ─── 캐시 ─────────────────────────────────────────────────────────────────────
@@ -819,6 +893,57 @@ async function samsungFundFetchHoldings(code: string): Promise<{ holdings: ETFHo
       .slice(0, 20)
       .map((h, i) => ({ ...h, rank: i + 1 }));
 
+    return { holdings, dataDate };
+  } catch {
+    return { holdings: [], dataDate: "" };
+  }
+}
+
+// ─── TIMEFOLIO ETF 구성종목 크롤러 ──────────────────────────────────────────────
+// timeetf.co.kr/past_pdf_json.php?idx={idx}&cate=001&period=latest
+// 응답: {"today":[{"prodNm":"NVIDIA Corp","wei":"8.91","increaseWei":"신규"}, ...]}
+
+const TIMEFOLIO_IDX_MAP: Record<string, number> = {
+  "426030": 2,   // TIME 미국나스닥100액티브
+  "426020": 5,   // TIME 미국S&P500액티브
+  "456600": 6,   // TIME 글로벌AI인공지능액티브
+  "494180": 8,   // TIME 글로벌소비트렌드액티브
+  "485810": 9,   // TIME 글로벌바이오액티브
+  "478150": 20,  // TIME 글로벌우주테크&방산액티브
+};
+
+async function timefolioFetchHoldings(code: string): Promise<{ holdings: ETFHolding[]; dataDate: string }> {
+  const idx = TIMEFOLIO_IDX_MAP[code];
+  if (!idx) return { holdings: [], dataDate: "" };
+
+  const url = `https://timeetf.co.kr/past_pdf_json.php?idx=${idx}&cate=001&period=latest`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":     "application/json",
+        "Referer":    "https://timeetf.co.kr/",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return { holdings: [], dataDate: "" };
+    const json = await res.json() as any;
+    const today: any[] = json?.today ?? [];
+    if (!today.length) return { holdings: [], dataDate: "" };
+
+    const holdings: ETFHolding[] = today
+      .filter((item: any) => item.prodNm && parseFloat(item.wei) > 0)
+      .map((item: any, i: number) => ({
+        rank:      i + 1,
+        stockCode: "",               // TIMEFOLIO API는 종목코드 미제공
+        stockName: String(item.prodNm ?? ""),
+        weight:    parseFloat(String(item.wei)) || 0,
+      }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 20)
+      .map((h, i) => ({ ...h, rank: i + 1 }));
+
+    const dataDate = tsToKstDateStr(Date.now());
     return { holdings, dataDate };
   } catch {
     return { holdings: [], dataDate: "" };
@@ -1035,7 +1160,7 @@ async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
 
 // ─── 공개 API ─────────────────────────────────────────────────────────────────
 
-export type DataSource = "kis" | "samsung" | "mirae" | "krx" | "yahoo" | "reference";
+export type DataSource = "kis" | "samsung" | "mirae" | "krx" | "yahoo" | "reference" | "timefolio";
 export type HoldingsResult = { holdings: ETFHolding[]; source: DataSource; dataDate: string };
 
 function tsToKstDateStr(ts: number): string {
@@ -1045,8 +1170,10 @@ function tsToKstDateStr(ts: number): string {
   return `${year}년 ${month}월 ${day}일`;
 }
 
-/** ETF 구성 종목 조회 (KIS → 삼성펀드(KODEX) → KRX → 정적 폴백 / 미국 ETF는 Yahoo Finance)
- *  @param isuCd  MAJOR_ETFS에 없는 ETF(예: TIGER 스크래핑분)도 KRX 조회가 가능하도록 ISIN 주입 */
+/** ETF 구성 종목 조회
+ *  우선순위: KIS → TIMEFOLIO(TIME ETF) → 삼성펀드(KODEX) → 미래에셋(TIGER) → KRX → 정적 폴백
+ *  미국 ETF는 Yahoo Finance 별도 경로.
+ *  @param isuCd  MAJOR_ETFS에 없는 ETF도 KRX 폴백이 가능하도록 ISIN을 외부에서 주입 */
 export async function getEtfHoldings(code: string, isuCd?: string): Promise<HoldingsResult> {
   // 미국 ETF 분기 (알파벳 코드)
   if (US_ETFS.find(e => e.code === code)) {
@@ -1064,23 +1191,25 @@ export async function getEtfHoldings(code: string, isuCd?: string): Promise<Hold
 
   const etf = MAJOR_ETFS.find(e => e.code === code);
   const resolvedIsuCd = etf?.isuCd ?? isuCd;
-
-  // isuCd도 없으면 정적 폴백만 가능
-  if (!resolvedIsuCd) {
-    const st = STATIC_HOLDINGS[code] ?? [];
-    return { holdings: st, source: "reference", dataDate: tsToKstDateStr(Date.now()) };
-  }
-
   const now = Date.now();
 
-  // 1) KIS API (실시간)
+  // 1) KIS API (실시간) — 6자리 종목코드만으로 모든 상장 ETF 조회 가능
   const kisData = await kisGetEtfHoldings(code);
   if (kisData.length >= 3) {
     holdingsCache.set(code, { data: kisData, ts: now, source: "kis" });
     return { holdings: kisData, source: "kis", dataDate: tsToKstDateStr(now) };
   }
 
-  // 2) Samsung Fund 모바일 API (KODEX ETF 전용 — MAJOR_ETFS에 있는 경우만)
+  // 2) TIMEFOLIO 전용 API (TIME ETF — prodNm·wei 형태로 직접 반환)
+  if (TIMEFOLIO_IDX_MAP[code]) {
+    const { holdings: tfData, dataDate: tfDate } = await timefolioFetchHoldings(code);
+    if (tfData.length >= 3) {
+      holdingsCache.set(code, { data: tfData, ts: now, source: "timefolio" as DataSource });
+      return { holdings: tfData, source: "timefolio" as DataSource, dataDate: tfDate || tsToKstDateStr(now) };
+    }
+  }
+
+  // 3) Samsung Fund 모바일 API (KODEX ETF 전용)
   if (etf) {
     const { holdings: sfData, dataDate: sfDate } = await samsungFundFetchHoldings(code);
     if (sfData.length >= 3) {
@@ -1089,27 +1218,43 @@ export async function getEtfHoldings(code: string, isuCd?: string): Promise<Hold
     }
   }
 
-  // 3) 미래에셋 TIGER ETF 구성종목 API
-  // MAJOR_ETFS isuCd보다 스크래퍼 isuCd가 더 정확 (Mirae Asset 사이트 기준)
-  const miraeIsuCd = isuCd || resolvedIsuCd;
-  const { holdings: maData, dataDate: maDate } = await miraeFundFetchHoldings(miraeIsuCd);
-  if (maData.length >= 3) {
-    holdingsCache.set(code, { data: maData, ts: now, source: "mirae" });
-    return { holdings: maData, source: "mirae", dataDate: maDate || tsToKstDateStr(now) };
+  // 4) 미래에셋 TIGER ETF 구성종목 API (ISIN 필요)
+  if (resolvedIsuCd) {
+    const miraeIsuCd = isuCd || resolvedIsuCd;
+    const { holdings: maData, dataDate: maDate } = await miraeFundFetchHoldings(miraeIsuCd);
+    if (maData.length >= 3) {
+      holdingsCache.set(code, { data: maData, ts: now, source: "mirae" });
+      return { holdings: maData, source: "mirae", dataDate: maDate || tsToKstDateStr(now) };
+    }
   }
 
-  // 4) KRX 스크래핑 (MAJOR_ETFS + TIGER 스크래핑분 모두 가능)
-  const krxTrdDd = lastKrxTradingDay();
-  const krxData  = await krxFetchHoldings(resolvedIsuCd);
-  if (krxData.length >= 3) {
-    holdingsCache.set(code, { data: krxData, ts: now, source: "krx" });
-    return { holdings: krxData, source: "krx", dataDate: yyyymmddToKorean(krxTrdDd) };
+  // 5) KRX 스크래핑 (ISIN 필요)
+  if (resolvedIsuCd) {
+    const krxTrdDd = lastKrxTradingDay();
+    const krxData  = await krxFetchHoldings(resolvedIsuCd);
+    if (krxData.length >= 3) {
+      holdingsCache.set(code, { data: krxData, ts: now, source: "krx" });
+      return { holdings: krxData, source: "krx", dataDate: yyyymmddToKorean(krxTrdDd) };
+    }
   }
 
-  // 5) 정적 폴백
-  const st = STATIC_HOLDINGS[code] ?? [];
-  holdingsCache.set(code, { data: st, ts: now, source: "reference" });
-  return { holdings: st, source: "reference", dataDate: tsToKstDateStr(now) };
+  // 6) 정적 데이터 우선 확인 — pykrx(30초+)보다 먼저 반환하여 빠른 응답 보장
+  const staticEarly = STATIC_HOLDINGS[code];
+  if (staticEarly && staticEarly.length > 0) {
+    holdingsCache.set(code, { data: staticEarly, ts: now, source: "reference" });
+    return { holdings: staticEarly, source: "reference", dataDate: tsToKstDateStr(now) };
+  }
+
+  // 7) pykrx fallback — KRX 로그인으로 6자리 코드 직접 조회 (RISE/PLUS/ACE 등 isuCd 부정확한 ETF 구제)
+  const pykrxData = await fetchEtfHoldingsPykrx(code);
+  if (pykrxData.length >= 3) {
+    holdingsCache.set(code, { data: pykrxData, ts: now, source: "krx" });
+    return { holdings: pykrxData, source: "krx", dataDate: tsToKstDateStr(now) };
+  }
+
+  // 8) 최종 폴백 (모든 API 실패 시)
+  holdingsCache.set(code, { data: [], ts: now, source: "reference" });
+  return { holdings: [], source: "reference", dataDate: tsToKstDateStr(now) };
 }
 
 /** 미국 ETF 구성 종목 조회 (Yahoo Finance topHoldings) */

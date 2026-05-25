@@ -165,6 +165,29 @@ export function isPykrxEnabled(): boolean {
   return !!(process.env.KRX_ID && process.env.KRX_PW);
 }
 
+export interface PykrxEtfHolding {
+  rank: number;
+  stockCode: string;
+  stockName: string;
+  weight: number;
+}
+
+/**
+ * pykrx로 ETF 구성종목(PDF) 조회 — RISE/PLUS/ACE 등 isuCd 없는 ETF에서도 동작
+ * KRX_ID/KRX_PW가 설정돼 있어야 작동 (KRX 로그인 필요)
+ */
+export async function fetchEtfHoldingsPykrx(
+  etfCode: string,
+): Promise<PykrxEtfHolding[]> {
+  if (!process.env.KRX_ID || !process.env.KRX_PW) return [];
+  const today = toKRXDate(new Date());
+  const rows = await callPykrx("etf_holdings", today, today, etfCode, 30000);
+  return (rows as any[]).filter(
+    (r): r is PykrxEtfHolding =>
+      typeof r.stockCode === "string" && typeof r.weight === "number" && r.weight > 0,
+  );
+}
+
 export interface EtfHolding {
   etfCode: string;
   etfName: string;
