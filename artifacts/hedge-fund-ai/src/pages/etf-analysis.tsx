@@ -21,6 +21,18 @@ interface ETFInfo {
 interface ETFHolding {
   rank: number; stockCode: string; stockName: string; weight: number;
 }
+interface HoldingChangeItem {
+  stockCode: string; stockName: string; weight: number;
+  weightDelta?: number; prevWeight?: number; prevRank?: number; rank?: number;
+}
+interface HoldingsChanges {
+  added: HoldingChangeItem[];
+  removed: HoldingChangeItem[];
+  increased: HoldingChangeItem[];
+  decreased: HoldingChangeItem[];
+  previousDate: string;
+  currentDate: string;
+}
 interface SectorScore {
   sector: string; score: number; return5d: number; return20d: number;
   signal: string; etfCode: string; etfName: string; price?: number; change1d?: number;
@@ -265,7 +277,7 @@ function SearchTab() {
   const [mode, setMode]           = useState<"etf" | "stock">("etf");
   const [query, setQuery]         = useState("");
   const [loading, setLoading]     = useState(false);
-  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string; dataDate?: string } | null>(null);
+  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string; dataDate?: string; changes?: HoldingsChanges | null } | null>(null);
   const [stockResult, setStockResult] = useState<{ etf: ETFInfo; holding: ETFHolding }[] | null>(null);
   const [searchList, setSearchList]   = useState<ETFInfo[]>([]);
   const [showList, setShowList]       = useState(false);
@@ -684,6 +696,96 @@ function SearchTab() {
                       : "bg-emerald-500/5 border-emerald-500/20 text-emerald-700 dark:text-emerald-400",
                   )}>
                     📊 {conc.text}
+                  </div>
+                );
+              })()}
+
+              {/* 리밸런싱 변화 */}
+              {etfResult.changes && (() => {
+                const { added, removed, increased, decreased, previousDate, currentDate } = etfResult.changes;
+                const totalChanges = added.length + removed.length + increased.length + decreased.length;
+                if (totalChanges === 0) return null;
+                return (
+                  <div className="rounded-2xl border border-border bg-card overflow-hidden col-span-full">
+                    <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="w-3.5 h-3.5 text-primary" />
+                        <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest">리밸런싱 변화</p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/50">{previousDate} → {currentDate}</p>
+                    </div>
+                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* 신규 편입 */}
+                      {added.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" /> 신규 편입 ({added.length})
+                          </p>
+                          <div className="space-y-1.5">
+                            {added.map(h => (
+                              <div key={h.stockCode} className="flex items-center justify-between text-xs">
+                                <span className="text-foreground font-medium truncate max-w-[140px]">{h.stockName}</span>
+                                <span className="text-emerald-500 font-bold shrink-0 ml-2">+{h.weight.toFixed(2)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* 편출 */}
+                      {removed.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                            <TrendingDown className="w-3 h-3" /> 편출 ({removed.length})
+                          </p>
+                          <div className="space-y-1.5">
+                            {removed.map(h => (
+                              <div key={h.stockCode} className="flex items-center justify-between text-xs">
+                                <span className="text-foreground font-medium truncate max-w-[140px]">{h.stockName}</span>
+                                <span className="text-red-500 font-bold shrink-0 ml-2">−{h.weight.toFixed(2)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* 비중 확대 */}
+                      {increased.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" /> 비중 확대 ({increased.length})
+                          </p>
+                          <div className="space-y-1.5">
+                            {increased.map(h => (
+                              <div key={h.stockCode} className="flex items-center justify-between text-xs">
+                                <div className="min-w-0">
+                                  <p className="text-foreground font-medium truncate max-w-[140px]">{h.stockName}</p>
+                                  <p className="text-[10px] text-muted-foreground/50">{h.prevWeight?.toFixed(2)}% → {h.weight.toFixed(2)}%</p>
+                                </div>
+                                <span className="text-blue-500 font-bold shrink-0 ml-2">+{h.weightDelta?.toFixed(2)}%p</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* 비중 축소 */}
+                      {decreased.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                            <TrendingDown className="w-3 h-3" /> 비중 축소 ({decreased.length})
+                          </p>
+                          <div className="space-y-1.5">
+                            {decreased.map(h => (
+                              <div key={h.stockCode} className="flex items-center justify-between text-xs">
+                                <div className="min-w-0">
+                                  <p className="text-foreground font-medium truncate max-w-[140px]">{h.stockName}</p>
+                                  <p className="text-[10px] text-muted-foreground/50">{h.prevWeight?.toFixed(2)}% → {h.weight.toFixed(2)}%</p>
+                                </div>
+                                <span className="text-amber-500 font-bold shrink-0 ml-2">{h.weightDelta?.toFixed(2)}%p</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()}

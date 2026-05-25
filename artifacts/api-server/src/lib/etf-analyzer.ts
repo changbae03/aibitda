@@ -11,6 +11,7 @@ import { getKisAccessToken } from "./kis-client.js";
 import { fetchECOSMacro } from "./ecos-client.js";
 import { fetchFREDMacro } from "./fred-client.js";
 import { fetchEtfHoldingsPykrx } from "./pykrx-client.js";
+import { pool } from "@workspace/db";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 const KRX_BASE = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
@@ -36,6 +37,25 @@ export interface ETFHolding {
   stockName: string;
   weight: number;        // % (소수점 2자리)
   sector?: string;
+}
+
+export interface HoldingChangeItem {
+  stockCode: string;
+  stockName: string;
+  weight: number;         // 현재 비중 (편출 시 이전 비중)
+  weightDelta?: number;   // 비중 변화 (편입/편출 없음)
+  prevWeight?: number;    // 이전 비중
+  prevRank?: number;      // 이전 순위
+  rank?: number;          // 현재 순위
+}
+
+export interface HoldingsChanges {
+  added: HoldingChangeItem[];      // 신규 편입
+  removed: HoldingChangeItem[];    // 편출
+  increased: HoldingChangeItem[];  // 비중 확대
+  decreased: HoldingChangeItem[];  // 비중 축소
+  previousDate: string;            // 이전 스냅샷 날짜
+  currentDate: string;             // 현재 데이터 날짜
 }
 
 export interface SectorScore {
@@ -1161,7 +1181,112 @@ async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
 // ─── 공개 API ─────────────────────────────────────────────────────────────────
 
 export type DataSource = "kis" | "samsung" | "mirae" | "krx" | "yahoo" | "reference" | "timefolio";
-export type HoldingsResult = { holdings: ETFHolding[]; source: DataSource; dataDate: string };
+export type HoldingsResult = { holdings: ETFHolding[]; source: DataSource; dataDate: string; changes?: HoldingsChanges | null };
+
+// ─── ETF 리밸런싱 추적 ────────────────────────────────────────────────────────
+
+const SNAPSHOT_TTL_DAYS = 90;
+const WEIGHT_THRESHOLD  = 0.15; // 비중 변화 최소 임계값 (%)
+
+interface SnapshotData {
+  holdings: ETFHolding[];
+  date: string;
+}
+
+async function loadHoldingsSnapshot(code: string): Promise<SnapshotData | null> {
+  try {
+    const res = await pool.query<{ data: SnapshotData }>(
+      "SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()",
+      [`etf_snapshot:${code}`]
+    );
+    return res.rows[0]?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveHoldingsSnapshot(code: string, holdings: ETFHolding[], date: string): Promise<void> {
+  try {
+    const expiry = new Date(Date.now() + SNAPSHOT_TTL_DAYS * 86_400_000);
+    const data: SnapshotData = { holdings, date };
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [`etf_snapshot:${code}`, JSON.stringify(data), expiry]
+    );
+  } catch {
+    // 스냅샷 저장 실패는 조용히 무시 (메인 기능에 영향 없음)
+  }
+}
+
+function computeHoldingsDiff(
+  prev: ETFHolding[],
+  curr: ETFHolding[],
+  previousDate: string,
+  currentDate: string,
+): HoldingsChanges {
+  const prevMap = new Map(prev.map(h => [h.stockCode, h]));
+  const currMap = new Map(curr.map(h => [h.stockCode, h]));
+
+  const added:     HoldingChangeItem[] = [];
+  const removed:   HoldingChangeItem[] = [];
+  const increased: HoldingChangeItem[] = [];
+  const decreased: HoldingChangeItem[] = [];
+
+  for (const [code, ch] of currMap) {
+    if (!code) continue;
+    const ph = prevMap.get(code);
+    if (!ph) {
+      added.push({ stockCode: ch.stockCode, stockName: ch.stockName, weight: ch.weight, rank: ch.rank });
+    } else {
+      const delta = ch.weight - ph.weight;
+      if (Math.abs(delta) >= WEIGHT_THRESHOLD) {
+        const item: HoldingChangeItem = {
+          stockCode: ch.stockCode, stockName: ch.stockName,
+          weight: ch.weight, weightDelta: delta,
+          prevWeight: ph.weight, prevRank: ph.rank, rank: ch.rank,
+        };
+        if (delta > 0) increased.push(item);
+        else           decreased.push(item);
+      }
+    }
+  }
+
+  for (const [code, ph] of prevMap) {
+    if (!code) continue;
+    if (!currMap.has(code)) {
+      removed.push({ stockCode: ph.stockCode, stockName: ph.stockName, weight: ph.weight, prevRank: ph.rank });
+    }
+  }
+
+  increased.sort((a, b) => (b.weightDelta ?? 0) - (a.weightDelta ?? 0));
+  decreased.sort((a, b) => (a.weightDelta ?? 0) - (b.weightDelta ?? 0));
+
+  return { added, removed, increased, decreased, previousDate, currentDate };
+}
+
+export async function trackHoldingsChanges(
+  code: string,
+  holdings: ETFHolding[],
+  dataDate: string,
+): Promise<HoldingsChanges | null> {
+  if (holdings.length < 3) return null;
+  const snapshot = await loadHoldingsSnapshot(code);
+
+  if (!snapshot || snapshot.date === dataDate) {
+    if (!snapshot) {
+      saveHoldingsSnapshot(code, holdings, dataDate).catch(() => {});
+    }
+    return null;
+  }
+
+  const changes = computeHoldingsDiff(snapshot.holdings, holdings, snapshot.date, dataDate);
+  const hasAny = changes.added.length + changes.removed.length + changes.increased.length + changes.decreased.length > 0;
+
+  saveHoldingsSnapshot(code, holdings, dataDate).catch(() => {});
+  return hasAny ? changes : null;
+}
 
 function tsToKstDateStr(ts: number): string {
   const d = new Date(ts + 9 * 3600_000);

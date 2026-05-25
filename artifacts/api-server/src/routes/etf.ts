@@ -9,6 +9,7 @@ import {
   getUnifiedSignals,
   getMomentumAnalysis,
   miraePreFetchAllHoldings,
+  trackHoldingsChanges,
 } from "../lib/etf-analyzer.js";
 import { getCachedTigerEtfs } from "../lib/tiger-etf-scraper.js";
 import { getStatus } from "../lib/lstm-predictor.js";
@@ -98,7 +99,11 @@ router.get("/etf/:code/holdings", async (req, res) => {
     const tigerEtf  = tigerEtfs.find((e: any) => e.code === code);
     const { holdings, source, dataDate } = await getEtfHoldings(code, tigerEtf?.isuCd);
     const etf = ALL_ETFS.find(e => e.code === code) ?? (tigerEtf as any) ?? null;
-    res.json({ etf, holdings, source, dataDate });
+    // 리밸런싱 추적 (참고용 정적 데이터는 제외)
+    const changes = source !== "reference"
+      ? await trackHoldingsChanges(code, holdings, dataDate)
+      : null;
+    res.json({ etf, holdings, source, dataDate, changes });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
   }
