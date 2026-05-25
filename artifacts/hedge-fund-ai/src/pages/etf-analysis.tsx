@@ -957,7 +957,7 @@ function SectorAccordionRow({
   closeDetail: () => void;
   allEtfs: ETFInfo[];
 }) {
-  const [expanded, setExpanded] = useState(rank === 0);
+  const [expanded, setExpanded] = useState(false);
   const cfg    = OUTLOOK_CONFIG[sector.outlook];
   const sColor = sector.score >= 75 ? "#22c55e" : sector.score >= 60 ? "#f59e0b" : "#94a3b8";
 
@@ -1039,7 +1039,7 @@ function PulseAccordionRow({
   closeDetail: () => void;
   allEtfs: ETFInfo[];
 }) {
-  const [expanded, setExpanded] = useState(rank === 0);
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div>
