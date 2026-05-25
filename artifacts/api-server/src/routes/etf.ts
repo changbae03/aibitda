@@ -139,11 +139,65 @@ router.post("/etf/prefetch-holdings", async (_req, res) => {
   }
 });
 
+/** 네이버 증권에서 지수 최근 가격 취득 (모델 학습 여부 무관) */
+async function naverIndexPrices(code: "KOSPI" | "KOSDAQ", n = 20) {
+  try {
+    const res = await fetch(
+      `https://m.stock.naver.com/api/index/${code}/price`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) },
+    );
+    if (!res.ok) return null;
+    const rows: any[] = await res.json();
+    const sorted   = rows.slice(0, n).reverse();
+    const sparkline = sorted.map((r: any) => +String(r.closePrice).replace(/,/g, ""));
+    const latest    = sparkline.at(-1) ?? null;
+    const prev      = sparkline.at(-2) ?? null;
+    const change1d  = latest && prev ? +((latest - prev) / prev * 100).toFixed(2) : null;
+    return { sparkline, latestPrice: latest, change1d };
+  } catch { return null; }
+}
+
 // GET /api/etf/momentum-analysis
 router.get("/etf/momentum-analysis", async (_req, res) => {
   try {
-    const data = await cached("momentum-analysis", 30 * 60_000, getMomentumAnalysis);
-    res.json(data);
+    const [data, status, naverK, naverKQ] = await Promise.all([
+      cached("momentum-analysis", 30 * 60_000, getMomentumAnalysis),
+      Promise.resolve(getStatus()),
+      naverIndexPrices("KOSPI",  20),
+      naverIndexPrices("KOSDAQ", 20),
+    ]);
+
+    const toOutlook = (idx: any, name: string, symbol: string, naver: typeof naverK) => {
+      // 스파크라인·현재가는 Naver API 우선, 없으면 LSTM historical 폴백
+      const hist: Array<{ date: string; value: number }> = idx?.historical ?? [];
+      const fallback = hist.slice(-20).map((p: { date: string; value: number }) => p.value);
+      const sparkline    = naver?.sparkline?.length    ? naver.sparkline    : fallback;
+      const latestPrice  = naver?.latestPrice          ?? hist.at(-1)?.value ?? null;
+      const change1d     = naver?.change1d             ?? null;
+      return {
+        name,
+        symbol,
+        trend:             idx?.trend             ?? "neutral",
+        predictedReturn3d: idx?.predictedReturn3d ?? null,
+        agreementSignal:   idx?.agreementSignal   ?? "neutral",
+        agreementStrength: idx?.agreementStrength ?? 0,
+        curVol20:          idx?.curVol20          ?? null,
+        wfDirAcc:          idx?.wfDirAcc          ?? null,
+        gbdtDirAcc:        idx?.gbdtDirAcc        ?? null,
+        latestPrice,
+        change1d,
+        sparkline,
+      };
+    };
+
+    res.json({
+      ...data,
+      indexOutlook: {
+        kospi:  toOutlook(status.kospi,  "KOSPI",  "^KS11", naverK),
+        kosdaq: toOutlook(status.kosdaq, "KOSDAQ", "^KQ11", naverKQ),
+        ready:  status.ready ?? false,
+      },
+    });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
   }

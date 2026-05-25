@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, PieChart, Pie, Legend,
+  AreaChart, Area,
 } from "recharts";
 import {
   Search, TrendingUp, TrendingDown, Loader2, RefreshCw,
@@ -102,6 +103,20 @@ interface MarketPulse {
   retailWarning: string[];
   marketNarrative: string;
 }
+interface IndexOutlook {
+  name: string;
+  symbol: string;
+  trend: string;
+  predictedReturn3d: number | null;
+  agreementSignal: "up" | "down" | "neutral";
+  agreementStrength: number;
+  curVol20: number | null;
+  wfDirAcc: number | null;
+  gbdtDirAcc: number | null;
+  latestPrice: number | null;
+  change1d: number | null;
+  sparkline: number[];
+}
 interface MomentumAnalysis {
   macro: MacroSnapshot;
   environment: MacroEnvironment;
@@ -109,6 +124,11 @@ interface MomentumAnalysis {
   futureSectors: SectorMomentum[];
   marketPulse: MarketPulse;
   updatedAt: number;
+  indexOutlook?: {
+    kospi: IndexOutlook;
+    kosdaq: IndexOutlook;
+    ready: boolean;
+  };
 }
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
@@ -1017,6 +1037,102 @@ const OUTLOOK_CONFIG = {
   cautious: { label: "관망", text: "text-slate-400",   bg: "bg-slate-500/10",   border: "border-slate-500/20"   },
 };
 
+function IndexOutlookCard({ idx }: { idx: IndexOutlook }) {
+  const isUp   = idx.agreementSignal === "up";
+  const isDown = idx.agreementSignal === "down";
+  const pred   = idx.predictedReturn3d;
+  const predColor = pred === null ? "text-muted-foreground" : pred >= 0 ? "text-emerald-500" : "text-red-500";
+  const change1dColor = !idx.change1d ? "text-muted-foreground" : idx.change1d >= 0 ? "text-emerald-500" : "text-red-500";
+  const sparkData = idx.sparkline.map((v, i) => ({ i, v }));
+  const sparkMin  = Math.min(...idx.sparkline);
+  const sparkMax  = Math.max(...idx.sparkline);
+  const sparkColor = isUp ? "#22c55e" : isDown ? "#ef4444" : "#94a3b8";
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-bold text-foreground">{idx.name}</span>
+            <span className="text-[10px] text-muted-foreground/50">{idx.symbol}</span>
+            {isUp   && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-semibold">상승 전망</span>}
+            {isDown && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 border border-red-500/30 font-semibold">하락 전망</span>}
+            {!isUp && !isDown && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20 font-semibold">중립</span>}
+          </div>
+          {idx.latestPrice && (
+            <div className="flex items-baseline gap-2">
+              <span className="text-xl font-bold tabular-nums text-foreground">{idx.latestPrice.toLocaleString()}</span>
+              {idx.change1d !== null && (
+                <span className={cn("text-xs font-semibold tabular-nums", change1dColor)}>
+                  {idx.change1d >= 0 ? "+" : ""}{idx.change1d.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        {sparkData.length > 3 && (
+          <div className="w-24 h-12 shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={sparkData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                <defs>
+                  <linearGradient id={`sg-${idx.symbol}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={sparkColor} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={sparkColor} stopOpacity={0}   />
+                  </linearGradient>
+                </defs>
+                <YAxis domain={[sparkMin * 0.998, sparkMax * 1.002]} hide />
+                <Area type="monotone" dataKey="v" stroke={sparkColor} strokeWidth={1.5}
+                  fill={`url(#sg-${idx.symbol})`} dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pb-3 grid grid-cols-2 gap-x-4 gap-y-2">
+        {/* 3일 예측 수익률 */}
+        <div>
+          <p className="text-[10px] text-muted-foreground/50 mb-0.5">AI 3일 예측</p>
+          <p className={cn("text-sm font-bold tabular-nums", predColor)}>
+            {pred === null ? "—" : `${pred >= 0 ? "+" : ""}${pred.toFixed(2)}%`}
+          </p>
+        </div>
+        {/* AI 합의 강도 */}
+        <div>
+          <p className="text-[10px] text-muted-foreground/50 mb-1">모델 합의</p>
+          <div className="flex items-center gap-1.5">
+            <div className="flex-1 h-1.5 bg-muted/40 rounded-full overflow-hidden">
+              <div
+                className={cn("h-full rounded-full", isUp ? "bg-emerald-500" : isDown ? "bg-red-500" : "bg-slate-400")}
+                style={{ width: `${Math.min(100, idx.agreementStrength)}%` }}
+              />
+            </div>
+            <span className="text-[11px] font-semibold text-foreground tabular-nums w-8 text-right">{idx.agreementStrength.toFixed(0)}%</span>
+          </div>
+        </div>
+        {/* 변동성 */}
+        {idx.curVol20 !== null && (
+          <div>
+            <p className="text-[10px] text-muted-foreground/50 mb-0.5">20일 변동성</p>
+            <p className={cn("text-sm font-bold tabular-nums", idx.curVol20 > 2 ? "text-orange-500" : "text-foreground")}>
+              {idx.curVol20.toFixed(2)}%
+            </p>
+          </div>
+        )}
+        {/* GBDT 방향 정확도 */}
+        {idx.gbdtDirAcc !== null && (
+          <div>
+            <p className="text-[10px] text-muted-foreground/50 mb-0.5">GBDT 방향 정확도</p>
+            <p className={cn("text-sm font-bold tabular-nums", idx.gbdtDirAcc >= 55 ? "text-emerald-500" : idx.gbdtDirAcc >= 45 ? "text-foreground" : "text-red-400")}>
+              {idx.gbdtDirAcc.toFixed(1)}%
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MacroStatRow({
   label, value, signal, isWarn,
 }: { label: string; value: string; signal: string; isWarn: boolean }) {
@@ -1413,6 +1529,29 @@ function MomentumTab() {
                   {buildMacroNarrative(data.macro, data.environment)}
                 </p>
               </div>
+
+              {/* 코스피·코스닥 AI 전망 */}
+              {data.indexOutlook && (
+                <div>
+                  <div className="flex items-center justify-between px-1 mb-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
+                      코스피 · 코스닥 AI 전망
+                    </p>
+                    {!data.indexOutlook.ready && (
+                      <span className="text-[10px] text-amber-500/70 flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" /> 모델 학습 중
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <IndexOutlookCard idx={data.indexOutlook.kospi}  />
+                    <IndexOutlookCard idx={data.indexOutlook.kosdaq} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/40 px-1 mt-2">
+                    * LSTM + GBDT 앙상블 모델의 3일 예측. 과거 백테스트 기준이며 실제 수익을 보장하지 않습니다.
+                  </p>
+                </div>
+              )}
 
               {/* 지금 유망 섹터 */}
               <div>
