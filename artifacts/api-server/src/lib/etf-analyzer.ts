@@ -108,6 +108,7 @@ export const MAJOR_ETFS: ETFInfo[] = [
   // 반도체
   { code:"091160", isuCd:"KR7091160007", name:"KODEX 반도체",            sector:"반도체",   issuer:"삼성자산운용", yahooCode:"091160.KS", leverage:1,  ter:0.45, benchmark:"KRX 반도체" },
   { code:"381180", isuCd:"KR7381180009", name:"TIGER 미국필라델피아반도체나스닥", sector:"해외주식", issuer:"미래에셋",    yahooCode:"381180.KS", leverage:1,  ter:0.49, benchmark:"필라델피아 반도체지수(SOX)" },
+  { code:"491830", isuCd:"KR7491830006", name:"TIGER 미국AI반도체팹리스",      sector:"해외주식", issuer:"미래에셋",    yahooCode:"491830.KS", leverage:1,  ter:0.49, benchmark:"Mirae Asset US AI Fabless 지수" },
   { code:"395160", isuCd:"KR7395160003", name:"KODEX AI반도체TOP2플러스", sector:"반도체",   issuer:"삼성자산운용", yahooCode:"395160.KS", leverage:1,  ter:0.45, benchmark:"KODEX AI반도체TOP2+" },
   // 2차전지
   { code:"305720", isuCd:"KR7305720003", name:"KODEX 2차전지산업",       sector:"2차전지",  issuer:"삼성자산운용", yahooCode:"305720.KS", leverage:1,  ter:0.45, benchmark:"KRX 2차전지" },
@@ -886,9 +887,14 @@ async function miraeFundFetchHoldings(isuCd: string): Promise<{ holdings: ETFHol
       if (tds.length < 3) continue;
       const stockName = tds[0];
       const weightStr = tds[1].replace("%", "").trim();
-      const stockCode = tds[2].replace(/\s/g, "");
+      const rawCode   = tds[2].trim();
+      // "AMD US EQUITY" → "AMD", "005930 KS EQUITY" → "005930", 그 외 공백 제거
+      const usMatch   = rawCode.match(/^([A-Z]{1,6})\s+US\s+EQUITY/i);
+      const ksMatch   = rawCode.match(/^(\d{6})\s+KS?\s+EQUITY/i);
+      const stockCode = usMatch?.[1] ?? ksMatch?.[1] ?? rawCode.replace(/\s/g, "");
       const weight    = parseFloat(weightStr);
-      if (!stockCode || !/^\d{6}$/.test(stockCode) || isNaN(weight) || weight <= 0) continue;
+      // 국내 6자리 숫자 또는 미국 영문 티커(1~6자) 허용
+      if (!stockCode || (!/^\d{6}$/.test(stockCode) && !/^[A-Z]{1,6}$/.test(stockCode)) || isNaN(weight) || weight <= 0) continue;
       holdings.push({ rank: rank++, stockCode, stockName, weight });
     }
 
