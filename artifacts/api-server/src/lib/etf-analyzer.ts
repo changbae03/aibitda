@@ -107,7 +107,7 @@ export const MAJOR_ETFS: ETFInfo[] = [
   { code:"233740", isuCd:"KR7233740006", name:"KODEX 코스닥150레버리지", sector:"코스닥",   issuer:"삼성자산운용", yahooCode:"233740.KS", leverage:2,  ter:0.64, benchmark:"KOSDAQ 150 ×2" },
   // 반도체
   { code:"091160", isuCd:"KR7091160007", name:"KODEX 반도체",            sector:"반도체",   issuer:"삼성자산운용", yahooCode:"091160.KS", leverage:1,  ter:0.45, benchmark:"KRX 반도체" },
-  { code:"381180", isuCd:"KR7381180009", name:"TIGER KRX반도체15",       sector:"반도체",   issuer:"미래에셋",    yahooCode:"381180.KS", leverage:1,  ter:0.40, benchmark:"KRX 반도체15" },
+  { code:"381180", isuCd:"KR7381180009", name:"TIGER 미국필라델피아반도체나스닥", sector:"해외주식", issuer:"미래에셋",    yahooCode:"381180.KS", leverage:1,  ter:0.49, benchmark:"필라델피아 반도체지수(SOX)" },
   { code:"395160", isuCd:"KR7395160003", name:"KODEX AI반도체TOP2플러스", sector:"반도체",   issuer:"삼성자산운용", yahooCode:"395160.KS", leverage:1,  ter:0.45, benchmark:"KODEX AI반도체TOP2+" },
   // 2차전지
   { code:"305720", isuCd:"KR7305720003", name:"KODEX 2차전지산업",       sector:"2차전지",  issuer:"삼성자산운용", yahooCode:"305720.KS", leverage:1,  ter:0.45, benchmark:"KRX 2차전지" },
@@ -326,23 +326,23 @@ const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
     { rank:14, stockCode:"095340", stockName:"ISC",                 weight: 1.21 },
     { rank:15, stockCode:"319660", stockName:"피에스케이",          weight: 1.17 },
   ],
-  // ── TIGER KRX반도체15 (381180) — KRX 반도체 TOP15 ─────────────────────────
+  // ── TIGER 미국필라델피아반도체나스닥 (381180) — 필라델피아 SOX 추종 ───────
   "381180": [
-    { rank: 1, stockCode:"000660", stockName:"SK하이닉스",          weight:35.10 },
-    { rank: 2, stockCode:"005930", stockName:"삼성전자",            weight:22.40 },
-    { rank: 3, stockCode:"042700", stockName:"한미반도체",          weight: 8.20 },
-    { rank: 4, stockCode:"009150", stockName:"삼성전기",            weight: 5.30 },
-    { rank: 5, stockCode:"058470", stockName:"리노공업",            weight: 3.80 },
-    { rank: 6, stockCode:"039030", stockName:"이오테크닉스",        weight: 3.20 },
-    { rank: 7, stockCode:"000990", stockName:"DB하이텍",            weight: 2.90 },
-    { rank: 8, stockCode:"240810", stockName:"원익IPS",             weight: 2.50 },
-    { rank: 9, stockCode:"403870", stockName:"HPSP",               weight: 2.30 },
-    { rank:10, stockCode:"036930", stockName:"주성엔지니어링",      weight: 2.10 },
-    { rank:11, stockCode:"095340", stockName:"ISC",                 weight: 1.90 },
-    { rank:12, stockCode:"222800", stockName:"심텍",                weight: 1.60 },
-    { rank:13, stockCode:"440110", stockName:"파두",                weight: 1.50 },
-    { rank:14, stockCode:"067310", stockName:"하나마이크론",        weight: 1.40 },
-    { rank:15, stockCode:"319660", stockName:"피에스케이",          weight: 1.20 },
+    { rank: 1, stockCode:"NVDA",  stockName:"NVIDIA Corp",            weight:26.50 },
+    { rank: 2, stockCode:"AVGO",  stockName:"Broadcom Inc",           weight: 9.30 },
+    { rank: 3, stockCode:"TSM",   stockName:"Taiwan Semiconductor",   weight: 7.20 },
+    { rank: 4, stockCode:"QCOM",  stockName:"Qualcomm Inc",           weight: 6.10 },
+    { rank: 5, stockCode:"AMD",   stockName:"Advanced Micro Devices", weight: 5.80 },
+    { rank: 6, stockCode:"TXN",   stockName:"Texas Instruments",      weight: 5.10 },
+    { rank: 7, stockCode:"AMAT",  stockName:"Applied Materials",      weight: 4.70 },
+    { rank: 8, stockCode:"LRCX",  stockName:"Lam Research",           weight: 4.20 },
+    { rank: 9, stockCode:"KLAC",  stockName:"KLA Corp",               weight: 3.60 },
+    { rank:10, stockCode:"MU",    stockName:"Micron Technology",      weight: 3.30 },
+    { rank:11, stockCode:"ON",    stockName:"ON Semiconductor",       weight: 2.80 },
+    { rank:12, stockCode:"ADI",   stockName:"Analog Devices",         weight: 2.60 },
+    { rank:13, stockCode:"MRVL",  stockName:"Marvell Technology",     weight: 2.40 },
+    { rank:14, stockCode:"MPWR",  stockName:"Monolithic Power",       weight: 2.10 },
+    { rank:15, stockCode:"INTC",  stockName:"Intel Corp",             weight: 1.80 },
   ],
   // ── KODEX 2차전지산업 (305720) — KRX 2차전지, 26종목 ──────────────────────
   "305720": [

@@ -5,6 +5,7 @@ import { correctKoreanTicker, getKRXCache } from "../lib/krx-cache.js";
 import { fetchETFsForStock, isPykrxEnabled } from "../lib/pykrx-client.js";
 import { cache } from "../lib/mem-cache.js";
 import { getStockExposure } from "../lib/etf-analyzer.js";
+import { calcEventRisk } from "../lib/event-risk.js";
 
 const SECTOR_TO_CATEGORY: Record<string, string> = {
   "국내주식": "시장전체",
@@ -417,6 +418,23 @@ ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피�
   } catch (err: any) {
     console.error("Peer group error:", err);
     res.status(500).json({ error: err?.message ?? "Failed to generate peer group" });
+  }
+});
+
+// ── 이벤트 리스크 점수 ─────────────────────────────────────────────────────────
+// GET /api/market-data/event-risk/:ticker
+router.get("/event-risk/:ticker", async (req, res) => {
+  try {
+    const ticker = decodeURIComponent(req.params.ticker as string);
+    const cacheKey = `event-risk:${ticker}`;
+    const hit = cache.get<Awaited<ReturnType<typeof calcEventRisk>>>(cacheKey);
+    if (hit) { res.json(hit); return; }
+    const result = await calcEventRisk(ticker);
+    cache.set(cacheKey, result, 30 * 60_000);
+    res.json(result);
+  } catch (err: any) {
+    console.error("[event-risk] error:", err?.message);
+    res.status(500).json({ error: err?.message ?? "Failed to calculate event risk" });
   }
 });
 

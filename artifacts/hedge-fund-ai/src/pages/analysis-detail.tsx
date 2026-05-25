@@ -935,6 +935,168 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
 
 
 
+// ─── EventRiskCard ────────────────────────────────────────────────────────────
+
+interface EventRiskResult {
+  ticker: string;
+  score: number;
+  level: "low" | "caution" | "warning" | "high";
+  levelKo: string;
+  runUp30d: number | null;
+  runUp60d: number | null;
+  runUp90d: number | null;
+  rsi14: number | null;
+  shortRatio: number | null;
+  loanRatio: number | null;
+  runUpScore: number;
+  rsiScore: number;
+  shortScore: number;
+  warnings: string[];
+  fetchedAt: string;
+}
+
+const RISK_COLORS = {
+  low:     { bar: "bg-emerald-500", text: "text-emerald-500", badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", ring: "ring-emerald-400" },
+  caution: { bar: "bg-amber-400",   text: "text-amber-500",   badge: "bg-amber-400/15  text-amber-600  dark:text-amber-400",  ring: "ring-amber-400" },
+  warning: { bar: "bg-orange-500",  text: "text-orange-500",  badge: "bg-orange-500/15 text-orange-600 dark:text-orange-400", ring: "ring-orange-400" },
+  high:    { bar: "bg-red-500",     text: "text-red-500",     badge: "bg-red-500/15    text-red-600    dark:text-red-400",    ring: "ring-red-500" },
+};
+
+function EventRiskCard({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [data, setData] = useState<EventRiskResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!ticker || !open) return;
+    setLoading(true);
+    fetch(getApiUrl(`/api/market-data/event-risk/${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d ?? null); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [ticker, open]);
+
+  const colors = data ? RISK_COLORS[data.level] : RISK_COLORS["low"];
+  const fmtPct = (v: number | null) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+      <button
+        className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5 text-left gap-3 hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(v => !v)}
+      >
+        <div className="flex items-center gap-2.5">
+          <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <span className="font-semibold text-sm">
+            {isEn ? "Event Risk Score" : "이벤트 리스크 점수"}
+          </span>
+          {data && (
+            <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full", colors.badge)}>
+              {data.score}점 · {data.levelKo}
+            </span>
+          )}
+        </div>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="px-4 sm:px-5 pb-4 space-y-4">
+          {loading && (
+            <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>{isEn ? "Calculating risk score…" : "리스크 점수 계산 중…"}</span>
+            </div>
+          )}
+
+          {!loading && data && (
+            <>
+              {/* 종합 점수 게이지 */}
+              <div className="space-y-2">
+                <div className="flex items-end justify-between">
+                  <span className="text-xs text-muted-foreground">{isEn ? "Overall Score" : "종합 점수"}</span>
+                  <span className={cn("text-2xl font-black tabular-nums leading-none", colors.text)}>{data.score}<span className="text-sm font-semibold text-muted-foreground">/100</span></span>
+                </div>
+                <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full transition-all duration-700", colors.bar)}
+                    style={{ width: `${data.score}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>✅ {isEn ? "Low" : "낮음"}</span>
+                  <span>⚠️ {isEn ? "Caution" : "주의"}</span>
+                  <span>🔶 {isEn ? "Warn" : "경고"}</span>
+                  <span>🔴 {isEn ? "High Risk" : "고위험"}</span>
+                </div>
+              </div>
+
+              {/* 컴포넌트 3행 */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  {
+                    label: isEn ? "Pre-pricing" : "선반영률",
+                    sub:   `30d ${fmtPct(data.runUp30d)}`,
+                    score: data.runUpScore,
+                    max:   35,
+                    hint:  data.runUp60d != null ? `60d ${fmtPct(data.runUp60d)} · 90d ${fmtPct(data.runUp90d)}` : undefined,
+                  },
+                  {
+                    label: "RSI 14",
+                    sub:   data.rsi14 != null ? `${data.rsi14.toFixed(1)}` : "—",
+                    score: data.rsiScore,
+                    max:   30,
+                    hint:  data.rsi14 != null ? (data.rsi14 >= 70 ? "과열" : data.rsi14 <= 30 ? "과매도" : "보통") : undefined,
+                  },
+                  {
+                    label: isEn ? "Short Ratio" : "공매도비율",
+                    sub:   data.shortRatio != null ? `${data.shortRatio.toFixed(2)}%` : "N/A",
+                    score: data.shortScore,
+                    max:   35,
+                    hint:  data.loanRatio != null ? `대차 ${data.loanRatio.toFixed(2)}%` : undefined,
+                  },
+                ].map(({ label, sub, score, max, hint }) => (
+                  <div key={label} className="bg-muted/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide truncate">{label}</div>
+                    <div className="text-sm font-bold tabular-nums leading-tight">{sub}</div>
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full", score >= max * 0.8 ? "bg-red-500" : score >= max * 0.5 ? "bg-amber-400" : "bg-emerald-500")}
+                        style={{ width: `${(score / max) * 100}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">{score} / {max}점{hint ? ` · ${hint}` : ""}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 경고 메시지 */}
+              {data.warnings.length > 0 && (
+                <div className="space-y-1.5">
+                  {data.warnings.map((w, i) => (
+                    <div key={i} className="text-xs text-foreground/80 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 leading-snug">
+                      {w}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="text-[10px] text-muted-foreground/50 text-right">
+                {isEn ? "Updated" : "산출"}: {new Date(data.fetchedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </div>
+            </>
+          )}
+
+          {!loading && !data && (
+            <p className="text-xs text-muted-foreground py-2">
+              {isEn ? "Unable to fetch data for this ticker." : "데이터를 불러올 수 없습니다."}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── PeerMultiplesPanel ───────────────────────────────────────────────────────
 
 interface PeerMultiples {
@@ -1872,6 +2034,9 @@ export default function AnalysisDetail() {
 
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
+
+      {/* Event Risk Score */}
+      <EventRiskCard ticker={analysis.ticker} isEn={isEn} />
 
       {/* Version Timeline */}
       <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
