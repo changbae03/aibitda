@@ -432,6 +432,106 @@ function SearchTab() {
         </div>
       </div>
 
+      {/* 인기 ETF 바로가기 — 검색 결과 없을 때만 표시 */}
+      {!etfResult && !stockResult && (
+        <div className="space-y-4">
+          {mode === "etf" && (() => {
+            const POPULAR: { label: string; items: { code: string; name: string }[] }[] = [
+              {
+                label: "국내 대표",
+                items: [
+                  { code: "069500", name: "KODEX 200" },
+                  { code: "229200", name: "코스닥150" },
+                  { code: "139270", name: "ACE 국고채10년" },
+                  { code: "102110", name: "TIGER KOSPI" },
+                ],
+              },
+              {
+                label: "반도체·AI",
+                items: [
+                  { code: "091160", name: "KODEX 반도체" },
+                  { code: "395160", name: "AI반도체TOP2+" },
+                  { code: "381180", name: "TIGER 반도체" },
+                  { code: "SOXX",   name: "SOXX" },
+                  { code: "SMH",    name: "SMH" },
+                ],
+              },
+              {
+                label: "2차전지·헬스케어",
+                items: [
+                  { code: "305720", name: "KODEX 2차전지" },
+                  { code: "305540", name: "TIGER 2차전지" },
+                  { code: "266420", name: "KODEX 헬스케어" },
+                ],
+              },
+              {
+                label: "미국 시장",
+                items: [
+                  { code: "SPY",  name: "SPY S&P500" },
+                  { code: "QQQ",  name: "QQQ 나스닥100" },
+                  { code: "IWM",  name: "IWM 러셀2000" },
+                  { code: "XLF",  name: "XLF 금융" },
+                  { code: "ITA",  name: "ITA 방산" },
+                ],
+              },
+            ];
+            return (
+              <div className="space-y-3">
+                <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest">인기 ETF</p>
+                {POPULAR.map(group => (
+                  <div key={group.label}>
+                    <p className="text-[10px] text-muted-foreground/30 mb-1.5 px-0.5">{group.label}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.items.map(item => (
+                        <button
+                          key={item.code}
+                          onClick={() => { setQuery(item.code); handleSearch(item.code); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/40 hover:border-primary/30 transition-all text-left"
+                        >
+                          <span className="text-[12px] font-medium text-foreground">{item.name}</span>
+                          <span className="text-[10px] text-muted-foreground/40 font-mono">{item.code}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+          {mode === "stock" && (() => {
+            const POPULAR_STOCKS = [
+              { code: "005930", name: "삼성전자" },
+              { code: "000660", name: "SK하이닉스" },
+              { code: "035420", name: "NAVER" },
+              { code: "051910", name: "LG화학" },
+              { code: "373220", name: "LG에너지솔루션" },
+              { code: "NVDA",   name: "NVIDIA" },
+              { code: "TSLA",   name: "Tesla" },
+              { code: "MSFT",   name: "Microsoft" },
+              { code: "AAPL",   name: "Apple" },
+              { code: "META",   name: "Meta" },
+            ];
+            return (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest">인기 종목</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {POPULAR_STOCKS.map(s => (
+                    <button
+                      key={s.code}
+                      onClick={() => { setQuery(s.code); handleSearch(s.code); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/40 hover:border-primary/30 transition-all"
+                    >
+                      <span className="text-[12px] font-medium text-foreground">{s.name}</span>
+                      <span className="text-[10px] text-muted-foreground/40 font-mono">{s.code}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ETF 결과: 구성 종목 */}
       {mode === "etf" && etfResult && (
         <div className="space-y-4">
