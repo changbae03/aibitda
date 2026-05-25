@@ -244,6 +244,14 @@ export const US_ETFS: ETFInfo[] = [
 
   // ── 인버스 ETF (국내) ──────────────────────────────────────────────────────
   { code:"233740", isuCd:"KR7233740003", name:"KODEX 코스닥150선물인버스",   sector:"코스닥",    issuer:"삼성자산운용", yahooCode:"233740.KS", leverage:-1, ter:0.64, benchmark:"KOSDAQ 150 ×-1" },
+
+  // ── 글로벌 / 신흥국 / 한국 집중 ETF ──────────────────────────────────────
+  { code:"EWY",  isuCd:"EWY",  name:"iShares MSCI South Korea ETF",    sector:"한국시장",  issuer:"BlackRock", yahooCode:"EWY",  leverage:1, ter:0.57, benchmark:"MSCI Korea" },
+  { code:"EEM",  isuCd:"EEM",  name:"iShares MSCI Emerging Markets",   sector:"신흥국",    issuer:"BlackRock", yahooCode:"EEM",  leverage:1, ter:0.70, benchmark:"MSCI Emerging Markets" },
+  { code:"VWO",  isuCd:"VWO",  name:"Vanguard FTSE Emerging Markets",  sector:"신흥국",    issuer:"Vanguard",  yahooCode:"VWO",  leverage:1, ter:0.08, benchmark:"FTSE Emerging Markets" },
+  { code:"ACWI", isuCd:"ACWI", name:"iShares MSCI ACWI ETF",           sector:"글로벌주식", issuer:"BlackRock", yahooCode:"ACWI", leverage:1, ter:0.32, benchmark:"MSCI ACWI" },
+  { code:"VEA",  isuCd:"VEA",  name:"Vanguard FTSE Developed Markets", sector:"선진국",    issuer:"Vanguard",  yahooCode:"VEA",  leverage:1, ter:0.06, benchmark:"FTSE Developed Markets" },
+  { code:"EFA",  isuCd:"EFA",  name:"iShares MSCI EAFE ETF",           sector:"선진국",    issuer:"BlackRock", yahooCode:"EFA",  leverage:1, ter:0.32, benchmark:"MSCI EAFE" },
 ];
 
 export const ALL_ETFS: ETFInfo[] = [...MAJOR_ETFS, ...US_ETFS];
@@ -974,11 +982,16 @@ export async function getStockExposure(
   for (const r of results) {
     if (r.status !== "fulfilled") continue;
     const { etf, holdings } = r.value;
-    const match = holdings.find(h =>
-      h.stockCode.toLowerCase() === qLow ||
-      h.stockName.toLowerCase() === qLow ||
-      h.stockName.toLowerCase().includes(qLow)
-    );
+    const match = holdings.find(h => {
+      // Yahoo Finance 코드는 "005930.KS" 형태 → 접미사 제거 후 비교
+      const normalizedCode = h.stockCode.toLowerCase().replace(/\.(ks|kq|ko|t|hk|l|de|pa|as)$/i, "");
+      return (
+        normalizedCode === qLow ||
+        h.stockCode.toLowerCase() === qLow ||
+        h.stockName.toLowerCase() === qLow ||
+        h.stockName.toLowerCase().includes(qLow)
+      );
+    });
     if (match) found.push({ etf, holding: match });
   }
   return found.sort((a, b) => b.holding.weight - a.holding.weight);

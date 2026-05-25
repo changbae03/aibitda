@@ -322,8 +322,13 @@ function SearchTab() {
     setQuery(v);
     if (mode === "etf") {
       if (v.trim()) {
+        const vl = v.toLowerCase();
         const filtered = allEtfs.filter(e =>
-          e.name.toLowerCase().includes(v.toLowerCase()) || e.code.includes(v)
+          e.name.toLowerCase().includes(vl) ||
+          e.code.toLowerCase().includes(vl) ||
+          (e.sector && e.sector.toLowerCase().includes(vl)) ||
+          (e.benchmark && e.benchmark.toLowerCase().includes(vl)) ||
+          (e.issuer && e.issuer.toLowerCase().includes(vl))
         );
         setSearchList(filtered.slice(0, 8));
         setShowList(true);
