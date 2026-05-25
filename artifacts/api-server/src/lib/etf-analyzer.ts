@@ -631,6 +631,28 @@ function todayKst(): string {
   return d.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
+/** YYYYMMDD → "YYYY년 MM월 DD일" */
+function yyyymmddToKorean(d: string): string {
+  return `${d.slice(0, 4)}년 ${d.slice(4, 6)}월 ${d.slice(6, 8)}일`;
+}
+
+/** KRX 데이터가 실제로 존재하는 가장 최근 영업일 (장마감 후 15:30 KST 기준) */
+function lastKrxTradingDay(): string {
+  const nowKst = Date.now() + 9 * 3600_000;
+  const d = new Date(nowKst);
+  const hourKst = d.getUTCHours() + d.getUTCMinutes() / 60;
+
+  // 15:30 KST 이전이면 당일 데이터 미게재 → 하루 전으로
+  if (hourKst < 15.5) d.setUTCDate(d.getUTCDate() - 1);
+
+  // 주말 건너뜀 (토 → 금, 일 → 금)
+  const dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 async function fetchPrices(yahooCode: string, days = 60): Promise<number[]> {
   const cached = priceCache.get(yahooCode);
   if (cached && Date.now() - cached.ts < PRICE_TTL) return cached.prices;
@@ -783,7 +805,7 @@ async function samsungFundFetchHoldings(code: string): Promise<ETFHolding[]> {
 // ─── KRX ETF 구성 종목 조회 ───────────────────────────────────────────────────
 
 async function krxFetchHoldings(isuCd: string): Promise<ETFHolding[]> {
-  const trdDd = todayKst();
+  const trdDd = lastKrxTradingDay();
   try {
     const params = new URLSearchParams({
       bld:         "dbms/MDC/STAT/standard/MDCSTAT05401",
@@ -831,8 +853,9 @@ function tsToKstDateStr(ts: number): string {
   return `${year}년 ${month}월 ${day}일`;
 }
 
-/** ETF 구성 종목 조회 (KIS 실시간 → KRX → 정적 폴백 / 미국 ETF는 Yahoo Finance) */
-export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
+/** ETF 구성 종목 조회 (KIS → 삼성펀드(KODEX) → KRX → 정적 폴백 / 미국 ETF는 Yahoo Finance)
+ *  @param isuCd  MAJOR_ETFS에 없는 ETF(예: TIGER 스크래핑분)도 KRX 조회가 가능하도록 ISIN 주입 */
+export async function getEtfHoldings(code: string, isuCd?: string): Promise<HoldingsResult> {
   // 미국 ETF 분기 (알파벳 코드)
   if (US_ETFS.find(e => e.code === code)) {
     return getUsEtfHoldings(code);
@@ -848,9 +871,12 @@ export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
   }
 
   const etf = MAJOR_ETFS.find(e => e.code === code);
-  if (!etf) {
+  const resolvedIsuCd = etf?.isuCd ?? isuCd;
+
+  // isuCd도 없으면 정적 폴백만 가능
+  if (!resolvedIsuCd) {
     const st = STATIC_HOLDINGS[code] ?? [];
-    return { holdings: st, source: "reference", dataDate: "2026년 05월 22일" };
+    return { holdings: st, source: "reference", dataDate: tsToKstDateStr(Date.now()) };
   }
 
   const now = Date.now();
@@ -862,24 +888,27 @@ export async function getEtfHoldings(code: string): Promise<HoldingsResult> {
     return { holdings: kisData, source: "kis", dataDate: tsToKstDateStr(now) };
   }
 
-  // 2) Samsung Fund 모바일 API (KODEX ETF 전용)
-  const sfData = await samsungFundFetchHoldings(code);
-  if (sfData.length >= 3) {
-    holdingsCache.set(code, { data: sfData, ts: now, source: "samsung" });
-    return { holdings: sfData, source: "samsung", dataDate: tsToKstDateStr(now) };
+  // 2) Samsung Fund 모바일 API (KODEX ETF 전용 — MAJOR_ETFS에 있는 경우만)
+  if (etf) {
+    const sfData = await samsungFundFetchHoldings(code);
+    if (sfData.length >= 3) {
+      holdingsCache.set(code, { data: sfData, ts: now, source: "samsung" });
+      return { holdings: sfData, source: "samsung", dataDate: tsToKstDateStr(now) };
+    }
   }
 
-  // 3) KRX 스크래핑
-  const krxData = await krxFetchHoldings(etf.isuCd);
+  // 3) KRX 스크래핑 (MAJOR_ETFS + TIGER 스크래핑분 모두 가능)
+  const krxTrdDd = lastKrxTradingDay();
+  const krxData  = await krxFetchHoldings(resolvedIsuCd);
   if (krxData.length >= 3) {
     holdingsCache.set(code, { data: krxData, ts: now, source: "krx" });
-    return { holdings: krxData, source: "krx", dataDate: tsToKstDateStr(now) };
+    return { holdings: krxData, source: "krx", dataDate: yyyymmddToKorean(krxTrdDd) };
   }
 
   // 4) 정적 폴백
   const st = STATIC_HOLDINGS[code] ?? [];
   holdingsCache.set(code, { data: st, ts: now, source: "reference" });
-  return { holdings: st, source: "reference", dataDate: "2026년 05월 22일" };
+  return { holdings: st, source: "reference", dataDate: tsToKstDateStr(now) };
 }
 
 /** 미국 ETF 구성 종목 조회 (Yahoo Finance topHoldings) */

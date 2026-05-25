@@ -92,9 +92,12 @@ router.get("/etf/unified-signals", async (_req, res) => {
 router.get("/etf/:code/holdings", async (req, res) => {
   try {
     const code = req.params.code.replace(/[^0-9A-Za-z]/g, "").slice(0, 10);
-    const { holdings, source, dataDate } = await getEtfHoldings(code);
-    const etf = ALL_ETFS.find(e => e.code === code);
-    res.json({ etf: etf ?? null, holdings, source, dataDate });
+    // TIGER 스크래핑분의 isuCd를 주입하여 KRX 조회 가능하게
+    const tigerEtfs = getCachedTigerEtfs();
+    const tigerEtf  = tigerEtfs.find((e: any) => e.code === code);
+    const { holdings, source, dataDate } = await getEtfHoldings(code, tigerEtf?.isuCd);
+    const etf = ALL_ETFS.find(e => e.code === code) ?? (tigerEtf as any) ?? null;
+    res.json({ etf, holdings, source, dataDate });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
   }
