@@ -658,6 +658,7 @@ function SearchTab() {
                   <p className="text-[10px] text-muted-foreground/50">
                     {etfResult.source === "kis"      && "* KIS Open API"}
                     {etfResult.source === "samsung"  && "* 삼성자산운용 공시"}
+                    {etfResult.source === "mirae"    && "* 미래에셋자산운용 공시"}
                     {etfResult.source === "krx"      && "* KRX 공시"}
                     {etfResult.source === "yahoo"    && "* Yahoo Finance — 분기별 비중 기준"}
                     {etfResult.source === "reference" && "* 참고용 — 실제 비중과 차이가 있을 수 있습니다"}
