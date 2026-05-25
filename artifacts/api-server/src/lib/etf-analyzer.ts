@@ -911,10 +911,13 @@ async function getUsEtfHoldings(code: string): Promise<HoldingsResult> {
 }
 
 /** ETF 검색 (국내 + 미국) */
-export function searchEtf(query: string): ETFInfo[] {
+export function searchEtf(query: string, extraEtfs: ETFInfo[] = []): ETFInfo[] {
   const q = query.trim().toLowerCase();
-  if (!q) return ALL_ETFS;
-  return ALL_ETFS.filter(e =>
+  // extraEtfs는 tiger-etf-scraper 등에서 주입 (순환 의존 방지)
+  const existingCodes = new Set(ALL_ETFS.map(e => e.code));
+  const merged = [...ALL_ETFS, ...extraEtfs.filter(e => !existingCodes.has(e.code))];
+  if (!q) return merged;
+  return merged.filter(e =>
     e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) ||
     e.sector.toLowerCase().includes(q) || e.issuer.toLowerCase().includes(q)
   );

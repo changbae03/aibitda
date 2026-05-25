@@ -13,6 +13,7 @@ import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
+import { ensureTigerEtfs } from "./lib/tiger-etf-scraper.js";
 import { fetchECOSMacro } from "./lib/ecos-client.js";
 import { fetchFREDMacro } from "./lib/fred-client.js";
 import { spawn, type ChildProcess } from "child_process";
@@ -134,6 +135,7 @@ const server = app.listen(port, () => {
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
     .then(() => initCalendarCache())
+    .then(() => ensureTigerEtfs().catch(e => console.error("[tiger-etf] 초기 로드 실패:", e?.message)))
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
       // 서버 재시작 시 미완료 분석 자동 복구 (30초 후 — 다른 초기화 완료 이후)

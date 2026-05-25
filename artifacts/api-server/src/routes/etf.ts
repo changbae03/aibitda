@@ -9,6 +9,7 @@ import {
   getUnifiedSignals,
   getMomentumAnalysis,
 } from "../lib/etf-analyzer.js";
+import { getCachedTigerEtfs } from "../lib/tiger-etf-scraper.js";
 import { getStatus } from "../lib/lstm-predictor.js";
 
 const router = Router();
@@ -24,13 +25,17 @@ function cached<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T> {
 
 // GET /api/etf/list
 router.get("/etf/list", (_req, res) => {
-  res.json(ALL_ETFS);
+  const tigerEtfs = getCachedTigerEtfs() as any[];
+  const existingCodes = new Set(ALL_ETFS.map(e => e.code));
+  const merged = [...ALL_ETFS, ...tigerEtfs.filter(e => !existingCodes.has(e.code))];
+  res.json(merged);
 });
 
 // GET /api/etf/search?q=
 router.get("/etf/search", (req, res) => {
   const q = String(req.query.q ?? "");
-  res.json(searchEtf(q));
+  const tigerEtfs = getCachedTigerEtfs() as any[];
+  res.json(searchEtf(q, tigerEtfs));
 });
 
 // GET /api/etf/sector-rotation
