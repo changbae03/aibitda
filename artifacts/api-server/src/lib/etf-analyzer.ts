@@ -1261,6 +1261,13 @@ export interface ThemeKeyword {
   relatedSectors: string[];
 }
 
+export interface InstitutionalFlow {
+  sector: string;
+  direction: "in" | "out" | "watch";
+  reason: string;
+  strength: number;
+}
+
 export interface MarketPulse {
   fearGreedScore: number;
   fearGreedLabel: string;
@@ -1268,6 +1275,7 @@ export interface MarketPulse {
   signals: MarketSignal[];
   themes: ThemeKeyword[];
   institutionalFocus: string[];
+  institutionalFlow: InstitutionalFlow[];
   retailWarning: string[];
   marketNarrative: string;
 }
@@ -1793,6 +1801,92 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
   if (fxKrw === "weak") institutionalFocus.push("미국 달러 자산");
   institutionalFocus.push("사이버보안");
 
+  // ── 기관 수급 흐름 (방향 + 강도 + 이유) ────────────────────────────
+  const institutionalFlow: InstitutionalFlow[] = [];
+
+  // 항상 유입: AI·반도체
+  institutionalFlow.push({
+    sector: "AI·반도체",
+    direction: "in",
+    strength: rateLevel === "high" ? 82 : 90,
+    reason: "AI 인프라 투자 사이클 지속, 글로벌 빅테크 설비투자 확대",
+  });
+
+  // 고금리 → 금융 유입
+  if (rateLevel === "high") {
+    institutionalFlow.push({
+      sector: "금융·은행",
+      direction: "in",
+      strength: 75,
+      reason: `기준금리 ${m.usRate}% 고점 유지 → 순이자마진(NIM) 극대화, 배당 확대`,
+    });
+  }
+
+  // 고유가 → 에너지·방산 유입
+  if (oilPrice === "high") {
+    institutionalFlow.push({
+      sector: "에너지·방산",
+      direction: "in",
+      strength: 72,
+      reason: `WTI $${m.wti.toFixed(0)} 고공행진, 지정학 리스크 고조로 방산 수요 동반 증가`,
+    });
+  }
+
+  // 원화약세 → 달러 자산 유입
+  if (fxKrw === "weak") {
+    institutionalFlow.push({
+      sector: "미국 달러 자산",
+      direction: "in",
+      strength: 68,
+      reason: `원/달러 ${m.krwUsd.toFixed(0)}원 — 해외 ETF 환차익 기대, 달러 헷지 수요`,
+    });
+  }
+
+  // 항상: 사이버보안 유입
+  institutionalFlow.push({
+    sector: "사이버보안",
+    direction: "in",
+    strength: 60,
+    reason: "AI 인프라 확장에 따른 보안 수요 구조적 증가",
+  });
+
+  // 고금리 → 리츠 유출
+  if (rateLevel === "high") {
+    institutionalFlow.push({
+      sector: "리츠(REITs)",
+      direction: "out",
+      strength: 65,
+      reason: `고금리(${m.usRate}%) 지속 → 자본비용 부담, 금리 인하 시그널 전까지 관망`,
+    });
+  }
+
+  // 고금리 또는 고유가 → 클린에너지 유출/관망
+  if (rateLevel === "high" && oilPrice === "high") {
+    institutionalFlow.push({
+      sector: "클린에너지",
+      direction: "out",
+      strength: 55,
+      reason: "고금리 프로젝트 파이낸싱 부담 + 화석연료 경쟁력 유지로 단기 역풍",
+    });
+  } else if (rateLevel === "normal" || oilPrice === "normal") {
+    institutionalFlow.push({
+      sector: "클린에너지",
+      direction: "watch",
+      strength: 45,
+      reason: "금리 방향 전환 여부 확인 후 본격 유입 예상",
+    });
+  }
+
+  // 2차전지 — 중국 EV 수요 회복 대기
+  institutionalFlow.push({
+    sector: "2차전지",
+    direction: fxKrw === "weak" ? "watch" : "in",
+    strength: fxKrw === "weak" ? 40 : 58,
+    reason: fxKrw === "weak"
+      ? "원화약세로 수출 경쟁력은 양호하나 중국 EV 수요 회복 속도 불확실"
+      : "중국 EV 보조금 확대 + ESS 수요 증가로 저점 매집 구간",
+  });
+
   // ── 개인투자자 주의 ───────────────────────────────────────────────
   const retailWarning: string[] = [];
   if (rateLevel === "high") retailWarning.push("고금리 환경에서 레버리지 ETF 손실 위험 확대");
@@ -1802,7 +1896,7 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
 
   return {
     fearGreedScore: fg, fearGreedLabel, overallSentiment,
-    signals, themes, institutionalFocus, retailWarning,
+    signals, themes, institutionalFocus, institutionalFlow, retailWarning,
     marketNarrative: buildMarketNarrative(env, m, fg),
   };
 }

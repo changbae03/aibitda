@@ -74,12 +74,19 @@ interface ThemeKeyword {
   sentiment: "hot" | "warm" | "cool";
   relatedSectors: string[];
 }
+interface InstitutionalFlow {
+  sector: string;
+  direction: "in" | "out" | "watch";
+  reason: string;
+  strength: number;
+}
 interface MarketPulse {
   fearGreedScore: number; fearGreedLabel: string;
   overallSentiment: "bullish" | "neutral" | "bearish";
   signals: MarketSignal[];
   themes: ThemeKeyword[];
   institutionalFocus: string[];
+  institutionalFlow: InstitutionalFlow[];
   retailWarning: string[];
   marketNarrative: string;
 }
@@ -749,31 +756,6 @@ function EtfDetailPanel({
 
 // ─── 탭 2: ETF 모멘텀 분석 ───────────────────────────────────────────────────
 
-/** 공포·탐욕 게이지 */
-function FearGreedMeter({ score, label }: { score: number; label: string }) {
-  const activeColor = score < 25 ? "#ef4444" : score < 45 ? "#f97316" : score < 55 ? "#eab308" : score < 80 ? "#84cc16" : "#22c55e";
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] text-muted-foreground">공포·탐욕 지수</span>
-        <div className="flex items-baseline gap-2">
-          <span className="text-[28px] font-black leading-none tabular-nums" style={{ color: activeColor }}>{score}</span>
-          <span className="text-[13px] font-semibold" style={{ color: activeColor }}>{label}</span>
-        </div>
-      </div>
-      <div className="relative h-2 rounded-full overflow-hidden"
-        style={{ background: "linear-gradient(to right, #ef4444 0%, #f97316 25%, #eab308 45%, #84cc16 65%, #22c55e 100%)" }}>
-        <div className="absolute top-0 h-full w-1 bg-white shadow-md rounded-full"
-          style={{ left: `${score}%`, transform: "translateX(-50%)" }} />
-      </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground/40">
-        <span>극단적 공포</span><span>중립</span><span>극단적 탐욕</span>
-      </div>
-    </div>
-  );
-}
-
-
 /** 전체 섹터 스코어보드 (히트맵 그리드) */
 function SectorHeatMap({
   sectors, label, onSectorClick, selectedSectors,
@@ -1108,7 +1090,10 @@ function MomentumTab() {
   const [selectedEtfCode, setSelectedEtfCode] = useState<string | null>(null);
   const [etfDetail, setEtfDetail]     = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null>(null);
   const [loadingEtf, setLoadingEtf]   = useState(false);
-  const [subTab, setSubTab]           = useState<"macro" | "pulse">("macro");
+  const [subTab, setSubTab]           = useState<"macro" | "pulse">(() => {
+    const p = new URLSearchParams(window.location.search).get("sub");
+    return p === "pulse" ? "pulse" : "macro";
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1270,34 +1255,63 @@ function MomentumTab() {
           {/* ── 탭 2: 수급·테마 통합 ── */}
           {subTab === "pulse" && (
             <div className="space-y-6">
-              {/* 공포·탐욕 + 내러티브 */}
-              <div className="space-y-3">
-                <FearGreedMeter score={data.marketPulse.fearGreedScore} label={data.marketPulse.fearGreedLabel} />
-                <p className="text-[12px] text-muted-foreground leading-relaxed pt-1 border-t border-border/30">
-                  {data.marketPulse.marketNarrative}
-                </p>
+
+              {/* 기관 수급 흐름 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest">기관 수급 흐름</p>
+                  <p className="text-[10px] text-muted-foreground/30">거시 지표 기반 추정</p>
+                </div>
+                {(data.marketPulse.institutionalFlow ?? []).map((item, i) => {
+                  const isIn  = item.direction === "in";
+                  const isOut = item.direction === "out";
+                  const dirIcon  = isIn ? "↑" : isOut ? "↓" : "→";
+                  const dirLabel = isIn ? "유입" : isOut ? "유출" : "관망";
+                  const dirColor = isIn
+                    ? "text-emerald-500"
+                    : isOut
+                    ? "text-red-400"
+                    : "text-amber-400";
+                  const barColor = isIn
+                    ? "bg-emerald-500"
+                    : isOut
+                    ? "bg-red-400"
+                    : "bg-amber-400";
+                  return (
+                    <div key={i} className="py-2.5 border-b border-border/25 last:border-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[13px] font-bold w-4 shrink-0 ${dirColor}`}>{dirIcon}</span>
+                        <span className="text-[13px] font-semibold text-foreground flex-1">{item.sector}</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-16 h-1 rounded-full bg-border/30 overflow-hidden">
+                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${item.strength}%` }} />
+                          </div>
+                          <span className={`text-[11px] font-semibold ${dirColor}`}>{dirLabel}</span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground/60 leading-snug pl-6">{item.reason}</p>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* 기관 관심 & 개인 주의 — 플랫 2열 */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest mb-2">기관 관심</p>
-                  {data.marketPulse.institutionalFocus.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 py-1.5 border-b border-border/25 last:border-0">
-                      <span className="text-[11px] tabular-nums text-muted-foreground/30 w-4 shrink-0">{i + 1}</span>
-                      <span className="text-[13px] font-medium text-foreground">{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest mb-2">개인 주의</p>
+              {/* 매크로 내러티브 */}
+              <p className="text-[12px] text-muted-foreground leading-relaxed border-t border-border/30 pt-3">
+                {data.marketPulse.marketNarrative}
+              </p>
+
+              {/* 개인 투자자 주의 */}
+              {data.marketPulse.retailWarning.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest mb-2">개인 투자자 주의</p>
                   {data.marketPulse.retailWarning.map((w, i) => (
-                    <div key={i} className="py-1.5 border-b border-border/25 last:border-0">
+                    <div key={i} className="flex items-start gap-2 py-1.5 border-b border-border/25 last:border-0">
+                      <span className="text-[11px] text-amber-400 mt-0.5 shrink-0">⚠</span>
                       <p className="text-[12px] text-muted-foreground/70 leading-snug">{w}</p>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
 
               {/* 수급·심리 시그널 */}
               <div>
