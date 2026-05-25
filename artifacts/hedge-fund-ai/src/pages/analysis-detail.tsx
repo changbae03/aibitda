@@ -2035,8 +2035,8 @@ export default function AnalysisDetail() {
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
 
-      {/* Event Risk Score */}
-      <EventRiskCard ticker={analysis.ticker} isEn={isEn} />
+      {/* Event Risk Score — 임시 비활성화 */}
+      {/* <EventRiskCard ticker={analysis.ticker} isEn={isEn} /> */}
 
       {/* Version Timeline */}
       <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
