@@ -1833,6 +1833,23 @@ function buildMarketPulse(env: MacroEnvironment, m: MacroSnapshot): MarketPulse 
     sentiment: "warm", relatedSectors: ["로보틱스AI"],
   });
 
+  // 바이오·헬스케어: 금리와 무관한 구조적 성장 테마
+  {
+    const bioSentiment: ThemeKeyword["sentiment"] =
+      rateLevel !== "high" ? "hot"   // 금리 인하 국면 → 성장주 리레이팅 수혜
+      : inflation === "elevated" ? "warm"  // 고금리·고물가 → 방어주 성격 부각
+      : "warm";
+    const bioDesc = rateLevel !== "high"
+      ? "금리 인하 기대로 성장주 밸류에이션 리레이팅 수혜. GLP-1 비만치료제·AI 신약 개발 테마에 글로벌 자금 집중."
+      : "고금리 환경에서도 GLP-1 비만치료제·AI 기반 신약 발굴이 구조적 성장 동력으로 주목. 경기 방어적 특성과 혁신 성장성이 공존.";
+    themes.push({
+      label: "바이오·헬스케어",
+      description: bioDesc,
+      sentiment: bioSentiment,
+      relatedSectors: ["헬스케어", "미국헬스케어"],
+    });
+  }
+
   if (rateLevel !== "high") {
     themes.push({
       label: "금리 인하 수혜주", description: "Fed 금리 인하 기대가 리츠·성장주·바이오 섹터 관심 폭발적 증가 유도. 금리 민감도 높은 자산군으로 선제 자금 이동.",
