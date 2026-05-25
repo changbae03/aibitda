@@ -4,6 +4,8 @@
  * [#2] 앙상블 가중치 실시간 조정 : GBDT / LSTM 개별 예측 저장 → 컴포넌트별 라이브 정확도 → alpha 보정
  * [#1] 오차 컨텍스트 저장        : VIX / 변동성 기록 → 나중에 "어떤 상황에서 틀리나" 분석용
  *      (데이터 2주+ 쌓이면 자동 활성화)
+ * [v2] D+1 / D+2 / D+3 별도 저장 지원 (pred_horizon 컬럼)
+ *      과거 예측치 불변: ON CONFLICT DO NOTHING (resolved_at 등 결과만 UPDATE)
  */
 
 import { pool } from "@workspace/db";
@@ -25,15 +27,16 @@ export async function initPredictionTable(): Promise<void> {
       correct          BOOLEAN,
       resolved_at      TIMESTAMPTZ,
       model_version    SMALLINT     NOT NULL DEFAULT 0,
+      pred_horizon     SMALLINT     NOT NULL DEFAULT 3,
       gbdt_ret         FLOAT,
       lstm_ret         FLOAT,
       gbdt_correct     BOOLEAN,
       lstm_correct     BOOLEAN,
       vix_at_pred      FLOAT,
-      volatility_at_pred FLOAT,
-      UNIQUE(symbol, predicted_at)
+      volatility_at_pred FLOAT
     )
   `);
+
   // 기존 테이블에 컬럼 추가 (없으면 추가, 있으면 무시)
   const cols = [
     ["gbdt_ret",           "FLOAT"],
@@ -42,21 +45,33 @@ export async function initPredictionTable(): Promise<void> {
     ["lstm_correct",       "BOOLEAN"],
     ["vix_at_pred",        "FLOAT"],
     ["volatility_at_pred", "FLOAT"],
+    ["pred_horizon",       "SMALLINT NOT NULL DEFAULT 3"],
   ] as const;
   for (const [col, typ] of cols) {
     await pool.query(
       `ALTER TABLE index_predictions ADD COLUMN IF NOT EXISTS ${col} ${typ}`
     ).catch(() => {});
   }
+
+  // 기존 UNIQUE(symbol, predicted_at) 제약 제거 → (symbol, predicted_at, pred_horizon)으로 교체
+  // D+1 / D+2 / D+3 각각 별도 행 저장을 위해 필요
+  await pool.query(
+    `ALTER TABLE index_predictions DROP CONSTRAINT IF EXISTS index_predictions_symbol_predicted_at_key`
+  ).catch(() => {});
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_ip_unique_spd
+     ON index_predictions(symbol, predicted_at, pred_horizon)`
+  ).catch(() => {});
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_ip_symbol_predicted
     ON index_predictions(symbol, predicted_at DESC)
-  `);
+  `).catch(() => {});
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_ip_unresolved
     ON index_predictions(symbol, target_date)
     WHERE correct IS NULL
-  `);
+  `).catch(() => {});
 }
 
 // ─── 헬퍼 ──────────────────────────────────────────────────────────────────────
@@ -79,15 +94,21 @@ function todayKST(): string {
 // ─── 예측 저장 ─────────────────────────────────────────────────────────────────
 
 export interface PredictionContext {
-  gbdtReturn?:    number;   // GBDT 단독 예측 수익률 (%)
-  lstmReturn?:    number;   // LSTM 단독 예측 수익률 (%)
-  vixAtPred?:     number;   // 예측 시점 VIX 수준
-  volatilityAtPred?: number; // 예측 시점 20일 실현 변동성 (일별 std, %)
+  gbdtReturn?:    number;
+  lstmReturn?:    number;
+  vixAtPred?:     number;
+  volatilityAtPred?: number;
 }
 
+/**
+ * 예측 저장.
+ * - 같은 (symbol, predicted_at, pred_horizon) 조합이 이미 있으면 DO NOTHING.
+ *   → 과거 예측치 불변 보장.
+ * - actual_return / correct 결과는 resolveExpiredPredictions 에서 별도 UPDATE.
+ */
 export async function savePrediction(
   symbol: string,
-  predictedReturn3d: number,
+  predictedReturn: number,
   currentPrice: number,
   modelVersion: number,
   predHorizon = 3,
@@ -95,27 +116,19 @@ export async function savePrediction(
 ): Promise<void> {
   const predictedAt = todayKST();
   const targetDate  = addTradingDays(predictedAt, predHorizon);
-  const dir = predictedReturn3d >= 0 ? 1 : -1;
+  const dir = predictedReturn >= 0 ? 1 : -1;
 
   await pool.query(
     `INSERT INTO index_predictions
        (symbol, predicted_at, target_date, predicted_return, predicted_dir,
-        price_at_pred, model_version,
+        price_at_pred, model_version, pred_horizon,
         gbdt_ret, lstm_ret, vix_at_pred, volatility_at_pred)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-     ON CONFLICT (symbol, predicted_at)
-     DO UPDATE SET
-       predicted_return     = EXCLUDED.predicted_return,
-       predicted_dir        = EXCLUDED.predicted_dir,
-       price_at_pred        = EXCLUDED.price_at_pred,
-       target_date          = EXCLUDED.target_date,
-       model_version        = EXCLUDED.model_version,
-       gbdt_ret             = EXCLUDED.gbdt_ret,
-       lstm_ret             = EXCLUDED.lstm_ret,
-       vix_at_pred          = EXCLUDED.vix_at_pred,
-       volatility_at_pred   = EXCLUDED.volatility_at_pred`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (symbol, predicted_at, pred_horizon)
+     DO NOTHING`,
     [
-      symbol, predictedAt, targetDate, predictedReturn3d, dir, currentPrice, modelVersion,
+      symbol, predictedAt, targetDate, predictedReturn, dir, currentPrice,
+      modelVersion, predHorizon,
       ctx.gbdtReturn ?? null, ctx.lstmReturn ?? null,
       ctx.vixAtPred ?? null, ctx.volatilityAtPred ?? null,
     ],
@@ -135,12 +148,13 @@ export async function resolveExpiredPredictions(
     predicted_at: string;
     target_date: string;
     predicted_dir: number;
+    pred_horizon: number;
     gbdt_ret: number | null;
     lstm_ret: number | null;
     price_at_pred: number;
   }>(
     `SELECT id, predicted_at::text, target_date::text,
-            predicted_dir, gbdt_ret, lstm_ret, price_at_pred
+            predicted_dir, pred_horizon, gbdt_ret, lstm_ret, price_at_pred
      FROM index_predictions
      WHERE symbol = $1
        AND correct IS NULL
@@ -169,7 +183,6 @@ export async function resolveExpiredPredictions(
     const actualDir    = actualReturn >= 0 ? 1 : -1;
     const correct      = actualDir === row.predicted_dir;
 
-    // GBDT / LSTM 개별 정확도도 기록
     const gbdtCorrect = row.gbdt_ret !== null ? (row.gbdt_ret >= 0 ? 1 : -1) === actualDir : null;
     const lstmCorrect = row.lstm_ret !== null ? (row.lstm_ret >= 0 ? 1 : -1) === actualDir : null;
 
@@ -201,25 +214,27 @@ export interface LiveAccuracy {
   total:    number;
   pending:  number;
   accuracy: number | null;
+  /** D+1 / D+2 / D+3 별도 적중률 */
+  byHorizon: Record<number, { correct: number; total: number; accuracy: number | null }>;
 }
 
 export interface ComponentLiveAccuracy {
-  gbdtAcc:  number | null;   // GBDT 단독 라이브 적중률 (0~1)
-  lstmAcc:  number | null;   // LSTM 단독 라이브 적중률 (0~1)
-  nSamples: number;          // resolved 샘플 수
+  gbdtAcc:  number | null;
+  lstmAcc:  number | null;
+  nSamples: number;
 }
 
 export async function getLiveAccuracy(
   symbol: string,
   n = 30,
 ): Promise<LiveAccuracy> {
-  const { rows: resolved } = await pool.query<{ correct: boolean }>(
-    `SELECT correct
+  const { rows: resolved } = await pool.query<{ correct: boolean; pred_horizon: number }>(
+    `SELECT correct, pred_horizon
      FROM index_predictions
      WHERE symbol = $1 AND correct IS NOT NULL
      ORDER BY predicted_at DESC
      LIMIT $2`,
-    [symbol, n],
+    [symbol, n * 3],   // 3개 horizon이므로 더 넓게 조회
   );
 
   const { rows: pendingRows } = await pool.query<{ cnt: string }>(
@@ -229,9 +244,24 @@ export async function getLiveAccuracy(
     [symbol],
   );
 
-  const total   = resolved.length;
-  const correct = resolved.filter(r => r.correct).length;
+  // D+3 기준으로 전체 적중률 계산 (기존 방식 유지)
+  const h3rows = resolved.filter(r => r.pred_horizon === 3).slice(0, n);
+  const total   = h3rows.length;
+  const correct = h3rows.filter(r => r.correct).length;
   const pending = parseInt(pendingRows[0]?.cnt ?? "0", 10);
+
+  // 각 horizon별 적중률
+  const byHorizon: LiveAccuracy["byHorizon"] = {};
+  for (const h of [1, 2, 3]) {
+    const hRows = resolved.filter(r => r.pred_horizon === h).slice(0, n);
+    const hTotal   = hRows.length;
+    const hCorrect = hRows.filter(r => r.correct).length;
+    byHorizon[h] = {
+      correct: hCorrect,
+      total:   hTotal,
+      accuracy: hTotal >= 5 ? Math.round((hCorrect / hTotal) * 1000) / 10 : null,
+    };
+  }
 
   return {
     symbol,
@@ -239,12 +269,10 @@ export async function getLiveAccuracy(
     total,
     pending,
     accuracy: total >= 5 ? Math.round((correct / total) * 1000) / 10 : null,
+    byHorizon,
   };
 }
 
-/**
- * [#2] GBDT / LSTM 개별 라이브 적중률 → buildResultFromModel alpha 보정용
- */
 export async function getComponentLiveAccuracy(
   symbol: string,
   n = 20,
@@ -259,6 +287,7 @@ export async function getComponentLiveAccuracy(
        AND correct IS NOT NULL
        AND gbdt_correct IS NOT NULL
        AND lstm_correct IS NOT NULL
+       AND pred_horizon = 3
      ORDER BY predicted_at DESC
      LIMIT $2`,
     [symbol, n],
@@ -297,6 +326,7 @@ export interface PredictionRecord {
   actual_return:   number | null;
   actual_dir:      number | null;
   correct:         boolean | null;
+  pred_horizon:    number;
   gbdt_ret:        number | null;
   lstm_ret:        number | null;
   gbdt_correct:    boolean | null;
@@ -309,6 +339,7 @@ export interface PredictionRecord {
 export async function getPredictionHistory(
   symbol: string,
   limit = 20,
+  horizon?: number,
 ): Promise<PredictionRecord[]> {
   const { rows } = await pool.query<PredictionRecord>(
     `SELECT id,
@@ -320,6 +351,7 @@ export async function getPredictionHistory(
             actual_return,
             actual_dir,
             correct,
+            pred_horizon,
             gbdt_ret,
             lstm_ret,
             gbdt_correct,
@@ -329,9 +361,10 @@ export async function getPredictionHistory(
             model_version
      FROM index_predictions
      WHERE symbol = $1
-     ORDER BY predicted_at DESC
+       ${horizon ? "AND pred_horizon = $3" : ""}
+     ORDER BY predicted_at DESC, pred_horizon
      LIMIT $2`,
-    [symbol, limit],
+    horizon ? [symbol, limit, horizon] : [symbol, limit],
   );
   return rows;
 }

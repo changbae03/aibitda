@@ -23,6 +23,8 @@ interface IndexResult {
   predictions: PredPoint[];
   currentValue: number;
   predictedReturn3d: number;
+  predictedReturn1d?: number;
+  predictedReturn2d?: number;
   trend: "up" | "down";
   testMae: number;
   testDirAcc: number;
@@ -46,6 +48,7 @@ interface LiveAccuracy {
   total:    number;
   pending:  number;
   accuracy: number | null;
+  byHorizon?: Record<string, { correct: number; total: number; accuracy: number | null }>;
 }
 
 interface PipelineStep {
@@ -1207,13 +1210,16 @@ export default function MarketAnalysis() {
                   ...(status.nasdaq  ? [{ id: "nasdaq",  data: status.nasdaq  }] : []),
                 ] as { id: "kospi" | "kosdaq" | "snp500" | "nasdaq"; data: IndexResult }[]).map(({ id, data }) => {
                   const isActive = activeIdx === id;
-                  const up = data.predictedReturn3d >= 0;
+                  const d1 = data.predictedReturn1d ?? +(data.predictedReturn3d / 3).toFixed(2);
+                  const d2 = data.predictedReturn2d ?? +(data.predictedReturn3d * 2 / 3).toFixed(2);
+                  const d3 = data.predictedReturn3d;
+                  const up3 = d3 >= 0;
                   return (
                     <button
                       key={id}
                       onClick={() => setActiveIdx(id)}
                       className={cn(
-                        "flex-1 min-w-[130px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left min-h-[88px]",
+                        "flex-1 min-w-[130px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left min-h-[100px]",
                         isActive
                           ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
                           : "border-border bg-card hover:bg-muted/30",
@@ -1226,12 +1232,16 @@ export default function MarketAnalysis() {
                       <div className="text-xl font-bold text-foreground">
                         {data.currentValue.toLocaleString()}
                       </div>
-                      <div className={cn(
-                        "flex items-center gap-1 text-xs font-semibold",
-                        up ? "text-red-400" : "text-blue-400",
-                      )}>
-                        {up ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                        3일 후 {up ? "오를 것 같아요" : "내릴 것 같아요"} ({up ? "+" : ""}{data.predictedReturn3d}%)
+                      <div className="flex items-center gap-2 text-[11px]">
+                        {([["D+1", d1], ["D+2", d2], ["D+3", d3]] as [string, number][]).map(([label, val]) => (
+                          <span key={label} className={cn("font-semibold", val >= 0 ? "text-red-400" : "text-blue-400")}>
+                            {label} {val >= 0 ? "+" : ""}{val}%
+                          </span>
+                        ))}
+                      </div>
+                      <div className={cn("flex items-center gap-1 text-[11px] font-medium text-muted-foreground/70")}>
+                        {up3 ? <TrendingUp className="w-3 h-3 text-red-400" /> : <TrendingDown className="w-3 h-3 text-blue-400" />}
+                        3일 후 {up3 ? "상승" : "하락"} 전망
                       </div>
                     </button>
                   );
@@ -1300,14 +1310,34 @@ export default function MarketAnalysis() {
                 <p className="text-xs text-muted-foreground/60 mb-1 font-medium flex items-center gap-1">
                   <Shield className="w-3.5 h-3.5" /> AI 예측 성능 — 이 정도로 믿을 수 있어요
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <StatCard
-                    emoji="🎯"
-                    label="3일 후 예측"
-                    value={`${current.predictedReturn3d >= 0 ? "+" : ""}${current.predictedReturn3d}%`}
-                    desc={current.trend === "up" ? "상승 방향 전망" : "하락 방향 전망"}
-                    highlight
-                  />
+                {/* D+1 / D+2 / D+3 예측 */}
+                <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3.5 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 font-medium">
+                    <span>🔮</span>
+                    <span>AI 단기 예측 (D+1 · D+2 · D+3)</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {([
+                      { label: "D+1 (내일)", val: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2) },
+                      { label: "D+2 (모레)", val: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2) },
+                      { label: "D+3 (3일 후)", val: current.predictedReturn3d },
+                    ]).map(({ label, val }) => (
+                      <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-background/60 border border-border/60">
+                        <span className="text-[10px] text-muted-foreground/60 font-medium">{label}</span>
+                        <span className={cn(
+                          "text-xl font-bold",
+                          val >= 0 ? "text-red-400" : "text-blue-400",
+                        )}>
+                          {val >= 0 ? "+" : ""}{val}%
+                        </span>
+                        <span className={cn("text-[10px] font-semibold", val >= 0 ? "text-red-400/70" : "text-blue-400/70")}>
+                          {val >= 0 ? "▲ 상승" : "▼ 하락"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
                   <StatCard
                     emoji="✅"
                     label="최근 6주 적중률"
@@ -1318,13 +1348,13 @@ export default function MarketAnalysis() {
                     emoji="📊"
                     label="전체 검증 적중률"
                     value={`${current.wfDirAcc}%`}
-                    desc="50%면 동전 던지기 수준 · 60% 이상이면 의미 있음"
+                    desc="50%면 동전 던지기 · 60%↑ 의미 있음"
                   />
                   <StatCard
                     emoji="📏"
                     label="평균 예측 오차"
                     value={`±${current.testMae}%`}
-                    desc="방향보다 정확한 숫자는 이만큼 차이날 수 있어요"
+                    desc="정확한 숫자는 이만큼 차이날 수 있어요"
                   />
                 </div>
               </div>
@@ -1357,26 +1387,62 @@ export default function MarketAnalysis() {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
-                        <span className="text-[11px] text-muted-foreground/70 font-medium">🎯 라이브 적중률</span>
-                        <span className={cn("text-2xl font-bold", pctColor)}>
-                          {la.accuracy !== null ? `${la.accuracy}%` : "—"}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground/55">실제 맞힌 비율</span>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
+                          <span className="text-[11px] text-muted-foreground/70 font-medium">🎯 전체 적중률</span>
+                          <span className={cn("text-2xl font-bold", pctColor)}>
+                            {la.accuracy !== null ? `${la.accuracy}%` : "—"}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground/55">실제 맞힌 비율</span>
+                        </div>
+                        <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
+                          <span className="text-[11px] text-muted-foreground/70 font-medium">📋 누적 기록</span>
+                          <span className="text-2xl font-bold text-foreground">
+                            {la.correct}/{la.total}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground/55">맞힌 수 / 전체</span>
+                        </div>
+                        <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
+                          <span className="text-[11px] text-muted-foreground/70 font-medium">⏳ 결과 대기</span>
+                          <span className="text-2xl font-bold text-foreground">{la.pending}</span>
+                          <span className="text-[11px] text-muted-foreground/55">결과 확인 대기 중</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
-                        <span className="text-[11px] text-muted-foreground/70 font-medium">📋 누적 기록</span>
-                        <span className="text-2xl font-bold text-foreground">
-                          {la.correct}/{la.total}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground/55">맞힌 수 / 전체</span>
-                      </div>
-                      <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
-                        <span className="text-[11px] text-muted-foreground/70 font-medium">⏳ 결과 대기</span>
-                        <span className="text-2xl font-bold text-foreground">{la.pending}</span>
-                        <span className="text-[11px] text-muted-foreground/55">3일 후 확인 예정</span>
-                      </div>
+                      {la.byHorizon && (la.byHorizon["1"] || la.byHorizon["2"] || la.byHorizon["3"]) && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] text-muted-foreground/55 font-medium">예측 구간별 적중률</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([
+                              { key: "1", label: "D+1 (내일)" },
+                              { key: "2", label: "D+2 (모레)" },
+                              { key: "3", label: "D+3 (3일 후)" },
+                            ]).map(({ key, label }) => {
+                              const h = la.byHorizon?.[key];
+                              if (!h || h.total < 3) return (
+                                <div key={key} className="flex flex-col items-center gap-0.5 py-2 rounded-lg border border-border/50 bg-muted/10">
+                                  <span className="text-[10px] text-muted-foreground/50">{label}</span>
+                                  <span className="text-sm font-bold text-muted-foreground/40">—</span>
+                                </div>
+                              );
+                              const acc = h.accuracy;
+                              const color = acc === null ? "text-muted-foreground"
+                                : acc >= 60 ? "text-emerald-400"
+                                : acc >= 50 ? "text-yellow-400"
+                                : "text-red-400";
+                              return (
+                                <div key={key} className="flex flex-col items-center gap-0.5 py-2 rounded-lg border border-border/50 bg-muted/10">
+                                  <span className="text-[10px] text-muted-foreground/55 font-medium">{label}</span>
+                                  <span className={cn("text-base font-bold", color)}>
+                                    {acc !== null ? `${acc}%` : "—"}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground/40">{h.correct}/{h.total}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1417,12 +1483,13 @@ export default function MarketAnalysis() {
                 {/* 1. AI 예측 숫자 */}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">🔮</span> "3일 후 +0.8%" 이게 무슨 말이에요?
+                    <span className="text-base">🔮</span> "D+1 +0.3% / D+2 +0.5% / D+3 +0.8%" 이게 무슨 말이에요?
                   </p>
                   <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    AI가 <span className="font-medium text-foreground">3거래일(영업일 기준)</span> 후 지수가 지금보다 몇 % 움직일지 예측한 값입니다.
-                    <span className="text-red-400 font-medium"> 빨간색 숫자·화살표</span>는 오를 것 같다, <span className="text-blue-400 font-medium">파란색은 내릴 것 같다</span>는 뜻이에요.
+                    AI가 <span className="font-medium text-foreground">내일(D+1)·모레(D+2)·3거래일 후(D+3)</span>로 나눠 지수가 지금보다 몇 % 움직일지 예측한 값입니다.
+                    <span className="text-red-400 font-medium"> 빨간색 숫자</span>는 오를 것 같다, <span className="text-blue-400 font-medium">파란색은 내릴 것 같다</span>는 뜻이에요.
                     정확한 숫자보다 <span className="font-medium text-foreground">방향(오를지 내릴지)</span>을 참고하는 데 쓰세요.
+                    D+3 예측이 기준 예측이며, D+1·D+2는 그 선행 신호입니다.
                   </p>
                 </div>
 

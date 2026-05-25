@@ -47,6 +47,10 @@ export interface IndexResult {
   lstmForecastRet?: number;
   curVol20?: number;
   lastVix5dMom?: number;
+  /** [v24] D+1 예측 수익률 (선형 보간 1/3) */
+  predictedReturn1d?: number;
+  /** [v24] D+2 예측 수익률 (선형 보간 2/3) */
+  predictedReturn2d?: number;
   /** [v22] GBDT·LSTM 방향 합의 신호 — 두 모델이 같은 방향이고 |예측| > 임계값이면 up/down, 아니면 neutral */
   agreementSignal: "up" | "down" | "neutral";
   /** [v22] 합의 강도: |gbdtReturn| + |lstmReturn| 의 평균 (클수록 양쪽 모두 강하게 예측) */
@@ -78,7 +82,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 23;  // [v23] D+1 별도 GBDT 앙상블 추가 — 내일 방향 신호 (predictedReturn1d)
+const MODEL_VERSION = 24;  // [v24] dirPenalty 과적합 수정, wfDirAcc 가중치 재조정, D+1/D+2/D+3 별도 저장
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -100,54 +104,48 @@ interface IndexHP {
 
 const INDEX_HP: Record<string, IndexHP> = {
   /**
-   * KOSPI [v22] — 방향 정확도 70%+ 목표
-   * · halfLifeDays 84→70: 관세전쟁·레짐 전환 가속화 대응. 3.5개월 반감기
-   * · dirPenalty 2.5→4.5: GBDT가 방향 오류 샘플에 4.5배 잔차 가중 → 방향 최적화 강화
-   *   (v21 KOSDAQ 3.5가 효과적임을 검증 → KOSPI도 강화)
-   * · nEnsemble 12, GBDT 트리 300개 유지
-   * · LSTM: dropout 0.22 유지 (halfLife 단축에 따라 과적합 위험 경계)
+   * KOSPI [v24] — dirPenalty 과적합 수정
+   * · dirPenalty 4.5→1.5: 높은 페널티가 훈련셋 방향 암기 → 테스트셋 반대 예측 유발.
+   *   MSE 최적화로 돌아가되 방향 오류에 1.5배만 가중.
+   * · halfLifeDays 70→42: 관세전쟁 이후 2개월 반감기 — 최신 레짐 집중.
    */
   KS11: {
     gbdtTrees: 300, gbdtLR: 0.012,  gbdtDepth: 4, gbdtLeaf: 10,
     gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 12,
     lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.22,
     recentWindow: 30,
-    halfLifeDays: 70,
-    dirPenalty: 4.5,
+    halfLifeDays: 42,
+    dirPenalty: 1.5,
   },
   /**
-   * KOSDAQ [v22] — 40% 최근 적중률 개선 목표
-   * 1. halfLifeDays 56→35: 코스닥 레짐 전환 주기 1~1.5개월 → 35일 = 1.5개월 반감기
-   *    최근 35일 데이터가 전체 학습의 50%를 차지 → 현재 레짐 집중
-   * 2. dirPenalty 3.5→4.5: 방향 오류 패널티 추가 강화
-   *    v21의 3.5배에서 추가 강화 → GBDT가 진폭보다 방향 정확도를 우선 최적화
-   * 3. lstmDrop 0.28→0.32: halfLife 단축 시 과적합 위험 대응
+   * KOSDAQ [v24] — dirPenalty 과적합 수정
+   * · dirPenalty 4.5→1.5, halfLifeDays 35→28: 코스닥 단기 레짐 집중.
    */
   KQ11: {
     gbdtTrees: 300, gbdtLR: 0.012, gbdtDepth: 5, gbdtLeaf: 8,
     gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 12,
-    lstmEpochs: 120, lstmLR: 0.0008, lstmDrop: 0.32,
+    lstmEpochs: 120, lstmLR: 0.0008, lstmDrop: 0.30,
     recentWindow: 30,
-    halfLifeDays: 35,
-    dirPenalty: 4.5,
+    halfLifeDays: 28,
+    dirPenalty: 1.5,
   },
-  /** S&P500 — 유동성 높은 미국 대형주 지수 [v20] dirPenalty 2.0 추가 */
+  /** S&P500 [v24] — dirPenalty 2.0→1.5, halfLifeDays 252→84 (4개월) */
   GSPC: {
     gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
     gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.25,
     recentWindow: 20,
-    halfLifeDays: 252,
-    dirPenalty: 2.0,
+    halfLifeDays: 84,
+    dirPenalty: 1.5,
   },
-  /** NASDAQ — 기술주 중심 지수 [v20] dirPenalty 2.0 추가 */
+  /** NASDAQ [v24] — dirPenalty 2.0→1.5, halfLifeDays 126→84 */
   IXIC: {
     gbdtTrees: 250, gbdtLR: 0.02, gbdtDepth: 5, gbdtLeaf: 10,
     gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 8,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.28,
     recentWindow: 20,
-    halfLifeDays: 126,
-    dirPenalty: 2.0,
+    halfLifeDays: 84,
+    dirPenalty: 1.5,
   },
 };
 
@@ -1265,9 +1263,9 @@ function buildResultFromModel(
     const e = k < K_WF - 1 ? s + wfWin : nTest;
     if (e > s) wfAccs.push(dirAccRate(testPreds.slice(s, e), Array.from(yte).slice(s, e)));
   }
-  // 지수 가중 평균: weight[k] = exp(k * 2.5) → 최근 폴드가 가장 오래된 폴드보다 약 2,981x 중요
-  // [v22] 0.7→2.5: 최근 레짐 성능을 wfDirAcc에 압도적으로 반영 (전체 = 사실상 최근 폴드 성능)
-  const wfWeights = wfAccs.map((_, k) => Math.exp(k * 2.5));
+  // 지수 가중 평균: weight[k] = exp(k * 0.5) → 최근 폴드가 약 7.4배 중요 (이전 exp*2.5=22000배 수정)
+  // [v24] 2.5→0.5: 마지막 폴드에 91% 집중되던 문제 수정 → 전 구간 균형 반영
+  const wfWeights = wfAccs.map((_, k) => Math.exp(k * 0.5));
   const wfWeightSum = wfWeights.reduce((a, b) => a + b, 0);
   const wfDirAccVal = wfAccs.length > 0
     ? wfAccs.reduce((sum, acc, k) => sum + acc * wfWeights[k], 0) / wfWeightSum
@@ -1367,6 +1365,8 @@ function buildResultFromModel(
     lstmForecastRet: +lstmForecastRetPct.toFixed(2),
     curVol20: +(curVol20 * 100).toFixed(3),
     lastVix5dMom: lastVix5dMom !== null ? +lastVix5dMom.toFixed(4) : undefined,
+    predictedReturn1d: +(forecastReturn * (1/3) * 100).toFixed(2),
+    predictedReturn2d: +(forecastReturn * (2/3) * 100).toFixed(2),
     agreementSignal,
     agreementStrength: +agreementStrength.toFixed(3),
   };
@@ -1663,12 +1663,17 @@ export async function runPipeline(force=false, keepExisting=false): Promise<void
     console.log(`[pipeline] 완료 ${Date.now()-t0}ms | KOSPI ${kospiResult.testDirAcc}% | KOSDAQ ${kosdaqResult.testDirAcc}% | S&P500 ${snp500Result.testDirAcc}% | NASDAQ ${nasdaqResult.testDirAcc}%`);
     // 재배포 후에도 즉시 표시될 수 있도록 DB에 저장
     saveResultsToDB(kospiResult, kosdaqResult, snp500Result, nasdaqResult).catch(() => {});
-    // [#1][#2] 오늘 예측 기록 저장 — 개별 컴포넌트 예측 + 오차 컨텍스트(VIX, 변동성) 포함
+    // [v24] D+1 / D+2 / D+3 각각 별도 저장 — 과거 예측치 불변 (DO NOTHING on conflict)
     Promise.all([
-      savePrediction("^KS11", kospiResult.predictedReturn3d,  kospiResult.currentValue,  MODEL_VERSION, 3, { gbdtReturn: kospiResult.gbdtForecastRet,  lstmReturn: kospiResult.lstmForecastRet,  volatilityAtPred: kospiResult.curVol20,  vixAtPred: kospiResult.lastVix5dMom  }),
-      savePrediction("^KQ11", kosdaqResult.predictedReturn3d, kosdaqResult.currentValue, MODEL_VERSION, 3, { gbdtReturn: kosdaqResult.gbdtForecastRet, lstmReturn: kosdaqResult.lstmForecastRet, volatilityAtPred: kosdaqResult.curVol20, vixAtPred: kosdaqResult.lastVix5dMom }),
-      savePrediction("^GSPC", snp500Result.predictedReturn3d, snp500Result.currentValue, MODEL_VERSION, 3, { gbdtReturn: snp500Result.gbdtForecastRet, lstmReturn: snp500Result.lstmForecastRet, volatilityAtPred: snp500Result.curVol20, vixAtPred: snp500Result.lastVix5dMom }),
-      savePrediction("^IXIC", nasdaqResult.predictedReturn3d, nasdaqResult.currentValue, MODEL_VERSION, 3, { gbdtReturn: nasdaqResult.gbdtForecastRet, lstmReturn: nasdaqResult.lstmForecastRet, volatilityAtPred: nasdaqResult.curVol20, vixAtPred: nasdaqResult.lastVix5dMom }),
+      ...["^KS11","^KQ11","^GSPC","^IXIC"].flatMap((sym, i) => {
+        const r = [kospiResult, kosdaqResult, snp500Result, nasdaqResult][i]!;
+        const ctx = { gbdtReturn: r.gbdtForecastRet, lstmReturn: r.lstmForecastRet, volatilityAtPred: r.curVol20, vixAtPred: r.lastVix5dMom };
+        return [
+          savePrediction(sym, r.predictedReturn1d ?? r.predictedReturn3d / 3, r.currentValue, MODEL_VERSION, 1, ctx),
+          savePrediction(sym, r.predictedReturn2d ?? r.predictedReturn3d * 2 / 3, r.currentValue, MODEL_VERSION, 2, ctx),
+          savePrediction(sym, r.predictedReturn3d, r.currentValue, MODEL_VERSION, 3, ctx),
+        ];
+      }),
     ]).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
   } catch(err:any) {
     console.error("[pipeline] 오류:",err?.message??err);
@@ -1784,13 +1789,21 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     _lastRun=Date.now();
     _status={..._status,ready:true,kospi,kosdaq,snp500,nasdaq};
     saveResultsToDB(kospi,kosdaq,snp500,nasdaq??undefined).catch(()=>{});
-    // [#1][#2] 오늘 예측 저장 — 개별 컴포넌트 예측 + 오차 컨텍스트 포함
-    Promise.all([
-      savePrediction("^KS11", kospi.predictedReturn3d,  kospi.currentValue,  MODEL_VERSION, 3, { gbdtReturn: kospi.gbdtForecastRet,  lstmReturn: kospi.lstmForecastRet,  volatilityAtPred: kospi.curVol20,  vixAtPred: kospi.lastVix5dMom  }),
-      savePrediction("^KQ11", kosdaq.predictedReturn3d, kosdaq.currentValue, MODEL_VERSION, 3, { gbdtReturn: kosdaq.gbdtForecastRet, lstmReturn: kosdaq.lstmForecastRet, volatilityAtPred: kosdaq.curVol20, vixAtPred: kosdaq.lastVix5dMom }),
-      savePrediction("^GSPC", snp500.predictedReturn3d, snp500.currentValue, MODEL_VERSION, 3, { gbdtReturn: snp500.gbdtForecastRet, lstmReturn: snp500.lstmForecastRet, volatilityAtPred: snp500.curVol20, vixAtPred: snp500.lastVix5dMom }),
-      ...(nasdaq ? [savePrediction("^IXIC", nasdaq.predictedReturn3d, nasdaq.currentValue, MODEL_VERSION, 3, { gbdtReturn: nasdaq.gbdtForecastRet, lstmReturn: nasdaq.lstmForecastRet, volatilityAtPred: nasdaq.curVol20, vixAtPred: nasdaq.lastVix5dMom })] : []),
-    ]).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
+    // [v24] D+1 / D+2 / D+3 각각 별도 저장 — 과거 예측치 불변 (DO NOTHING on conflict)
+    const allResults: [string, IndexResult][] = [
+      ["^KS11", kospi], ["^KQ11", kosdaq], ["^GSPC", snp500],
+      ...(nasdaq ? [["^IXIC", nasdaq] as [string, IndexResult]] : []),
+    ];
+    Promise.all(
+      allResults.flatMap(([sym, r]) => {
+        const ctx = { gbdtReturn: r.gbdtForecastRet, lstmReturn: r.lstmForecastRet, volatilityAtPred: r.curVol20, vixAtPred: r.lastVix5dMom };
+        return [
+          savePrediction(sym, r.predictedReturn1d ?? r.predictedReturn3d / 3, r.currentValue, MODEL_VERSION, 1, ctx),
+          savePrediction(sym, r.predictedReturn2d ?? r.predictedReturn3d * 2 / 3, r.currentValue, MODEL_VERSION, 2, ctx),
+          savePrediction(sym, r.predictedReturn3d, r.currentValue, MODEL_VERSION, 3, ctx),
+        ];
+      }),
+    ).catch(e => console.error("[tracker] 예측 저장 실패:", e?.message));
     // 만료된 예측 결과 확인 → 자동 재학습 체크
     Promise.all([
       resolveExpiredPredictions("^KS11", kospiRows),
