@@ -920,10 +920,10 @@ function MacroStatRow({
 }: { label: string; value: string; signal: string; isWarn: boolean }) {
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/30 last:border-0">
-      <span className="text-[13px] text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-2.5">
+      <span className="text-[13px] text-muted-foreground whitespace-nowrap shrink-0 mr-2">{label}</span>
+      <div className="flex items-center gap-2.5 shrink-0">
         <span className="text-[15px] font-bold text-foreground tabular-nums">{value}</span>
-        <span className={cn("text-[11px] font-medium w-16 text-right shrink-0", isWarn ? "text-orange-500" : "text-emerald-500")}>
+        <span className={cn("text-[12px] font-semibold w-[4.5rem] text-right shrink-0", isWarn ? "text-orange-500" : "text-emerald-500")}>
           {signal}
         </span>
       </div>
@@ -979,7 +979,7 @@ function EtfButtonGroup({
     <div className="space-y-3">
       {etfs.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] text-muted-foreground/40 font-medium">관련 ETF</p>
+          <p className="text-[11px] text-muted-foreground/60 font-semibold">관련 ETF</p>
           <div className="flex flex-wrap gap-1.5">
             {etfs.map(etf => (
               <button key={etf.code}
@@ -997,7 +997,7 @@ function EtfButtonGroup({
       )}
       {levEtfs.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] text-orange-500/50 font-medium">레버리지 <span className="font-normal text-muted-foreground/30">— 고위험 단기매매 전용</span></p>
+          <p className="text-[11px] text-orange-500 font-semibold">레버리지 <span className="font-normal text-muted-foreground/55">— 고위험 단기매매 전용</span></p>
           <div className="flex flex-wrap gap-1.5">
             {levEtfs.map(etf => (
               <button key={etf.code}
@@ -1015,7 +1015,7 @@ function EtfButtonGroup({
       )}
       {invEtfs.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] text-sky-500/50 font-medium">역발상 <span className="font-normal text-muted-foreground/30">— 하락 시 수익</span></p>
+          <p className="text-[11px] text-sky-500 font-semibold">역발상 <span className="font-normal text-muted-foreground/55">— 하락 시 수익</span></p>
           <div className="flex flex-wrap gap-1.5">
             {invEtfs.map(etf => (
               <button key={etf.code}
@@ -1067,29 +1067,29 @@ function SectorAccordionRow({
         onClick={() => setExpanded(e => !e)}
         className="w-full flex items-center gap-3 px-1 py-3.5 hover:bg-muted/20 rounded-xl transition-colors text-left border-b border-border/30"
       >
-        <span className="text-[12px] font-semibold text-muted-foreground/30 w-5 text-center shrink-0 tabular-nums">{rank + 1}</span>
+        <span className="text-[12px] font-semibold text-muted-foreground/50 w-5 text-center shrink-0 tabular-nums">{rank + 1}</span>
         <span className="text-[18px] leading-none shrink-0">{sector.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-[14px] font-semibold text-foreground truncate">{sector.name}</span>
-            {!isNow && <span className="text-[10px] text-muted-foreground/40 shrink-0">{sector.horizon}</span>}
+            {!isNow && <span className="text-[11px] text-muted-foreground/55 shrink-0">{sector.horizon}</span>}
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-1 rounded-full bg-muted/30 overflow-hidden">
+            <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
               <div className="h-full rounded-full transition-all" style={{ width: `${sector.score}%`, background: sColor }} />
             </div>
             <span className="text-[13px] font-bold tabular-nums shrink-0" style={{ color: sColor }}>{sector.score}</span>
           </div>
         </div>
-        <span className={cn("text-[12px] font-semibold shrink-0 w-8 text-right", cfg.text)}>{cfg.label}</span>
+        <span className={cn("text-[13px] font-semibold shrink-0 w-8 text-right", cfg.text)}>{cfg.label}</span>
         {!expanded && etfs.length > 0 && (
           <div className="hidden sm:flex items-center gap-1 shrink-0">
             {etfs.slice(0, 2).map(e => (
-              <span key={e.code} className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground/45">{e.code}</span>
+              <span key={e.code} className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground/55">{e.code}</span>
             ))}
           </div>
         )}
-        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/25 shrink-0 transition-transform duration-200", expanded && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/40 shrink-0 transition-transform duration-200", expanded && "rotate-180")} />
       </button>
 
       {expanded && (
@@ -1098,12 +1098,12 @@ function SectorAccordionRow({
           <div className="flex flex-wrap gap-1.5">
             {sector.catalysts.map(c => (
               <span key={c} className={cn(
-                "text-[11px] px-2.5 py-1 rounded-full font-medium",
-                isNow ? "bg-emerald-500/8 text-emerald-600 dark:text-emerald-400" : "bg-blue-500/8 text-blue-600 dark:text-blue-400"
+                "text-[12px] px-2.5 py-1 rounded-full font-medium",
+                isNow ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-blue-500/12 text-blue-700 dark:text-blue-300"
               )}>↑ {c}</span>
             ))}
             {sector.risks.map(r => (
-              <span key={r} className="text-[11px] px-2.5 py-1 rounded-full bg-muted/30 text-muted-foreground/45">△ {r}</span>
+              <span key={r} className="text-[12px] px-2.5 py-1 rounded-full bg-muted/50 text-muted-foreground/70">△ {r}</span>
             ))}
           </div>
           <EtfButtonGroup
@@ -1162,7 +1162,7 @@ function PulseAccordionRow({
             ))}
           </div>
         )}
-        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/25 shrink-0 transition-transform duration-200", expanded && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/40 shrink-0 transition-transform duration-200", expanded && "rotate-180")} />
       </button>
 
       {expanded && (
@@ -1294,8 +1294,8 @@ function MomentumTab() {
             <div className="space-y-6">
               {/* 매크로 지표 */}
               <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest px-1 mb-2">주요 매크로 지표</p>
-                <div className="grid grid-cols-2 gap-x-6">
+                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-1 mb-2">주요 매크로 지표</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                   <div>
                     <MacroStatRow label="한국 기준금리" value={`${data.macro.krRate}%`} signal={data.macro.krRate > 2.5 ? "고금리" : "안정"} isWarn={data.macro.krRate > 2.5} />
                     <MacroStatRow label="미국 Fed 금리" value={`${data.macro.usRate}%`} signal={data.macro.usRate > 3.0 ? "고금리" : "완화"} isWarn={data.macro.usRate > 3.0} />
@@ -1315,8 +1315,8 @@ function MomentumTab() {
               {/* 지금 유망 섹터 */}
               <div>
                 <div className="flex items-center justify-between px-1 mb-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest">지금 유망 섹터</p>
-                  <span className="text-[10px] text-muted-foreground/30">탭해서 ETF 확인</span>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">지금 유망 섹터</p>
+                  <span className="text-[11px] text-muted-foreground/50">탭해서 ETF 확인</span>
                 </div>
                 {data.nowSectors.map((s, i) => {
                   const { regular, leveraged, inverse } = getEtfsForSector(s.sectorTags);
@@ -1334,8 +1334,8 @@ function MomentumTab() {
               {/* 앞으로 주목 섹터 */}
               <div>
                 <div className="flex items-center justify-between px-1 mb-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest">앞으로 주목 섹터</p>
-                  <span className="text-[10px] text-muted-foreground/30">향후 3–12개월 관점</span>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">앞으로 주목 섹터</p>
+                  <span className="text-[11px] text-muted-foreground/50">향후 3–12개월 관점</span>
                 </div>
                 {data.futureSectors.map((s, i) => {
                   const { regular, leveraged, inverse } = getEtfsForSector(s.sectorTags);
@@ -1359,8 +1359,8 @@ function MomentumTab() {
               {/* 기관 수급 흐름 */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest">기관 수급 흐름</p>
-                  <p className="text-[10px] text-muted-foreground/30">거시 지표 기반 추정</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">기관 수급 흐름</p>
+                  <p className="text-[11px] text-muted-foreground/50">거시 지표 기반 추정</p>
                 </div>
                 {(data.marketPulse.institutionalFlow ?? []).map((item, i) => {
                   const isIn  = item.direction === "in";
@@ -1383,13 +1383,13 @@ function MomentumTab() {
                         <span className={`text-[13px] font-bold w-4 shrink-0 ${dirColor}`}>{dirIcon}</span>
                         <span className="text-[13px] font-semibold text-foreground flex-1">{item.sector}</span>
                         <div className="flex items-center gap-1.5">
-                          <div className="w-16 h-1 rounded-full bg-border/30 overflow-hidden">
+                          <div className="w-16 h-1.5 rounded-full bg-border/40 overflow-hidden">
                             <div className={`h-full rounded-full ${barColor}`} style={{ width: `${item.strength}%` }} />
                           </div>
                           <span className={`text-[11px] font-semibold ${dirColor}`}>{dirLabel}</span>
                         </div>
                       </div>
-                      <p className="text-[11px] text-muted-foreground/60 leading-snug pl-6">{item.reason}</p>
+                      <p className="text-[12px] text-muted-foreground/70 leading-snug pl-6">{item.reason}</p>
                     </div>
                   );
                 })}
@@ -1403,11 +1403,11 @@ function MomentumTab() {
               {/* 개인 투자자 주의 */}
               {data.marketPulse.retailWarning.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest mb-2">개인 투자자 주의</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2">개인 투자자 주의</p>
                   {data.marketPulse.retailWarning.map((w, i) => (
                     <div key={i} className="flex items-start gap-2 py-1.5 border-b border-border/25 last:border-0">
-                      <span className="text-[11px] text-amber-400 mt-0.5 shrink-0">⚠</span>
-                      <p className="text-[12px] text-muted-foreground/70 leading-snug">{w}</p>
+                      <span className="text-[12px] text-amber-500 mt-0.5 shrink-0">⚠</span>
+                      <p className="text-[13px] text-muted-foreground leading-snug">{w}</p>
                     </div>
                   ))}
                 </div>
@@ -1415,7 +1415,7 @@ function MomentumTab() {
 
               {/* 수급·심리 시그널 */}
               <div>
-                <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest px-1 mb-1">수급·심리 시그널</p>
+                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-1 mb-1">수급·심리 시그널</p>
                 {data.marketPulse.signals.map((sig, i) => {
                   const { regular, leveraged, inverse } = getEtfsForSector(sig.sectorTags ?? []);
                   const catColor: Record<typeof sig.category, string> = {
@@ -1443,7 +1443,7 @@ function MomentumTab() {
 
               {/* 언론·소셜 주목 테마 */}
               <div>
-                <p className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest px-1 mb-1">주목 테마</p>
+                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-1 mb-1">주목 테마</p>
                 {data.marketPulse.themes.map((t, i) => {
                   const { regular, leveraged, inverse } = getEtfsForSector(t.relatedSectors);
                   const sentimentCfg = {
