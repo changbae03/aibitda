@@ -108,7 +108,14 @@ export const MAJOR_ETFS: ETFInfo[] = [
   // 반도체
   { code:"091160", isuCd:"KR7091160007", name:"KODEX 반도체",            sector:"반도체",   issuer:"삼성자산운용", yahooCode:"091160.KS", leverage:1,  ter:0.45, benchmark:"KRX 반도체" },
   { code:"381180", isuCd:"KR7381180009", name:"TIGER 미국필라델피아반도체나스닥", sector:"해외주식", issuer:"미래에셋",    yahooCode:"381180.KS", leverage:1,  ter:0.49, benchmark:"필라델피아 반도체지수(SOX)" },
-  { code:"491830", isuCd:"KR7491830006", name:"TIGER 미국AI반도체팹리스",      sector:"해외주식", issuer:"미래에셋",    yahooCode:"491830.KS", leverage:1,  ter:0.49, benchmark:"Mirae Asset US AI Fabless 지수" },
+  { code:"491830", isuCd:"KR7491830006", name:"TIGER 미국AI반도체팹리스",       sector:"해외주식", issuer:"미래에셋",    yahooCode:"491830.KS", leverage:1,  ter:0.49, benchmark:"Mirae Asset US AI Fabless 지수" },
+  { code:"480310", isuCd:"KR7480310002", name:"TIGER 글로벌온디바이스AI",        sector:"테마",     issuer:"미래에셋",    yahooCode:"480310.KS", leverage:1,  ter:0.49, benchmark:"Indxx 글로벌온디바이스AI" },
+  { code:"464930", isuCd:"KR7464930007", name:"TIGER 글로벌혁신블루칩TOP10",     sector:"테마",     issuer:"미래에셋",    yahooCode:"464930.KS", leverage:1,  ter:0.49, benchmark:"Solactive 글로벌혁신블루칩TOP10" },
+  { code:"466950", isuCd:"KR7466950003", name:"TIGER 글로벌AI액티브",            sector:"테마",     issuer:"미래에셋",    yahooCode:"466950.KS", leverage:1,  ter:0.80, benchmark:"액티브(AI)" },
+  { code:"476690", isuCd:"KR7476690003", name:"TIGER 글로벌비만치료제TOP2Plus",   sector:"헬스케어", issuer:"미래에셋",    yahooCode:"476690.KS", leverage:1,  ter:0.49, benchmark:"Solactive 글로벌비만치료제TOP2" },
+  { code:"371450", isuCd:"KR7371450008", name:"TIGER 글로벌클라우드컴퓨팅INDXX", sector:"테마",     issuer:"미래에셋",    yahooCode:"371450.KS", leverage:1,  ter:0.49, benchmark:"Indxx 글로벌클라우드컴퓨팅" },
+  { code:"491010", isuCd:"KR7491010005", name:"TIGER 글로벌AI전력인프라액티브",   sector:"테마",     issuer:"미래에셋",    yahooCode:"491010.KS", leverage:1,  ter:0.80, benchmark:"액티브(AI전력인프라)" },
+  { code:"418670", isuCd:"KR7418670006", name:"TIGER 글로벌AI사이버보안",         sector:"테마",     issuer:"미래에셋",    yahooCode:"418670.KS", leverage:1,  ter:0.49, benchmark:"Indxx 글로벌AI사이버보안" },
   { code:"395160", isuCd:"KR7395160003", name:"KODEX AI반도체TOP2플러스", sector:"반도체",   issuer:"삼성자산운용", yahooCode:"395160.KS", leverage:1,  ter:0.45, benchmark:"KODEX AI반도체TOP2+" },
   // 2차전지
   { code:"305720", isuCd:"KR7305720003", name:"KODEX 2차전지산업",       sector:"2차전지",  issuer:"삼성자산운용", yahooCode:"305720.KS", leverage:1,  ter:0.45, benchmark:"KRX 2차전지" },
@@ -819,42 +826,88 @@ async function samsungFundFetchHoldings(code: string): Promise<{ holdings: ETFHo
 }
 
 // ─── 미래에셋 TIGER ETF 구성종목 크롤러 ────────────────────────────────────────
-// investments.miraeasset.com/tigeretf  →  pdfListAjax.ajax (세션 기반 HTML 파싱)
+// investments.miraeasset.com/tigeretf  →  pdfListAjax.ajax
+// 세션 1개를 공유해서 모든 ETF holdings 조회 (ETF마다 새 세션 불필요)
 
-async function miraeFundFetchHoldings(isuCd: string): Promise<{ holdings: ETFHolding[]; dataDate: string }> {
-  const base = "https://investments.miraeasset.com/tigeretf/ko/product/search/detail";
-  const UA   = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+const MIRAE_BASE        = "https://investments.miraeasset.com/tigeretf/ko/product/search/detail";
+const MIRAE_UA          = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+const MIRAE_SESSION_TTL = 25 * 60 * 1000; // 25분 (서블릿 기본 세션 30분보다 짧게)
+
+let _miraeSession: { cookieStr: string; jsessionid: string; ts: number } | null = null;
+let _miraeSessionFlight: Promise<{ cookieStr: string; jsessionid: string } | null> | null = null;
+
+/** 미래에셋 세션 획득 (캐시된 세션 재사용, 만료 시 재발급) */
+async function ensureMiraeSession(): Promise<{ cookieStr: string; jsessionid: string } | null> {
+  if (_miraeSession && Date.now() - _miraeSession.ts < MIRAE_SESSION_TTL) {
+    return _miraeSession;
+  }
+  if (_miraeSessionFlight) return _miraeSessionFlight;
+
+  _miraeSessionFlight = (async () => {
+    try {
+      const res = await fetch(`${MIRAE_BASE}/index.do?ksdFund=KR7491830006`, {
+        headers: { "User-Agent": MIRAE_UA, "Accept": "text/html,application/xhtml+xml" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) return null;
+      const rawCookies: string[] = (res.headers as any).getSetCookie?.() ?? [];
+      const cookieStr = rawCookies.map((c: string) => c.split(";")[0]).join("; ");
+      if (!cookieStr) return null;
+      const html = await res.text();
+      const jsMatch = html.match(/;jsessionid=([^"';/\s]+)/);
+      const jsessionid = jsMatch?.[1] ?? "";
+      _miraeSession = { cookieStr, jsessionid, ts: Date.now() };
+      return _miraeSession;
+    } catch {
+      return null;
+    } finally {
+      _miraeSessionFlight = null;
+    }
+  })();
+  return _miraeSessionFlight;
+}
+
+/** HTML에서 ETFHolding 배열 파싱 (국내 6자리 + 해외 US 티커 모두 지원) */
+function parseMiraeHoldingsHtml(html: string): ETFHolding[] {
+  const holdings: ETFHolding[] = [];
+  let rank = 1;
+  for (const m of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const tds = [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+      .map(td => td[1].replace(/<[^>]+>/g, "").trim().replace(/\s+/g, " "));
+    if (tds.length < 3) continue;
+    const stockName = tds[0];
+    const weightStr = tds[1].replace("%", "").trim();
+    const rawCode   = tds[2].trim();
+    // "AMD US EQUITY" → "AMD"  |  "005930 KS EQUITY" → "005930"  |  "005930" → "005930"
+    const usMatch   = rawCode.match(/^([A-Z]{1,6})\s+US\s+EQUITY/i);
+    const ksMatch   = rawCode.match(/^(\d{6})\s+KS?\s+EQUITY/i);
+    const stockCode = usMatch?.[1]?.toUpperCase() ?? ksMatch?.[1] ?? rawCode.replace(/\s/g, "");
+    const weight    = parseFloat(weightStr);
+    if (!stockCode || (!/^\d{6}$/.test(stockCode) && !/^[A-Z]{1,6}$/.test(stockCode)) || isNaN(weight) || weight <= 0) continue;
+    holdings.push({ rank: rank++, stockCode, stockName, weight });
+  }
+  return holdings;
+}
+
+/** 공유 세션으로 단일 ETF의 holdings + 기준일 조회 */
+async function miraeHoldingsWithSession(
+  isuCd: string,
+  session: { cookieStr: string; jsessionid: string },
+): Promise<{ holdings: ETFHolding[]; dataDate: string }> {
+  const ajaxUrl = (path: string) =>
+    `${MIRAE_BASE}/${path}` + (session.jsessionid ? `;jsessionid=${session.jsessionid}` : "");
+
+  const commonHeaders = {
+    "User-Agent":       MIRAE_UA,
+    "Cookie":           session.cookieStr,
+    "X-Requested-With": "XMLHttpRequest",
+    "Referer":          `${MIRAE_BASE}/index.do?ksdFund=${isuCd}`,
+    "Content-Type":     "application/x-www-form-urlencoded",
+  };
+
+  let dataDate = "";
   try {
-    // 1) 세션 획득: 쿠키(Set-Cookie) + HTML 내 jsessionid
-    const pageRes = await fetch(`${base}/index.do?ksdFund=${isuCd}`, {
-      headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!pageRes.ok) return { holdings: [], dataDate: "" };
-
-    const rawCookies: string[] = (pageRes.headers as any).getSetCookie?.() ?? [];
-    const cookieStr = rawCookies.map((c: string) => c.split(";")[0]).join("; ");
-    if (!cookieStr) return { holdings: [], dataDate: "" };
-
-    // Java 서블릿 세션 ID는 Set-Cookie가 아닌 HTML 내 URL에서 추출해야 정확합니다
-    const pageHtml = await pageRes.text();
-    const jsMatch  = pageHtml.match(/;jsessionid=([^"';/\s]+)/);
-    const jsessionid = jsMatch?.[1] ?? "";
-
-    const ajaxUrl = (path: string) =>
-      `${base}/${path}` + (jsessionid ? `;jsessionid=${jsessionid}` : "");
-
-    const commonHeaders = {
-      "User-Agent":        UA,
-      "Cookie":            cookieStr,
-      "X-Requested-With":  "XMLHttpRequest",
-      "Referer":           `${base}/index.do?ksdFund=${isuCd}`,
-      "Content-Type":      "application/x-www-form-urlencoded",
-    };
-
-    // 2) 기준일(fixDate) 조회
-    let dataDate = "";
     const pdRes = await fetch(ajaxUrl("pdf.ajax"), {
       method: "POST",
       headers: commonHeaders,
@@ -866,42 +919,79 @@ async function miraeFundFetchHoldings(isuCd: string): Promise<{ holdings: ETFHol
       const dm = pdHtml.match(/name="fixDate"[^>]*value="(\d{4}\.\d{2}\.\d{2})"/);
       if (dm) dataDate = yyyymmddToKorean(dm[1].replace(/\./g, ""));
     }
+  } catch { /* 기준일 없으면 생략 */ }
 
-    // 3) 구성종목 목록 (최대 50개)
-    const listRes = await fetch(ajaxUrl("pdfListAjax.ajax"), {
-      method: "POST",
-      headers: commonHeaders,
-      body: `ksdFund=${isuCd}&pageIndex=1&firstIndex=0&listCnt=50&order=SRD`,
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!listRes.ok) return { holdings: [], dataDate };
+  const listRes = await fetch(ajaxUrl("pdfListAjax.ajax"), {
+    method: "POST",
+    headers: commonHeaders,
+    body: `ksdFund=${isuCd}&pageIndex=1&firstIndex=0&listCnt=50&order=SRD`,
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!listRes.ok) return { holdings: [], dataDate };
 
-    const html = await listRes.text();
+  const html = await listRes.text();
+  const holdings = parseMiraeHoldingsHtml(html);
+  return { holdings, dataDate: dataDate || tsToKstDateStr(Date.now()) };
+}
 
-    // 컬럼 순서: [종목명(hidden), 비중%, 종목코드, 수량, 평가금액, 수익률]
-    const holdings: ETFHolding[] = [];
-    let rank = 1;
-    for (const m of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
-      const tds = [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
-        .map(td => td[1].replace(/<[^>]+>/g, "").trim().replace(/\s+/g, " "));
-      if (tds.length < 3) continue;
-      const stockName = tds[0];
-      const weightStr = tds[1].replace("%", "").trim();
-      const rawCode   = tds[2].trim();
-      // "AMD US EQUITY" → "AMD", "005930 KS EQUITY" → "005930", 그 외 공백 제거
-      const usMatch   = rawCode.match(/^([A-Z]{1,6})\s+US\s+EQUITY/i);
-      const ksMatch   = rawCode.match(/^(\d{6})\s+KS?\s+EQUITY/i);
-      const stockCode = usMatch?.[1] ?? ksMatch?.[1] ?? rawCode.replace(/\s/g, "");
-      const weight    = parseFloat(weightStr);
-      // 국내 6자리 숫자 또는 미국 영문 티커(1~6자) 허용
-      if (!stockCode || (!/^\d{6}$/.test(stockCode) && !/^[A-Z]{1,6}$/.test(stockCode)) || isNaN(weight) || weight <= 0) continue;
-      holdings.push({ rank: rank++, stockCode, stockName, weight });
+/** 단일 ETF holdings 조회 (세션 자동 관리, 만료 시 재시도) */
+async function miraeFundFetchHoldings(isuCd: string): Promise<{ holdings: ETFHolding[]; dataDate: string }> {
+  try {
+    const session = await ensureMiraeSession();
+    if (!session) return { holdings: [], dataDate: "" };
+    const result = await miraeHoldingsWithSession(isuCd, session);
+    // 빈 결과 = 세션 만료 가능성 → 세션 초기화 후 1회 재시도
+    if (result.holdings.length === 0 && _miraeSession) {
+      _miraeSession = null;
+      const fresh = await ensureMiraeSession();
+      if (fresh) return miraeHoldingsWithSession(isuCd, fresh);
     }
-
-    return { holdings, dataDate: dataDate || tsToKstDateStr(Date.now()) };
+    return result;
   } catch {
     return { holdings: [], dataDate: "" };
   }
+}
+
+/** TIGER ETF 전체 holdings 일괄 사전로딩
+ *  세션 1개로 모든 isuCd를 순차 조회 → holdingsCache에 저장
+ *  @returns { fetched, skipped } — 캐시 히트는 skipped로 카운트 */
+export async function miraePreFetchAllHoldings(
+  isuCds: string[],
+): Promise<{ fetched: number; skipped: number; errors: number }> {
+  let session = await ensureMiraeSession();
+  if (!session) return { fetched: 0, skipped: 0, errors: isuCds.length };
+
+  let fetched = 0, skipped = 0, errors = 0;
+  for (const isuCd of isuCds) {
+    const code = isuCd.substring(3, 9); // KR7XXXXXXY → XXXXXX
+    const hit  = holdingsCache.get(code);
+    if (hit && Date.now() - hit.ts < HOLDINGS_TTL) { skipped++; continue; }
+
+    try {
+      const { holdings, dataDate } = await miraeHoldingsWithSession(isuCd, session!);
+      if (holdings.length > 0) {
+        holdingsCache.set(code, { data: holdings, ts: Date.now(), source: "mirae" });
+        fetched++;
+      } else {
+        errors++;
+      }
+    } catch {
+      // 세션 만료 → 갱신 후 재시도
+      _miraeSession = null;
+      session = await ensureMiraeSession();
+      if (!session) { errors++; continue; }
+      try {
+        const { holdings } = await miraeHoldingsWithSession(isuCd, session);
+        if (holdings.length > 0) {
+          holdingsCache.set(code, { data: holdings, ts: Date.now(), source: "mirae" });
+          fetched++;
+        } else errors++;
+      } catch { errors++; }
+    }
+
+    await new Promise(r => setTimeout(r, 80)); // 서버 부하 방지 (80ms 간격)
+  }
+  return { fetched, skipped, errors };
 }
 
 // ─── KRX ETF 구성 종목 조회 ───────────────────────────────────────────────────

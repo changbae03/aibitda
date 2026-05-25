@@ -8,6 +8,7 @@ import {
   getTimingSignals,
   getUnifiedSignals,
   getMomentumAnalysis,
+  miraePreFetchAllHoldings,
 } from "../lib/etf-analyzer.js";
 import { getCachedTigerEtfs } from "../lib/tiger-etf-scraper.js";
 import { getStatus } from "../lib/lstm-predictor.js";
@@ -109,6 +110,25 @@ router.get("/etf/stock/:query/exposure", async (req, res) => {
     const query = decodeURIComponent(req.params.query);
     const data  = await getStockExposure(query);
     res.json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "error" });
+  }
+});
+
+// POST /api/etf/prefetch-holdings
+// 미래에셋 세션 1개로 모든 TIGER ETF holdings를 일괄 사전로딩
+router.post("/etf/prefetch-holdings", async (_req, res) => {
+  try {
+    const tigerEtfs = getCachedTigerEtfs() as any[];
+    // MAJOR_ETFS + tiger scraper에서 미래에셋 isuCd가 있는 것만
+    const miraeIsuCds = [
+      ...ALL_ETFS.filter(e => e.isuCd.startsWith("KR7") && e.issuer === "미래에셋").map(e => e.isuCd),
+      ...tigerEtfs.filter(e => e.isuCd?.startsWith("KR7")).map((e: any) => e.isuCd),
+    ];
+    // 중복 제거
+    const unique = [...new Set(miraeIsuCds)];
+    const result = await miraePreFetchAllHoldings(unique);
+    res.json({ ...result, total: unique.length });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? "error" });
   }
