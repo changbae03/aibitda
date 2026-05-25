@@ -20,6 +20,7 @@ import { performanceRouter } from "./performance.js";
 import userSettingsRouter from "./user-settings.js";
 import portfolioRouter from "./portfolio.js";
 import etfRouter from "./etf.js";
+import newsScrapsRouter from "./news-scraps.js";
 const router: IRouter = Router();
 
 router.use(healthRouter);
@@ -43,6 +44,7 @@ router.use(performanceRouter);
 router.use(userSettingsRouter);
 router.use(portfolioRouter);
 router.use(etfRouter);
+router.use(newsScrapsRouter);
 // market-analysis 라우트는 market-server 프로세스에서 처리 (app.ts 프록시로 전달)
 
 export default router;
