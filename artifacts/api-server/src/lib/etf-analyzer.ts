@@ -771,9 +771,9 @@ function sfKstDate(): string {
   return `${y}.${m}.${dd}`;
 }
 
-async function samsungFundFetchHoldings(code: string): Promise<ETFHolding[]> {
+async function samsungFundFetchHoldings(code: string): Promise<{ holdings: ETFHolding[]; dataDate: string }> {
   const fid = SF_FID_MAP[code];
-  if (!fid) return [];
+  if (!fid) return { holdings: [], dataDate: "" };
 
   const date = sfKstDate();
   const url = `https://m.samsungfund.com/api/v1/kodex/product-pdf/${fid}.do?gijunYMD=${date}`;
@@ -787,10 +787,17 @@ async function samsungFundFetchHoldings(code: string): Promise<ETFHolding[]> {
       },
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { holdings: [], dataDate: "" };
     const json = await res.json() as any;
-    const list: any[] = json?.pdf?.list ?? [];
-    if (!list.length) return [];
+    const pdf = json?.pdf;
+    const list: any[] = pdf?.list ?? [];
+    if (!list.length) return { holdings: [], dataDate: "" };
+
+    // 삼성펀드 API 응답의 실제 공시 기준일 ("20260522" → "2026년 05월 22일")
+    const rawDate: string = String(pdf?.gijunYMD ?? "");
+    const dataDate = rawDate.length === 8
+      ? yyyymmddToKorean(rawDate)
+      : tsToKstDateStr(Date.now());
 
     const holdings: ETFHolding[] = list
       .filter((item: any) => item.ratio && parseFloat(item.ratio) > 0)
@@ -804,9 +811,9 @@ async function samsungFundFetchHoldings(code: string): Promise<ETFHolding[]> {
       .slice(0, 20)
       .map((h, i) => ({ ...h, rank: i + 1 }));
 
-    return holdings;
+    return { holdings, dataDate };
   } catch {
-    return [];
+    return { holdings: [], dataDate: "" };
   }
 }
 
@@ -898,10 +905,10 @@ export async function getEtfHoldings(code: string, isuCd?: string): Promise<Hold
 
   // 2) Samsung Fund 모바일 API (KODEX ETF 전용 — MAJOR_ETFS에 있는 경우만)
   if (etf) {
-    const sfData = await samsungFundFetchHoldings(code);
+    const { holdings: sfData, dataDate: sfDate } = await samsungFundFetchHoldings(code);
     if (sfData.length >= 3) {
       holdingsCache.set(code, { data: sfData, ts: now, source: "samsung" });
-      return { holdings: sfData, source: "samsung", dataDate: tsToKstDateStr(now) };
+      return { holdings: sfData, source: "samsung", dataDate: sfDate || tsToKstDateStr(now) };
     }
   }
 
