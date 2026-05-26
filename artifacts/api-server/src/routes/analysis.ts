@@ -4084,6 +4084,12 @@ router.get("/public-stats", async (_req, res) => {
 
 router.get("/period-stats", async (_req, res) => {
   try {
+    // 성과 트래킹 기준일 (system_settings에서 읽음)
+    const settingRow = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = 'performance_tracking_start' LIMIT 1`
+    );
+    const trackingStart = settingRow[0]?.value ?? null;
+
     // 완료된 분석 + model_insights 조인
     const rows = await rawQuery<{
       analysis_id: number;
@@ -4092,19 +4098,37 @@ router.get("/period-stats", async (_req, res) => {
       outcome: string | null;
       price_return: number | null;
       days_elapsed: number | null;
-    }>(`
-      SELECT
-        a.id               AS analysis_id,
-        a.created_at,
-        a.investment_verdict,
-        mi.outcome,
-        mi.price_return,
-        mi.days_elapsed
-      FROM analyses a
-      LEFT JOIN model_insights mi ON mi.analysis_id = a.id
-      WHERE a.status = 'completed'
-      ORDER BY a.created_at
-    `);
+    }>(
+      trackingStart
+        ? `
+          SELECT
+            a.id               AS analysis_id,
+            a.created_at,
+            a.investment_verdict,
+            mi.outcome,
+            mi.price_return,
+            mi.days_elapsed
+          FROM analyses a
+          LEFT JOIN model_insights mi ON mi.analysis_id = a.id
+          WHERE a.status = 'completed'
+            AND a.created_at >= $1
+          ORDER BY a.created_at
+        `
+        : `
+          SELECT
+            a.id               AS analysis_id,
+            a.created_at,
+            a.investment_verdict,
+            mi.outcome,
+            mi.price_return,
+            mi.days_elapsed
+          FROM analyses a
+          LEFT JOIN model_insights mi ON mi.analysis_id = a.id
+          WHERE a.status = 'completed'
+          ORDER BY a.created_at
+        `,
+      trackingStart ? [trackingStart] : []
+    );
 
     const now = Date.now();
 

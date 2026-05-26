@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Brain, ChevronDown, History } from "lucide-react";
+import { Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Brain, ChevronDown, History, RotateCcw } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import {
@@ -177,20 +177,52 @@ export default function AdminCalibration() {
   const [recalcResult, setRecalcResult] = useState<RecalcResult | null>(null);
   const [recalcError, setRecalcError] = useState<string | null>(null);
   const [expandedSector, setExpandedSector] = useState<string | null>(null);
+  const [trackingStart, setTrackingStart] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(getApiUrl("/api/performance/calibration"), { credentials: "include" });
+      const [r, s] = await Promise.all([
+        fetch(getApiUrl("/api/performance/calibration"), { credentials: "include" }),
+        fetch(getApiUrl("/api/admin/settings"), { credentials: "include" }),
+      ]);
       if (r.status === 403) { setForbidden(true); return; }
       const data = await r.json();
       setRows(Array.isArray(data) ? data : []);
+      if (s.ok) {
+        const settings = await s.json();
+        setTrackingStart(settings.performance_tracking_start ?? null);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function resetTracking() {
+    if (!confirm("오늘부터 성과 트래킹을 새로 시작합니다.\n이전 방향 정확도 데이터는 집계에서 제외됩니다.\n계속하시겠습니까?")) return;
+    setResetLoading(true);
+    setResetDone(false);
+    try {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const r = await fetch(getApiUrl("/api/admin/settings"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ performance_tracking_start: today }),
+      });
+      if (r.ok) {
+        setTrackingStart(today);
+        setResetDone(true);
+        setTimeout(() => setResetDone(false), 4000);
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -238,15 +270,43 @@ export default function AdminCalibration() {
             30일 이상 된 분석의 실제 주가 성과를 비교해 섹터별 편향을 측정합니다. 보정값은 이후 분석의 밸류에이션·최종 전략 단계 프롬프트에 자동 주입됩니다.
           </p>
         </div>
-        <button
-          onClick={runRecalc}
-          disabled={recalcLoading}
-          className="shrink-0 flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-        >
-          {recalcLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          보정 재계산
-        </button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <button
+            onClick={runRecalc}
+            disabled={recalcLoading}
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {recalcLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            보정 재계산
+          </button>
+          <button
+            onClick={resetTracking}
+            disabled={resetLoading}
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition-colors"
+          >
+            {resetLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            성과 추적 리셋
+          </button>
+        </div>
       </div>
+
+      {/* 트래킹 기준일 표시 */}
+      {trackingStart && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50">
+          <RotateCcw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <p className="text-[12.5px] text-amber-700 dark:text-amber-300">
+            성과 트래킹 기준일: <span className="font-bold">{trackingStart}</span> 이후 분석만 집계됩니다
+          </p>
+        </div>
+      )}
+      {resetDone && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <p className="text-[12.5px] text-emerald-700 dark:text-emerald-300 font-medium">
+            오늘({trackingStart})부터 새로 추적을 시작합니다. 기간별 성과 페이지에 반영됐습니다.
+          </p>
+        </div>
+      )}
 
       {recalcResult && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">

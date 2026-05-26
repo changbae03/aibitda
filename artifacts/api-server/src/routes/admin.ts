@@ -504,6 +504,7 @@ router.post("/settings", async (req, res) => {
     "notice_enabled", "notice_text", "notice_type",
     "maintenance_mode", "signup_enabled", "default_daily_limit",
     "banner_text", "banner_url", "feature_flags",
+    "performance_tracking_start",
   ]);
   const updates = req.body as Record<string, string>;
   const invalid = Object.keys(updates).filter(k => !ALLOWED_SETTING_KEYS.has(k));
