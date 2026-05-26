@@ -2809,6 +2809,28 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     </span>
                   );
                 })()}
+                {json.momentum_grade && json.momentum_grade !== "N" && (() => {
+                  const g = String(json.momentum_grade);
+                  const pct = json.momentum_premium_pct != null ? Number(json.momentum_premium_pct) : null;
+                  const gradeStyle: Record<string, string> = {
+                    S: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700",
+                    A: "bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700",
+                    B: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700",
+                    D: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700",
+                  };
+                  const gradeLabel: Record<string, string> = {
+                    S: isEn ? "Supercycle" : "슈퍼사이클",
+                    A: isEn ? "Theme ↑" : "테마 상승",
+                    B: isEn ? "Theme △" : "테마 간접",
+                    D: isEn ? "Theme ↓" : "테마 소멸",
+                  };
+                  return (
+                    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${gradeStyle[g] ?? "bg-muted text-foreground/70 border-border"}`}>
+                      {isEn ? "Momentum" : "모멘텀"} {gradeLabel[g] ?? g}
+                      {pct != null && pct !== 0 ? ` ${pct > 0 ? "+" : ""}${pct}%` : ""}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 
