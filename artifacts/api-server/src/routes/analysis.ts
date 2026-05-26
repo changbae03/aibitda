@@ -5249,7 +5249,8 @@ async function executeStep(
     enrichedContext,
     previousStepsForContext,
     sectorCalibration,
-    ((analysis as any).language ?? "ko") as "ko" | "en"
+    ((analysis as any).language ?? "ko") as "ko" | "en",
+    analysis.startPrice ?? null
   );
 
   /**
