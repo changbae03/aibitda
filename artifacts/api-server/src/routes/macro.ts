@@ -3,6 +3,7 @@ import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
 import YahooFinanceClass from "yahoo-finance2";
 import { GoogleGenAI } from "@google/genai";
+import { pool } from "@workspace/db";
 const yahooFinance = new YahooFinanceClass();
 
 const router = Router();
@@ -246,8 +247,41 @@ router.get("/macro/news", async (req, res) => {
 
 // ─── GET /api/macro/dashboard ────────────────────────────────────────────────
 
-const MACRO_DASH_TTL = 20 * 60 * 1000; // 20분
+const MACRO_DASH_TTL    = 25 * 60 * 60 * 1000; // 25시간 (하루 1회 갱신)
+const MACRO_DB_CACHE_KEY = "macro_dashboard_daily";
 let _macroDashCache: { data: any; expiresAt: number } | null = null;
+let _macroBuildRunning = false; // 중복 실행 방지
+
+async function loadMacroCacheFromDB(): Promise<boolean> {
+  try {
+    const r = await pool.query<{ data: any; expires_at: string }>(
+      `SELECT data, expires_at FROM system_cache WHERE key = $1`,
+      [MACRO_DB_CACHE_KEY]
+    );
+    if (!r.rows[0]) return false;
+    const { data, expires_at } = r.rows[0];
+    _macroDashCache = { data, expiresAt: new Date(expires_at).getTime() };
+    console.log(`[macro/dashboard] DB 캐시 복원 성공 (만료: ${expires_at})`);
+    return true;
+  } catch (e: any) {
+    console.warn("[macro/dashboard] DB 캐시 로드 실패:", e?.message);
+    return false;
+  }
+}
+
+async function saveMacroCacheToDB(data: any): Promise<void> {
+  try {
+    const expiresAt = new Date(Date.now() + MACRO_DASH_TTL).toISOString();
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [MACRO_DB_CACHE_KEY, JSON.stringify(data), expiresAt]
+    );
+  } catch (e: any) {
+    console.error("[macro/dashboard] DB 캐시 저장 실패:", e?.message);
+  }
+}
 
 interface DashItem {
   id: string; cat: string; name: string; nameEn: string;
@@ -406,12 +440,13 @@ KR ETF 실제 코드 참고 (정확한 6자리 사용):
   }
 }
 
-router.get("/macro/dashboard", async (req, res) => {
-  const force = req.query.force === "true";
-  if (!force && _macroDashCache && Date.now() < _macroDashCache.expiresAt) {
-    return res.json(_macroDashCache.data);
+/** 거시 대시보드 데이터를 실제로 생성하는 함수 (스케줄러·라우트 공용) */
+export async function buildMacroDashboard(): Promise<any> {
+  if (_macroBuildRunning) {
+    console.log("[macro/dashboard] 빌드 중 — 중복 실행 무시");
+    return _macroDashCache?.data ?? null;
   }
-
+  _macroBuildRunning = true;
   try {
     // 1. Yahoo Finance 시장 데이터 (병렬)
     const yfResults = await Promise.allSettled(SYMBOLS.map(s => fetchYFQuote(s)));
@@ -471,7 +506,7 @@ router.get("/macro/dashboard", async (req, res) => {
     if (fredItems.length) catMap["fred"] = fredItems;
 
     // 한국 경제 지표 (ECOS + Yahoo Finance 코스닥)
-    const koreaYFItems = catMap["korea"] ?? [];  // SYMBOLS에서 온 코스닥
+    const koreaYFItems = catMap["korea"] ?? [];
     const koreaEcosItems = ecos ? [
       { id: "bok-rate",   cat: "korea", name: "한국 기준금리", nameEn: "BOK Rate",      flag: "🇰🇷", unit: "%",  value: ecos.baseRate,         change1d: null },
       { id: "kr-cpi",     cat: "korea", name: "한국 CPI",      nameEn: "KR CPI YoY",    flag: "🇰🇷", unit: "%",  value: ecos.cpiYoY,           change1d: null },
@@ -504,7 +539,66 @@ router.get("/macro/dashboard", async (req, res) => {
     };
 
     _macroDashCache = { data: result, expiresAt: Date.now() + MACRO_DASH_TTL };
+    await saveMacroCacheToDB(result);
     console.log(`[macro/dashboard] 완료 — 지표 ${items.length}개, 인사이트 ${ai.insights?.length ?? 0}개`);
+    return result;
+  } finally {
+    _macroBuildRunning = false;
+  }
+}
+
+/**
+ * 서버 시작 시 호출 — DB에서 캐시를 즉시 로드하고
+ * 캐시가 없거나 만료됐으면 백그라운드에서 재생성
+ */
+export async function initMacroDashboard(): Promise<void> {
+  const ok = await loadMacroCacheFromDB();
+  if (!ok || Date.now() >= (_macroDashCache?.expiresAt ?? 0)) {
+    console.log("[macro/dashboard] 캐시 없음/만료 — 백그라운드 재생성 시작");
+    buildMacroDashboard().catch(e =>
+      console.error("[macro/dashboard] 초기 빌드 실패:", e?.message)
+    );
+  } else {
+    console.log("[macro/dashboard] DB 캐시 로드 완료 — 즉시 서빙 준비");
+  }
+}
+
+/** 스케줄러가 매일 호출 — 강제 재생성 */
+export async function refreshMacroDashboard(): Promise<void> {
+  console.log("[macro/dashboard] 일일 갱신 시작");
+  _macroDashCache = null; // 메모리 캐시 무효화
+  await buildMacroDashboard().catch(e =>
+    console.error("[macro/dashboard] 일일 갱신 실패:", e?.message)
+  );
+}
+
+router.get("/macro/dashboard", async (req, res) => {
+  const force = req.query.force === "true";
+  if (force) {
+    // 강제 재생성: 백그라운드로 돌리고 현재 캐시(있으면) 즉시 반환, 없으면 기다림
+    if (_macroDashCache) {
+      buildMacroDashboard().catch(e =>
+        console.error("[macro/dashboard] force 재생성 실패:", e?.message)
+      );
+      return res.json({ ..._macroDashCache.data, _refreshing: true });
+    }
+    try {
+      const result = await buildMacroDashboard();
+      return res.json(result);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message ?? "거시지표 대시보드 조회 실패" });
+    }
+  }
+
+  // 캐시 히트 (메모리 우선)
+  if (_macroDashCache && Date.now() < _macroDashCache.expiresAt) {
+    return res.json(_macroDashCache.data);
+  }
+
+  // 캐시 미스: 빌드 후 반환
+  try {
+    const result = await buildMacroDashboard();
+    if (!result) return res.status(503).json({ error: "데이터 준비 중입니다. 잠시 후 다시 시도해 주세요." });
     return res.json(result);
   } catch (e: any) {
     console.error("[macro/dashboard] error:", e?.message);

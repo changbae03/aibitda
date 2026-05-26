@@ -4,6 +4,7 @@ import { triggerModelReview } from "./routes/model-insights.js";
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "./routes/performance.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
+import { initMacroDashboard, refreshMacroDashboard } from "./routes/macro.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
 import { harvestMarketData } from "./lib/market-harvester.js";
 import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
@@ -135,6 +136,7 @@ const server = app.listen(port, () => {
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
     .then(() => initCalendarCache())
+    .then(() => initMacroDashboard().catch(e => console.error("[macro-dashboard] 초기 캐시 로드 실패:", e?.message)))
     .then(() => ensureTigerEtfs().catch(e => console.error("[tiger-etf] 초기 로드 실패:", e?.message)))
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
@@ -177,6 +179,30 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] 실적 캘린더 일일 갱신 실패:", e?.message ?? e)
     );
   }, ONE_DAY_MS);
+
+  // ── 거시 대시보드 일일 갱신: 매일 09:00 KST (00:00 UTC) ──────────────────
+  // setInterval 대신 UTC 0시 정각에 맞춰 첫 실행 후 24시간 간격으로 반복
+  (function scheduleMacroDailyRefresh() {
+    const now = new Date();
+    const nextMidnightUTC = new Date(Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1,
+      0, 0, 0, 0
+    ));
+    const msUntilMidnight = nextMidnightUTC.getTime() - now.getTime();
+    console.log(`[SCHEDULER] 거시 대시보드 첫 갱신: ${msUntilMidnight / 1000 / 60 | 0}분 후 (09:00 KST)`);
+    setTimeout(() => {
+      console.log("[SCHEDULER] 거시 대시보드 일일 갱신 시작 (09:00 KST)");
+      refreshMacroDashboard().catch(e =>
+        console.error("[SCHEDULER] 거시 대시보드 갱신 실패:", e?.message)
+      );
+      setInterval(() => {
+        console.log("[SCHEDULER] 거시 대시보드 일일 갱신 시작 (09:00 KST)");
+        refreshMacroDashboard().catch(e =>
+          console.error("[SCHEDULER] 거시 대시보드 갱신 실패:", e?.message)
+        );
+      }, ONE_DAY_MS);
+    }, msUntilMidnight);
+  })();
 
   // ── 일일 섹터 재보정 (model_calibration 자동 갱신) ─────────────────────────
   // 6시간마다 model_insights 가격 갱신(triggerModelReview) + 하루 1회 섹터 통계 재계산
