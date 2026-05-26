@@ -1375,7 +1375,7 @@ function buildResultFromModel(
   // makeSeqs 는 i < feats.length - PRED_H 까지만 순회하므로 최근 PRED_H 영업일이 누락됨.
   // 각 행에 대해 GBDT 예측을 직접 계산하고, 이용 가능한 최신 종가로 실제 수익률을 근사함.
   const F = feats[0].length;
-  for (let i = feats.length - PRED_H; i <= feats.length - 2; i++) {
+  for (let i = feats.length - PRED_H; i <= feats.length - 1; i++) {
     if (i < LOOKBACK) continue;
     // GBDT 입력 벡터 구성 (makeSeqs 와 동일한 방식)
     const v = new Float64Array(LOOKBACK * F + 1);
@@ -1386,10 +1386,19 @@ function buildResultFromModel(
     const vn = applyStd([v], gbdtScaler.mu, gbdtScaler.sigma);
     const rawPred = gbdtModels.map(m => gbdtPredict(m, vn)[0]).reduce((a, b) => a + b, 0) / gbdtModels.length;
     const adjPred = (rawPred - biasThreshold) * calibFactor;
-    // 실제 수익률: 가용한 최신 종가까지 사용
-    const endIdx = Math.min(i + PRED_H, closes.length - 1);
-    if (endIdx <= i) continue; // 미래 데이터 전혀 없음 → 스킵
-    const actual = (closes[endIdx] - closes[i]) / closes[i];
+    // 실제 수익률 계산:
+    //   - 3일치 종가가 있으면 PRED_H 기준 수익률
+    //   - 마지막 행(오늘)은 당일 등락률(close[i] / close[i-1] - 1) 사용
+    let actual: number;
+    const endIdx = i + PRED_H;
+    if (endIdx < closes.length) {
+      actual = (closes[endIdx] - closes[i]) / closes[i];
+    } else if (i > 0) {
+      // 오늘 당일 등락: 이전 종가 대비
+      actual = (closes[i] - closes[i - 1]) / closes[i - 1];
+    } else {
+      continue;
+    }
     recentPerf.push({
       date: dates[i] ?? `G${i}`,
       predicted: +(adjPred * 100).toFixed(2),
