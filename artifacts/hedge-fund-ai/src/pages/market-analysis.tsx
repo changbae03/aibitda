@@ -723,12 +723,75 @@ function IndexChart({ result, predHistory = [] }: { result: IndexResult; predHis
 }
 
 /* ── 예측 vs 실제 비교 차트 ──────────────────────────────────────────────── */
-function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
+function nextTradingDays(fromDateStr: string, count: number): string[] {
+  const result: string[] = [];
+  const d = new Date(fromDateStr);
+  while (result.length < count) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) {
+      result.push(d.toISOString().slice(0, 10));
+    }
+  }
+  return result;
+}
+
+function ReturnComparisonChart({
+  data,
+  future,
+}: {
+  data: RecentPerfPoint[];
+  future?: { d1: number; d2: number; d3: number };
+}) {
   const cc = useChartColors();
-  const allVals  = data.flatMap(d => [d.actual, d.predicted]);
-  const dataMin  = Math.min(...allVals);
-  const dataMax  = Math.max(...allVals);
-  const pad      = Math.max(Math.abs(dataMin), Math.abs(dataMax)) * 0.15;
+
+  // 미래 3거래일 날짜 계산
+  const lastDate = data[data.length - 1]?.date ?? "";
+  const futureDates = future && lastDate ? nextTradingDays(lastDate, 3) : [];
+
+  // 차트 데이터: 과거 + 오늘 브릿지 + 미래 3포인트
+  type ChartRow = {
+    date: string; label: string;
+    actual: number | null;
+    predicted: number | null;    // 실선 (과거 + 브릿지)
+    futurePredict: number | null; // 점선 (브릿지 + 미래)
+    isFuture: boolean;
+    futureLabel?: string;
+  };
+
+  const allRows: ChartRow[] = data.map((d, i) => ({
+    date: d.date,
+    label: i % 5 === 0 ? formatDate(d.date, true) : "",
+    actual: d.actual,
+    predicted: d.predicted,
+    futurePredict: null,
+    isFuture: false,
+  }));
+
+  // 마지막 역사 포인트에 브릿지값 설정
+  if (future && allRows.length > 0) {
+    const last = allRows[allRows.length - 1];
+    last.futurePredict = last.predicted; // 연결점
+    // 미래 3포인트 추가
+    const labels = ["D+1", "D+2", "D+3"];
+    const vals = [future.d1, future.d2, future.d3];
+    futureDates.forEach((date, i) => {
+      allRows.push({
+        date,
+        label: labels[i],
+        actual: null,
+        predicted: null,
+        futurePredict: vals[i],
+        isFuture: true,
+        futureLabel: labels[i],
+      });
+    });
+  }
+
+  const allVals = data.flatMap(d => [d.actual, d.predicted]);
+  if (future) allVals.push(future.d1, future.d2, future.d3);
+  const dataMin = Math.min(...allVals);
+  const dataMax = Math.max(...allVals);
+  const pad     = Math.max(Math.abs(dataMin), Math.abs(dataMax)) * 0.15;
   const yDomain: [number, number] = [
     Math.floor((dataMin - pad) * 10) / 10,
     Math.ceil ((dataMax + pad) * 10) / 10,
@@ -736,33 +799,41 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
 
   const customTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload as RecentPerfPoint;
+    const d = payload[0]?.payload as ChartRow;
+    const predVal = d.predicted ?? d.futurePredict;
     return (
       <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
-        <p className="text-muted-foreground font-medium">{d.date}</p>
-        <p style={{ color: "#a78bfa" }}>
-          AI 예측: {d.predicted >= 0 ? "+" : ""}{d.predicted}%
+        <p className="text-muted-foreground font-medium">
+          {d.isFuture ? `${d.futureLabel} 예측 (${d.date})` : d.date}
         </p>
-        <p style={{ color: d.actual >= 0 ? RISE : FALL }}>
-          실제 결과: {d.actual >= 0 ? "+" : ""}{d.actual}%
-        </p>
-        <p className="text-muted-foreground/50 text-[10px]">
-          {(d.predicted >= 0) === (d.actual >= 0) ? "✅ 방향 맞힘" : "❌ 방향 틀림"}
-        </p>
+        {predVal != null && (
+          <p style={{ color: "#a78bfa" }}>
+            {d.isFuture ? "AI D+3 예측" : "AI 예측"}: {predVal >= 0 ? "+" : ""}{predVal}%
+          </p>
+        )}
+        {d.actual != null && (
+          <p style={{ color: d.actual >= 0 ? RISE : FALL }}>
+            실제 결과: {d.actual >= 0 ? "+" : ""}{d.actual}%
+          </p>
+        )}
+        {d.actual != null && predVal != null && (
+          <p className="text-muted-foreground/50 text-[10px]">
+            {(predVal >= 0) === (d.actual >= 0) ? "✅ 방향 맞힘" : "❌ 방향 틀림"}
+          </p>
+        )}
+        {d.isFuture && (
+          <p className="text-muted-foreground/50 text-[10px]">⏳ 예측 (결과 미확정)</p>
+        )}
       </div>
     );
   };
 
-  const tickFormatter = (_: any, index: number) =>
-    index % 5 === 0 ? formatDate(data[index]?.date ?? "", true) : "";
-
   return (
     <ResponsiveContainer width="100%" height={210}>
-      <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap="30%">
+      <ComposedChart data={allRows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap="30%">
         <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
         <XAxis
-          dataKey="date"
-          tickFormatter={tickFormatter}
+          dataKey="label"
           tick={{ fontSize: 9, fill: cc.tickFill }}
           tickLine={false} axisLine={false}
           interval={0}
@@ -775,13 +846,26 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
         />
         <Tooltip content={customTooltip} cursor={{ fill: cc.barCursor }} />
         <ReferenceLine y={0} stroke={cc.refLineStroke} strokeDasharray="4 2" />
+        {future && lastDate && (
+          <ReferenceLine
+            x="D+1"
+            stroke={cc.refLineStroke}
+            strokeDasharray="3 3"
+            label={{ value: "예측", fill: cc.tickFill, fontSize: 9, position: "insideTopLeft" }}
+          />
+        )}
 
         <Bar dataKey="actual" name="실제 등락" radius={[2, 2, 0, 0]}>
-          {data.map((d, i) => (
-            <Cell key={`act-${i}`} fill={d.actual >= 0 ? RISE : FALL} fillOpacity={0.7} />
+          {allRows.map((d, i) => (
+            <Cell
+              key={`act-${i}`}
+              fill={d.actual != null ? (d.actual >= 0 ? RISE : FALL) : "transparent"}
+              fillOpacity={d.actual != null ? 0.7 : 0}
+            />
           ))}
         </Bar>
 
+        {/* 과거 실선 */}
         <Line
           dataKey="predicted"
           name="AI 예측 방향"
@@ -790,94 +874,33 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
           strokeWidth={1.5}
           dot={{ r: 3, fill: "#a78bfa", strokeWidth: 0 }}
           activeDot={{ r: 5 }}
+          connectNulls={false}
         />
+
+        {/* 미래 점선 (D+1~D+3) */}
+        {future && (
+          <Line
+            dataKey="futurePredict"
+            name="D+3 예측 (미래)"
+            type="monotone"
+            stroke="#a78bfa"
+            strokeWidth={1.5}
+            strokeDasharray="5 3"
+            dot={(props: any) => {
+              const { cx, cy, payload } = props;
+              if (!payload?.isFuture) return <g key={`fp-${payload.date}`} />;
+              const c = (payload.futurePredict ?? 0) >= 0 ? "#a78bfa" : "#f87171";
+              return <circle key={`fp-${payload.date}`} cx={cx} cy={cy} r={4} fill={c} stroke="white" strokeWidth={1.5} />;
+            }}
+            activeDot={{ r: 5 }}
+            connectNulls={false}
+            legendType="none"
+          />
+        )}
 
         <Legend
           iconSize={10}
           wrapperStyle={{ fontSize: 10, paddingTop: 8, color: cc.legendColor }}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── D+3 예측치 전용 차트 ─────────────────────────────────────────────── */
-function D3ForecastChart({ data }: { data: RecentPerfPoint[] }) {
-  const cc = useChartColors();
-  const allPreds = data.map(d => d.predicted);
-  const dataMin  = Math.min(...allPreds);
-  const dataMax  = Math.max(...allPreds);
-  const pad      = Math.max(Math.abs(dataMin), Math.abs(dataMax)) * 0.2 || 1;
-  const yDomain: [number, number] = [
-    Math.floor((dataMin - pad) * 10) / 10,
-    Math.ceil ((dataMax + pad) * 10) / 10,
-  ];
-
-  const tickFormatter = (_: any, index: number) =>
-    index % 5 === 0 ? formatDate(data[index]?.date ?? "", true) : "";
-
-  const customTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload as RecentPerfPoint;
-    return (
-      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
-        <p className="text-muted-foreground font-medium">{d.date}</p>
-        <p style={{ color: "#a78bfa" }}>
-          D+3 예측: {d.predicted >= 0 ? "+" : ""}{d.predicted}%
-        </p>
-        <p className="text-[10px] text-muted-foreground/60">
-          {d.predicted >= 0 ? "상승 방향 예측" : "하락 방향 예측"}
-        </p>
-      </div>
-    );
-  };
-
-  const chartData = data.map(d => ({
-    ...d,
-    fill: d.predicted >= 0 ? "#a78bfa" : "#f87171",
-  }));
-
-  return (
-    <ResponsiveContainer width="100%" height={160}>
-      <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="d3ForecastGradUp" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#a78bfa" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.03} />
-          </linearGradient>
-          <linearGradient id="d3ForecastGradDown" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="5%"  stopColor="#f87171" stopOpacity={0.20} />
-            <stop offset="95%" stopColor="#f87171" stopOpacity={0.03} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
-        <XAxis
-          dataKey="date"
-          tickFormatter={tickFormatter}
-          tick={{ fontSize: 9, fill: cc.tickFill }}
-          tickLine={false} axisLine={false}
-          interval={0}
-        />
-        <YAxis
-          domain={yDomain}
-          tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
-          tick={{ fontSize: 9, fill: cc.tickFill }}
-          tickLine={false} axisLine={false} width={48}
-        />
-        <Tooltip content={customTooltip} />
-        <ReferenceLine y={0} stroke={cc.refLineStroke} strokeDasharray="4 2" />
-        <Area
-          dataKey="predicted"
-          type="monotone"
-          stroke="#a78bfa"
-          strokeWidth={2}
-          fill="url(#d3ForecastGradUp)"
-          dot={(props: any) => {
-            const { cx, cy, payload } = props;
-            const color = payload.predicted >= 0 ? "#a78bfa" : "#f87171";
-            return <circle key={`d3-${payload.date}`} cx={cx} cy={cy} r={3} fill={color} strokeWidth={0} />;
-          }}
-          activeDot={{ r: 5, fill: "#a78bfa" }}
         />
       </ComposedChart>
     </ResponsiveContainer>
@@ -1356,15 +1379,14 @@ export default function MarketAnalysis() {
                     막대 = 실제 등락 (빨강=오름·파랑=내림) · 보라 선 = AI가 예측한 방향 · 터치하면 상세 정보가 나와요
                   </p>
                 </div>
-                <ReturnComparisonChart data={current.recentPerf} />
-
-                <div className="border-t border-border/40 pt-3 space-y-1.5">
-                  <h3 className="text-sm font-semibold text-foreground">D+3 예측치 추이</h3>
-                  <p className="text-xs text-muted-foreground">
-                    AI가 각 날짜 기준 3거래일 후 수익률을 얼마나 예측했는지 흐름을 보여요
-                  </p>
-                  <D3ForecastChart data={current.recentPerf} />
-                </div>
+                <ReturnComparisonChart
+                  data={current.recentPerf}
+                  future={{
+                    d1: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2),
+                    d2: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2),
+                    d3: current.predictedReturn3d,
+                  }}
+                />
               </div>
             )}
 
