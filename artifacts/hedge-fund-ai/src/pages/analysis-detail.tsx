@@ -1975,11 +1975,62 @@ export default function AnalysisDetail() {
                         </div>
                       )}
                     </div>
-                    {contradictory && (
-                      <div className="mb-2 px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-[10px] text-amber-700 dark:text-amber-400">
-                        {isEn ? "⚠️ Price data mismatch — re-analysis recommended" : "⚠️ 가격 데이터 불일치 — 재분석을 권장합니다"}
-                      </div>
-                    )}
+                    {/* ── [v] 밸류에이션 vs 모멘텀 괴리 알림 ── */}
+                    {(() => {
+                      const liveP = headerLivePrice?.price ?? null;
+                      const sinceAnalysisPct = (liveP && sp && sp > 0)
+                        ? ((liveP - sp) / sp * 100) : null;
+                      // 괴리 감지: 매도인데 5%+ 상승 / 매수인데 5%+ 하락
+                      const isMomUp   = sinceAnalysisPct !== null && sinceAnalysisPct > 5;
+                      const isMomDown = sinceAnalysisPct !== null && sinceAnalysisPct < -5;
+                      const divergence = verdictHasDirection &&
+                        ((isSellVerdict && isMomUp) || (!isSellVerdict && isMomDown));
+                      if (!divergence) return null;
+                      const upside = isSellVerdict && isMomUp;
+                      return (
+                        <div className="mb-3 rounded-xl border border-amber-300/60 dark:border-amber-600/40 bg-amber-50/60 dark:bg-amber-950/25 overflow-hidden">
+                          {/* 헤더 */}
+                          <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5">
+                            <span className="text-sm">{upside ? "📈" : "📉"}</span>
+                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                              {isEn
+                                ? (upside ? "Momentum–Valuation Divergence" : "Valuation–Momentum Gap")
+                                : "모멘텀 ↔ 밸류에이션 괴리"}
+                            </span>
+                            <span className={`ml-auto text-[11px] font-black tabular-nums ${upside ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
+                              {sinceAnalysisPct! >= 0 ? "+" : ""}{sinceAnalysisPct!.toFixed(1)}%
+                            </span>
+                          </div>
+                          {/* 설명 */}
+                          <div className="px-3 pb-2.5">
+                            <p className="text-[10px] leading-relaxed text-amber-800/80 dark:text-amber-300/70">
+                              {isEn
+                                ? (upside
+                                  ? `Stock rose ${sinceAnalysisPct!.toFixed(1)}% since analysis despite a Sell rating. Valuation reflects 12-month DCF/WACC fair value — short-term momentum driven by sentiment or catalysts can temporarily diverge from fundamentals.`
+                                  : `Stock dropped ${Math.abs(sinceAnalysisPct!).toFixed(1)}% since analysis despite a Buy rating. Valuation reflects 12-month DCF fair value — short-term price may lag due to market conditions.`)
+                                : (upside
+                                  ? `분석 이후 ${sinceAnalysisPct!.toFixed(1)}% 상승했습니다. 매도 의견은 DCF·WACC 기반 12개월 장기 적정가 대비 고평가 판단으로, 단기 모멘텀(수급·이슈·센티멘트)은 밸류에이션과 반대 방향으로 움직일 수 있습니다.`
+                                  : `분석 이후 ${Math.abs(sinceAnalysisPct!).toFixed(1)}% 하락했습니다. 매수 의견은 장기 내재가치 저평가 판단으로, 시장 리스크·수급 등 단기 요인에 의해 추가 하락이 있을 수 있습니다.`)}
+                            </p>
+                            {/* 두 축 비교 칩 */}
+                            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300">
+                                {isEn ? "📌 12M Valuation" : "📌 장기 가치평가"}:{" "}
+                                <span className={isSellVerdict ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}>
+                                  {isEn ? (effectiveVerdict ?? "") : toKoreanVerdict(effectiveVerdict)}
+                                </span>
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300">
+                                {isEn ? "📊 Since analysis" : "📊 분석 이후 모멘텀"}:{" "}
+                                <span className={upside ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}>
+                                  {upside ? "▲" : "▼"} {Math.abs(sinceAnalysisPct!).toFixed(1)}%
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-1.5 font-mono text-xs">
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
                         <span className="text-muted-foreground">{isEn ? <>Target Price <span className="text-xs opacity-60">(12M)</span></> : <>적정주가 <span className="text-xs opacity-60">(12개월)</span></>}</span>
@@ -1991,6 +2042,20 @@ export default function AnalysisDetail() {
                           <span className="text-foreground/70 font-medium">{formatCurrency(sp, currency, isEn)}</span>
                         </div>
                       )}
+                      {/* [v] 분석 이후 등락률 */}
+                      {(() => {
+                        const liveP = headerLivePrice?.price ?? null;
+                        const pct = (liveP && sp && sp > 0) ? ((liveP - sp) / sp * 100) : null;
+                        if (pct === null) return null;
+                        return (
+                          <div className="flex justify-between items-center border-b border-border pb-1.5">
+                            <span className="text-muted-foreground">{isEn ? 'Since Analysis' : '분석 후 등락'}</span>
+                            <span className={`font-bold tabular-nums ${pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
+                              {pct >= 0 ? "▲ +" : "▼ "}{pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        );
+                      })()}
                       <div className="flex justify-between items-center border-b border-border pb-1.5">
                         <span className="text-muted-foreground">
                           {isEn
@@ -2793,8 +2858,19 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               const entrySubLabel = isSell ? (isEn ? "Re-entry zone after sell" : "매도 후 재진입 고려 구간") : (isEn ? "Target entry price" : "진입 목표 가격");
               const stopSubLabel = isSell ? (isEn ? "Profit-taking zone" : "단계적 차익실현 구간") : (isEn ? "Stop loss level" : "손절 기준선");
 
+              // [v] 밸류에이션 vs 단기 모멘텀 설명 배너
+              const momentumDivBanner = isSell
+                ? `📌 ${isEn ? "This rating reflects 12-month DCF/WACC valuation (not short-term price direction). Momentum may diverge from fundamentals." : "이 의견은 DCF·WACC 기반 12개월 장기 가치평가 판단입니다. 단기 가격 모멘텀은 밸류에이션과 반대 방향으로 움직일 수 있습니다."}`
+                : null;
+
               return (
                 <div className="px-4 sm:px-6 py-4">
+                  {/* 밸류에이션 vs 단기 모멘텀 구분 안내 */}
+                  {momentumDivBanner && (
+                    <div className="mb-3 px-3 py-2 rounded-xl border border-amber-300/50 dark:border-amber-600/30 bg-amber-50/50 dark:bg-amber-950/20 flex items-start gap-2">
+                      <p className="text-[10.5px] leading-relaxed text-amber-700/90 dark:text-amber-300/80">{momentumDivBanner}</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {/* 진입가 / 재관심 기준가 */}
                     <div className="rounded-xl border border-border bg-background p-3 sm:p-4">
