@@ -9,7 +9,9 @@ import {
   BarChart3, Zap, LayoutGrid, ChevronRight, Info,
   Building2, Globe, ArrowUpDown, Brain, Sparkles,
   Flame, Target, Activity, X, ChevronDown,
+  Package, DollarSign, Landmark, ExternalLink,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 
@@ -129,6 +131,31 @@ interface MomentumAnalysis {
     kosdaq: IndexOutlook;
     ready: boolean;
   };
+}
+
+// ─── 거시 대시보드 타입 ──────────────────────────────────────────────────────
+interface DashMarketItem {
+  id: string; cat: string;
+  name: string; nameEn: string;
+  symbol: string; unit: string; flag: string;
+  value: number | null; change1d: number | null; prevClose: number | null;
+}
+interface DashCategory {
+  id: string; name: string; nameEn: string; icon: string;
+  items: DashMarketItem[];
+}
+interface ETFReco { ticker: string; name: string; reason: string; }
+interface MacroInsight {
+  theme: string; themeEn: string; description: string;
+  sentiment: "positive" | "negative" | "neutral" | "mixed";
+  krETFs?: ETFReco[];
+  usETFs?: ETFReco[];
+}
+interface DashData {
+  categories: DashCategory[];
+  narrative: string;
+  insights: MacroInsight[];
+  generatedAt: number;
 }
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
@@ -1258,6 +1285,182 @@ function EtfButtonGroup({
 
 // ─── 섹터 아코디언 행 ─────────────────────────────────────────────────────────
 
+// ─── 거시 대시보드 헬퍼 & 컴포넌트 ──────────────────────────────────────────
+
+const DASH_SENTIMENT_CFG = {
+  positive: { bg: "bg-emerald-500/10 border-emerald-500/20", badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", dot: "bg-emerald-500", label: "긍정" },
+  negative: { bg: "bg-red-500/10 border-red-500/20",         badge: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",           dot: "bg-red-500",     label: "부정" },
+  neutral:  { bg: "bg-slate-500/10 border-slate-500/20",     badge: "bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400",   dot: "bg-slate-400",   label: "중립" },
+  mixed:    { bg: "bg-amber-500/10 border-amber-500/20",     badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",   dot: "bg-amber-500",   label: "혼조" },
+};
+
+const CAT_ICON_MAP: Record<string, typeof Globe> = {
+  markets: Globe, commodities: Package, currencies: DollarSign,
+  rates: TrendingUp, fred: BarChart3, korea: Landmark,
+};
+
+function fmtDashValue(v: number | null, unit: string, id: string): string {
+  if (v == null) return "—";
+  if (["sp500","nasdaq","dow","nikkei","hsi","stoxx","shanghai","kospi"].includes(id))
+    return v >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 0 }) : v >= 100 ? v.toFixed(1) : v.toFixed(2);
+  if (id === "usdkrw") return v.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
+  if (id === "eurusd") return v.toFixed(4);
+  if (id === "usdjpy" || id === "usdcnh") return v.toFixed(2);
+  if (id === "corn" || id === "wheat") return v.toFixed(0);
+  if (unit === "%") return v.toFixed(2);
+  const abs = Math.abs(v);
+  if (abs >= 100) return v.toFixed(0);
+  if (abs >= 10)  return v.toFixed(2);
+  return v.toFixed(3);
+}
+
+function DashChangeBadge({ v }: { v: number | null }) {
+  if (v == null) return <span className="text-muted-foreground/40 text-[10px]">—</span>;
+  const up = v >= 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 text-[11px] font-mono font-semibold", up ? "text-red-500" : "text-blue-500")}>
+      <Icon className="w-2.5 h-2.5" />
+      {up ? "+" : ""}{v.toFixed(2)}%
+    </span>
+  );
+}
+
+function DashMiniBar({ change }: { change: number | null }) {
+  if (change == null) return <div className="w-14 h-1 rounded-full bg-muted/30" />;
+  const pct = Math.min(Math.abs(change) / 5, 1);
+  const up = change >= 0;
+  return (
+    <div className="w-14 h-1 rounded-full bg-muted/30 overflow-hidden">
+      <div className={cn("h-full rounded-full", up ? "bg-red-400" : "bg-blue-400")}
+        style={{ width: `${(pct * 100).toFixed(1)}%`, float: up ? "left" : "right" }} />
+    </div>
+  );
+}
+
+function DashMarketCard({ item, isEn }: { item: DashMarketItem; isEn: boolean }) {
+  const displayName = isEn ? item.nameEn : item.name;
+  const value = fmtDashValue(item.value, item.unit, item.id);
+  const isUp = (item.change1d ?? 0) >= 0;
+  return (
+    <div className="bg-card border border-border rounded-xl px-3 py-2.5 hover:border-primary/20 transition-colors">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm leading-none">{item.flag}</span>
+          <span className="text-[10px] text-muted-foreground/60 font-medium truncate max-w-[90px]">{displayName}</span>
+        </div>
+        <DashChangeBadge v={item.change1d} />
+      </div>
+      <div className="flex items-end justify-between gap-1">
+        <div className="flex items-baseline gap-0.5">
+          <span className={cn("text-base font-bold font-mono leading-none",
+            item.change1d == null ? "text-foreground" : isUp ? "text-red-500" : "text-blue-500")}>
+            {value}
+          </span>
+          {item.unit && item.unit !== "pt" && item.unit !== "₩" && item.unit !== "¥" &&
+            <span className="text-[9px] text-muted-foreground/50 ml-0.5">{item.unit}</span>}
+        </div>
+        <DashMiniBar change={item.change1d} />
+      </div>
+    </div>
+  );
+}
+
+function DashCategorySection({ cat, isEn }: { cat: DashCategory; isEn: boolean }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const Icon = CAT_ICON_MAP[cat.id] ?? Globe;
+  const title = isEn ? cat.nameEn : cat.name;
+  return (
+    <div className="mb-4">
+      <button onClick={() => setCollapsed(v => !v)} className="flex items-center gap-2 mb-2">
+        <Icon className="w-3.5 h-3.5 text-primary/60" />
+        <span className="text-sm font-semibold text-foreground/80">{title}</span>
+        <span className="text-[10px] text-muted-foreground/40">({cat.items.length})</span>
+        <ChevronDown className={cn("w-3 h-3 text-muted-foreground/30 transition-transform ml-0.5", collapsed && "-rotate-90")} />
+      </button>
+      {!collapsed && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {cat.items.map(it => <DashMarketCard key={it.id} item={it} isEn={isEn} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashInsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }) {
+  const [open, setOpen] = useState(false);
+  const cfg = DASH_SENTIMENT_CFG[insight.sentiment] ?? DASH_SENTIMENT_CFG.neutral;
+  const hasETFs = (insight.krETFs?.length ?? 0) > 0 || (insight.usETFs?.length ?? 0) > 0;
+  const title = isEn ? insight.themeEn : insight.theme;
+  return (
+    <motion.div layout className={cn("rounded-xl border overflow-hidden", cfg.bg)}>
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors">
+        <div className="flex items-center gap-2.5">
+          <div className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-foreground/90">{title}</span>
+              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", cfg.badge)}>{cfg.label}</span>
+            </div>
+            {!open && <p className="text-[11px] text-muted-foreground/60 mt-0.5 line-clamp-1">{insight.description}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {hasETFs && <span className="text-[10px] text-muted-foreground/40">ETF {(insight.krETFs?.length ?? 0) + (insight.usETFs?.length ?? 0)}</span>}
+          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", open && "rotate-180")} />
+        </div>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
+            <div className="px-4 pb-4 pt-0 space-y-3 border-t border-current/10">
+              <p className="text-[12px] text-foreground/70 mt-3 leading-relaxed">{insight.description}</p>
+              {hasETFs && (
+                <div className="space-y-2">
+                  {(insight.krETFs?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground/50 mb-1.5 font-semibold">🇰🇷 {isEn ? "Korean ETFs" : "국내 ETF"}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {insight.krETFs!.map(e => (
+                          <a key={e.ticker} href={`https://finance.naver.com/item/main.naver?code=${e.ticker}`}
+                            target="_blank" rel="noopener noreferrer" title={e.reason}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400 hover:opacity-80 transition-colors">
+                            <span className="font-mono font-bold">{e.ticker}</span>
+                            {e.name && <span className="text-[10px] opacity-70 hidden sm:inline truncate max-w-[80px]">{e.name}</span>}
+                            <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(insight.usETFs?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground/50 mb-1.5 font-semibold">🇺🇸 {isEn ? "US ETFs" : "미국 ETF"}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {insight.usETFs!.map(e => (
+                          <a key={e.ticker} href={`https://finance.yahoo.com/quote/${e.ticker}`}
+                            target="_blank" rel="noopener noreferrer" title={e.reason}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:opacity-80 transition-colors">
+                            <span className="font-mono font-bold">{e.ticker}</span>
+                            {e.name && <span className="text-[10px] opacity-70 hidden sm:inline truncate max-w-[80px]">{e.name}</span>}
+                            <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 // ─── 거시 ETF 픽 섹션 (지금 유망 / 앞으로 주목) ──────────────────────────────
 
 function EtfMacroPickSection({
@@ -1507,7 +1710,10 @@ function PulseAccordionRow({
 
 // ─── 탭 2: 모멘텀 탭 ─────────────────────────────────────────────────────────
 
+let _dashCache: { data: DashData; fetchedAt: number } | null = null;
+
 function MomentumTab() {
+  const { isEn } = useLanguage();
   const [data, setData]               = useState<MomentumAnalysis | null>(null);
   const [loading, setLoading]         = useState(true);
   const [refreshed, setRefreshed]     = useState<Date | null>(null);
@@ -1520,6 +1726,42 @@ function MomentumTab() {
     return p === "pulse" ? "pulse" : "macro";
   });
 
+  /* 거시 대시보드 상태 */
+  const [dashData, setDashData]       = useState<DashData | null>(_dashCache?.data ?? null);
+  const [dashLoading, setDashLoading] = useState(false);
+  const [dashError, setDashError]     = useState<string | null>(null);
+  const [dashCatTab, setDashCatTab]   = useState<string>("all");
+
+  const loadDash = useCallback(async (force = false) => {
+    if (!force && _dashCache && Date.now() - _dashCache.fetchedAt < 20 * 60 * 1000) {
+      setDashData(_dashCache.data); return;
+    }
+    setDashLoading(true); setDashError(null);
+    try {
+      const r = await fetch(getApiUrl("/api/macro/dashboard"), { credentials: "include" });
+      if (!r.ok) throw new Error(`${r.status}`);
+      const d: DashData = await r.json();
+      _dashCache = { data: d, fetchedAt: Date.now() };
+      setDashData(d);
+    } catch (e: any) { setDashError(e?.message ?? "오류"); }
+    finally { setDashLoading(false); }
+  }, []);
+
+  const dashTabs = useMemo(() => {
+    if (!dashData) return [];
+    return [
+      { id: "all", label: isEn ? "All" : "전체" },
+      ...dashData.categories.map(c => ({ id: c.id, label: isEn ? c.nameEn : c.name })),
+      { id: "insights", label: isEn ? "AI Insights" : "AI 시사점" },
+    ];
+  }, [dashData, isEn]);
+
+  const visibleDashCats = useMemo(() => {
+    if (!dashData) return [];
+    if (dashCatTab === "all" || dashCatTab === "insights") return dashData.categories;
+    return dashData.categories.filter(c => c.id === dashCatTab);
+  }, [dashData, dashCatTab]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -1531,6 +1773,8 @@ function MomentumTab() {
       if (r2.ok) { const d = await r2.json(); setAllEtfs(Array.isArray(d) ? d : []); }
     } finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadDash(); }, [loadDash]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1614,34 +1858,110 @@ function MomentumTab() {
             ))}
           </div>
 
-          {/* ── 탭 1: 거시 지표 기반 ETF 추천 ── */}
+          {/* ── 탭 1: 거시 지표 + 전체 대시보드 ── */}
           {subTab === "macro" && (
-            <div className="space-y-6">
-              {/* 매크로 지표 */}
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-1 mb-2">주요 매크로 지표</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                  <div>
-                    <MacroStatRow label="한국 기준금리" value={`${data.macro.krRate}%`} signal={data.macro.krRate > 2.5 ? "고금리" : "안정"} isWarn={data.macro.krRate > 2.5} />
-                    <MacroStatRow label="미국 Fed 금리" value={`${data.macro.usRate}%`} signal={data.macro.usRate > 3.0 ? "고금리" : "완화"} isWarn={data.macro.usRate > 3.0} />
-                    <MacroStatRow label="원/달러 환율" value={`${data.macro.krwUsd.toLocaleString()}원`} signal={data.macro.krwUsd > 1400 ? "원화약세" : "안정"} isWarn={data.macro.krwUsd > 1400} />
-                  </div>
-                  <div>
-                    <MacroStatRow label="미국 물가(CPI)" value={`${data.macro.usCpi.toFixed(1)}%`} signal={data.macro.usCpi > 3.0 ? "목표초과" : "안정"} isWarn={data.macro.usCpi > 3.0} />
-                    <MacroStatRow label="국제 유가(WTI)" value={`$${data.macro.wti.toFixed(0)}`} signal={data.macro.wti > 80 ? "고유가" : "안정"} isWarn={data.macro.wti > 80} />
-                    <MacroStatRow label="장단기 금리차" value={`${data.macro.yieldSpread > 0 ? "+" : ""}${data.macro.yieldSpread.toFixed(2)}%`} signal={data.macro.yieldSpread > 0.2 ? "정상화" : "역전경고"} isWarn={data.macro.yieldSpread <= 0.2} />
-                  </div>
+            <div className="space-y-8">
+
+              {/* ① 거시 대시보드 전체 */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[13px] font-bold text-foreground flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-primary/60" />
+                    글로벌 거시 대시보드
+                  </p>
+                  <button
+                    onClick={() => loadDash(true)}
+                    disabled={dashLoading}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  >
+                    <RefreshCw className={cn("w-3 h-3", dashLoading && "animate-spin")} />
+                    {dashData && new Date(dashData.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                  </button>
                 </div>
-                <p className="text-[12px] text-muted-foreground leading-relaxed pt-3 px-1 border-t border-border/30">
-                  {buildMacroNarrative(data.macro, data.environment)}
-                </p>
+
+                {/* 로딩 */}
+                {dashLoading && !dashData && (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <RefreshCw className="w-5 h-5 animate-spin text-primary/50" />
+                    <p className="text-xs text-muted-foreground/60">글로벌 시장 데이터 수집 및 AI 분석 중… (약 10초)</p>
+                  </div>
+                )}
+                {dashError && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-500 mb-3">
+                    데이터 로드 실패 ({dashError})
+                  </div>
+                )}
+
+                {dashData && (
+                  <>
+                    {/* AI 내러티브 */}
+                    {dashData.narrative && (
+                      <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
+                        <Sparkles className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
+                        <p className="text-[12px] text-foreground/80 leading-relaxed">{dashData.narrative}</p>
+                      </div>
+                    )}
+
+                    {/* 카테고리 필터 탭 */}
+                    <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1 scrollbar-none">
+                      {dashTabs.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => setDashCatTab(t.id)}
+                          className={cn(
+                            "px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
+                            dashCatTab === t.id
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                          )}
+                        >
+                          {t.id === "insights" && <Sparkles className="w-2.5 h-2.5 inline mr-1 -mt-0.5" />}
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* 시장 지표 카테고리 카드 */}
+                    {dashCatTab !== "insights" && (
+                      <div className="mb-2">
+                        {visibleDashCats.map(cat => (
+                          <DashCategorySection key={cat.id} cat={cat} isEn={isEn} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* AI 시사점 & ETF 추천 */}
+                    {(dashCatTab === "all" || dashCatTab === "insights") && dashData.insights.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles className="w-4 h-4 text-primary/60" />
+                          <h3 className="text-sm font-semibold text-foreground/80">
+                            {isEn ? "AI Macro Insights & ETF Picks" : "애빛다 거시 시사점 & ETF 추천"}
+                          </h3>
+                        </div>
+                        <div className="space-y-2">
+                          {dashData.insights.map((ins, i) => (
+                            <DashInsightCard key={i} insight={ins} isEn={isEn} />
+                          ))}
+                        </div>
+                        <p className="mt-3 text-[10px] text-muted-foreground/40">
+                          * AI 인사이트는 참고용이며 투자 권유가 아닙니다.
+                        </p>
+                      </div>
+                    )}
+                    {dashCatTab === "insights" && dashData.insights.length === 0 && (
+                      <div className="text-center py-10 text-muted-foreground/40 text-sm">AI 인사이트를 생성하지 못했습니다.</div>
+                    )}
+                  </>
+                )}
               </div>
 
-              {/* 코스피·코스닥 AI 전망 */}
+              {/* ② 코스피·코스닥 AI 전망 */}
               {data.indexOutlook && (
                 <div>
                   <div className="flex items-center justify-between px-1 mb-2">
-                    <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
+                    <p className="text-[12px] font-bold text-foreground/80 flex items-center gap-2">
+                      <Brain className="w-3.5 h-3.5 text-primary/60" />
                       코스피 · 코스닥 AI 전망
                     </p>
                     {!data.indexOutlook.ready && (
@@ -1651,7 +1971,7 @@ function MomentumTab() {
                     )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <IndexOutlookCard idx={data.indexOutlook.kospi}  />
+                    <IndexOutlookCard idx={data.indexOutlook.kospi} />
                     <IndexOutlookCard idx={data.indexOutlook.kosdaq} />
                   </div>
                   <p className="text-[10px] text-muted-foreground/40 px-1 mt-2">
@@ -1660,7 +1980,7 @@ function MomentumTab() {
                 </div>
               )}
 
-              {/* 🔥 지금 유망한 ETF */}
+              {/* ③ 🔥 지금 유망한 ETF */}
               <div>
                 <div className="flex items-center justify-between px-1 mb-3">
                   <p className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
@@ -1680,7 +2000,7 @@ function MomentumTab() {
                 />
               </div>
 
-              {/* 🎯 앞으로 주목해야할 ETF */}
+              {/* ④ 🎯 앞으로 주목해야할 ETF */}
               <div>
                 <div className="flex items-center justify-between px-1 mb-3">
                   <p className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
