@@ -350,22 +350,38 @@ ${snapshot}
       ],
       "usETFs": [
         { "ticker": "US ETF ticker", "name": "ETF 정식명칭", "reason": "추천 이유 (15자 이내)" }
+      ],
+      "levETFs": [
+        { "ticker": "KR 레버리지 ETF 종목코드 (6자리)", "name": "ETF 정식명칭", "reason": "공격적 포지션용" }
+      ],
+      "invETFs": [
+        { "ticker": "KR 인버스 ETF 종목코드 (6자리)", "name": "ETF 정식명칭", "reason": "헤지·역방향용" }
       ]
     }
   ]
 }
 
+규칙:
+- krETFs: 각 인사이트당 3~6개 (일반 배수 ETF)
+- usETFs: 각 인사이트당 1~3개
+- levETFs: sentiment=positive일 때만 1~2개 포함 (레버리지 2X 이상)
+- invETFs: sentiment=negative일 때만 1개 포함, sentiment=mixed면 선택
+
 KR ETF 실제 코드 참고 (정확한 6자리 사용):
-- AI·반도체: TIGER AI반도체핵심공정(457680), KODEX 반도체(091160), ACE AI반도체포커스(448730), TIGER 미국필라델피아반도체나스닥(381170)
-- 나스닥·기술주: TIGER 미국나스닥100(133690), KODEX 미국S&P500TR(379800), ACE 미국빅테크TOP7Plus(457490)
-- 원자재·에너지: TIGER 원자재(130680), KODEX 에너지화학(117460), TIGER WTI원유선물(H)(261220)
-- 금: KODEX 골드선물(H)(132030), ACE KRX금현물(411060)
-- 채권·금리: KODEX 미국채10년선물(308620), TIGER 미국채30년스트립액티브(합성H)(458730), KODEX 단기채권PLUS(214980)
+일반:
+- AI·반도체: TIGER AI반도체핵심공정(457680), KODEX 반도체(091160), ACE AI반도체포커스(448730), TIGER 미국필라델피아반도체나스닥(381170), KODEX AI반도체핵심장비(432600)
+- 나스닥·기술주: TIGER 미국나스닥100(133690), KODEX 미국S&P500TR(379800), ACE 미국빅테크TOP7Plus(457490), TIGER 미국S&P500(360750)
+- 원자재·에너지: TIGER 원자재(130680), KODEX 에너지화학(117460), TIGER WTI원유선물(H)(261220), KODEX 배터리(305720)
+- 금: KODEX 골드선물(H)(132030), ACE KRX금현물(411060), TIGER 골드은선물(합성H)(280920)
+- 채권·금리: KODEX 미국채10년선물(308620), TIGER 미국채30년스트립액티브(합성H)(458730), KODEX 단기채권PLUS(214980), ACE 미국30년국채액티브(합성H)(453870)
 - 달러: KODEX 달러선물(261240), TIGER 미국달러단기채권액티브(430900)
-- 한국 수출·반도체: TIGER 코스피(102110), KODEX 코스닥150(229200), TIGER 반도체(091160)
-- 인버스·헤지: KODEX 인버스(114800), KODEX 200선물인버스2X(252670)
-- 이머징: TIGER 차이나A300(192090), KODEX 인도Nifty50(453810), ACE 베트남VN30(401180)
-- 헬스케어: TIGER 헬스케어(143860), ACE 미국빅테크헬스케어(381560)`;
+- 한국 수출·반도체: TIGER 코스피(102110), KODEX 코스닥150(229200), KODEX 삼성그룹(213630), TIGER KRX바이오K-뉴딜(334690)
+- 이머징: TIGER 차이나A300(192090), KODEX 인도Nifty50(453810), ACE 베트남VN30(401180), TIGER 인도빌리언컨슈머(448290)
+- 헬스케어: TIGER 헬스케어(143860), KODEX 바이오(244580)
+레버리지:
+- KODEX 레버리지(122630, 코스피2X), TIGER 코스닥150레버리지(233740), KODEX 나스닥100레버리지(합성)(253150), TIGER 미국나스닥100레버리지(합성)(409820), KODEX 미국S&P500레버리지(합성)(261270), TIGER 반도체레버리지(합성)(396510)
+인버스:
+- KODEX 인버스(114800), KODEX 200선물인버스2X(252670), TIGER 코스닥150인버스(251340), KODEX 미국채10년선물인버스(H)(308630), KODEX 달러선물인버스(261250)`;
 
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-flash",
