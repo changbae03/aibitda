@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, PieChart, Pie, Legend,
@@ -1258,6 +1258,113 @@ function EtfButtonGroup({
 
 // ─── 섹터 아코디언 행 ─────────────────────────────────────────────────────────
 
+// ─── 거시 ETF 픽 섹션 (지금 유망 / 앞으로 주목) ──────────────────────────────
+
+function EtfMacroPickSection({
+  sectors, allEtfs, isNow, handleEtfClick, selectedEtfCode, etfDetail, loadingEtf, closeDetail,
+}: {
+  sectors: SectorMomentum[];
+  allEtfs: ETFInfo[];
+  isNow: boolean;
+  handleEtfClick: (code: string) => void;
+  selectedEtfCode: string | null;
+  etfDetail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
+  loadingEtf: boolean;
+  closeDetail: () => void;
+}) {
+  const sectorsWithEtfs = useMemo(() =>
+    sectors.map(sector => ({
+      sector,
+      etfs: allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage === 1).slice(0, 4),
+    })).filter(x => x.etfs.length > 0),
+  [sectors, allEtfs]);
+
+  if (sectorsWithEtfs.length === 0) {
+    return (
+      <div className="text-[12px] text-muted-foreground/50 text-center py-6">
+        매칭되는 ETF가 없습니다
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {sectorsWithEtfs.map(({ sector, etfs }) => {
+        const cfg    = OUTLOOK_CONFIG[sector.outlook];
+        const sColor = sector.score >= 75 ? "#22c55e" : sector.score >= 60 ? "#f59e0b" : "#94a3b8";
+        return (
+          <div key={sector.id} className="space-y-2">
+            {/* 섹터 헤더 */}
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-base leading-none">{sector.icon}</span>
+              <span className="text-[13px] font-semibold text-foreground">{sector.name}</span>
+              <div className="flex-1 h-1 bg-muted/30 rounded-full overflow-hidden mx-1">
+                <div className="h-full rounded-full" style={{ width: `${sector.score}%`, background: sColor }} />
+              </div>
+              <span className="text-[11px] font-bold tabular-nums" style={{ color: sColor }}>{sector.score}</span>
+              <span className={cn("text-[11px] font-semibold shrink-0", cfg.text)}>{cfg.label}</span>
+              {!isNow && <span className="text-[10px] text-muted-foreground/45 shrink-0">{sector.horizon}</span>}
+            </div>
+            <p className="text-[11px] text-muted-foreground/60 leading-relaxed px-1">
+              {sector.reason.length > 80 ? sector.reason.slice(0, 80) + "…" : sector.reason}
+            </p>
+            {/* ETF 카드 그리드 */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {etfs.map(etf => {
+                const isSelected = selectedEtfCode === etf.code;
+                const eColor = SECTOR_COLORS[etf.sector] ?? "#64748b";
+                return (
+                  <div key={etf.code}>
+                    <button
+                      onClick={() => handleEtfClick(etf.code)}
+                      className={cn(
+                        "w-full flex flex-col gap-1 px-3 py-2.5 rounded-xl border transition-all text-left",
+                        isSelected
+                          ? "bg-primary/8 border-primary/25"
+                          : "bg-card border-border hover:bg-muted/30",
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-md leading-tight"
+                          style={{ background: `${eColor}20`, color: eColor }}
+                        >
+                          {etf.sector}
+                        </span>
+                        <span className="text-[10px] font-mono text-muted-foreground/45 ml-auto">{etf.code}</span>
+                      </div>
+                      <span className="text-[12px] font-semibold text-foreground leading-snug line-clamp-2">{etf.name}</span>
+                      {isSelected && (
+                        <span className="text-[10px] text-primary/70 font-medium mt-0.5">▼ 상세 보기</span>
+                      )}
+                    </button>
+                    {isSelected && (
+                      <div className="mt-1 col-span-2">
+                        {loadingEtf ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="w-5 h-5 animate-spin text-primary/50" />
+                          </div>
+                        ) : etfDetail?.etf ? (
+                          <EtfDetailPanel
+                            etf={etfDetail.etf}
+                            holdings={etfDetail.holdings}
+                            source={etfDetail.source}
+                            onClose={closeDetail}
+                          />
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SectorAccordionRow({
   sector, isNow, rank, etfs, levEtfs, invEtfs,
   handleEtfClick, selectedEtfCode, etfDetail, loadingEtf, closeDetail, allEtfs,
@@ -1553,42 +1660,44 @@ function MomentumTab() {
                 </div>
               )}
 
-              {/* 지금 유망 섹터 */}
+              {/* 🔥 지금 유망한 ETF */}
               <div>
-                <div className="flex items-center justify-between px-1 mb-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">지금 유망 섹터</p>
-                  <span className="text-[11px] text-muted-foreground/50">탭해서 ETF 확인</span>
+                <div className="flex items-center justify-between px-1 mb-3">
+                  <p className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
+                    🔥 지금 유망한 ETF
+                  </p>
+                  <span className="text-[11px] text-muted-foreground/50">현재 매크로 환경 기반</span>
                 </div>
-                {data.nowSectors.map((s, i) => {
-                  const { regular, leveraged, inverse } = getEtfsForSector(s.sectorTags);
-                  return (
-                    <SectorAccordionRow
-                      key={s.id} sector={s} isNow={true} rank={i}
-                      etfs={regular} levEtfs={leveraged} invEtfs={inverse}
-                      handleEtfClick={handleEtfClick} selectedEtfCode={selectedEtfCode}
-                      etfDetail={etfDetail} loadingEtf={loadingEtf} closeDetail={closeDetail} allEtfs={allEtfs}
-                    />
-                  );
-                })}
+                <EtfMacroPickSection
+                  sectors={data.nowSectors}
+                  allEtfs={allEtfs}
+                  isNow={true}
+                  handleEtfClick={handleEtfClick}
+                  selectedEtfCode={selectedEtfCode}
+                  etfDetail={etfDetail}
+                  loadingEtf={loadingEtf}
+                  closeDetail={closeDetail}
+                />
               </div>
 
-              {/* 앞으로 주목 섹터 */}
+              {/* 🎯 앞으로 주목해야할 ETF */}
               <div>
-                <div className="flex items-center justify-between px-1 mb-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-widest">앞으로 주목 섹터</p>
+                <div className="flex items-center justify-between px-1 mb-3">
+                  <p className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
+                    🎯 앞으로 주목해야할 ETF
+                  </p>
                   <span className="text-[11px] text-muted-foreground/50">향후 3–12개월 관점</span>
                 </div>
-                {data.futureSectors.map((s, i) => {
-                  const { regular, leveraged, inverse } = getEtfsForSector(s.sectorTags);
-                  return (
-                    <SectorAccordionRow
-                      key={s.id} sector={s} isNow={false} rank={i}
-                      etfs={regular} levEtfs={leveraged} invEtfs={inverse}
-                      handleEtfClick={handleEtfClick} selectedEtfCode={selectedEtfCode}
-                      etfDetail={etfDetail} loadingEtf={loadingEtf} closeDetail={closeDetail} allEtfs={allEtfs}
-                    />
-                  );
-                })}
+                <EtfMacroPickSection
+                  sectors={data.futureSectors}
+                  allEtfs={allEtfs}
+                  isNow={false}
+                  handleEtfClick={handleEtfClick}
+                  selectedEtfCode={selectedEtfCode}
+                  etfDetail={etfDetail}
+                  loadingEtf={loadingEtf}
+                  closeDetail={closeDetail}
+                />
               </div>
             </div>
           )}

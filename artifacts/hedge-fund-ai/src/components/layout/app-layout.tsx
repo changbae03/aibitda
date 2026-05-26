@@ -108,7 +108,6 @@ const NAV_GROUPS = [
     labelEn: "Macro",
     items: [
       { href: "/market-analysis", label: "AI 시장예측",   labelEn: "AI Forecast",      Icon: LineChart },
-      { href: "/macro",           label: "거시 대시보드", labelEn: "Macro Dashboard",  Icon: Globe },
       { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
       { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",         Icon: Newspaper },
       { href: "/news-timeline",   label: "이슈 타임라인", labelEn: "Issue Timeline",    Icon: Clock },
