@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useId } from "react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { ko, enUS } from "date-fns/locale";
 import {
   CalendarDays, RefreshCw, TrendingUp, DollarSign,
   ChevronRight, Building2, AlertCircle, Sparkles, Globe, X,
+  ChevronDown, TrendingDown, Minus,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import StockLogo from "@/components/ui/stock-logo";
@@ -58,6 +59,20 @@ type CalendarItem =
 
 type Range = "week" | "month";
 type Filter = "all" | "earnings" | "economic";
+
+// ── 주요 지표 추이 타입 ────────────────────────────────────────────────────────
+interface IndicatorPoint { date: string; value: number; }
+interface IndicatorSeries {
+  id: string;
+  name: string;
+  nameEn: string;
+  country: string;
+  unit: string;
+  category: string;
+  frequency: "monthly" | "quarterly";
+  data: IndicatorPoint[];
+  targetLine?: number;
+}
 
 // ── 클라이언트 캐시 ────────────────────────────────────────────────────────────
 const _earningsCache = new Map<string, { data: EarningsEntry[]; fetchedAt: number }>();
@@ -357,6 +372,277 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
       </div>
       <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 mt-1" />
     </motion.div>
+  );
+}
+
+// ── 주요 지표 추이 컴포넌트 ────────────────────────────────────────────────────
+const COUNTRY_FLAG_INDICATOR: Record<string, string> = {
+  US: "🇺🇸", KR: "🇰🇷", EU: "🇪🇺", CN: "🇨🇳", JP: "🇯🇵",
+};
+
+/** 지표별 색상/방향 계산 */
+function getIndicatorTheme(s: IndicatorSeries): { color: string; bg: string; trend: "up" | "down" | "flat" } {
+  const vals = s.data.map(d => d.value);
+  if (vals.length < 2) return { color: "#6366f1", bg: "bg-indigo-500/10", trend: "flat" };
+  const last = vals[vals.length - 1];
+  const prev = vals[vals.length - 2];
+  const trend: "up" | "down" | "flat" = Math.abs(last - prev) < 0.01 ? "flat" : last > prev ? "up" : "down";
+
+  if (s.id === "fed-rate") {
+    return { color: "#6366f1", bg: "bg-indigo-500/10", trend };
+  }
+  if (s.id === "us-cpi" || s.id === "core-pce") {
+    // 목표 2% 기준 — 내려가면 good(green), 올라가면 bad(red)
+    if (last <= 2.5) return { color: "#22c55e", bg: "bg-emerald-500/10", trend };
+    if (last <= 3.5) return { color: "#f59e0b", bg: "bg-amber-500/10", trend };
+    return { color: trend === "down" ? "#f59e0b" : "#ef4444", bg: trend === "down" ? "bg-amber-500/10" : "bg-red-500/10", trend };
+  }
+  if (s.id === "unemployment") {
+    // 낮을수록 good
+    if (last < 4.0) return { color: "#22c55e", bg: "bg-emerald-500/10", trend };
+    if (last < 5.0) return { color: "#f59e0b", bg: "bg-amber-500/10", trend };
+    return { color: "#ef4444", bg: "bg-red-500/10", trend };
+  }
+  if (s.id === "us-gdp") {
+    if (last >= 2.0) return { color: "#22c55e", bg: "bg-emerald-500/10", trend };
+    if (last >= 0) return { color: "#f59e0b", bg: "bg-amber-500/10", trend };
+    return { color: "#ef4444", bg: "bg-red-500/10", trend };
+  }
+  return { color: "#6366f1", bg: "bg-indigo-500/10", trend };
+}
+
+/** 미니 스파크라인 (순수 SVG) */
+function Sparkline({ data, color, targetLine, w = 96, h = 38 }: {
+  data: number[]; color: string; targetLine?: number; w?: number; h?: number;
+}) {
+  const uid = useId().replace(/:/g, "");
+  if (data.length < 2) return <div style={{ width: w, height: h }} />;
+
+  const pad = 3;
+  const allVals = targetLine !== undefined ? [...data, targetLine] : data;
+  const min = Math.min(...allVals);
+  const max = Math.max(...allVals);
+  const range = max - min || 1;
+  const xScale = (i: number) => pad + (i / (data.length - 1)) * (w - pad * 2);
+  const yScale = (v: number) => h - pad - ((v - min) / range) * (h - pad * 2);
+
+  const points = data.map((v, i) => `${xScale(i).toFixed(1)},${yScale(v).toFixed(1)}`);
+  const areaD = [
+    `M ${points[0]}`,
+    ...points.slice(1).map(p => `L ${p}`),
+    `L ${xScale(data.length - 1).toFixed(1)},${h}`,
+    `L ${xScale(0).toFixed(1)},${h}`,
+    "Z",
+  ].join(" ");
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+      <defs>
+        <linearGradient id={`sg-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.18} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.01} />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#sg-${uid})`} />
+      <polyline
+        points={points.join(" ")}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {targetLine !== undefined && (
+        <line
+          x1={pad} y1={yScale(targetLine).toFixed(1)}
+          x2={w - pad} y2={yScale(targetLine).toFixed(1)}
+          stroke={color} strokeWidth={0.8} strokeDasharray="3,2" opacity={0.35}
+        />
+      )}
+      <circle cx={xScale(data.length - 1).toFixed(1)} cy={yScale(data[data.length - 1]).toFixed(1)} r={2.5} fill={color} />
+    </svg>
+  );
+}
+
+/** 히스토리 테이블 (펼쳤을 때) */
+function IndicatorHistoryTable({ series, isEn }: { series: IndicatorSeries; isEn: boolean }) {
+  const rows = [...series.data].reverse().slice(0, 12);
+  return (
+    <div className="mt-2 rounded-lg border border-border/50 overflow-hidden">
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className="bg-muted/40">
+            <th className="text-left px-2 py-1.5 text-muted-foreground font-medium">{isEn ? "Date" : "날짜"}</th>
+            <th className="text-right px-2 py-1.5 text-muted-foreground font-medium">{isEn ? "Value" : "값"}</th>
+            <th className="text-right px-2 py-1.5 text-muted-foreground font-medium">{isEn ? "Change" : "변동"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const nextRow = rows[i + 1];
+            const delta = nextRow ? row.value - nextRow.value : null;
+            return (
+              <tr key={row.date} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
+                <td className="px-2 py-1.5 text-muted-foreground font-mono">{row.date.slice(0, 7)}</td>
+                <td className="px-2 py-1.5 text-right font-mono font-medium text-foreground">
+                  {row.value.toFixed(series.id === "us-gdp" ? 1 : 2)}{series.unit}
+                </td>
+                <td className={cn(
+                  "px-2 py-1.5 text-right font-mono",
+                  delta === null ? "text-muted-foreground/40" :
+                  delta > 0 ? "text-emerald-500" : delta < 0 ? "text-red-400" : "text-muted-foreground/40"
+                )}>
+                  {delta === null ? "—" :
+                    `${delta > 0 ? "▲" : delta < 0 ? "▼" : ""}${Math.abs(delta).toFixed(2)}`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** 지표 하나의 카드 */
+function IndicatorCard({ series, isEn }: { series: IndicatorSeries; isEn: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const { color, bg, trend } = useMemo(() => getIndicatorTheme(series), [series]);
+  const vals = series.data.map(d => d.value);
+  const last = vals[vals.length - 1];
+  const prev = vals[vals.length - 2] ?? last;
+  const delta = last - prev;
+  const lastDate = series.data[series.data.length - 1]?.date ?? "";
+  const dateLabel = lastDate.slice(0, 7); // YYYY-MM
+
+  const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
+
+  return (
+    <div className={cn("rounded-xl border border-border bg-card/60 overflow-hidden transition-all", expanded && "border-border/80")}>
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full text-left px-3 pt-3 pb-2 hover:bg-accent/20 transition-colors"
+      >
+        {/* 헤더 행 */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm">{COUNTRY_FLAG_INDICATOR[series.country] ?? "🌐"}</span>
+            <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded", bg, "text-foreground/70")}>{series.category}</span>
+          </div>
+          <ChevronDown className={cn("w-3 h-3 text-muted-foreground/40 transition-transform mt-0.5 shrink-0", expanded && "rotate-180")} />
+        </div>
+
+        {/* 지표명 */}
+        <p className="text-[11px] font-medium text-foreground/80 mb-2 leading-tight">
+          {isEn ? series.nameEn : series.name}
+        </p>
+
+        {/* 값 + 스파크라인 */}
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-bold text-foreground font-mono leading-none">
+                {last.toFixed(series.id === "us-gdp" ? 1 : 2)}
+              </span>
+              <span className="text-[10px] text-muted-foreground/60">{series.unit}</span>
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <TrendIcon className="w-2.5 h-2.5" style={{ color }} />
+              <span className="text-[10px] font-mono" style={{ color }}>
+                {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
+              </span>
+              <span className="text-[9px] text-muted-foreground/40">{dateLabel}</span>
+            </div>
+          </div>
+          <Sparkline data={vals} color={color} targetLine={series.targetLine} />
+        </div>
+      </button>
+
+      {/* 펼쳤을 때: 히스토리 테이블 */}
+      {expanded && (
+        <div className="px-3 pb-3">
+          {series.targetLine !== undefined && (
+            <p className="text-[10px] text-muted-foreground/50 mb-1.5">
+              {isEn ? `Fed target: ${series.targetLine}%` : `목표: ${series.targetLine}%`}
+              <span className="ml-1 text-muted-foreground/30">— — —</span>
+            </p>
+          )}
+          <IndicatorHistoryTable series={series} isEn={isEn} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 주요 지표 추이 전체 섹션 */
+const _indicatorCache: { data: IndicatorSeries[]; fetchedAt: number } | null = null;
+let _indicatorCacheMut: { data: IndicatorSeries[]; fetchedAt: number } | null = null;
+
+function IndicatorTrendSection() {
+  const { isEn } = useLanguage();
+  const [indicators, setIndicators] = useState<IndicatorSeries[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (_indicatorCacheMut && Date.now() - _indicatorCacheMut.fetchedAt < 12 * 60 * 60 * 1000) {
+      setIndicators(_indicatorCacheMut.data);
+      return;
+    }
+    setLoading(true);
+    fetch(getApiUrl("/api/market-data/indicator-history"), { credentials: "include" })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`${r.status}`)))
+      .then((data: IndicatorSeries[]) => {
+        _indicatorCacheMut = { data, fetchedAt: Date.now() };
+        setIndicators(data);
+        setError(null);
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="mb-5 rounded-xl border border-border bg-card/30 overflow-hidden">
+      {/* 섹션 헤더 */}
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-accent/20 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-3.5 h-3.5 text-primary/70" />
+          <span className="text-xs font-semibold text-foreground/80">
+            {isEn ? "Key Indicator Trends" : "주요 지표 추이"}
+          </span>
+          <span className="text-[10px] text-muted-foreground/50">
+            {isEn ? "FRED · real data" : "FRED 실제 데이터"}
+          </span>
+        </div>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", collapsed && "-rotate-90")} />
+      </button>
+
+      {/* 컨텐츠 */}
+      {!collapsed && (
+        <div className="px-3 pb-3">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground/50">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span className="text-xs">{isEn ? "Loading FRED data…" : "FRED 데이터 불러오는 중…"}</span>
+            </div>
+          ) : error ? (
+            <p className="text-xs text-muted-foreground/50 text-center py-4">
+              {isEn ? `Failed to load (${error})` : `불러오기 실패 (${error})`}
+            </p>
+          ) : indicators.length === 0 ? null : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {indicators.map(s => (
+                <IndicatorCard key={s.id} series={s} isEn={isEn} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -768,6 +1054,9 @@ export default function CalendarPage() {
                 ))}
               </div>
             )}
+
+            {/* 주요 지표 추이 섹션 */}
+            {filter !== "earnings" && <IndicatorTrendSection />}
 
             {/* DART 최근 잠정실적 공시 섹션 */}
             {filter !== "economic" && <DartRecentSection />}

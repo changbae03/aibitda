@@ -1446,6 +1446,133 @@ router.get("/dart-recent-earnings", async (req, res) => {
   }
 });
 
+// ─── GET /api/market-data/indicator-history ──────────────────────────────────
+interface IndicatorPoint { date: string; value: number; }
+interface IndicatorSeries {
+  id: string;
+  name: string;
+  nameEn: string;
+  country: string;
+  unit: string;
+  category: string;
+  frequency: "monthly" | "quarterly";
+  data: IndicatorPoint[];
+  targetLine?: number;
+}
+
+let _indicatorHistoryCache: { data: IndicatorSeries[]; expiresAt: number } | null = null;
+const INDICATOR_HISTORY_TTL = 12 * 60 * 60 * 1000; // 12시간
+
+router.get("/indicator-history", async (_req, res) => {
+  if (_indicatorHistoryCache && Date.now() < _indicatorHistoryCache.expiresAt) {
+    return res.json(_indicatorHistoryCache.data);
+  }
+
+  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v2");
+  if (dbCached) {
+    _indicatorHistoryCache = { data: dbCached, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
+    return res.json(dbCached);
+  }
+
+  try {
+    const FRED_KEY = process.env["FRED_API_KEY"];
+    if (!FRED_KEY) throw new Error("FRED_API_KEY 없음");
+
+    // 4년 이력 (YoY 계산에 최소 12개월 필요)
+    const start4y = new Date();
+    start4y.setFullYear(start4y.getFullYear() - 4);
+    const startStr = start4y.toISOString().split("T")[0];
+
+    async function fredGet(series: string): Promise<IndicatorPoint[]> {
+      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FRED_KEY}&file_type=json&observation_start=${startStr}&sort_order=asc&limit=300`;
+      const r = await fetch(url);
+      const d = await r.json();
+      return (d.observations ?? [])
+        .filter((o: any) => o.value !== ".")
+        .map((o: any) => ({ date: o.date, value: parseFloat(o.value) }));
+    }
+
+    const [fedRate, cpi, corePce, unemployment, gdp] = await Promise.all([
+      fredGet("FEDFUNDS"),        // 연방기금금리 (월별)
+      fredGet("CPIAUCSL"),        // 미국 CPI 수준 (월별) → YoY 계산
+      fredGet("PCEPILFE"),        // 근원 PCE 수준 (월별) → YoY 계산
+      fredGet("UNRATE"),          // 실업률 (월별)
+      fredGet("A191RL1Q225SBEA"), // 실질 GDP 성장률 연율 (분기)
+    ]);
+
+    // 전년동월비 계산
+    function calcYoY(pts: IndicatorPoint[]): IndicatorPoint[] {
+      return pts.slice(12).map((d, i) => ({
+        date: d.date,
+        value: parseFloat(((d.value / pts[i].value - 1) * 100).toFixed(2)),
+      }));
+    }
+
+    const result: IndicatorSeries[] = [
+      {
+        id: "fed-rate",
+        name: "연방기금금리",
+        nameEn: "Fed Funds Rate",
+        country: "US",
+        unit: "%",
+        category: "금리",
+        frequency: "monthly",
+        data: fedRate.slice(-24),
+      },
+      {
+        id: "us-cpi",
+        name: "미국 CPI",
+        nameEn: "US CPI YoY",
+        country: "US",
+        unit: "%",
+        category: "물가",
+        frequency: "monthly",
+        data: calcYoY(cpi).slice(-24),
+        targetLine: 2.0,
+      },
+      {
+        id: "core-pce",
+        name: "근원 PCE",
+        nameEn: "Core PCE YoY",
+        country: "US",
+        unit: "%",
+        category: "물가",
+        frequency: "monthly",
+        data: calcYoY(corePce).slice(-24),
+        targetLine: 2.0,
+      },
+      {
+        id: "unemployment",
+        name: "실업률",
+        nameEn: "Unemployment",
+        country: "US",
+        unit: "%",
+        category: "고용",
+        frequency: "monthly",
+        data: unemployment.slice(-24),
+      },
+      {
+        id: "us-gdp",
+        name: "GDP 성장률",
+        nameEn: "GDP Growth QoQ",
+        country: "US",
+        unit: "%",
+        category: "성장",
+        frequency: "quarterly",
+        data: gdp.slice(-16),
+      },
+    ];
+
+    _indicatorHistoryCache = { data: result, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
+    saveToDBCache("indicator-history-v2", result, INDICATOR_HISTORY_TTL);
+    console.log("[indicator-history] 완료 — 지표 5개 수집");
+    return res.json(result);
+  } catch (err: any) {
+    console.error("[indicator-history] error:", err?.message);
+    return res.status(500).json({ error: err?.message ?? "지표 이력 조회 실패" });
+  }
+});
+
 // ─── GET /api/market-data/economic-calendar ─────────────────────────────────
 router.get("/economic-calendar", async (req, res) => {
   const range = (req.query.range === "month") ? "month" : "week";
