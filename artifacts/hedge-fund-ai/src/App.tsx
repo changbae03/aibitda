@@ -29,8 +29,9 @@ const Browse           = lazy(() => import("@/pages/browse"));
 const SettingsPage     = lazy(() => import("@/pages/settings"));
 const AboutPage        = lazy(() => import("@/pages/about"));
 const SharePage        = lazy(() => import("@/pages/share"));
-const CalendarPage     = lazy(() => import("@/pages/calendar"));
-const MarketAnalysis   = lazy(() => import("@/pages/market-analysis"));
+const CalendarPage      = lazy(() => import("@/pages/calendar"));
+const MacroDashboard    = lazy(() => import("@/pages/macro-dashboard"));
+const MarketAnalysis    = lazy(() => import("@/pages/market-analysis"));
 const ETFAnalysis      = lazy(() => import("@/pages/etf-analysis"));
 const Portfolio        = lazy(() => import("@/pages/portfolio"));
 const MyPage           = lazy(() => import("@/pages/mypage"));
@@ -293,6 +294,7 @@ function Router() {
                 <Route path="/admin/quality" component={AdminQuality} />
                 <Route path="/admin/portfolios" component={AdminPortfolios} />
                 <Route path="/admin/calibration" component={AdminCalibration} />
+                <Route path="/macro" component={MacroDashboard} />
                 <Route path="/market-analysis" component={MarketAnalysis} />
                 <Route path="/etf-analysis" component={ETFAnalysis} />
                 <Route path="/portfolio" component={Portfolio} />

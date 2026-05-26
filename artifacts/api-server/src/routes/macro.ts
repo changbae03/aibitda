@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
+import YahooFinanceClass from "yahoo-finance2";
+import { GoogleGenAI } from "@google/genai";
+const yahooFinance = new YahooFinanceClass();
 
 const router = Router();
 
@@ -238,6 +241,192 @@ router.get("/macro/news", async (req, res) => {
     res.json({ items, cachedAt: new Date().toISOString() });
   } catch {
     res.status(500).json({ error: "매크로 뉴스 조회 실패" });
+  }
+});
+
+// ─── GET /api/macro/dashboard ────────────────────────────────────────────────
+
+const MACRO_DASH_TTL = 20 * 60 * 1000; // 20분
+let _macroDashCache: { data: any; expiresAt: number } | null = null;
+
+interface DashItem {
+  id: string; cat: string; name: string; nameEn: string;
+  symbol: string; unit: string; flag: string; isInverse?: boolean;
+}
+
+const SYMBOLS: DashItem[] = [
+  // 글로벌 시장
+  { id: "sp500",    cat: "markets",      name: "S&P 500",      nameEn: "S&P 500",      symbol: "^GSPC",     unit: "pt",  flag: "🇺🇸" },
+  { id: "nasdaq",   cat: "markets",      name: "나스닥",         nameEn: "NASDAQ",        symbol: "^IXIC",     unit: "pt",  flag: "🇺🇸" },
+  { id: "dow",      cat: "markets",      name: "다우존스",       nameEn: "Dow Jones",     symbol: "^DJI",      unit: "pt",  flag: "🇺🇸" },
+  { id: "nikkei",   cat: "markets",      name: "닛케이 225",    nameEn: "Nikkei 225",    symbol: "^N225",     unit: "pt",  flag: "🇯🇵" },
+  { id: "shanghai", cat: "markets",      name: "상해종합",       nameEn: "Shanghai",      symbol: "000001.SS", unit: "pt",  flag: "🇨🇳" },
+  { id: "hsi",      cat: "markets",      name: "항셍지수",       nameEn: "Hang Seng",     symbol: "^HSI",      unit: "pt",  flag: "🇭🇰" },
+  { id: "stoxx",    cat: "markets",      name: "Euro Stoxx 50", nameEn: "Euro Stoxx 50", symbol: "^STOXX50E", unit: "pt",  flag: "🇪🇺" },
+  { id: "kospi",    cat: "markets",      name: "코스피",         nameEn: "KOSPI",         symbol: "^KS11",     unit: "pt",  flag: "🇰🇷" },
+  // 원자재
+  { id: "wti",      cat: "commodities",  name: "WTI 원유",      nameEn: "WTI Crude",     symbol: "CL=F",      unit: "$/bbl", flag: "🛢️" },
+  { id: "brent",    cat: "commodities",  name: "Brent 원유",    nameEn: "Brent",         symbol: "BZ=F",      unit: "$/bbl", flag: "🛢️" },
+  { id: "gold",     cat: "commodities",  name: "금",            nameEn: "Gold",          symbol: "GC=F",      unit: "$/oz", flag: "🥇" },
+  { id: "silver",   cat: "commodities",  name: "은",            nameEn: "Silver",        symbol: "SI=F",      unit: "$/oz", flag: "🥈" },
+  { id: "copper",   cat: "commodities",  name: "구리",           nameEn: "Copper",        symbol: "HG=F",      unit: "$/lb", flag: "🔶" },
+  { id: "natgas",   cat: "commodities",  name: "천연가스",       nameEn: "Nat Gas",       symbol: "NG=F",      unit: "$/MMBtu", flag: "⛽" },
+  { id: "corn",     cat: "commodities",  name: "옥수수",         nameEn: "Corn",          symbol: "ZC=F",      unit: "¢/bu", flag: "🌽" },
+  { id: "wheat",    cat: "commodities",  name: "밀",            nameEn: "Wheat",         symbol: "ZW=F",      unit: "¢/bu", flag: "🌾" },
+  // 환율
+  { id: "dxy",      cat: "currencies",   name: "달러 인덱스",    nameEn: "DXY",           symbol: "DX-Y.NYB",  unit: "",    flag: "💵" },
+  { id: "usdkrw",   cat: "currencies",   name: "원/달러",        nameEn: "USD/KRW",       symbol: "KRW=X",     unit: "₩",   flag: "🇰🇷" },
+  { id: "eurusd",   cat: "currencies",   name: "EUR/USD",       nameEn: "EUR/USD",       symbol: "EURUSD=X",  unit: "",    flag: "🇪🇺" },
+  { id: "usdjpy",   cat: "currencies",   name: "달러/엔",        nameEn: "USD/JPY",       symbol: "JPY=X",     unit: "¥",   flag: "🇯🇵" },
+  { id: "usdcnh",   cat: "currencies",   name: "달러/위안",      nameEn: "USD/CNH",       symbol: "CNH=X",     unit: "¥",   flag: "🇨🇳" },
+  // 채권/금리
+  { id: "us10y",    cat: "rates",        name: "미국 10Y",      nameEn: "US 10Y",        symbol: "^TNX",      unit: "%",   flag: "🇺🇸" },
+  { id: "us30y",    cat: "rates",        name: "미국 30Y",      nameEn: "US 30Y",        symbol: "^TYX",      unit: "%",   flag: "🇺🇸" },
+  { id: "us5y",     cat: "rates",        name: "미국 5Y",       nameEn: "US 5Y",         symbol: "^FVX",      unit: "%",   flag: "🇺🇸" },
+];
+
+async function fetchYFQuote(sym: DashItem): Promise<{ value: number | null; change1d: number | null; prevClose: number | null }> {
+  try {
+    const q = await (yahooFinance as any).quote(sym.symbol, undefined, { validateResult: false });
+    const value = q?.regularMarketPrice ?? null;
+    const change1d = q?.regularMarketChangePercent ?? null;
+    const prevClose = q?.regularMarketPreviousClose ?? null;
+    return { value, change1d, prevClose };
+  } catch (e: any) {
+    console.warn(`[macro/dashboard] YF quote 실패 (${sym.symbol}): ${e?.message?.slice(0, 60)}`);
+    return { value: null, change1d: null, prevClose: null };
+  }
+}
+
+/** 거시 스냅샷을 Gemini에 보내 인사이트 생성 */
+async function generateMacroInsights(snapshot: string): Promise<{ narrative: string; insights: any[] }> {
+  const key = process.env["GEMINI_API_KEY"];
+  if (!key) return { narrative: "", insights: [] };
+  try {
+    const ai = new GoogleGenAI({ apiKey: key });
+    const prompt = `당신은 거시경제 전문가입니다. 아래 시장 데이터를 분석하여 JSON으로 응답하세요.
+
+시장 데이터:
+${snapshot}
+
+다음 형식의 JSON으로만 응답하세요 (설명 없이):
+{
+  "narrative": "현재 거시경제 환경에 대한 2~3문장 요약 (한국어)",
+  "insights": [
+    {
+      "theme": "테마명 (한국어, 10자 이내)",
+      "themeEn": "Theme name (English, short)",
+      "description": "이 테마의 시장 시사점 (한국어, 2문장)",
+      "sentiment": "positive|negative|neutral|mixed",
+      "krETFs": [
+        { "ticker": "KR ETF 종목코드 (6자리)", "name": "ETF명", "reason": "추천 이유 (한국어, 15자 이내)" }
+      ],
+      "usETFs": [
+        { "ticker": "US ETF ticker", "name": "ETF명", "reason": "추천 이유 (한국어, 15자 이내)" }
+      ]
+    }
+  ]
+}
+
+인사이트는 3~5개로 작성하세요. 현재 시장 상황에서 실제로 중요한 테마만 포함하세요.
+KR ETF는 KODEX/TIGER/KBSTAR/ACE 계열 실제 상품 코드를 사용하세요.
+예: KODEX 미국S&P500TR(379800), TIGER 원자재(130680), KODEX 골드선물(H)(132030), TIGER WTI원유선물(H)(261220), KODEX 달러선물(261240), KODEX 미국채10년선물(308620), KODEX 인버스(114800), TIGER 미국나스닥100(133690), TIGER 차이나A300(192090), KODEX 일본TOPIX100(213630)`;
+
+    const resp = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
+    const text = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { narrative: "", insights: [] };
+    return JSON.parse(jsonMatch[0]);
+  } catch (e: any) {
+    console.error("[macro/dashboard] AI 인사이트 오류:", e?.message);
+    return { narrative: "", insights: [] };
+  }
+}
+
+router.get("/macro/dashboard", async (req, res) => {
+  const force = req.query.force === "true";
+  if (!force && _macroDashCache && Date.now() < _macroDashCache.expiresAt) {
+    return res.json(_macroDashCache.data);
+  }
+
+  try {
+    // 1. Yahoo Finance 시장 데이터 (병렬)
+    const yfResults = await Promise.allSettled(SYMBOLS.map(s => fetchYFQuote(s)));
+
+    const items = SYMBOLS.map((s, i) => {
+      const r = yfResults[i];
+      const q = r.status === "fulfilled" ? r.value : { value: null, change1d: null, prevClose: null };
+      return { ...s, value: q.value, change1d: q.change1d, prevClose: q.prevClose };
+    });
+
+    // 2. FRED 경제 지표
+    const fred = await fetchFREDMacro().catch(() => null);
+
+    // 3. 스냅샷 텍스트 생성 (Gemini 입력용)
+    const snapshotLines: string[] = [];
+    for (const it of items) {
+      if (it.value != null)
+        snapshotLines.push(`${it.name}(${it.nameEn}): ${it.value.toFixed(2)}${it.unit} (${it.change1d != null ? (it.change1d >= 0 ? "+" : "") + it.change1d.toFixed(2) + "%" : "N/A"})`);
+    }
+    if (fred) {
+      if (fred.fedTargetUpper != null) snapshotLines.push(`미국 기준금리(Fed Target Upper): ${fred.fedTargetUpper}%`);
+      if (fred.cpiYoY != null)          snapshotLines.push(`미국 CPI YoY: ${fred.cpiYoY}%`);
+      if (fred.unemploymentRate != null) snapshotLines.push(`미국 실업률: ${fred.unemploymentRate}%`);
+      if (fred.gdpGrowth != null)        snapshotLines.push(`미국 GDP 성장률(연율): ${fred.gdpGrowth}%`);
+      if (fred.yieldSpread != null)      snapshotLines.push(`미국 장단기금리차(10Y-2Y): ${fred.yieldSpread.toFixed(2)}%`);
+      if (fred.t10y != null)             snapshotLines.push(`미국 10Y 국채: ${fred.t10y}%`);
+    }
+
+    // 4. Gemini AI 인사이트
+    const ai = await generateMacroInsights(snapshotLines.join("\n"));
+
+    // 5. 카테고리별 그루핑
+    const catMap: Record<string, any[]> = {};
+    for (const it of items) {
+      if (!catMap[it.cat]) catMap[it.cat] = [];
+      catMap[it.cat].push(it);
+    }
+
+    const fredItems = fred ? [
+      { id: "fed-rate",   cat: "fred", name: "미국 기준금리", nameEn: "Fed Rate",      flag: "🇺🇸", unit: "%",  value: fred.fedTargetUpper,    change1d: null },
+      { id: "cpi-yoy",    cat: "fred", name: "미국 CPI YoY", nameEn: "US CPI YoY",    flag: "🇺🇸", unit: "%",  value: fred.cpiYoY,            change1d: null },
+      { id: "unemp",      cat: "fred", name: "실업률",        nameEn: "Unemployment",  flag: "🇺🇸", unit: "%",  value: fred.unemploymentRate,  change1d: null },
+      { id: "gdp",        cat: "fred", name: "GDP 성장률",    nameEn: "GDP Growth",    flag: "🇺🇸", unit: "%",  value: fred.gdpGrowth,         change1d: null },
+      { id: "yield-spr",  cat: "fred", name: "장단기금리차",  nameEn: "10Y-2Y Spread", flag: "🇺🇸", unit: "%",  value: fred.yieldSpread,       change1d: null },
+      { id: "us10y-fred", cat: "fred", name: "미국 10Y",      nameEn: "US 10Y",        flag: "🇺🇸", unit: "%",  value: fred.t10y,              change1d: null },
+    ].filter(x => x.value != null) : [];
+    if (fredItems.length) catMap["fred"] = fredItems;
+
+    const CATEGORY_META: Record<string, { name: string; nameEn: string; icon: string }> = {
+      markets:     { name: "글로벌 시장",  nameEn: "Global Markets",  icon: "globe" },
+      commodities: { name: "원자재",       nameEn: "Commodities",     icon: "package" },
+      currencies:  { name: "환율/달러",    nameEn: "FX / Dollar",     icon: "dollar-sign" },
+      rates:       { name: "채권/금리",    nameEn: "Bonds / Rates",   icon: "trending-up" },
+      fred:        { name: "경제 지표",    nameEn: "Economic Data",   icon: "bar-chart-2" },
+    };
+
+    const categories = Object.entries(catMap).map(([id, its]) => ({
+      id,
+      ...CATEGORY_META[id],
+      items: its,
+    }));
+
+    const result = {
+      categories,
+      narrative: ai.narrative,
+      insights: ai.insights ?? [],
+      generatedAt: Date.now(),
+    };
+
+    _macroDashCache = { data: result, expiresAt: Date.now() + MACRO_DASH_TTL };
+    console.log(`[macro/dashboard] 완료 — 지표 ${items.length}개, 인사이트 ${ai.insights?.length ?? 0}개`);
+    return res.json(result);
+  } catch (e: any) {
+    console.error("[macro/dashboard] error:", e?.message);
+    return res.status(500).json({ error: e?.message ?? "거시지표 대시보드 조회 실패" });
   }
 });
 
