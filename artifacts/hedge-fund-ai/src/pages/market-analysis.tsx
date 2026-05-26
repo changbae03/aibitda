@@ -801,6 +801,89 @@ function ReturnComparisonChart({ data }: { data: RecentPerfPoint[] }) {
   );
 }
 
+/* ── D+3 예측치 전용 차트 ─────────────────────────────────────────────── */
+function D3ForecastChart({ data }: { data: RecentPerfPoint[] }) {
+  const cc = useChartColors();
+  const allPreds = data.map(d => d.predicted);
+  const dataMin  = Math.min(...allPreds);
+  const dataMax  = Math.max(...allPreds);
+  const pad      = Math.max(Math.abs(dataMin), Math.abs(dataMax)) * 0.2 || 1;
+  const yDomain: [number, number] = [
+    Math.floor((dataMin - pad) * 10) / 10,
+    Math.ceil ((dataMax + pad) * 10) / 10,
+  ];
+
+  const tickFormatter = (_: any, index: number) =>
+    index % 5 === 0 ? formatDate(data[index]?.date ?? "", true) : "";
+
+  const customTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload as RecentPerfPoint;
+    return (
+      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
+        <p className="text-muted-foreground font-medium">{d.date}</p>
+        <p style={{ color: "#a78bfa" }}>
+          D+3 예측: {d.predicted >= 0 ? "+" : ""}{d.predicted}%
+        </p>
+        <p className="text-[10px] text-muted-foreground/60">
+          {d.predicted >= 0 ? "상승 방향 예측" : "하락 방향 예측"}
+        </p>
+      </div>
+    );
+  };
+
+  const chartData = data.map(d => ({
+    ...d,
+    fill: d.predicted >= 0 ? "#a78bfa" : "#f87171",
+  }));
+
+  return (
+    <ResponsiveContainer width="100%" height={160}>
+      <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="d3ForecastGradUp" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor="#a78bfa" stopOpacity={0.25} />
+            <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.03} />
+          </linearGradient>
+          <linearGradient id="d3ForecastGradDown" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="5%"  stopColor="#f87171" stopOpacity={0.20} />
+            <stop offset="95%" stopColor="#f87171" stopOpacity={0.03} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={tickFormatter}
+          tick={{ fontSize: 9, fill: cc.tickFill }}
+          tickLine={false} axisLine={false}
+          interval={0}
+        />
+        <YAxis
+          domain={yDomain}
+          tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
+          tick={{ fontSize: 9, fill: cc.tickFill }}
+          tickLine={false} axisLine={false} width={48}
+        />
+        <Tooltip content={customTooltip} />
+        <ReferenceLine y={0} stroke={cc.refLineStroke} strokeDasharray="4 2" />
+        <Area
+          dataKey="predicted"
+          type="monotone"
+          stroke="#a78bfa"
+          strokeWidth={2}
+          fill="url(#d3ForecastGradUp)"
+          dot={(props: any) => {
+            const { cx, cy, payload } = props;
+            const color = payload.predicted >= 0 ? "#a78bfa" : "#f87171";
+            return <circle key={`d3-${payload.date}`} cx={cx} cy={cy} r={3} fill={color} strokeWidth={0} />;
+          }}
+          activeDot={{ r: 5, fill: "#a78bfa" }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
 /* ── 수치 카드 ───────────────────────────────────────────────────────────── */
 function StatCard({
   emoji, label, value, desc, highlight,
@@ -1274,6 +1357,14 @@ export default function MarketAnalysis() {
                   </p>
                 </div>
                 <ReturnComparisonChart data={current.recentPerf} />
+
+                <div className="border-t border-border/40 pt-3 space-y-1.5">
+                  <h3 className="text-sm font-semibold text-foreground">D+3 예측치 추이</h3>
+                  <p className="text-xs text-muted-foreground">
+                    AI가 각 날짜 기준 3거래일 후 수익률을 얼마나 예측했는지 흐름을 보여요
+                  </p>
+                  <D3ForecastChart data={current.recentPerf} />
+                </div>
               </div>
             )}
 
