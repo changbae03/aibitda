@@ -79,7 +79,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 25;   // [v17] 20→25: 한 달 영업일 전체 패턴 포함
 const PRED_H       = 3;
-const N_FEATURES   = 31;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI (v25)
+const N_FEATURES   = 34;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 (v26)
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 48;   // [v18] 32→48: KOSPI 복잡 패턴 대응 용량 확대
@@ -90,7 +90,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 25;  // [v25] 닛케이/SOX/WTI 피처 추가, dirPenalty 제거, 방향 편향 교정(biasThreshold)
+const MODEL_VERSION = 26;  // [v26] 방향특화 피처 3개 추가(upStreak5/ret3dLag/rsiAccel), graduated dirPenalty 복원, US 앙상블 강화
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -112,50 +112,58 @@ interface IndexHP {
 
 const INDEX_HP: Record<string, IndexHP> = {
   /**
-   * KOSPI [v25] — dirPenalty 완전 제거, 새 피처(닛케이/SOX/WTI) 반영
-   * · dirPenalty 1.5→1.0 (제거): 방향 페널티가 훈련셋 과적합 → 테스트셋 반대 예측 유발.
-   *   순수 MSE 최적화 + 방향 편향 교정(biasThreshold)으로 대체.
-   * · halfLifeDays 42→56: 닛케이 상관관계가 레짐 안정적 → 반감기 소폭 연장.
-   * · lstmDrop 0.22→0.25: 새 피처 4개 추가로 정규화 강화.
+   * KOSPI [v26] — graduated dirPenalty 1.8 복원 (0.3% 이상 유의 구간만 적용)
+   * · v25에서 blunt dirPenalty 제거 → v26에서 Graduated 방식으로 복원
+   *   (노이즈 구간 <0.3% 제외, 유의 방향 오류에만 1.8배 잔차 패널티)
+   * · 새 피처 3개(upStreak5, ret3dLag, rsiAccel) 정규화 강화 → lstmDrop 0.25→0.27
    */
   KS11: {
-    gbdtTrees: 350, gbdtLR: 0.010,  gbdtDepth: 4, gbdtLeaf: 10,
+    gbdtTrees: 400, gbdtLR: 0.009,  gbdtDepth: 4, gbdtLeaf: 10,
     gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 15,
-    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.25,
+    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.27,
     recentWindow: 30,
     halfLifeDays: 56,
-    dirPenalty: 1.0,
+    dirPenalty: 1.8,
   },
   /**
-   * KOSDAQ [v25] — dirPenalty 제거, halfLifeDays 28→42
-   * · 코스닥은 개인투자자 비중이 높아 닛케이·SOX 민감도가 KOSPI보다 큼.
-   * · halfLifeDays 28→42: 단기 레짐 집중도 유지하되 데이터 안정성 확보.
+   * KOSDAQ [v26] — graduated dirPenalty 1.8, depth 5→4 (과적합 완화)
+   * · 코스닥 개인투자자 주도 → 단기 반전 신호(ret3dLag) 효과적
+   * · depth 5→4: 풍부한 피처 수(34)에 맞춰 트리 복잡도 조정
    */
   KQ11: {
-    gbdtTrees: 350, gbdtLR: 0.010, gbdtDepth: 5, gbdtLeaf: 8,
-    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 15,
+    gbdtTrees: 400, gbdtLR: 0.009, gbdtDepth: 4, gbdtLeaf: 8,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 18,
     lstmEpochs: 130, lstmLR: 0.0008, lstmDrop: 0.30,
     recentWindow: 30,
     halfLifeDays: 42,
-    dirPenalty: 1.0,
+    dirPenalty: 1.8,
   },
-  /** S&P500 [v25] — dirPenalty 1.5→1.0, SOX/WTI 추가 */
+  /**
+   * S&P500 [v26] — nEnsemble 5→12, 트리 200→400, LR 0.025→0.012
+   * · 기존 앙상블이 너무 작아 분산 높음 → 앙상블 2배 이상 확대
+   * · LR 낮추고 트리 늘림 → 더 안정적 수렴
+   * · graduated dirPenalty 1.8 적용
+   */
   GSPC: {
-    gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
-    gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
+    gbdtTrees: 400, gbdtLR: 0.012, gbdtDepth: 4, gbdtLeaf: 12,
+    gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 12,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.25,
     recentWindow: 20,
     halfLifeDays: 84,
-    dirPenalty: 1.0,
+    dirPenalty: 1.8,
   },
-  /** NASDAQ [v25] — dirPenalty 1.5→1.0 */
+  /**
+   * NASDAQ [v26] — nEnsemble 8→12, 트리 250→400, LR 0.020→0.012
+   * · NASDAQ은 tech 집중도 높아 SOX 피처 영향 큼 → 앙상블 확대
+   * · graduated dirPenalty 1.8 적용
+   */
   IXIC: {
-    gbdtTrees: 250, gbdtLR: 0.02, gbdtDepth: 5, gbdtLeaf: 10,
-    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 8,
+    gbdtTrees: 400, gbdtLR: 0.012, gbdtDepth: 4, gbdtLeaf: 10,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 12,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.28,
     recentWindow: 20,
     halfLifeDays: 84,
-    dirPenalty: 1.0,
+    dirPenalty: 1.8,
   },
 };
 
@@ -851,6 +859,12 @@ function buildFeatures(
     const tr = Math.abs(closes[i] - closes[i-1]);
     atr14[i] = i === 1 ? tr : atrAlpha * tr + (1 - atrAlpha) * atr14[i-1];
   }
+  // [v26] ATR 배열 → atrCompression 계산에 재사용 (루프 밖에서 한 번 변환)
+  const atr14Array = Array.from(atr14);
+
+  // [v26] RSI 캐시: rsiAccel 계산용 (rsiNorm 2번 호출 비용 줄임)
+  const rsiCache = new Float64Array(closes.length);
+  for (let i = 0; i < closes.length; i++) rsiCache[i] = rsiNorm(rets, 14, i);
 
   const feats  = rows.map((row, i): Float64Array => {
     const ma5       = rollingMean(closes, 5,  i);
@@ -890,7 +904,7 @@ function buildFeatures(
       rets[i],
       ma5>0  ? closes[i]/ma5  - 1 : 0,
       ma20>0 ? closes[i]/ma20 - 1 : 0,
-      rsiNorm(rets, 14, i),
+      rsiCache[i],                              // [v26] 사전 계산 캐시 사용
       rollingStdFn(rets, 5,  i),
       rollingStdFn(rets, 20, i),
       Math.max(0, Math.min(1, bband)),
@@ -922,6 +936,19 @@ function buildFeatures(
       Math.max(-1, Math.min(1, ext.nikkei5dMom / 0.10)),  // 닛케이 5일 모멘텀 (±10%→±1)
       Math.max(-1, Math.min(1, ext.soxRet      / 0.05)),  // SOX 등락 (±5%→±1 정규화)
       Math.max(-1, Math.min(1, ext.wtiRet      / 0.05)),  // WTI 등락 (±5%→±1 정규화)
+      // ── [v26] 방향 특화 피처 3개 ──
+      // 1. upStreak5: 최근 5일 상승 비율 → 방향 지속성 (−1=5일 연속 하락, +1=5일 연속 상승)
+      ((): number => {
+        let up = 0, total = 0;
+        for (let k = Math.max(0, i-4); k <= i; k++) { if (rets[k] > 0) up++; total++; }
+        return total > 0 ? (up / total - 0.5) * 2 : 0;
+      })(),
+      // 2. ret3dLag: 3일 지연 수익률 → 반전/모멘텀 신호 (±5% 범위 → ±1 정규화)
+      i >= 3
+        ? Math.max(-1, Math.min(1, (closes[i] - closes[i-3]) / closes[i-3] / 0.05))
+        : 0,
+      // 3. rsiAccel: RSI14 가속도 (현재 RSI - 3일 전 RSI) → 모멘텀 가속/감속 신호
+      Math.max(-1, Math.min(1, (rsiCache[i] - (i >= 3 ? rsiCache[i-3] : rsiCache[0])) * 4)),
     ]);
   });
   return { feats, closes, dates };
@@ -1028,13 +1055,15 @@ function gbdtFit(X:Float64Array[],y:Float64Array,seed:number,hp:IndexHP,sampleWe
   else{for(let i=0;i<n;i++)basePred+=y[i];basePred/=n;}
   const preds=new Float64Array(n).fill(basePred),trees:any[]=[];
   const rowBag=Math.floor(n*hp.gbdtSsub);
-  const dp=hp.dirPenalty??1.0;  // [v20] 방향 오류 잔차 배율
+  const dp=hp.dirPenalty??1.0;
+  // [v26] Graduated dirPenalty: 0.3% 이상 유의미한 방향 오류에만 패널티 적용
+  // (노이즈 구간 제외 → v25 blunt 패널티의 과적합 문제 해결)
+  const DP_THRESHOLD = 0.003;
   for(let t=0;t<hp.gbdtTrees;t++){
-    // [v20] 방향 오류 샘플에 dp배 가중치 → GBDT가 방향 정확도를 직접 최적화
     const res=Array.from({length:n},(_,i)=>{
       const r=y[i]-preds[i];
-      // 예측 방향이 실제와 반대이면 잔차에 dp배 패널티 (기울기 증폭)
-      return (dp>1.0 && Math.sign(y[i])!==Math.sign(preds[i]) && Math.abs(y[i])>1e-8) ? r*dp : r;
+      // [v26] |실제 수익률| > 0.3% 이고 방향이 반대인 경우에만 dp 배율 적용
+      return (dp>1.0 && Math.abs(y[i])>DP_THRESHOLD && Math.sign(y[i])!==Math.sign(preds[i])) ? r*dp : r;
     });
     // [#3] 최근 데이터가 더 자주 선택되도록 가중 샘플링
     const idxs=sampleWeights

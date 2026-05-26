@@ -20,8 +20,18 @@ let middayBriefToday   = "";   // "YYYY-MM-DD" 형식
 let closingBriefToday  = "";   // "YYYY-MM-DD" 형식
 let dailyRunToday      = "";   // "YYYY-MM-DD" 형식
 let monthlyRunMonth    = "";   // "YYYY-MM" 형식
+let weeklyRunWeek      = "";   // "YYYY-WNN" 형식 (주 번호)
 
 function utcNow() { return new Date(); }
+
+/** ISO 주 번호 계산 (YYYY-WNN) — 중복 실행 방지용 */
+function getISOWeekStr(d: Date): string {
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
 
 function checkAndRun() {
   const now    = utcNow();
@@ -30,12 +40,22 @@ function checkAndRun() {
   const dow    = now.getUTCDay();                   // 0=일, 1-5=평일, 6=토
   const dateStr  = now.toISOString().slice(0, 10); // YYYY-MM-DD
   const monthStr = now.toISOString().slice(0, 7);  // YYYY-MM
+  const weekStr  = getISOWeekStr(now);             // YYYY-WNN
 
   // ── 월간 완전 재학습: 매월 1일 00:00 KST = 전날 15:00 UTC ────────────────
   if (now.getUTCDate() === 1 && utcH === 15 && utcM === 0 && monthlyRunMonth !== monthStr) {
     monthlyRunMonth = monthStr;
     console.log("[scheduler] 월간 완전 재학습 시작");
     runPipeline(true).catch(e => console.error("[scheduler] 월간 재학습 실패:", e?.message));
+    return;
+  }
+
+  // ── 주간 전체 재학습: 매주 일요일 01:00 UTC (= 일요일 10:00 KST) ─────────
+  // 월간 재학습 사이에 최신 데이터로 GBDT+편향 교정 갱신 (LSTM 재훈련 포함)
+  if (dow === 0 && utcH === 1 && utcM === 0 && weeklyRunWeek !== weekStr) {
+    weeklyRunWeek = weekStr;
+    console.log("[scheduler] 주간 완전 재학습 시작 (일요일 10:00 KST)");
+    runPipeline(true).catch(e => console.error("[scheduler] 주간 재학습 실패:", e?.message));
     return;
   }
 
@@ -126,7 +146,8 @@ export function startMarketScheduler() {
   console.log("  - 장전 브리핑:   평일 06:00 KST (21:00 UTC 전날)");
   console.log("  - 장중 브리핑:   평일 13:00 KST (04:00 UTC)");
   console.log("  - 장마감 업데이트: 평일 16:30 KST (07:30 UTC)");
-  console.log("  - 월간 재학습:   매월 1일 00:00 KST (전날 15:00 UTC)");
+  console.log("  - 주간 재학습:   매주 일요일 10:00 KST (01:00 UTC)");
+  console.log("  - 월간 재학습:   매월 1일 00:00 KST (전달 15:00 UTC)");
 }
 
 export { runDailyIncrementalUpdate, loadMeta };
