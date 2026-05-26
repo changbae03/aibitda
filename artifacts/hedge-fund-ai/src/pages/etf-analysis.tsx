@@ -1387,77 +1387,315 @@ function DashCategorySection({ cat, isEn }: { cat: DashCategory; isEn: boolean }
   );
 }
 
-function DashInsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }) {
-  const [open, setOpen] = useState(false);
-  const cfg = DASH_SENTIMENT_CFG[insight.sentiment] ?? DASH_SENTIMENT_CFG.neutral;
-  const hasETFs = (insight.krETFs?.length ?? 0) > 0 || (insight.usETFs?.length ?? 0) > 0;
-  const title = isEn ? insight.themeEn : insight.theme;
+// ─── 거시 시사점 & ETF 전략 (완전 재설계) ────────────────────────────────────
+
+/** 인라인 보유종목 패널 - hooks 없이 순수 렌더 */
+function InlineHoldings({
+  loadingEtf, etfDetail, closeDetail,
+}: {
+  loadingEtf: boolean;
+  etfDetail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
+  closeDetail: () => void;
+}) {
+  if (loadingEtf) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-4">
+        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/50" />
+        <span className="text-[11px] text-muted-foreground/50">보유 종목 불러오는 중…</span>
+      </div>
+    );
+  }
+  const holdings = etfDetail?.holdings ?? [];
+  if (holdings.length === 0) {
+    return <p className="text-[11px] text-muted-foreground/40 text-center py-3">보유 종목 정보 없음</p>;
+  }
+  const top = holdings.slice(0, 10);
+  const maxW = top[0]?.weight ?? 1;
   return (
-    <motion.div layout className={cn("rounded-xl border overflow-hidden", cfg.bg)}>
-      <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors">
-        <div className="flex items-center gap-2.5">
-          <div className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground/90">{title}</span>
-              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", cfg.badge)}>{cfg.label}</span>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+          보유 종목 Top {top.length}
+        </p>
+        <button
+          onClick={closeDetail}
+          className="text-[10px] text-muted-foreground/40 hover:text-foreground transition-colors px-1"
+        >
+          ✕ 닫기
+        </button>
+      </div>
+      {top.map(h => (
+        <div key={h.rank} className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground/30 w-4 text-right shrink-0 tabular-nums">{h.rank}</span>
+          <span className="text-[11px] font-medium text-foreground flex-1 truncate min-w-0">{h.stockName}</span>
+          <div className="w-20 h-1 bg-muted/30 rounded-full overflow-hidden shrink-0">
+            <div className="h-full rounded-full bg-primary/60 transition-all"
+              style={{ width: `${Math.min(100, (h.weight / maxW) * 100)}%` }} />
+          </div>
+          <span className="text-[11px] font-bold tabular-nums text-foreground w-10 text-right shrink-0">
+            {h.weight.toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 전략 카드 하나 - sector 기반 */
+function StrategyCard({
+  sector, etfs, levEtfs, invEtfs,
+  selectedEtfCode, etfDetail, loadingEtf, handleEtfClick, closeDetail,
+}: {
+  sector: SectorMomentum;
+  etfs: ETFInfo[];
+  levEtfs: ETFInfo[];
+  invEtfs: ETFInfo[];
+  selectedEtfCode: string | null;
+  etfDetail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
+  loadingEtf: boolean;
+  handleEtfClick: (code: string) => void;
+  closeDetail: () => void;
+}) {
+  const cfg    = OUTLOOK_CONFIG[sector.outlook];
+  const sColor = sector.score >= 75 ? "#22c55e" : sector.score >= 60 ? "#f59e0b" : "#94a3b8";
+  const allEtfsInCard = [...etfs, ...levEtfs, ...invEtfs];
+  const hasSelectedInCard = selectedEtfCode !== null && allEtfsInCard.some(e => e.code === selectedEtfCode);
+
+  return (
+    <div className={cn("rounded-2xl border overflow-hidden bg-card/40", cfg.border)}>
+      {/* 카드 헤더 */}
+      <div className="px-4 py-3 flex items-center gap-3">
+        <span className="text-xl leading-none shrink-0">{sector.icon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[13px] font-bold text-foreground">{sector.name}</span>
+            <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0", cfg.text, cfg.bg, cfg.border)}>
+              {cfg.label}
+            </span>
+            {sector.horizon && (
+              <span className="text-[10px] text-muted-foreground/40 ml-auto shrink-0">{sector.horizon}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1 bg-muted/30 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{ width: `${sector.score}%`, background: sColor }} />
             </div>
-            {!open && <p className="text-[11px] text-muted-foreground/60 mt-0.5 line-clamp-1">{insight.description}</p>}
+            <span className="text-[11px] font-black tabular-nums shrink-0" style={{ color: sColor }}>{sector.score}</span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-          {hasETFs && <span className="text-[10px] text-muted-foreground/40">ETF {(insight.krETFs?.length ?? 0) + (insight.usETFs?.length ?? 0)}</span>}
-          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform", open && "rotate-180")} />
+      </div>
+
+      {/* 거시 분석 근거 */}
+      <div className="px-4 pb-3">
+        <p className="text-[12px] text-muted-foreground leading-relaxed">{sector.reason}</p>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {sector.catalysts.map(c => (
+            <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              ↑ {c}
+            </span>
+          ))}
+          {sector.risks.slice(0, 2).map(r => (
+            <span key={r} className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground/60 border border-border/30">
+              △ {r}
+            </span>
+          ))}
         </div>
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
-            <div className="px-4 pb-4 pt-0 space-y-3 border-t border-current/10">
-              <p className="text-[12px] text-foreground/70 mt-3 leading-relaxed">{insight.description}</p>
-              {hasETFs && (
-                <div className="space-y-2">
-                  {(insight.krETFs?.length ?? 0) > 0 && (
-                    <div>
-                      <p className="text-[10px] text-muted-foreground/50 mb-1.5 font-semibold">🇰🇷 {isEn ? "Korean ETFs" : "국내 ETF"}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {insight.krETFs!.map(e => (
-                          <a key={e.ticker} href={`https://finance.naver.com/item/main.naver?code=${e.ticker}`}
-                            target="_blank" rel="noopener noreferrer" title={e.reason}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400 hover:opacity-80 transition-colors">
-                            <span className="font-mono font-bold">{e.ticker}</span>
-                            {e.name && <span className="text-[10px] opacity-70 hidden sm:inline truncate max-w-[80px]">{e.name}</span>}
-                            <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
-                          </a>
-                        ))}
-                      </div>
+      </div>
+
+      {/* ETF 추천 그리드 */}
+      <div className="px-4 pb-4 pt-2 border-t border-border/30 space-y-3">
+        <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">추천 ETF</p>
+
+        {/* 일반 ETF */}
+        {etfs.length > 0 && (
+          <div className="grid grid-cols-2 gap-1.5">
+            {etfs.map(etf => {
+              const isSelected = selectedEtfCode === etf.code;
+              const eColor = SECTOR_COLORS[etf.sector] ?? "#64748b";
+              return (
+                <div key={etf.code} className={cn("col-span-1", isSelected && "col-span-2")}>
+                  <button
+                    onClick={() => handleEtfClick(etf.code)}
+                    className={cn(
+                      "w-full flex flex-col gap-1 px-3 py-2.5 rounded-xl border transition-all text-left",
+                      isSelected
+                        ? "bg-primary/8 border-primary/30"
+                        : "bg-card/80 border-border hover:bg-muted/30",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md leading-tight"
+                        style={{ background: `${eColor}20`, color: eColor }}>
+                        {etf.sector}
+                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground/40">{etf.code}</span>
                     </div>
-                  )}
-                  {(insight.usETFs?.length ?? 0) > 0 && (
-                    <div>
-                      <p className="text-[10px] text-muted-foreground/50 mb-1.5 font-semibold">🇺🇸 {isEn ? "US ETFs" : "미국 ETF"}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {insight.usETFs!.map(e => (
-                          <a key={e.ticker} href={`https://finance.yahoo.com/quote/${e.ticker}`}
-                            target="_blank" rel="noopener noreferrer" title={e.reason}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:opacity-80 transition-colors">
-                            <span className="font-mono font-bold">{e.ticker}</span>
-                            {e.name && <span className="text-[10px] opacity-70 hidden sm:inline truncate max-w-[80px]">{e.name}</span>}
-                            <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
-                          </a>
-                        ))}
-                      </div>
+                    <span className="text-[12px] font-semibold text-foreground leading-snug line-clamp-2">{etf.name}</span>
+                    {isSelected && <span className="text-[10px] text-primary/60 font-medium mt-0.5">▼ 보유 종목 확인 중</span>}
+                  </button>
+                  {isSelected && (
+                    <div className="mt-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                      <InlineHoldings loadingEtf={loadingEtf} etfDetail={etfDetail} closeDetail={closeDetail} />
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </motion.div>
+              );
+            })}
+          </div>
         )}
-      </AnimatePresence>
-    </motion.div>
+
+        {/* 레버리지 / 인버스 */}
+        {(levEtfs.length > 0 || invEtfs.length > 0) && (
+          <div>
+            <p className="text-[10px] text-muted-foreground/30 mb-1.5">레버리지 · 인버스</p>
+            <div className="flex flex-wrap gap-1.5">
+              {levEtfs.map(e => {
+                const isSelected = selectedEtfCode === e.code;
+                return (
+                  <div key={e.code} className="w-full">
+                    <button
+                      onClick={() => handleEtfClick(e.code)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] transition-all w-auto",
+                        isSelected
+                          ? "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                          : "bg-amber-500/8 border-amber-500/20 text-amber-600 dark:text-amber-400 hover:opacity-80",
+                      )}
+                    >
+                      <span className="font-bold text-[9px] bg-amber-500/20 px-1 py-0.5 rounded">2×</span>
+                      <span className="font-mono">{e.code}</span>
+                      <span className="opacity-60 truncate max-w-[100px]">{e.name}</span>
+                    </button>
+                    {isSelected && (
+                      <div className="mt-1.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                        <InlineHoldings loadingEtf={loadingEtf} etfDetail={etfDetail} closeDetail={closeDetail} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {invEtfs.map(e => {
+                const isSelected = selectedEtfCode === e.code;
+                return (
+                  <div key={e.code} className="w-full">
+                    <button
+                      onClick={() => handleEtfClick(e.code)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] transition-all w-auto",
+                        isSelected
+                          ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
+                          : "bg-red-500/8 border-red-500/20 text-red-600 dark:text-red-400 hover:opacity-80",
+                      )}
+                    >
+                      <span className="font-bold text-[9px] bg-red-500/20 px-1 py-0.5 rounded">인버스</span>
+                      <span className="font-mono">{e.code}</span>
+                      <span className="opacity-60 truncate max-w-[100px]">{e.name}</span>
+                    </button>
+                    {isSelected && (
+                      <div className="mt-1.5 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                        <InlineHoldings loadingEtf={loadingEtf} etfDetail={etfDetail} closeDetail={closeDetail} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** AI 인사이트 기반 전략 카드 */
+function InsightStrategyCard({
+  insight, allEtfs, selectedEtfCode, etfDetail, loadingEtf, handleEtfClick, closeDetail, isEn,
+}: {
+  insight: MacroInsight;
+  allEtfs: ETFInfo[];
+  selectedEtfCode: string | null;
+  etfDetail: { etf: ETFInfo | null; holdings: ETFHolding[]; source?: string } | null;
+  loadingEtf: boolean;
+  handleEtfClick: (code: string) => void;
+  closeDetail: () => void;
+  isEn: boolean;
+}) {
+  const cfg = DASH_SENTIMENT_CFG[insight.sentiment] ?? DASH_SENTIMENT_CFG.neutral;
+  const krEtfs = (insight.krETFs ?? [])
+    .map(e => allEtfs.find(a => a.code === e.ticker))
+    .filter(Boolean) as ETFInfo[];
+  const usEtfRecs = insight.usETFs ?? [];
+
+  return (
+    <div className={cn("rounded-2xl border overflow-hidden", cfg.bg)}>
+      <div className="px-4 py-3 flex items-center gap-2.5">
+        <div className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
+        <span className="text-[13px] font-bold text-foreground flex-1">
+          {isEn ? insight.themeEn : insight.theme}
+        </span>
+        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0", cfg.badge)}>
+          {cfg.label}
+        </span>
+      </div>
+      <div className="px-4 pb-3">
+        <p className="text-[12px] text-muted-foreground leading-relaxed">{insight.description}</p>
+      </div>
+      <div className="px-4 pb-4 pt-2 border-t border-current/10 space-y-3">
+        {krEtfs.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-2">
+              🇰🇷 국내 ETF
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {krEtfs.map(etf => {
+                const isSelected = selectedEtfCode === etf.code;
+                const eColor = SECTOR_COLORS[etf.sector] ?? "#64748b";
+                return (
+                  <div key={etf.code} className={cn("col-span-1", isSelected && "col-span-2")}>
+                    <button
+                      onClick={() => handleEtfClick(etf.code)}
+                      className={cn(
+                        "w-full flex flex-col gap-1 px-3 py-2.5 rounded-xl border transition-all text-left",
+                        isSelected ? "bg-primary/8 border-primary/30" : "bg-card/50 border-border hover:bg-muted/30",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md leading-tight"
+                          style={{ background: `${eColor}20`, color: eColor }}>{etf.sector}</span>
+                        <span className="text-[10px] font-mono text-muted-foreground/40">{etf.code}</span>
+                      </div>
+                      <span className="text-[12px] font-semibold text-foreground leading-snug line-clamp-2">{etf.name}</span>
+                      {isSelected && <span className="text-[10px] text-primary/60 font-medium mt-0.5">▼ 보유 종목 확인 중</span>}
+                    </button>
+                    {isSelected && (
+                      <div className="mt-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                        <InlineHoldings loadingEtf={loadingEtf} etfDetail={etfDetail} closeDetail={closeDetail} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {usEtfRecs.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-2">🇺🇸 미국 ETF</p>
+            <div className="flex flex-wrap gap-1.5">
+              {usEtfRecs.map(e => (
+                <a key={e.ticker} href={`https://finance.yahoo.com/quote/${e.ticker}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:opacity-80 transition-colors">
+                  <span className="text-[11px] font-mono font-bold">{e.ticker}</span>
+                  {e.name && <span className="text-[10px] opacity-60 hidden sm:inline truncate max-w-[80px]">{e.name}</span>}
+                  <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1542,19 +1780,8 @@ function EtfMacroPickSection({
                       )}
                     </button>
                     {isSelected && (
-                      <div className="mt-1 col-span-2">
-                        {loadingEtf ? (
-                          <div className="flex items-center justify-center py-6">
-                            <Loader2 className="w-5 h-5 animate-spin text-primary/50" />
-                          </div>
-                        ) : etfDetail?.etf ? (
-                          <EtfDetailPanel
-                            etf={etfDetail.etf}
-                            holdings={etfDetail.holdings}
-                            source={etfDetail.source}
-                            onClose={closeDetail}
-                          />
-                        ) : null}
+                      <div className="mt-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3 col-span-2">
+                        <InlineHoldings loadingEtf={loadingEtf} etfDetail={etfDetail} closeDetail={closeDetail} />
                       </div>
                     )}
                   </div>
@@ -1858,105 +2085,131 @@ function MomentumTab() {
             ))}
           </div>
 
-          {/* ── 탭 1: 거시 지표 + 전체 대시보드 ── */}
+          {/* ── 탭 1: 거시 시사점 & ETF 전략 ── */}
           {subTab === "macro" && (
-            <div className="space-y-8">
+            <div className="space-y-6">
 
-              {/* ① 거시 대시보드 전체 */}
+              {/* ① AI 거시 내러티브 배너 */}
+              {(dashData?.narrative || dashLoading) && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
+                  <Sparkles className={cn("w-4 h-4 text-primary/60 shrink-0 mt-0.5", dashLoading && "animate-pulse")} />
+                  {dashLoading && !dashData ? (
+                    <p className="text-[12px] text-muted-foreground/50">거시 데이터 수집 및 AI 분석 중…</p>
+                  ) : (
+                    <p className="text-[12px] text-foreground/80 leading-relaxed">{dashData?.narrative}</p>
+                  )}
+                </div>
+              )}
+              {dashError && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-500">
+                  거시 데이터 로드 실패 ({dashError}) —{" "}
+                  <button onClick={() => loadDash(true)} className="underline">재시도</button>
+                </div>
+              )}
+
+              {/* ② 거시 시사점 & ETF 전략 (메인 섹션) */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[13px] font-bold text-foreground flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-primary/60" />
-                    글로벌 거시 대시보드
+                    <Sparkles className="w-3.5 h-3.5 text-primary/60" />
+                    {isEn ? "Macro Insights & ETF Strategies" : "거시 시사점 & ETF 전략"}
                   </p>
                   <button
                     onClick={() => loadDash(true)}
                     disabled={dashLoading}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
                   >
                     <RefreshCw className={cn("w-3 h-3", dashLoading && "animate-spin")} />
                     {dashData && new Date(dashData.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
                   </button>
                 </div>
 
-                {/* 로딩 */}
-                {dashLoading && !dashData && (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <RefreshCw className="w-5 h-5 animate-spin text-primary/50" />
-                    <p className="text-xs text-muted-foreground/60">글로벌 시장 데이터 수집 및 AI 분석 중… (약 10초)</p>
+                {/* 섹터 기반 전략 카드 (현재 유망) */}
+                {data.nowSectors.length > 0 && (
+                  <div className="space-y-3 mb-3">
+                    <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest px-0.5">
+                      🔥 {isEn ? "Now — Current macro environment" : "지금 유망 · 현재 매크로 환경 기반"}
+                    </p>
+                    {data.nowSectors.map(sector => {
+                      const etfs     = allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage === 1).slice(0, 6);
+                      const levEtfs  = allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage >= 2).slice(0, 2);
+                      const invEtfs  = allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage < 0).slice(0, 2);
+                      if (etfs.length === 0 && levEtfs.length === 0) return null;
+                      return (
+                        <StrategyCard
+                          key={sector.id}
+                          sector={sector}
+                          etfs={etfs}
+                          levEtfs={levEtfs}
+                          invEtfs={invEtfs}
+                          selectedEtfCode={selectedEtfCode}
+                          etfDetail={etfDetail}
+                          loadingEtf={loadingEtf}
+                          handleEtfClick={handleEtfClick}
+                          closeDetail={closeDetail}
+                        />
+                      );
+                    })}
                   </div>
                 )}
-                {dashError && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-500 mb-3">
-                    데이터 로드 실패 ({dashError})
+
+                {/* 섹터 기반 전략 카드 (향후 주목) */}
+                {data.futureSectors.length > 0 && (
+                  <div className="space-y-3 mb-3">
+                    <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest px-0.5">
+                      🎯 {isEn ? "Upcoming — 3–12 month outlook" : "앞으로 주목 · 향후 3–12개월 관점"}
+                    </p>
+                    {data.futureSectors.map(sector => {
+                      const etfs     = allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage === 1).slice(0, 6);
+                      const levEtfs  = allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage >= 2).slice(0, 2);
+                      const invEtfs  = allEtfs.filter(e => sector.sectorTags.includes(e.sector) && e.leverage < 0).slice(0, 2);
+                      if (etfs.length === 0 && levEtfs.length === 0) return null;
+                      return (
+                        <StrategyCard
+                          key={sector.id}
+                          sector={sector}
+                          etfs={etfs}
+                          levEtfs={levEtfs}
+                          invEtfs={invEtfs}
+                          selectedEtfCode={selectedEtfCode}
+                          etfDetail={etfDetail}
+                          loadingEtf={loadingEtf}
+                          handleEtfClick={handleEtfClick}
+                          closeDetail={closeDetail}
+                        />
+                      );
+                    })}
                   </div>
                 )}
 
-                {dashData && (
-                  <>
-                    {/* AI 내러티브 */}
-                    {dashData.narrative && (
-                      <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
-                        <Sparkles className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
-                        <p className="text-[12px] text-foreground/80 leading-relaxed">{dashData.narrative}</p>
-                      </div>
-                    )}
-
-                    {/* 카테고리 필터 탭 */}
-                    <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1 scrollbar-none">
-                      {dashTabs.map(t => (
-                        <button
-                          key={t.id}
-                          onClick={() => setDashCatTab(t.id)}
-                          className={cn(
-                            "px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
-                            dashCatTab === t.id
-                              ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                          )}
-                        >
-                          {t.id === "insights" && <Sparkles className="w-2.5 h-2.5 inline mr-1 -mt-0.5" />}
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* 시장 지표 카테고리 카드 */}
-                    {dashCatTab !== "insights" && (
-                      <div className="mb-2">
-                        {visibleDashCats.map(cat => (
-                          <DashCategorySection key={cat.id} cat={cat} isEn={isEn} />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* AI 시사점 & ETF 추천 */}
-                    {(dashCatTab === "all" || dashCatTab === "insights") && dashData.insights.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Sparkles className="w-4 h-4 text-primary/60" />
-                          <h3 className="text-sm font-semibold text-foreground/80">
-                            {isEn ? "AI Macro Insights & ETF Picks" : "애빛다 거시 시사점 & ETF 추천"}
-                          </h3>
-                        </div>
-                        <div className="space-y-2">
-                          {dashData.insights.map((ins, i) => (
-                            <DashInsightCard key={i} insight={ins} isEn={isEn} />
-                          ))}
-                        </div>
-                        <p className="mt-3 text-[10px] text-muted-foreground/40">
-                          * AI 인사이트는 참고용이며 투자 권유가 아닙니다.
-                        </p>
-                      </div>
-                    )}
-                    {dashCatTab === "insights" && dashData.insights.length === 0 && (
-                      <div className="text-center py-10 text-muted-foreground/40 text-sm">AI 인사이트를 생성하지 못했습니다.</div>
-                    )}
-                  </>
+                {/* AI 인사이트 기반 추가 전략 */}
+                {dashData && dashData.insights.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest px-0.5">
+                      🧠 {isEn ? "AI Macro Insights" : "AI 거시 인사이트"}
+                    </p>
+                    {dashData.insights.map((ins, i) => (
+                      <InsightStrategyCard
+                        key={i}
+                        insight={ins}
+                        allEtfs={allEtfs}
+                        selectedEtfCode={selectedEtfCode}
+                        etfDetail={etfDetail}
+                        loadingEtf={loadingEtf}
+                        handleEtfClick={handleEtfClick}
+                        closeDetail={closeDetail}
+                        isEn={isEn}
+                      />
+                    ))}
+                  </div>
                 )}
+
+                <p className="mt-4 text-[10px] text-muted-foreground/35 px-0.5">
+                  * AI가 거시 지표를 분석해 도출한 전략입니다. ETF를 누르면 보유 종목을 확인할 수 있습니다. 투자 권유가 아닙니다.
+                </p>
               </div>
 
-              {/* ② 코스피·코스닥 AI 전망 */}
+              {/* ③ 코스피·코스닥 AI 전망 */}
               {data.indexOutlook && (
                 <div>
                   <div className="flex items-center justify-between px-1 mb-2">
@@ -1979,46 +2232,6 @@ function MomentumTab() {
                   </p>
                 </div>
               )}
-
-              {/* ③ 🔥 지금 유망한 ETF */}
-              <div>
-                <div className="flex items-center justify-between px-1 mb-3">
-                  <p className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
-                    🔥 지금 유망한 ETF
-                  </p>
-                  <span className="text-[11px] text-muted-foreground/50">현재 매크로 환경 기반</span>
-                </div>
-                <EtfMacroPickSection
-                  sectors={data.nowSectors}
-                  allEtfs={allEtfs}
-                  isNow={true}
-                  handleEtfClick={handleEtfClick}
-                  selectedEtfCode={selectedEtfCode}
-                  etfDetail={etfDetail}
-                  loadingEtf={loadingEtf}
-                  closeDetail={closeDetail}
-                />
-              </div>
-
-              {/* ④ 🎯 앞으로 주목해야할 ETF */}
-              <div>
-                <div className="flex items-center justify-between px-1 mb-3">
-                  <p className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
-                    🎯 앞으로 주목해야할 ETF
-                  </p>
-                  <span className="text-[11px] text-muted-foreground/50">향후 3–12개월 관점</span>
-                </div>
-                <EtfMacroPickSection
-                  sectors={data.futureSectors}
-                  allEtfs={allEtfs}
-                  isNow={false}
-                  handleEtfClick={handleEtfClick}
-                  selectedEtfCode={selectedEtfCode}
-                  etfDetail={etfDetail}
-                  loadingEtf={loadingEtf}
-                  closeDetail={closeDetail}
-                />
-              </div>
             </div>
           )}
 
