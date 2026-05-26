@@ -1371,6 +1371,32 @@ function buildResultFromModel(
     return { date: dates[anchorIdx]??`D${m}`, predicted: +(pred*calibFactor*100).toFixed(2), actual: +(last30Actual[m]*100).toFixed(2) };
   });
 
+  // ── 갭 구간 연장: makeSeqs 가 포함 못하는 마지막 PRED_H 행을 직접 추가 ──
+  // makeSeqs 는 i < feats.length - PRED_H 까지만 순회하므로 최근 PRED_H 영업일이 누락됨.
+  // 각 행에 대해 GBDT 예측을 직접 계산하고, 이용 가능한 최신 종가로 실제 수익률을 근사함.
+  const F = feats[0].length;
+  for (let i = feats.length - PRED_H; i <= feats.length - 2; i++) {
+    if (i < LOOKBACK) continue;
+    // GBDT 입력 벡터 구성 (makeSeqs 와 동일한 방식)
+    const v = new Float64Array(LOOKBACK * F + 1);
+    for (let t = 0; t < LOOKBACK; t++)
+      for (let f = 0; f < F; f++)
+        v[t * F + f] = feats[i - LOOKBACK + t][f];
+    v[LOOKBACK * F] = 1;
+    const vn = applyStd([v], gbdtScaler.mu, gbdtScaler.sigma);
+    const rawPred = gbdtModels.map(m => gbdtPredict(m, vn)[0]).reduce((a, b) => a + b, 0) / gbdtModels.length;
+    const adjPred = (rawPred - biasThreshold) * calibFactor;
+    // 실제 수익률: 가용한 최신 종가까지 사용
+    const endIdx = Math.min(i + PRED_H, closes.length - 1);
+    if (endIdx <= i) continue; // 미래 데이터 전혀 없음 → 스킵
+    const actual = (closes[endIdx] - closes[i]) / closes[i];
+    recentPerf.push({
+      date: dates[i] ?? `G${i}`,
+      predicted: +(adjPred * 100).toFixed(2),
+      actual: +(actual * 100).toFixed(2),
+    });
+  }
+
   const lastGBDT_Xn = applyStd([X[n-1]], gbdtScaler.mu, gbdtScaler.sigma);
   const gbdtForecast = gbdtModels.map(m => gbdtPredict(m, lastGBDT_Xn)[0]).reduce((a,b)=>a+b,0) / gbdtModels.length;
 
