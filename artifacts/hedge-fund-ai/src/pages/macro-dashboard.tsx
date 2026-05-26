@@ -236,36 +236,60 @@ function InlineHoldings({ ticker, onClose }: { ticker: string; onClose: () => vo
   );
 }
 
-// ─── KR ETF 버튼 (클릭 시 보유 종목 인라인 표시) ─────────────────────────────
+// ─── ETF 버튼 (KR/US/레버리지/인버스, 클릭 시 인라인 보유 종목) ───────────────
 
-function KRETFButton({
-  etf, variant = "normal", selectedCode, onSelect,
+function ETFButton({
+  etf, variant = "kr", selectedCode, onSelect,
 }: {
   etf: ETFReco;
-  variant?: "normal" | "lev" | "inv";
+  variant?: "kr" | "us" | "lev" | "inv";
   selectedCode: string | null;
   onSelect: (code: string | null) => void;
 }) {
   const isSelected = selectedCode === etf.ticker;
 
-  if (variant === "lev") {
+  const chipStyle = {
+    lev: {
+      base: "bg-amber-500/8 border-amber-500/20 text-amber-600 dark:text-amber-400",
+      active: "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400",
+      panel: "border-amber-500/20 bg-amber-500/5",
+      badge: <span className="font-bold text-[9px] bg-amber-500/20 px-1 py-0.5 rounded shrink-0">2×</span>,
+    },
+    inv: {
+      base: "bg-red-500/8 border-red-500/20 text-red-600 dark:text-red-400",
+      active: "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400",
+      panel: "border-red-500/20 bg-red-500/5",
+      badge: <span className="font-bold text-[9px] bg-red-500/20 px-1 py-0.5 rounded shrink-0">인버스</span>,
+    },
+    us: {
+      base: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
+      active: "bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400",
+      panel: "border-indigo-500/20 bg-indigo-500/5",
+      badge: <span className="font-bold text-[9px] bg-indigo-500/20 px-1 py-0.5 rounded shrink-0">US</span>,
+    },
+  } as const;
+
+  // 일반 KR ETF — 2-column 카드 형태
+  if (variant === "kr") {
     return (
-      <div className="w-full">
+      <div className={cn("col-span-1", isSelected && "col-span-2")}>
         <button
           onClick={() => onSelect(isSelected ? null : etf.ticker)}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] transition-all w-auto",
-            isSelected
-              ? "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400"
-              : "bg-amber-500/8 border-amber-500/20 text-amber-600 dark:text-amber-400 hover:opacity-80",
+            "w-full flex flex-col gap-1 px-3 py-2.5 rounded-xl border transition-all text-left",
+            isSelected ? "bg-primary/8 border-primary/30" : "bg-card/80 border-border hover:bg-muted/30",
           )}
         >
-          <span className="font-bold text-[9px] bg-amber-500/20 px-1 py-0.5 rounded">2×</span>
-          <span className="font-mono">{etf.ticker}</span>
-          <span className="opacity-60 truncate max-w-[120px]">{etf.name}</span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md leading-tight bg-primary/10 text-primary/70">국내</span>
+            <span className="text-[10px] font-mono text-muted-foreground/40">{etf.ticker}</span>
+          </div>
+          <span className="text-[12px] font-semibold text-foreground leading-snug line-clamp-2">{etf.name}</span>
+          {etf.reason && <span className="text-[10px] text-muted-foreground/50">{etf.reason}</span>}
+          {isSelected && <span className="text-[10px] text-primary/60 font-medium mt-0.5">▼ 보유 종목 확인 중</span>}
         </button>
         {isSelected && (
-          <div className="mt-1.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+          <div className="mt-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3">
             <InlineHoldings ticker={etf.ticker} onClose={() => onSelect(null)} />
           </div>
         )}
@@ -273,53 +297,23 @@ function KRETFButton({
     );
   }
 
-  if (variant === "inv") {
-    return (
-      <div className="w-full">
-        <button
-          onClick={() => onSelect(isSelected ? null : etf.ticker)}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] transition-all w-auto",
-            isSelected
-              ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
-              : "bg-red-500/8 border-red-500/20 text-red-600 dark:text-red-400 hover:opacity-80",
-          )}
-        >
-          <span className="font-bold text-[9px] bg-red-500/20 px-1 py-0.5 rounded">인버스</span>
-          <span className="font-mono">{etf.ticker}</span>
-          <span className="opacity-60 truncate max-w-[120px]">{etf.name}</span>
-        </button>
-        {isSelected && (
-          <div className="mt-1.5 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-            <InlineHoldings ticker={etf.ticker} onClose={() => onSelect(null)} />
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // normal
+  // 레버리지·인버스·US — 가로 칩 형태
+  const s = chipStyle[variant];
   return (
-    <div className={cn("col-span-1", isSelected && "col-span-2")}>
+    <div className="w-full">
       <button
         onClick={() => onSelect(isSelected ? null : etf.ticker)}
         className={cn(
-          "w-full flex flex-col gap-1 px-3 py-2.5 rounded-xl border transition-all text-left",
-          isSelected ? "bg-primary/8 border-primary/30" : "bg-card/80 border-border hover:bg-muted/30",
+          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] transition-all",
+          isSelected ? s.active : s.base,
         )}
       >
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md leading-tight bg-primary/10 text-primary/70">
-            국내
-          </span>
-          <span className="text-[10px] font-mono text-muted-foreground/40">{etf.ticker}</span>
-        </div>
-        <span className="text-[12px] font-semibold text-foreground leading-snug line-clamp-2">{etf.name}</span>
-        {etf.reason && <span className="text-[10px] text-muted-foreground/50">{etf.reason}</span>}
-        {isSelected && <span className="text-[10px] text-primary/60 font-medium mt-0.5">▼ 보유 종목 확인 중</span>}
+        {s.badge}
+        <span className="font-mono font-bold">{etf.ticker}</span>
+        {etf.name && <span className="opacity-60 truncate max-w-[140px]">{etf.name}</span>}
       </button>
       {isSelected && (
-        <div className="mt-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3">
+        <div className={cn("mt-1.5 rounded-xl border p-3", s.panel)}>
           <InlineHoldings ticker={etf.ticker} onClose={() => onSelect(null)} />
         </div>
       )}
@@ -327,9 +321,10 @@ function KRETFButton({
   );
 }
 
-// ─── 인사이트 카드 (수급·테마 StrategyCard 동일 디자인) ───────────────────────
+// ─── 인사이트 카드 (아코디언, 기본 닫힘) ─────────────────────────────────────
 
 function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }) {
+  const [open, setOpen] = useState(false);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const cfg = SENTIMENT_CONFIG[insight.sentiment] ?? SENTIMENT_CONFIG.neutral;
   const title = isEn ? insight.themeEn : insight.theme;
@@ -337,9 +332,12 @@ function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }
     + (insight.levETFs?.length ?? 0) + (insight.invETFs?.length ?? 0);
 
   return (
-    <div className={cn("rounded-2xl border overflow-hidden bg-card/40", cfg.bg)}>
-      {/* 헤더 */}
-      <div className="px-4 py-3 flex items-center gap-2.5">
+    <div className={cn("rounded-2xl border overflow-hidden", cfg.bg)}>
+      {/* 헤더 (클릭 시 토글) */}
+      <button
+        onClick={() => { setOpen(v => !v); if (open) setSelectedCode(null); }}
+        className="w-full px-4 py-3 flex items-center gap-2.5 text-left hover:bg-white/5 transition-colors"
+      >
         <div className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
         <span className="text-[13px] font-bold text-foreground flex-1">{title}</span>
         <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0", cfg.badge)}>
@@ -350,76 +348,73 @@ function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }
         {etfCount > 0 && (
           <span className="text-[10px] text-muted-foreground/40 shrink-0">ETF {etfCount}</span>
         )}
-      </div>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform shrink-0", open && "rotate-180")} />
+      </button>
 
-      {/* 설명 */}
+      {/* 설명 — 항상 표시 */}
       <div className="px-4 pb-3">
         <p className="text-[12px] text-muted-foreground leading-relaxed">{insight.description}</p>
       </div>
 
-      {/* ETF 섹션 */}
-      <div className="px-4 pb-4 pt-2 border-t border-current/10 space-y-3">
+      {/* ETF 섹션 — 열렸을 때만 */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-2 border-t border-current/10 space-y-3">
 
-        {/* 국내 ETF 그리드 */}
-        {(insight.krETFs?.length ?? 0) > 0 && (
-          <div>
-            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-2">
-              🇰🇷 국내 ETF
-            </p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {insight.krETFs!.map(e => (
-                <KRETFButton
-                  key={e.ticker}
-                  etf={e}
-                  variant="normal"
-                  selectedCode={selectedCode}
-                  onSelect={setSelectedCode}
-                />
-              ))}
+              {/* 국내 ETF 그리드 */}
+              {(insight.krETFs?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-2">
+                    🇰🇷 국내 ETF
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {insight.krETFs!.map(e => (
+                      <ETFButton key={e.ticker} etf={e} variant="kr" selectedCode={selectedCode} onSelect={setSelectedCode} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 레버리지 · 인버스 */}
+              {((insight.levETFs?.length ?? 0) > 0 || (insight.invETFs?.length ?? 0) > 0) && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground/30 mb-1.5">레버리지 · 인버스</p>
+                  <div className="flex flex-col gap-1.5">
+                    {insight.levETFs?.map(e => (
+                      <ETFButton key={e.ticker} etf={e} variant="lev" selectedCode={selectedCode} onSelect={setSelectedCode} />
+                    ))}
+                    {insight.invETFs?.map(e => (
+                      <ETFButton key={e.ticker} etf={e} variant="inv" selectedCode={selectedCode} onSelect={setSelectedCode} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 미국 ETF */}
+              {(insight.usETFs?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-2">
+                    🇺🇸 미국 ETF
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {insight.usETFs!.map(e => (
+                      <ETFButton key={e.ticker} etf={e} variant="us" selectedCode={selectedCode} onSelect={setSelectedCode} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
-          </div>
+          </motion.div>
         )}
-
-        {/* 레버리지 · 인버스 */}
-        {((insight.levETFs?.length ?? 0) > 0 || (insight.invETFs?.length ?? 0) > 0) && (
-          <div>
-            <p className="text-[10px] text-muted-foreground/30 mb-1.5">레버리지 · 인버스</p>
-            <div className="flex flex-col gap-1.5">
-              {insight.levETFs?.map(e => (
-                <KRETFButton key={e.ticker} etf={e} variant="lev" selectedCode={selectedCode} onSelect={setSelectedCode} />
-              ))}
-              {insight.invETFs?.map(e => (
-                <KRETFButton key={e.ticker} etf={e} variant="inv" selectedCode={selectedCode} onSelect={setSelectedCode} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 미국 ETF */}
-        {(insight.usETFs?.length ?? 0) > 0 && (
-          <div>
-            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-2">
-              🇺🇸 미국 ETF
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {insight.usETFs!.map(e => (
-                <a
-                  key={e.ticker}
-                  href={`https://finance.yahoo.com/quote/${e.ticker}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:opacity-80 transition-colors"
-                >
-                  <span className="text-[11px] font-mono font-bold">{e.ticker}</span>
-                  {e.name && <span className="text-[10px] opacity-60 hidden sm:inline truncate max-w-[90px]">{e.name}</span>}
-                  <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-
-      </div>
+      </AnimatePresence>
     </div>
   );
 }
