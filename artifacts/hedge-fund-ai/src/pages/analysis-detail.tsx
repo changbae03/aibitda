@@ -3997,6 +3997,62 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
   );
 }
 
+const BLUR_GATED_STEPS = ["company_analysis", "relative_valuation", "market_analysis", "investment_strategy"];
+
+function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: string; delay: number; isEn: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      className="bg-card border border-border rounded-xl border-l-4 overflow-hidden"
+      style={{ borderLeftColor: color }}
+    >
+      <div className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
+          <agent.icon className="w-4 h-4" style={{ color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+        </div>
+      </div>
+      <div className="relative px-5 py-5 overflow-hidden">
+        <div className="blur-sm pointer-events-none select-none space-y-2.5 opacity-50">
+          {[85, 62, 78, 45, 90, 55, 0, 70, 88, 40].map((w, i) =>
+            w === 0
+              ? <div key={i} className="h-4" />
+              : <div key={i} className="h-3 rounded-full bg-muted-foreground/30" style={{ width: `${w}%` }} />
+          )}
+        </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-card/70 backdrop-blur-[2px]">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${color}18` }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <p className="text-[13px] font-semibold text-foreground text-center px-4">
+            {isEn ? "Sign in to unlock this section" : "로그인하면 전체 내용을 볼 수 있습니다"}
+          </p>
+          <a
+            href="/login"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: color }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+              <polyline points="10 17 15 12 10 7" />
+              <line x1="15" y1="12" x2="3" y2="12" />
+            </svg>
+            {isEn ? "Sign In" : "로그인"}
+          </a>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyNameEn, startPrice, isEn = false, isSignedIn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo | undefined, delay: number, ticker?: string, companyName?: string, companyNameEn?: string, startPrice?: number, isEn?: boolean, isSignedIn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
   const priceCurrency: "KRW" | "USD" = isUSTicker(ticker) ? "USD" : "KRW";
   const agent: AgentInfo = agentProp ?? {
@@ -4011,7 +4067,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
     descriptionEn: "",
   };
 
+  const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
+  const isGated = !isSignedIn && BLUR_GATED_STEPS.includes(step.stepKey);
+
   if (step.stepKey === "investment_strategy") {
+    if (isGated) return <BlurGateCard agent={agent} color={color} delay={delay} isEn={isEn} />;
     return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} validatedTargetPrice={validatedTargetPrice} validatedVerdict={validatedVerdict} />;
   }
 
@@ -4034,8 +4094,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           ? stripFinalValuationData(content)
           : content
   )), [isMarket, isFundamental, isRelativeVal, content]);
-
-  const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
 
   // 리드 문장 — 첫 번째 ## 소제목 이전의 텍스트
   const leadIdx = useMemo(() => displayContent.search(/(?:^|\n)## /), [displayContent]);
@@ -4126,57 +4184,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const [showModelAssumptions, setShowModelAssumptions] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  if (isRelativeVal && !isSignedIn) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-card border border-border rounded-xl border-l-4 overflow-hidden"
-        style={{ borderLeftColor: color }}
-      >
-        <div className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-            <agent.icon className="w-4 h-4" style={{ color }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-            <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
-          </div>
-        </div>
-        <div className="px-5 py-10 flex flex-col items-center gap-4 text-center">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-[14px] font-semibold text-foreground">
-              {isEn ? "Login required to view valuation" : "적정주가 산출 결과는 로그인 후 확인 가능합니다"}
-            </p>
-            <p className="text-[12px] text-muted-foreground leading-relaxed max-w-xs">
-              {isEn
-                ? "DCF, peer multiples, and target price range are available to signed-in users."
-                : "DCF, 피어 멀티플, 목표주가 밴드 등 핵심 밸류에이션 결과를 보려면 로그인해 주세요."}
-            </p>
-          </div>
-          <a
-            href="/login"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: color }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-              <polyline points="10 17 15 12 10 7" />
-              <line x1="15" y1="12" x2="3" y2="12" />
-            </svg>
-            {isEn ? "Sign In" : "로그인"}
-          </a>
-        </div>
-      </motion.div>
-    );
-  }
+  if (isGated) return <BlurGateCard agent={agent} color={color} delay={delay} isEn={isEn} />;
 
   return (
     <motion.div
