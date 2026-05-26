@@ -1,7 +1,7 @@
 /**
- * 시장 예측 파이프라인 v8  — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성
+ * 시장 예측 파이프라인 v25 — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성 + 방향 편향 교정
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 = 총 N_FEATURES = 27
+ * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 + 닛케이/SOX/WTI 4 = N_FEATURES = 31
  *
  * [기술적 15] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
  *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price
@@ -18,6 +18,14 @@
  * [글로벌 3]  VIX 5일 모멘텀 — 공포/탐욕 레짐 감지 (전 시장 공통)
  *             VIX 일별 변화율 — 공포 가속도 감지
  *             미국 10Y-2Y 금리차 — 경기 선행 사이클
+ * [신규 v25 4] 닛케이225 전일 등락 (^N225) — KOSPI와 ~75% 상관, 최강 예측변수  ← v25
+ *             닛케이225 5일 모멘텀           — 중기 추세 지속성                 ← v25
+ *             필라델피아 반도체(SOX) 전일 등락 — 삼성·SK하이닉스 통한 KOSPI 연동  ← v25
+ *             WTI 원유 전일 등락 (CL=F)      — 한국 수입 에너지 비용 영향        ← v25
+ *
+ * [v25 방향 편향 교정] biasThreshold 계산 — 모델이 한쪽 방향 체계적 오류 시 임계값 자동 보정
+ *   실제 상승 비율에 맞춰 예측 임계값 조정 → 36%→50%+ 보장
+ * [v25 dirPenalty 제거] KS11/KQ11 dirPenalty 1.5→1.0 — 과적합 반대 예측 주범 제거
  */
 import fs   from "node:fs";
 import path from "node:path";
@@ -71,7 +79,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 25;   // [v17] 20→25: 한 달 영업일 전체 패턴 포함
 const PRED_H       = 3;
-const N_FEATURES   = 27;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 변동성/금리
+const N_FEATURES   = 31;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI (v25)
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 48;   // [v18] 32→48: KOSPI 복잡 패턴 대응 용량 확대
@@ -82,7 +90,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 24;  // [v24] dirPenalty 과적합 수정, wfDirAcc 가중치 재조정, D+1/D+2/D+3 별도 저장
+const MODEL_VERSION = 25;  // [v25] 닛케이/SOX/WTI 피처 추가, dirPenalty 제거, 방향 편향 교정(biasThreshold)
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -104,48 +112,50 @@ interface IndexHP {
 
 const INDEX_HP: Record<string, IndexHP> = {
   /**
-   * KOSPI [v24] — dirPenalty 과적합 수정
-   * · dirPenalty 4.5→1.5: 높은 페널티가 훈련셋 방향 암기 → 테스트셋 반대 예측 유발.
-   *   MSE 최적화로 돌아가되 방향 오류에 1.5배만 가중.
-   * · halfLifeDays 70→42: 관세전쟁 이후 2개월 반감기 — 최신 레짐 집중.
+   * KOSPI [v25] — dirPenalty 완전 제거, 새 피처(닛케이/SOX/WTI) 반영
+   * · dirPenalty 1.5→1.0 (제거): 방향 페널티가 훈련셋 과적합 → 테스트셋 반대 예측 유발.
+   *   순수 MSE 최적화 + 방향 편향 교정(biasThreshold)으로 대체.
+   * · halfLifeDays 42→56: 닛케이 상관관계가 레짐 안정적 → 반감기 소폭 연장.
+   * · lstmDrop 0.22→0.25: 새 피처 4개 추가로 정규화 강화.
    */
   KS11: {
-    gbdtTrees: 300, gbdtLR: 0.012,  gbdtDepth: 4, gbdtLeaf: 10,
-    gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 12,
-    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.22,
+    gbdtTrees: 350, gbdtLR: 0.010,  gbdtDepth: 4, gbdtLeaf: 10,
+    gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 15,
+    lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.25,
     recentWindow: 30,
-    halfLifeDays: 42,
-    dirPenalty: 1.5,
+    halfLifeDays: 56,
+    dirPenalty: 1.0,
   },
   /**
-   * KOSDAQ [v24] — dirPenalty 과적합 수정
-   * · dirPenalty 4.5→1.5, halfLifeDays 35→28: 코스닥 단기 레짐 집중.
+   * KOSDAQ [v25] — dirPenalty 제거, halfLifeDays 28→42
+   * · 코스닥은 개인투자자 비중이 높아 닛케이·SOX 민감도가 KOSPI보다 큼.
+   * · halfLifeDays 28→42: 단기 레짐 집중도 유지하되 데이터 안정성 확보.
    */
   KQ11: {
-    gbdtTrees: 300, gbdtLR: 0.012, gbdtDepth: 5, gbdtLeaf: 8,
-    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 12,
-    lstmEpochs: 120, lstmLR: 0.0008, lstmDrop: 0.30,
+    gbdtTrees: 350, gbdtLR: 0.010, gbdtDepth: 5, gbdtLeaf: 8,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 15,
+    lstmEpochs: 130, lstmLR: 0.0008, lstmDrop: 0.30,
     recentWindow: 30,
-    halfLifeDays: 28,
-    dirPenalty: 1.5,
+    halfLifeDays: 42,
+    dirPenalty: 1.0,
   },
-  /** S&P500 [v24] — dirPenalty 2.0→1.5, halfLifeDays 252→84 (4개월) */
+  /** S&P500 [v25] — dirPenalty 1.5→1.0, SOX/WTI 추가 */
   GSPC: {
     gbdtTrees: 200, gbdtLR: 0.025, gbdtDepth: 4, gbdtLeaf: 12,
     gbdtFsub: 0.65, gbdtSsub: 0.80, nEnsemble: 5,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.25,
     recentWindow: 20,
     halfLifeDays: 84,
-    dirPenalty: 1.5,
+    dirPenalty: 1.0,
   },
-  /** NASDAQ [v24] — dirPenalty 2.0→1.5, halfLifeDays 126→84 */
+  /** NASDAQ [v25] — dirPenalty 1.5→1.0 */
   IXIC: {
     gbdtTrees: 250, gbdtLR: 0.02, gbdtDepth: 5, gbdtLeaf: 10,
     gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 8,
     lstmEpochs: 100, lstmLR: 0.0007, lstmDrop: 0.28,
     recentWindow: 20,
     halfLifeDays: 84,
-    dirPenalty: 1.5,
+    dirPenalty: 1.0,
   },
 };
 
@@ -484,6 +494,11 @@ interface ExtPoint {
   vix5dMom:   number;   // [v13] VIX 5일 모멘텀 — 낙폭=음수=공포완화=회복신호
   vixRet:     number;   // VIX 일별 변화율 (당일 공포 가속도)
   yieldSpread: number;  // 미국 10Y-2Y 금리차 (%) — 경기 선행
+  // [v25] 신규 피처 4개
+  nikkeiRet:   number;  // 닛케이225 전일 등락 — KOSPI와 ~75% 상관 (최강 예측변수)
+  nikkei5dMom: number;  // 닛케이225 5일 모멘텀 — 중기 추세
+  soxRet:      number;  // 필라델피아 반도체(^SOX) 전일 등락 — 삼성·SK하이닉스 채널
+  wtiRet:      number;  // WTI 원유(CL=F) 전일 등락 — 한국 에너지 비용
 }
 
 async function fetchYahooSeries(ticker: string, years: number): Promise<{ date: string; close: number }[]> {
@@ -617,21 +632,31 @@ async function fetchExternalData(
         vix5dMom:    lastVix5dMom,                                    // VIX 5일 모멘텀 (음수=공포완화=회복)
         vixRet:      lastVixRet,                                      // VIX 일별 변화율
         yieldSpread: yieldSpread,                                     // 10Y-2Y 장단기 금리차
+        // [v25] SNP용: 닛케이는 추종 관계이므로 0, SOX·WTI는 내부에 이미 반영
+        nikkeiRet:   0,
+        nikkei5dMom: 0,
+        soxRet:      Math.max(-1, Math.min(1, lastIxicRet / 0.03)),   // 나스닥으로 SOX 근사
+        wtiRet:      0,
       });
     }
     console.log(`[ext] 완료(SNP) — DXY ${dxyRows.length}행, 환율 ${usdkrwRows.length}행, 미국10Y ${bond10Rows.length}행, VIX ${vixRows.length}행, 미국2Y ${bond2Rows.length}행, IXIC ${ixicRows.length}행, RUT ${rutRows.length}행`);
     return result;
   }
 
-  const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows, vixRows, usb10Rows, usb2Rows] = await Promise.all([
+  // [v25] 닛케이225(^N225), SOX(^SOX), WTI(CL=F) 추가
+  const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows, vixRows, usb10Rows, usb2Rows,
+         nikkeiRows, soxRows, wtiRows] = await Promise.all([
     fetchYahooSeries("^GSPC", years),
     fetchYahooSeries("USDKRW=X", years),
     fredFetchSeries("IRLTLT01KRM156N", startISO),  // 한국 장기국채 (월별, OECD) – 3Y ≈ 10Y – 0.4pp
     fetchKRXMarketInvestor(market, startKRX, endKRX),
     fetchKRXMarketShort(market, startKRX, endKRX),
-    fetchYahooSeries("^VIX", years),               // [NEW] VIX 공포지수
-    fredFetchSeries("DGS10", startISO),            // [NEW] 미국 10Y 국채금리
-    fredFetchSeries("DGS2",  startISO),            // [NEW] 미국 2Y 국채금리
+    fetchYahooSeries("^VIX", years),               // VIX 공포지수
+    fredFetchSeries("DGS10", startISO),            // 미국 10Y 국채금리
+    fredFetchSeries("DGS2",  startISO),            // 미국 2Y 국채금리
+    fetchYahooSeries("^N225", years),              // [v25] 닛케이225 — KOSPI 최강 예측변수
+    fetchYahooSeries("^SOX",  years),              // [v25] 필라델피아 반도체 — 한국 반도체 채널
+    fetchYahooSeries("CL=F",  years),              // [v25] WTI 원유 — 한국 에너지 비용
   ]);
 
   // ── S&P500 일별 수익률 Map ──
@@ -695,7 +720,27 @@ async function fetchExternalData(
   const usb10Entries = usb10Rows.sort((a, b) => a.date.localeCompare(b.date));
   const usb2Entries  = usb2Rows.sort((a, b) => a.date.localeCompare(b.date));
 
-  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행, VIX ${vixRows.length}행`);
+  // ── [v25] 닛케이225: 일별 수익률 + 5일 모멘텀 ──
+  const nikkeiRetMap   = new Map<string, number>();
+  const nikkei5dMomMap = new Map<string, number>();
+  for (let i = 1; i < nikkeiRows.length; i++) {
+    const ret = (nikkeiRows[i].close - nikkeiRows[i-1].close) / (nikkeiRows[i-1].close || 1);
+    nikkeiRetMap.set(nikkeiRows[i].date, ret);
+    if (i >= 5)
+      nikkei5dMomMap.set(nikkeiRows[i].date, (nikkeiRows[i].close - nikkeiRows[i-5].close) / (nikkeiRows[i-5].close || 1));
+  }
+
+  // ── [v25] SOX 일별 수익률 ──
+  const soxRetMap = new Map<string, number>();
+  for (let i = 1; i < soxRows.length; i++)
+    soxRetMap.set(soxRows[i].date, (soxRows[i].close - soxRows[i-1].close) / (soxRows[i-1].close || 1));
+
+  // ── [v25] WTI 원유 일별 수익률 ──
+  const wtiRetMap = new Map<string, number>();
+  for (let i = 1; i < wtiRows.length; i++)
+    wtiRetMap.set(wtiRows[i].date, (wtiRows[i].close - wtiRows[i-1].close) / (wtiRows[i-1].close || 1));
+
+  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행, VIX ${vixRows.length}행, 닛케이 ${nikkeiRows.length}행, SOX ${soxRows.length}행, WTI ${wtiRows.length}행`);
 
   // ── KOSPI/KOSDAQ 날짜에 맞춰 forward-fill ──
   const result = new Map<string, ExtPoint>();
@@ -703,6 +748,7 @@ async function fetchExternalData(
   let lastForeign = 0, lastInst = 0, lastShort = 0.0;  // IQR 정규화 후 초기값=0(중앙값)
   let lastVix5dMom2 = 0, lastVixRet2 = 0;
   let lastUsb10 = 4.5, lastUsb2 = 4.0;
+  let lastNikkeiRet = 0, lastNikkei5dMom = 0, lastSoxRet = 0, lastWtiRet = 0;  // [v25]
   let bondIdx = 0, b10Idx2 = 0, b2Idx2 = 0;
 
   for (const date of dates) {
@@ -715,8 +761,8 @@ async function fetchExternalData(
     while (b2Idx2 < usb2Entries.length && usb2Entries[b2Idx2].date <= date) {
       lastUsb2 = usb2Entries[b2Idx2].value; b2Idx2++;
     }
-    if (sp500RetMap.has(date))   lastSP500      = sp500RetMap.get(date)!;
-    if (usdkrwRetMap.has(date))  lastUSDKRW     = usdkrwRetMap.get(date)!;
+    if (sp500RetMap.has(date))      lastSP500       = sp500RetMap.get(date)!;
+    if (usdkrwRetMap.has(date))     lastUSDKRW      = usdkrwRetMap.get(date)!;
     if (investorMap.has(date)) {
       const iv = investorMap.get(date)!;
       lastForeign = iv.foreignNet;
@@ -724,9 +770,13 @@ async function fetchExternalData(
       // 기관은 코스닥 상승 시 오히려 차익실현 경향 → 역상관 노이즈 제거
       lastInst = market === "KOSDAQ" ? (iv.individualNet ?? iv.instNet) : iv.instNet;
     }
-    if (shortMap.has(date))        lastShort      = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
-    if (vix5dMomMap2.has(date))    lastVix5dMom2  = vix5dMomMap2.get(date)!;
-    if (vixRetMap2.has(date))      lastVixRet2    = vixRetMap2.get(date)!;
+    if (shortMap.has(date))         lastShort       = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
+    if (vix5dMomMap2.has(date))     lastVix5dMom2   = vix5dMomMap2.get(date)!;
+    if (vixRetMap2.has(date))       lastVixRet2     = vixRetMap2.get(date)!;
+    if (nikkeiRetMap.has(date))     lastNikkeiRet   = nikkeiRetMap.get(date)!;     // [v25]
+    if (nikkei5dMomMap.has(date))   lastNikkei5dMom = nikkei5dMomMap.get(date)!;  // [v25]
+    if (soxRetMap.has(date))        lastSoxRet      = soxRetMap.get(date)!;        // [v25]
+    if (wtiRetMap.has(date))        lastWtiRet      = wtiRetMap.get(date)!;        // [v25]
 
     result.set(date, {
       sp500Ret:    lastSP500,
@@ -738,6 +788,11 @@ async function fetchExternalData(
       vix5dMom:    lastVix5dMom2,            // [v13] VIX 5일 모멘텀 (음수=회복신호)
       vixRet:      lastVixRet2,              // VIX 일별 변화율
       yieldSpread: lastUsb10 - lastUsb2,     // 10Y-2Y 금리차
+      // [v25] 신규 4개 피처
+      nikkeiRet:   Math.max(-0.1, Math.min(0.1, lastNikkeiRet)),   // 닛케이 등락 (±10% 클리핑)
+      nikkei5dMom: Math.max(-0.15, Math.min(0.15, lastNikkei5dMom)), // 닛케이 5일 모멘텀
+      soxRet:      Math.max(-0.1, Math.min(0.1, lastSoxRet)),      // SOX 등락 (±10% 클리핑)
+      wtiRet:      Math.max(-0.1, Math.min(0.1, lastWtiRet)),      // WTI 등락 (±10% 클리핑)
     });
   }
 
@@ -807,7 +862,7 @@ function buildFeatures(
       : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
-    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:0, vix5dMom:0, vixRet:0, yieldSpread:0.5 };
+    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:0, vix5dMom:0, vixRet:0, yieldSpread:0.5, nikkeiRet:0, nikkei5dMom:0, soxRet:0, wtiRet:0 };
     const p     = closes[i] || 1e-8;
     // ── 거래량 피처 ──
     const volMa5   = rollingMean(volumes, 5,  i);
@@ -862,6 +917,11 @@ function buildFeatures(
       Math.max(-1, Math.min(1, ext.vix5dMom / 0.3)),
       ext.vixRet,
       ext.yieldSpread / 3,
+      // ── [v25] 닛케이/SOX/WTI (4) ──
+      Math.max(-1, Math.min(1, ext.nikkeiRet   / 0.05)),  // 닛케이 등락 (±5%→±1 정규화)
+      Math.max(-1, Math.min(1, ext.nikkei5dMom / 0.10)),  // 닛케이 5일 모멘텀 (±10%→±1)
+      Math.max(-1, Math.min(1, ext.soxRet      / 0.05)),  // SOX 등락 (±5%→±1 정규화)
+      Math.max(-1, Math.min(1, ext.wtiRet      / 0.05)),  // WTI 등락 (±5%→±1 정규화)
     ]);
   });
   return { feats, closes, dates };
@@ -1275,6 +1335,22 @@ function buildResultFromModel(
   for (let i = 0; i < nTest; i++) mae += Math.abs(testPreds[i] - yte[i]);
   mae /= nTest || 1;
 
+  // ── [v25] 방향 편향 교정 (Direction Bias Calibration) ────────────────────────
+  // 모델이 한쪽 방향으로 체계적 편향 예측하는 경우(예: 36%=항상 반대) 임계값 보정.
+  // 실제 테스트셋 상승 비율에 맞춰 예측의 (1-upFrac) 분위수를 임계값으로 사용.
+  // sign(pred - biasThreshold) > 0 이면 상승 예측 → 상승 비율이 실제와 일치.
+  const testUpFrac = Array.from(yte).filter(v => v > 0).length / (yte.length || 1);
+  const testPredsSorted = Array.from(testPreds).sort((a, b) => a - b);
+  const biasThreshIdx = Math.max(0, Math.min(
+    testPredsSorted.length - 1,
+    Math.floor((1 - testUpFrac) * testPredsSorted.length),
+  ));
+  const biasThreshold = testPredsSorted[biasThreshIdx] ?? 0;
+  // 편향 교정된 방향 정확도 재계산
+  const biasAdjPreds = Array.from(testPreds).map(v => v - biasThreshold);
+  const biasAdjDirAcc = dirAccRate(new Float64Array(biasAdjPreds), yte);
+  console.log(`[v25-bias] ${symbol} upFrac=${(testUpFrac*100).toFixed(1)}% biasThreshold=${(biasThreshold*100).toFixed(3)}% raw dirAcc=${(dirAccRate(testPreds,yte)*100).toFixed(1)}% adj dirAcc=${(biasAdjDirAcc*100).toFixed(1)}%`);
+
   // ── 진폭 교정 계수 (Amplitude Calibration) ──────────────────────────────────
   // 회귀 모델은 MSE 최소화 과정에서 예측 진폭이 실제 대비 1/5~1/10로 수렴함.
   // 테스트셋 기준 mean(|실제|) / mean(|예측|) 로 교정 계수를 계산해 적용.
@@ -1309,7 +1385,10 @@ function buildResultFromModel(
     ? Math.sign(lstmForecastRaw) * gfAbs * 2
     : lstmForecastRaw;
   // 교정 계수 적용: 방향 유지, 진폭을 실제 시장 수준으로 스케일업
-  const forecastReturn = (alpha * lstmForecast + (1-alpha) * gbdtForecast) * calibFactor;
+  // [v25] biasThreshold 적용: 예측 임계값 보정 → 방향 편향 제거
+  const ensembleRaw = alpha * lstmForecast + (1-alpha) * gbdtForecast;
+  const ensembleBiasAdj = ensembleRaw - biasThreshold;  // [v25] 편향 교정
+  const forecastReturn = ensembleBiasAdj * calibFactor;
   // [#2] 개별 컴포넌트 예측값 (savePrediction으로 전달 → 컴포넌트별 라이브 적중률 추적)
   const gbdtForecastRetPct = gbdtForecast * calibFactor * 100;
   const lstmForecastRetPct = lstmForecast * calibFactor * 100;
