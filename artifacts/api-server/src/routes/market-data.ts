@@ -1468,7 +1468,7 @@ router.get("/indicator-history", async (_req, res) => {
     return res.json(_indicatorHistoryCache.data);
   }
 
-  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v2");
+  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v6");
   if (dbCached) {
     _indicatorHistoryCache = { data: dbCached, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
     return res.json(dbCached);
@@ -1492,12 +1492,29 @@ router.get("/indicator-history", async (_req, res) => {
         .map((o: any) => ({ date: o.date, value: parseFloat(o.value) }));
     }
 
-    const [fedRate, cpi, corePce, unemployment, gdp] = await Promise.all([
-      fredGet("FEDFUNDS"),        // 연방기금금리 (월별)
-      fredGet("CPIAUCSL"),        // 미국 CPI 수준 (월별) → YoY 계산
-      fredGet("PCEPILFE"),        // 근원 PCE 수준 (월별) → YoY 계산
-      fredGet("UNRATE"),          // 실업률 (월별)
-      fredGet("A191RL1Q225SBEA"), // 실질 GDP 성장률 연율 (분기)
+    // 한국 실업률: World Bank 공개 API (key 불필요)
+    async function wbGetKrUnemployment(): Promise<IndicatorPoint[]> {
+      const r = await fetch(
+        "https://api.worldbank.org/v2/country/KR/indicator/SL.UEM.TOTL.ZS?format=json&mrv=20&date=2019:2026"
+      );
+      const d = await r.json();
+      return ((d[1] ?? []) as any[])
+        .filter((x: any) => x.value != null)
+        .sort((a: any, b: any) => a.date.localeCompare(b.date))
+        .map((x: any) => ({ date: `${x.date}-01-01`, value: parseFloat(x.value.toFixed(2)) }));
+    }
+
+    const [fedRate, cpi, corePce, unemployment, gdp,
+           krRate, krCpi, krGdpVol, krUnemployment] = await Promise.all([
+      fredGet("FEDFUNDS"),            // 미국 연방기금금리 (월별)
+      fredGet("CPIAUCSL"),            // 미국 CPI 지수 (월별) → YoY 계산
+      fredGet("PCEPILFE"),            // 미국 근원 PCE (월별) → YoY 계산
+      fredGet("UNRATE"),              // 미국 실업률 (월별)
+      fredGet("A191RL1Q225SBEA"),     // 미국 GDP 성장률 연율 (분기)
+      fredGet("IR3TIB01KRM156N"),     // 한국 단기금리 3개월 (월별)
+      fredGet("KORCPIALLMINMEI"),     // 한국 CPI 지수 (월별) → YoY 계산
+      fredGet("NAEXKP01KRQ657S"),     // 한국 GDP 거래량 지수 (분기) → YoY 계산
+      wbGetKrUnemployment(),          // 한국 실업률 (연간, World Bank)
     ]);
 
     // 전년동월비 계산
@@ -1507,8 +1524,16 @@ router.get("/indicator-history", async (_req, res) => {
         value: parseFloat(((d.value / pts[i].value - 1) * 100).toFixed(2)),
       }));
     }
+    // 분기 데이터용 전년동분기비 (4분기 전 대비)
+    function calcYoYQ(pts: IndicatorPoint[]): IndicatorPoint[] {
+      return pts.slice(4).map((d, i) => ({
+        date: d.date,
+        value: parseFloat(((d.value / pts[i].value - 1) * 100).toFixed(2)),
+      }));
+    }
 
     const result: IndicatorSeries[] = [
+      // ── 미국 지표 ──
       {
         id: "fed-rate",
         name: "연방기금금리",
@@ -1543,8 +1568,8 @@ router.get("/indicator-history", async (_req, res) => {
       },
       {
         id: "unemployment",
-        name: "실업률",
-        nameEn: "Unemployment",
+        name: "미국 실업률",
+        nameEn: "US Unemployment",
         country: "US",
         unit: "%",
         category: "고용",
@@ -1553,19 +1578,61 @@ router.get("/indicator-history", async (_req, res) => {
       },
       {
         id: "us-gdp",
-        name: "GDP 성장률",
-        nameEn: "GDP Growth QoQ",
+        name: "미국 GDP 성장률",
+        nameEn: "US GDP Growth",
         country: "US",
         unit: "%",
         category: "성장",
         frequency: "quarterly",
         data: gdp.slice(-16),
       },
+      // ── 한국 지표 ──
+      ...(krRate.length > 0 ? [{
+        id: "kr-rate",
+        name: "한국 단기금리",
+        nameEn: "Korea 3M Rate",
+        country: "KR",
+        unit: "%",
+        category: "금리",
+        frequency: "monthly" as const,
+        data: krRate.slice(-24),
+      }] : []),
+      ...(krCpi.length > 4 ? [{
+        id: "kr-cpi",
+        name: "한국 CPI",
+        nameEn: "Korea CPI YoY",
+        country: "KR",
+        unit: "%",
+        category: "물가",
+        frequency: "monthly" as const,
+        data: calcYoY(krCpi).filter(p => p.value != null),
+        targetLine: 2.0,
+      }] : []),
+      ...(krUnemployment.length > 0 ? [{
+        id: "kr-unemployment",
+        name: "한국 실업률",
+        nameEn: "Korea Unemployment",
+        country: "KR",
+        unit: "%",
+        category: "고용",
+        frequency: "quarterly" as const,
+        data: krUnemployment.slice(-8),
+      }] : []),
+      ...(krGdpVol.length > 0 ? [{
+        id: "kr-gdp",
+        name: "한국 GDP 성장률",
+        nameEn: "Korea GDP Growth (QoQ)",
+        country: "KR",
+        unit: "%",
+        category: "성장",
+        frequency: "quarterly" as const,
+        data: krGdpVol.slice(-12), // 이미 분기별 QoQ % 성장률
+      }] : []),
     ];
 
     _indicatorHistoryCache = { data: result, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
-    saveToDBCache("indicator-history-v2", result, INDICATOR_HISTORY_TTL);
-    console.log("[indicator-history] 완료 — 지표 5개 수집");
+    saveToDBCache("indicator-history-v6", result, INDICATOR_HISTORY_TTL);
+    console.log(`[indicator-history] 완료 — 지표 ${result.length}개 수집 (미국 5개, 한국 ${result.length - 5}개)`);
     return res.json(result);
   } catch (err: any) {
     console.error("[indicator-history] error:", err?.message);

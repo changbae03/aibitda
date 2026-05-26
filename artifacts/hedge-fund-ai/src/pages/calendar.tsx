@@ -634,10 +634,33 @@ function IndicatorTrendSection() {
               {isEn ? `Failed to load (${error})` : `불러오기 실패 (${error})`}
             </p>
           ) : indicators.length === 0 ? null : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {indicators.map(s => (
-                <IndicatorCard key={s.id} series={s} isEn={isEn} />
-              ))}
+            <div className="space-y-3">
+              {/* 미국 지표 */}
+              {indicators.filter(s => s.country === "US").length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-2 px-0.5 flex items-center gap-1">
+                    🇺🇸 {isEn ? "United States" : "미국"}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {indicators.filter(s => s.country === "US").map(s => (
+                      <IndicatorCard key={s.id} series={s} isEn={isEn} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* 한국 지표 */}
+              {indicators.filter(s => s.country === "KR").length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-2 px-0.5 flex items-center gap-1">
+                    🇰🇷 {isEn ? "South Korea" : "한국"}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {indicators.filter(s => s.country === "KR").map(s => (
+                      <IndicatorCard key={s.id} series={s} isEn={isEn} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
