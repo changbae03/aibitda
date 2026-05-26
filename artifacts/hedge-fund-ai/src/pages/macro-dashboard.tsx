@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useId, useMemo } from "react";
 import {
   Globe, Package, DollarSign, TrendingUp, BarChart2, Landmark,
   RefreshCw, ChevronDown, ChevronRight, Sparkles, ExternalLink,
-  TrendingDown, Minus, Info,
+  TrendingDown, Minus, Info, Loader2, X,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -178,31 +178,141 @@ function CategorySection({ cat, isEn }: { cat: DashCategory; isEn: boolean }) {
   );
 }
 
-// ─── ETF 태그 ────────────────────────────────────────────────────────────────
+// ─── ETF 구성 종목 패널 ───────────────────────────────────────────────────────
 
-function ETFTag({ etf, market }: { etf: ETFReco; market: "KR" | "US" }) {
-  const isKR = market === "KR";
-  const searchUrl = isKR
-    ? `https://finance.naver.com/item/main.naver?code=${etf.ticker}`
-    : `https://finance.yahoo.com/quote/${etf.ticker}`;
+interface Holding { rank: number; stockCode: string; stockName: string; weight: number }
+
+function ETFHoldingsPanel({
+  ticker, name, reason, market, onClose,
+}: {
+  ticker: string; name: string; reason: string; market: "KR" | "US"; onClose: () => void;
+}) {
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (market !== "KR") return;
+    setLoading(true);
+    setError(null);
+    fetch(getApiUrl(`/api/etf/${ticker}/holdings`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => setHoldings((d.holdings ?? []).slice(0, 10)))
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [ticker, market]);
+
+  const yahooUrl = `https://finance.yahoo.com/quote/${market === "KR" ? `${ticker}.KS` : ticker}`;
 
   return (
-    <a
-      href={searchUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={etf.reason}
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.15 }}
+      className="mt-2 rounded-xl border border-border bg-card shadow-sm overflow-hidden"
+    >
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/20">
+        <div>
+          <span className="text-[12px] font-bold text-foreground font-mono">{ticker}</span>
+          {name && <span className="text-[11px] text-muted-foreground ml-1.5">{name}</span>}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <a
+            href={yahooUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-muted-foreground/60 hover:text-foreground flex items-center gap-0.5 transition-colors"
+          >
+            <ExternalLink className="w-2.5 h-2.5" />
+          </a>
+          <button onClick={onClose} className="text-muted-foreground/50 hover:text-foreground transition-colors">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {reason && (
+        <p className="px-3 py-1.5 text-[10px] text-muted-foreground/60 border-b border-border/30 bg-muted/10">
+          💡 {reason}
+        </p>
+      )}
+
+      <div className="px-3 py-2">
+        {market === "US" ? (
+          <p className="text-[11px] text-muted-foreground/60 py-2">
+            미국 ETF는 Yahoo Finance에서 구성 종목을 확인하세요.
+            <a href={yahooUrl} target="_blank" rel="noopener noreferrer"
+              className="ml-1 underline text-primary/70 hover:text-primary">바로가기 →</a>
+          </p>
+        ) : loading ? (
+          <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground/50">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> 구성 종목 불러오는 중…
+          </div>
+        ) : error ? (
+          <p className="text-[11px] text-red-400 py-2">구성 종목 조회 실패 ({error})</p>
+        ) : holdings.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground/50 py-2">구성 종목 데이터 없음</p>
+        ) : (
+          <div className="space-y-1 py-1">
+            {holdings.map((h) => (
+              <div key={h.stockCode} className="flex items-center gap-2 py-0.5">
+                <span className="text-[9px] text-muted-foreground/30 w-4 text-right shrink-0">{h.rank}</span>
+                <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                  <span className="text-[11px] text-foreground/80 font-medium truncate">{h.stockName}</span>
+                  <span className="text-[9px] text-muted-foreground/40 font-mono shrink-0">{h.stockCode}</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <div className="w-14 h-1 rounded-full bg-border/30 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary/50"
+                      style={{ width: `${Math.min(h.weight * 4, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground/70 w-9 text-right">
+                    {h.weight.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+            <p className="text-[9px] text-muted-foreground/30 pt-1">상위 10개 종목 기준</p>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── ETF 태그 (클릭 시 구성 종목 패널 토글) ──────────────────────────────────
+
+function ETFTag({
+  etf, market, selectedTicker, onSelect,
+}: {
+  etf: ETFReco; market: "KR" | "US";
+  selectedTicker: string | null;
+  onSelect: (ticker: string | null) => void;
+}) {
+  const isKR = market === "KR";
+  const isOpen = selectedTicker === etf.ticker;
+
+  return (
+    <button
+      onClick={() => onSelect(isOpen ? null : etf.ticker)}
       className={cn(
-        "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors hover:opacity-80",
+        "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-all",
         isKR
-          ? "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400"
-          : "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
+          ? isOpen
+            ? "bg-blue-500/20 border-blue-500/40 text-blue-600 dark:text-blue-300"
+            : "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20"
+          : isOpen
+            ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-300"
+            : "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20",
       )}
     >
       <span className="font-mono font-bold">{etf.ticker}</span>
       {etf.name && <span className="text-[10px] opacity-70 hidden sm:inline truncate max-w-[80px]">{etf.name}</span>}
-      <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
-    </a>
+      <ChevronDown className={cn("w-2.5 h-2.5 opacity-50 transition-transform shrink-0", isOpen && "rotate-180")} />
+    </button>
   );
 }
 
@@ -210,9 +320,20 @@ function ETFTag({ etf, market }: { etf: ETFReco; market: "KR" | "US" }) {
 
 function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }) {
   const [open, setOpen] = useState(false);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [selectedMarket, setSelectedMarket] = useState<"KR" | "US">("KR");
   const cfg = SENTIMENT_CONFIG[insight.sentiment] ?? SENTIMENT_CONFIG.neutral;
   const hasETFs = (insight.krETFs?.length ?? 0) > 0 || (insight.usETFs?.length ?? 0) > 0;
   const title = isEn ? insight.themeEn : insight.theme;
+
+  function handleSelect(market: "KR" | "US", ticker: string | null) {
+    setSelectedMarket(market);
+    setSelectedTicker(ticker);
+  }
+
+  const selectedEtf = selectedTicker
+    ? ([...(insight.krETFs ?? []), ...(insight.usETFs ?? [])]).find(e => e.ticker === selectedTicker) ?? null
+    : null;
 
   return (
     <motion.div
@@ -220,7 +341,7 @@ function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }
       className={cn("rounded-xl border overflow-hidden", cfg.bg)}
     >
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={() => { setOpen(v => !v); if (open) setSelectedTicker(null); }}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2.5">
@@ -262,15 +383,35 @@ function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }
               <p className="text-[12px] text-foreground/70 mt-3 leading-relaxed">{insight.description}</p>
 
               {hasETFs && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {(insight.krETFs?.length ?? 0) > 0 && (
                     <div>
                       <p className="text-[10px] text-muted-foreground/50 mb-1.5 font-semibold">
                         🇰🇷 {isEn ? "Korean ETFs" : "국내 ETF"}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {insight.krETFs!.map(e => <ETFTag key={e.ticker} etf={e} market="KR" />)}
+                        {insight.krETFs!.map(e => (
+                          <ETFTag
+                            key={e.ticker}
+                            etf={e}
+                            market="KR"
+                            selectedTicker={selectedMarket === "KR" ? selectedTicker : null}
+                            onSelect={(t) => handleSelect("KR", t)}
+                          />
+                        ))}
                       </div>
+                      <AnimatePresence>
+                        {selectedTicker && selectedMarket === "KR" && selectedEtf && (
+                          <ETFHoldingsPanel
+                            key={selectedTicker}
+                            ticker={selectedTicker}
+                            name={selectedEtf.name}
+                            reason={selectedEtf.reason}
+                            market="KR"
+                            onClose={() => setSelectedTicker(null)}
+                          />
+                        )}
+                      </AnimatePresence>
                     </div>
                   )}
                   {(insight.usETFs?.length ?? 0) > 0 && (
@@ -279,8 +420,28 @@ function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }
                         🇺🇸 {isEn ? "US ETFs" : "미국 ETF"}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {insight.usETFs!.map(e => <ETFTag key={e.ticker} etf={e} market="US" />)}
+                        {insight.usETFs!.map(e => (
+                          <ETFTag
+                            key={e.ticker}
+                            etf={e}
+                            market="US"
+                            selectedTicker={selectedMarket === "US" ? selectedTicker : null}
+                            onSelect={(t) => handleSelect("US", t)}
+                          />
+                        ))}
                       </div>
+                      <AnimatePresence>
+                        {selectedTicker && selectedMarket === "US" && selectedEtf && (
+                          <ETFHoldingsPanel
+                            key={selectedTicker}
+                            ticker={selectedTicker}
+                            name={selectedEtf.name}
+                            reason={selectedEtf.reason}
+                            market="US"
+                            onClose={() => setSelectedTicker(null)}
+                          />
+                        )}
+                      </AnimatePresence>
                     </div>
                   )}
                 </div>
