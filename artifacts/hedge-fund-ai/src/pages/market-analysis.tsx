@@ -63,6 +63,7 @@ interface PipelineStatus {
   error?: string;
   trainedAt?: string;
   trainingMs?: number;
+  modelVersion?: number;
   kospi?: IndexResult;
   kosdaq?: IndexResult;
   snp500?: IndexResult;
@@ -1633,7 +1634,7 @@ export default function MarketAnalysis() {
       </AnimatePresence>
 
       {/* 면책 고지 */}
-      <div className="max-w-2xl mx-auto px-4 pb-10">
+      <div className="max-w-2xl mx-auto px-4 pb-4">
         <div className="flex items-start gap-2.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground/50" />
           <p className="text-[11px] leading-relaxed text-muted-foreground/50">
@@ -1643,6 +1644,34 @@ export default function MarketAnalysis() {
             전문 금융 자문과 함께 활용하시기 바랍니다.
             애빛다는 본 예측 정보에 기반한 투자 손실에 대해 책임을 지지 않습니다.
           </p>
+        </div>
+      </div>
+
+      {/* 모델 버전 정보 */}
+      <div className="max-w-2xl mx-auto px-4 pb-10">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          {status?.modelVersion && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
+              Model v{status.modelVersion}
+            </span>
+          )}
+          {status?.trainedAt && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
+              학습 완료 {new Date(status.trainedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {status?.trainingMs && status.trainingMs > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
+              {(status.trainingMs / 1000).toFixed(0)}s
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
+            LSTM + GBDT Ensemble
+          </span>
         </div>
       </div>
     </div>

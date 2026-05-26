@@ -72,6 +72,7 @@ export interface PipelineStep {
 export interface PipelineStatus {
   running: boolean; ready: boolean; steps: PipelineStep[];
   error?: string; trainedAt?: string; trainingMs?: number;
+  modelVersion?: number;
   kospi?: IndexResult; kosdaq?: IndexResult; snp500?: IndexResult; nasdaq?: IndexResult;
 }
 
@@ -1622,7 +1623,8 @@ export function getStatus(): PipelineStatus & { initializing?: boolean } {
     running:_status.running, ready:_status.ready,
     steps:_status.steps.map(s=>({...s})),
     error:_status.error, trainedAt:_status.trainedAt,
-    trainingMs:_status.trainingMs, kospi:_status.kospi, kosdaq:_status.kosdaq, snp500:_status.snp500, nasdaq:_status.nasdaq,
+    trainingMs:_status.trainingMs, modelVersion:MODEL_VERSION,
+    kospi:_status.kospi, kosdaq:_status.kosdaq, snp500:_status.snp500, nasdaq:_status.nasdaq,
     initializing: (_status as any).initializing ?? false,
   };
 }
