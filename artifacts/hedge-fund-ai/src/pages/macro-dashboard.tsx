@@ -393,14 +393,6 @@ export function MacroDashboardPanel() {
 
       {data && (
         <>
-          {/* AI 내러티브 배너 */}
-          {data.narrative && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
-              <Sparkles className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
-              <p className="text-[12px] text-foreground/80 leading-relaxed">{data.narrative}</p>
-            </div>
-          )}
-
           {/* 카테고리 탭 */}
           <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
             {tabs.map(t => (
@@ -426,6 +418,14 @@ export function MacroDashboardPanel() {
               {visibleCats.map(cat => (
                 <CategorySection key={cat.id} cat={cat} isEn={isEn} />
               ))}
+            </div>
+          )}
+
+          {/* AI 내러티브 배너 */}
+          {data.narrative && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
+              <p className="text-[12px] text-foreground/80 leading-relaxed">{data.narrative}</p>
             </div>
           )}
 
