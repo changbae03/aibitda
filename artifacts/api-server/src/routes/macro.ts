@@ -306,19 +306,31 @@ async function generateMacroInsights(snapshot: string): Promise<{ narrative: str
   if (!key) return { narrative: "", insights: [] };
   try {
     const ai = new GoogleGenAI({ apiKey: key });
-    const prompt = `당신은 거시경제 전문가입니다. 아래 시장 데이터를 분석하여 JSON으로 응답하세요.
+    const prompt = `당신은 글로벌 매크로 전략가입니다. 아래 실시간 시장 데이터를 바탕으로 현재 시장 상황을 날카롭게 분석하세요.
 
-시장 데이터:
+=== 실시간 시장 데이터 ===
 ${snapshot}
 
-다음 형식의 JSON으로만 응답하세요 (설명 없이):
+=== 분석 지침 ===
+narrative 작성 규칙:
+1. 위 데이터에서 얻을 수 있는 핵심 시사점을 구체적 수치와 함께 서술하세요.
+2. 반드시 다음 항목을 모두 포함해야 합니다:
+   - 강세 자산/시장: 오늘 상승폭이 크거나 추세적으로 강한 것 (구체적 수치 인용)
+   - 약세 자산/시장: 오늘 하락폭이 크거나 부진한 것 (구체적 수치 인용)
+   - 달러/금리 환경: DXY 방향, 미국 10Y 금리 수준이 위험자산에 주는 영향
+   - 원자재 흐름: 원유/금/구리 등 경기 신호
+   - 한국 시장 시사점: 원/달러 환율, 코스피/코스닥 흐름이 국내 투자에 주는 의미
+3. 4~6문장으로 작성하세요. 단순 나열이 아닌 인과관계 중심으로 서술하세요.
+4. "~합니다" 체로 작성하세요.
+
+다음 형식의 JSON으로만 응답하세요 (코드블록·설명 없이):
 {
-  "narrative": "현재 거시경제 환경에 대한 2~3문장 요약 (한국어)",
+  "narrative": "강세/약세 분석과 시사점을 담은 4~6문장 (한국어, 구체적 수치 포함)",
   "insights": [
     {
       "theme": "테마명 (한국어, 10자 이내)",
       "themeEn": "Theme name (English, short)",
-      "description": "이 테마의 시장 시사점 (한국어, 2문장)",
+      "description": "이 테마의 시장 시사점 (한국어, 2문장, 수치 인용)",
       "sentiment": "positive|negative|neutral|mixed",
       "krETFs": [
         { "ticker": "KR ETF 종목코드 (6자리)", "name": "ETF명", "reason": "추천 이유 (한국어, 15자 이내)" }
