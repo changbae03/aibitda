@@ -293,16 +293,14 @@ function InsightCard({ insight, isEn }: { insight: MacroInsight; isEn: boolean }
   );
 }
 
-// ─── 메인 페이지 ──────────────────────────────────────────────────────────────
+// ─── 공유 캐시 & 데이터 훅 ────────────────────────────────────────────────────
 
 let _dashCache: { data: MacroDashboard; fetchedAt: number } | null = null;
 
-export default function MacroDashboardPage() {
-  const { isEn } = useLanguage();
+function useMacroDashboard() {
   const [data, setData] = useState<MacroDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("all");
 
   const load = useCallback(async (force = false) => {
     if (!force && _dashCache && Date.now() - _dashCache.fetchedAt < 20 * 60 * 1000) {
@@ -325,6 +323,152 @@ export default function MacroDashboardPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  return { data, loading, error, load };
+}
+
+// ─── 임베드용 패널 (ETF 분석 탭 등에서 사용) ─────────────────────────────────
+
+export function MacroDashboardPanel() {
+  const { isEn } = useLanguage();
+  const { data, loading, error, load } = useMacroDashboard();
+  const [activeTab, setActiveTab] = useState<string>("all");
+
+  const tabs = useMemo(() => {
+    if (!data) return [];
+    return [
+      { id: "all",      label: isEn ? "All" : "전체" },
+      ...data.categories.map(c => ({ id: c.id, label: isEn ? c.nameEn : c.name })),
+      { id: "insights", label: isEn ? "AI Insights" : "AI 시사점" },
+    ];
+  }, [data, isEn]);
+
+  const visibleCats = useMemo(() => {
+    if (!data) return [];
+    if (activeTab === "all" || activeTab === "insights") return data.categories;
+    return data.categories.filter(c => c.id === activeTab);
+  }, [data, activeTab]);
+
+  const updatedAt = data?.generatedAt
+    ? new Date(data.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {/* 상단 새로고침 줄 */}
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-muted-foreground/40">
+          {updatedAt ? `${isEn ? "Updated" : "업데이트"}: ${updatedAt}` : ""}
+        </p>
+        <button
+          onClick={() => load(true)}
+          disabled={loading}
+          className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+          {isEn ? "Refresh" : "새로고침"}
+        </button>
+      </div>
+
+      {/* 로딩 */}
+      {loading && !data && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <RefreshCw className="w-5 h-5 animate-spin text-primary/50" />
+          <p className="text-xs text-muted-foreground/60">
+            {isEn ? "Loading market data & generating AI insights…" : "시장 데이터 수집 및 AI 인사이트 생성 중…"}
+          </p>
+          <p className="text-[10px] text-muted-foreground/40">
+            {isEn ? "(Yahoo Finance + FRED + Gemini AI, ~10s)" : "(Yahoo Finance + FRED + Gemini AI, 약 10초)"}
+          </p>
+        </div>
+      )}
+
+      {/* 오류 */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-500">
+          {isEn ? `Failed to load data (${error})` : `데이터 로드 실패 (${error})`} —{" "}
+          <button onClick={() => load(true)} className="underline">{isEn ? "Retry" : "재시도"}</button>
+        </div>
+      )}
+
+      {data && (
+        <>
+          {/* AI 내러티브 배너 */}
+          {data.narrative && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
+              <p className="text-[12px] text-foreground/80 leading-relaxed">{data.narrative}</p>
+            </div>
+          )}
+
+          {/* 카테고리 탭 */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
+                  activeTab === t.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                )}
+              >
+                {t.id === "insights" && <Sparkles className="w-2.5 h-2.5 inline mr-1 -mt-0.5" />}
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 시장 지표 카테고리 */}
+          {activeTab !== "insights" && (
+            <div>
+              {visibleCats.map(cat => (
+                <CategorySection key={cat.id} cat={cat} isEn={isEn} />
+              ))}
+            </div>
+          )}
+
+          {/* AI 시사점 & ETF 추천 */}
+          {(activeTab === "all" || activeTab === "insights") && data.insights.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-4 h-4 text-primary/60" />
+                <h2 className="text-sm font-semibold text-foreground/80">
+                  {isEn ? "AI Macro Insights & ETF Picks" : "AI 거시 시사점 & ETF 추천"}
+                </h2>
+                <span className="text-[10px] text-muted-foreground/40 ml-1">Powered by Gemini</span>
+              </div>
+              <div className="space-y-2">
+                {data.insights.map((ins, i) => (
+                  <InsightCard key={i} insight={ins} isEn={isEn} />
+                ))}
+              </div>
+              <p className="mt-3 text-[10px] text-muted-foreground/40 leading-relaxed">
+                {isEn
+                  ? "* AI-generated insights are for reference only and not investment advice."
+                  : "* AI 인사이트는 참고용이며 투자 권유가 아닙니다. 투자 결정은 본인의 책임입니다."}
+              </p>
+            </div>
+          )}
+
+          {activeTab === "insights" && data.insights.length === 0 && (
+            <div className="text-center py-10 text-muted-foreground/40 text-sm">
+              {isEn ? "No AI insights available yet." : "AI 인사이트를 생성하지 못했습니다."}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── 메인 페이지 ──────────────────────────────────────────────────────────────
+
+export default function MacroDashboardPage() {
+  const { isEn } = useLanguage();
+  const { data, loading, error, load } = useMacroDashboard();
+  const [activeTab, setActiveTab] = useState<string>("all");
 
   const tabs = useMemo(() => {
     if (!data) return [];

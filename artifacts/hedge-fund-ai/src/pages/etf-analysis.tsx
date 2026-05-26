@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
+import { MacroDashboardPanel } from "@/pages/macro-dashboard";
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -2085,14 +2086,8 @@ function MomentumTab() {
             ))}
           </div>
 
-          {/* ── 탭 1: 거시 지표 (준비 중) ── */}
-          {subTab === "macro" && (
-            <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-              <span className="text-4xl">🚧</span>
-              <p className="text-sm font-semibold text-foreground/70">준비 중입니다</p>
-              <p className="text-xs text-muted-foreground/50">거시 지표 탭을 새롭게 만들고 있어요.</p>
-            </div>
-          )}
+          {/* ── 탭 1: 거시 대시보드 ── */}
+          {subTab === "macro" && <MacroDashboardPanel />}
 
           {/* ── 탭 2: 수급·테마 통합 ── */}
           {subTab === "pulse" && (
