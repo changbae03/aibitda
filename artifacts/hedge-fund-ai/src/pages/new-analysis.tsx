@@ -2,11 +2,21 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStartAnalysis } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn, Check } from "lucide-react";
+import { Search, Loader2, Building2, ArrowRight, ChevronRight, Zap, Flame, Clock, TrendingUp, TrendingDown, Minus, BarChart2, LogIn, Check, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ApiError } from "@workspace/api-client-react";
 import { getApiUrl, cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
+
+/* ── 익명 분석 횟수 제한 ─────────────────────────────────────────────────── */
+const ANON_LIMIT = 3;
+const ANON_KEY = "anon_analysis_count";
+function getAnonCount(): number {
+  return parseInt(localStorage.getItem(ANON_KEY) ?? "0", 10);
+}
+function incrementAnonCount() {
+  localStorage.setItem(ANON_KEY, String(getAnonCount() + 1));
+}
 
 interface AuthUser { id: string; nickname: string; profileImage: string | null }
 function useAuth() {
@@ -303,6 +313,7 @@ export default function NewAnalysis() {
   const [isSearching, setIsSearching] = useState(false);
   const [selectHint, setSelectHint] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
+  const [showAnonGate, setShowAnonGate] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -356,6 +367,12 @@ export default function NewAnalysis() {
   }, []);
 
   const handleSubmit = async (tickerValue: string) => {
+    // 익명 사용자 3회 제한
+    if (user === null && getAnonCount() >= ANON_LIMIT) {
+      setShowAnonGate(true);
+      return;
+    }
+
     let value = tickerValue.trim().toUpperCase();
     // 한국 종목: .KS/.KQ 없이 6자리 코드만 사용
     if (/^\d{6}\.(KS|KQ)$/.test(value)) {
@@ -372,6 +389,7 @@ export default function NewAnalysis() {
     setShowDropdown(false);
     try {
       const result = await startAnalysis({ data: { ticker: value } });
+      if (user === null) incrementAnonCount();
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       setLocation(`/analysis/${result.id}`);
     } catch (err) {
@@ -837,6 +855,75 @@ export default function NewAnalysis() {
 
     {/* ── 분석 확인 모달 ── */}
     <AnimatePresence>
+      {/* ── 익명 횟수 초과 게이트 모달 ── */}
+      {showAnonGate && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowAnonGate(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-sm p-6"
+          >
+            {/* 아이콘 */}
+            <div className="flex flex-col items-center text-center mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Lock className="w-7 h-7 text-primary" />
+              </div>
+              <h3 className="text-[18px] font-black text-foreground leading-tight mb-1.5">
+                무료 체험 {ANON_LIMIT}회 완료
+              </h3>
+              <p className="text-[13px] text-muted-foreground leading-relaxed">
+                로그인하면 매일 더 많은 분석을 무료로 이용할 수 있습니다
+              </p>
+            </div>
+
+            {/* 혜택 목록 */}
+            <div className="rounded-xl bg-muted/50 border border-border/40 px-4 py-3.5 mb-5 space-y-2">
+              {[
+                "매일 무료 분석 크레딧 제공",
+                "분석 기록 저장 및 히스토리",
+                "밸류에이션·투자전략 전체 공개",
+                "뉴스 스크랩 및 주제별 정리",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                    <Check className="w-2.5 h-2.5 text-primary" />
+                  </div>
+                  <span className="text-[12.5px] text-foreground/80">{item}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* 버튼 */}
+            <div className="flex gap-2.5">
+              <button
+                onClick={() => setShowAnonGate(false)}
+                className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                닫기
+              </button>
+              <a
+                href="/login"
+                className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#FF8A7A" }}
+              >
+                <LogIn className="w-4 h-4" />
+                로그인하기
+              </a>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
       {confirmModal && (
         <motion.div
           initial={{ opacity: 0 }}
