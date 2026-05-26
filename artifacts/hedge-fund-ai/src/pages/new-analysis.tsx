@@ -356,9 +356,8 @@ export default function NewAnalysis() {
   }, []);
 
   const handleSubmit = async (tickerValue: string) => {
-    // 로그인 필수 체크
+    // 로그인 안 된 경우 — 하단 로그인 배너가 이미 표시됨, 리다이렉트 없이 종료
     if (user === null) {
-      setLocation("/login");
       return;
     }
 

@@ -243,13 +243,19 @@ function ConsentGate() {
   );
 }
 
+function HomeRedirect() {
+  const [, setLocation] = useLocation();
+  useEffect(() => { setLocation("/analysis/new", { replace: true }); }, [setLocation]);
+  return null;
+}
+
 function Router() {
   return (
     <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
       <Switch>
         {/* 풀스크린 페이지 (사이드바 없음) */}
-        <Route path="/" component={Landing} />
+        <Route path="/" component={HomeRedirect} />
         <Route path="/login" component={Landing} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/share/:id" component={SharePage} />
