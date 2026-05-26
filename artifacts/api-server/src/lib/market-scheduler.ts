@@ -114,6 +114,17 @@ export function startMarketScheduler() {
         const diskOk = await tryRestoreFromDisk(true);
         if (diskOk) {
           console.log("[scheduler] 백그라운드 디스크 복원 완료 — 예측 갱신됨");
+          // ③ 마지막 증분 업데이트가 오늘이 아니면 즉시 실행 → recentPerf 최신화
+          const meta = loadMeta();
+          const lastUpdated = meta?.lastUpdated ?? meta?.lastTrained ?? "";
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const dow = new Date().getUTCDay(); // 0=일, 6=토
+          if (lastUpdated.slice(0, 10) < todayStr && dow >= 1 && dow <= 5) {
+            console.log(`[scheduler] 마지막 갱신(${lastUpdated.slice(0,10)}) < 오늘(${todayStr}) → 즉시 증분 업데이트 시작`);
+            runDailyIncrementalUpdate()
+              .then(() => console.log("[scheduler] 시작 시 즉시 증분 업데이트 완료"))
+              .catch(e => console.error("[scheduler] 시작 즉시 증분 업데이트 실패:", e?.message));
+          }
         } else {
           // 모델이 없거나 버전 불일치 → 백그라운드 전체 재학습 (기존 DB 캐시 데이터는 유지)
           console.log("[scheduler] 디스크 모델 없음 — 백그라운드 전체 재학습 시작 (기존 데이터 유지)");

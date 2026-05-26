@@ -1751,6 +1751,8 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       trainedAt:meta.lastTrained, trainingMs:0, kospi, kosdaq, snp500, nasdaq,
     };
     console.log(`[gbdt] 복원 완료 | KOSPI ${kospi.testDirAcc}% | KOSDAQ ${kosdaq.testDirAcc}% | S&P500 ${snp500.testDirAcc}%${nasdaq ? ` | NASDAQ ${nasdaq.testDirAcc}%` : ""}`);
+    // 최신 가격 데이터로 재계산한 결과를 DB에 저장 — 다음 서버 재시작 시 즉시 최신 recentPerf 서빙
+    saveResultsToDB(kospi, kosdaq, snp500, nasdaq ?? undefined).catch(() => {});
     return true;
   } catch(e:any) { console.warn("[gbdt] 복원 실패:",e?.message); return false; }
 }
