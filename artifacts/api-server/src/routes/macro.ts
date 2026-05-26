@@ -283,6 +283,8 @@ const SYMBOLS: DashItem[] = [
   { id: "us10y",    cat: "rates",        name: "미국 10Y",      nameEn: "US 10Y",        symbol: "^TNX",      unit: "%",   flag: "🇺🇸" },
   { id: "us30y",    cat: "rates",        name: "미국 30Y",      nameEn: "US 30Y",        symbol: "^TYX",      unit: "%",   flag: "🇺🇸" },
   { id: "us5y",     cat: "rates",        name: "미국 5Y",       nameEn: "US 5Y",         symbol: "^FVX",      unit: "%",   flag: "🇺🇸" },
+  // 한국 시장 (코스닥)
+  { id: "kosdaq",   cat: "korea",        name: "코스닥",         nameEn: "KOSDAQ",        symbol: "^KQ11",     unit: "pt",  flag: "🇰🇷" },
 ];
 
 async function fetchYFQuote(sym: DashItem): Promise<{ value: number | null; change1d: number | null; prevClose: number | null }> {
@@ -362,8 +364,11 @@ router.get("/macro/dashboard", async (req, res) => {
       return { ...s, value: q.value, change1d: q.change1d, prevClose: q.prevClose };
     });
 
-    // 2. FRED 경제 지표
-    const fred = await fetchFREDMacro().catch(() => null);
+    // 2. FRED 경제 지표 + ECOS 한국 지표 (병렬)
+    const [fred, ecos] = await Promise.all([
+      fetchFREDMacro().catch(() => null),
+      fetchECOSMacro().catch(() => null),
+    ]);
 
     // 3. 스냅샷 텍스트 생성 (Gemini 입력용)
     const snapshotLines: string[] = [];
@@ -378,6 +383,13 @@ router.get("/macro/dashboard", async (req, res) => {
       if (fred.gdpGrowth != null)        snapshotLines.push(`미국 GDP 성장률(연율): ${fred.gdpGrowth}%`);
       if (fred.yieldSpread != null)      snapshotLines.push(`미국 장단기금리차(10Y-2Y): ${fred.yieldSpread.toFixed(2)}%`);
       if (fred.t10y != null)             snapshotLines.push(`미국 10Y 국채: ${fred.t10y}%`);
+    }
+    if (ecos) {
+      if (ecos.baseRate != null)      snapshotLines.push(`한국 기준금리(BOK): ${ecos.baseRate}%`);
+      if (ecos.cpiYoY != null)        snapshotLines.push(`한국 CPI YoY: ${ecos.cpiYoY}%`);
+      if (ecos.gdpQoQ != null)        snapshotLines.push(`한국 실질GDP 전기대비: ${ecos.gdpQoQ}%`);
+      if (ecos.bondYield3Y != null)   snapshotLines.push(`한국 국고채 3년: ${ecos.bondYield3Y}%`);
+      if (ecos.bondYield10Y != null)  snapshotLines.push(`한국 국고채 10년: ${ecos.bondYield10Y}%`);
     }
 
     // 4. Gemini AI 인사이트
@@ -400,12 +412,24 @@ router.get("/macro/dashboard", async (req, res) => {
     ].filter(x => x.value != null) : [];
     if (fredItems.length) catMap["fred"] = fredItems;
 
+    // 한국 경제 지표 (ECOS + Yahoo Finance 코스닥)
+    const koreaYFItems = catMap["korea"] ?? [];  // SYMBOLS에서 온 코스닥
+    const koreaEcosItems = ecos ? [
+      { id: "bok-rate",   cat: "korea", name: "한국 기준금리", nameEn: "BOK Rate",      flag: "🇰🇷", unit: "%",  value: ecos.baseRate,         change1d: null },
+      { id: "kr-cpi",     cat: "korea", name: "한국 CPI",      nameEn: "KR CPI YoY",    flag: "🇰🇷", unit: "%",  value: ecos.cpiYoY,           change1d: null },
+      { id: "kr-gdp",     cat: "korea", name: "한국 GDP",       nameEn: "KR GDP QoQ",    flag: "🇰🇷", unit: "%",  value: ecos.gdpQoQ,           change1d: null },
+      { id: "kr-ktb3y",   cat: "korea", name: "국고채 3년",     nameEn: "KTB 3Y",        flag: "🇰🇷", unit: "%",  value: ecos.bondYield3Y,      change1d: null },
+      { id: "kr-ktb10y",  cat: "korea", name: "국고채 10년",    nameEn: "KTB 10Y",       flag: "🇰🇷", unit: "%",  value: ecos.bondYield10Y,     change1d: null },
+    ].filter(x => x.value != null) : [];
+    catMap["korea"] = [...koreaYFItems, ...koreaEcosItems];
+
     const CATEGORY_META: Record<string, { name: string; nameEn: string; icon: string }> = {
       markets:     { name: "글로벌 시장",  nameEn: "Global Markets",  icon: "globe" },
       commodities: { name: "원자재",       nameEn: "Commodities",     icon: "package" },
       currencies:  { name: "환율/달러",    nameEn: "FX / Dollar",     icon: "dollar-sign" },
       rates:       { name: "채권/금리",    nameEn: "Bonds / Rates",   icon: "trending-up" },
-      fred:        { name: "경제 지표",    nameEn: "Economic Data",   icon: "bar-chart-2" },
+      fred:        { name: "미국 경제",    nameEn: "US Economy",      icon: "bar-chart-2" },
+      korea:       { name: "한국 경제",    nameEn: "KR Economy",      icon: "landmark" },
     };
 
     const categories = Object.entries(catMap).map(([id, its]) => ({

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useId, useMemo } from "react";
 import {
-  Globe, Package, DollarSign, TrendingUp, BarChart2,
+  Globe, Package, DollarSign, TrendingUp, BarChart2, Landmark,
   RefreshCw, ChevronDown, ChevronRight, Sparkles, ExternalLink,
   TrendingDown, Minus, Info,
 } from "lucide-react";
@@ -44,7 +44,7 @@ interface MacroDashboard {
 
 const CAT_ICON: Record<string, typeof Globe> = {
   markets: Globe, commodities: Package,
-  currencies: DollarSign, rates: TrendingUp, fred: BarChart2,
+  currencies: DollarSign, rates: TrendingUp, fred: BarChart2, korea: Landmark,
 };
 
 const SENTIMENT_CONFIG = {
@@ -357,7 +357,7 @@ export default function MacroDashboardPage() {
           <p className="text-sm text-muted-foreground/60 mt-0.5">
             {isEn
               ? "Global markets · Commodities · FX · Rates · AI Insights · ETF picks"
-              : "글로벌 시장 · 원자재 · 환율 · 금리 · AI 시사점 · ETF 추천"}
+              : "글로벌 시장 · 원자재 · 환율 · 금리 · 한국 경제 · AI 시사점 · ETF 추천"}
           </p>
           {updatedAt && (
             <p className="text-[10px] text-muted-foreground/40 mt-1">{isEn ? "Updated" : "업데이트"}: {updatedAt}</p>
