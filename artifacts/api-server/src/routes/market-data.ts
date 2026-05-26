@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
+import { fetchECOSBaseRateHistory } from "../lib/ecos-client.js";
 
 const TTL_BATCH_QUOTES      =  3 * 60 * 1000;  //  3분 — 현재가
 const TTL_BATCH_SPARKLINES  =  6 * 60 * 60 * 1000;  //  6시간 — 90일 차트 (장 마감 후 변경)
@@ -1468,7 +1469,7 @@ router.get("/indicator-history", async (_req, res) => {
     return res.json(_indicatorHistoryCache.data);
   }
 
-  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v6");
+  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v7");
   if (dbCached) {
     _indicatorHistoryCache = { data: dbCached, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
     return res.json(dbCached);
@@ -1511,7 +1512,7 @@ router.get("/indicator-history", async (_req, res) => {
       fredGet("PCEPILFE"),            // 미국 근원 PCE (월별) → YoY 계산
       fredGet("UNRATE"),              // 미국 실업률 (월별)
       fredGet("A191RL1Q225SBEA"),     // 미국 GDP 성장률 연율 (분기)
-      fredGet("IR3TIB01KRM156N"),     // 한국 단기금리 3개월 (월별)
+      fetchECOSBaseRateHistory(),     // 한국은행 기준금리 (ECOS 월별)
       fredGet("KORCPIALLMINMEI"),     // 한국 CPI 지수 (월별) → YoY 계산
       fredGet("NAEXKP01KRQ657S"),     // 한국 GDP 거래량 지수 (분기) → YoY 계산
       wbGetKrUnemployment(),          // 한국 실업률 (연간, World Bank)
@@ -1589,8 +1590,8 @@ router.get("/indicator-history", async (_req, res) => {
       // ── 한국 지표 ──
       ...(krRate.length > 0 ? [{
         id: "kr-rate",
-        name: "한국 단기금리",
-        nameEn: "Korea 3M Rate",
+        name: "한국은행 기준금리",
+        nameEn: "BOK Base Rate",
         country: "KR",
         unit: "%",
         category: "금리",
@@ -1631,7 +1632,7 @@ router.get("/indicator-history", async (_req, res) => {
     ];
 
     _indicatorHistoryCache = { data: result, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
-    saveToDBCache("indicator-history-v6", result, INDICATOR_HISTORY_TTL);
+    saveToDBCache("indicator-history-v7", result, INDICATOR_HISTORY_TTL);
     console.log(`[indicator-history] 완료 — 지표 ${result.length}개 수집 (미국 5개, 한국 ${result.length - 5}개)`);
     return res.json(result);
   } catch (err: any) {

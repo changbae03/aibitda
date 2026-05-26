@@ -303,5 +303,30 @@ export function buildECOSContext(macro: EcosMacro | null): string {
 → 금리 사이클 "${rateCycle}" 반영하여 할인율 및 밸류에이션 배수 조정`;
 }
 
+/** 한국은행 기준금리 월별 시계열 (최대 60개월) — 지표 히스토리 차트용 */
+export async function fetchECOSBaseRateHistory(): Promise<Array<{ date: string; value: number }>> {
+  const key = getApiKey();
+  if (!key) return [];
+  // 5년치 요청 (YoY 계산 여유 포함)
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - 5);
+  const startYYYYMM = `${start.getFullYear()}${String(start.getMonth() + 1).padStart(2, "0")}`;
+  const endYYYYMM   = yyyymm(0);
+  const rows = await ecosFetch("722Y001", "M", startYYYYMM, endYYYYMM, "0101000", 65);
+  return rows
+    .map(r => {
+      const val = parseFloat(r.DATA_VALUE);
+      if (isNaN(val)) return null;
+      // TIME 형식: "202501" → "2025-01-01"
+      const t = r.TIME.trim();
+      const date = t.length === 6
+        ? `${t.slice(0, 4)}-${t.slice(4, 6)}-01`
+        : t;
+      return { date, value: val };
+    })
+    .filter((x): x is { date: string; value: number } => x !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 // 서버 시작 시 프리로드
 fetchECOSMacro().catch(() => {});
