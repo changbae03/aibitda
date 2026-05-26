@@ -1300,8 +1300,8 @@ function tsToKstDateStr(ts: number): string {
  *  미국 ETF는 Yahoo Finance 별도 경로.
  *  @param isuCd  MAJOR_ETFS에 없는 ETF도 KRX 폴백이 가능하도록 ISIN을 외부에서 주입 */
 export async function getEtfHoldings(code: string, isuCd?: string): Promise<HoldingsResult> {
-  // 미국 ETF 분기 (알파벳 코드)
-  if (US_ETFS.find(e => e.code === code)) {
+  // 미국 ETF 분기 — US_ETFS 목록에 있거나 순수 알파벳 티커면 Yahoo Finance로 조회
+  if (US_ETFS.find(e => e.code === code) || /^[A-Z]{1,6}$/.test(code)) {
     return getUsEtfHoldings(code);
   }
 

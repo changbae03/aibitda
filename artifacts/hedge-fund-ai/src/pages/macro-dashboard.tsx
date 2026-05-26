@@ -184,6 +184,8 @@ function CategorySection({ cat, isEn }: { cat: DashCategory; isEn: boolean }) {
 
 interface Holding { rank: number; stockCode: string; stockName: string; weight: number }
 
+const isUsTicker = (t: string) => /^[A-Z]{1,6}$/.test(t);
+
 function InlineHoldings({ ticker, onClose }: { ticker: string; onClose: () => void }) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(false);
@@ -206,7 +208,23 @@ function InlineHoldings({ ticker, onClose }: { ticker: string; onClose: () => vo
     </div>
   );
   if (error) return <p className="text-[11px] text-red-400 py-3 text-center">조회 실패 ({error})</p>;
-  if (holdings.length === 0) return <p className="text-[11px] text-muted-foreground/40 text-center py-3">보유 종목 정보 없음</p>;
+  if (holdings.length === 0) return (
+    <div className="flex items-center justify-between py-2">
+      <p className="text-[11px] text-muted-foreground/40">
+        {isUsTicker(ticker) ? "상세 종목 데이터 미제공" : "보유 종목 정보 없음"}
+      </p>
+      {isUsTicker(ticker) && (
+        <a
+          href={`https://finance.yahoo.com/quote/${ticker}/holdings`}
+          target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1 text-[10px] text-indigo-500/70 hover:text-indigo-500 transition-colors"
+        >
+          Yahoo Finance <ExternalLink className="w-2.5 h-2.5" />
+        </a>
+      )}
+      <button onClick={onClose} className="text-[10px] text-muted-foreground/40 hover:text-foreground transition-colors ml-2">✕</button>
+    </div>
+  );
 
   const maxW = holdings[0]?.weight ?? 1;
   return (
