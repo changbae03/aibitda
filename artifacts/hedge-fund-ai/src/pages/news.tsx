@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   RefreshCw, ExternalLink, Zap, Newspaper, ChevronDown,
   Bookmark, BookmarkCheck, BookmarkX, ChevronRight, Tag,
-  LayoutList, Clock,
+  LayoutList, Clock, Search, X,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format, isToday, isYesterday } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -455,6 +455,9 @@ export default function NewsPage() {
   /* 탭 */
   const [tab, setTab] = useState<Tab>("feed");
 
+  /* 검색 */
+  const [searchQuery, setSearchQuery] = useState("");
+
   /* ── 피드 로드 ── */
   const loadFeed = useCallback((force = false) => {
     setLoading(true);
@@ -539,8 +542,15 @@ export default function NewsPage() {
   }, [scraps]);
 
   /* ── 피드 그룹화 ── */
-  const breakingItems = items.filter(i => isBreaking(i.title));
-  const visible = expanded ? items : items.slice(0, PAGE);
+  const q = searchQuery.trim().toLowerCase();
+  const feedFiltered = q
+    ? items.filter(i => i.title.toLowerCase().includes(q) || i.source.toLowerCase().includes(q))
+    : items;
+  const scrapsFiltered = q
+    ? scraps.filter(i => i.title.toLowerCase().includes(q) || i.source.toLowerCase().includes(q))
+    : scraps;
+  const breakingItems = feedFiltered.filter(i => isBreaking(i.title));
+  const visible = q ? feedFiltered : (expanded ? feedFiltered : feedFiltered.slice(0, PAGE));
   type Group = { label: string; items: MacroNewsItem[] };
   const grouped: Group[] = [];
   for (const item of visible) {
@@ -588,9 +598,9 @@ export default function NewsPage() {
         </div>
 
         {/* 탭 */}
-        <div className="flex items-center gap-1 mb-5 p-1 rounded-xl bg-muted/30 border border-border/40">
+        <div className="flex items-center gap-1 mb-3 p-1 rounded-xl bg-muted/30 border border-border/40">
           <button
-            onClick={() => setTab("feed")}
+            onClick={() => { setTab("feed"); setSearchQuery(""); }}
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-all",
               tab === "feed"
@@ -602,7 +612,7 @@ export default function NewsPage() {
             피드
           </button>
           <button
-            onClick={() => { setTab("scraps"); if (loggedIn && scraps.length === 0 && !scrapsLoading) loadScraps(); }}
+            onClick={() => { setTab("scraps"); setSearchQuery(""); if (loggedIn && scraps.length === 0 && !scrapsLoading) loadScraps(); }}
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-all",
               tab === "scraps"
@@ -618,6 +628,30 @@ export default function NewsPage() {
               </span>
             )}
           </button>
+        </div>
+
+        {/* 검색창 */}
+        <div className="relative mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="키워드로 뉴스 검색..."
+            className={cn(
+              "w-full pl-9 pr-9 py-2.5 rounded-xl text-[13px]",
+              "bg-muted/30 border border-border/40 text-foreground placeholder:text-muted-foreground/40",
+              "focus:outline-none focus:border-primary/40 focus:bg-muted/50 transition-colors",
+            )}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* ── 피드 탭 ── */}
@@ -653,6 +687,17 @@ export default function NewsPage() {
                 </div>
               )}
 
+              {/* 검색 결과 수 표시 */}
+              {q && !loading && (
+                <div className="flex items-center gap-2 px-1 mb-3">
+                  <Search className="w-3 h-3 text-muted-foreground/40" />
+                  <span className="text-[12px] text-muted-foreground/60">
+                    <span className="font-semibold text-foreground/70">"{searchQuery}"</span> 검색 결과{" "}
+                    <span className="font-semibold text-primary">{feedFiltered.length}건</span>
+                  </span>
+                </div>
+              )}
+
               {/* 뉴스 목록 */}
               {loading && items.length === 0 ? (
                 <div className="space-y-0">
@@ -661,7 +706,17 @@ export default function NewsPage() {
               ) : grouped.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground/40">
                   <Newspaper className="w-8 h-8" />
-                  <p className="text-sm">뉴스를 불러오지 못했습니다</p>
+                  <p className="text-sm">
+                    {q ? `"${searchQuery}"에 해당하는 뉴스가 없습니다` : "뉴스를 불러오지 못했습니다"}
+                  </p>
+                  {q && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="text-[12px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
+                    >
+                      검색 초기화
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -690,7 +745,7 @@ export default function NewsPage() {
                     </div>
                   ))}
 
-                  {items.length > PAGE && (
+                  {!q && items.length > PAGE && (
                     <button
                       onClick={() => setExpanded(v => !v)}
                       className="w-full py-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
@@ -753,15 +808,47 @@ export default function NewsPage() {
               ) : (
                 <div className="space-y-3">
                   {/* 요약 헤더 */}
+                  {/* 검색 결과 수 (스크랩) */}
+                  {q && (
+                    <div className="flex items-center gap-2 px-1 mb-3">
+                      <Search className="w-3 h-3 text-muted-foreground/40" />
+                      <span className="text-[12px] text-muted-foreground/60">
+                        <span className="font-semibold text-foreground/70">"{searchQuery}"</span> 검색 결과{" "}
+                        <span className="font-semibold text-primary">{scrapsFiltered.length}건</span>
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between px-1 mb-2">
                     <span className="text-[12px] text-muted-foreground/60">
-                      총 <span className="font-bold text-foreground/70">{scraps.length}건</span> · {timeline().length}개 주제
+                      총 <span className="font-bold text-foreground/70">{q ? scrapsFiltered.length : scraps.length}건</span>
+                      {!q && ` · ${timeline().length}개 주제`}
                     </span>
                     <span className="text-[11px] text-muted-foreground/40">주제별 타임라인</span>
                   </div>
 
+                  {q && scrapsFiltered.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground/40">
+                      <Search className="w-7 h-7" />
+                      <p className="text-sm">"{searchQuery}"에 해당하는 스크랩이 없습니다</p>
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="text-[12px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
+                      >
+                        검색 초기화
+                      </button>
+                    </div>
+                  ) : (
                   <AnimatePresence>
-                    {timeline().map(group => (
+                    {(q
+                      ? [{
+                          topic: "검색 결과",
+                          count: scrapsFiltered.length,
+                          latestAt: scrapsFiltered[0]?.scrapped_at ?? null,
+                          items: scrapsFiltered,
+                        }]
+                      : timeline()
+                    ).map(group => (
                       <TopicGroupCard
                         key={group.topic}
                         group={group}
@@ -772,6 +859,7 @@ export default function NewsPage() {
                       />
                     ))}
                   </AnimatePresence>
+                  )}
                 </div>
               )}
             </motion.div>
