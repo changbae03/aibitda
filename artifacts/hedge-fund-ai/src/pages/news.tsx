@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
-  RefreshCw, ExternalLink, Zap, Newspaper, ChevronDown,
+  RefreshCw, ExternalLink, Zap, Newspaper, ChevronDown, ChevronUp,
   Bookmark, BookmarkCheck, BookmarkX, ChevronRight, Tag,
-  LayoutList, Clock, Search, X,
+  LayoutList, Clock, Search, X, Sparkles, Globe,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format, isToday, isYesterday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
+import { useLanguage } from "@/lib/language-context";
 
 /* ── 타입 ───────────────────────────────────────────────────────────────── */
 
@@ -40,6 +41,46 @@ interface TopicGroup {
   latestAt: string | null;
   items: ScrapItem[];
 }
+
+/* ── 타임라인 타입 ──────────────────────────────────────────────────────── */
+interface TimelineEvent {
+  date: string;
+  dateLabel: string;
+  event: string;
+  detail: string;
+  importance: "high" | "medium" | "low";
+  category: string;
+  source?: string;
+  url?: string;
+}
+interface TimelineData {
+  keyword: string;
+  summary: string;
+  timeline: TimelineEvent[];
+  generatedAt: number;
+}
+
+const PRESET_KEYWORDS = [
+  "이란", "미중갈등", "연준 금리", "반도체", "트럼프 관세",
+  "우크라이나", "엔비디아", "삼성전자", "원/달러", "OPEC",
+];
+
+const IMPORTANCE_CONFIG = {
+  high:   { dot: "bg-rose-500",   badge: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",    label: "핵심", ring: "border-l-rose-500" },
+  medium: { dot: "bg-amber-500",  badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", label: "주요", ring: "border-l-amber-500" },
+  low:    { dot: "bg-slate-400",  badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",   label: "참고", ring: "border-l-slate-300 dark:border-l-slate-600" },
+};
+
+const CAT_COLOR: Record<string, string> = {
+  외교: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  경제: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  군사: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  시장: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+  정치: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  에너지: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+  기술: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
+  금융: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+};
 
 /* ── 유틸 ───────────────────────────────────────────────────────────────── */
 
@@ -434,11 +475,12 @@ function TopicGroupCard({
 
 /* ── 메인 페이지 ────────────────────────────────────────────────────────── */
 
-type Tab = "feed" | "scraps";
+type Tab = "feed" | "scraps" | "timeline";
 
 export default function NewsPage() {
   const { data: authData } = useAuth();
   const loggedIn = !!authData?.user;
+  const { isEn } = useLanguage();
 
   /* 피드 상태 */
   const [items, setItems]       = useState<MacroNewsItem[]>([]);
@@ -457,6 +499,39 @@ export default function NewsPage() {
 
   /* 검색 */
   const [searchQuery, setSearchQuery] = useState("");
+
+  /* 타임라인 상태 */
+  const [tlKeyword, setTlKeyword]           = useState("");
+  const [tlInput, setTlInput]               = useState("");
+  const [tlData, setTlData]                 = useState<TimelineData | null>(null);
+  const [tlLoading, setTlLoading]           = useState(false);
+  const [tlError, setTlError]               = useState<string | null>(null);
+  const [tlExpandedIdx, setTlExpandedIdx]   = useState<number | null>(null);
+  const tlInputRef                          = useRef<HTMLInputElement>(null);
+
+  const fetchTimeline = useCallback(async (kw: string, force = false) => {
+    if (!kw.trim()) return;
+    setTlLoading(true);
+    setTlError(null);
+    setTlData(null);
+    setTlExpandedIdx(null);
+    setTlKeyword(kw.trim());
+    try {
+      const url = getApiUrl(`/api/news/timeline?keyword=${encodeURIComponent(kw.trim())}${force ? "&force=true" : ""}`);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json: TimelineData = await res.json();
+      setTlData(json);
+    } catch (e: any) {
+      setTlError(e?.message ?? "타임라인 생성 실패");
+    } finally {
+      setTlLoading(false);
+    }
+  }, []);
+
+  const tlUpdatedAt = tlData
+    ? new Date(tlData.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   /* ── 피드 로드 ── */
   const loadFeed = useCallback((force = false) => {
@@ -628,10 +703,22 @@ export default function NewsPage() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => { setTab("timeline"); setSearchQuery(""); }}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-all",
+              tab === "timeline"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground/60 hover:text-foreground",
+            )}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            이슈 타임라인
+          </button>
         </div>
 
-        {/* 검색창 */}
-        <div className="relative mb-5">
+        {/* 검색창 (타임라인 탭에서는 숨김) */}
+        <div className={cn("relative mb-5", tab === "timeline" && "hidden")}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40 pointer-events-none" />
           <input
             type="text"
@@ -860,6 +947,278 @@ export default function NewsPage() {
                     ))}
                   </AnimatePresence>
                   )}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ── 이슈 타임라인 탭 ── */}
+          {tab === "timeline" && (
+            <motion.div
+              key="timeline"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-5"
+            >
+              {/* 타임라인 소개 */}
+              <div className="flex items-start justify-between">
+                <p className="text-[12px] text-muted-foreground/50 mt-0.5">
+                  {isEn
+                    ? "애빛다 traces any keyword from origin to now"
+                    : "키워드로 처음부터 지금까지의 흐름을 한눈에 · 애빛다가 찾아줍니다"}
+                </p>
+                {tlData && (
+                  <button
+                    onClick={() => fetchTimeline(tlKeyword, true)}
+                    disabled={tlLoading}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg hover:bg-accent transition-colors shrink-0"
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", tlLoading && "animate-spin")} />
+                    {isEn ? "Refresh" : "새로고침"}
+                  </button>
+                )}
+              </div>
+
+              {/* 검색 폼 */}
+              <form
+                onSubmit={(e) => { e.preventDefault(); fetchTimeline(tlInput); }}
+                className="flex gap-2"
+              >
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+                  <input
+                    ref={tlInputRef}
+                    value={tlInput}
+                    onChange={e => setTlInput(e.target.value)}
+                    placeholder={isEn
+                      ? "Enter keyword (e.g. Iran, NVIDIA, US tariffs...)"
+                      : "키워드 입력 (예: 이란, 엔비디아, 미중갈등...)"}
+                    className="w-full pl-9 pr-4 py-2.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={tlLoading || !tlInput.trim()}
+                  className="px-4 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {isEn ? "Search" : "검색"}
+                </button>
+              </form>
+
+              {/* 프리셋 키워드 칩 */}
+              <div className="flex flex-wrap gap-2">
+                {PRESET_KEYWORDS.map(kw => (
+                  <button
+                    key={kw}
+                    onClick={() => { setTlInput(kw); fetchTimeline(kw); }}
+                    disabled={tlLoading}
+                    className={cn(
+                      "px-3 py-1 text-xs rounded-full border transition-colors",
+                      tlKeyword === kw
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                    )}
+                  >
+                    {kw}
+                  </button>
+                ))}
+              </div>
+
+              {/* 로딩 */}
+              <AnimatePresence>
+                {tlLoading && (
+                  <motion.div
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="space-y-5"
+                  >
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/10">
+                      <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          &quot;{tlKeyword}&quot; {isEn ? "timeline generating..." : "타임라인 생성 중..."}
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5">
+                          {isEn
+                            ? "애빛다 is analyzing news and historical context"
+                            : "애빛다가 뉴스와 역사적 맥락을 분석하고 있습니다"}
+                        </p>
+                      </div>
+                    </div>
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex gap-4 animate-pulse">
+                        <div className="flex flex-col items-center gap-1 shrink-0">
+                          <div className="w-3.5 h-3.5 rounded-full bg-muted mt-1.5" />
+                        </div>
+                        <div className="flex-1 pb-5 space-y-2">
+                          <div className="h-3 bg-muted rounded w-20" />
+                          <div className="h-5 bg-muted rounded w-3/4" />
+                          <div className="h-3 bg-muted rounded w-full" />
+                          <div className="h-3 bg-muted rounded w-2/3" />
+                        </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* 에러 */}
+              {tlError && !tlLoading && (
+                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+                  {tlError}
+                </div>
+              )}
+
+              {/* 결과 */}
+              <AnimatePresence>
+                {tlData && !tlLoading && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-5"
+                  >
+                    {/* 애빛다 분석 요약 */}
+                    <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex gap-3">
+                      <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-semibold text-primary">
+                            {isEn ? "애빛다 Analysis" : "애빛다 종합 분석"}
+                          </span>
+                          {tlUpdatedAt && (
+                            <span className="text-[10px] text-muted-foreground/50">
+                              {isEn ? "Updated" : "업데이트"}: {tlUpdatedAt}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-foreground/80 leading-relaxed">{tlData.summary}</p>
+                      </div>
+                    </div>
+
+                    {/* 이벤트 수 */}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground/60">
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>
+                        <span className="font-medium text-foreground">{tlData.timeline.length}개</span> 주요 사건
+                      </span>
+                      <span>·</span>
+                      <span className="text-rose-500 font-medium">
+                        {tlData.timeline.filter(e => e.importance === "high").length}개 핵심 이벤트
+                      </span>
+                    </div>
+
+                    {/* 타임라인 */}
+                    <div className="relative pl-1">
+                      <div className="absolute left-[7px] top-2 bottom-8 w-px bg-border/60" />
+                      <div className="space-y-0">
+                        {tlData.timeline.map((ev, idx) => {
+                          const cfg = IMPORTANCE_CONFIG[ev.importance] ?? IMPORTANCE_CONFIG.low;
+                          const catColor = CAT_COLOR[ev.category] ?? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+                          const isExp = tlExpandedIdx === idx;
+                          return (
+                            <motion.div
+                              key={`${ev.date}-${idx}`}
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.045, duration: 0.25 }}
+                              className="flex gap-4"
+                            >
+                              <div className="shrink-0 flex flex-col items-center">
+                                <div className={cn("w-3.5 h-3.5 rounded-full border-2 border-background mt-2 z-10", cfg.dot)} />
+                              </div>
+                              <div className={cn("flex-1 mb-4 rounded-xl border border-border border-l-[3px] bg-card shadow-sm overflow-hidden", cfg.ring)}>
+                                <button
+                                  className="w-full text-left px-4 py-3 hover:bg-accent/30 transition-colors"
+                                  onClick={() => setTlExpandedIdx(isExp ? null : idx)}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center flex-wrap gap-1.5 mb-1.5">
+                                        <span className="text-[11px] font-semibold text-muted-foreground/70 tabular-nums">
+                                          {ev.dateLabel || ev.date}
+                                        </span>
+                                        <span className={cn("px-1.5 py-px text-[10px] font-semibold rounded-full", cfg.badge)}>
+                                          {cfg.label}
+                                        </span>
+                                        <span className={cn("px-1.5 py-px text-[10px] font-medium rounded-full", catColor)}>
+                                          {ev.category}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm font-semibold leading-snug">{ev.event}</p>
+                                    </div>
+                                    {isExp
+                                      ? <ChevronUp className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1" />
+                                      : <ChevronDown className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1" />
+                                    }
+                                  </div>
+                                </button>
+                                <AnimatePresence>
+                                  {isExp && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.18 }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="px-4 pb-4 border-t border-border/50 pt-3">
+                                        <p className="text-sm text-muted-foreground leading-relaxed">{ev.detail}</p>
+                                        {(ev.source || ev.url) && (
+                                          <div className="flex items-center gap-2 mt-3">
+                                            {ev.source && (
+                                              <span className="text-[11px] text-muted-foreground/60 bg-muted px-2 py-0.5 rounded-full">
+                                                {ev.source}
+                                              </span>
+                                            )}
+                                            {ev.url && (
+                                              <a
+                                                href={ev.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                                                onClick={e => e.stopPropagation()}
+                                              >
+                                                원문 보기 <ExternalLink className="w-3 h-3" />
+                                              </a>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 안내 문구 */}
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-[11px] text-muted-foreground/60">
+                      <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        {isEn
+                          ? "This timeline is curated by 애빛다 from RSS news and training data. Use as a reference only."
+                          : "이 타임라인은 애빛다가 RSS 뉴스와 과거 데이터를 바탕으로 생성했습니다. 투자 판단의 참고자료로만 활용하세요."}
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* 초기 빈 상태 */}
+              {!tlData && !tlLoading && !tlError && (
+                <div className="text-center py-16 text-muted-foreground/30">
+                  <Clock className="w-14 h-14 mx-auto mb-4 opacity-20" />
+                  <p className="text-sm font-medium text-muted-foreground/50">
+                    {isEn ? "Enter a keyword to build an issue timeline" : "키워드를 입력하면 이슈 타임라인을 생성합니다"}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {isEn ? "e.g. Iran crisis, Fed rate hike, semiconductor war..." : "예: 이란, 미중갈등, 연준 금리인상, 반도체..."}
+                  </p>
                 </div>
               )}
             </motion.div>
