@@ -5816,6 +5816,22 @@ ${COMMON_RULES}`,
 - Catalyst & Smart Money Analyst의 핵심 이슈·체크포인트 → key_issue, hypothesis, monitoring_indicators
 - Valuation Analyst의 최종 밸류에이션 인계 요약 + 핵심 가정 요약 → 모든 목표가 수치의 원천
 - Market & Technical Analyst의 기술적 분석 진입 구간·손절선 → entry_price, stop_loss 최종 결정
+- Market & Technical Analyst의 기술적 저항선·모멘텀 상태 → technical_target(단기 기술적 이정표), action_timing(매매 실행 시점) 결정
+
+단기 기술적 이정표(technical_target) 및 실행 타이밍(action_timing) 결정 규칙:
+① technical_target — 1~3개월 내 모멘텀 기준 가격 이정표 (현지통화 숫자만, 해당 없으면 null)
+   · Sell/Strong Sell + 상승 모멘텀 강함: 주요 기술적 저항선(피보나치 되돌림, 52주 고점, 이전 고점 등)을 기입 — 투자자가 이 가격대에서 차익실현을 고려할 기준으로 활용
+   · Buy/Strong Buy + 상승 추세: 모멘텀 지속 시 1~3개월 상방 목표
+   · Hold 또는 추세 불명확: null
+② action_timing — 실제 매매 실행 시점 (아래 중 반드시 하나)
+   · "즉시" — 기술적 추세와 verdict 방향이 일치 (하락추세+Sell, 상승추세+Buy)
+   · "모멘텀 정점 후" — Sell/Strong Sell이지만 상승 모멘텀이 강하게 살아있는 경우 (RSI<80 상승 중, 52주 신고가 근접, 이격도 확대)
+   · "지지선 이탈 후" — Sell이지만 핵심 지지선 위에 있어 추세 전환 확인 필요
+   · "분할 실행" — Buy이지만 단기 과매수 상태라 일시에 진입 위험
+   · "관망" — Hold 또는 판단 유보
+
+   ⚠️ Sell/Strong Sell 판정 + 상승 모멘텀 신호가 동시에 존재하면 action_timing은 반드시 "모멘텀 정점 후" 또는 "지지선 이탈 후" 중 하나여야 합니다. "즉시" 선택 금지.
+
 - 사용자에게 추가 입력을 요청하지 말 것
 - 반드시 아래 JSON 형식으로만 응답하세요. JSON 외 다른 텍스트 및 마크다운 금지. 코드블록(\`\`\`) 절대 사용 금지.`,
       userPrompt: `${baseContextFull}${previousContext}
@@ -5953,6 +5969,8 @@ ${COMMON_RULES}`,
   "entry_price": "구체적 진입 가격 (KRW 예: 190000, USD 예: 120.50 — 현지통화 숫자만)",
   "target_price": "⛔ 반드시 FINAL_VALUATION_DATA의 base 필드 숫자 (수급·심리 보정 적용 시 보정 후 값) — scenarios Base target_price와 반드시 동일해야 함",
   "stop_loss": "손절 가격 (KRW 예: 175000, USD 예: 110.00 — 현지통화 숫자만)",
+  "technical_target": "단기 기술적 이정표 가격 (현지통화 숫자만). Sell/Strong Sell+상승모멘텀: 주요 저항선(차익실현 참조). Buy/Strong Buy+상승추세: 1~3개월 상방 목표. 추세 불명확: null",
+  "action_timing": "매매 실행 타이밍 — '즉시' / '모멘텀 정점 후' / '지지선 이탈 후' / '분할 실행' / '관망' 중 하나. Sell+상승모멘텀 강함 시 반드시 '모멘텀 정점 후' 또는 '지지선 이탈 후'",
   "risks": [
     "핵심 리스크 1",
     "핵심 리스크 2",

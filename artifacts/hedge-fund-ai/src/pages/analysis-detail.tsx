@@ -2788,6 +2788,27 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                     {isEn ? "R/R" : "손익비(R/R)"} {json.risk_reward}
                   </span>
                 )}
+                {json.action_timing && (() => {
+                  const at = String(json.action_timing);
+                  const isUrgent = at === "즉시" || at.toLowerCase() === "immediately";
+                  const isMomentum = at.includes("정점") || at.toLowerCase().includes("momentum");
+                  const isSupport = at.includes("이탈") || at.toLowerCase().includes("support");
+                  const isSplit = at.includes("분할") || at.toLowerCase().includes("partial");
+                  const pillStyle = isUrgent
+                    ? "bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700"
+                    : isMomentum
+                    ? "bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700"
+                    : isSupport
+                    ? "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700"
+                    : isSplit
+                    ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700"
+                    : "bg-muted text-foreground/70 border-border";
+                  return (
+                    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${pillStyle}`}>
+                      ⏱ {isEn ? "Timing" : "실행시점"}: {at}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2863,6 +2884,9 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                 ? `📌 ${isEn ? "This rating reflects 12-month DCF/WACC valuation (not short-term price direction). Momentum may diverge from fundamentals." : "이 의견은 DCF·WACC 기반 12개월 장기 가치평가 판단입니다. 단기 가격 모멘텀은 밸류에이션과 반대 방향으로 움직일 수 있습니다."}`
                 : null;
 
+              const techTarget = parseFloat(String(json.technical_target ?? "").replace(/[^0-9.]/g, "")) || null;
+              const techTargetUpside = (techTarget && cp && cp > 0) ? ((techTarget - cp) / cp * 100) : null;
+
               return (
                 <div className="px-4 sm:px-6 py-4">
                   {/* 밸류에이션 vs 단기 모멘텀 구분 안내 */}
@@ -2918,6 +2942,38 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
                       )}
                     </div>
                   </div>
+
+                  {/* 단기 기술적 이정표 — technical_target 있을 때만 표시 */}
+                  {techTarget && (
+                    <div className="mt-3 rounded-xl border border-orange-300/60 dark:border-orange-700/40 bg-orange-50/40 dark:bg-orange-950/20 px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
+                        <div>
+                          <p className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-widest">
+                            {isEn ? "Short-Term Technical Target" : "단기 기술적 이정표"}
+                            <span className="ml-1.5 font-normal normal-case text-orange-500/70 dark:text-orange-400/60">
+                              {isEn ? "(1–3M momentum, not fair value)" : "(1~3개월 모멘텀 기준 · 내재가치 아님)"}
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-orange-600/70 dark:text-orange-400/60 mt-0.5">
+                            {isSell
+                              ? (isEn ? "Possible resistance zone — consider profit-taking if momentum reaches this level" : "모멘텀이 이 가격대에 도달 시 차익실현 검토")
+                              : (isEn ? "Momentum upside target if current trend continues" : "현 추세 지속 시 단기 상방 목표")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[15px] sm:text-[18px] font-bold text-orange-700 dark:text-orange-300 font-mono leading-none">
+                          {formatPrice(String(techTarget), priceCurrency, isEn)}
+                        </p>
+                        {techTargetUpside !== null && (
+                          <p className={`text-[11px] font-bold mt-0.5 ${techTargetUpside >= 0 ? "text-orange-600 dark:text-orange-400" : "text-orange-500 dark:text-orange-300"}`}>
+                            {techTargetUpside >= 0 ? "+" : ""}{techTargetUpside.toFixed(1)}%
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
