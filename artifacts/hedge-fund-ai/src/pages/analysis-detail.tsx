@@ -2378,7 +2378,18 @@ export default function AnalysisDetail() {
                 const isCurrent = !isComplete && idx === currentStepCount;
                 const agent = AGENTS[stepKey];
                 return (
-                  <div key={stepKey} className="flex flex-col items-center gap-1.5">
+                  <button
+                    key={stepKey}
+                    disabled={!isDone}
+                    onClick={() => {
+                      const el = document.getElementById(`step-${stepKey}`);
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 transition-opacity",
+                      isDone ? "cursor-pointer hover:opacity-75" : "cursor-default"
+                    )}
+                  >
                     <div className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
                       isDone ? "bg-primary border-primary text-primary-foreground" : 
@@ -2393,7 +2404,7 @@ export default function AnalysisDetail() {
                     )}>
                       {isEn ? (agent.nameEn ?? agent.name) : agent.name}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
