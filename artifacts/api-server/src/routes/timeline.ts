@@ -25,7 +25,7 @@ interface TimelineResult {
   generatedAt: number;
 }
 
-/* ── RSS 소스 ─────────────────────────────────────────────────────────────── */
+/* ── 고정 RSS 소스 (일반 경제 뉴스) ─────────────────────────────────────── */
 const RSS_SOURCES: RssSource[] = [
   { url: "https://www.hankyung.com/feed/economy",       source: "한국경제" },
   { url: "https://www.hankyung.com/feed/international", source: "한국경제(국제)" },
@@ -36,9 +36,9 @@ const RSS_SOURCES: RssSource[] = [
   { url: "https://www.sedaily.com/RSS/Economy",         source: "서울경제" },
 ];
 
-/* ── 캐시 (키워드별 30분) ────────────────────────────────────────────────── */
+/* ── 캐시 (키워드별 15분) ────────────────────────────────────────────────── */
 const _cache = new Map<string, { data: TimelineResult; expiresAt: number }>();
-const CACHE_TTL = 30 * 60 * 1000;
+const CACHE_TTL = 15 * 60 * 1000;
 
 /* ── RSS 파싱 ─────────────────────────────────────────────────────────────── */
 function parseRssItems(xml: string, source: string): RssItem[] {
@@ -77,12 +77,38 @@ async function fetchRss(src: RssSource): Promise<RssItem[]> {
   } catch { return []; }
 }
 
+/* ── Google News RSS (키워드 특화) ──────────────────────────────────────── */
+async function fetchGoogleNewsRss(keyword: string): Promise<RssItem[]> {
+  try {
+    // 한국어 뉴스
+    const krUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=ko&gl=KR&ceid=KR:ko`;
+    // 영어 뉴스 (글로벌 종목 대응)
+    const enUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=en-US&gl=US&ceid=US:en`;
+
+    const [krRes, enRes] = await Promise.allSettled([
+      fetch(krUrl, { signal: AbortSignal.timeout(10000), headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" } }),
+      fetch(enUrl, { signal: AbortSignal.timeout(10000), headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" } }),
+    ]);
+
+    const items: RssItem[] = [];
+    if (krRes.status === "fulfilled" && krRes.value.ok) {
+      items.push(...parseRssItems(await krRes.value.text(), "Google 뉴스(KR)"));
+    }
+    if (enRes.status === "fulfilled" && enRes.value.ok) {
+      items.push(...parseRssItems(await enRes.value.text(), "Google 뉴스(EN)"));
+    }
+    return items;
+  } catch { return []; }
+}
+
 /* ── Gemini 타임라인 생성 ─────────────────────────────────────────────────── */
 async function generateTimeline(keyword: string, recentArticles: RssItem[]): Promise<{ summary: string; timeline: TimelineEvent[] }> {
   const key = process.env["GEMINI_API_KEY"];
   if (!key) return { summary: "Gemini API 키가 없습니다.", timeline: [] };
 
-  const articleSnippets = recentArticles.slice(0, 30).map(a => {
+  // 최신순 정렬 후 50개 사용 (기존 30개 → 50개)
+  const sorted = [...recentArticles].sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+  const articleSnippets = sorted.slice(0, 50).map(a => {
     const d = new Date(a.pubDate);
     const dateStr = isNaN(d.getTime()) ? a.pubDate : d.toISOString().slice(0, 10);
     return `[${dateStr}] (${a.source}) ${a.title}`;
@@ -94,7 +120,7 @@ async function generateTimeline(keyword: string, recentArticles: RssItem[]): Pro
 오늘 날짜는 ${today}입니다. 타임라인은 반드시 오늘까지의 최신 사건을 포함해야 합니다.
 키워드 "${keyword}"에 대한 이슈 타임라인을 생성해주세요.
 
-최근 뉴스 기사 (RSS 수집):
+최근 뉴스 기사 (RSS 수집, 최신순):
 ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반으로 생성)"}
 
 다음 JSON 형식으로만 응답하세요 (설명 없이):
@@ -115,12 +141,13 @@ ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반�
 }
 
 규칙:
-- 타임라인은 이 이슈가 처음 주목받은 시점부터 현재까지 시간순으로 정렬
-- 총 8~15개의 굵직한 사건만 포함 (지엽적인 사건 제외)
-- 최근 제공된 뉴스 기사를 우선 반영, 그 외 Gemini 학습 데이터로 보완
+- 타임라인은 이 이슈가 처음 주목받은 시점부터 현재(${today})까지 시간순으로 정렬
+- 총 10~15개의 굵직한 사건만 포함 (지엽적인 사건 제외)
+- 제공된 최신 뉴스 기사를 최우선 반영, 그 외 Gemini 학습 데이터로 보완
 - importance: high는 시장/외교에 결정적 영향을 준 사건, medium은 주요 사건, low는 참고 사건
 - 투자자 관점에서 실질적으로 중요한 흐름을 보여주세요
 - 날짜를 정확히 모르는 경우 연/월 단위로 표시
+- 반드시 ${today} 기준 최근 1~2주 내 뉴스가 있다면 타임라인에 포함하세요
 `;
 
   try {
@@ -160,21 +187,26 @@ router.get("/news/timeline", async (req, res) => {
   try {
     console.log(`[timeline] 키워드 "${keyword}" 타임라인 생성 시작`);
 
-    // 1. 모든 RSS 병렬 수집
-    const allResults = await Promise.allSettled(RSS_SOURCES.map(s => fetchRss(s)));
-    const allArticles = allResults.flatMap(r => r.status === "fulfilled" ? r.value : []);
+    // 1. 일반 RSS + Google News RSS 병렬 수집
+    const [generalResults, googleItems] = await Promise.all([
+      Promise.allSettled(RSS_SOURCES.map(s => fetchRss(s))),
+      fetchGoogleNewsRss(keyword),
+    ]);
+    const generalArticles = generalResults.flatMap(r => r.status === "fulfilled" ? r.value : []);
 
-    // 2. 키워드 필터 (제목에 포함)
+    // 2. 일반 RSS → 키워드 필터
     const kwLower = keyword.toLowerCase();
-    const matching = allArticles.filter(a =>
-      a.title.toLowerCase().includes(kwLower) ||
-      a.title.includes(keyword)
-    ).sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+    const filteredGeneral = generalArticles.filter(a =>
+      a.title.toLowerCase().includes(kwLower) || a.title.includes(keyword)
+    );
 
-    console.log(`[timeline] RSS 수집 ${allArticles.length}건 → 키워드 일치 ${matching.length}건`);
+    // 3. Google News는 이미 키워드 특화 → 바로 합산
+    const allMatching = [...googleItems, ...filteredGeneral];
 
-    // 3. Gemini 타임라인 생성
-    const { summary, timeline } = await generateTimeline(keyword, matching);
+    console.log(`[timeline] Google뉴스 ${googleItems.length}건 + 일반RSS 키워드일치 ${filteredGeneral.length}건 = 총 ${allMatching.length}건`);
+
+    // 4. Gemini 타임라인 생성
+    const { summary, timeline } = await generateTimeline(keyword, allMatching);
 
     const result: TimelineResult = {
       keyword,

@@ -1320,19 +1320,23 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<number | null>(null);
+  const [forceCount, setForceCount] = useState(0);
   const keyword = isEn ? (ticker || companyName) : companyName;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const url = getApiUrl(`/api/news/timeline?keyword=${encodeURIComponent(keyword)}`);
+    const isForce = forceCount > 0;
+    const url = getApiUrl(`/api/news/timeline?keyword=${encodeURIComponent(keyword)}${isForce ? "&force=true" : ""}`);
     fetch(url)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((d: { summary?: string; timeline?: StockNewsEvent[] }) => {
+      .then((d: { summary?: string; timeline?: StockNewsEvent[]; generatedAt?: number }) => {
         if (cancelled) return;
         setSummary(d.summary ?? "");
         setEvents(d.timeline ?? []);
+        setGeneratedAt(d.generatedAt ?? null);
         setLoading(false);
       })
       .catch(e => {
@@ -1341,13 +1345,17 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [keyword]);
+  }, [keyword, forceCount]);
 
   const importanceDot: Record<string, string> = {
     high:   "bg-rose-500",
     medium: "bg-amber-400",
     low:    "bg-muted-foreground/30",
   };
+
+  const generatedLabel = generatedAt
+    ? new Date(generatedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
@@ -1360,9 +1368,22 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
         <span className="text-[11px] text-muted-foreground/40">
           {isEn ? "oldest → latest" : "과거 → 최신"}
         </span>
-        {!loading && events.length > 0 && (
-          <span className="ml-auto text-[11px] font-mono text-muted-foreground/35">{events.length}</span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {!loading && generatedLabel && (
+            <span className="text-[10.5px] text-muted-foreground/30 font-mono">{generatedLabel}</span>
+          )}
+          {!loading && events.length > 0 && (
+            <span className="text-[11px] font-mono text-muted-foreground/35">{events.length}</span>
+          )}
+          <button
+            onClick={() => { setExpandedIdx(null); setForceCount(c => c + 1); }}
+            disabled={loading}
+            title={isEn ? "Refresh to latest news" : "최신 뉴스로 새로고침"}
+            className="p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground/70 hover:bg-muted/50 transition-colors disabled:opacity-30"
+          >
+            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+          </button>
+        </div>
       </div>
 
       {/* AI 요약 */}
