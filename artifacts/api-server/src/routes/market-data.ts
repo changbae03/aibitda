@@ -1880,6 +1880,104 @@ router.get("/:ticker", async (req, res) => {
   }
 });
 
+const TTL_TICKER_STATS = 30 * 60 * 1000; // 30분
+
+// GET /api/market-data/ticker-stats/:ticker — PER, PBR, 52w high/low, volume, etc.
+router.get("/ticker-stats/:ticker", async (req, res) => {
+  const ticker = sanitizeTicker(req.params.ticker ?? "");
+  if (!ticker) { res.status(400).json({ error: "Invalid ticker" }); return; }
+
+  const cacheKey = `ts:${ticker}`;
+  const cached = cache.get<any>(cacheKey);
+  if (cached) { res.json(cached); return; }
+
+  const koreanCode = ticker.match(/^(\d{6})\.(KS|KQ)$/)?.[1]
+    ?? ticker.match(/^(\d{6})$/)?.[1];
+
+  try {
+    let q: any = null;
+
+    if (koreanCode) {
+      // Naver integration API — totalInfos 배열에서 PER/PBR/52주고저/거래량/시총 추출
+      const NAVER_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Referer": "https://m.stock.naver.com/",
+      };
+      try {
+        const intRes = await fetch(`https://m.stock.naver.com/api/stock/${koreanCode}/integration`, { headers: NAVER_HEADERS });
+        if (intRes.ok) {
+          const intData: any = await intRes.json();
+          const infos: any[] = intData?.totalInfos ?? [];
+          const byCode: Record<string, string> = {};
+          for (const item of infos) {
+            if (item?.code && item?.value != null) byCode[item.code] = String(item.value);
+          }
+          // 값 파싱 헬퍼: "24.81배" → 24.81, "330,000" → 330000
+          const parseNum = (v: string | undefined) => {
+            if (!v) return null;
+            const n = parseFloat(v.replace(/[^0-9.]/g, ""));
+            return isNaN(n) ? null : n;
+          };
+          // 시총 파싱: "1,794조 8,075억" → 숫자(원)
+          const parseMC = (v: string | undefined): number | null => {
+            if (!v) return null;
+            const joMatch = v.match(/([\d,]+)조/);
+            const eokMatch = v.match(/([\d,]+)억/);
+            const jo = joMatch ? Number(joMatch[1].replace(/,/g, "")) : 0;
+            const eok = eokMatch ? Number(eokMatch[1].replace(/,/g, "")) : 0;
+            const total = jo * 1e12 + eok * 1e8;
+            return total > 0 ? total : null;
+          };
+          const per = parseNum(byCode.per);
+          const pbr = parseNum(byCode.pbr);
+          const eps = parseNum(byCode.eps);
+          const bps = parseNum(byCode.bps);
+          const week52High = parseNum(byCode.highPriceOf52Weeks);
+          const week52Low = parseNum(byCode.lowPriceOf52Weeks);
+          const volume = parseNum(byCode.accumulatedTradingVolume);
+          const marketCap = parseMC(byCode.marketValue);
+          const divYieldRaw = byCode.dividendYieldRatio ? parseFloat(byCode.dividendYieldRatio) : null;
+
+          const result = { currency: "KRW", marketCap, per, pbr, eps, bps, dividendYield: divYieldRaw, week52High, week52Low, volume, avgVolume: null, beta: null };
+          cache.set(cacheKey, result, TTL_TICKER_STATS);
+          res.json(result);
+          return;
+        }
+      } catch { /* Naver 실패 시 Yahoo fallback */ }
+
+      // Yahoo Finance fallback for Korean stocks
+      for (const suffix of [".KS", ".KQ"]) {
+        try {
+          q = await yahooFinance.quote(`${koreanCode}${suffix}`);
+          if (q?.regularMarketPrice) break;
+        } catch { continue; }
+      }
+    } else {
+      // US / global stocks
+      try { q = await yahooFinance.quote(ticker); } catch {}
+    }
+
+    const result = {
+      currency: koreanCode ? "KRW" : (q?.currency ?? "USD"),
+      marketCap: q?.marketCap ?? null,
+      per: q?.trailingPE ?? null,
+      forwardPer: q?.forwardPE ?? null,
+      pbr: q?.priceToBook ?? null,
+      week52High: q?.fiftyTwoWeekHigh ?? null,
+      week52Low: q?.fiftyTwoWeekLow ?? null,
+      volume: q?.regularMarketVolume ?? null,
+      avgVolume: q?.averageDailyVolume3Month ?? null,
+      dividendYield: q?.dividendYield != null ? q.dividendYield * 100 : null,
+      beta: q?.beta ?? null,
+      eps: q?.epsTrailingTwelveMonths ?? null,
+    };
+    cache.set(cacheKey, result, TTL_TICKER_STATS);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to fetch ticker stats" });
+  }
+});
+
 // GET /api/market-data/financials/:ticker — structured annual + quarterly income statement
 router.get("/financials/:ticker", async (req, res) => {
   const ticker = sanitizeTicker(req.params.ticker ?? "");

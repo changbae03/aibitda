@@ -1651,17 +1651,31 @@ export default function AnalysisDetail() {
     }
   }, [analysis?.id, analysis?.userRating, analysis?.userFeedback]);
 
-  // 시가총액 + 현재가 fetch
+  // 시가총액 + 현재가 + 주요 지표 fetch
   const [headerMarketCap, setHeaderMarketCap] = useState<{ value: number; currency: string } | null>(null);
   const [headerLivePrice, setHeaderLivePrice] = useState<{ price: number; change: number | null; currency: string } | null>(null);
+  const [headerTickerStats, setHeaderTickerStats] = useState<{
+    per: number | null; pbr: number | null;
+    week52High: number | null; week52Low: number | null;
+    volume: number | null; dividendYield: number | null; beta: number | null;
+  } | null>(null);
+
   useEffect(() => {
     if (!analysis?.ticker) return;
-    fetch(getApiUrl(`/api/market-data/financials/${encodeURIComponent(analysis.ticker)}`))
+    // 주요 지표 (PER, PBR, 52주 고저, 거래량)
+    fetch(getApiUrl(`/api/market-data/ticker-stats/${encodeURIComponent(analysis.ticker)}`))
       .then(r => r.ok ? r.json() : null)
       .then((d: any) => {
-        if (d?.marketCap != null) setHeaderMarketCap({ value: d.marketCap, currency: d.currency ?? "KRW" });
+        if (!d) return;
+        if (d.marketCap != null) setHeaderMarketCap({ value: d.marketCap, currency: d.currency ?? "KRW" });
+        setHeaderTickerStats({
+          per: d.per ?? null, pbr: d.pbr ?? null,
+          week52High: d.week52High ?? null, week52Low: d.week52Low ?? null,
+          volume: d.volume ?? null, dividendYield: d.dividendYield ?? null, beta: d.beta ?? null,
+        });
       })
       .catch(() => {});
+    // 실시간 현재가
     fetch(getApiUrl(`/api/market-data/batch-quotes`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2074,103 +2088,164 @@ export default function AnalysisDetail() {
         <StepNavSidebar steps={analysis.steps} isEn={isEn} />
         <div className="flex-1 min-w-0 space-y-5 sm:space-y-6">
 
-      {/* Header */}
-      <div ref={headerRef} className="bg-card rounded-2xl p-5 sm:p-6" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-6">
-          <div className="flex-1 min-w-0">
-            {/* 회사명 */}
-            <div className="mb-3">
-              {isEn ? (
-                <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
-                  {analysis.englishName || analysis.companyName}
-                </h1>
-              ) : (
-                <>
-                  <h1 className="text-xl md:text-2xl font-display font-bold text-foreground leading-tight">
-                    {analysis.companyName}
-                  </h1>
-                  {analysis.englishName && (
-                    <p className="text-xs text-muted-foreground font-normal">{analysis.englishName}</p>
-                  )}
-                </>
-              )}
-            </div>
+      {/* ── Report Hero ─────────────────────────────────────────────── */}
+      <div ref={headerRef} className="bg-card rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
 
-            {/* 현재가 + 등락률 */}
-            {headerLivePrice && (
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-2xl font-black tabular-nums tracking-tight text-foreground">
-                  {headerLivePrice.currency === "USD"
-                    ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : isEn
-                      ? `KRW ${Math.round(headerLivePrice.price).toLocaleString("en-US")}`
-                      : `₩${Math.round(headerLivePrice.price).toLocaleString("ko-KR")}`}
+        {/* 상단 컬러 스트라이프 */}
+        <div className={cn(
+          "h-1 w-full",
+          isComplete && effectiveVerdict
+            ? ["strong buy", "buy"].includes((effectiveVerdict ?? "").toLowerCase())
+              ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+              : ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase())
+              ? "bg-gradient-to-r from-rose-500 to-orange-400"
+              : "bg-gradient-to-r from-amber-400 to-yellow-300"
+            : "bg-gradient-to-r from-primary/40 to-primary/20"
+        )} />
+
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-5 sm:gap-6">
+
+            {/* ── 왼쪽: 종목 정보 ── */}
+            <div className="flex-1 min-w-0">
+
+              {/* 회사명 + 배지 */}
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <div className="min-w-0">
+                  {isEn ? (
+                    <h1 className="text-2xl md:text-3xl font-display font-extrabold text-foreground leading-tight tracking-tight">
+                      {analysis.englishName || analysis.companyName}
+                    </h1>
+                  ) : (
+                    <>
+                      <h1 className="text-2xl md:text-3xl font-display font-extrabold text-foreground leading-tight tracking-tight">
+                        {analysis.companyName}
+                      </h1>
+                      {analysis.englishName && (
+                        <p className="text-xs text-muted-foreground/70 mt-0.5 font-normal">{analysis.englishName}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+                {/* 상태 배지 */}
+                <span className={cn(
+                  "shrink-0 mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full border",
+                  isComplete
+                    ? "bg-success/10 text-success border-success/20"
+                    : isError
+                      ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30"
+                      : analysis.status === 'queued'
+                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 animate-pulse"
+                        : "bg-warning/10 text-warning border-warning/20 animate-pulse"
+                )}>
+                  {isComplete ? (isEn ? 'Complete' : '분석 완료')
+                    : isError ? (isEn ? 'Failed' : '실패')
+                    : analysis.status === 'queued' ? (isEn ? 'Queued' : '대기 중')
+                    : (isEn ? 'In Progress' : '분석 중')}
                 </span>
-                {headerLivePrice.change != null && (
-                  <span className={cn(
-                    "text-sm font-bold",
-                    headerLivePrice.change >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
-                  )}>
-                    {headerLivePrice.change >= 0 ? "▲" : "▼"} {Math.abs(headerLivePrice.change).toFixed(2)}%
-                  </span>
+              </div>
+
+              {/* 현재가 + 등락률 */}
+              <div className="flex items-baseline gap-2.5 mt-3 mb-4">
+                {headerLivePrice ? (
+                  <>
+                    <span className="text-3xl md:text-4xl font-black tabular-nums tracking-tight text-foreground">
+                      {headerLivePrice.currency === "USD"
+                        ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : isEn
+                          ? `KRW ${Math.round(headerLivePrice.price).toLocaleString("en-US")}`
+                          : `₩${Math.round(headerLivePrice.price).toLocaleString("ko-KR")}`}
+                    </span>
+                    {headerLivePrice.change != null && (
+                      <span className={cn(
+                        "text-base font-bold",
+                        headerLivePrice.change >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                      )}>
+                        {headerLivePrice.change >= 0 ? "▲" : "▼"} {Math.abs(headerLivePrice.change).toFixed(2)}%
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div className="h-10 w-36 bg-muted/50 rounded-lg animate-pulse" />
                 )}
               </div>
-            )}
 
-            {/* 배지 행 */}
-            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-              <span className="px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-mono font-bold tracking-wider text-xs border border-primary/20">
-                {analysis.ticker}
-              </span>
-              <span className={cn(
-                "px-2.5 py-0.5 text-xs font-semibold rounded-full border",
-                isComplete
-                  ? "bg-success/10 text-success border-success/20"
-                  : isError
-                    ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 dark:border-red-500/20"
-                    : analysis.status === 'queued'
-                      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 dark:border-blue-500/20 animate-pulse"
-                      : "bg-warning/10 text-warning border-warning/20 animate-pulse"
-              )}>
-                {isComplete
-                  ? (isEn ? 'Analysis Complete' : '분석 완료')
-                  : isError
-                    ? (isEn ? 'Analysis Failed' : '분석 실패')
-                    : analysis.status === 'queued'
-                      ? (isEn ? 'Queued' : '분석 대기 중')
-                      : (isEn ? 'In Progress' : '분석 진행중')}
-              </span>
-              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 flex items-center gap-1">
-                <span>⚡</span>{isEn ? 'AI · For Reference' : 'AI 자동생성 · 참고용'}
-              </span>
+              {/* 지표 그리드 */}
+              {(() => {
+                const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+                const fmtPrice = (v: number | null) => {
+                  if (v == null) return "—";
+                  if (currency === "USD") return `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+                  return `₩${Math.round(v).toLocaleString("ko-KR")}`;
+                };
+                const fmtVol = (v: number | null) => {
+                  if (v == null) return "—";
+                  if (v >= 1e8) return `${(v / 1e8).toFixed(0)}억`;
+                  if (v >= 1e4) return `${Math.round(v / 1e3)}K`;
+                  return v.toLocaleString();
+                };
+                const fmtMC = (v: number | null, cur: string) => {
+                  if (v == null) return "—";
+                  if (cur === "USD") {
+                    if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+                    if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+                    return `$${(v / 1e6).toFixed(0)}M`;
+                  }
+                  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+                  return `${Math.round(v / 1e8)}억`;
+                };
+                const st = headerTickerStats;
+                const mc = headerMarketCap;
+                const metrics = [
+                  { label: isEn ? "Mkt Cap" : "시가총액",  value: fmtMC(mc?.value ?? null, mc?.currency ?? "KRW") },
+                  { label: isEn ? "PER" : "PER",            value: st?.per != null ? `${st.per.toFixed(1)}x` : "—" },
+                  { label: isEn ? "PBR" : "PBR",            value: st?.pbr != null ? `${st.pbr.toFixed(2)}x` : "—" },
+                  { label: isEn ? "52W High" : "52주 고",   value: fmtPrice(st?.week52High ?? null) },
+                  { label: isEn ? "52W Low" : "52주 저",    value: fmtPrice(st?.week52Low ?? null) },
+                  ...(st?.volume != null ? [{ label: isEn ? "Volume" : "거래량", value: fmtVol(st.volume) }] : []),
+                ];
+                const isLoading = !st && !mc;
+                return (
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-border/40 rounded-xl overflow-hidden border border-border/40 mb-4">
+                    {isLoading
+                      ? Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="bg-card px-3 py-2.5 space-y-1.5 animate-pulse">
+                            <div className="h-2 w-10 bg-muted rounded" />
+                            <div className="h-3 w-14 bg-muted/70 rounded" />
+                          </div>
+                        ))
+                      : metrics.map((m) => (
+                          <div key={m.label} className="bg-card px-3 py-2.5">
+                            <p className="text-[10px] text-muted-foreground/60 font-medium mb-0.5">{m.label}</p>
+                            <p className="text-xs font-bold text-foreground tabular-nums">{m.value}</p>
+                          </div>
+                        ))}
+                  </div>
+                );
+              })()}
+
+              {/* 하단 메타 행 */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
+                <span className="font-mono font-bold text-primary/80 bg-primary/8 px-2 py-0.5 rounded-md border border-primary/15">
+                  {analysis.ticker}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Briefcase className="w-3 h-3 shrink-0" />
+                  {isEn ? (analysis.industry ?? "—") : toKoreanIndustry(analysis.industry)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 shrink-0" />
+                  {isEn ? format(new Date(analysis.createdAt), 'MMM d, HH:mm') : format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}
+                </span>
+                <span className="flex items-center gap-1 text-amber-600/70 dark:text-amber-400/70">
+                  <Zap className="w-3 h-3 shrink-0" />
+                  {isEn ? 'AI · For Reference' : 'AI 자동생성 · 참고용'}
+                </span>
+              </div>
             </div>
 
-            {/* 메타 정보 */}
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 shrink-0" /> {isEn ? (analysis.industry ?? "—") : toKoreanIndustry(analysis.industry)}</span>
-              <span className="opacity-30">·</span>
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3 shrink-0" /> {isEn ? format(new Date(analysis.createdAt), 'MMM d HH:mm') : format(new Date(analysis.createdAt), 'M월 d일 HH:mm', { locale: ko })}</span>
-              {headerMarketCap != null && (
-                <>
-                  <span className="opacity-30">·</span>
-                  <span className="flex items-center gap-1">
-                    <Building2 className="w-3 h-3 shrink-0" />
-                    {isEn ? "Mkt Cap" : "시총"} {headerMarketCap.currency === "USD"
-                      ? headerMarketCap.value >= 1e12
-                        ? `$${(headerMarketCap.value / 1e12).toFixed(1)}T`
-                        : headerMarketCap.value >= 1e9
-                        ? `$${(headerMarketCap.value / 1e9).toFixed(1)}B`
-                        : `$${(headerMarketCap.value / 1e6).toFixed(0)}M`
-                      : headerMarketCap.value >= 1e12
-                      ? `${(headerMarketCap.value / 1e12).toFixed(1)}조`
-                      : `${Math.round(headerMarketCap.value / 1e8)}억`}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
+            {/* ── 오른쪽: Verdict Card ── */}
+            <div className="flex flex-col items-start md:items-end gap-3 print:hidden w-full md:w-auto">
 
           {/* Verdict Card */}
           {isComplete && effectiveVerdict && (
@@ -2328,6 +2403,7 @@ export default function AnalysisDetail() {
           )}
           </div>
         </div>
+      </div>
       </div>
 
       {/* TL;DR 결론 카드 — 완료 시 최상단 표시 */}
