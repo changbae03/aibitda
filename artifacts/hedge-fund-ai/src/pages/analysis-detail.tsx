@@ -3234,8 +3234,8 @@ function ScenarioCompareCard({ analysis, isEn }: { analysis: any; isEn: boolean 
           return (
             <div key={s.case} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-3 sm:p-4`}>
               <p className={`text-[11px] font-bold ${cfg.color}`}>{cfg.label}</p>
-              <p className="text-[10px] text-muted-foreground mb-3">{cfg.sublabel}</p>
-              <p className="text-[14px] sm:text-[17px] font-black text-foreground font-mono leading-none">
+              <p className="text-[10px] text-muted-foreground mb-2.5">{cfg.sublabel}</p>
+              <p className={`text-[13px] sm:text-[15px] font-bold tabular-nums leading-tight break-all ${cfg.color}`}>
                 {formatPrice(s.target_price, currency, isEn)}
               </p>
               <p className={`text-[12px] font-bold mt-0.5 ${cfg.numColor}`}>{uDisplay}</p>
