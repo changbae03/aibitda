@@ -115,8 +115,11 @@ export default function ETFSection({
     );
   }
 
+  const uniqueDomesticEtfs = data.domesticEtfs.filter((etf, idx, arr) =>
+    arr.findIndex(e => e.code === etf.code) === idx
+  );
   const hasGlobal = data.globalFunds.length > 0;
-  const hasDomestic = data.domesticEtfs.length > 0;
+  const hasDomestic = uniqueDomesticEtfs.length > 0;
 
   return (
     <div className="bg-card border border-border rounded-2xl p-5">
@@ -146,7 +149,7 @@ export default function ETFSection({
               }`}>
                 {isUsStock ? "Yahoo Finance" : "KRX 실데이터"}
               </span>
-              <span className="text-[10px] text-muted-foreground ml-auto">{data.domesticEtfs.length}개</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{uniqueDomesticEtfs.length}개</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs min-w-[400px]">
@@ -158,7 +161,7 @@ export default function ETFSection({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {data.domesticEtfs.map(etf => (
+                  {uniqueDomesticEtfs.map(etf => (
                     <tr key={etf.code} className="hover:bg-muted/20 transition-colors">
                       <td className="py-2.5 pr-2">
                         <div className="font-semibold text-foreground leading-tight">{etf.name}</div>

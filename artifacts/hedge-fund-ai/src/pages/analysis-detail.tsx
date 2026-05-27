@@ -46,6 +46,7 @@ import { useAuth as useKakaoAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import StockChart, { type ChartLevels } from "@/components/StockChart";
 import FinancialChart from "@/components/FinancialChart";
+import { ErrorBoundary } from "@/components/error-boundary";
 import SummaryCardsB from "@/components/SummaryCardsB";
 import ETFSection from "@/components/ETFSection";
 import ReactMarkdown from "react-markdown";
@@ -2496,7 +2497,9 @@ export default function AnalysisDetail() {
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
             <div key={step.id} id={`step-${step.stepKey}`}>
-              <StepCard step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} companyNameEn={(analysis as any).englishName ?? undefined} startPrice={(analysis as any).startPrice ?? undefined} isEn={isEn} isSignedIn={isSignedIn} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} validatedVerdict={(analysis as any).investmentVerdict ?? undefined} />
+              <ErrorBoundary fallback={null}>
+                <StepCard step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} companyNameEn={(analysis as any).englishName ?? undefined} startPrice={(analysis as any).startPrice ?? undefined} isEn={isEn} isSignedIn={isSignedIn} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} validatedVerdict={(analysis as any).investmentVerdict ?? undefined} />
+              </ErrorBoundary>
             </div>
           ))}
         </AnimatePresence>
@@ -4607,6 +4610,49 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
 
 const BLUR_GATED_STEPS = ["company_analysis", "relative_valuation", "market_analysis", "investment_strategy"];
 
+const MD_BODY_COMPONENTS = {
+  h2: ({ children }: any) => (
+    <h2 className="text-[15px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
+  ),
+  h3: ({ children }: any) => (
+    <h3 className="text-[13px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
+  ),
+  h4: ({ children }: any) => (
+    <h4 className="text-[13px] font-medium text-foreground/75 mt-3 mb-1.5">{children}</h4>
+  ),
+  p: ({ children }: any) => {
+    const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
+    if (text.startsWith("출처:") || text.startsWith("출처 :")) {
+      return <p className="mt-5 pt-3 border-t border-border/40 text-[11px] text-muted-foreground">{children}</p>;
+    }
+    return <p className="mb-4 last:mb-0 text-foreground/75 leading-[1.9] text-[13.5px]">{children}</p>;
+  },
+  ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-2 list-none">{children}</ul>,
+  ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
+  li: ({ children }: any) => (
+    <li className="flex items-start gap-2.5 text-[13.5px] leading-[1.85] text-foreground/75">
+      <span className="shrink-0 w-1 h-1 rounded-full bg-muted-foreground/50 mt-[0.75em]" />
+      <span className="flex-1 min-w-0">{children}</span>
+    </li>
+  ),
+  strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
+  em: ({ children }: any) => <em className="text-foreground/65 not-italic">{children}</em>,
+  blockquote: ({ children }: any) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
+  hr: () => <hr className="my-5 border-border/40" />,
+  ...MD_TABLE_COMPONENTS,
+};
+
+function MdBlock({ src, isEn }: { src: string; isEn: boolean }) {
+  if (!src.trim()) return null;
+  return (
+    <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
+      <RoadmapEnContext.Provider value={isEn}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_BODY_COMPONENTS}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
+      </RoadmapEnContext.Provider>
+    </div>
+  );
+}
+
 function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: string; delay: number; isEn: boolean }) {
   return (
     <motion.div
@@ -4850,49 +4896,10 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         )}
 
         {(() => {
-          const mdComponents = {
-            h2: ({ children }: any) => (
-              <h2 className="text-[15px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
-            ),
-            h3: ({ children }: any) => (
-              <h3 className="text-[13px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
-            ),
-            h4: ({ children }: any) => (
-              <h4 className="text-[13px] font-medium text-foreground/75 mt-3 mb-1.5">{children}</h4>
-            ),
-            p: ({ children }: any) => {
-              const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
-              if (text.startsWith("출처:") || text.startsWith("출처 :")) {
-                return <p className="mt-5 pt-3 border-t border-border/40 text-[11px] text-muted-foreground">{children}</p>;
-              }
-              return <p className="mb-4 last:mb-0 text-foreground/75 leading-[1.9] text-[13.5px]">{children}</p>;
-            },
-            ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-2 list-none">{children}</ul>,
-            ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
-            li: ({ children }: any) => (
-              <li className="flex items-start gap-2.5 text-[13.5px] leading-[1.85] text-foreground/75">
-                <span className="shrink-0 w-1 h-1 rounded-full bg-muted-foreground/50 mt-[0.75em]" />
-                <span className="flex-1 min-w-0">{children}</span>
-              </li>
-            ),
-            strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
-            em: ({ children }: any) => <em className="text-foreground/65 not-italic">{children}</em>,
-            blockquote: ({ children }: any) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
-            hr: () => <hr className="my-5 border-border/40" />,
-            ...MD_TABLE_COMPONENTS,
-          };
-          const MdBlock = ({ src }: { src: string }) => src.trim() ? (
-            <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
-              <RoadmapEnContext.Provider value={isEn}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
-              </RoadmapEnContext.Provider>
-            </div>
-          ) : null;
-
           if (modelAssumptionsSplit) {
             return (
               <>
-                <MdBlock src={modelAssumptionsSplit.before} />
+                <MdBlock src={modelAssumptionsSplit.before} isEn={isEn} />
                 {/* 모델 가정 수립 — 토글 (WACC 결과값은 항상 노출) */}
                 {(() => {
                   const waccMatch = modelAssumptionsSplit.section.match(/→\s*WACC:\s*([\d.]+\s*%)/);
@@ -4951,11 +4958,11 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                 </div>
                   );
                 })()}
-                <MdBlock src={modelAssumptionsSplit.after} />
+                <MdBlock src={modelAssumptionsSplit.after} isEn={isEn} />
               </>
             );
           }
-          return <MdBlock src={mainBodyContent} />;
+          return <MdBlock src={mainBodyContent} isEn={isEn} />;
         })()}
 
         {/* 밸류에이션 핵심 지표 — 토글 섹션 */}

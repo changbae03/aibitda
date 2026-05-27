@@ -5599,6 +5599,8 @@ async function executeStep(
       let riskRewardRatio: number | null = null;
 
       const json = extractJsonSafe(content);
+      let savedStartPrice: number | null = null;
+      let savedTicker: string = "";
       try {
         if (!json) throw new Error("JSON parse failed");
         investmentVerdict = json.verdict ?? null;
@@ -5618,8 +5620,8 @@ async function executeStep(
           `SELECT start_price, ticker FROM analyses WHERE id=$1`,
           [id]
         );
-        const savedStartPrice: number | null = startPriceRow[0]?.start_price ?? null;
-        const savedTicker: string = startPriceRow[0]?.ticker ?? "";
+        savedStartPrice = startPriceRow[0]?.start_price ?? null;
+        savedTicker = startPriceRow[0]?.ticker ?? "";
         const isKR = /^\d{6}$/.test(savedTicker);
 
         // ── FINAL_VALUATION_DATA current price 검증 (AI가 wrong price 사용 시 조기 경보) ──
