@@ -4679,11 +4679,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const color = AGENT_COLORS[step.stepKey] ?? "hsl(218, 67%, 44%)";
   const isGated = !isSignedIn && BLUR_GATED_STEPS.includes(step.stepKey);
 
-  if (step.stepKey === "investment_strategy") {
-    if (isGated) return <BlurGateCard agent={agent} color={color} delay={delay} isEn={isEn} />;
-    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} validatedTargetPrice={validatedTargetPrice} validatedVerdict={validatedVerdict} />;
-  }
-
   const isMarket = step.stepKey === "market_analysis";
   const isFundamental = step.stepKey === "company_analysis";
   const isRelativeVal = step.stepKey === "relative_valuation";
@@ -4792,6 +4787,12 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
   const [showModelAssumptions, setShowModelAssumptions] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  // investment_strategy는 모든 hook 선언 후에 분기 (Rules of Hooks 준수)
+  if (step.stepKey === "investment_strategy") {
+    if (isGated) return <BlurGateCard agent={agent} color={color} delay={delay} isEn={isEn} />;
+    return <InvestmentStrategyCard step={step} agent={agent} delay={delay} ticker={ticker} companyName={companyName} createdAt={step.createdAt} isEn={isEn} validatedTargetPrice={validatedTargetPrice} validatedVerdict={validatedVerdict} />;
+  }
 
   if (isGated) return <BlurGateCard agent={agent} color={color} delay={delay} isEn={isEn} />;
 

@@ -46,6 +46,11 @@ async function ensureTable(): Promise<void> {
       UNIQUE(ticker, bsns_year, reprt_code, fs_type)
     )
   `);
+  // 기존 테이블에 period_label 컬럼이 없는 경우 추가 (마이그레이션)
+  await pool.query(`
+    ALTER TABLE ticker_financials
+    ADD COLUMN IF NOT EXISTS period_label VARCHAR(16) NOT NULL DEFAULT ''
+  `);
   tableReady = true;
 }
 
