@@ -34,6 +34,10 @@ import {
   Home,
   Search,
   Zap,
+  Sparkles,
+  ExternalLink,
+  ChevronUp,
+  Newspaper,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -1275,6 +1279,237 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
 
 
 // ── 포트폴리오 추가 CTA (분석 완료 후) ──────────────────────────────────────
+/* ── 종목 뉴스 타임라인 ─────────────────────────────────────────────────────── */
+interface StockNewsEvent {
+  date: string;
+  dateLabel: string;
+  event: string;
+  detail: string;
+  importance: "high" | "medium" | "low";
+  category: string;
+  source?: string;
+  url?: string;
+}
+
+const NEWS_IMPORTANCE: Record<string, { dot: string; badge: string; label: string; labelEn: string; ring: string }> = {
+  high:   { dot: "bg-rose-500",  badge: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",    label: "핵심", labelEn: "Key",   ring: "border-l-rose-500"  },
+  medium: { dot: "bg-amber-500", badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", label: "주요", labelEn: "Major", ring: "border-l-amber-500" },
+  low:    { dot: "bg-slate-400", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",   label: "참고", labelEn: "Ref",   ring: "border-l-slate-300 dark:border-l-slate-600" },
+};
+
+const NEWS_CAT_COLOR: Record<string, string> = {
+  실적: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  계약: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  규제: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  시장: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+  인사: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  "M&A": "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+  기술: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
+  외교: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+  Earnings: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  Contract: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  Regulation: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  Market: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+  Technology: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
+};
+
+function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: string; companyName: string; isEn?: boolean }) {
+  const [events, setEvents] = useState<StockNewsEvent[]>([]);
+  const [summary, setSummary] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const keyword = isEn ? (ticker || companyName) : companyName;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const url = getApiUrl(`/api/news/timeline?keyword=${encodeURIComponent(keyword)}`);
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((d: { summary?: string; timeline?: StockNewsEvent[] }) => {
+        if (cancelled) return;
+        setSummary(d.summary ?? "");
+        setEvents(d.timeline ?? []);
+        setLoading(false);
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setError(e?.message ?? "뉴스 타임라인 생성 실패");
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [keyword]);
+
+  return (
+    <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2 mb-5">
+        <Newspaper className="w-4 h-4 text-primary/70" />
+        <h2 className="text-base font-bold text-foreground">
+          {isEn ? "News Timeline" : "주요 뉴스 타임라인"}
+        </h2>
+        <span className="text-xs text-muted-foreground/50">
+          {isEn ? "· Oldest to latest" : "· 과거부터 최신순"}
+        </span>
+        {!loading && events.length > 0 && (
+          <span className="ml-auto text-xs font-mono text-muted-foreground/40">{events.length}개</span>
+        )}
+      </div>
+
+      {/* 로딩 스켈레톤 */}
+      {loading && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3.5 rounded-xl bg-primary/5 border border-primary/10">
+            <Sparkles className="w-4 h-4 text-primary animate-pulse shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              {isEn ? `Generating news timeline for "${companyName}"...` : `"${companyName}" 뉴스 타임라인 생성 중...`}
+            </p>
+          </div>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex gap-3 animate-pulse">
+              <div className="shrink-0 flex flex-col items-center gap-1">
+                <div className="w-3 h-3 rounded-full bg-muted mt-1.5" />
+              </div>
+              <div className="flex-1 pb-4 space-y-2">
+                <div className="h-2.5 bg-muted rounded w-16" />
+                <div className="h-4 bg-muted rounded w-2/3" />
+                <div className="h-2.5 bg-muted rounded w-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 에러 */}
+      {error && !loading && (
+        <p className="text-sm text-muted-foreground/60 py-6 text-center">{error}</p>
+      )}
+
+      {/* 결과 */}
+      {!loading && !error && events.length > 0 && (
+        <div className="space-y-4">
+          {/* AI 요약 */}
+          {summary && (
+            <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/10 flex gap-2.5">
+              <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <p className="text-sm text-foreground/80 leading-relaxed">{summary}</p>
+            </div>
+          )}
+
+          {/* 타임라인 */}
+          <div className="relative pl-1 mt-2">
+            <div className="absolute left-[6px] top-2 bottom-8 w-px bg-border/60" />
+            <div className="space-y-0">
+              {events.map((ev, idx) => {
+                const cfg = NEWS_IMPORTANCE[ev.importance] ?? NEWS_IMPORTANCE.low;
+                const catColor = NEWS_CAT_COLOR[ev.category] ?? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+                const isExpanded = expandedIdx === idx;
+                return (
+                  <motion.div
+                    key={`${ev.date}-${idx}`}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.04, duration: 0.22 }}
+                    className="flex gap-3.5"
+                  >
+                    <div className="shrink-0 flex flex-col items-center">
+                      <div className={cn("w-3 h-3 rounded-full border-2 border-background mt-2.5 z-10", cfg.dot)} />
+                    </div>
+                    <div className={cn(
+                      "flex-1 mb-3 rounded-xl border border-border border-l-[3px] bg-card/50 overflow-hidden",
+                      cfg.ring
+                    )}>
+                      <button
+                        className="w-full text-left px-3.5 py-3 hover:bg-accent/30 transition-colors"
+                        onClick={() => setExpandedIdx(isExpanded ? null : idx)}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-1.5 mb-1">
+                              <span className="text-[11px] font-semibold text-muted-foreground/70 tabular-nums">
+                                {ev.dateLabel || ev.date}
+                              </span>
+                              <span className={cn("px-1.5 py-px text-[10px] font-semibold rounded-full", cfg.badge)}>
+                                {isEn ? cfg.labelEn : cfg.label}
+                              </span>
+                              <span className={cn("px-1.5 py-px text-[10px] font-medium rounded-full", catColor)}>
+                                {ev.category}
+                              </span>
+                            </div>
+                            <p className="text-sm font-semibold leading-snug">{ev.event}</p>
+                          </div>
+                          {isExpanded
+                            ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-1" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-1" />
+                          }
+                        </div>
+                      </button>
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-3.5 pb-3.5 border-t border-border/50 pt-3">
+                              <p className="text-sm text-muted-foreground leading-relaxed">{ev.detail}</p>
+                              {(ev.source || ev.url) && (
+                                <div className="flex items-center gap-2 mt-2.5">
+                                  {ev.source && (
+                                    <span className="text-[11px] text-muted-foreground/60 bg-muted px-2 py-0.5 rounded-full">
+                                      {ev.source}
+                                    </span>
+                                  )}
+                                  {ev.url && (
+                                    <a
+                                      href={ev.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                                      onClick={e => e.stopPropagation()}
+                                    >
+                                      {isEn ? "Read more" : "원문 보기"} <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 주의사항 */}
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-[11px] text-muted-foreground/60">
+            <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>
+              {isEn
+                ? "AI-generated timeline from news RSS + Gemini training data. For reference only."
+                : "Gemini AI가 뉴스 RSS와 학습 데이터를 바탕으로 생성한 타임라인입니다. 참고자료로만 활용하세요."}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 빈 상태 */}
+      {!loading && !error && events.length === 0 && (
+        <p className="text-sm text-muted-foreground/50 text-center py-6">
+          {isEn ? "No news timeline available." : "관련 뉴스 타임라인을 찾을 수 없습니다."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PortfolioCTA({ ticker, companyName, isEn }: { ticker: string; companyName: string; isEn: boolean }) {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState<"idle" | "checking" | "adding" | "added" | "exists">("checking");
@@ -2320,6 +2555,22 @@ export default function AnalysisDetail() {
             ticker={analysis.ticker}
             companyName={analysis.companyName}
             industry={analysis.industry ?? undefined}
+          />
+        </motion.div>
+      )}
+
+      {/* 주요 뉴스 타임라인 — 분석 완료 후 표시 */}
+      {isComplete && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut", delay: 0.5 }}
+          className="mt-4 print:hidden"
+        >
+          <StockNewsTimeline
+            ticker={analysis.ticker}
+            companyName={analysis.companyName}
+            isEn={isEn}
           />
         </motion.div>
       )}
