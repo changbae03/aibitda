@@ -557,16 +557,19 @@ export const SECTOR_PRIORS: Record<string, {
   specificLevers: string[];
 }> = {
   KR_SEMICONDUCTOR: {
-    waccRange: "WACC 11.0~14.0% (한국 반도체: 시장위험 + 사이클 리스크 반영)",
+    waccRange: "WACC 12.0~15.0% (한국 반도체: 시장위험 + HBM 사이클 리스크 반영. 기본값 13.0%)",
     terminalG: "Terminal g ≤ 1.5% (반도체는 기술 진부화 리스크로 장기 성장 보수적 적용)",
-    peersNote: "피어: 삼성전자 반도체부문·SK하이닉스·Micron·Samsung Foundry(비상장 추정) 순서로 우선. EV/EBITDA 한국 벤치마크(6~14x)와 미국 Damodaran(23.9x) 차이 주의 — 한국 주식이면 한국 멀티플 우선.",
-    biasRisk: "과대평가 위험: AI가 HBM 성장률을 장기에도 지속 적용하는 경향. Year 3 이후 성장률을 컨센서스 수준(8~12%)으로 반드시 수렴.",
+    peersNote: "피어: 삼성전자 반도체부문·SK하이닉스·Micron·Samsung Foundry(비상장 추정) 순서로 우선. EV/EBITDA 한국 벤치마크(6~14x)와 미국 Damodaran(23.9x) 차이 주의 — 한국 주식이면 한국 멀티플 우선. Damodaran 23.9x 직접 적용 금지.",
+    biasRisk: "⛔ 과대평가 위험 CRITICAL: 2026년 분석 다수에서 목표가 300~480% 괴리 발생 확인. DCF 성장률 하드캡 미준수가 원인. Year 3 이후 성장률을 컨센서스 수준(8~12%)으로 반드시 수렴. 목표주가 = 시작가 × 1.8 초과 시 분석 무효 처리 후 WACC 2%p 상향 재계산 필수.",
     specificLevers: [
-      "Year 2 성장률은 Year 1의 30~50%로 감소 적용 (예: Y1 +55% → Y2 +15~25%)",
-      "OPM 상한: Year 1~2 최대 45%, Year 3~5 최대 35%, Year 6~10 최대 28%",
-      "FCFF/매출 상한: Year 1~5 최대 15%, Year 6~10 최대 12%",
-      "10년 매출 CAGR이 15% 초과 시 과성장 가정 — 컨센서스로 하향",
-      "목표주가가 현재주가 2배 초과 시 WACC 최소 1%p 상향 재검토 필수",
+      "⛔ HARD CAP: 목표주가가 시작가의 180% 초과 금지 — 초과 시 WACC 최소 2%p 상향 후 재계산",
+      "Year 1 매출성장률 상한: +50% (HBM 최대 호황 가정)",
+      "Year 2 성장률 = Year 1의 최대 40% (예: Y1 +50% → Y2 최대 +20%)",
+      "Year 3~5 성장률 = 컨센서스 기준 8~15%로 수렴",
+      "10년 매출 CAGR이 15% 초과 시 과성장 가정 — 즉시 컨센서스로 하향",
+      "OPM 상한: Year 1~2 최대 40%, Year 3~5 최대 32%, Year 6~10 최대 25%",
+      "FCFF/매출 상한: Year 1~5 최대 12%, Year 6~10 최대 10%",
+      "EV/EBITDA 최대 14x (한국 반도체 역사적 상단) 크로스체크 필수",
     ],
   },
   KR_BIOTECH: {

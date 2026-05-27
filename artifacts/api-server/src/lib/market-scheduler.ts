@@ -13,6 +13,8 @@
  */
 import { runPipeline, runDailyIncrementalUpdate, tryRestoreFromDisk, tryRestoreFromDB, loadMeta } from "./lstm-predictor.js";
 import { invalidateBriefCache } from "../routes/market-analysis.js";
+import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
+import { pool } from "@workspace/db";
 
 // 실행 중복 방지용 플래그
 let morningBriefToday  = "";   // "YYYY-MM-DD" 형식
@@ -93,6 +95,13 @@ function checkAndRun() {
         // 학습 완료 후 브리핑 캐시도 초기화 → 당일 마감 데이터 반영
         invalidateBriefCache();
         console.log("[scheduler] 장마감 증분 업데이트 완료 — 브리핑 캐시 초기화");
+        // 일별 섹터 재보정 (30일+ 분석 기준) — 자동 학습 루프
+        autoRecalibrate()
+          .then(async (r) => {
+            console.log(`[scheduler] 일별 섹터 재보정 완료 — ${r.analysesProcessed}건, ${r.sectorsUpdated}개 섹터`);
+            if (r.sectorsUpdated > 0) await autoUpdateAllSectorPriors();
+          })
+          .catch(e => console.error("[scheduler] 일별 재보정 실패:", e?.message));
       })
       .catch(e => console.error("[scheduler] 증분 업데이트 실패:", e?.message));
   }
@@ -151,7 +160,27 @@ export function startMarketScheduler() {
     }, 60_000);
   })();
 
-  // 2. 1분마다 스케줄 조건 확인
+  // 2. 시작 시 model_calibration 비어있으면 즉시 autoRecalibrate 실행
+  setTimeout(async () => {
+    try {
+      const { rowCount } = await pool.query(`SELECT 1 FROM model_calibration LIMIT 1`);
+      if ((rowCount ?? 0) === 0) {
+        console.log("[SCHEDULER] model_calibration 비어있음 — 즉시 섹터 재보정 실행");
+        const result = await autoRecalibrate();
+        console.log(`[SCHEDULER] 초기 섹터 재보정 완료 — ${result.analysesProcessed}건 처리, ${result.sectorsUpdated}개 섹터`);
+        if (result.sectorsUpdated > 0) {
+          await autoUpdateAllSectorPriors();
+          console.log("[SCHEDULER] 섹터 프라이어 자동 업데이트 완료");
+        }
+      } else {
+        console.log("[SCHEDULER] model_calibration 데이터 존재 — 재보정 스킵");
+      }
+    } catch (e) {
+      console.error("[SCHEDULER] 초기 섹터 재보정 실패:", (e as Error)?.message ?? e);
+    }
+  }, 8_000);
+
+  // 3. 1분마다 스케줄 조건 확인
   setInterval(checkAndRun, 60_000);
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
   console.log("  - 장전 브리핑:   평일 06:00 KST (21:00 UTC 전날)");
