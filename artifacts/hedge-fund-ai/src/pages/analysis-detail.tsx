@@ -3770,7 +3770,7 @@ function stripChartData(content: string): string {
 interface MarketSignals {
   trend: "bullish" | "bearish" | "neutral";
   position52w: number;
-  signal: "buy" | "wait" | "sell";
+  signal: "continuing" | "peaking" | "reversing" | "wait" | "buy" | "sell";
   rrRatio: number;
 }
 
@@ -3795,10 +3795,13 @@ function MarketSignalChips({ signals, isEn = false }: { signals: MarketSignals; 
     bearish: { label: isEn ? "▼ Downtrend" : "▼ 하락 추세", cls: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60" },
     neutral: { label: isEn ? "→ Sideways" : "→ 횡보 구간", cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60" },
   };
-  const signalMap = {
-    buy:  { label: isEn ? "Buy Signal" : "매수 진입", cls: "bg-emerald-500 text-white" },
-    wait: { label: isEn ? "Hold" : "관망",            cls: "bg-amber-500 text-white"   },
-    sell: { label: isEn ? "Sell Signal" : "매도 대응", cls: "bg-red-500 text-white"    },
+  const signalMap: Record<string, { label: string; cls: string }> = {
+    continuing: { label: isEn ? "▲ Momentum On"  : "▲ 모멘텀 지속",   cls: "bg-emerald-500 text-white" },
+    peaking:    { label: isEn ? "⚠ Near Peak"    : "⚠ 정점 근접",     cls: "bg-orange-500 text-white"  },
+    reversing:  { label: isEn ? "▼ Reversing"    : "▼ 추세 전환 중",   cls: "bg-red-500 text-white"     },
+    wait:       { label: isEn ? "Hold"            : "방향 불명확",      cls: "bg-amber-500 text-white"   },
+    buy:        { label: isEn ? "Buy Signal"      : "매수 진입",        cls: "bg-emerald-500 text-white" },
+    sell:       { label: isEn ? "Sell Signal"     : "매도 대응",        cls: "bg-red-500 text-white"     },
   };
   const tc = trendMap[signals.trend] ?? trendMap.neutral;
   const sc = signalMap[signals.signal] ?? signalMap.wait;
