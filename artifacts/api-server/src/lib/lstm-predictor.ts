@@ -91,7 +91,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 28;  // [v28] MA50비율·볼가속 피처 2개 추가, D+1/D+2 독립 GBDT, 적응형 biasThreshold(최근 60일)
+const MODEL_VERSION = 29;  // [v29] 이진 분류 GBDT(로지스틱 손실), 신뢰도 필터 적중률, 분류기·회귀기 결합 방향 예측
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -196,6 +196,8 @@ interface StoredModelFile {
   gbdtModels_h1?: GBDTModel[];
   /** [v28] D+2 독립 GBDT 앙상블 (D+3 선형보간 대체) */
   gbdtModels_h2?: GBDTModel[];
+  /** [v29] 이진 분류 GBDT — P(상승) 예측, 방향 정확도 직접 최적화 */
+  gbdtDirModels?: GBDTModel[];
 }
 export interface StoredMeta {
   lastTrained: string; lastUpdated: string;
@@ -1127,6 +1129,46 @@ function gbdtFit(X:Float64Array[],y:Float64Array,seed:number,hp:IndexHP,sampleWe
 function gbdtPredict(model:GBDTModel,X:Float64Array[]):Float64Array {
   return new Float64Array(X.map(x=>{let p=model.basePred;for(const t of model.trees)p+=model.lr*dtPredict(t as DNode|number,x);return p;}));
 }
+
+// ─── [v29] 이진 분류 GBDT (로지스틱 손실) ────────────────────────────────────
+// MSE 회귀 대신 P(상승) 확률을 직접 최적화 → 방향 정확도 직접 최적화.
+// 그래디언트: grad_i = sigmoid(F_i) - y_i (양수 = 모델이 과소 예측)
+// 리프 값: mean(-grad) ≈ Newton 스텝 근사 (소형 lr로 수렴 보장)
+const _sigmoid = (x: number) => 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, x))));
+
+function gbdtFitClassifier(
+  X: Float64Array[], y_dir: Float64Array, seed: number, hp: IndexHP, sampleWeights?: Float64Array
+): GBDTModel {
+  const rng = makeRng(seed), n = X.length;
+  // 사전 확률(log-odds)을 기저 예측값으로 사용
+  let wSum = 0, wY = 0;
+  if (sampleWeights) { for (let i=0;i<n;i++){wSum+=sampleWeights[i];wY+=sampleWeights[i]*y_dir[i];} }
+  else { wSum = n; for (let i=0;i<n;i++) wY += y_dir[i]; }
+  const priorP   = Math.max(0.05, Math.min(0.95, wY / wSum));
+  const basePred = Math.log(priorP / (1 - priorP)); // log-odds
+  const F = new Float64Array(n).fill(basePred);
+  const trees: any[] = [];
+  const rowBag = Math.floor(n * hp.gbdtSsub);
+  for (let t = 0; t < hp.gbdtTrees; t++) {
+    // residual = y - sigmoid(F): 양수→확률 증가 필요, 음수→감소 필요
+    const res = Array.from({ length: n }, (_, i) => y_dir[i] - _sigmoid(F[i]));
+    const idxs = sampleWeights
+      ? weightedRowBag(n, rowBag, sampleWeights, rng)
+      : Array.from({ length: n }, (_, i) => i).sort(() => rng() - 0.5).slice(0, rowBag);
+    const tree = buildNode(X, res, idxs, hp.gbdtDepth, hp.gbdtLeaf, rng, hp.gbdtFsub, GBDT_BINS);
+    trees.push(tree);
+    for (let i = 0; i < n; i++) F[i] += hp.gbdtLR * dtPredict(tree as DNode | number, X[i]);
+  }
+  return { trees, lr: hp.gbdtLR, basePred };
+}
+// P(상승) ∈ [0,1] 반환
+function gbdtPredictClassifier(model: GBDTModel, X: Float64Array[]): Float64Array {
+  return new Float64Array(X.map(x => {
+    let logOdds = model.basePred;
+    for (const t of model.trees) logOdds += model.lr * dtPredict(t as DNode | number, x);
+    return _sigmoid(logOdds);
+  }));
+}
 function incrementalAddTrees(model:GBDTModel,X:Float64Array[],y:Float64Array,nTrees:number,seed:number,hp:IndexHP):GBDTModel {
   if(X.length===0)return model;
   const rng=makeRng(seed),n=X.length,rowBag=Math.max(1,Math.floor(n*hp.gbdtSsub));
@@ -1320,6 +1362,8 @@ function buildResultFromModel(
   // [v28] D+1/D+2 독립 GBDT 앙상블
   gbdtModels_h1?: GBDTModel[],
   gbdtModels_h2?: GBDTModel[],
+  // [v29] 이진 분류 GBDT
+  gbdtDirModels?: GBDTModel[],
 ): IndexResult {
   const { feats, closes, dates } = buildFeatures(rows, extMap);
 
@@ -1512,7 +1556,52 @@ function buildResultFromModel(
   // [v25] biasThreshold 적용: 예측 임계값 보정 → 방향 편향 제거
   const ensembleRaw = alpha * lstmForecast + (1-alpha) * gbdtForecast;
   const ensembleBiasAdj = ensembleRaw - biasThreshold;  // [v25] 편향 교정
-  const forecastReturn = ensembleBiasAdj * calibFactor;
+
+  // ── [v29] 이진 분류 GBDT: 방향 확률 계산 ────────────────────────────────────
+  // 분류기가 있으면: 방향은 분류기(P(상승)), 크기는 회귀기에서 가져옴
+  // 분류기가 없으면: 기존 biasAdj 부호 사용 (fallback)
+  const lastDirProb: number | undefined = (() => {
+    if (!gbdtDirModels || gbdtDirModels.length === 0) return undefined;
+    const probs = gbdtDirModels.map(m => gbdtPredictClassifier(m, lastGBDT_Xn)[0]);
+    return probs.reduce((a, b) => a + b, 0) / probs.length;
+  })();
+
+  // 테스트셋 분류기 적중률 계산 (신뢰도 필터 적용)
+  // CONF_THRESHOLD: |P(상승) - 0.5| > 이 값인 예측만 고신뢰 구간으로 판정
+  const CONF_THRESHOLD = 0.08;
+  let classifierAllAcc: number | undefined;
+  let classifierConf6wAcc: number | undefined;
+  let classifierConfTotal6w = 0;
+  if (gbdtDirModels && gbdtDirModels.length > 0) {
+    // 테스트셋 전체에 분류기 예측 적용
+    const testDirProbs = new Float64Array(nTest);
+    for (const m of gbdtDirModels) {
+      const p = gbdtPredictClassifier(m, XteN);
+      for (let i = 0; i < nTest; i++) testDirProbs[i] += p[i] / gbdtDirModels.length;
+    }
+    // 전체 분류기 방향 정확도 (신뢰도 필터 없음)
+    let allCorrect = 0;
+    for (let i = 0; i < nTest; i++) {
+      if ((testDirProbs[i] > 0.5) === (yte[i] > 0)) allCorrect++;
+    }
+    classifierAllAcc = allCorrect / (nTest || 1);
+    // 최근 42거래일(6주) 고신뢰 구간 적중률
+    const week6Start = Math.max(0, nTest - 42);
+    let conf6wCorrect = 0;
+    for (let i = week6Start; i < nTest; i++) {
+      if (Math.abs(testDirProbs[i] - 0.5) > CONF_THRESHOLD) {
+        classifierConfTotal6w++;
+        if ((testDirProbs[i] > 0.5) === (yte[i] > 0)) conf6wCorrect++;
+      }
+    }
+    classifierConf6wAcc = classifierConfTotal6w > 0 ? conf6wCorrect / classifierConfTotal6w : undefined;
+    console.log(`[v29-cls] ${symbol} allAcc=${(classifierAllAcc*100).toFixed(1)}% conf6wAcc=${classifierConf6wAcc !== undefined ? (classifierConf6wAcc*100).toFixed(1)+'%' : 'N/A'} confSamples=${classifierConfTotal6w}/42`);
+  }
+
+  // 방향 결정: 분류기 우선, fallback은 회귀기 biasAdj 부호
+  const classifierDir = lastDirProb !== undefined ? (lastDirProb >= 0.5 ? 1 : -1) : Math.sign(ensembleBiasAdj);
+  const magnitude     = Math.abs(ensembleBiasAdj) * calibFactor;
+  const forecastReturn = classifierDir * magnitude;
   // [#2] 개별 컴포넌트 예측값 (savePrediction으로 전달 → 컴포넌트별 라이브 적중률 추적)
   const gbdtForecastRetPct = gbdtForecast * calibFactor * 100;
   const lstmForecastRetPct = lstmForecast * calibFactor * 100;
@@ -1556,9 +1645,15 @@ function buildResultFromModel(
     predictedReturn3d: +(forecastReturn*100).toFixed(2),
     trend: forecastReturn>=0?"up":"down",
     testMae: +(mae*100).toFixed(3),
-    testDirAcc: +(dirAccRate(testPreds,yte)*100).toFixed(1),
+    // [v29] 분류기 있으면 분류기 전체 정확도 사용, 없으면 회귀기 dirAcc
+    testDirAcc: classifierAllAcc !== undefined
+      ? +(classifierAllAcc*100).toFixed(1)
+      : +(dirAccRate(testPreds,yte)*100).toFixed(1),
     wfDirAcc: +(wfDirAccVal*100).toFixed(1),
-    rolling30dDirAcc: +(rolling30dDirAccBC*100).toFixed(1),  // [v27] 편향 교정 후 적중률 표시
+    // [v29] 6주 적중률: 분류기 고신뢰(|P-0.5|>0.08) 구간 기준, 없으면 편향 교정 회귀기
+    rolling30dDirAcc: classifierConf6wAcc !== undefined
+      ? +(classifierConf6wAcc*100).toFixed(1)
+      : +(rolling30dDirAccBC*100).toFixed(1),
     predErrStd: +(stddev(recentErrors)*100).toFixed(3),
     recentPerf,
     lstmDirAcc: +(l30*100).toFixed(1),
@@ -1634,6 +1729,14 @@ async function trainFull(
     hp,
   );
 
+  // [v29] 이진 분류 GBDT 훈련 — P(D+3 상승) 직접 예측
+  // 동일 훈련셋(XtrN)에 이진 타깃(y_dir)으로 분류기 학습
+  // 하이퍼파라미터: 트리 수 70%, 앙상블 수 70% (회귀기보다 경량)
+  const hpDir = { ...hp, gbdtTrees: Math.ceil(hp.gbdtTrees * 0.7), nEnsemble: Math.max(6, Math.ceil(hp.nEnsemble * 0.7)) };
+  const yDir  = new Float64Array(trainEnd).map((_, i) => y[i] > 0 ? 1 : 0);
+  console.log(`[train] ${symbol} Dir-GBDT (${hpDir.nEnsemble}×${hpDir.gbdtTrees}) upFrac=${(Array.from(yDir).filter(v=>v>0).length/trainEnd*100).toFixed(1)}%`);
+  const gbdtDirModels = Array.from({length:hpDir.nEnsemble}, (_,e) => gbdtFitClassifier(XtrN, yDir, e*53+17, hpDir, sampleWeights));
+
   const symKey = symbol.replace(/[\^]/g,"");
   saveModelFile(symKey, {
     nFeatures: N_FEATURES,
@@ -1644,6 +1747,7 @@ async function trainFull(
     ensembleAlpha: 0.5,
     gbdtModels_h1,
     gbdtModels_h2,
+    gbdtDirModels,
   });
 
   // [#2] 훈련 완료 후 라이브 적중률 조회해서 alpha 보정
@@ -1657,6 +1761,7 @@ async function trainFull(
     liveComp,
     gbdtModels_h1,
     gbdtModels_h2,
+    gbdtDirModels,
   );
   lstmModel.dispose();
   return result;
@@ -1808,6 +1913,7 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       kospiStore.ensembleAlpha, getHP("^KS11").recentWindow,
       undefined,
       kospiStore.gbdtModels_h1, kospiStore.gbdtModels_h2,
+      kospiStore.gbdtDirModels,
     );
     await yield_();
     const kosdaq = buildResultFromModel(
@@ -1819,6 +1925,7 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       kosdaqStore.ensembleAlpha, getHP("^KQ11").recentWindow,
       undefined,
       kosdaqStore.gbdtModels_h1, kosdaqStore.gbdtModels_h2,
+      kosdaqStore.gbdtDirModels,
     );
     await yield_();
     const snp500 = buildResultFromModel(
@@ -1830,6 +1937,7 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       snpStore.ensembleAlpha, getHP("^GSPC").recentWindow,
       undefined,
       snpStore.gbdtModels_h1, snpStore.gbdtModels_h2,
+      snpStore.gbdtDirModels,
     );
     await yield_();
     const nasdaq = ixicStore?.lstmWeights ? buildResultFromModel(
@@ -1841,6 +1949,7 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       ixicStore.ensembleAlpha, getHP("^IXIC").recentWindow,
       undefined,
       ixicStore.gbdtModels_h1, ixicStore.gbdtModels_h2,
+      ixicStore.gbdtDirModels,
     ) : undefined;
     await yield_();
 
