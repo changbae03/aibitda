@@ -74,8 +74,9 @@ export function classifySector(industry: string, market: "KR" | "US"): string {
     if (ind.includes("consumer electronics") || ind.includes("소비재") || ind.includes("consumer cyclical") || ind.includes("retail")) return "KR_CONSUMER";
     // 에너지·화학
     if (ind.includes("energy") || ind.includes("oil") || ind.includes("chemical") || ind.includes("에너지") || ind.includes("화학")) return "KR_ENERGY";
-    // 방산·조선·기계
-    if (ind.includes("defense") || ind.includes("aerospace") || ind.includes("shipbuilding") || ind.includes("machinery")) return "KR_DEFENSE";
+    // 방산·조선 (※ "machinery" 단독은 방산 아님 — "defense", "aerospace", "shipbuilding", "naval", "military"만 허용)
+    if (ind.includes("defense") || ind.includes("aerospace") || ind.includes("shipbuilding") ||
+        ind.includes("naval") || ind.includes("military") || ind.includes("방위산업") || ind.includes("방위")) return "KR_DEFENSE";
     return "KR_OTHER";
   } else {
     if (ind.includes("biotech") || ind.includes("pharmaceutical") || ind.includes("drug")) return "US_BIOTECH";
@@ -607,13 +608,18 @@ export const SECTOR_PRIORS: Record<string, {
     ],
   },
   KR_AUTO: {
-    waccRange: "WACC 9.5~12.5%",
-    terminalG: "Terminal g ≤ 1.5% (자동차: 전기차 전환 리스크 반영)",
-    peersNote: "피어: 현대차·기아·Toyota·Volkswagen·BMW. PER 6~14x, EV/EBITDA 3~8x 범위.",
-    biasRisk: "EV 전환 비용 과소평가 경향. R&D·Capex 증가 반영하여 FCFF 하향 압력 적용.",
+    waccRange: "WACC 10.5~13.5% (자동차 OEM: 10.5~12.0%, 부품사 티어1: 11.0~13.0%, 부품사 티어2: 12.0~13.5%)",
+    terminalG: "Terminal g ≤ 1.5% (전기차 전환 리스크·경쟁 심화로 장기 성장 보수적 적용)",
+    peersNote: "OEM 피어: 현대차·기아·Toyota·Volkswagen·BMW. PER 6~14x, EV/EBITDA 3~8x. 부품사 피어: 현대모비스·만도·HL만도. PER 8~14x, EV/EBITDA 4~9x.",
+    biasRisk: "⛔ 과대평가 위험 HIGH: 2026년 분석에서 부품사 목표가 300%+ 괴리 발생 확인. EV 전환 비용과 중국 경쟁사 진입 리스크를 과소평가하는 경향. 매출 성장 가정이 시장 컨센서스를 크게 벗어나면 즉시 재검토.",
     specificLevers: [
-      "전기차 전환 비용: 연간 Capex 20~30% 증가 반영 (2026~2030)",
-      "배터리 원가 하락 효과와 수익성 개선 균형 조정",
+      "⛔ HARD CAP: 목표주가가 시작가의 180% 초과 금지 — 초과 시 WACC 1.5%p 상향 후 재계산",
+      "매출성장률 Year 1: OEM 최대 +15%, 부품사 최대 +20%",
+      "매출성장률 Year 2~5: 최대 10%, 컨센서스 기반 수렴",
+      "OPM 상한: OEM 8~12%, 부품사 5~10% (전기차 전환 비용 반영)",
+      "전기차 관련 Capex 급증 시나리오 반드시 Bear 케이스에 포함",
+      "중국산 경쟁 리스크: 완성차 및 부품 부문 모두 점유율 하락 시나리오 반영",
+      "EV/EBITDA 14x 초과 시 프리미엄 사유 명시 필수",
     ],
   },
   KR_REIT: {
@@ -668,24 +674,31 @@ export const SECTOR_PRIORS: Record<string, {
     ],
   },
   KR_IT: {
-    waccRange: "WACC 9.0~12.0% (IT·게임·플랫폼)",
+    waccRange: "WACC 10.0~13.5% (대형 플랫폼: 10.0~11.5%, 중형 게임: 11.0~12.5%, 소형 SW·보안: 11.5~13.5%)",
     terminalG: "Terminal g ≤ 2.0%",
-    peersNote: "피어: 카카오·넷마블·크래프톤·엔씨소프트·펄어비스 (게임), 네이버·카카오 (플랫폼). PER 15~35x, EV/Sales 2~5x.",
-    biasRisk: "게임주: 신작 흥행 여부 불확실성 과소평가 경향. 플랫폼주: 광고 매출 사이클 변동성 고려.",
+    peersNote: "대형 플랫폼 피어: 네이버·카카오. EV/EBITDA 8~18x, PER 15~35x. 게임 피어: 크래프톤·엔씨소프트·넷마블. PER 10~30x. 소형 B2B SW·보안(지니언스 등): EV/Sales 2~5x, PER 20~35x.",
+    biasRisk: "⛔ 과대평가 위험 HIGH: 2026년 소형 IT 기업 분석에서 목표가 120%+ 괴리 발생 확인. 소형 IT·보안 기업은 성장 가정이 과도하게 낙관적이 되는 경향. 매출 50억 미만 기업은 WACC를 최소 12.5% 이상 적용.",
     specificLevers: [
+      "⛔ HARD CAP: 목표주가가 시작가의 160% 초과 금지 — 초과 시 WACC 1.5%p 상향 후 재계산",
+      "소형 IT·보안 기업(시총 3,000억 미만): WACC ≥ 12.5%, 매출성장률 Year 1 최대 +30%",
+      "OPM 상한: 플랫폼 30%, 게임 25%, 소형 SW·보안 20%",
+      "EV/Sales 상한: 대형 플랫폼 8x, 소형 SW 5x",
       "신작 게임: 오픈 후 12개월 이내 매출 집중, 이후 급감 곡선 모델링",
       "플랫폼: MAU 성장률 둔화 감안하여 ARPU 개선 여부 별도 분석",
-      "SBC 반드시 비용 처리",
+      "SBC(주식보상) 반드시 비용 처리 (adjusted EBITDA 사용 금지)",
     ],
   },
   KR_CONSUMER: {
-    waccRange: "WACC 8.5~11.0% (소비재·전자)",
+    waccRange: "WACC 8.5~11.0% (대형 소비재: 8.5~9.5%, 전자: 9.0~11.0%)",
     terminalG: "Terminal g ≤ 2.0%",
-    peersNote: "피어: 삼성전자(소비자 가전부문)·LG전자·애플·Sony. EV/EBITDA 5~12x, PER 12~20x.",
-    biasRisk: "삼성전자 등 복합 대기업은 반도체·가전·모바일 부문 분리 분석 필수. 소비자 가전만 분석 시 과대평가 주의.",
+    peersNote: "피어: LG전자·애플·Sony·Panasonic. EV/EBITDA 5~12x, PER 12~20x. ※삼성전자(005930)는 Consumer Electronics로 분류돼도 반드시 SOTP 적용.",
+    biasRisk: "⛔ 과대평가 위험 CRITICAL(삼성전자): 삼성전자(005930)가 Consumer Electronics로 분류될 경우 단순 DCF를 적용하면 목표가 200%+ 괴리 발생. 반드시 SOTP로 분석하고, 반도체·MX·가전 각 부문 OPM을 혼용하지 말 것.",
     specificLevers: [
-      "삼성전자 분석 시: 반도체(DS) + 가전(CE) + MX 부문 SOTP 또는 통합 DCF로 전체 기업 분석 필수",
-      "가전 부문 OPM 상한: 8~12% (반도체 OPM과 혼용 금지)",
+      "⛔ HARD CAP (삼성전자 005930 전용): 목표주가 = 시작가 × 1.7 초과 금지",
+      "삼성전자 SOTP 의무: DS(반도체) EV/EBITDA 8~14x + MX(모바일) EV/EBITDA 6~10x + CE(가전) EV/EBITDA 5~8x + 금융(삼성생명 지분가치) 별도",
+      "삼성전자 반도체(DS) OPM 상한: Year 1~2 최대 30%, Year 3~5 최대 25% (사이클 조정)",
+      "삼성전자 가전(CE) OPM 상한: 8~12% — 반도체 OPM과 절대 혼용 금지",
+      "일반 소비재·전자 OPM 상한: 8~12%",
       "WM(웨어러블·스마트홈) 성장 가정 보수적 적용",
     ],
   },
@@ -700,14 +713,58 @@ export const SECTOR_PRIORS: Record<string, {
     ],
   },
   KR_DEFENSE: {
-    waccRange: "WACC 8.0~10.5% (방산·조선·기계)",
+    waccRange: "WACC 8.0~11.0% (한화에어로스페이스·LIG넥스원 등 순수 방산: 8.0~9.5%, 조선·중장비: 9.0~11.0%)",
     terminalG: "Terminal g ≤ 2.0%",
-    peersNote: "피어: 한화에어로스페이스·LIG넥스원·현대로템·HD현대중공업. EV/EBITDA 8~20x (방산 프리미엄), PER 12~25x.",
-    biasRisk: "수출 수주 지속성 불확실성 과소평가 경향. 폴란드·루마니아 등 대규모 계약의 이행 리스크 반영 필수.",
+    peersNote: "순수 방산 피어: 한화에어로스페이스·LIG넥스원·현대로템·한국항공우주. EV/EBITDA 10~22x (방산 프리미엄), PER 12~28x. 조선 피어: HD현대중공업·삼성중공업·한화오션. EV/EBITDA 6~14x.",
+    biasRisk: "⛔ 과대평가 위험 HIGH: 2026년 분석에서 산업기계 업체가 방산으로 오분류되어 목표가 316%+ 괴리 발생. 'Specialty Industrial Machinery' 업종은 방산이 아님. 방산으로 분류된 기업의 방위산업 매출 비중이 50% 미만이면 방산 멀티플 직접 적용 금지.",
     specificLevers: [
+      "⛔ HARD CAP: 목표주가가 시작가의 170% 초과 금지",
+      "⛔ 분류 확인 필수: 방위산업 매출 비중 50% 이상 기업만 방산 멀티플(EV/EBITDA 10~22x) 적용",
+      "방위산업 매출 비중 20~50%: 방산 멀티플과 일반 산업 멀티플 혼합 적용 (가중 평균)",
+      "방위산업 매출 비중 20% 미만: 방산 프리미엄 적용 불가, KR_OTHER 가이드라인 적용",
       "수출 계약: 이행 단계별 매출 인식(납품 일정 기반) 모델링",
-      "방산 업체: 장기 수주잔고 기반 매출 예측 가능성 높음 → DCF 신뢰도 우수",
+      "장기 수주잔고 기반 매출 예측 — 잔고 대비 목표가 검증 필수",
       "조선: 수주단가 vs 철강 원가 스프레드 모델링 필수",
+    ],
+  },
+  KR_OTHER: {
+    waccRange: "WACC 9.0~13.0% (섹터 불명확 시 보수적 상단 적용 권장. 소형주·신성장: 12.0~13.0%)",
+    terminalG: "Terminal g ≤ 1.5% (섹터 불명확 시 보수적 적용)",
+    peersNote: "섹터 미분류 종목이므로 가장 유사한 업종 피어를 명시적으로 선택하고 그 이유를 서술할 것. 다음 업종 참고: 유통(PBR 0.3~0.8x, PER 8~15x), 건자재(EV/EBITDA 5~10x), 엔터테인먼트(PER 15~30x), 의료기기(PER 15~35x), 종합상사(EV/EBITDA 4~8x, PBR 0.3~0.6x).",
+    biasRisk: "⛔ 과대평가 위험 CRITICAL: 2026년 KR_OTHER 31건 중 방향 정확도 36%, 평균 목표가 괴리 +60%. 분류 불확실 섹터일수록 낙관적 가정이 검증 없이 적용되는 경향이 강함. 컨센서스 목표가 대비 ±30% 이내를 기본 목표로 설정할 것.",
+    specificLevers: [
+      "⛔ HARD CAP: 목표주가가 시작가의 150% 초과 금지 — 초과 시 WACC 최소 1.5%p 상향 및 Bear 시나리오 가중치 30%+ 적용",
+      "매출성장률 Year 1 상한: 업종 컨센서스 기준 최대 +25% (불명확 섹터 과성장 가정 금지)",
+      "OPM 가정: 최근 3년 평균 OPM의 최대 120% 이내 (OPM이 역사적 고점 대비 150% 초과 가정 금지)",
+      "피어 멀티플: 코스피 평균(PER 10~14x, EV/EBITDA 6~9x)에서 프리미엄·디스카운트 사유를 명시해야만 벗어날 수 있음",
+      "종합상사·지주회사: EV/EBITDA 4~8x, PBR 0.3~0.7x — 단순 DCF 목표가의 70~85% 수준으로 할인",
+      "소형주(시총 5,000억 미만): 유동성 리스크 할인 10~20% 추가 적용",
+      "Bear 시나리오 가중치: 최소 20%로 설정",
+    ],
+  },
+  US_OTHER: {
+    waccRange: "WACC 9.0~14.0% (섹터 불명확·소형 성장주: 12.0~14.0%, 성숙 대형주: 9.0~11.0%)",
+    terminalG: "Terminal g ≤ 2.5% (미국 장기 성장률 수준)",
+    peersNote: "섹터 미분류 종목이므로 가장 유사한 S&P 500 업종 피어 명시 필수. 미국 소형성장주(Joby, Beyond Meat 등): 수익성 없는 단계라면 DCF 대신 DCF + 시나리오 분석 혼합. S&P 500 중간 PER 약 20~25x 기준.",
+    biasRisk: "⛔ 과대평가 위험 HIGH: 2026년 US_OTHER 6건 중 방향 정확도 17%, 평균 -18.5%p 과소평가(실제 주가가 목표가보다 더 하락). 방향 자체를 틀리는 경우가 많음 — 낙관/비관 모두 극단을 피하고 시장 컨센서스를 기준점으로 삼을 것.",
+    specificLevers: [
+      "⛔ HARD CAP: 목표주가가 시작가의 150% 초과 금지",
+      "수익성 없는 성장주(적자 기업): DCF의 Terminal Value 의존도를 60% 이하로 제한",
+      "항공·우주 스타트업(Joby 등): PoS(사업화 확률) 30~50% 할인 적용 후 가중 DCF",
+      "농식품·소비재 턴어라운드 기업: 컨센서스 EPS 회복 타임라인 보수적 설정 (시장보다 1년 늦게)",
+      "Bear 시나리오 가중치: 최소 25%",
+    ],
+  },
+  US_DEFENSE: {
+    waccRange: "WACC 7.5~10.5% (방산 대형주: 7.5~9.0%, 우주·항공 스타트업: 10.0~14.0%)",
+    terminalG: "Terminal g ≤ 2.5%",
+    peersNote: "방산 대형주 피어: Lockheed Martin·Raytheon·Northrop·BAE Systems. EV/EBITDA 10~18x, PER 14~25x. ※ Rocket Lab 같은 우주 스타트업은 방산 대형주 멀티플 적용 금지.",
+    biasRisk: "⛔ 과소평가 위험: 2026년 US_DEFENSE 2건 중 방향 정확도 0%, 평균 -81% 과소평가(방어주를 너무 비관적으로 봄). 방산 대형주(Lockheed 등)는 정부 계약 기반 안정적 FCF를 가진 경우 지나치게 보수적인 WACC 적용 금지.",
+    specificLevers: [
+      "⛔ Rocket Lab(RKLB)·스타트업 우주기업: EV/Sales 기반 평가 (DCF 단독 적용 금지), 성공 시나리오 30~50% PoS 가중",
+      "방산 대형주(LMT·RTX·NOC): FCF Yield 3~6% 정상 범위, WACC 7.5~9.0%",
+      "미국 국방예산 성장률(2~4%/y)로 장기 수주 성장률 상한 설정",
+      "US_DEFENSE에서 낙관적 방향이 틀리는 경우: WACC 하향이 아닌 성장률 현실화 필요",
     ],
   },
 };
