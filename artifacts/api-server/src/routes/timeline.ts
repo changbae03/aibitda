@@ -88,7 +88,10 @@ async function generateTimeline(keyword: string, recentArticles: RssItem[]): Pro
     return `[${dateStr}] (${a.source}) ${a.title}`;
   }).join("\n");
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const prompt = `당신은 경제·지정학 전문 애널리스트입니다.
+오늘 날짜는 ${today}입니다. 타임라인은 반드시 오늘까지의 최신 사건을 포함해야 합니다.
 키워드 "${keyword}"에 대한 이슈 타임라인을 생성해주세요.
 
 최근 뉴스 기사 (RSS 수집):
