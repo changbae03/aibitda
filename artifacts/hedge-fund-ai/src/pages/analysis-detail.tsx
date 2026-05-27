@@ -1765,7 +1765,7 @@ export default function AnalysisDetail() {
   };
 
   return (
-    <div id="analysis-report-content" className="space-y-5 sm:space-y-6 pb-20">
+    <div id="analysis-report-content" className="pb-20">
       {/* 인쇄 전용 헤더 — 화면에서는 숨김, 인쇄 시에만 표시 */}
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
@@ -1834,6 +1834,10 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div className="flex gap-6 items-start mt-5 sm:mt-6">
+        <StepNavSidebar steps={analysis.steps} isEn={isEn} />
+        <div className="flex-1 min-w-0 space-y-5 sm:space-y-6">
 
       {/* Header */}
       <div ref={headerRef} className="bg-card rounded-2xl p-5 sm:p-6" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
@@ -2091,6 +2095,16 @@ export default function AnalysisDetail() {
         </div>
       </div>
 
+      {/* TL;DR 결론 카드 — 완료 시 최상단 표시 */}
+      {isComplete && effectiveVerdict && (
+        <TldrCard analysis={analysis} isEn={isEn} />
+      )}
+
+      {/* Bull / Base / Bear 시나리오 비교 카드 */}
+      {isComplete && (
+        <ScenarioCompareCard analysis={analysis} isEn={isEn} />
+      )}
+
       {/* Financial Chart */}
       <div className="bg-card rounded-2xl p-4 sm:p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
         <FinancialChart ticker={analysis.ticker} isEn={isEn} />
@@ -2161,7 +2175,9 @@ export default function AnalysisDetail() {
           {[...analysis.steps]
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
             .map((step, idx) => (
-            <StepCard key={step.id} step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} companyNameEn={(analysis as any).englishName ?? undefined} startPrice={(analysis as any).startPrice ?? undefined} isEn={isEn} isSignedIn={isSignedIn} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} validatedVerdict={(analysis as any).investmentVerdict ?? undefined} />
+            <div key={step.id} id={`step-${step.stepKey}`}>
+              <StepCard step={step} agent={AGENTS[step.stepKey]} delay={idx * 0.05} ticker={analysis.ticker} companyName={analysis.companyName} companyNameEn={(analysis as any).englishName ?? undefined} startPrice={(analysis as any).startPrice ?? undefined} isEn={isEn} isSignedIn={isSignedIn} validatedTargetPrice={(analysis as any).targetPrice ?? undefined} validatedVerdict={(analysis as any).investmentVerdict ?? undefined} />
+            </div>
           ))}
         </AnimatePresence>
 
@@ -2630,6 +2646,8 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2726,6 +2744,256 @@ function extractJson(raw: string): any | null {
       .replace(/,\s*([}\]])/g, "$1");
     return JSON.parse(fixedAll);
   } catch { return null; }
+}
+
+function TldrCard({ analysis, isEn }: { analysis: any; isEn: boolean }) {
+  const stratStep = analysis.steps?.find((s: any) => s.stepKey === "investment_strategy");
+  const json = stratStep ? extractJson(stratStep.content) : null;
+  const verdict = (analysis as any).investmentVerdict ?? json?.verdict;
+  const tp = analysis.targetPrice ?? (json?.target_price ? parseFloat(String(json.target_price).replace(/[^0-9.]/g, "")) || null : null);
+  const sp = (analysis as any).startPrice as number | null ?? null;
+  const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+
+  if (!verdict && !tp) return null;
+
+  const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
+  const verdictLabel = isEn ? (verdict ?? "") : toKoreanVerdict(verdict);
+  const isBuy = verdict?.toLowerCase().includes("buy");
+  const isSell = verdict?.toLowerCase().includes("sell");
+
+  const accentColor = isBuy
+    ? "text-emerald-700 dark:text-emerald-400"
+    : isSell
+    ? "text-blue-700 dark:text-blue-400"
+    : "text-amber-700 dark:text-amber-400";
+  const accentBg = isBuy
+    ? "bg-emerald-50 dark:bg-emerald-950/30"
+    : isSell
+    ? "bg-blue-50 dark:bg-blue-950/30"
+    : "bg-amber-50 dark:bg-amber-950/30";
+  const accentBorder = isBuy
+    ? "border-emerald-200 dark:border-emerald-800/50"
+    : isSell
+    ? "border-blue-200 dark:border-blue-800/50"
+    : "border-amber-200 dark:border-amber-800/50";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card rounded-2xl overflow-hidden"
+      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+    >
+      <div className="px-5 py-3 border-b border-border/50 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+          {isEn ? "Investment Summary · TL;DR" : "투자 요약 · 한눈에 보기"}
+        </span>
+        <span className="text-[10px] text-muted-foreground/50 font-mono">AI Research</span>
+      </div>
+      <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
+        <div className={`rounded-xl border ${accentBorder} ${accentBg} px-5 py-4 flex flex-col justify-center sm:min-w-[152px] sm:max-w-[188px]`}>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
+            {isEn ? "Verdict" : "투자의견"}
+          </p>
+          <p className={`text-[18px] font-bold leading-tight ${accentColor}`}>{verdictLabel}</p>
+          {upsidePct !== null && (
+            <p className={`text-[28px] font-black tabular-nums leading-none mt-1 ${upsidePct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
+              {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
+            </p>
+          )}
+          {tp && (
+            <p className="text-[11px] text-muted-foreground mt-2 font-mono">
+              {isEn ? "Target" : "목표가"} {formatCurrency(tp, currency, isEn)}
+            </p>
+          )}
+        </div>
+        <div className="flex-1 min-w-0 space-y-3.5">
+          {json?.key_issue && (
+            <div>
+              <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">
+                {isEn ? "Key Issue" : "핵심 이슈"}
+              </p>
+              <p className="text-[13.5px] font-medium text-foreground leading-relaxed">{json.key_issue}</p>
+            </div>
+          )}
+          {json?.summary && (
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                {isEn ? "Investment Thesis" : "투자 논거"}
+              </p>
+              <p className="text-[13px] text-foreground/75 leading-relaxed line-clamp-4">{json.summary}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function ScenarioCompareCard({ analysis, isEn }: { analysis: any; isEn: boolean }) {
+  const stratStep = analysis.steps?.find((s: any) => s.stepKey === "investment_strategy");
+  const json = stratStep ? extractJson(stratStep.content) : null;
+  if (!json?.scenarios?.length) return null;
+
+  const currency: "KRW" | "USD" = isUSTicker(analysis.ticker) ? "USD" : "KRW";
+
+  const caseConfig: Record<string, { label: string; sublabel: string; bg: string; border: string; color: string; barColor: string; numColor: string }> = {
+    Bull: {
+      label: "▲ Bull",
+      sublabel: isEn ? "Upside Case" : "낙관 시나리오",
+      bg: "bg-emerald-50 dark:bg-emerald-950/25",
+      border: "border-emerald-200 dark:border-emerald-800/50",
+      color: "text-emerald-700 dark:text-emerald-400",
+      barColor: "bg-emerald-500",
+      numColor: "text-emerald-600 dark:text-emerald-400",
+    },
+    Base: {
+      label: "— Base",
+      sublabel: isEn ? "Base Case" : "기본 시나리오",
+      bg: "bg-blue-50 dark:bg-blue-950/25",
+      border: "border-blue-200 dark:border-blue-800/50",
+      color: "text-blue-700 dark:text-blue-400",
+      barColor: "bg-blue-500",
+      numColor: "text-blue-600 dark:text-blue-400",
+    },
+    Bear: {
+      label: "▼ Bear",
+      sublabel: isEn ? "Downside Case" : "비관 시나리오",
+      bg: "bg-red-50 dark:bg-red-950/25",
+      border: "border-red-200 dark:border-red-800/50",
+      color: "text-red-600 dark:text-red-400",
+      barColor: "bg-red-400",
+      numColor: "text-red-500 dark:text-red-400",
+    },
+  };
+
+  const ordered = (["Bull", "Base", "Bear"] as const)
+    .map(c => json.scenarios.find((s: any) => s.case === c))
+    .filter(Boolean);
+
+  if (ordered.length < 2) return null;
+
+  return (
+    <div
+      className="bg-card rounded-2xl overflow-hidden"
+      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+    >
+      <div className="px-5 py-3 border-b border-border/50">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+          {isEn ? "Scenario Analysis — Bull / Base / Bear" : "시나리오 분석 — 낙관 · 기본 · 비관"}
+        </span>
+      </div>
+      <div className="p-4 grid grid-cols-3 gap-2 sm:gap-3">
+        {ordered.map((s: any) => {
+          const cfg = caseConfig[s.case as keyof typeof caseConfig];
+          if (!cfg) return null;
+          const uStr = String(s.upside ?? "");
+          const uNum = parseFloat(uStr.replace(/[^0-9.\-]/g, ""));
+          const uDisplay = !isNaN(uNum) ? (uNum >= 0 ? "+" : "") + uNum.toFixed(1) + "%" : uStr;
+          const pStr = String(s.probability ?? "");
+          const pNum = parseFloat(pStr.replace(/[^0-9.]/g, ""));
+          return (
+            <div key={s.case} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-3 sm:p-4`}>
+              <p className={`text-[11px] font-bold ${cfg.color}`}>{cfg.label}</p>
+              <p className="text-[10px] text-muted-foreground mb-3">{cfg.sublabel}</p>
+              <p className="text-[14px] sm:text-[17px] font-black text-foreground font-mono leading-none">
+                {formatPrice(s.target_price, currency, isEn)}
+              </p>
+              <p className={`text-[12px] font-bold mt-0.5 ${cfg.numColor}`}>{uDisplay}</p>
+              {!isNaN(pNum) && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-muted-foreground">{isEn ? "Prob." : "확률"}</span>
+                    <span className="text-[11px] font-bold text-foreground/80">{pNum}%</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-muted/70 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${cfg.barColor}`}
+                      style={{ width: `${Math.min(pNum, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {s.assumption && (
+                <p className="mt-2.5 text-[11px] text-foreground/60 leading-snug line-clamp-3">{s.assumption}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StepNavSidebar({ steps, isEn }: { steps: any[]; isEn: boolean }) {
+  const [activeStep, setActiveStep] = useState<string>("");
+  const doneSteps = new Set(steps.map((s: any) => s.stepKey));
+
+  useEffect(() => {
+    const observers: IntersectionObserver[] = [];
+    for (const stepKey of ANALYSIS_STEPS_ORDER) {
+      const el = document.getElementById(`step-${stepKey}`);
+      if (!el) continue;
+      const obs = new IntersectionObserver(
+        ([entry]) => { if (entry.isIntersecting) setActiveStep(stepKey); },
+        { threshold: 0.1, rootMargin: "-10% 0px -60% 0px" }
+      );
+      obs.observe(el);
+      observers.push(obs);
+    }
+    return () => observers.forEach(o => o.disconnect());
+  }, [steps.length]);
+
+  const scrollToStep = (stepKey: string) => {
+    const el = document.getElementById(`step-${stepKey}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div className="hidden xl:block w-40 shrink-0">
+      <div className="sticky top-6 pt-1">
+        <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2 px-2">
+          {isEn ? "Contents" : "목차"}
+        </p>
+        <div className="space-y-0.5">
+          {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
+            const agent = AGENTS[stepKey];
+            const isDone = doneSteps.has(stepKey);
+            const isActive = activeStep === stepKey;
+            return (
+              <button
+                key={stepKey}
+                onClick={() => scrollToStep(stepKey)}
+                disabled={!isDone}
+                className={cn(
+                  "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all duration-150",
+                  isDone
+                    ? isActive
+                      ? "bg-primary/8 text-primary"
+                      : "text-foreground/55 hover:text-foreground hover:bg-muted/60"
+                    : "text-muted-foreground/30 cursor-not-allowed"
+                )}
+              >
+                <span className={cn(
+                  "w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : isDone
+                    ? "bg-muted-foreground/15 text-muted-foreground"
+                    : "bg-muted text-muted-foreground/40"
+                )}>
+                  {idx + 1}
+                </span>
+                <span className="text-[11.5px] font-medium leading-tight truncate">
+                  {isEn ? (agent?.nameEn ?? agent?.name) : agent?.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, createdAt, isEn = false, validatedTargetPrice, validatedVerdict }: { step: any, agent: AgentInfo, delay: number, ticker?: string, companyName?: string, createdAt?: string, isEn?: boolean, validatedTargetPrice?: number | null, validatedVerdict?: string | null }) {
