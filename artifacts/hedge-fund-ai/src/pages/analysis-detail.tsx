@@ -3157,7 +3157,7 @@ function TldrCard({ analysis, isEn }: { analysis: any; isEn: boolean }) {
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
                 {isEn ? "Investment Thesis" : "투자 논거"}
               </p>
-              <p className="text-[13px] text-foreground/75 leading-relaxed line-clamp-4">{json.summary}</p>
+              <p className="text-[13px] text-foreground/75 leading-relaxed">{json.summary}</p>
             </div>
           )}
         </div>
