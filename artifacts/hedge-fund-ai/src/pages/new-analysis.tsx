@@ -568,9 +568,9 @@ export default function NewAnalysis() {
           <AnimatePresence>
             {selectedCompany && !showDropdown && (
               <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.15 }}
                 className="flex items-center gap-2 mt-2 px-1"
               >
@@ -589,14 +589,14 @@ export default function NewAnalysis() {
             {showDropdown && suggestions.length > 0 && (
               <motion.div
                 ref={dropdownRef}
-                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                initial={{ opacity: 0 }}
                 animate={{
-                  opacity: 1, y: 0, scale: 1,
+                  opacity: 1,
                   boxShadow: selectHint
                     ? "0 0 0 2px hsl(var(--primary)), 0 8px 24px rgba(0,0,0,0.12)"
                     : "0 4px 16px rgba(0,0,0,0.08)",
                 }}
-                exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.12 }}
                 className="absolute top-full left-0 right-0 mt-1.5 bg-popover border border-border rounded-xl z-50 overflow-hidden"
               >
@@ -669,8 +669,8 @@ export default function NewAnalysis() {
           <AnimatePresence>
             {isSearching && !isDirectTicker(ticker.trim()) && (
               <motion.p
-                initial={{ opacity: 0, y: -2 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5"
               >
@@ -684,8 +684,8 @@ export default function NewAnalysis() {
           <AnimatePresence>
             {selectHint && (
               <motion.p
-                initial={{ opacity: 0, y: -2 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="mt-2 text-xs text-primary font-medium flex items-center gap-1"
               >
@@ -697,8 +697,8 @@ export default function NewAnalysis() {
           <AnimatePresence>
             {error && !selectHint && (
               <motion.p
-                initial={{ opacity: 0, y: -2 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="mt-2 text-xs text-red-500"
               >
