@@ -1,7 +1,7 @@
 /**
- * 시장 예측 파이프라인 v25 — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성 + 방향 편향 교정
+ * 시장 예측 파이프라인 v27 — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성 + 방향 편향 교정
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 + 닛케이/SOX/WTI 4 = N_FEATURES = 31
+ * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 + 닛케이/SOX/WTI 4 + 방향특화 3 + 52W·OBV 3 = N_FEATURES = 37
  *
  * [기술적 15] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
  *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price
@@ -80,18 +80,18 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 25;   // [v17] 20→25: 한 달 영업일 전체 패턴 포함
 const PRED_H       = 3;
-const N_FEATURES   = 34;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 (v26)
+const N_FEATURES   = 37;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 + 3 52W·OBV (v27)
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 48;   // [v18] 32→48: KOSPI 복잡 패턴 대응 용량 확대
 const LSTM_DENSE   = 24;   // [v18] 16→24
 const LSTM_BATCH   = 32;
-const YEARS_DATA   = 5;
+const YEARS_DATA   = 3;    // [v27] 5→3년: 최근 레짐 집중 (2025 관세전쟁 이후 패턴 우선)
 const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 26;  // [v26] 방향특화 피처 3개 추가(upStreak5/ret3dLag/rsiAccel), graduated dirPenalty 복원, US 앙상블 강화
+const MODEL_VERSION = 27;  // [v27] 52W고저·OBV 피처 3개 추가, YEARS_DATA 5→3, halfLifeDays 단축, 편향교정 적중률 표시
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ const INDEX_HP: Record<string, IndexHP> = {
     gbdtFsub: 0.65, gbdtSsub: 0.85, nEnsemble: 15,
     lstmEpochs: 150, lstmLR: 0.0007, lstmDrop: 0.27,
     recentWindow: 30,
-    halfLifeDays: 56,
+    halfLifeDays: 28,  // [v27] 56→28: 최근 1개월 레짐에 집중 (2025 관세전쟁 이후 빠른 적응)
     dirPenalty: 1.8,
   },
   /**
@@ -136,7 +136,7 @@ const INDEX_HP: Record<string, IndexHP> = {
     gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 18,
     lstmEpochs: 130, lstmLR: 0.0008, lstmDrop: 0.30,
     recentWindow: 30,
-    halfLifeDays: 42,
+    halfLifeDays: 21,  // [v27] 42→21: 코스닥 개인주도 레짐 더 빠른 전환 대응
     dirPenalty: 1.8,
   },
   /**
@@ -867,6 +867,25 @@ function buildFeatures(
   const rsiCache = new Float64Array(closes.length);
   for (let i = 0; i < closes.length; i++) rsiCache[i] = rsiNorm(rets, 14, i);
 
+  // [v27] 52주 고점·저점 사전 계산 — 돌파/반등 신호 (저항선 근접 = 모멘텀, 지지선 근접 = 반등)
+  const hi252 = new Float64Array(closes.length);
+  const lo252 = new Float64Array(closes.length);
+  for (let i = 0; i < closes.length; i++) {
+    const start = Math.max(0, i - 251);
+    let h = closes[start], l = closes[start];
+    for (let k = start + 1; k <= i; k++) {
+      if (closes[k] > h) h = closes[k];
+      if (closes[k] < l) l = closes[k];
+    }
+    hi252[i] = h; lo252[i] = l;
+  }
+
+  // [v27] OBV (On-Balance Volume) 사전 계산 — 매집/배분 방향성 확인
+  const obv = new Float64Array(closes.length);
+  for (let i = 1; i < closes.length; i++) {
+    obv[i] = obv[i-1] + (rets[i] > 0 ? volumes[i] : rets[i] < 0 ? -volumes[i] : 0);
+  }
+
   const feats  = rows.map((row, i): Float64Array => {
     const ma5       = rollingMean(closes, 5,  i);
     const ma20      = rollingMean(closes, 20, i);
@@ -950,6 +969,17 @@ function buildFeatures(
         : 0,
       // 3. rsiAccel: RSI14 가속도 (현재 RSI - 3일 전 RSI) → 모멘텀 가속/감속 신호
       Math.max(-1, Math.min(1, (rsiCache[i] - (i >= 3 ? rsiCache[i-3] : rsiCache[0])) * 4)),
+      // ── [v27] 52주 고저·OBV 피처 3개 ──────────────────────────────────────
+      // 35. high52wDist: 52주 고점 대비 하락폭 (0=고점, 1=고점서 50% 하락) — 저항·돌파 신호
+      Math.max(0, Math.min(1, (hi252[i] / (closes[i] || 1e-8) - 1) / 0.5)),
+      // 36. low52wDist: 52주 저점 대비 상승폭 (0=저점, 1=저점서 50% 상승) — 지지·반등 신호
+      Math.max(0, Math.min(1, (closes[i] / (lo252[i] || 1e-8) - 1) / 0.5)),
+      // 37. obv10mom: OBV 10일 모멘텀 정규화 (양=매집, 음=배분) — 거래량 방향 확인
+      ((): number => {
+        const o10 = obv[Math.max(0, i - 10)];
+        const vScale = rollingMean(volumes, 20, i) * (closes[i] || 1e-8) * 10 + 1e-8;
+        return Math.max(-1, Math.min(1, (obv[i] - o10) / vScale));
+      })(),
     ]);
   });
   return { feats, closes, dates };
@@ -1391,6 +1421,9 @@ function buildResultFromModel(
 
   const last30Preds  = Array.from(testPreds).slice(-lastN);
   const last30Actual = Array.from(yte).slice(-lastN);
+  // [v27] 편향 교정된 최근 적중률 계산 (biasThreshold 적용 후 방향 재판정)
+  const last30PredsBC = new Float64Array(last30Preds.map(v => v - biasThreshold));
+  const rolling30dDirAccBC = dirAccRate(last30PredsBC, new Float64Array(last30Actual));
   // 교정된 오차로 신뢰구간 계산
   const recentErrors = last30Actual.map((a, i) => a - last30Preds[i] * calibFactor);
 
@@ -1499,7 +1532,7 @@ function buildResultFromModel(
     testMae: +(mae*100).toFixed(3),
     testDirAcc: +(dirAccRate(testPreds,yte)*100).toFixed(1),
     wfDirAcc: +(wfDirAccVal*100).toFixed(1),
-    rolling30dDirAcc: +(dirAccRate(last30Preds,last30Actual)*100).toFixed(1),
+    rolling30dDirAcc: +(rolling30dDirAccBC*100).toFixed(1),  // [v27] 편향 교정 후 적중률 표시
     predErrStd: +(stddev(recentErrors)*100).toFixed(3),
     recentPerf,
     lstmDirAcc: +(l30*100).toFixed(1),
