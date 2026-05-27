@@ -4844,35 +4844,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           </div>
         )}
 
-        {/* ② 주요 주가 급변 이슈 */}
-        {isMarket && chartEvents.length > 0 && (
-          <div className="mb-5 pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Key Price Events" : "주요 주가 급변 이슈"}</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground border border-border">{chartEvents.length}건</span>
-            </div>
-            <div className="space-y-2">
-              {chartEvents.map((ev, i) => {
-                const typeStyle: Record<string, { label: string; cls: string }> = {
-                  catalyst: { label: isEn ? "Catalyst" : "촉매", cls: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
-                  risk:     { label: isEn ? "Risk" : "리스크",   cls: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300" },
-                  earnings: { label: isEn ? "Earnings" : "실적", cls: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
-                  news:     { label: isEn ? "News" : "뉴스",     cls: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300" },
-                };
-                const ts = typeStyle[ev.type] ?? typeStyle.news;
-                return (
-                  <div key={i} className="flex items-start gap-3 px-3.5 py-2.5 rounded-lg bg-muted/30 border border-border/50">
-                    <span className="shrink-0 text-[10px] font-mono text-muted-foreground/70 mt-0.5 w-14">{ev.date}</span>
-                    <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${ts.cls}`}>{ts.label}</span>
-                    <span className="text-[13px] text-foreground/80 leading-relaxed flex-1 min-w-0">{ev.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* ③ 현재가 vs 적정주가 + 단기 방향 분석 */}
         {isMarket && marketSignals && (() => {
           const cp = (chartLevels?.currentPrice && chartLevels.currentPrice > 0) ? chartLevels.currentPrice : (startPrice ?? 0);
