@@ -4783,6 +4783,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               companyName={companyName}
               companyNameEn={companyNameEn}
               chartLevels={chartLevels ?? undefined}
+              validatedTargetPrice={validatedTargetPrice ?? undefined}
               events={chartEvents}
               currency={priceCurrency}
               isEn={isEn}

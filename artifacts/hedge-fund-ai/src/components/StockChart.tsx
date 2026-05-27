@@ -57,6 +57,7 @@ interface StockChartProps {
   companyName?: string;
   companyNameEn?: string;
   chartLevels?: ChartLevels;
+  validatedTargetPrice?: number | null;
   events?: ChartEvent[];
   currency?: "KRW" | "USD";
   isEn?: boolean;
@@ -209,7 +210,7 @@ async function fetchPriceEvents(ticker: string, companyName: string | undefined,
 
 const NUM_BADGES = ["①", "②", "③", "④", "⑤"];
 
-export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, events = [], currency = "KRW", isEn = false }: StockChartProps) {
+export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, validatedTargetPrice, events = [], currency = "KRW", isEn = false }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
   const [showEvents, setShowEvents] = useState(true);
@@ -257,21 +258,11 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
   }), [chartData, swings]);
 
   const currentPrice = data?.currentPrice ?? 0;
-  const MAX_LEVEL_RATIO = 1.5;
-  const showTarget1OnChart = chartLevels?.target1 && currentPrice > 0 && chartLevels.target1 <= currentPrice * MAX_LEVEL_RATIO;
-  const showTarget2OnChart = chartLevels?.target2 && currentPrice > 0 && chartLevels.target2 <= currentPrice * MAX_LEVEL_RATIO;
-  const showStopLossOnChart = chartLevels?.stopLoss && currentPrice > 0 && chartLevels.stopLoss >= currentPrice * (2 - MAX_LEVEL_RATIO);
+  const showValidatedTarget = validatedTargetPrice && validatedTargetPrice > 0;
 
-  const priceMin = chartData.length ? Math.min(
-    ...chartData.map((d) => d.low ?? d.close),
-    ...(showStopLossOnChart ? [chartLevels!.stopLoss!] : [])
-  ) * 0.99 : 0;
+  const priceMin = chartData.length ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99 : 0;
   const dataMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) : 100;
-  const levelMax = Math.max(
-    dataMax,
-    showTarget1OnChart ? chartLevels!.target1! : 0,
-    showTarget2OnChart ? chartLevels!.target2! : 0,
-  );
+  const levelMax = Math.max(dataMax, showValidatedTarget ? validatedTargetPrice! : 0);
   const priceMax = levelMax * 1.03;
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
   const volumeDomainMax = maxVolume * 5;
@@ -453,15 +444,6 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
                 />
                 <Tooltip content={<CustomTooltip currency={currency} isEn={isEn} />} />
 
-                {chartLevels?.stopLoss && chartLevels?.entryMin && (
-                  <ReferenceArea yAxisId="price" y1={chartLevels.stopLoss} y2={chartLevels.entryMin} fill="#ef4444" fillOpacity={0.04} strokeOpacity={0} />
-                )}
-                {chartLevels?.entryMin && chartLevels?.entryMax && (
-                  <ReferenceArea yAxisId="price" y1={chartLevels.entryMin} y2={chartLevels.entryMax} fill="#1d4ed8" fillOpacity={0.08} stroke="#1d4ed8" strokeOpacity={0.2} strokeDasharray="3 3" />
-                )}
-                {chartLevels?.target1 && chartLevels?.target2 && (
-                  <ReferenceArea yAxisId="price" y1={chartLevels.target1} y2={chartLevels.target2} fill="#16a34a" fillOpacity={0.06} strokeOpacity={0} />
-                )}
 
                 <Bar yAxisId="volume" dataKey="volume" name={isEn ? "Volume" : "거래량"} fill="#d4d4d4" opacity={0.5} radius={[1, 1, 0, 0]} isAnimationActive={false} />
 
@@ -475,20 +457,8 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
                   activeDot={{ r: 3, fill: lineColor }}
                 />
 
-                {showStopLossOnChart && (
-                  <ReferenceLine yAxisId="price" y={chartLevels!.stopLoss!} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="3 2" />
-                )}
-                {chartLevels?.entryMin && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.entryMin} stroke="#1d4ed8" strokeWidth={1} strokeDasharray="4 2" />
-                )}
-                {chartLevels?.entryMax && (
-                  <ReferenceLine yAxisId="price" y={chartLevels.entryMax} stroke="#1d4ed8" strokeWidth={1} strokeDasharray="4 2" />
-                )}
-                {showTarget1OnChart && (
-                  <ReferenceLine yAxisId="price" y={chartLevels!.target1!} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" />
-                )}
-                {showTarget2OnChart && (
-                  <ReferenceLine yAxisId="price" y={chartLevels!.target2!} stroke="#15803d" strokeWidth={2} strokeDasharray="5 3" />
+                {showValidatedTarget && (
+                  <ReferenceLine yAxisId="price" y={validatedTargetPrice!} stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 3" label={{ value: isEn ? "Target" : "적정주가", position: "insideTopRight", fontSize: 10, fill: "#f59e0b", fontWeight: 700 }} />
                 )}
 
                 {swings.map((swing, idx) => (
@@ -513,32 +483,10 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* Level badges */}
-            {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
+            {/* 조율 적정주가 배지 */}
+            {showValidatedTarget && (
               <div className="mt-3 flex flex-wrap gap-1.5 px-1">
-                {chartLevels.stopLoss && (
-                  <LevelBadge label={isEn ? "Stop Loss" : "손절선"} value={chartLevels.stopLoss} color="#dc2626" currency={currency} isEn={isEn} />
-                )}
-                {chartLevels.entryMin && chartLevels.entryMax && (
-                  <LevelBadge
-                    label={isEn ? "Entry Zone" : "진입 구간"}
-                    value={currency === "USD"
-                      ? `$${chartLevels.entryMin.toLocaleString("en-US", { minimumFractionDigits: 2 })} ~ $${chartLevels.entryMax.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
-                      : isEn
-                        ? `${chartLevels.entryMin.toLocaleString("en-US")} ~ ${chartLevels.entryMax.toLocaleString("en-US")}`
-                        : `${chartLevels.entryMin.toLocaleString("ko-KR")} ~ ${chartLevels.entryMax.toLocaleString("ko-KR")}`
-                    }
-                    color="#1d4ed8"
-                    currency={currency}
-                    isEn={isEn}
-                  />
-                )}
-                {chartLevels.target1 && (
-                  <LevelBadge label={isEn ? "1st Target" : "1차 적정주가"} value={chartLevels.target1} color="#16a34a" currency={currency} isEn={isEn} />
-                )}
-                {chartLevels.target2 && (
-                  <LevelBadge label={isEn ? "2nd Target" : "2차 목표"} value={chartLevels.target2} color="#15803d" currency={currency} isEn={isEn} />
-                )}
+                <LevelBadge label={isEn ? "Fair Value (12M)" : "조율 적정주가 (12M)"} value={validatedTargetPrice!} color="#f59e0b" currency={currency} isEn={isEn} />
               </div>
             )}
 
