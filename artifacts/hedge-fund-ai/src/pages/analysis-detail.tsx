@@ -2216,7 +2216,7 @@ export default function AnalysisDetail() {
                       : metrics.map((m) => (
                           <div key={m.label} className="bg-card px-3 py-2.5">
                             <p className="text-[10px] text-muted-foreground/60 font-medium mb-0.5">{m.label}</p>
-                            <p className="text-xs font-bold text-foreground tabular-nums">{m.value}</p>
+                            <p className="text-[11px] font-bold text-foreground tabular-nums whitespace-nowrap">{m.value}</p>
                           </div>
                         ))}
                   </div>
@@ -2271,22 +2271,6 @@ export default function AnalysisDetail() {
 
                 return (
                   <>
-                    <div className="mb-4">
-                      {upsidePct !== null ? (
-                        <>
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-                            {isEn ? (upsidePct >= 0 ? "Upside Potential" : "Downside Risk") : (upsidePct >= 0 ? "상승여지" : "하락여지")}
-                          </p>
-                          <p className={`text-4xl font-black tabular-nums leading-none tracking-tight ${upsidePct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
-                            {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
-                          </p>
-                        </>
-                      ) : (
-                        <div className="text-xl font-bold text-foreground">
-                          {isEn ? effectiveVerdict : toKoreanVerdict(effectiveVerdict)}
-                        </div>
-                      )}
-                    </div>
                     {/* ── [v] 밸류에이션 vs 모멘텀 괴리 알림 ── */}
                     {(() => {
                       const liveP = headerLivePrice?.price ?? null;
