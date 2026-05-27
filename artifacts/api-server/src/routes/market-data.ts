@@ -1812,9 +1812,10 @@ router.get("/:ticker", async (req, res) => {
       // quote info optional
     }
 
-    // Fetch Naver real-time data for Korean stocks (NXT price + accurate close)
+    // Fetch Naver real-time data for Korean stocks (NXT price + accurate close + today OHLCV)
     let nxtInfo: { price: number; changePercent: number; compareToPrev: string; at: string; sessionType: string; status: string } | null = null;
     let naverKrxClose: number | null = null;
+    let naverTodayCandle: { open: number; high: number; low: number; close: number; volume: number } | null = null;
     const koreanCode = resolvedSymbol.match(/^(\d{6})\.(KS|KQ)$/)?.[1];
     if (koreanCode) {
       try {
@@ -1824,8 +1825,25 @@ router.get("/:ticker", async (req, res) => {
         );
         if (naverBasicRes.ok) {
           const naverBasic: any = await naverBasicRes.json();
-          const naverClose = naverBasic.closePrice ? Number(String(naverBasic.closePrice).replace(/,/g, "")) : null;
+          const parseNum = (v: any) => v ? Number(String(v).replace(/,/g, "")) : null;
+          const naverClose = parseNum(naverBasic.closePrice);
           if (naverClose && naverClose > 0) naverKrxClose = naverClose;
+
+          // Extract today's OHLCV from Naver basic
+          const naverOpen   = parseNum(naverBasic.openPrice);
+          const naverHigh   = parseNum(naverBasic.highPrice);
+          const naverLow    = parseNum(naverBasic.lowPrice);
+          const naverVol    = parseNum(naverBasic.accumulatedTradingVolume ?? naverBasic.tradingVolume);
+          if (naverClose && naverClose > 0) {
+            naverTodayCandle = {
+              open:   naverOpen  && naverOpen  > 0 ? naverOpen  : naverClose,
+              high:   naverHigh  && naverHigh  > 0 ? naverHigh  : naverClose,
+              low:    naverLow   && naverLow   > 0 ? naverLow   : naverClose,
+              close:  naverClose,
+              volume: naverVol   && naverVol   > 0 ? naverVol   : 0,
+            };
+          }
+
           const nxt = naverBasic.overMarketPriceInfo;
           if (nxt?.overPrice) {
             const nxtPriceNum = Number(String(nxt.overPrice).replace(/,/g, ""));
@@ -1848,6 +1866,36 @@ router.get("/:ticker", async (req, res) => {
 
     // Use Naver close price as authoritative for Korean stocks when available
     const effectiveCurrentPrice = naverKrxClose ?? currentPrice;
+
+    // Inject today's candle if Yahoo Finance hasn't included it yet
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0]; // KST today
+    const lastCandleDate = dates[dates.length - 1] ?? "";
+    if (naverTodayCandle && lastCandleDate < todayKST) {
+      // Add synthetic today candle using Naver data
+      const prevClose = closes[closes.length - 1] ?? naverTodayCandle.close;
+      dates.push(todayKST);
+      opens.push(naverTodayCandle.open);
+      highs.push(naverTodayCandle.high);
+      lows.push(naverTodayCandle.low);
+      closes.push(naverTodayCandle.close);
+      volumes.push(naverTodayCandle.volume);
+      // Append indicators (repeat last known value or null)
+      const todayRsi = rsi.length > 0 ? rsi[rsi.length - 1] : null;
+      const todayMa20 = ma20.length > 0 ? ma20[ma20.length - 1] : null;
+      const todayMa60 = ma60.length > 0 ? ma60[ma60.length - 1] : null;
+      const todayMa120 = ma120.length > 0 ? ma120[ma120.length - 1] : null;
+      const todayBbUpper = bb.upper.length > 0 ? bb.upper[bb.upper.length - 1] : null;
+      const todayBbMiddle = bb.middle.length > 0 ? bb.middle[bb.middle.length - 1] : null;
+      const todayBbLower = bb.lower.length > 0 ? bb.lower[bb.lower.length - 1] : null;
+      void prevClose;
+      rsi.push(todayRsi as number);
+      ma20.push(todayMa20 as number);
+      ma60.push(todayMa60 as number);
+      ma120.push(todayMa120 as number);
+      bb.upper.push(todayBbUpper as number);
+      bb.middle.push(todayBbMiddle as number);
+      bb.lower.push(todayBbLower as number);
+    }
 
     res.json({
       ticker,
