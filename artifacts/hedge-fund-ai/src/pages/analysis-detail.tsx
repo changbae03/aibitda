@@ -5141,11 +5141,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           </div>
         )}
 
-        {/* Market & Technical Analyst: 가격 구간 레이더 */}
-        {isMarket && chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
-          <TechnicalLevelLadder levels={chartLevels} startPrice={startPrice} currency={priceCurrency} isEn={isEn} />
-        )}
-
         {/* Valuation Analyst — 최종 조율 적정주가 시각화 */}
         {isRelativeVal && finalValuationData && (() => {
           const fv = finalValuationData;
