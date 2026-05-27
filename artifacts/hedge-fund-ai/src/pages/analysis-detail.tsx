@@ -3450,60 +3450,6 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
 
               return (
                 <div className="px-4 sm:px-6 py-4">
-                  {/* 밸류에이션 vs 단기 모멘텀 구분 안내 */}
-                  {momentumDivBanner && (
-                    <div className="mb-3 px-3 py-2 rounded-xl border border-amber-300/50 dark:border-amber-600/30 bg-amber-50/50 dark:bg-amber-950/20 flex items-start gap-2">
-                      <p className="text-[10.5px] leading-relaxed text-amber-700/90 dark:text-amber-300/80">{momentumDivBanner}</p>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                    {/* 진입가 / 재관심 기준가 */}
-                    <div className="rounded-xl border border-border bg-background p-3 sm:p-4">
-                      <div className="flex items-center gap-1 mb-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground">{entryLabel}</p>
-                      </div>
-                      <p className="text-[13px] sm:text-[17px] font-bold text-foreground font-mono leading-none break-all">{formatPrice(json.entry_price, priceCurrency, isEn)}</p>
-                      {entryVsCurrent !== null ? (
-                        <p className={`text-[10px] sm:text-[11px] font-bold mt-1 ${parseFloat(entryVsCurrent) < 0 ? "text-rose-500" : "text-emerald-600"}`}>
-                          {parseFloat(entryVsCurrent) >= 0 ? "+" : ""}{entryVsCurrent}%
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-muted-foreground mt-1 hidden sm:block">{entrySubLabel}</p>
-                      )}
-                    </div>
-
-                    {/* 적정주가 — 현재가 기준 upside/downside */}
-                    <div className={`rounded-xl border ${targetCardStyle.border} ${targetCardStyle.bg} p-3 sm:p-4`}>
-                      <div className="flex items-center gap-1 mb-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${targetCardStyle.dotColor} shrink-0`} />
-                        <p className={`text-[10px] sm:text-[11px] font-semibold ${targetCardStyle.labelColor}`}>{isEn ? "Fair Value" : "적정주가"} <span className="font-normal opacity-70">(12M)</span></p>
-                      </div>
-                      <p className={`text-[13px] sm:text-[17px] font-bold ${targetCardStyle.valColor} font-mono leading-none break-all`}>{tp ? formatPrice(String(tp), priceCurrency, isEn) : formatPrice(json.target_price, priceCurrency, isEn)}</p>
-                      {upsideFromCurrent !== null ? (
-                        <p className={`text-[10px] sm:text-[11px] font-bold ${targetCardStyle.pctColor} mt-1`}>
-                          {upsideFromCurrent >= 0 ? "+" : ""}{upsideFromCurrent.toFixed(1)}%
-                        </p>
-                      ) : (
-                        <p className={`text-[10px] ${targetCardStyle.labelColor} mt-1 hidden sm:block`}>{isEn ? "vs. current" : "현재가 기준"}</p>
-                      )}
-                    </div>
-
-                    {/* 손절가 / 청산 우선 구간 */}
-                    <div className="rounded-xl border border-red-300 dark:border-red-700 bg-card p-3 sm:p-4">
-                      <div className="flex items-center gap-1 mb-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-red-500 dark:text-red-400">{stopLabel}</p>
-                      </div>
-                      <p className="text-[13px] sm:text-[17px] font-bold text-red-600 dark:text-red-400 font-mono leading-none break-all">{formatPrice(json.stop_loss, priceCurrency, isEn)}</p>
-                      {slPct !== null ? (
-                        <p className="text-[10px] sm:text-[11px] font-bold text-red-500 dark:text-red-400 mt-1">-{slPct}%</p>
-                      ) : (
-                        <p className="text-[10px] text-red-500 dark:text-red-400 mt-1 hidden sm:block">{stopSubLabel}</p>
-                      )}
-                    </div>
-                  </div>
-
                   {/* 단기 기술적 이정표 — technical_target 있을 때만 표시 */}
                   {techTarget && (
                     <div className="mt-3 rounded-xl border border-orange-300/60 dark:border-orange-700/40 bg-orange-50/40 dark:bg-orange-950/20 px-4 py-3 flex items-center justify-between gap-3">
