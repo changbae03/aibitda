@@ -1619,6 +1619,12 @@ export default function AnalysisDetail() {
 
   const { mutate: deleteAnalysis } = useDeleteAnalysis();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // 피드백 상태
   const [feedbackRating, setFeedbackRating] = useState<1 | 5 | null>(null);
@@ -5380,6 +5386,23 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
 
       </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 맨 위로 가기 버튼 */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 8 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-6 right-6 z-50 w-10 h-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 active:scale-95 transition-transform flex items-center justify-center print:hidden"
+            aria-label="맨 위로"
+          >
+            <ChevronUp className="w-5 h-5" />
+          </motion.button>
         )}
       </AnimatePresence>
     </motion.div>
