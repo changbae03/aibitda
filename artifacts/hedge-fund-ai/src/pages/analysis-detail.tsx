@@ -2248,140 +2248,50 @@ export default function AnalysisDetail() {
 
           {/* Verdict Card */}
           {isComplete && effectiveVerdict && (
-            <div ref={verdictRef} className="bg-primary/8 border border-primary/30 p-5 rounded-xl w-full md:min-w-[250px] md:w-auto">
+            <div ref={verdictRef} className="w-full md:w-auto md:min-w-[220px]">
               {(() => {
                 const isSellVerdict = ["sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase());
                 const currency = isUSTicker(analysis.ticker) ? "USD" : "KRW";
-
-                // 현재가(분석 시작 시 저장된 startPrice) 기준 upside 계산
                 const sp = (analysis as any).startPrice as number | null ?? null;
                 const tp = analysis.targetPrice ?? null;
                 const upsidePct = (sp && tp && sp > 0) ? ((tp - sp) / sp * 100) : null;
-                const isActualUpside = upsidePct !== null ? upsidePct >= 0 : null;
-
-                // 의견과 실제 방향 불일치 감지
-                const verdictIsPositive = !isSellVerdict;
-                // Hold(중립)는 방향성이 없으므로 경고 제외, Buy/Sell 계열만 체크
-                const verdictHasDirection = ["buy", "strong buy", "sell", "strong sell"].includes((effectiveVerdict ?? "").toLowerCase());
-                const contradictory = verdictHasDirection && isActualUpside !== null && verdictIsPositive !== isActualUpside;
-
-                const targetColor = isActualUpside === false
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-success";
-
+                const isUp = upsidePct !== null ? upsidePct >= 0 : true;
+                const upColor = isUp
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-rose-500 dark:text-rose-400";
                 return (
-                  <>
-                    {/* ── [v] 밸류에이션 vs 모멘텀 괴리 알림 ── */}
-                    {(() => {
-                      const liveP = headerLivePrice?.price ?? null;
-                      const sinceAnalysisPct = (liveP && sp && sp > 0)
-                        ? ((liveP - sp) / sp * 100) : null;
-                      // 괴리 감지: 매도인데 5%+ 상승 / 매수인데 5%+ 하락
-                      const isMomUp   = sinceAnalysisPct !== null && sinceAnalysisPct > 5;
-                      const isMomDown = sinceAnalysisPct !== null && sinceAnalysisPct < -5;
-                      const divergence = verdictHasDirection &&
-                        ((isSellVerdict && isMomUp) || (!isSellVerdict && isMomDown));
-                      if (!divergence) return null;
-                      const upside = isSellVerdict && isMomUp;
-                      return (
-                        <div className="mb-3 rounded-xl border border-amber-300/60 dark:border-amber-600/40 bg-amber-50/60 dark:bg-amber-950/25 overflow-hidden">
-                          {/* 헤더 */}
-                          <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5">
-                            <span className="text-sm">{upside ? "📈" : "📉"}</span>
-                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                              {isEn
-                                ? (upside ? "Momentum–Valuation Divergence" : "Valuation–Momentum Gap")
-                                : "모멘텀 ↔ 밸류에이션 괴리"}
-                            </span>
-                            <span className={`ml-auto text-[11px] font-black tabular-nums ${upside ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
-                              {sinceAnalysisPct! >= 0 ? "+" : ""}{sinceAnalysisPct!.toFixed(1)}%
-                            </span>
-                          </div>
-                          {/* 설명 */}
-                          <div className="px-3 pb-2.5">
-                            <p className="text-[10px] leading-relaxed text-amber-800/80 dark:text-amber-300/70">
-                              {isEn
-                                ? (upside
-                                  ? `Stock rose ${sinceAnalysisPct!.toFixed(1)}% since analysis despite a Sell rating. Valuation reflects 12-month DCF/WACC fair value — short-term momentum driven by sentiment or catalysts can temporarily diverge from fundamentals.`
-                                  : `Stock dropped ${Math.abs(sinceAnalysisPct!).toFixed(1)}% since analysis despite a Buy rating. Valuation reflects 12-month DCF fair value — short-term price may lag due to market conditions.`)
-                                : (upside
-                                  ? `분석 이후 ${sinceAnalysisPct!.toFixed(1)}% 상승했습니다. 매도 의견은 DCF·WACC 기반 12개월 장기 적정가 대비 고평가 판단으로, 단기 모멘텀(수급·이슈·센티멘트)은 밸류에이션과 반대 방향으로 움직일 수 있습니다.`
-                                  : `분석 이후 ${Math.abs(sinceAnalysisPct!).toFixed(1)}% 하락했습니다. 매수 의견은 장기 내재가치 저평가 판단으로, 시장 리스크·수급 등 단기 요인에 의해 추가 하락이 있을 수 있습니다.`)}
-                            </p>
-                            {/* 두 축 비교 칩 */}
-                            <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300">
-                                {isEn ? "📌 12M Valuation" : "📌 장기 가치평가"}:{" "}
-                                <span className={isSellVerdict ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}>
-                                  {isEn ? (effectiveVerdict ?? "") : toKoreanVerdict(effectiveVerdict)}
-                                </span>
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300">
-                                {isEn ? "📊 Since analysis" : "📊 분석 이후 모멘텀"}:{" "}
-                                <span className={upside ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}>
-                                  {upside ? "▲" : "▼"} {Math.abs(sinceAnalysisPct!).toFixed(1)}%
-                                </span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    <div className="space-y-1.5 font-mono text-xs">
-                      <div className="flex justify-between items-center border-b border-border pb-1.5">
-                        <span className="text-muted-foreground">{isEn ? <>Target Price <span className="text-xs opacity-60">(12M)</span></> : <>적정주가 <span className="text-xs opacity-60">(12개월)</span></>}</span>
-                        <span className={`font-bold ${targetColor}`}>{formatCurrency(analysis.targetPrice, currency, isEn)}</span>
-                      </div>
-                      {sp && (
-                        <div className="flex justify-between items-center border-b border-border pb-1.5">
-                          <span className="text-muted-foreground">{isEn ? 'Analysis Start Price' : '분석 시작가'}</span>
-                          <span className="text-foreground/70 font-medium">{formatCurrency(sp, currency, isEn)}</span>
-                        </div>
+                  <div className="rounded-2xl border border-border/60 bg-card overflow-hidden"
+                    style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+                    {/* 적정주가 */}
+                    <div className="px-5 pt-4 pb-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
+                        {isEn ? "Fair Value (12M)" : "적정주가 (12개월)"}
+                      </p>
+                      <p className={`text-2xl font-black tabular-nums leading-none tracking-tight ${upColor}`}>
+                        {formatCurrency(tp, currency, isEn)}
+                      </p>
+                      {upsidePct !== null && (
+                        <p className={`text-[12px] font-bold mt-1 tabular-nums ${upColor}`}>
+                          {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}%
+                          <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                            {isEn ? "vs entry" : "상승여지"}
+                          </span>
+                        </p>
                       )}
-                      {/* [v] 분석 이후 등락률 */}
-                      {(() => {
-                        const liveP = headerLivePrice?.price ?? null;
-                        const pct = (liveP && sp && sp > 0) ? ((liveP - sp) / sp * 100) : null;
-                        if (pct === null) return null;
-                        return (
-                          <div className="flex justify-between items-center border-b border-border pb-1.5">
-                            <span className="text-muted-foreground">{isEn ? 'Since Analysis' : '분석 후 등락'}</span>
-                            <span className={`font-bold tabular-nums ${pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}`}>
-                              {pct >= 0 ? "▲ +" : "▼ "}{pct.toFixed(1)}%
-                            </span>
-                          </div>
-                        );
-                      })()}
-                      <div className="flex justify-between items-center border-b border-border pb-1.5">
-                        <span className="text-muted-foreground">
-                          {isEn
-                            ? (isSellVerdict ? "Re-entry Threshold" : "Entry Price")
-                            : (isSellVerdict ? "재관심 기준가" : "진입가")}
-                        </span>
-                        <span className={`font-semibold ${isSellVerdict ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>{formatCurrency(analysis.entryPrice, currency, isEn)}</span>
-                      </div>
-                      <div className="flex justify-between items-center pt-0.5">
-                        <span className="text-muted-foreground">
-                          {isEn
-                            ? (isSellVerdict ? "Liquidation Zone" : "Stop Loss")
-                            : (isSellVerdict ? "청산 우선 구간" : "손절가")}
-                        </span>
-                        <span className="text-destructive font-semibold">{formatCurrency(analysis.stopLoss, currency, isEn)}</span>
-                      </div>
                     </div>
-                  </>
+                    {/* 공유 버튼 */}
+                    <div className="px-3 pb-3">
+                      <button
+                        onClick={() => setShowShareModal(true)}
+                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        {isEn ? 'Share this analysis' : '이 분석 공유하기'}
+                      </button>
+                    </div>
+                  </div>
                 );
               })()}
-
-              {/* 인라인 공유 버튼 */}
-              <button
-                onClick={() => setShowShareModal(true)}
-                className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                {isEn ? 'Share this analysis' : '이 분석 공유하기'}
-              </button>
-
             </div>
           )}
           </div>
