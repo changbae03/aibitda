@@ -866,14 +866,13 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
   };
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-5">
+    <div className="bg-card rounded-2xl p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
       <div className="flex items-center gap-2 mb-4">
-        <History className="w-4 h-4 text-primary shrink-0" />
         <h3 className="font-semibold text-sm text-foreground">
           {isEn ? "Analysis Version Timeline" : "분석 버전 타임라인"}
         </h3>
-        <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-          {isEn ? `${versions.length} reports` : `${versions.length}개 리포트`}
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+          {isEn ? `${versions.length} reports` : `${versions.length}개`}
         </span>
       </div>
       <div className="relative">
@@ -1154,13 +1153,13 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
   if (!loading && !data) return null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+    <div className="bg-card rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
       <div
         role="button"
         tabIndex={0}
         onClick={() => setOpen(o => !o)}
         onKeyDown={e => e.key === "Enter" && setOpen(o => !o)}
-        className="w-full px-5 py-3.5 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors select-none"
+        className="w-full px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-muted/40 transition-colors select-none"
       >
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-blue-500" />
@@ -1766,7 +1765,7 @@ export default function AnalysisDetail() {
   };
 
   return (
-    <div id="analysis-report-content" className="space-y-4 sm:space-y-6 pb-20">
+    <div id="analysis-report-content" className="space-y-5 sm:space-y-6 pb-20">
       {/* 인쇄 전용 헤더 — 화면에서는 숨김, 인쇄 시에만 표시 */}
       <div className="hidden print:block mb-8 pb-6 border-b-2 border-gray-800">
         <div className="flex items-start justify-between">
@@ -1837,7 +1836,7 @@ export default function AnalysisDetail() {
       </AnimatePresence>
 
       {/* Header */}
-      <div ref={headerRef} className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm">
+      <div ref={headerRef} className="bg-card rounded-2xl p-5 sm:p-6" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-6">
           <div className="flex-1 min-w-0">
             {/* 회사명 */}
@@ -2093,7 +2092,7 @@ export default function AnalysisDetail() {
       </div>
 
       {/* Financial Chart */}
-      <div className="bg-card border border-border rounded-2xl p-3 sm:p-5">
+      <div className="bg-card rounded-2xl p-4 sm:p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
         <FinancialChart ticker={analysis.ticker} isEn={isEn} />
       </div>
 
@@ -2107,14 +2106,13 @@ export default function AnalysisDetail() {
       <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
 
       {/* Progress Track */}
-      <div className="bg-card border border-border rounded-2xl p-3 sm:p-5 print:hidden sticky top-12 z-20 shadow-sm">
-        <div className="flex items-center justify-between mb-3 sm:mb-5">
-          <h3 className="font-display font-semibold text-sm sm:text-base flex items-center gap-2">
-            <BrainCircuit className="text-primary w-4 h-4" />
+      <div className="bg-card rounded-2xl p-4 sm:p-5 print:hidden sticky top-12 z-20" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-sm text-foreground">
             {isEn ? 'AI Analysis Pipeline' : 'AI 분석 파이프라인'}
           </h3>
-          <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-            {isComplete ? ANALYSIS_STEPS_ORDER.length : isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length} {isEn ? 'steps' : '단계'}
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {isComplete ? ANALYSIS_STEPS_ORDER.length : isStreaming ? currentStepCount + 1 : currentStepCount} / {ANALYSIS_STEPS_ORDER.length}
           </span>
         </div>
         
@@ -2257,18 +2255,21 @@ export default function AnalysisDetail() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="bg-card border border-border rounded-xl border-l-4"
-                  style={{ borderLeftColor: color }}
+                  className="bg-card rounded-2xl overflow-hidden"
+                  style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
                 >
-                  <div className="bg-muted/70 px-5 py-3.5 flex items-center gap-3 border-b border-border rounded-t-xl">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center border" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-                      <agent.icon className="w-4.5 h-4.5" style={{ color }} />
-                    </div>
+                  <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
+                    <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
                     <div className="flex-1">
-                      <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-                      <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+                      <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
+                      <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground/70 font-mono">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
+                        <agent.icon className="w-3.5 h-3.5" style={{ color }} />
+                      </div>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{currentStepCount + 1}/{ANALYSIS_STEPS_ORDER.length}</span>
+                    </div>
                   </div>
                   <div className="flex flex-col items-center justify-center py-8 px-5">
                     <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
@@ -2746,21 +2747,20 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="rounded-2xl border border-border bg-background shadow-sm"
+      className="rounded-2xl bg-card overflow-hidden"
+      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
     >
       {/* ── 상단 헤더 ── */}
-      <div className="bg-foreground px-4 sm:px-6 py-4 flex items-center justify-between gap-3 rounded-t-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-background/10 flex items-center justify-center">
-            <agent.icon className="w-4 h-4 text-background" />
-          </div>
+      <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3 border-b border-border/50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-1 h-8 rounded-full bg-foreground shrink-0" />
           <div>
-            <p className="text-background font-display font-semibold text-sm leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
-            <p className="text-background/50 text-[10px] font-mono uppercase tracking-widest">{agent.role}</p>
+            <p className="font-semibold text-[14px] text-foreground leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
+            <p className="text-[11px] text-muted-foreground">{agent.role}</p>
           </div>
         </div>
         {companyName && (
-          <span className="text-[11px] text-background/60 font-medium hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
+          <span className="text-[12px] text-muted-foreground hidden sm:block">{companyName}{ticker ? ` · ${ticker}` : ""}</span>
         )}
       </div>
 
@@ -3411,17 +3411,18 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4, transition: { duration: 0.3 } }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-card border border-border rounded-xl border-l-4"
-      style={{ borderLeftColor: color }}
+      className="bg-card rounded-2xl overflow-hidden"
+      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
     >
       {/* 헤더 */}
-      <div className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-          <agent.icon className="w-4 h-4" style={{ color }} />
-        </div>
+      <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
+        <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
         <div className="flex-1 min-w-0">
-          <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+          <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+        </div>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
+          <agent.icon className="w-3.5 h-3.5" style={{ color }} />
         </div>
       </div>
 
@@ -4005,16 +4006,17 @@ function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-card border border-border rounded-xl border-l-4 overflow-hidden"
-      style={{ borderLeftColor: color }}
+      className="bg-card rounded-2xl overflow-hidden"
+      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
     >
-      <div className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-          <agent.icon className="w-4 h-4" style={{ color }} />
-        </div>
+      <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
+        <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
         <div className="flex-1 min-w-0">
-          <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+          <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+        </div>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
+          <agent.icon className="w-3.5 h-3.5" style={{ color }} />
         </div>
       </div>
       <div className="relative px-5 py-5 overflow-hidden">
@@ -4191,22 +4193,28 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-card border border-border rounded-xl border-l-4 overflow-hidden"
-      style={{ borderLeftColor: color }}
+      className="bg-card rounded-2xl overflow-hidden"
+      style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
     >
       {/* ⑪ Accordion header */}
       <div
-        className="bg-muted/70 px-3 sm:px-5 py-3 sm:py-3.5 flex items-center gap-2.5 sm:gap-3 border-b border-border rounded-t-xl cursor-pointer hover:bg-muted/90 transition-colors select-none"
+        className="px-4 sm:px-6 py-4 flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors select-none border-b border-border/50"
         onClick={() => setCollapsed(c => !c)}
       >
-        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shrink-0" style={{ background: `${color}15`, borderColor: `${color}30` }}>
-          <agent.icon className="w-4 h-4" style={{ color }} />
-        </div>
+        <div
+          className="w-1 h-8 rounded-full shrink-0"
+          style={{ background: color }}
+        />
         <div className="flex-1 min-w-0">
-          <h4 className="font-display font-semibold text-sm text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+          <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
-        <ChevronDown className={cn("w-4 h-4 text-muted-foreground/70 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
+            <agent.icon className="w-3.5 h-3.5" style={{ color }} />
+          </div>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 transition-transform duration-200 shrink-0", collapsed && "rotate-180")} />
+        </div>
       </div>
 
       <AnimatePresence initial={false}>
@@ -4226,8 +4234,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
         {leadPara && (
           <div
-            className="mb-4 px-4 py-3.5 rounded-lg border-l-[3px] text-[13.5px] leading-[1.9] text-foreground/90 whitespace-pre-line"
-            style={{ background: `${color}0d`, borderLeftColor: color }}
+            className="mb-4 px-4 py-3.5 rounded-xl bg-muted/50 text-[13.5px] leading-[1.9] text-foreground/85 whitespace-pre-line border-l-[3px]"
+            style={{ borderLeftColor: color }}
           >
             {leadPara}
           </div>
@@ -4236,33 +4244,33 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         {(() => {
           const mdComponents = {
             h2: ({ children }: any) => (
-              <h2 className="text-base font-bold text-foreground mt-6 mb-3 first:mt-0 pb-1.5 border-b border-border/60">{children}</h2>
+              <h2 className="text-[15px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
             ),
             h3: ({ children }: any) => (
-              <h3 className="text-sm font-semibold text-foreground mt-5 mb-2 flex items-center gap-1.5">{children}</h3>
+              <h3 className="text-[13px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
             ),
             h4: ({ children }: any) => (
-              <h4 className="text-[13px] font-semibold text-foreground/80 mt-3 mb-1.5">{children}</h4>
+              <h4 className="text-[13px] font-medium text-foreground/75 mt-3 mb-1.5">{children}</h4>
             ),
             p: ({ children }: any) => {
               const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
               if (text.startsWith("출처:") || text.startsWith("출처 :")) {
-                return <p className="mt-5 pt-3 border-t border-border/50 text-[11px] text-muted-foreground">{children}</p>;
+                return <p className="mt-5 pt-3 border-t border-border/40 text-[11px] text-muted-foreground">{children}</p>;
               }
-              return <p className="mb-5 sm:mb-4 last:mb-0 text-foreground/80 leading-[1.9] sm:leading-[1.8]">{children}</p>;
+              return <p className="mb-4 last:mb-0 text-foreground/75 leading-[1.9] text-[13.5px]">{children}</p>;
             },
-            ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-1.5 list-none">{children}</ul>,
+            ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-2 list-none">{children}</ul>,
             ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
             li: ({ children }: any) => (
-              <li className="flex items-start gap-2 text-[13.5px] leading-[1.85] text-foreground/80">
-                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.68em]" />
+              <li className="flex items-start gap-2.5 text-[13.5px] leading-[1.85] text-foreground/75">
+                <span className="shrink-0 w-1 h-1 rounded-full bg-muted-foreground/50 mt-[0.75em]" />
                 <span className="flex-1 min-w-0">{children}</span>
               </li>
             ),
-            strong: ({ children }: any) => <strong className="font-semibold text-foreground/95">{children}</strong>,
-            em: ({ children }: any) => <em className="text-foreground/70 not-italic">{children}</em>,
+            strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
+            em: ({ children }: any) => <em className="text-foreground/65 not-italic">{children}</em>,
             blockquote: ({ children }: any) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
-            hr: () => <hr className="my-4 border-border/60" />,
+            hr: () => <hr className="my-5 border-border/40" />,
             ...MD_TABLE_COMPONENTS,
           };
           const MdBlock = ({ src }: { src: string }) => src.trim() ? (
