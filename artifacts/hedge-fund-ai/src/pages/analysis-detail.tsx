@@ -4814,7 +4814,138 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
             style={{ overflow: "hidden" }}
           >
       <div className="p-4 sm:p-5">
-        {/* Market & Technical Analyst: 기술적 신호 칩 */}
+
+        {/* ① 주가 차트 — 기술적 분석 최상단 */}
+        {isMarket && ticker && (
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price Chart" : "주가 차트"}</span>
+              {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
+                  {isEn ? "Incl. entry/target/stop" : "진입·목표·손절 레벨 포함"}
+                </span>
+              )}
+              {chartEvents.length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/60">
+                  {isEn ? `${chartEvents.length} key events` : `핵심 이슈 ${chartEvents.length}건`}
+                </span>
+              )}
+            </div>
+            <StockChart
+              ticker={ticker}
+              companyName={companyName}
+              companyNameEn={companyNameEn}
+              chartLevels={chartLevels ?? undefined}
+              events={chartEvents}
+              currency={priceCurrency}
+              isEn={isEn}
+            />
+          </div>
+        )}
+
+        {/* ② 주요 주가 급변 이슈 */}
+        {isMarket && chartEvents.length > 0 && (
+          <div className="mb-5 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Key Price Events" : "주요 주가 급변 이슈"}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground border border-border">{chartEvents.length}건</span>
+            </div>
+            <div className="space-y-2">
+              {chartEvents.map((ev, i) => {
+                const typeStyle: Record<string, { label: string; cls: string }> = {
+                  catalyst: { label: isEn ? "Catalyst" : "촉매", cls: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
+                  risk:     { label: isEn ? "Risk" : "리스크",   cls: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300" },
+                  earnings: { label: isEn ? "Earnings" : "실적", cls: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+                  news:     { label: isEn ? "News" : "뉴스",     cls: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300" },
+                };
+                const ts = typeStyle[ev.type] ?? typeStyle.news;
+                return (
+                  <div key={i} className="flex items-start gap-3 px-3.5 py-2.5 rounded-lg bg-muted/30 border border-border/50">
+                    <span className="shrink-0 text-[10px] font-mono text-muted-foreground/70 mt-0.5 w-14">{ev.date}</span>
+                    <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${ts.cls}`}>{ts.label}</span>
+                    <span className="text-[13px] text-foreground/80 leading-relaxed flex-1 min-w-0">{ev.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ③ 현재가 vs 적정주가 + 단기 방향 분석 */}
+        {isMarket && marketSignals && (() => {
+          const cp = (chartLevels?.currentPrice && chartLevels.currentPrice > 0) ? chartLevels.currentPrice : (startPrice ?? 0);
+          const tp = validatedTargetPrice;
+          const { trend, signal, rrRatio } = marketSignals;
+
+          type Dir = { label: string; sub: string; clr: string; bg: string; icon: string };
+          const dirKey = `${trend}-${signal}`;
+          const dirMap: Record<string, Dir> = {
+            "bullish-continuing": { icon: "▲", label: isEn ? "Uptrend Intact" : "상승 추세 지속",   sub: isEn ? "Momentum remains strong — trend likely continues short-term." : "모멘텀 유지 중. 단기 추가 상승 흐름 지속 예상.",        clr: "#10b981", bg: "#10b98112" },
+            "bullish-peaking":    { icon: "⚠", label: isEn ? "Near Peak — Caution" : "고점 경계 구간", sub: isEn ? "Extended rally approaching 52W high — short-term pullback likely." : "52주 고점권 접근. 단기 차익 실현·조정 가능성 높음.",  clr: "#f59e0b", bg: "#f59e0b12" },
+            "bullish-reversing":  { icon: "↘", label: isEn ? "Trend Weakening" : "상승 둔화",        sub: isEn ? "Uptrend losing momentum — watch for breakdown." : "상승 추세 내 모멘텀 약화. 추세 이탈 여부 주시 필요.",     clr: "#f59e0b", bg: "#f59e0b12" },
+            "bullish-wait":       { icon: "→", label: isEn ? "Uptrend — Hold" : "상승 추세, 관망",   sub: isEn ? "Uptrend intact but short-term direction unclear." : "추세는 상승이나 단기 방향성 불명확. 신호 확인 후 대응.", clr: "#10b981", bg: "#10b98112" },
+            "bullish-buy":        { icon: "▲", label: isEn ? "Buy on Dip" : "눌림목 매수",           sub: isEn ? "Pullback within uptrend — potential re-entry." : "상승 추세 내 일시 조정. 재진입 기회 포착 구간.",         clr: "#10b981", bg: "#10b98112" },
+            "bearish-reversing":  { icon: "↗", label: isEn ? "Reversal Attempt" : "반등 시도 중",    sub: isEn ? "Downtrend with technical rebound signals." : "하락 추세 내 기술적 반등 시도. 추세 전환 확인 필요.",    clr: "#f59e0b", bg: "#f59e0b12" },
+            "bearish-continuing": { icon: "▼", label: isEn ? "Downtrend Intact" : "하락 추세 지속",  sub: isEn ? "Downward pressure continues — avoid new longs short-term." : "하락 모멘텀 지속. 단기 신규 매수 자제 권고.",          clr: "#ef4444", bg: "#ef444412" },
+            "bearish-wait":       { icon: "↘", label: isEn ? "Bearish — Watch" : "하락 추세, 관망",  sub: isEn ? "Downtrend intact, await reversal confirmation." : "하락 추세 내 반전 신호 대기. 성급한 매수 자제.",         clr: "#ef4444", bg: "#ef444412" },
+            "neutral-buy":        { icon: "▲", label: isEn ? "Support Entry Zone" : "지지 매수 구간", sub: isEn ? "Near key support — potential entry if holds." : "주요 지지구간 접근. 지지 확인 시 단기 매수 기회.",       clr: "#10b981", bg: "#10b98112" },
+            "neutral-sell":       { icon: "▼", label: isEn ? "Resistance Zone" : "저항 매도 구간",   sub: isEn ? "Near resistance — consider trimming on strength." : "주요 저항구간 접근. 단기 비중 축소 고려.",              clr: "#ef4444", bg: "#ef444412" },
+            "neutral-wait":       { icon: "→", label: isEn ? "Direction Unclear" : "방향 관망",       sub: isEn ? "Await clearer signal before acting." : "방향성 신호 확인 대기. 명확한 돌파 후 대응 권장.",            clr: "#94a3b8", bg: "#94a3b812" },
+          };
+          const dir: Dir = dirMap[dirKey] ?? { icon: "→", label: isEn ? "Direction Unclear" : "방향 관망", sub: isEn ? "Await clearer signal." : "방향성 신호 확인 대기.", clr: "#94a3b8", bg: "#94a3b812" };
+
+          const upside = (cp > 0 && tp) ? ((Number(tp) - cp) / cp * 100) : null;
+          const isUp = upside !== null ? upside >= 0 : null;
+
+          return (
+            <div className="mb-5 pt-4 border-t border-border">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price vs Target · Short-term Outlook" : "현재가 · 적정주가 · 단기 전망"}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {cp > 0 && tp && (
+                  <div className="rounded-xl border border-border/60 p-3.5 bg-muted/20">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">{isEn ? "Price vs Target (12M)" : "현재가 vs 적정주가 (12개월)"}</p>
+                    <div className="flex items-end gap-3 flex-wrap">
+                      <div>
+                        <p className="text-[9px] text-muted-foreground/70 mb-0.5">{isEn ? "Current" : "현재가"}</p>
+                        <p className="text-[16px] font-bold font-mono text-foreground leading-none">{formatPrice(cp, priceCurrency, isEn)}</p>
+                      </div>
+                      <span className="text-muted-foreground/40 text-sm mb-0.5">→</span>
+                      <div>
+                        <p className="text-[9px] text-muted-foreground/70 mb-0.5">{isEn ? "Target" : "적정주가"}</p>
+                        <p className={`text-[16px] font-bold font-mono leading-none ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{formatPrice(Number(tp), priceCurrency, isEn)}</p>
+                      </div>
+                      {upside !== null && (
+                        <span className={`text-[13px] font-bold mb-0.5 ${isUp ? "text-emerald-500" : "text-rose-500"}`}>
+                          {isUp ? "+" : ""}{upside.toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-xl border p-3.5" style={{ borderColor: `${dir.clr}35`, background: dir.bg }}>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isEn ? "Short-term Outlook" : "단기 주가 전망"}</p>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[18px] leading-none font-bold" style={{ color: dir.clr }}>{dir.icon}</span>
+                    <span className="text-[14px] font-bold" style={{ color: dir.clr }}>{dir.label}</span>
+                  </div>
+                  <p className="text-[12px] text-foreground/70 leading-relaxed">{dir.sub}</p>
+                  {rrRatio > 0 && (
+                    <div className="mt-2 pt-2 border-t" style={{ borderColor: `${dir.clr}25` }}>
+                      <span className="text-[10px] text-muted-foreground">R/R {rrRatio.toFixed(1)} : 1</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ④ Market & Technical Analyst: 기술적 신호 칩 */}
         {isMarket && marketSignals && <MarketSignalChips signals={marketSignals} isEn={isEn} />}
 
         {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
@@ -5013,35 +5144,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         {/* Market & Technical Analyst: 가격 구간 레이더 */}
         {isMarket && chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
           <TechnicalLevelLadder levels={chartLevels} startPrice={startPrice} currency={priceCurrency} isEn={isEn} />
-        )}
-
-        {/* 기술적 분석: 주가 차트 (지지/저항·진입·목표·이벤트 포함) */}
-        {isMarket && ticker && (
-          <div className="mt-5 pt-4 border-t border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Price Chart" : "주가 차트"}</span>
-              {chartLevels && Object.values(chartLevels).some(v => v && v > 0) && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
-                  {isEn ? "Incl. entry/target/stop" : "진입·목표·손절 레벨 포함"}
-                </span>
-              )}
-              {chartEvents.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/60">
-                  {isEn ? `${chartEvents.length} key events` : `핵심 이슈 ${chartEvents.length}건`}
-                </span>
-              )}
-            </div>
-            <StockChart
-              ticker={ticker}
-              companyName={companyName}
-              companyNameEn={companyNameEn}
-              chartLevels={chartLevels ?? undefined}
-              events={chartEvents}
-              currency={priceCurrency}
-              isEn={isEn}
-            />
-          </div>
         )}
 
         {/* Valuation Analyst — 최종 조율 적정주가 시각화 */}
