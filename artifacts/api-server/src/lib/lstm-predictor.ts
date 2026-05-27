@@ -80,7 +80,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 25;   // [v17] 20→25: 한 달 영업일 전체 패턴 포함
 const PRED_H       = 3;
-const N_FEATURES   = 37;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 + 3 52W·OBV (v27)
+const N_FEATURES   = 39;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 + 3 52W·OBV + 2 MA50·볼가속 (v28)
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 48;   // [v18] 32→48: KOSPI 복잡 패턴 대응 용량 확대
@@ -91,7 +91,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 27;  // [v27] 52W고저·OBV 피처 3개 추가, YEARS_DATA 5→3, halfLifeDays 단축, 편향교정 적중률 표시
+const MODEL_VERSION = 28;  // [v28] MA50비율·볼가속 피처 2개 추가, D+1/D+2 독립 GBDT, 적응형 biasThreshold(최근 60일)
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -192,6 +192,10 @@ interface StoredModelFile {
   lstmWeights: LSTMWeightLayer[][];
   lstmScaler:  { mu: number[]; sigma: number[] };
   ensembleAlpha: number;
+  /** [v28] D+1 독립 GBDT 앙상블 (D+3 선형보간 대체) */
+  gbdtModels_h1?: GBDTModel[];
+  /** [v28] D+2 독립 GBDT 앙상블 (D+3 선형보간 대체) */
+  gbdtModels_h2?: GBDTModel[];
 }
 export interface StoredMeta {
   lastTrained: string; lastUpdated: string;
@@ -980,6 +984,20 @@ function buildFeatures(
         const vScale = rollingMean(volumes, 20, i) * (closes[i] || 1e-8) * 10 + 1e-8;
         return Math.max(-1, Math.min(1, (obv[i] - o10) / vScale));
       })(),
+      // ── [v28] 중기 추세·변동성 가속도 피처 2개 ────────────────────────────
+      // 38. ma50ratio: 50일 이평 대비 현재가 위치 (±15% → ±1 정규화) — 중기 추세 방향
+      //     양수=이평 위(강세), 음수=이평 아래(약세)
+      ((): number => {
+        const ma50 = rollingMean(closes, 50, i);
+        return ma50 > 0 ? Math.max(-1, Math.min(1, (closes[i] / ma50 - 1) / 0.15)) : 0;
+      })(),
+      // 39. volAcc: 5일 변동성 / 20일 변동성 비율 (중심=0) — 변동성 팽창/수축 레짐 신호
+      //     +1=단기 변동성이 장기의 2배(위기), 0=균형, -1=수축(안정)
+      ((): number => {
+        const v5  = rollingStdFn(rets, 5,  i);
+        const v20 = rollingStdFn(rets, 20, i);
+        return v20 > 1e-10 ? Math.max(-1, Math.min(1, v5 / v20 - 1)) : 0;
+      })(),
     ]);
   });
   return { feats, closes, dates };
@@ -1299,6 +1317,9 @@ function buildResultFromModel(
   recentWindow = 30,
   // [#2] 라이브 적중률 기반 alpha 실시간 조정용
   liveComp?: ComponentLiveAccuracy,
+  // [v28] D+1/D+2 독립 GBDT 앙상블
+  gbdtModels_h1?: GBDTModel[],
+  gbdtModels_h2?: GBDTModel[],
 ): IndexResult {
   const { feats, closes, dates } = buildFeatures(rows, extMap);
 
@@ -1395,21 +1416,26 @@ function buildResultFromModel(
   for (let i = 0; i < nTest; i++) mae += Math.abs(testPreds[i] - yte[i]);
   mae /= nTest || 1;
 
-  // ── [v25] 방향 편향 교정 (Direction Bias Calibration) ────────────────────────
-  // 모델이 한쪽 방향으로 체계적 편향 예측하는 경우(예: 36%=항상 반대) 임계값 보정.
-  // 실제 테스트셋 상승 비율에 맞춰 예측의 (1-upFrac) 분위수를 임계값으로 사용.
-  // sign(pred - biasThreshold) > 0 이면 상승 예측 → 상승 비율이 실제와 일치.
-  const testUpFrac = Array.from(yte).filter(v => v > 0).length / (yte.length || 1);
-  const testPredsSorted = Array.from(testPreds).sort((a, b) => a - b);
+  // ── [v28] 방향 편향 교정 — 적응형 창(Adaptive Bias Calibration) ─────────────
+  // [v25] 문제: 전체 테스트셋 기준 biasThreshold → 최근 레짐이 다르면 역교정 발생
+  //             (예: 훈련 기간엔 55% 상승, 최근 30일엔 60% 하락 → 임계값이 역방향 보정)
+  // [v28] 수정: 최근 min(60, nTest/2)일 창의 실제 상승 비율로 임계값 계산
+  //             → 현재 레짐을 반영한 동적 편향 교정
+  const BIAS_WINDOW = Math.max(30, Math.min(60, Math.floor(nTest / 2)));
+  const biasStart   = Math.max(0, nTest - BIAS_WINDOW);
+  const biasSlicePreds   = Array.from(testPreds).slice(biasStart);
+  const biasSliceActuals = Array.from(yte).slice(biasStart);
+  const adaptUpFrac  = biasSliceActuals.filter(v => v > 0).length / (biasSliceActuals.length || 1);
+  const adaptPredsSorted = biasSlicePreds.slice().sort((a, b) => a - b);
   const biasThreshIdx = Math.max(0, Math.min(
-    testPredsSorted.length - 1,
-    Math.floor((1 - testUpFrac) * testPredsSorted.length),
+    adaptPredsSorted.length - 1,
+    Math.floor((1 - adaptUpFrac) * adaptPredsSorted.length),
   ));
-  const biasThreshold = testPredsSorted[biasThreshIdx] ?? 0;
+  const biasThreshold = adaptPredsSorted[biasThreshIdx] ?? 0;
   // 편향 교정된 방향 정확도 재계산
   const biasAdjPreds = Array.from(testPreds).map(v => v - biasThreshold);
   const biasAdjDirAcc = dirAccRate(new Float64Array(biasAdjPreds), yte);
-  console.log(`[v25-bias] ${symbol} upFrac=${(testUpFrac*100).toFixed(1)}% biasThreshold=${(biasThreshold*100).toFixed(3)}% raw dirAcc=${(dirAccRate(testPreds,yte)*100).toFixed(1)}% adj dirAcc=${(biasAdjDirAcc*100).toFixed(1)}%`);
+  console.log(`[v28-bias] ${symbol} window=${BIAS_WINDOW} adaptUpFrac=${(adaptUpFrac*100).toFixed(1)}% biasThreshold=${(biasThreshold*100).toFixed(3)}% raw dirAcc=${(dirAccRate(testPreds,yte)*100).toFixed(1)}% adj dirAcc=${(biasAdjDirAcc*100).toFixed(1)}%`);
 
   // ── 진폭 교정 계수 (Amplitude Calibration) ──────────────────────────────────
   // 회귀 모델은 MSE 최소화 과정에서 예측 진폭이 실제 대비 1/5~1/10로 수렴함.
@@ -1542,8 +1568,21 @@ function buildResultFromModel(
     lstmForecastRet: +lstmForecastRetPct.toFixed(2),
     curVol20: +(curVol20 * 100).toFixed(3),
     lastVix5dMom: lastVix5dMom !== null ? +lastVix5dMom.toFixed(4) : undefined,
-    predictedReturn1d: +(forecastReturn * (1/3) * 100).toFixed(2),
-    predictedReturn2d: +(forecastReturn * (2/3) * 100).toFixed(2),
+    // [v28] D+1/D+2 독립 GBDT 예측 (모델 없으면 D+3 선형보간 fallback)
+    predictedReturn1d: (() => {
+      if (gbdtModels_h1 && gbdtModels_h1.length > 0) {
+        const raw = gbdtModels_h1.map(m => gbdtPredict(m, lastGBDT_Xn)[0]).reduce((a,b)=>a+b,0) / gbdtModels_h1.length;
+        return +((raw - biasThreshold) * calibFactor * 100).toFixed(2);
+      }
+      return +(forecastReturn * (1/3) * 100).toFixed(2);
+    })(),
+    predictedReturn2d: (() => {
+      if (gbdtModels_h2 && gbdtModels_h2.length > 0) {
+        const raw = gbdtModels_h2.map(m => gbdtPredict(m, lastGBDT_Xn)[0]).reduce((a,b)=>a+b,0) / gbdtModels_h2.length;
+        return +((raw - biasThreshold) * calibFactor * 100).toFixed(2);
+      }
+      return +(forecastReturn * (2/3) * 100).toFixed(2);
+    })(),
     agreementSignal,
     agreementStrength: +agreementStrength.toFixed(3),
   };
@@ -1570,6 +1609,22 @@ async function trainFull(
   const sampleWeights = expDecayWeights(trainEnd, hp.halfLifeDays);
   const gbdtModels = Array.from({length:hp.nEnsemble}, (_,e) => gbdtFit(XtrN, y.slice(0,trainEnd), e*37+13, hp, sampleWeights));
 
+  // [v28] D+1/D+2 독립 GBDT 앙상블 — D+3 선형보간 대체
+  // 경량 하이퍼파라미터: 트리 수·앙상블 수를 절반으로 → 훈련 시간 +25%
+  const hpH1 = { ...hp, gbdtTrees: Math.ceil(hp.gbdtTrees * 0.5), nEnsemble: Math.max(4, Math.ceil(hp.nEnsemble * 0.5)) };
+  const hpH2 = { ...hp, gbdtTrees: Math.ceil(hp.gbdtTrees * 0.6), nEnsemble: Math.max(5, Math.ceil(hp.nEnsemble * 0.6)) };
+  const { X: Xh1, y: yh1 } = makeSeqs(feats, closes, LOOKBACK, 1);
+  const { X: Xh2, y: yh2 } = makeSeqs(feats, closes, LOOKBACK, 2);
+  const trainEndH1 = Math.floor(Xh1.length * 0.80);
+  const trainEndH2 = Math.floor(Xh2.length * 0.80);
+  const { Xn: XtrH1N } = standardize(Xh1.slice(0, trainEndH1));
+  const { Xn: XtrH2N } = standardize(Xh2.slice(0, trainEndH2));
+  const swH1 = expDecayWeights(trainEndH1, hp.halfLifeDays);
+  const swH2 = expDecayWeights(trainEndH2, hp.halfLifeDays);
+  console.log(`[train] ${symbol} D+1 GBDT (${hpH1.nEnsemble}×${hpH1.gbdtTrees}) D+2 GBDT (${hpH2.nEnsemble}×${hpH2.gbdtTrees})`);
+  const gbdtModels_h1 = Array.from({length:hpH1.nEnsemble}, (_,e) => gbdtFit(XtrH1N, yh1.slice(0,trainEndH1), e*41+7, hpH1, swH1));
+  const gbdtModels_h2 = Array.from({length:hpH2.nEnsemble}, (_,e) => gbdtFit(XtrH2N, yh2.slice(0,trainEndH2), e*43+11, hpH2, swH2));
+
   const lstmScaler = computeLSTMScaler(feats.slice(0, trainEnd+LOOKBACK));
   const { X3d } = makeSeqs3D(feats, closes, lstmScaler.mu, lstmScaler.sigma, LOOKBACK, PRED_H);
   const valSplit  = Math.floor(trainEnd * 0.9);
@@ -1587,6 +1642,8 @@ async function trainFull(
     lstmWeights: saveLSTMWeights(lstmModel),
     lstmScaler:  { mu: Array.from(lstmScaler.mu), sigma: Array.from(lstmScaler.sigma) },
     ensembleAlpha: 0.5,
+    gbdtModels_h1,
+    gbdtModels_h2,
   });
 
   // [#2] 훈련 완료 후 라이브 적중률 조회해서 alpha 보정
@@ -1598,6 +1655,8 @@ async function trainFull(
     0.5,
     hp.recentWindow,
     liveComp,
+    gbdtModels_h1,
+    gbdtModels_h2,
   );
   lstmModel.dispose();
   return result;
@@ -1747,6 +1806,8 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       loadLSTMFromWeights(kospiStore.lstmWeights),
       {mu:new Float64Array(kospiStore.lstmScaler.mu),sigma:new Float64Array(kospiStore.lstmScaler.sigma)},
       kospiStore.ensembleAlpha, getHP("^KS11").recentWindow,
+      undefined,
+      kospiStore.gbdtModels_h1, kospiStore.gbdtModels_h2,
     );
     await yield_();
     const kosdaq = buildResultFromModel(
@@ -1756,6 +1817,8 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       loadLSTMFromWeights(kosdaqStore.lstmWeights),
       {mu:new Float64Array(kosdaqStore.lstmScaler.mu),sigma:new Float64Array(kosdaqStore.lstmScaler.sigma)},
       kosdaqStore.ensembleAlpha, getHP("^KQ11").recentWindow,
+      undefined,
+      kosdaqStore.gbdtModels_h1, kosdaqStore.gbdtModels_h2,
     );
     await yield_();
     const snp500 = buildResultFromModel(
@@ -1765,6 +1828,8 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       loadLSTMFromWeights(snpStore.lstmWeights),
       {mu:new Float64Array(snpStore.lstmScaler.mu),sigma:new Float64Array(snpStore.lstmScaler.sigma)},
       snpStore.ensembleAlpha, getHP("^GSPC").recentWindow,
+      undefined,
+      snpStore.gbdtModels_h1, snpStore.gbdtModels_h2,
     );
     await yield_();
     const nasdaq = ixicStore?.lstmWeights ? buildResultFromModel(
@@ -1774,6 +1839,8 @@ export async function tryRestoreFromDisk(silent = false): Promise<boolean> {
       loadLSTMFromWeights(ixicStore.lstmWeights),
       {mu:new Float64Array(ixicStore.lstmScaler.mu),sigma:new Float64Array(ixicStore.lstmScaler.sigma)},
       ixicStore.ensembleAlpha, getHP("^IXIC").recentWindow,
+      undefined,
+      ixicStore.gbdtModels_h1, ixicStore.gbdtModels_h2,
     ) : undefined;
     await yield_();
 
