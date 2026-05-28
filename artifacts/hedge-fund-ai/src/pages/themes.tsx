@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lightbulb, Search, Loader2, TrendingUp, ArrowRight, RefreshCw, Building2 } from "lucide-react";
+import { Lightbulb, Search, Loader2, TrendingUp, ArrowRight, RefreshCw, Building2, ChevronDown, Info } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
@@ -46,6 +46,7 @@ export default function ThemesPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     setTrendingLoading(true);
@@ -116,6 +117,66 @@ export default function ThemesPage() {
       <p className="text-sm text-foreground/60 -mt-4">
         지금 수급이 몰리는 테마를 입력하면 관련 종목을 찾아드립니다.
       </p>
+
+      {/* 사용법 안내 */}
+      <div className="rounded-xl border border-border bg-muted/30 overflow-hidden -mt-2">
+        <button
+          onClick={() => setShowGuide(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 text-foreground/40 shrink-0" />
+            <span className="text-xs font-medium text-foreground/50">이 기능은 어떻게 동작하나요?</span>
+          </div>
+          <ChevronDown className={cn("w-3.5 h-3.5 text-foreground/30 transition-transform duration-200", showGuide && "rotate-180")} />
+        </button>
+        <AnimatePresence initial={false}>
+          {showGuide && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-4 space-y-4 border-t border-border/50">
+                {/* 지금 주목받는 테마 설명 */}
+                <div className="pt-3 space-y-1.5">
+                  <p className="text-[11px] font-semibold text-foreground/40 uppercase tracking-widest">💡 지금 주목받는 테마 — 산출 방식</p>
+                  <p className="text-[12.5px] text-foreground/70 leading-relaxed">
+                    Gemini AI가 <span className="font-semibold text-foreground/85">최근 1~2주간</span> 기관·외국인 수급이 집중된 섹터와 이슈를 분석해 자동 산출합니다.
+                    실시간 체결 데이터가 아니라 <span className="font-semibold text-foreground/85">AI의 최신 시장 학습 지식</span> 기반이며, 3시간마다 갱신됩니다.
+                    칩을 클릭하면 해당 테마로 즉시 발굴이 시작됩니다.
+                  </p>
+                </div>
+                {/* 사용 방법 */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-foreground/40 uppercase tracking-widest">📌 사용 방법</p>
+                  <div className="space-y-2">
+                    {[
+                      { step: "1", title: "테마 선택 또는 직접 입력", desc: "위 칩 중 관심 테마를 클릭하거나, 입력창에 \"미국 전력 인프라\", \"금리 인하 수혜\", \"양자컴퓨팅\" 등 자유롭게 입력하세요." },
+                      { step: "2", title: "시장 필터 설정", desc: "전체·한국·미국 중 원하는 시장을 선택하면 해당 거래소에 상장된 종목만 필터링해 보여줍니다." },
+                      { step: "3", title: "종목 발굴 결과 확인", desc: "테마 수혜 종목 6~8개와 각 종목이 왜 수혜를 받는지 한 줄 이유가 함께 표시됩니다." },
+                      { step: "4", title: "AI 기업분석 시작", desc: "마음에 드는 종목 카드 위에 마우스를 올리면 나타나는 \"분석 →\" 버튼을 클릭해 심층 AI 기업분석을 바로 시작하세요." },
+                    ].map(({ step, title, desc }) => (
+                      <div key={step} className="flex gap-3">
+                        <div className="w-5 h-5 rounded-full bg-[#FF8A7A]/15 text-[#FF8A7A] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{step}</div>
+                        <div>
+                          <p className="text-[12px] font-semibold text-foreground/80">{title}</p>
+                          <p className="text-[11.5px] text-foreground/55 leading-relaxed mt-0.5">{desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[11px] text-foreground/35 border-t border-border/40 pt-3">
+                  ⚠️ AI가 생성한 참고용 정보입니다. 특정 종목의 매수·매도를 권유하지 않으며, 투자 판단의 최종 책임은 투자자 본인에게 있습니다.
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* 지금 주목받는 테마 */}
       <div className="space-y-2">
