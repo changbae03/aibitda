@@ -65,7 +65,7 @@ router.get("/themes/trending", async (_req, res) => {
       year: "numeric", month: "long", day: "numeric",
     });
 
-    const prompt = `${today} 기준으로 최근 1~3개월간 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰린 테마와 섹터 8개를 선정해주세요.
+    const prompt = `${today} 기준으로 최근 1~2주간 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰린 테마와 섹터 8개를 선정해주세요.
 
 조건:
 - "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하세요
