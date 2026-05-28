@@ -5611,7 +5611,6 @@ async function executeStep(
           return isNaN(num) ? null : num;
         };
 
-        targetPrice = parsePrice(json.target_price);
         entryPrice = parsePrice(json.entry_price);
         stopLoss = parsePrice(json.stop_loss);
 
@@ -5623,6 +5622,36 @@ async function executeStep(
         savedStartPrice = startPriceRow[0]?.start_price ?? null;
         savedTicker = startPriceRow[0]?.ticker ?? "";
         const isKR = /^\d{6}$/.test(savedTicker);
+
+        // ── 1순위: relative_valuation FINAL_VALUATION_DATA.base 우선 사용 ──────
+        // investment_strategy AI가 지시를 무시하고 다른 값을 쓰는 경우를 서버에서 강제 보정
+        let rvBasePrice: number | null = null;
+        try {
+          const rvStepRow = await rawQuery(
+            `SELECT content FROM analysis_steps WHERE analysis_id=$1 AND step_key='relative_valuation' LIMIT 1`,
+            [id]
+          );
+          const rvContent: string = rvStepRow[0]?.content ?? "";
+          const fvdMatch = rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[\s\S]*?\})/);
+          const fvdRaw = fvdMatch?.[1] ?? rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
+          if (fvdRaw) {
+            const fvd = JSON.parse(fvdRaw.replace(/[\r\n\t]/g, " "));
+            const parsed = parseFloat(String(fvd.base ?? fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
+            if (!isNaN(parsed) && parsed > 0) rvBasePrice = parsed;
+          }
+        } catch { /* optional */ }
+
+        if (rvBasePrice && rvBasePrice > 0) {
+          // FINAL_VALUATION_DATA.base가 있으면 AI의 FINAL_JSON target_price 대신 사용
+          const aiTp = parsePrice(json.target_price);
+          if (aiTp && Math.abs(aiTp - rvBasePrice) / rvBasePrice > 0.02) {
+            console.warn(`[tp-override] AI wrote target_price=${aiTp} but FINAL_VALUATION_DATA.base=${rvBasePrice} — using valuation base`);
+          }
+          targetPrice = Math.round(rvBasePrice);
+        } else {
+          // FINAL_VALUATION_DATA 없으면 AI 출력값 사용 (fallback)
+          targetPrice = parsePrice(json.target_price);
+        }
 
         // ── FINAL_VALUATION_DATA current price 검증 (AI가 wrong price 사용 시 조기 경보) ──
         if (savedStartPrice && savedStartPrice > 0) {
