@@ -22,6 +22,7 @@ interface DiscoveredStock {
   rationale: string;
   dartVerified?: boolean;
   dartIndustry?: string;
+  dartBizMatch?: boolean | null;
 }
 
 interface DiscoverResult {
@@ -323,6 +324,14 @@ export default function ThemesPage() {
                           className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium cursor-help"
                         >
                           📋 {stock.dartIndustry ?? "DART"}
+                        </span>
+                      )}
+                      {stock.dartBizMatch === true && (
+                        <span
+                          title="DART 사업보고서 본문에 테마 키워드 확인됨"
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium cursor-help"
+                        >
+                          📄 사업보고서 확인
                         </span>
                       )}
                     </div>

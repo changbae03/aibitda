@@ -29,6 +29,7 @@ interface DiscoveredStock {
   rationale: string;
   dartVerified?: boolean;
   dartIndustry?: string;
+  dartBizMatch?: boolean | null; // true=사업보고서 키워드 일치, false=불일치, null=미캐시
 }
 
 interface DiscoverResult {
@@ -254,6 +255,46 @@ function isIndutyRelevant(indutyCode: string, theme: string): boolean {
   return true; // 기본 포함
 }
 
+// ─── DART 사업보고서 캐시 키워드 매칭 (DB 전용, API 호출 없음) ──────────────
+
+/**
+ * dart_biz_content 테이블에 캐시된 사업보고서 본문에서 테마 키워드를 검색.
+ * - true  : 본문 있고 키워드 1개 이상 발견 (테마 연관 확인됨)
+ * - false : 본문 있으나 키워드 없음 (테마 무관 가능성 높음)
+ * - null  : 캐시 없음 (판단 불가 — 필터 적용 안 함)
+ */
+async function checkDartBizCached(
+  corpCode: string,
+  keywords: string[],
+): Promise<boolean | null> {
+  if (!corpCode || !keywords.length) return null;
+  try {
+    const r = await pool.query<{ content: string }>(
+      "SELECT content FROM dart_biz_content WHERE corp_code = $1 LIMIT 1",
+      [corpCode],
+    );
+    if (!r.rows[0]?.content) return null; // 캐시 없음
+
+    const text = r.rows[0].content.toLowerCase();
+    return keywords.some((kw) => text.includes(kw));
+  } catch {
+    return null; // DB 오류 → 판단 보류
+  }
+}
+
+/** 테마 문자열에서 검색 키워드 배열 추출 */
+function extractThemeKeywords(theme: string): string[] {
+  // 전체 테마, 그리고 공백/하이픈/숫자로 분리한 단어들
+  const raw = [theme, ...theme.split(/[\s\-·]+/)];
+  return [
+    ...new Set(
+      raw
+        .map((t) => t.toLowerCase().replace(/[^가-힣a-z0-9]/g, "").trim())
+        .filter((t) => t.length >= 2),
+    ),
+  ];
+}
+
 let trendingCache: { themes: TrendingTheme[]; cachedAt: number } | null = null;
 const TRENDING_TTL = 3 * 60 * 60 * 1000;
 
@@ -467,6 +508,29 @@ ticker 규칙:
         }
       })
     );
+
+    // 후처리 0: DART 사업보고서 캐시 키워드 매칭 (DB 전용, 빠름)
+    {
+      const themeKeywords = extractThemeKeywords(trimmed);
+      await Promise.allSettled(
+        result.stocks
+          .filter(s => s.market === "KR")
+          .map(async stock => {
+            const corpCode = codeMap.get(stock.ticker);
+            if (!corpCode) { stock.dartBizMatch = null; return; }
+            stock.dartBizMatch = await checkDartBizCached(corpCode, themeKeywords);
+          }),
+      );
+      // 사업보고서가 캐시됐는데 테마 키워드가 0개 → 제거
+      result.stocks = result.stocks.filter(stock => {
+        if (stock.market === "US") return true;
+        if (stock.dartBizMatch === false) {
+          console.log(`[themes] dartBizMatch=false → 제거: ${stock.ticker} ${stock.name}`);
+          return false;
+        }
+        return true;
+      });
+    }
 
     // 후처리 1: rationale에 "간접 수혜" 명시된 종목 제거
     const INDIRECT_PATTERNS = /간접\s*수혜|장기적\s*(으로\s*)?(영향|수혜)|관련\s*산업\s*성장|수요\s*증가\s*기대/;
