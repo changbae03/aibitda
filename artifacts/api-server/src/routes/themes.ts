@@ -37,12 +37,15 @@ const TRENDING_TTL = 3 * 60 * 60 * 1000;
 
 function safeParseJson<T>(text: string): T | null {
   const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  // 객체를 먼저 시도 — stocks 배열이 먼저 매칭되는 버그 방지
+  // 1) 전체 텍스트 직접 파싱 (마크다운 제거 후 순수 JSON인 경우)
+  try { return JSON.parse(cleaned) as T; } catch {}
+  // 2) 객체 추출
   const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (objMatch) { try { return JSON.parse(objMatch[0]) as T; } catch {} }
+  // 3) 배열 추출
   const arrMatch = cleaned.match(/\[[\s\S]*\]/);
-  const raw = objMatch?.[0] ?? arrMatch?.[0];
-  if (!raw) return null;
-  try { return JSON.parse(raw) as T; } catch { return null; }
+  if (arrMatch) { try { return JSON.parse(arrMatch[0]) as T; } catch {} }
+  return null;
 }
 
 const FALLBACK_THEMES: TrendingTheme[] = [
