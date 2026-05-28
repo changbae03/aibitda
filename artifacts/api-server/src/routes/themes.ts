@@ -494,6 +494,13 @@ ticker 규칙:
           .replace(/\s*\(주\)\s*|\s*주식회사\s*|\s*(inc|corp|ltd|co\.?)\.?\s*/gi, "")
           .replace(/[\s\-·,\.]/g, "");
       }
+      // 영문 약어 → 한국어 음역 (LS→엘에스, LG→엘지 등)
+      const ABBR_KR: Record<string, string> = {
+        ls: "엘에스", lg: "엘지", sk: "에스케이", kt: "케이티",
+        cj: "씨제이", gs: "지에스", hd: "에이치디", kb: "케이비",
+        db: "디비", nh: "엔에이치", kcc: "케이씨씨", oci: "오씨아이",
+        posco: "포스코", hyundai: "현대", samsung: "삼성",
+      };
       function namesSimilar(a: string, b: string): boolean {
         const na = normName(a);
         const nb = normName(b);
@@ -501,7 +508,15 @@ ticker 규칙:
         if (na.includes(nb) || nb.includes(na)) return true;
         // 한글 3자 이상 교집합 ("대한" 등 2자 공통 접두어는 불충분)
         const krChars = [...na].filter(c => /[가-힣]/.test(c) && nb.includes(c));
-        return krChars.length >= 3;
+        if (krChars.length >= 3) return true;
+        // 영문 약어 ↔ 한국어 음역 매칭 (LS ↔ 엘에스일렉트릭)
+        const safeA = a.replace(/[\s\-·]/g, "").toLowerCase();
+        const safeB = b.replace(/[\s\-·]/g, "").toLowerCase();
+        for (const [abbr, kr] of Object.entries(ABBR_KR)) {
+          if ((safeA.startsWith(abbr) && nb.startsWith(kr)) ||
+              (safeB.startsWith(abbr) && na.startsWith(kr))) return true;
+        }
+        return false;
       }
 
       const toRemove = new Set<string>();
@@ -533,20 +548,24 @@ ticker 규칙:
               continue;
             }
 
-            // 검증 B: 라셔널에 다른 KRX 등록 회사명(4자↑)이 명시되면 할루시네이션 확정
+            // 검증 B: 라셔널에 실제 회사명(KRX)이 없고 다른 회사명이 주어로 쓰이면 할루시네이션
+            // (한미반도체 라셔널에 SK하이닉스가 고객사로 언급되는 경우는 정상 → 제거 안 함)
             const rationaleText = stock.rationale ?? "";
-            const aliasHit = krxCache.find(s =>
-              s.name.length >= 4 &&
-              s.code !== stock.ticker &&
-              rationaleText.includes(s.name) &&
-              !namesSimilar(s.name, krxEntry.name)
-            );
-            if (aliasHit) {
-              console.log(
-                `[themes] 티커 불일치(라셔널) → 제거: ${stock.ticker} (${krxEntry.name})` +
-                ` 라셔널에 다른 회사 "${aliasHit.name}"(${aliasHit.code}) 언급됨`
+            const hasOwnName = rationaleText.includes(krxEntry.name);
+            if (!hasOwnName) {
+              const aliasHit = krxCache.find(s =>
+                s.name.length >= 4 &&
+                s.code !== stock.ticker &&
+                rationaleText.includes(s.name) &&
+                !namesSimilar(s.name, krxEntry.name)
               );
-              toRemove.add(stock.ticker);
+              if (aliasHit) {
+                console.log(
+                  `[themes] 티커 불일치(라셔널) → 제거: ${stock.ticker} (${krxEntry.name})` +
+                  ` 라셔널에 다른 회사 "${aliasHit.name}"(${aliasHit.code}) 언급, 자사명 없음`
+                );
+                toRemove.add(stock.ticker);
+              }
             }
           }
           // KRX에 없는 티커(상장폐지 등)는 통과 (판단 보류)
@@ -607,7 +626,7 @@ ticker 규칙:
       // 섹터 → 해당 섹터와 어울리지 않는 테마 키워드
       const BLOCKLIST: Array<{ sectorIncludes: string[]; badThemeKW: string[] }> = [
         { sectorIncludes: ["반도체", "전자부품", "컴퓨터", "통신장비"],  badThemeKW: BIOTECH_KW },
-        { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기"] },
+        { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기", "전력", "인프라", "데이터센터", "ai 전력"] },
         { sectorIncludes: ["조선"],                                    badThemeKW: [...BIOTECH_KW, ...SEMI_KW, ...BATTERY_KW] },
         { sectorIncludes: ["자동차", "항공"],                           badThemeKW: BIOTECH_KW },
         { sectorIncludes: ["화학"],                                    badThemeKW: BIOTECH_KW },
