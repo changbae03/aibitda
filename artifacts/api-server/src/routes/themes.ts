@@ -485,15 +485,56 @@ ticker 규칙:
 
     if (!result?.stocks?.length) throw new Error("parse fail");
 
-    // KR 종목: 6자리 숫자 아닌 ticker는 KRX 이름 검색으로 교정
-    for (const stock of result.stocks) {
-      if (stock.market === "KR" && !/^\d{6}$/.test(stock.ticker)) {
-        const found = krxCache.find(s =>
-          s.name.replace(/\s|\(주\)|주식회사\s*/g, "").includes(stock.ticker.replace(/\s/g, "")) ||
-          stock.ticker.replace(/\s/g, "").includes(s.name.replace(/\s|\(주\)|주식회사\s*/g, ""))
-        );
-        if (found) stock.ticker = found.code;
-        else stock.market = "US";
+    // ── KR 종목 티커·이름 교정 및 할루시네이션 제거 ──────────────────────────
+    {
+      // 이름 유사도: 정규화 후 한쪽이 다른 쪽을 포함하거나 한글 2자 이상 공유
+      function normName(s: string): string {
+        return s
+          .toLowerCase()
+          .replace(/\s*\(주\)\s*|\s*주식회사\s*|\s*(inc|corp|ltd|co\.?)\.?\s*/gi, "")
+          .replace(/[\s\-·,\.]/g, "");
+      }
+      function namesSimilar(a: string, b: string): boolean {
+        const na = normName(a);
+        const nb = normName(b);
+        if (!na || !nb) return true; // 비어 있으면 판단 보류
+        if (na.includes(nb) || nb.includes(na)) return true;
+        // 한글 2자 이상 교집합
+        const krChars = [...na].filter(c => /[가-힣]/.test(c) && nb.includes(c));
+        return krChars.length >= 2;
+      }
+
+      const toRemove = new Set<string>();
+      for (const stock of result.stocks) {
+        if (stock.market !== "KR") continue;
+
+        if (!/^\d{6}$/.test(stock.ticker)) {
+          // ① 비-6자리: 이름으로 티커 탐색
+          const found = krxCache.find(s =>
+            s.name.replace(/\s|\(주\)|주식회사\s*/g, "").includes(stock.ticker.replace(/\s/g, "")) ||
+            stock.ticker.replace(/\s/g, "").includes(s.name.replace(/\s|\(주\)|주식회사\s*/g, ""))
+          );
+          if (found) { stock.ticker = found.code; stock.name = found.name; }
+          else { stock.market = "US"; }
+        } else {
+          // ② 6자리: KRX 실명 조회 후 교체·불일치 필터
+          const krxEntry = krxCache.find(s => s.code === stock.ticker);
+          if (krxEntry) {
+            const geminiName = stock.name;
+            stock.name = krxEntry.name; // 항상 KRX 실명으로 교체
+            if (!namesSimilar(geminiName, krxEntry.name)) {
+              console.log(
+                `[themes] 티커 불일치 → 제거: ${stock.ticker}` +
+                ` Gemini="${geminiName}" KRX="${krxEntry.name}"`
+              );
+              toRemove.add(stock.ticker);
+            }
+          }
+          // KRX에 없는 티커(상장폐지 등)는 통과 (판단 보류)
+        }
+      }
+      if (toRemove.size) {
+        result.stocks = result.stocks.filter(s => !toRemove.has(s.ticker));
       }
     }
 
