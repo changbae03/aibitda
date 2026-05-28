@@ -111,7 +111,7 @@ export default function ThemesPage() {
       {/* 헤더 */}
       <div className="flex items-center gap-2">
         <Lightbulb className="w-5 h-5 text-[#FF8A7A]" />
-        <h1 className="text-lg font-semibold text-foreground">테마 발굴</h1>
+        <h1 className="text-lg font-semibold text-foreground">테마종목발굴</h1>
       </div>
       <p className="text-sm text-foreground/60 -mt-4">
         지금 수급이 몰리는 테마를 입력하면 관련 종목을 찾아드립니다.
