@@ -20,6 +20,8 @@ interface DiscoveredStock {
   market: "KR" | "US";
   sector?: string;
   rationale: string;
+  dartVerified?: boolean;
+  dartIndustry?: string;
 }
 
 interface DiscoverResult {
@@ -292,6 +294,14 @@ export default function ThemesPage() {
                       {stock.sector && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-foreground/50">
                           {stock.sector}
+                        </span>
+                      )}
+                      {stock.dartVerified && (
+                        <span
+                          title={stock.dartIndustry ? `DART 등록 업종: ${stock.dartIndustry}` : "DART 사업보고서에서 관련 업종 확인됨"}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium cursor-help"
+                        >
+                          📋 {stock.dartIndustry ?? "DART"}
                         </span>
                       )}
                     </div>
