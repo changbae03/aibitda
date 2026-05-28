@@ -499,9 +499,9 @@ ticker 규칙:
         const nb = normName(b);
         if (!na || !nb) return true; // 비어 있으면 판단 보류
         if (na.includes(nb) || nb.includes(na)) return true;
-        // 한글 2자 이상 교집합
+        // 한글 3자 이상 교집합 ("대한" 등 2자 공통 접두어는 불충분)
         const krChars = [...na].filter(c => /[가-힣]/.test(c) && nb.includes(c));
-        return krChars.length >= 2;
+        return krChars.length >= 3;
       }
 
       const toRemove = new Set<string>();
@@ -522,10 +522,29 @@ ticker 규칙:
           if (krxEntry) {
             const geminiName = stock.name;
             stock.name = krxEntry.name; // 항상 KRX 실명으로 교체
+
+            // 검증 A: Gemini 이름 ↔ KRX 실명 유사도
             if (!namesSimilar(geminiName, krxEntry.name)) {
               console.log(
-                `[themes] 티커 불일치 → 제거: ${stock.ticker}` +
+                `[themes] 티커 불일치(이름) → 제거: ${stock.ticker}` +
                 ` Gemini="${geminiName}" KRX="${krxEntry.name}"`
+              );
+              toRemove.add(stock.ticker);
+              continue;
+            }
+
+            // 검증 B: 라셔널에 다른 KRX 등록 회사명(4자↑)이 명시되면 할루시네이션 확정
+            const rationaleText = stock.rationale ?? "";
+            const aliasHit = krxCache.find(s =>
+              s.name.length >= 4 &&
+              s.code !== stock.ticker &&
+              rationaleText.includes(s.name) &&
+              !namesSimilar(s.name, krxEntry.name)
+            );
+            if (aliasHit) {
+              console.log(
+                `[themes] 티커 불일치(라셔널) → 제거: ${stock.ticker} (${krxEntry.name})` +
+                ` 라셔널에 다른 회사 "${aliasHit.name}"(${aliasHit.code}) 언급됨`
               );
               toRemove.add(stock.ticker);
             }
