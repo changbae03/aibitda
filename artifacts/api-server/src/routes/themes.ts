@@ -104,10 +104,10 @@ router.post("/themes/discover", async (req, res) => {
 
     const marketGuide =
       market === "KR"
-        ? "한국 상장 주식(코스피·코스닥)만 추천. ticker는 6자리 숫자(예: 005930)."
+        ? "⚠️ 반드시 한국 상장 주식(코스피·코스닥)만 추천하세요. 미국 주식은 절대 포함 금지. ticker는 반드시 6자리 숫자(예: 005930). market 필드는 반드시 \"KR\"."
         : market === "US"
-        ? "미국 상장 주식(NYSE·NASDAQ)만 추천. ticker는 영문 심볼(예: NVDA)."
-        : "한국(코스피·코스닥)과 미국(NYSE·NASDAQ)을 적절히 혼합해 추천.";
+        ? "⚠️ 반드시 미국 상장 주식(NYSE·NASDAQ)만 추천하세요. 한국 주식은 절대 포함 금지. ticker는 반드시 영문 심볼(예: NVDA). market 필드는 반드시 \"US\"."
+        : "한국(코스피·코스닥)과 미국(NYSE·NASDAQ)을 적절히 혼합해 추천. ticker가 6자리 숫자면 KR, 영문 심볼이면 US로 market 필드 설정.";
 
     const prompt = `투자 테마: "${theme}"
 
@@ -130,6 +130,14 @@ ${marketGuide}
 
     const result = safeParseJson<DiscoverResult>(resp.text ?? "");
     if (!result?.stocks?.length) throw new Error("parse fail");
+
+    // 서버 사이드 필터: KR=6자리숫자, US=영문심볼
+    if (market === "KR") {
+      result.stocks = result.stocks.filter(s => /^\d{6}$/.test(s.ticker));
+    } else if (market === "US") {
+      result.stocks = result.stocks.filter(s => /^[A-Za-z]{1,5}$/.test(s.ticker));
+    }
+    if (!result.stocks.length) throw new Error("filter resulted in empty");
 
     return res.json(result);
   } catch (e) {
