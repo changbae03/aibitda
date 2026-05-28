@@ -37,9 +37,10 @@ const TRENDING_TTL = 3 * 60 * 60 * 1000;
 
 function safeParseJson<T>(text: string): T | null {
   const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+  // 객체를 먼저 시도 — stocks 배열이 먼저 매칭되는 버그 방지
   const objMatch = cleaned.match(/\{[\s\S]*\}/);
-  const raw = arrMatch?.[0] ?? objMatch?.[0];
+  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+  const raw = objMatch?.[0] ?? arrMatch?.[0];
   if (!raw) return null;
   try { return JSON.parse(raw) as T; } catch { return null; }
 }
