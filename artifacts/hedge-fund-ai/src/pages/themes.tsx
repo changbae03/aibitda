@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lightbulb, Search, Loader2, TrendingUp, ArrowRight, RefreshCw } from "lucide-react";
+import { Lightbulb, Search, Loader2, TrendingUp, ArrowRight, RefreshCw, Building2 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
+import { useStartAnalysis } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface TrendingTheme {
   id: string;
@@ -32,6 +34,9 @@ const MARKET_LABELS: Record<Market, string> = { ALL: "전체", KR: "한국", US:
 
 export default function ThemesPage() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { mutateAsync: startAnalysis, isPending: isStarting } = useStartAnalysis();
+
   const [trending, setTrending] = useState<TrendingTheme[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
   const [input, setInput] = useState("");
@@ -39,6 +44,8 @@ export default function ThemesPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiscoverResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     setTrendingLoading(true);
@@ -80,12 +87,23 @@ export default function ThemesPage() {
     discover(input);
   }
 
-  function goAnalyze(ticker: string) {
-    navigate("/analysis/new");
-    setTimeout(() => {
-      const el = document.querySelector<HTMLInputElement>("input[placeholder*='티커'], input[type='text']");
-      if (el) { el.value = ticker; el.dispatchEvent(new Event("input", { bubbles: true })); }
-    }, 400);
+  function goAnalyze(ticker: string, companyName: string) {
+    setStartError(null);
+    setConfirmModal({ ticker, companyName });
+  }
+
+  async function handleStartAnalysis() {
+    if (!confirmModal) return;
+    setStartError(null);
+    try {
+      const res = await startAnalysis({ data: { ticker: confirmModal.ticker.toUpperCase() } });
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
+      setConfirmModal(null);
+      navigate(`/analysis/${res.id}`);
+    } catch (err: any) {
+      const msg = err?.data?.error as string | undefined;
+      setStartError(msg ?? "분석을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    }
   }
 
   return (
@@ -242,7 +260,7 @@ export default function ThemesPage() {
                     <p className="text-xs text-foreground/60 mt-1 leading-relaxed">{stock.rationale}</p>
                   </div>
                   <button
-                    onClick={() => goAnalyze(stock.ticker)}
+                    onClick={() => goAnalyze(stock.ticker, stock.name)}
                     className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#FF8A7A] border border-[#FF8A7A]/30 hover:bg-[#FF8A7A]/10 transition-colors opacity-0 group-hover:opacity-100"
                   >
                     분석
@@ -260,6 +278,80 @@ export default function ThemesPage() {
               <RefreshCw className="w-3 h-3" />
               다른 종목으로 다시 발굴
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 분석 확인 팝업 */}
+      <AnimatePresence>
+        {confirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => !isStarting && setConfirmModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-sm p-6"
+            >
+              {/* 헤더 */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">AI 기업분석</p>
+                  <h3 className="text-[18px] font-black text-foreground leading-tight truncate">{confirmModal.companyName}</h3>
+                  <p className="font-mono text-[11px] text-muted-foreground/50">{confirmModal.ticker}</p>
+                </div>
+              </div>
+
+              {/* 설명 */}
+              <div className="rounded-xl bg-muted/60 px-4 py-3.5 mb-5 space-y-1">
+                <p className="text-[13.5px] text-foreground/85 leading-relaxed">
+                  <span className="font-bold" style={{ color: "#FF8A7A" }}>애빛다의 AI 애널리스트 팀</span>이<br />
+                  7단계 심층 분석을 시작합니다.
+                </p>
+                <p className="text-[11.5px] text-muted-foreground">
+                  평균 3분 소요 · DCF·rNPV 등 밸류에이션 자동 선정
+                </p>
+              </div>
+
+              {/* 오류 */}
+              {startError && (
+                <p className="text-[12px] text-red-500 text-center mb-3">{startError}</p>
+              )}
+
+              {/* 버튼 */}
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setConfirmModal(null)}
+                  disabled={isStarting}
+                  className="flex-1 py-3 rounded-xl border border-border text-[14px] font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleStartAnalysis}
+                  disabled={isStarting}
+                  className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ backgroundColor: "#FF8A7A" }}
+                >
+                  {isStarting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>분석 시작 <ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
