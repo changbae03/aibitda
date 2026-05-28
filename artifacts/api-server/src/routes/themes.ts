@@ -2,7 +2,7 @@ import { Router } from "express";
 import { GoogleGenAI } from "@google/genai";
 import AdmZip from "adm-zip";
 import { pool } from "@workspace/db";
-import { loadKRXList } from "../lib/krx-cache";
+import { loadKRXList, getKRXCache } from "../lib/krx-cache";
 
 const router = Router();
 
@@ -35,6 +35,8 @@ interface DiscoverResult {
   theme: string;
   summary: string;
   stocks: DiscoveredStock[];
+  invalid?: boolean;
+  reason?: string;
 }
 
 // ─── DART 업종 검증 ─────────────────────────────────────────────────────────
@@ -322,44 +324,95 @@ router.post("/themes/discover", async (req, res) => {
     const { theme } = req.body as { theme: string };
     if (!theme?.trim()) return res.status(400).json({ error: "테마를 입력해주세요." });
 
-    const prompt = `투자 테마: "${theme}"
+    const trimmed = theme.trim();
+
+    // ── STEP 0A: 서버 사전 차단 — KRX 종목명·코드 직접 입력 ────────────────
+    const krxCache = await loadKRXList().catch(() => getKRXCache());
+    const exactKrxMatch = krxCache.find(s => s.name === trimmed || s.code === trimmed);
+    if (exactKrxMatch) {
+      return res.status(400).json({
+        error: `'${trimmed}'은(는) 상장 종목입니다. 테마 발굴 대신 AI 기업분석 기능을 이용해주세요.`,
+        invalid: true,
+      });
+    }
+
+    // ── STEP 0B: 한글 2~4자 단어 — 알려진 투자 테마 키워드가 아니면 거절 ────
+    // 사람 이름(정원오, 홍길동 등)·국가명(미국, 중국)·의미없는 단어 차단
+    const PURE_KOREAN = /^[가-힣]{2,4}$/;
+    const KNOWN_SHORT_THEMES = new Set([
+      "반도체","방산","조선","바이오","배터리","자동차","로봇","소재","금융","보험",
+      "건설","에너지","화학","철강","항공","게임","헬스케어","물류","콘텐츠","미디어",
+      "제약","의료","의약","식품","농업","전력","가스","유통","패션","뷰티","해운",
+      "통신","핀테크","부동산","리츠","소프트웨어","인터넷","클라우드","리오프닝",
+      "전기차","방위","조세","증시","채권","환율","금리","인플레","공매도","PBR",
+    ]);
+    if (PURE_KOREAN.test(trimmed) && !KNOWN_SHORT_THEMES.has(trimmed)) {
+      return res.status(400).json({
+        error: `'${trimmed}'은(는) 투자 테마로 인식하기 어렵습니다. "K-방산", "AI 에이전트", "GLP-1 비만치료제" 처럼 더 구체적인 테마를 입력해주세요.`,
+        invalid: true,
+      });
+    }
+
+    // ── STEP 1: Gemini — 투자 테마 여부 최종 검증 ───────────────────────────
+    const validationPrompt = `다음 입력이 주식 투자 테마인지 판단하세요. JSON만 출력하세요.
+
+투자 테마란: 여러 기업이 수혜를 받는 섹터·산업·정책·기술 흐름입니다 (예: "K-방산", "AI 반도체", "금리 인하 수혜").
+투자 테마가 아닌 것: 사람 이름, 단독 기업명, 단독 국가명, 의미 없는 단어.
+
+입력: "${trimmed}"
+출력 형식: {"valid":true} 또는 {"valid":false,"reason":"한 문장 이유"}`;
+
+    const validResp = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: validationPrompt }] }],
+      config: { temperature: 0.0, thinkingConfig: { thinkingBudget: 0 } },
+    });
+
+    const validation = safeParseJson<{ valid: boolean; reason?: string }>(validResp.text ?? "");
+    if (!validation?.valid) {
+      return res.status(400).json({
+        error: validation?.reason ?? `'${trimmed}'은(는) 투자 테마로 인식할 수 없습니다.`,
+        invalid: true,
+      });
+    }
+
+    // ── STEP 2: Gemini — 종목 발굴 ────────────────────────────────────────
+    const discoverPrompt = `투자 테마: "${trimmed}"
 
 이 테마의 수혜 상장 주식 6~8개를 선정하세요.
-한국(코스피·코스닥)과 미국(NYSE·NASDAQ)을 적절히 혼합해 추천. 한국 테마면 KR 종목을 과반 이상 포함.
+한국(코스피·코스닥)과 미국(NYSE·NASDAQ) 혼합. 한국 관련 테마면 KR 종목 과반 이상.
 
-ticker 규칙 (반드시 준수):
-- 한국 주식: 반드시 6자리 숫자 코드 (예: "005930", "079550", "012450"). 회사 이름을 ticker로 쓰지 말 것.
+ticker 규칙:
+- 한국 주식: 반드시 6자리 숫자 코드 (예: "005930", "079550"). 회사 이름 금지.
 - 미국 주식: NYSE·NASDAQ 심볼 (예: "AAPL", "LMT")
 
 조건:
-- 해당 테마가 매출의 핵심 부분을 차지하거나, 테마 관련 제품·기술·파이프라인을 실제로 보유한 기업만 포함
-- "공급 가능성", "간접 수혜 예상", "향후 참여 가능" 같은 추측성 연결고리 절대 금지
-- 자동차·물류·유통 기업이 핵심 사업과 무관한 이유로 포함되지 않도록 주의
+- 테마가 매출의 핵심이거나 관련 기술·파이프라인을 실제 보유한 기업만 포함
+- "간접 수혜 예상", "향후 참여 가능" 같은 추측성 연결고리 절대 금지
 
-마크다운 없이 아래 JSON만 출력하세요:
-{"theme":"${theme}","summary":"테마 한 줄 요약","stocks":[{"ticker":"079550","name":"LIG넥스원","market":"KR","sector":"방산","rationale":"유도무기·레이더 핵심 생산"}]}`;
+마크다운 없이 아래 JSON만 출력:
+{"theme":"${trimmed}","summary":"테마 한 줄 요약","stocks":[{"ticker":"005930","name":"삼성전자","market":"KR","sector":"반도체","rationale":"이유"}]}`;
 
     const codeMap = getCorpCodeMap();
 
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.4, thinkingConfig: { thinkingBudget: 0 } },
+      contents: [{ role: "user", parts: [{ text: discoverPrompt }] }],
+      config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
     });
 
     const result = safeParseJson<DiscoverResult>(resp.text ?? "");
     if (!result?.stocks?.length) throw new Error("parse fail");
 
     // KR 종목: 6자리 숫자 아닌 ticker는 KRX 이름 검색으로 교정
-    const krxList = await loadKRXList().catch(() => []);
     for (const stock of result.stocks) {
       if (stock.market === "KR" && !/^\d{6}$/.test(stock.ticker)) {
-        const found = krxList.find(s =>
+        const found = krxCache.find(s =>
           s.name.replace(/\s|\(주\)|주식회사\s*/g, "").includes(stock.ticker.replace(/\s/g, "")) ||
           stock.ticker.replace(/\s/g, "").includes(s.name.replace(/\s|\(주\)|주식회사\s*/g, ""))
         );
         if (found) stock.ticker = found.code;
-        else stock.market = "US"; // 해결 못하면 US로 변경해 DART 필터 회피
+        else stock.market = "US";
       }
     }
 
@@ -370,15 +423,15 @@ ticker 규칙 (반드시 준수):
         const code = await getDartIndutyCode(stock.ticker, codeMap);
         if (code) {
           stock.dartIndustry = indutyLabel(code);
-          stock.dartVerified = isIndutyRelevant(code, theme);
+          stock.dartVerified = isIndutyRelevant(code, trimmed);
         }
       })
     );
 
-    // KR 종목: DART 업종 확인된 것만 포함 (업종 조회 실패 시 폴백)
+    // KR 종목: DART 업종 불일치 제거 (조회 실패 시 폴백 포함)
     result.stocks = result.stocks.filter(stock => {
       if (stock.market === "US") return true;
-      if (stock.dartIndustry === undefined) return true; // DART 조회 실패 시 폴백
+      if (stock.dartIndustry === undefined) return true;
       return stock.dartVerified === true;
     });
 

@@ -41,6 +41,7 @@ export default function ThemesPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiscoverResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invalidTheme, setInvalidTheme] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
@@ -59,6 +60,7 @@ export default function ThemesPage() {
     setLoading(true);
     setResult(null);
     setError(null);
+    setInvalidTheme(null);
     try {
       const r = await fetch(getApiUrl("api/themes/discover"), {
         method: "POST",
@@ -66,7 +68,14 @@ export default function ThemesPage() {
         body: JSON.stringify({ theme: theme.trim() }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "오류가 발생했습니다.");
+      if (!r.ok) {
+        if (data.invalid) {
+          setInvalidTheme(data.error ?? "투자 테마로 인식할 수 없는 입력입니다.");
+        } else {
+          throw new Error(data.error ?? "오류가 발생했습니다.");
+        }
+        return;
+      }
       setResult(data);
     } catch (e: any) {
       setError(e.message ?? "오류가 발생했습니다.");
@@ -227,7 +236,19 @@ export default function ThemesPage() {
 
       </form>
 
-      {/* 에러 */}
+      {/* 투자 테마 아닌 입력 */}
+      {invalidTheme && !loading && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/60 border border-border">
+          <span className="text-xl mt-0.5">🔍</span>
+          <div>
+            <p className="text-sm font-medium text-foreground">투자 테마를 찾을 수 없습니다</p>
+            <p className="text-xs text-foreground/55 mt-1 leading-relaxed">{invalidTheme}</p>
+            <p className="text-xs text-foreground/40 mt-2">예시: "K-방산", "AI 에이전트 인프라", "GLP-1 비만치료제", "HVDC 변압기"</p>
+          </div>
+        </div>
+      )}
+
+      {/* 시스템 에러 */}
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 text-sm">
           {error}
