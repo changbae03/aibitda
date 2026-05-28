@@ -435,8 +435,8 @@ const MD_TABLE_COMPONENTS = {
       </tr>
     );
   },
-  th: ({ children }: any) => <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{children}</th>,
-  td: ({ children }: any) => <td className="px-3 py-2.5 text-foreground/80 leading-[1.7] align-top">{children}</td>,
+  th: ({ children }: any) => <th className="px-3 py-2.5 text-left text-[12px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{children}</th>,
+  td: ({ children }: any) => <td className="px-3 py-2.5 text-foreground/90 leading-[1.75] align-top">{children}</td>,
 };
 
 // 야후 파이낸스 영문 업종명 → 한국어 변환
@@ -4459,7 +4459,7 @@ function CollapsibleBlockquote({ children }: { children: React.ReactNode }) {
 
   if (!isCollapsible) {
     return (
-      <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/60 text-[13px] italic">
+      <blockquote className="my-3 pl-3 border-l-2 border-border text-foreground/75 text-[14px] italic">
         {children}
       </blockquote>
     );
@@ -4493,22 +4493,22 @@ const MD_BODY_COMPONENTS = {
     <h2 className="text-[15px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
   ),
   h3: ({ children }: any) => (
-    <h3 className="text-[13px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
+    <h3 className="text-[15px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
   ),
   h4: ({ children }: any) => (
-    <h4 className="text-[13px] font-medium text-foreground/75 mt-3 mb-1.5">{children}</h4>
+    <h4 className="text-[14px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
   ),
   p: ({ children }: any) => {
     const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
     if (text.startsWith("출처:") || text.startsWith("출처 :")) {
-      return <p className="mt-5 pt-3 border-t border-border/40 text-[11px] text-muted-foreground">{children}</p>;
+      return <p className="mt-5 pt-3 border-t border-border/40 text-[12px] text-muted-foreground">{children}</p>;
     }
-    return <p className="mb-4 last:mb-0 text-foreground/75 leading-[1.9] text-[13.5px]">{children}</p>;
+    return <p className="mb-4 last:mb-0 text-foreground/90 leading-[1.95] text-[15px]">{children}</p>;
   },
   ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-2 list-none">{children}</ul>,
   ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
   li: ({ children }: any) => (
-    <li className="flex items-start gap-2.5 text-[13.5px] leading-[1.85] text-foreground/75">
+    <li className="flex items-start gap-2.5 text-[15px] leading-[1.9] text-foreground/90">
       <span className="shrink-0 w-1 h-1 rounded-full bg-muted-foreground/50 mt-[0.75em]" />
       <span className="flex-1 min-w-0">{children}</span>
     </li>
@@ -4523,7 +4523,7 @@ const MD_BODY_COMPONENTS = {
 function MdBlock({ src, isEn }: { src: string; isEn: boolean }) {
   if (!src.trim()) return null;
   return (
-    <div className="markdown-body" style={{ fontSize: "14px", lineHeight: "1.8" }}>
+    <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.95" }}>
       <RoadmapEnContext.Provider value={isEn}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_BODY_COMPONENTS}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
       </RoadmapEnContext.Provider>
@@ -4869,7 +4869,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
         {/* 리드 문장 — 첫 번째 ## 소제목 이전 텍스트 강조 박스 */}
         {leadPara && (
           <div
-            className="mb-4 px-4 py-3.5 rounded-xl bg-muted/50 text-[13.5px] leading-[1.9] text-foreground/85 whitespace-pre-line border-l-[3px]"
+            className="mb-4 px-4 py-3.5 rounded-xl bg-muted/50 text-[15px] leading-[1.95] text-foreground/90 whitespace-pre-line border-l-[3px]"
             style={{ borderLeftColor: color }}
           >
             {leadPara}
@@ -4913,20 +4913,20 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                         transition={{ duration: 0.2, ease: "easeInOut" }}
                         style={{ overflow: "hidden" }}
                       >
-                        <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                        <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
                           <RoadmapEnContext.Provider value={isEn}>
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                            h2: ({ children }: any) => <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-[12px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>,
-                            p: ({ children }: any) => <p className="mb-3 last:mb-0 text-foreground/75 leading-[1.8]">{children}</p>,
+                            h2: ({ children }: any) => <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="text-[14px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>,
+                            p: ({ children }: any) => <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>,
                             ul: ({ children }: any) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
                             li: ({ children }: any) => (
-                              <li className="flex items-start gap-2 text-[12.5px] leading-[1.8] text-foreground/75">
+                              <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
                                 <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
                                 <span className="flex-1 min-w-0">{children}</span>
                               </li>
                             ),
-                            strong: ({ children }: any) => <strong className="font-semibold text-foreground/90">{children}</strong>,
+                            strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
                             ...MD_TABLE_COMPONENTS,
                           }}>
                             {prepareMarkdown(waccOnlySection, isEn)}
@@ -4967,30 +4967,30 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                   transition={{ duration: 0.2, ease: "easeInOut" }}
                   style={{ overflow: "hidden" }}
                 >
-                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
                     <RoadmapEnContext.Provider value={isEn}>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         h2: ({ children }) => (
-                          <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
+                          <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
                             {children}
                           </h2>
                         ),
                         h3: ({ children }) => (
-                          <h3 className="text-[12px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>
+                          <h3 className="text-[14px] font-semibold text-foreground mt-3 mb-1.5">{children}</h3>
                         ),
                         p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 text-foreground/75 leading-[1.8]">{children}</p>
+                          <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>
                         ),
                         ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
                         li: ({ children }) => (
-                          <li className="flex items-start gap-2 text-[12.5px] leading-[1.8] text-foreground/75">
+                          <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
                             <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
                             <span className="flex-1 min-w-0">{children}</span>
                           </li>
                         ),
-                        strong: ({ children }) => <strong className="font-semibold text-foreground/90">{children}</strong>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
                         ...MD_TABLE_COMPONENTS,
                       }}
                     >
@@ -5025,27 +5025,27 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                   transition={{ duration: 0.2, ease: "easeInOut" }}
                   style={{ overflow: "hidden" }}
                 >
-                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "13px", lineHeight: "1.75" }}>
+                  <div className="px-4 py-3 markdown-body" style={{ fontSize: "15px", lineHeight: "1.9" }}>
                     <RoadmapEnContext.Provider value={isEn}>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         h2: ({ children }) => (
-                          <h2 className="text-[13px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
+                          <h2 className="text-[15px] font-bold text-foreground mt-4 mb-2 first:mt-0 pb-1 border-b border-border/50">
                             {children}
                           </h2>
                         ),
                         p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 text-foreground/75 leading-[1.8]">{children}</p>
+                          <p className="mb-3 last:mb-0 text-foreground/90 leading-[1.9]">{children}</p>
                         ),
                         ul: ({ children }) => <ul className="my-2 pl-0 space-y-1 list-none">{children}</ul>,
                         li: ({ children }) => (
-                          <li className="flex items-start gap-2 text-[12.5px] leading-[1.8] text-foreground/75">
+                          <li className="flex items-start gap-2 text-[14px] leading-[1.9] text-foreground/90">
                             <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-[0.65em]" />
                             <span className="flex-1 min-w-0">{children}</span>
                           </li>
                         ),
-                        strong: ({ children }) => <strong className="font-semibold text-foreground/90">{children}</strong>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
                         ...MD_TABLE_COMPONENTS,
                       }}
                     >
