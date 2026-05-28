@@ -257,6 +257,44 @@ function extractJsonSafe(raw: string): any | null {
   } catch { return null; }
 }
 
+/**
+ * FINAL_VALUATION_DATA JSON을 텍스트에서 robust하게 추출
+ * ─ 기존 regex(\{[\s\S]*?\})는 중첩 JSON에서 첫 번째 }에 멈추는 버그 있음
+ * ─ 이 함수는 문자열 이스케이프를 인식하는 bracket-counting으로 정확한 범위를 찾음
+ */
+function extractFvdJson(text: string): Record<string, any> | null {
+  const keyIdx = text.indexOf("FINAL_VALUATION_DATA");
+  if (keyIdx === -1) return null;
+  const start = text.indexOf("{", keyIdx);
+  if (start === -1) return null;
+
+  // bracket-counting (문자열 내부 괄호 무시)
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (esc) { esc = false; continue; }
+    if (ch === "\\" && inStr) { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        const raw = text.slice(start, i + 1);
+        // 시도 1: 원본 그대로
+        try { return JSON.parse(raw); } catch { /* 계속 */ }
+        // 시도 2: trailing comma + 개행 제거
+        try { return JSON.parse(raw.replace(/,\s*([}\]])/g, "$1").replace(/[\r\n\t]/g, " ")); } catch { /* 계속 */ }
+        // 시도 3: 마지막 수단 — base 숫자만 직접 추출
+        const baseM = raw.match(/"?base"?\s*:\s*([\d.]+)/);
+        if (baseM) return { base: parseFloat(baseM[1]) };
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 /** investment_strategy JSON이 파싱 불가인 경우 복구된 문자열 반환, 이미 정상이면 원본 반환 */
 function repairInvestmentStrategyContent(raw: string): string {
   if (!raw) return raw;
@@ -4773,11 +4811,9 @@ async function executeStep(
         try {
           const rvStep = existingSteps.find(s => s.stepKey === "relative_valuation");
           const rvContent = rvStep?.content ?? "";
-          // 한 줄 / 여러 줄 JSON 형식 모두 대응
-          const fvdMatch = rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[\s\S]*?\})/);
-          const fvdRaw = fvdMatch?.[1] ?? rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
-          if (fvdRaw) {
-            const fvd = JSON.parse(fvdRaw.replace(/[\r\n\t]/g, " "));
+          // bracket-counting 파서로 중첩 JSON 안전 추출 (regex 방식 제거)
+          const fvd = extractFvdJson(rvContent);
+          if (fvd) {
             // investment_strategy 프롬프트 1순위와 동일하게 'base' 필드를 우선 읽음
             // (AI가 {target: X, base: Y} 형태로 출력 시 investment_strategy는 base=Y를 쓰는데
             // tp-inject가 target=X를 읽으면 불일치 발생 → base 우선으로 통일)
@@ -5454,12 +5490,10 @@ async function executeStep(
 
           // ── Round 1 목표주가 앵커 추출 (synthesis 제약용) ──────────────────
           let round1BaseAnchor: number | null = null;
-          const fvdMatch = content.match(/FINAL_VALUATION_DATA\s*[:：]\s*(\{[^}]{10,500}\})/);
-          if (fvdMatch) {
-            try {
-              const fvd = JSON.parse(fvdMatch[1]);
-              if (typeof fvd.base === "number" && fvd.base > 0) round1BaseAnchor = fvd.base;
-            } catch {}
+          const fvdR1 = extractFvdJson(content);
+          if (fvdR1) {
+            const r1base = parseFloat(String(fvdR1.base ?? fvdR1.target ?? fvdR1.target_price ?? "0").replace(/[^0-9.]/g, ""));
+            if (!isNaN(r1base) && r1base > 0) round1BaseAnchor = r1base;
           }
           const anchorConstraintKo = round1BaseAnchor
             ? `\n⚠️ 목표주가 안정성 원칙: Round 1 초안의 적정주가는 ${round1BaseAnchor.toLocaleString()}원입니다. 반론을 반영하더라도 최종 FINAL_VALUATION_DATA의 base 값은 이 수치 대비 ±25% 이내(${Math.round(round1BaseAnchor * 0.75).toLocaleString()}~${Math.round(round1BaseAnchor * 1.25).toLocaleString()}원)에서 조정하세요. 이 범위를 벗어나는 수정은 허용되지 않습니다.`
@@ -5647,10 +5681,9 @@ async function executeStep(
             [id]
           );
           const rvContent: string = rvStepRow[0]?.content ?? "";
-          const fvdMatch = rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[\s\S]*?\})/);
-          const fvdRaw = fvdMatch?.[1] ?? rvContent.match(/FINAL_VALUATION_DATA:\s*(\{[^\n]+\})/)?.[1];
-          if (fvdRaw) {
-            const fvd = JSON.parse(fvdRaw.replace(/[\r\n\t]/g, " "));
+          // bracket-counting 파서 사용 — 중첩 JSON에서 regex 방식(\{[\s\S]*?\})이 첫 }에 멈추는 버그 수정
+          const fvd = extractFvdJson(rvContent);
+          if (fvd) {
             const parsed = parseFloat(String(fvd.base ?? fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
             if (!isNaN(parsed) && parsed > 0) rvBasePrice = parsed;
           }
