@@ -5034,7 +5034,7 @@ async function executeStep(
   }
 
   // ── company_analysis: 이전 동일 종목 실적 전망 수치 앵커 주입 ─────────────
-  // 일관성 확보: 직전 완료 분석의 재무 전망 요약을 참조로 제공
+  // 일관성 확보: 직전 완료 분석의 CHAIN-HANDOFF 구조화 수치 + 추정 재무 모델을 강하게 바인딩
   if (stepKey === "company_analysis") {
     try {
       const prevStepRows = await rawQuery(
@@ -5049,22 +5049,37 @@ async function executeStep(
       if (prevStepRows[0]) {
         const prevContent: string = prevStepRows[0].content ?? "";
         const prevDate = new Date(prevStepRows[0].created_at).toISOString().slice(0, 10);
-        // 핵심 지표 도출 블록 추출 (맨 마지막 부분)
-        const keyMetricsIdx = prevContent.lastIndexOf("밸류에이션을 위한 핵심 지표");
-        const summarySection = keyMetricsIdx !== -1
-          ? prevContent.slice(keyMetricsIdx, keyMetricsIdx + 1500)
-          : prevContent.slice(-1200);
-        // 실적 전망 테이블 추출 (추정 재무 모델 섹션)
-        const forecastIdx = prevContent.indexOf("추정 재무 모델");
+
+        // ① CHAIN-HANDOFF 핵심 지표 섹션 추출 (EPS·EBITDA·매출·영업이익률 등)
+        const chainIdx = prevContent.lastIndexOf("CHAIN-HANDOFF");
+        const chainSection = chainIdx !== -1
+          ? prevContent.slice(chainIdx, chainIdx + 1800)
+          : prevContent.slice(-1500);
+
+        // ② 추정 재무 모델 테이블 추출 (연도별 매출·영업이익·순이익·EPS 수치)
+        const forecastIdx = prevContent.search(/추정\s*재무\s*모델/);
         const forecastSection = forecastIdx !== -1
-          ? prevContent.slice(forecastIdx, forecastIdx + 800)
+          ? prevContent.slice(forecastIdx, forecastIdx + 1400)
           : "";
-        const anchorBlock = `\n\n[📌 ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 실적 전망 앵커]\n`
-          + `⚠️ 아래는 직전 분석에서 산출된 재무 전망 수치입니다. 새로운 분기 데이터나 업황 변화가 없는 한 수치 방향성을 유지하세요. 크게 달라진다면 그 이유를 전망 근거에 명시하세요.\n`
-          + (forecastSection ? forecastSection.slice(0, 600) + "\n" : "")
-          + summarySection.slice(0, 800);
+
+        // ③ 실적 전망 인계 데이터 섹션 추출 (Bottom-up 임팩트 + 시나리오 가정)
+        const handoffIdx = prevContent.lastIndexOf("실적 전망 인계 데이터");
+        const handoffSection = handoffIdx !== -1
+          ? prevContent.slice(handoffIdx, handoffIdx + 1200)
+          : "";
+
+        const anchorBlock = `\n\n[⛔ ${analysis.companyName}(${analysis.ticker}) 직전 분석(${prevDate}) 실적 전망 앵커 — 수치 일관성 강제]\n`
+          + `⛔ 일관성 규칙 (반드시 준수):\n`
+          + `1. 아래 직전 분석 수치에서 주요 지표(매출·영업이익·순이익·EPS)가 ±15% 이상 달라지면 반드시 "전망 수정 근거:" 별도 문단을 작성하세요.\n`
+          + `2. 새로운 분기 실적 발표·공시·업황 변화·컨센서스 대규모 조정 등 명확한 사유 없이 수치의 방향성(성장↔감소)을 역전하지 마세요.\n`
+          + `3. CHAIN-HANDOFF의 Base EPS·EBITDA·영업이익률 수치는 이번 분석의 출발점입니다. 수정 시 근거를 명시하세요.\n`
+          + `4. 이전 분석의 "추정 재무 모델" 테이블의 연도별 수치를 확인하고, 같은 연도 수치가 크게 달라지면 이유를 밝히세요.\n\n`
+          + (forecastSection ? `**[직전 추정 재무 모델]**\n${forecastSection.slice(0, 1200)}\n\n` : "")
+          + (handoffSection ? `**[직전 실적 전망 인계 데이터]**\n${handoffSection.slice(0, 900)}\n\n` : "")
+          + `**[직전 CHAIN-HANDOFF 핵심 지표]**\n${chainSection.slice(0, 1200)}`;
+
         enrichedContext = enrichedContext ? enrichedContext + anchorBlock : anchorBlock;
-        console.log(`[company_analysis] Injected prev forecast anchor from ${prevDate} (${anchorBlock.length} chars)`);
+        console.log(`[company_analysis] prev forecast anchor injected from ${prevDate} — forecastLen=${forecastSection.length} chainLen=${chainSection.length}`);
       }
     } catch {
       // optional — 이전 데이터 없어도 무방
