@@ -28,10 +28,6 @@ interface DiscoverResult {
   stocks: DiscoveredStock[];
 }
 
-type Market = "ALL" | "KR" | "US";
-
-const MARKET_LABELS: Record<Market, string> = { ALL: "전체", KR: "한국", US: "미국" };
-
 export default function ThemesPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -40,7 +36,6 @@ export default function ThemesPage() {
   const [trending, setTrending] = useState<TrendingTheme[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
   const [input, setInput] = useState("");
-  const [market, setMarket] = useState<Market>("ALL");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiscoverResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +61,7 @@ export default function ThemesPage() {
       const r = await fetch(getApiUrl("api/themes/discover"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: theme.trim(), market }),
+        body: JSON.stringify({ theme: theme.trim() }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "오류가 발생했습니다.");
@@ -228,24 +223,6 @@ export default function ThemesPage() {
           </button>
         </div>
 
-        {/* 시장 필터 */}
-        <div className="flex gap-1.5">
-          {(["ALL", "KR", "US"] as Market[]).map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMarket(m)}
-              className={cn(
-                "px-3 py-1 rounded-lg text-xs font-medium border transition-all",
-                market === m
-                  ? "bg-foreground text-background border-foreground"
-                  : "bg-muted/40 text-foreground/60 border-border hover:border-foreground/30"
-              )}
-            >
-              {MARKET_LABELS[m]}
-            </button>
-          ))}
-        </div>
       </form>
 
       {/* 에러 */}
