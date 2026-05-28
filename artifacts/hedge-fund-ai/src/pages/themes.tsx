@@ -217,8 +217,8 @@ export default function ThemesPage() {
                 >
                   <StockLogo
                     ticker={stock.ticker}
-                    market={stock.market === "KR" ? "KR" : "US"}
-                    size={36}
+                    companyName={stock.name}
+                    size="md"
                     className="shrink-0 mt-0.5"
                   />
                   <div className="flex-1 min-w-0">
