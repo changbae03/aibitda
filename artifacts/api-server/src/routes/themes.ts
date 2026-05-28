@@ -45,14 +45,14 @@ function safeParseJson<T>(text: string): T | null {
 }
 
 const FALLBACK_THEMES: TrendingTheme[] = [
-  { id: "ai_semiconductor", name: "AI 반도체",        description: "HBM·패키징·전력반도체 수혜주",            emoji: "🤖" },
-  { id: "k_defense",        name: "K-방산",           description: "글로벌 방산 수출 모멘텀 지속",            emoji: "🛡️" },
-  { id: "shipbuilding",     name: "조선 슈퍼사이클",   description: "LNG·친환경선 수주잔고 사상 최고",          emoji: "🚢" },
-  { id: "value_up",         name: "밸류업 수혜",       description: "자사주 소각·배당 확대 금융·지주사",        emoji: "📈" },
-  { id: "data_center",      name: "데이터센터 전력",   description: "AI 수요로 전력·냉각 인프라 급성장",        emoji: "⚡" },
-  { id: "obesity_drug",     name: "비만치료제",        description: "GLP-1 수요 확대 바이오·CMO 수혜",          emoji: "💊" },
-  { id: "tariff_winner",    name: "관세 수혜주",       description: "미중 무역갈등 속 반사이익 기업",           emoji: "🌐" },
-  { id: "battery_recovery", name: "2차전지 턴어라운드", description: "전기차 수요 회복으로 배터리주 반등",       emoji: "🔋" },
+  { id: "hvdc_transformer",  name: "HVDC·변압기",      description: "데이터센터 전력 병목으로 수주 급증",   emoji: "⚡" },
+  { id: "k_defense_export",  name: "K-방산 수출",      description: "트럼프 후 동맹 재편·수출 계약 급증",  emoji: "🛡️" },
+  { id: "glp1_cmo",          name: "GLP-1 CMO",        description: "비만치료제 공급 부족·CMO 수주 폭증",  emoji: "💊" },
+  { id: "shipbuilding_lng",  name: "조선 LNG선",       description: "LNG 운반선 수주잔고 역대 최고",       emoji: "🚢" },
+  { id: "value_up_bank",     name: "밸류업 금융주",    description: "자사주 소각·배당 확대 정책 수혜",     emoji: "🏦" },
+  { id: "ai_agent_infra",    name: "AI 에이전트 인프라", description: "추론 모델 확산으로 서버·스토리지 수요", emoji: "🤖" },
+  { id: "tariff_reroute",    name: "관세 우회 물류",   description: "미중 관세로 공급망 재편·물류 수혜",   emoji: "🌐" },
+  { id: "battery_solid",     name: "전고체 배터리",    description: "2027 양산 경쟁·소재·장비주 선반영",   emoji: "🔋" },
 ];
 
 router.get("/themes/trending", async (_req, res) => {
@@ -65,9 +65,16 @@ router.get("/themes/trending", async (_req, res) => {
       year: "numeric", month: "long", day: "numeric",
     });
 
-    const prompt = `오늘(${today}) 기준으로 한국·글로벌 주식시장에서 수급이 몰리거나 뉴스에서 부각되는 투자 테마 8개를 선정해주세요.
+    const prompt = `${today} 기준으로 최근 1~3개월간 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰린 테마와 섹터 8개를 선정해주세요.
+
+조건:
+- "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하세요
+- 구체적인 드라이버가 있는 테마여야 합니다 (예: 트럼프 관세 → K-방산 수출 수혜, 데이터센터 전력 부족 → HVDC·변압기, 비만치료제 GLP-1 확산 → CMO·원료의약품)
+- 최근 실적·수주·정책 이슈로 섹터 로테이션이 일어난 경우 우선
+- 한국 코스피·코스닥과 미국 시장을 모두 커버
+
 마크다운 없이 아래 JSON 배열만 출력하세요:
-[{"id":"영문_스네이크","name":"한글 테마명","description":"15자 이내 한 줄 설명","emoji":"이모지"}]`;
+[{"id":"영문_스네이크","name":"한글 테마명(10자 이내)","description":"수급 이유 한 줄(20자 이내)","emoji":"이모지"}]`;
 
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-flash",
