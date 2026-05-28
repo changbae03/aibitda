@@ -376,32 +376,71 @@ router.post("/themes/discover", async (req, res) => {
       });
     }
 
-    // ── STEP 2: Gemini — 종목 발굴 ────────────────────────────────────────
-    const discoverPrompt = `투자 테마: "${trimmed}"
+    // ── STEP 2A: Gemini — 대형·중형주 발굴 (병렬) ────────────────────────
+    const largeCapPrompt = `투자 테마: "${trimmed}"
 
-이 테마의 수혜 상장 주식 6~8개를 선정하세요.
-한국(코스피·코스닥)과 미국(NYSE·NASDAQ) 혼합. 한국 관련 테마면 KR 종목 과반 이상.
+이 테마의 핵심 수혜 상장 주식 4~5개를 선정하세요 (대형주·중형주 위주).
+한국(코스피·코스닥)과 미국(NYSE·NASDAQ) 혼합. 한국 관련 테마면 KR 종목 과반.
 
 ticker 규칙:
-- 한국 주식: 반드시 6자리 숫자 코드 (예: "005930", "079550"). 회사 이름 금지.
-- 미국 주식: NYSE·NASDAQ 심볼 (예: "AAPL", "LMT")
+- 한국: 6자리 숫자 코드만 (예: "079550"). 회사명 금지.
+- 미국: NYSE·NASDAQ 심볼
 
-조건:
-- 테마가 매출의 핵심이거나 관련 기술·파이프라인을 실제 보유한 기업만 포함
-- "간접 수혜 예상", "향후 참여 가능" 같은 추측성 연결고리 절대 금지
+마크다운 없이 JSON만:
+{"theme":"${trimmed}","summary":"한 줄 요약","stocks":[{"ticker":"079550","name":"LIG넥스원","market":"KR","sector":"방산","rationale":"이유"}]}`;
 
-마크다운 없이 아래 JSON만 출력:
-{"theme":"${trimmed}","summary":"테마 한 줄 요약","stocks":[{"ticker":"005930","name":"삼성전자","market":"KR","sector":"반도체","rationale":"이유"}]}`;
+    // ── STEP 2B: Gemini — 소형·스몰캡 전문기업 발굴 (병렬) ──────────────
+    const smallCapPrompt = `투자 테마: "${trimmed}"
+
+이 테마의 소형주·스몰캡 순수전문기업(pure-play) 4~5개를 선정하세요.
+
+【필수 조건】
+• 한국: 코스닥·코스피 시총 3000억원 미만 소형 전문기업 위주
+• 미국: 시총 $2B 미만 pure-play 소형주 포함 가능
+• 삼성·현대·SK·LG·한화·포스코·롯데·GS 계열 대기업 자회사 금지
+• 해당 테마가 매출 또는 핵심 파이프라인의 50% 이상인 기업만
+
+【한국 소형주 종목 예시 (참고용)】
+- 방산 소형주: 스페코(013810), 빅텍(065450), 퍼스텍(010820), 이오시스템(098660), 한일단조(001460)
+- 반도체 소형주: 두산테스나(336260), 오킨스전자(080580), 네오셈(086370), 티씨케이(064760), 하나마이크론(067310)
+- 바이오 소형주: 올리패스(244460), 지씨셀(144510), 강스템바이오텍(217730)
+- 조선 소형주: 세진중공업(075580), 대한조선(016090), 동성화인텍(033500)
+- 배터리 소형주: 나노신소재(121600), 이엔드디(101360), 엔켐(348370)
+
+ticker 규칙:
+- 한국: 6자리 숫자 코드만. 회사명 금지.
+- 미국: NYSE·NASDAQ 심볼
+
+마크다운 없이 JSON만:
+{"stocks":[{"ticker":"013810","name":"스페코","market":"KR","sector":"방산 부품","rationale":"이유"}]}`;
 
     const codeMap = getCorpCodeMap();
 
-    const resp = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: discoverPrompt }] }],
-      config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
-    });
+    const [largeResp, smallResp] = await Promise.all([
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: largeCapPrompt }] }],
+        config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
+      }),
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: smallCapPrompt }] }],
+        config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
+      }),
+    ]);
 
-    const result = safeParseJson<DiscoverResult>(resp.text ?? "");
+    const largePart = safeParseJson<DiscoverResult>(largeResp.text ?? "");
+    const smallPart = safeParseJson<{ stocks: DiscoverResult["stocks"] }>(smallResp.text ?? "");
+    if (!largePart?.stocks?.length) throw new Error("parse fail");
+
+    // 소형주 결과 병합 (중복 ticker 제거)
+    const seenTickers = new Set(largePart.stocks.map(s => s.ticker));
+    const extraSmall = (smallPart?.stocks ?? []).filter(s => !seenTickers.has(s.ticker));
+    const result: DiscoverResult = {
+      ...largePart,
+      stocks: [...largePart.stocks, ...extraSmall],
+    };
+
     if (!result?.stocks?.length) throw new Error("parse fail");
 
     // KR 종목: 6자리 숫자 아닌 ticker는 KRX 이름 검색으로 교정
@@ -428,14 +467,8 @@ ticker 규칙:
       })
     );
 
-    // KR 종목: DART 업종 불일치 제거 (조회 실패 시 폴백 포함)
-    result.stocks = result.stocks.filter(stock => {
-      if (stock.market === "US") return true;
-      if (stock.dartIndustry === undefined) return true;
-      return stock.dartVerified === true;
-    });
-
-    if (!result.stocks.length) throw new Error("no verified stocks");
+    // DART 정보는 표시용 태그로만 사용 — 필터링 없음
+    // (업종 코드 불일치로 유효 종목이 걸러지는 문제 방지)
 
     return res.json(result);
   } catch (e) {
