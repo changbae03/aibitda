@@ -406,20 +406,14 @@ ticker 규칙:
 • 삼성·현대·SK·LG·한화·포스코·롯데·GS 계열 대기업 자회사 금지
 • 해당 테마가 매출 또는 핵심 파이프라인의 50% 이상인 기업만
 • "간접 수혜", "수요 증가 기대", "장기 영향" 같은 연결고리 기업 절대 포함 금지
-
-【한국 소형주 종목 예시 (참고용)】
-- 방산 소형주: 스페코(013810), 빅텍(065450), 퍼스텍(010820), 이오시스템(098660), 한일단조(001460)
-- 반도체 소형주: 두산테스나(336260), 오킨스전자(080580), 네오셈(086370), 티씨케이(064760), 하나마이크론(067310)
-- 바이오 소형주: 올리패스(244460), 지씨셀(144510), 강스템바이오텍(217730)
-- 조선 소형주: 세진중공업(075580), 대한조선(016090), 동성화인텍(033500)
-- 배터리 소형주: 나노신소재(121600), 이엔드디(101360), 엔켐(348370)
+• 한국 소형주는 반드시 해당 테마와 동일 업종의 전문기업만 선정할 것 (바이오 테마 → 바이오/제약 전문기업, 반도체 테마 → 반도체 전문기업)
 
 ticker 규칙:
 - 한국: 6자리 숫자 코드만. 회사명 금지.
 - 미국: NYSE·NASDAQ 심볼
 
 마크다운 없이 JSON만:
-{"stocks":[{"ticker":"013810","name":"스페코","market":"KR","sector":"방산 부품","rationale":"이유"}]}`;
+{"stocks":[{"ticker":"000000","name":"회사명","market":"KR","sector":"섹터","rationale":"이유"}]}`;
 
     const codeMap = getCorpCodeMap();
 
@@ -474,12 +468,41 @@ ticker 규칙:
       })
     );
 
-    // DART 정보는 표시용 태그로만 사용 — 필터링 없음
-    // (업종 코드 불일치로 유효 종목이 걸러지는 문제 방지)
-
-    // 후처리: rationale에 "간접 수혜" 명시된 종목 제거
+    // 후처리 1: rationale에 "간접 수혜" 명시된 종목 제거
     const INDIRECT_PATTERNS = /간접\s*수혜|장기적\s*(으로\s*)?(영향|수혜)|관련\s*산업\s*성장|수요\s*증가\s*기대/;
     result.stocks = result.stocks.filter(s => !INDIRECT_PATTERNS.test(s.rationale ?? ""));
+
+    // 후처리 2: dartIndustry 텍스트 기반 명백 업종 불일치 제거
+    {
+      const BIOTECH_KW   = ["바이오", "제약", "치료제", "glp", "mrna", "백신", "임상", "cmo", "위탁생산"];
+      const SEMI_KW      = ["반도체", "hbm", "메모리", "파운드리", "웨이퍼", "칩"];
+      const SHIP_KW      = ["조선", "선박", "해양"];
+      const AUTO_KW      = ["자동차", "전기차", "ev "];
+      const BATTERY_KW   = ["배터리", "2차전지", "전고체"];
+
+      // 섹터 → 해당 섹터와 어울리지 않는 테마 키워드
+      const BLOCKLIST: Array<{ sectorIncludes: string[]; badThemeKW: string[] }> = [
+        { sectorIncludes: ["반도체", "전자부품", "컴퓨터", "통신장비"],  badThemeKW: BIOTECH_KW },
+        { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기"] },
+        { sectorIncludes: ["조선"],                                    badThemeKW: [...BIOTECH_KW, ...SEMI_KW, ...BATTERY_KW] },
+        { sectorIncludes: ["자동차", "항공"],                           badThemeKW: BIOTECH_KW },
+        { sectorIncludes: ["화학"],                                    badThemeKW: BIOTECH_KW },
+        { sectorIncludes: ["전기장비", "전지", "배터리"],                 badThemeKW: BIOTECH_KW },
+      ];
+
+      const thm = trimmed.toLowerCase();
+      result.stocks = result.stocks.filter(stock => {
+        if (stock.market === "US") return true;
+        const di = (stock.dartIndustry ?? "").toLowerCase();
+        if (!di || di === "기타") return true;
+        for (const rule of BLOCKLIST) {
+          const sectorHit = rule.sectorIncludes.some(s => di.includes(s));
+          const themeHit  = rule.badThemeKW.some(k => thm.includes(k));
+          if (sectorHit && themeHit) return false;
+        }
+        return true;
+      });
+    }
 
     if (!result.stocks.length) throw new Error("no verified stocks");
 
