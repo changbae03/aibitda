@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   Menu, X, Settings, LogIn, LogOut, Bell, Info,
   Sparkles, BookOpen, CalendarDays, BarChart2, LineChart,
-  User, Search, ChevronRight, Download, Share, Briefcase,
+  User, Search, ChevronRight, Download, Share, Briefcase, Lightbulb,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
   ShieldCheck, Shield, Newspaper, Globe,
@@ -98,6 +98,7 @@ const NAV_GROUPS = [
     labelEn: "Company",
     items: [
       { href: "/analysis/new", label: "AI 기업분석",  labelEn: "AI Analysis", Icon: Sparkles },
+      { href: "/themes",       label: "테마 발굴",    labelEn: "Theme Picks", Icon: Lightbulb },
       { href: "/portfolio",    label: "내 포트폴리오", labelEn: "Portfolio",   Icon: Briefcase },
       { href: "/history",      label: "내가 본 자료",  labelEn: "My Reports",  Icon: BookOpen },
       { href: "/popular",      label: "애빛다 통계",   labelEn: "Statistics",  Icon: BarChart2 },

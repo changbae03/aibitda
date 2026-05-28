@@ -39,6 +39,7 @@ const TermsPage        = lazy(() => import("@/pages/terms"));
 const DisclaimerPage   = lazy(() => import("@/pages/disclaimer"));
 const SupportPage      = lazy(() => import("@/pages/support"));
 const NoticesPage      = lazy(() => import("@/pages/notices"));
+const ThemesPage       = lazy(() => import("@/pages/themes"));
 const NotFound         = lazy(() => import("@/pages/not-found"));
 
 // Admin pages — 일반 사용자 접근 없으므로 별도 청크로 완전 분리
@@ -300,6 +301,7 @@ function Router() {
                 <Route path="/disclaimer" component={DisclaimerPage} />
                 <Route path="/support" component={SupportPage} />
                 <Route path="/notices" component={NoticesPage} />
+                <Route path="/themes" component={ThemesPage} />
                 <Route component={NotFound} />
               </Switch>
             </Suspense>
