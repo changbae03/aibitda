@@ -1506,10 +1506,15 @@ function buildResultFromModel(
 
   // ── 갭 구간 연장: makeSeqs 가 포함 못하는 마지막 PRED_H 행을 직접 추가 ──
   // makeSeqs 는 i < feats.length - PRED_H 까지만 순회하므로 최근 PRED_H 영업일이 누락됨.
-  // 각 행에 대해 GBDT 예측을 직접 계산하고, 이용 가능한 최신 종가로 실제 수익률을 근사함.
+  // 각 행에 대해 GBDT 예측을 직접 계산하고, D+3 종가 데이터가 존재하는 경우에만 실제 수익률 포함.
+  // ⚠️ 오늘(KST) 날짜 & D+3 데이터 미존재 구간은 recentPerf 제외 (장중 데이터로 결과를 오인하는 문제 방지)
+  const todayKST_str = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
   const F = feats[0].length;
   for (let i = feats.length - PRED_H; i <= feats.length - 1; i++) {
     if (i < LOOKBACK) continue;
+    const dateLabel = dates[i] ?? `G${i}`;
+    // 오늘(장중) 날짜는 미완성 데이터 — recentPerf에서 제외
+    if (dateLabel === todayKST_str) continue;
     // GBDT 입력 벡터 구성 (makeSeqs 와 동일한 방식)
     const v = new Float64Array(LOOKBACK * F + 1);
     for (let t = 0; t < LOOKBACK; t++)
@@ -1520,20 +1525,20 @@ function buildResultFromModel(
     const rawPred = gbdtModels.map(m => gbdtPredict(m, vn)[0]).reduce((a, b) => a + b, 0) / gbdtModels.length;
     const adjPred = (rawPred - biasThreshold) * calibFactor;
     // 실제 수익률 계산:
-    //   - 3일치 종가가 있으면 PRED_H 기준 수익률
-    //   - 마지막 행(오늘)은 당일 등락률(close[i] / close[i-1] - 1) 사용
+    //   - D+3 종가 존재 → PRED_H 기준 3일 수익률 (가장 정확한 비교)
+    //   - D+3 없고 완료된 거래일 → 당일 등락률(일간) 사용 (근사치, 방향 참고용)
+    //   ✅ 오늘(todayKST_str)은 이미 위에서 skip 처리됨 — 여기서는 완료된 거래일만 남음
     let actual: number;
     const endIdx = i + PRED_H;
     if (endIdx < closes.length) {
       actual = (closes[endIdx] - closes[i]) / closes[i];
     } else if (i > 0) {
-      // 오늘 당일 등락: 이전 종가 대비
       actual = (closes[i] - closes[i - 1]) / closes[i - 1];
     } else {
       continue;
     }
     recentPerf.push({
-      date: dates[i] ?? `G${i}`,
+      date: dateLabel,
       predicted: +(adjPred * 100).toFixed(2),
       actual: +(actual * 100).toFixed(2),
     });
