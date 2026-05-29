@@ -423,11 +423,15 @@ router.post("/themes/discover", async (req, res) => {
 이 테마의 핵심 수혜 상장 주식 6~8개를 선정하세요 (대형주·중형주 위주).
 한국(코스피·코스닥)과 미국(NYSE·NASDAQ) 혼합. 한국 관련 테마면 KR 종목 과반.
 
-【엄격한 선정 기준】
-- 해당 테마가 기업 매출·파이프라인의 핵심(30% 이상)인 기업만 포함
-- "간접 수혜", "장기적 영향", "관련 산업 성장" 같은 연결고리는 제외
-- GLP-1이면 → 노보노디스크·일라이릴리·동아ST처럼 GLP-1 약물을 직접 개발/생산/판매하는 기업만
-- 자동차·반도체·IT 대기업은 바이오 테마에 포함 불가
+【포함 기준 — 아래 조건을 모두 충족해야 포함】
+- 해당 테마 관련 매출·수주·파이프라인이 전체 사업의 30% 이상
+- 기업 스스로 해당 테마 제품·서비스를 직접 생산·판매·개발
+
+【절대 포함 금지】
+- 지주회사(LG·SK·한화 지주 등): 자회사가 수혜여도 지주 본체는 제외
+- 업종 불일치: 방산 테마 → 바이오/제약 불가 / 바이오 테마 → 방산/반도체 불가 / 우주 테마 → 바이오 불가
+- "군 의료", "부품 납품 기대", "관련 시장 성장 수혜" 같은 원거리 연결고리
+- 간접 수혜, 기대감, 중장기 영향 수준의 기업
 
 ticker 규칙:
 - 한국: 6자리 숫자 코드만 (예: "079550"). 회사명 금지.
@@ -441,13 +445,16 @@ ticker 규칙:
 
 이 테마의 소형주·스몰캡 순수전문기업(pure-play) 6~8개를 선정하세요.
 
-【필수 조건】
-• 한국: 코스닥·코스피 시총 3000억원 미만 소형 전문기업 위주
-• 미국: 시총 $2B 미만 pure-play 소형주 포함 가능
-• 삼성·현대·SK·LG·한화·포스코·롯데·GS 계열 대기업 자회사 금지
-• 해당 테마가 매출 또는 핵심 파이프라인의 50% 이상인 기업만
-• "간접 수혜", "수요 증가 기대", "장기 영향" 같은 연결고리 기업 절대 포함 금지
-• 한국 소형주는 반드시 해당 테마와 동일 업종의 전문기업만 선정할 것 (바이오 테마 → 바이오/제약 전문기업, 반도체 테마 → 반도체 전문기업)
+【포함 기준 — 모두 충족 필수】
+• 해당 테마 관련 매출·수주·파이프라인이 전체 사업의 50% 이상
+• 기업 스스로 해당 테마 제품·서비스를 직접 생산·판매·개발
+
+【절대 포함 금지】
+• 대기업(삼성·현대·SK·LG·한화·포스코·롯데·GS) 계열 및 지주회사
+• 업종 불일치 기업 (방산 테마 → 바이오/제약/의료기기 제외, 바이오 테마 → 방산/반도체 제외)
+• "군 의료", "방산 수혜 기대", "관련 시장 확대 수혜" 같은 원거리 연결
+• 간접 수혜·기대감·중장기 가능성 수준
+• 한국: 반드시 해당 테마와 동일 업종 전문기업만 (방산 테마 → 방산 부품·장비 기업만)
 
 ticker 규칙:
 - 한국: 6자리 숫자 코드만. 회사명 금지.
@@ -461,12 +468,15 @@ ticker 규칙:
 
 코스닥·코스피에 상장된 중소형 테마 전문기업 6~8개를 선정하세요 (시총 300억~1조 내외).
 
-【필수 조건】
+【포함 기준 — 모두 충족 필수】
 • 반드시 한국(KR) 상장 종목만 — 미국 종목 금지
-• 해당 테마 관련 매출 또는 수주가 전체 사업의 핵심인 기업
-• 대기업(삼성·현대·SK·LG·한화·포스코·롯데·GS) 계열 제외
-• 위 largeCapPrompt·smallCapPrompt에서 이미 나올 법한 1~2위 대표 종목은 제외하고 덜 알려진 종목 위주로
-• "간접 수혜", "기대감" 수준의 연결고리 기업 제외
+• 해당 테마 관련 매출·수주가 전체 사업의 40% 이상
+• 기업 스스로 해당 테마 제품·서비스를 직접 생산·납품
+
+【절대 포함 금지】
+• 대기업(삼성·현대·SK·LG·한화·포스코·롯데·GS) 계열 및 순수지주회사
+• 업종 불일치: 방산 테마에 바이오·제약·의료기기 기업 불가, 우주 테마에 바이오 불가
+• 간접 수혜·기대감·"고객사 확대 시 수혜 예상" 수준
 • 한국: 6자리 숫자 코드만. 회사명 금지.
 
 마크다운 없이 JSON만:
@@ -689,6 +699,61 @@ ticker 규칙:
         }
         return true;
       });
+    }
+
+    if (!result.stocks.length) throw new Error("no verified stocks");
+
+    // ── STEP 3: AI 최종 관련성 검증 패스 ────────────────────────────────────
+    // 발굴·필터를 통과한 종목들을 Gemini가 한 번 더 검토해 확실한 무관 종목 제거
+    if (result.stocks.length > 0) {
+      try {
+        const stockList = result.stocks
+          .map(s => `- ${s.ticker} ${s.name} (${s.market}, 업종: ${s.sector ?? "미분류"})`)
+          .join("\n");
+
+        const verifyPrompt = `투자 테마: "${trimmed}"
+
+아래 종목들이 이 테마의 "직접 핵심 수혜주"인지 판단하세요.
+
+【keep=true 기준 — 모두 충족해야 함】
+1. 해당 테마 관련 제품·서비스를 기업이 직접 생산·판매·개발
+2. 관련 매출·수주·파이프라인이 전체 사업의 실질적 비중(30% 이상) 차지
+3. 지주회사·자회사 경유 간접 수혜 아님
+4. 업종이 테마와 명백히 어울림 (방산 테마에 바이오/제약 → keep=false)
+
+종목 목록:
+${stockList}
+
+마크다운 없이 JSON 배열만 출력:
+[{"ticker":"079550","keep":true},{"ticker":"000660","keep":false}]`;
+
+        const verifyResp = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: verifyPrompt }] }],
+          config: { temperature: 0.0, thinkingConfig: { thinkingBudget: 0 } },
+        });
+
+        const verdicts = safeParseJson<Array<{ ticker: string; keep: boolean }>>(verifyResp.text ?? "");
+        if (verdicts && Array.isArray(verdicts)) {
+          const keepSet = new Set(
+            verdicts.filter(v => v.keep !== false).map(v => v.ticker)
+          );
+          const removedSet = new Set(
+            verdicts.filter(v => v.keep === false).map(v => v.ticker)
+          );
+          // 검증 결과에 없는 티커는 통과 (안전)
+          result.stocks = result.stocks.filter(s => {
+            if (removedSet.has(s.ticker)) {
+              console.log(`[themes] AI 검증 탈락 → 제거: ${s.ticker} ${s.name}`);
+              return false;
+            }
+            return true;
+          });
+          console.log(`[themes] AI 검증 완료 — 유지: ${keepSet.size}, 제거: ${removedSet.size}`);
+        }
+      } catch (e: any) {
+        console.warn("[themes] AI 검증 패스 실패 (건너뜀):", e?.message);
+      }
     }
 
     if (!result.stocks.length) throw new Error("no verified stocks");
