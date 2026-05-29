@@ -559,6 +559,16 @@ ticker 규칙:
         }
         return false;
       }
+      // 티커 교정 전용: 더 엄격한 매칭 (includes 관계만, 최소 3자 이상)
+      function namesSimilarStrict(a: string, b: string): boolean {
+        const na = normName(a);
+        const nb = normName(b);
+        if (!na || !nb) return false;
+        const shorter = na.length <= nb.length ? na : nb;
+        const longer  = na.length <= nb.length ? nb : na;
+        if (shorter.length < 3) return false; // 2자 이하 짧은 이름은 교정 불가
+        return longer.includes(shorter);
+      }
 
       const toRemove = new Set<string>();
       for (const stock of result.stocks) {
@@ -581,12 +591,23 @@ ticker 규칙:
 
             // 검증 A: Gemini 이름 ↔ KRX 실명 유사도
             if (!namesSimilar(geminiName, krxEntry.name)) {
-              console.log(
-                `[themes] 티커 불일치(이름) → 제거: ${stock.ticker}` +
-                ` Gemini="${geminiName}" KRX="${krxEntry.name}"`
-              );
-              toRemove.add(stock.ticker);
-              continue;
+              // 코드가 틀렸지만 이름은 맞을 수 있음 → 이름으로 KRX 재탐색 (엄격한 매칭)
+              const byName = krxCache.find(s => namesSimilarStrict(s.name, geminiName));
+              if (byName && byName.code !== stock.ticker) {
+                console.log(
+                  `[themes] 티커 교정: ${stock.ticker}(${geminiName}) → ${byName.code}(${byName.name})`
+                );
+                stock.ticker = byName.code;
+                stock.name = byName.name;
+                // 교정 성공 → 계속 진행 (제거 안 함)
+              } else {
+                console.log(
+                  `[themes] 티커 불일치(이름) → 제거: ${stock.ticker}` +
+                  ` Gemini="${geminiName}" KRX="${krxEntry.name}"`
+                );
+                toRemove.add(stock.ticker);
+                continue;
+              }
             }
 
             // 검증 B: 라셔널에 실제 회사명(KRX)이 없고 다른 회사명이 주어로 쓰이면 할루시네이션
@@ -615,6 +636,16 @@ ticker 규칙:
       if (toRemove.size) {
         result.stocks = result.stocks.filter(s => !toRemove.has(s.ticker));
       }
+      // 교정 후 중복 ticker 제거 (동일 코드로 교정된 여러 종목 → 첫 번째만 유지)
+      const seenTickers = new Set<string>();
+      result.stocks = result.stocks.filter(s => {
+        if (seenTickers.has(s.ticker)) {
+          console.log(`[themes] 중복 ticker 제거: ${s.ticker} (${s.name})`);
+          return false;
+        }
+        seenTickers.add(s.ticker);
+        return true;
+      });
     }
 
     // KR 종목: DART 업종코드 조회 (병렬)
@@ -737,6 +768,7 @@ B) 일반 테마 (예: "K-방산", "전고체 배터리"):
 【항상 keep=false】
 - 지주회사 본체 (자회사가 수혜여도 지주 자체 제외)
 - 테마 산업과 업종이 완전히 다른 기업 (방산 테마의 순수 바이오/제약사 등)
+- 파산·운영중단·사실상 상장폐지 기업 (예: Virgin Galactic SPCE 파산, Astra Space ASTR 발사중단, ABL Space 폐업, Momentus MNTS 파산 등)
 
 종목 목록:
 ${stockList}
