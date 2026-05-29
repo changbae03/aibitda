@@ -727,6 +727,15 @@ function IndexChart({ result, predHistory = [] }: { result: IndexResult; predHis
 const KRX_H_FE = new Set(["2025-01-01","2025-01-28","2025-01-29","2025-01-30","2025-05-05","2025-05-06","2025-06-06","2025-08-15","2025-10-03","2025-10-06","2025-10-07","2025-10-09","2025-12-25","2025-12-31","2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-03-02","2026-05-05","2026-05-25","2026-10-09","2026-12-25","2026-12-31","2027-01-01","2027-02-06","2027-02-07","2027-02-08","2027-03-01","2027-05-05","2027-06-06","2027-08-16","2027-10-04","2027-10-05","2027-10-06","2027-10-11","2027-12-24","2027-12-31"]);
 const NYSE_H_FE = new Set(["2025-01-01","2025-01-20","2025-02-17","2025-04-18","2025-05-26","2025-06-19","2025-07-04","2025-09-01","2025-11-27","2025-12-25","2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25","2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24"]);
 
+function todayKST(): string {
+  return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+}
+
+function formatMD(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
 function nextTradingDays(fromDateStr: string, count: number, symbol = ""): string[] {
   const isUS = symbol && !symbol.endsWith(".KS") && !symbol.endsWith(".KQ") && !/^\d{6}$/.test(symbol);
   const holidays = isUS ? NYSE_H_FE : KRX_H_FE;
@@ -1142,6 +1151,7 @@ export default function MarketAnalysis() {
                   const d2 = data.predictedReturn2d ?? +(data.predictedReturn3d * 2 / 3).toFixed(2);
                   const d3 = data.predictedReturn3d;
                   const up3 = d3 >= 0;
+                  const tradingDates = nextTradingDays(todayKST(), 3, data.symbol);
                   return (
                     <button
                       key={id}
@@ -1161,9 +1171,9 @@ export default function MarketAnalysis() {
                         {data.currentValue.toLocaleString()}
                       </div>
                       <div className="flex items-center gap-2 text-[11px]">
-                        {([["D+1", d1], ["D+2", d2], ["D+3", d3]] as [string, number][]).map(([label, val]) => (
+                        {([["D+1", d1, 0], ["D+2", d2, 1], ["D+3", d3, 2]] as [string, number, number][]).map(([label, val, i]) => (
                           <span key={label} className={cn("font-semibold", val >= 0 ? "text-red-400" : "text-blue-400")}>
-                            {label} {val >= 0 ? "+" : ""}{val}%
+                            <span className="text-muted-foreground/50 font-normal">{formatMD(tradingDates[i])} </span>{val >= 0 ? "+" : ""}{val}%
                           </span>
                         ))}
                       </div>
@@ -1245,13 +1255,16 @@ export default function MarketAnalysis() {
                     <span>AI 단기 예측 (D+1 · D+2 · D+3)</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    {([
-                      { label: "D+1 (내일)", val: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2) },
-                      { label: "D+2 (모레)", val: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2) },
-                      { label: "D+3 (3일 후)", val: current.predictedReturn3d },
-                    ]).map(({ label, val }) => (
-                      <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-background/60 border border-border/60">
-                        <span className="text-[10px] text-muted-foreground/60 font-medium">{label}</span>
+                    {(() => {
+                      const dates = nextTradingDays(todayKST(), 3, current.symbol);
+                      return ([
+                        { label: "D+1", date: dates[0], val: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2) },
+                        { label: "D+2", date: dates[1], val: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2) },
+                        { label: "D+3", date: dates[2], val: current.predictedReturn3d },
+                      ]).map(({ label, date, val }) => (
+                        <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-background/60 border border-border/60">
+                          <span className="text-[10px] text-muted-foreground/60 font-medium">{label}</span>
+                          <span className="text-[10px] text-muted-foreground/40 font-medium -mt-0.5">{formatMD(date)}</span>
                         <span className={cn(
                           "text-xl font-bold",
                           val >= 0 ? "text-red-400" : "text-blue-400",
@@ -1262,7 +1275,8 @@ export default function MarketAnalysis() {
                           {val >= 0 ? "▲ 상승" : "▼ 하락"}
                         </span>
                       </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
