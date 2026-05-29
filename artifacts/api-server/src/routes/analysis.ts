@@ -3697,6 +3697,17 @@ const POPULAR_CACHE_KEY = "popular_feed";
 const POPULAR_TTL_MS    = 5 * 60 * 1000;
 let _popularCache: { data: any; ts: number } | null = null;
 
+// QA/피어 컬럼 초기화 — 서버 기동 후 최초 1회만 실행 (pool 낭비 방지)
+let _qaPeerColumnsReady = false;
+async function ensureQaPeerColumns(): Promise<void> {
+  if (_qaPeerColumnsReady) return;
+  await Promise.all([
+    pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS qa_score INTEGER, ADD COLUMN IF NOT EXISTS qa_flags TEXT`),
+    pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS peer_flags TEXT`),
+  ]);
+  _qaPeerColumnsReady = true;
+}
+
 router.get("/popular", async (_req, res) => {
   if (_popularCache && Date.now() - _popularCache.ts < POPULAR_TTL_MS) {
     res.setHeader("X-Cache", "HIT");
@@ -4846,10 +4857,13 @@ async function executeStep(
               const upPct = ((valRatio - 1) * 100).toFixed(1);
               const priceUnit = isKRtk ? "원" : "달러(USD)";
               const fmtTp = (n: number) => isKRtk ? `${n.toLocaleString()}원` : `$${n.toLocaleString()}`;
+              const originalRatio = sp > 0 ? originalTp / sp : 1;
               const correctionNote = medianCorrected
                 ? `※ 밸류에이션 섹션의 AI 산출값 ${fmtTp(Math.round(originalTp))}이 과거 분석 중앙값 대비 편차 과다로 ${fmtTp(validated)}으로 서버 보정됨. 최종 결론의 적정주가는 반드시 ${fmtTp(validated)}을 사용할 것. 밸류에이션 섹션 수치와 다를 수 있으나 이 지시를 따를 것.\n`
                 : ratioCorrected
-                  ? `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 합리성 한도(현재가 대비 ${MIN_R}x~${MAX_R}x) 초과로 ${fmtTp(validated)}으로 자동 보정됨\n`
+                  ? (originalRatio < 0.1
+                      ? `⚠️ 재무 데이터 미확보 경고: AI가 산출한 적정주가 ${fmtTp(Math.round(originalTp))}(현재가의 ${(originalRatio * 100).toFixed(1)}%)는 DART 재무 데이터 부재로 인한 오산출로 판단됨. 서버가 하한선(현재가 × ${MIN_R})인 ${fmtTp(validated)}으로 기계적 보정. 이 목표주가는 AI 밸류에이션이 아닌 최소 안전값이므로 실제 적정주가 도출을 위해 반드시 재무제표 기반 DCF/멀티플 분석을 수행할 것.\n`
+                      : `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 합리성 한도(현재가 대비 ${MIN_R}x~${MAX_R}x) 초과로 ${fmtTp(validated)}으로 자동 보정됨\n`)
                   : "";
               const tpBlock = `\n\n[⛔ 밸류에이션 확정 목표주가 — 보고서 전체 일관성 필수]\n`
                 + `현재가(분석 시작 기준): ${fmtTp(sp)}\n`
@@ -5738,6 +5752,11 @@ async function executeStep(
               console.warn(
                 `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (<${TARGET_MIN_RATIO}x ${isKR ? "KR" : "US"} floor) — raised to ${floored}`
               );
+              if (tRatio < 0.1) {
+                console.error(
+                  `[analysis ${id}] DART 재무 부재 의심: AI target ${targetPrice}원은 현재가의 ${(tRatio * 100).toFixed(1)}% — 재무 데이터 없이 오산출된 것으로 판단. 기계적 floor(${floored})로 대체됨`
+                );
+              }
               targetPrice = floored;
             }
           }
@@ -5867,11 +5886,8 @@ async function executeStep(
       // 순서: ① 피어검증 & QA 병렬 → ② 둘 다 완료 후 보정메모 생성
       (async () => {
         try {
-          // 필요한 컬럼 추가 (병렬)
-          await Promise.all([
-            pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS qa_score INTEGER, ADD COLUMN IF NOT EXISTS qa_flags TEXT`),
-            pool.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS peer_flags TEXT`),
-          ]);
+          // 필요한 컬럼 추가 — 서버 기동 후 최초 1회만 실행 (pool 낭비 방지)
+          await ensureQaPeerColumns();
 
           // ① 피어 검증 + QA 채점 데이터 로드 병렬 실행
           const [pvRes, aRes, sRes] = await Promise.all([

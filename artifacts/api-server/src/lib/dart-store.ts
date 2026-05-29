@@ -55,10 +55,40 @@ async function ensureTable(): Promise<void> {
 }
 
 // ─── DART corp_code 조회 ─────────────────────────────────────────────────────
+// 우선순위: ① system_cache(themes.ts가 3967개 XML 로드 후 저장) → ② ticker_financials DB → ③ DART API 직접
 
 async function lookupCorpCode(stockCode: string): Promise<string | null> {
   const key = process.env["DART_API_KEY"];
   if (!key) return null;
+
+  // 1순위: system_cache의 dart_corp_code_map_v1 (themes.ts가 주기적으로 3967개 갱신)
+  try {
+    const r = await pool.query<{ data: string }>(
+      `SELECT data FROM system_cache WHERE key = 'dart_corp_code_map_v1' AND expires_at > NOW() LIMIT 1`
+    );
+    if (r.rows[0]?.data) {
+      const map = JSON.parse(r.rows[0].data) as Record<string, string>;
+      const found = map[stockCode];
+      if (found) {
+        console.log(`[dart-store] ${stockCode} corp_code=${found} (system_cache)`);
+        return found;
+      }
+    }
+  } catch { /* fallthrough */ }
+
+  // 2순위: ticker_financials에 이미 저장된 corp_code
+  try {
+    const r = await pool.query<{ corp_code: string }>(
+      `SELECT DISTINCT corp_code FROM ticker_financials WHERE ticker = $1 LIMIT 1`,
+      [stockCode]
+    );
+    if (r.rows[0]?.corp_code) {
+      console.log(`[dart-store] ${stockCode} corp_code=${r.rows[0].corp_code} (ticker_financials)`);
+      return r.rows[0].corp_code;
+    }
+  } catch { /* fallthrough */ }
+
+  // 3순위: DART OpenAPI 직접 조회 (네트워크 실패 가능)
   try {
     const res = await fetch(
       `https://opendart.fss.or.kr/api/company.json?crtfc_key=${key}&stock_code=${stockCode}`,
