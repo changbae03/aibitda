@@ -315,6 +315,7 @@ const FALLBACK_THEMES: TrendingTheme[] = [
   { id: "hvdc_transformer",  name: "HVDC·변압기",      description: "데이터센터 전력 병목으로 수주 급증",   emoji: "⚡" },
   { id: "k_defense_export",  name: "K-방산 수출",      description: "트럼프 후 동맹 재편·수출 계약 급증",  emoji: "🛡️" },
   { id: "glp1_cmo",          name: "GLP-1 CMO",        description: "비만치료제 공급 부족·CMO 수주 폭증",  emoji: "💊" },
+  { id: "spacex_related",    name: "스페이스X 관련주", description: "발사체·위성망 수혜 부품·장비 공급사", emoji: "🚀" },
   { id: "shipbuilding_lng",  name: "조선 LNG선",       description: "LNG 운반선 수주잔고 역대 최고",       emoji: "🚢" },
   { id: "value_up_bank",     name: "밸류업 금융주",    description: "자사주 소각·배당 확대 정책 수혜",     emoji: "🏦" },
   { id: "ai_agent_infra",    name: "AI 에이전트 인프라", description: "추론 모델 확산으로 서버·스토리지 수요", emoji: "🤖" },
@@ -397,8 +398,10 @@ router.post("/themes/discover", async (req, res) => {
     // ── STEP 1: Gemini — 투자 테마 여부 최종 검증 ───────────────────────────
     const validationPrompt = `다음 입력이 주식 투자 테마인지 판단하세요. JSON만 출력하세요.
 
-투자 테마란: 여러 기업이 수혜를 받는 섹터·산업·정책·기술 흐름입니다 (예: "K-방산", "AI 반도체", "금리 인하 수혜").
-투자 테마가 아닌 것: 사람 이름, 단독 기업명, 단독 국가명, 의미 없는 단어.
+투자 테마란: 여러 기업이 수혜를 받는 섹터·산업·정책·기술 흐름입니다.
+예시(valid=true): "K-방산", "AI 반도체", "금리 인하 수혜", "스페이스X 관련주", "엔비디아 협력사", "테슬라 부품주"
+  → "[비상장·대형사] 관련주/협력사/부품주" 형태는 공개 수혜 기업을 발굴하는 투자 테마로 valid=true
+투자 테마가 아닌 것: 단순 사람 이름, 단독 국가명, 의미 없는 단어, 욕설
 
 입력: "${trimmed}"
 출력 형식: {"valid":true} 또는 {"valid":false,"reason":"한 문장 이유"}`;
@@ -422,6 +425,10 @@ router.post("/themes/discover", async (req, res) => {
 
 이 테마의 핵심 수혜 상장 주식 6~8개를 선정하세요 (대형주·중형주 위주).
 한국(코스피·코스닥)과 미국(NYSE·NASDAQ) 혼합. 한국 관련 테마면 KR 종목 과반.
+
+※ 테마가 "스페이스X 관련주", "엔비디아 협력사", "테슬라 부품주" 등 비상장·대형사 관련주 형태인 경우:
+   해당 기업에 부품·기술·서비스를 실제 납품하거나 핵심 협력 관계인 상장사를 찾으세요.
+   추측·기대 수준이 아닌 실제 계약·납품 이력이 있는 기업 우선.
 
 【포함 기준 — 아래 조건을 모두 충족해야 포함】
 - 해당 테마 관련 매출·수주·파이프라인이 전체 사업의 30% 이상
