@@ -441,11 +441,11 @@ router.post("/themes/discover", async (req, res) => {
 - 간접 수혜, 기대감, 중장기 영향 수준의 기업
 
 ticker 규칙:
-- 한국: 6자리 숫자 코드만 (예: "079550"). 회사명 금지.
-- 미국: NYSE·NASDAQ 심볼
+- 한국(KR): ticker 필드에 한국어 회사명을 그대로 입력 (예: "LIG넥스원"). 절대 숫자 코드 금지.
+- 미국: NYSE·NASDAQ 심볼 (예: "RKLB")
 
 마크다운 없이 JSON만:
-{"theme":"${trimmed}","summary":"한 줄 요약","stocks":[{"ticker":"079550","name":"LIG넥스원","market":"KR","sector":"방산","rationale":"이유"}]}`;
+{"theme":"${trimmed}","summary":"한 줄 요약","stocks":[{"ticker":"LIG넥스원","name":"LIG넥스원","market":"KR","sector":"방산","rationale":"이유"}]}`;
 
     // ── STEP 2B: Gemini — 소형·스몰캡 전문기업 발굴 (병렬) ──────────────
     const smallCapPrompt = `투자 테마: "${trimmed}"
@@ -464,11 +464,11 @@ ticker 규칙:
 • 한국: 반드시 해당 테마와 동일 업종 전문기업만 (방산 테마 → 방산 부품·장비 기업만)
 
 ticker 규칙:
-- 한국: 6자리 숫자 코드만. 회사명 금지.
+- 한국(KR): ticker 필드에 한국어 회사명을 그대로 입력 (예: "에코프로비엠"). 절대 숫자 코드 금지.
 - 미국: NYSE·NASDAQ 심볼
 
 마크다운 없이 JSON만:
-{"stocks":[{"ticker":"000000","name":"회사명","market":"KR","sector":"섹터","rationale":"이유"}]}`;
+{"stocks":[{"ticker":"에코프로비엠","name":"에코프로비엠","market":"KR","sector":"2차전지","rationale":"이유"}]}`;
 
     // ── STEP 2C: Gemini — 코스닥 중소형 전문기업 발굴 (병렬) ──────────────
     const midCapKRPrompt = `투자 테마: "${trimmed}"
@@ -484,10 +484,13 @@ ticker 규칙:
 • 대기업(삼성·현대·SK·LG·한화·포스코·롯데·GS) 계열 및 순수지주회사
 • 업종 불일치: 방산 테마에 바이오·제약·의료기기 기업 불가, 우주 테마에 바이오 불가
 • 간접 수혜·기대감·"고객사 확대 시 수혜 예상" 수준
-• 한국: 6자리 숫자 코드만. 회사명 금지.
+
+ticker 규칙:
+- 한국(KR): ticker 필드에 한국어 회사명을 그대로 입력 (예: "쎄트렉아이"). 절대 숫자 코드 금지.
+- 미국 종목은 이 배치에 포함 금지.
 
 마크다운 없이 JSON만:
-{"stocks":[{"ticker":"000000","name":"회사명","market":"KR","sector":"섹터","rationale":"이유"}]}`;
+{"stocks":[{"ticker":"쎄트렉아이","name":"쎄트렉아이","market":"KR","sector":"위성","rationale":"이유"}]}`;
 
     const codeMap = getCorpCodeMap();
 
@@ -559,14 +562,15 @@ ticker 규칙:
         }
         return false;
       }
-      // 티커 교정 전용: 더 엄격한 매칭 (includes 관계만, 최소 3자 이상)
+      // 이름→코드 매핑 전용: 정확 일치 or 명확한 포함 관계만 허용 (최소 3자)
       function namesSimilarStrict(a: string, b: string): boolean {
         const na = normName(a);
         const nb = normName(b);
         if (!na || !nb) return false;
+        if (na === nb) return true; // 정확 일치 (길이 무관)
         const shorter = na.length <= nb.length ? na : nb;
         const longer  = na.length <= nb.length ? nb : na;
-        if (shorter.length < 3) return false; // 2자 이하 짧은 이름은 교정 불가
+        if (shorter.length < 3) return false; // 2자 이하 짧은 이름은 부분 매칭 불가
         return longer.includes(shorter);
       }
 
@@ -575,13 +579,19 @@ ticker 규칙:
         if (stock.market !== "KR") continue;
 
         if (!/^\d{6}$/.test(stock.ticker)) {
-          // ① 비-6자리: 이름으로 티커 탐색
-          const found = krxCache.find(s =>
-            s.name.replace(/\s|\(주\)|주식회사\s*/g, "").includes(stock.ticker.replace(/\s/g, "")) ||
-            stock.ticker.replace(/\s/g, "").includes(s.name.replace(/\s|\(주\)|주식회사\s*/g, ""))
-          );
-          if (found) { stock.ticker = found.code; stock.name = found.name; }
-          else { stock.market = "US"; }
+          // ① 비-6자리: Gemini가 회사명을 ticker에 넣은 경우 → KRX 이름으로 매핑
+          // namesSimilarStrict(엄격) → 포함 관계만 허용, 3자 이상
+          const geminiName = stock.name || stock.ticker;
+          const found = krxCache.find(s => namesSimilarStrict(s.name, geminiName));
+          if (found) {
+            console.log(`[themes] 이름→코드 매핑: "${geminiName}" → ${found.code}(${found.name})`);
+            stock.ticker = found.code;
+            stock.name   = found.name;
+          } else {
+            console.log(`[themes] KRX 미매핑 → 제거: "${geminiName}"`);
+            toRemove.add(stock.ticker);
+            continue;
+          }
         } else {
           // ② 6자리: KRX 실명 조회 후 교체·불일치 필터
           const krxEntry = krxCache.find(s => s.code === stock.ticker);
