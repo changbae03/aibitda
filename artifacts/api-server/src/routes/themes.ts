@@ -611,9 +611,18 @@ ticker 규칙:
       });
     }
 
-    // 후처리 1: rationale에 "간접 수혜" 명시된 종목 제거
+    // 후처리 1: rationale에 "간접 수혜" 또는 "연관 없음·제외" 명시된 종목 제거
     const INDIRECT_PATTERNS = /간접\s*수혜|장기적\s*(으로\s*)?(영향|수혜)|관련\s*산업\s*성장|수요\s*증가\s*기대/;
-    result.stocks = result.stocks.filter(s => !INDIRECT_PATTERNS.test(s.rationale ?? ""));
+    const NO_RELATION_PATTERNS = /연관성이\s*없|관련(이|성이)\s*없|직접적인\s*관련\s*없|테마와\s*무관|제외됩니다|제외\s*대상|수혜\s*종목이\s*아니/;
+    result.stocks = result.stocks.filter(s => {
+      const rat = s.rationale ?? "";
+      if (INDIRECT_PATTERNS.test(rat)) return false;
+      if (NO_RELATION_PATTERNS.test(rat)) {
+        console.log(`[themes] rationale 무관 명시 → 제거: ${s.ticker} ${s.name}`);
+        return false;
+      }
+      return true;
+    });
 
     // 후처리 2: dartIndustry 텍스트 기반 명백 업종 불일치 제거
     {
@@ -626,7 +635,7 @@ ticker 규칙:
       // 섹터 → 해당 섹터와 어울리지 않는 테마 키워드
       const BLOCKLIST: Array<{ sectorIncludes: string[]; badThemeKW: string[] }> = [
         { sectorIncludes: ["반도체", "전자부품", "컴퓨터", "통신장비"],  badThemeKW: BIOTECH_KW },
-        { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기", "전력", "인프라", "데이터센터", "ai 전력"] },
+        { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기", "전력", "인프라", "데이터센터", "ai 전력", "우주", "위성", "발사체", "항공우주", "로켓"] },
         { sectorIncludes: ["조선"],                                    badThemeKW: [...BIOTECH_KW, ...SEMI_KW, ...BATTERY_KW] },
         { sectorIncludes: ["자동차", "항공"],                           badThemeKW: BIOTECH_KW },
         { sectorIncludes: ["화학"],                                    badThemeKW: BIOTECH_KW },
