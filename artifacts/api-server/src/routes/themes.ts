@@ -395,6 +395,20 @@ router.post("/themes/discover", async (req, res) => {
       });
     }
 
+    // ── CACHE CHECK: 동일 테마 1시간 캐시 (Gemini 호출 4회 절약) ────────────
+    const THEME_CACHE_TTL = 60 * 60 * 1000; // 1시간
+    const themeCacheKey = `themes_discover_v2_${trimmed.toLowerCase().replace(/\s+/g, "_")}`;
+    try {
+      const cached = await pool.query(
+        `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+        [themeCacheKey]
+      );
+      if (cached.rows.length) {
+        console.log(`[themes] 캐시 히트: "${trimmed}"`);
+        return res.json(JSON.parse(cached.rows[0].data));
+      }
+    } catch (_) { /* 캐시 미스 시 정상 진행 */ }
+
     // ── STEP 1: Gemini — 투자 테마 여부 최종 검증 ───────────────────────────
     const validationPrompt = `다음 입력이 주식 투자 테마인지 판단하세요. JSON만 출력하세요.
 
@@ -838,6 +852,20 @@ ${stockList}
     }
 
     if (!result.stocks.length) throw new Error("no verified stocks");
+
+    // ── CACHE SAVE ──────────────────────────────────────────────────────────
+    try {
+      const expiresAt = new Date(Date.now() + THEME_CACHE_TTL);
+      await pool.query(
+        `INSERT INTO system_cache (key, data, expires_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (key) DO UPDATE SET data = $2, expires_at = $3`,
+        [themeCacheKey, JSON.stringify(result), expiresAt]
+      );
+      console.log(`[themes] 캐시 저장: "${trimmed}" (1시간)`);
+    } catch (e: any) {
+      console.warn("[themes] 캐시 저장 실패 (무시):", e?.message);
+    }
 
     return res.json(result);
   } catch (e) {
