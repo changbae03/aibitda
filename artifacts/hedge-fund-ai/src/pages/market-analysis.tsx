@@ -724,13 +724,28 @@ function IndexChart({ result, predHistory = [] }: { result: IndexResult; predHis
 }
 
 /* ── 예측 vs 실제 비교 차트 ──────────────────────────────────────────────── */
+const KRX_HOLIDAYS_FE = new Set([
+  "2025-01-01","2025-01-28","2025-01-29","2025-01-30",
+  "2025-05-05","2025-05-06","2025-06-06","2025-08-15",
+  "2025-10-03","2025-10-06","2025-10-07","2025-10-09",
+  "2025-12-25","2025-12-31",
+  "2026-01-01","2026-02-16","2026-02-17","2026-02-18",
+  "2026-03-02","2026-05-05","2026-05-25",
+  "2026-10-09","2026-12-25","2026-12-31",
+  "2027-01-01","2027-02-06","2027-02-07","2027-02-08",
+  "2027-03-01","2027-05-05","2027-06-06","2027-08-16",
+  "2027-10-04","2027-10-05","2027-10-06","2027-10-11",
+  "2027-12-24","2027-12-31",
+]);
+
 function nextTradingDays(fromDateStr: string, count: number): string[] {
   const result: string[] = [];
   const d = new Date(fromDateStr);
   while (result.length < count) {
     d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) {
-      result.push(d.toISOString().slice(0, 10));
+    const ds = d.toISOString().slice(0, 10);
+    if (d.getDay() !== 0 && d.getDay() !== 6 && !KRX_HOLIDAYS_FE.has(ds)) {
+      result.push(ds);
     }
   }
   return result;

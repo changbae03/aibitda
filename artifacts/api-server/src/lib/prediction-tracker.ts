@@ -74,6 +74,29 @@ export async function initPredictionTable(): Promise<void> {
   `).catch(() => {});
 }
 
+// ─── KRX 공휴일 목록 (주말 외 평일 공휴일) ────────────────────────────────────
+const KRX_HOLIDAYS = new Set([
+  // 2025
+  "2025-01-01","2025-01-28","2025-01-29","2025-01-30",
+  "2025-05-05","2025-05-06","2025-06-06","2025-08-15",
+  "2025-10-03","2025-10-06","2025-10-07","2025-10-09",
+  "2025-12-25","2025-12-31",
+  // 2026
+  "2026-01-01","2026-02-16","2026-02-17","2026-02-18",
+  "2026-03-02","2026-05-05","2026-05-25",
+  "2026-10-09","2026-12-25","2026-12-31",
+  // 2027
+  "2027-01-01","2027-02-06","2027-02-07","2027-02-08",
+  "2027-03-01","2027-05-05","2027-06-06","2027-08-16",
+  "2027-10-04","2027-10-05","2027-10-06","2027-10-11",
+  "2027-12-24","2027-12-31",
+]);
+
+function isKRXTradingDay(ds: string): boolean {
+  const dow = new Date(ds + "T12:00:00Z").getUTCDay();
+  return dow !== 0 && dow !== 6 && !KRX_HOLIDAYS.has(ds);
+}
+
 // ─── 헬퍼 ──────────────────────────────────────────────────────────────────────
 
 function addTradingDays(dateStr: string, days: number): string {
@@ -81,8 +104,8 @@ function addTradingDays(dateStr: string, days: number): string {
   let added = 0;
   while (added < days) {
     d.setUTCDate(d.getUTCDate() + 1);
-    const dow = d.getUTCDay();
-    if (dow !== 0 && dow !== 6) added++;
+    const ds = d.toISOString().slice(0, 10);
+    if (isKRXTradingDay(ds)) added++;
   }
   return d.toISOString().slice(0, 10);
 }
