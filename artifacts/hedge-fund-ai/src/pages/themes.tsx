@@ -326,57 +326,66 @@ export default function ThemesPage() {
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:border-[#FF8A7A]/30 transition-all group"
+                  className="flex flex-col gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-[#FF8A7A]/30 transition-all group"
                 >
-                  <StockLogo
-                    ticker={stock.ticker}
-                    companyName={stock.name}
-                    size="md"
-                    className="shrink-0 mt-0.5"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-foreground">{stock.name}</span>
-                      <span className="text-xs text-foreground/40 font-mono">{stock.ticker}</span>
-                      <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded font-medium",
-                        stock.market === "KR"
-                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                          : "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
-                      )}>
-                        {stock.market}
-                      </span>
-                      {stock.sector && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-foreground/50">
-                          {stock.sector}
+                  {/* 상단: 로고 + 이름·티커·배지 */}
+                  <div className="flex items-start gap-3">
+                    <StockLogo
+                      ticker={stock.ticker}
+                      companyName={stock.name}
+                      size="md"
+                      className="shrink-0 mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-sm text-foreground">{stock.name}</span>
+                        <span className="text-xs text-foreground/35 font-mono">{stock.ticker}</span>
+                        <span className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                          stock.market === "KR"
+                            ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                            : "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                        )}>
+                          {stock.market}
                         </span>
-                      )}
-                      {stock.dartVerified && (
-                        <span
-                          title={stock.dartIndustry ? `DART 등록 업종: ${stock.dartIndustry}` : "DART 사업보고서에서 관련 업종 확인됨"}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium cursor-help"
-                        >
-                          📋 {stock.dartIndustry ?? "DART"}
-                        </span>
-                      )}
-                      {stock.dartBizMatch === true && (
-                        <span
-                          title="DART 사업보고서 본문에 테마 키워드 확인됨"
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium cursor-help"
-                        >
-                          📄 사업보고서 확인
-                        </span>
-                      )}
+                        {stock.sector && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-foreground/50">
+                            {stock.sector}
+                          </span>
+                        )}
+                        {stock.dartVerified && (
+                          <span
+                            title={stock.dartIndustry ? `DART 등록 업종: ${stock.dartIndustry}` : "DART 사업보고서에서 관련 업종 확인됨"}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium cursor-help"
+                          >
+                            📋 {stock.dartIndustry ?? "DART"}
+                          </span>
+                        )}
+                        {stock.dartBizMatch === true && (
+                          <span
+                            title="DART 사업보고서 본문에 테마 키워드 확인됨"
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium cursor-help"
+                          >
+                            📄 사업보고서 확인
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-foreground/60 mt-1 leading-relaxed">{stock.rationale}</p>
                   </div>
-                  <button
-                    onClick={() => goAnalyze(stock.ticker, stock.name)}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#FF8A7A] border border-[#FF8A7A]/30 hover:bg-[#FF8A7A]/10 transition-colors md:opacity-0 md:group-hover:opacity-100"
-                  >
-                    분석
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+
+                  {/* 본문: 근거 */}
+                  <p className="text-xs text-foreground/60 leading-relaxed pl-[52px]">{stock.rationale}</p>
+
+                  {/* 하단: 분석 버튼 */}
+                  <div className="flex justify-end pl-[52px]">
+                    <button
+                      onClick={() => goAnalyze(stock.ticker, stock.name)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#FF8A7A] border border-[#FF8A7A]/30 hover:bg-[#FF8A7A]/10 active:bg-[#FF8A7A]/20 transition-colors md:opacity-0 md:group-hover:opacity-100"
+                    >
+                      AI 분석
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </motion.div>
               ))}
             </div>
