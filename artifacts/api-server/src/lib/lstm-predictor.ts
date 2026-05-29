@@ -1365,7 +1365,10 @@ function buildResultFromModel(
   // [v29] 이진 분류 GBDT
   gbdtDirModels?: GBDTModel[],
 ): IndexResult {
-  const { feats, closes, dates } = buildFeatures(rows, extMap);
+  // 오늘(KST) 장중 미완성 데이터 제외 — 항상 어제 종가 기준으로 예측
+  const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const trimmedRows = rows.filter(r => r.date < todayKST);
+  const { feats, closes, dates } = buildFeatures(trimmedRows.length >= 60 ? trimmedRows : rows, extMap);
 
   const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length;
@@ -1705,8 +1708,12 @@ async function trainFull(
   const hp = getHP(symbol);
   console.log(`[train] ${symbol} HP: gbdtTrees=${hp.gbdtTrees} depth=${hp.gbdtDepth} leaf=${hp.gbdtLeaf} nEns=${hp.nEnsemble} lstmEpochs=${hp.lstmEpochs} lstmLR=${hp.lstmLR}`);
 
-  const extMap = await fetchExternalData(rows.map(r => r.date), market);
-  const { feats, closes } = buildFeatures(rows, extMap);
+  // 오늘(KST) 장중 미완성 데이터 제외
+  const todayKST_tf = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const trainRows = rows.filter(r => r.date < todayKST_tf);
+  const rowsForTrain = trainRows.length >= 60 ? trainRows : rows;
+  const extMap = await fetchExternalData(rowsForTrain.map(r => r.date), market);
+  const { feats, closes } = buildFeatures(rowsForTrain, extMap);
 
   const { X, y } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
   const n = X.length, trainEnd = Math.floor(n*0.80);
