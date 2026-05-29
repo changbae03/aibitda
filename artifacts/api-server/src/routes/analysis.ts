@@ -5220,10 +5220,60 @@ async function executeStep(
         }
         guideLines.push(`· 피어 배수 선택 시 현재 시장 내재 멀티플(위 컨텍스트 참조)의 25% 미만 배수 사용 금지.`);
         guideLines.push(`· 최종 목표주가(Base)는 현재가의 30% 미만 산출 시 QC 불승인 — 가정 재검토 필수.`);
+        guideLines.push(`\n⛔ 수치 일관성 필수 (위반 시 QC 불승인):`);
+        guideLines.push(`· 본문 결론에 기재한 Base 목표주가(숫자)와 FINAL_VALUATION_DATA.base 값이 반드시 동일한 숫자여야 합니다.`);
+        guideLines.push(`· 예: 본문에 "적정주가 350,000원"이라고 썼다면 FINAL_VALUATION_DATA.base = 350000. 두 값이 다르면 QC 불승인.`);
 
         const guideBlock = guideLines.join("\n");
         enrichedContext = enrichedContext ? enrichedContext + "\n" + guideBlock : guideBlock;
         console.log(`[model-guide] 밸류에이션 모델 가이드라인 주입 (isBio=${isBio}, isBattery=${isBattery}, isNewSpace=${isNewSpace})`);
+      }
+
+      // ── 테마 프리미엄 보정 (이전 스텝 텍스트에서 핫 테마 감지 → 멀티플 상향) ───────
+      {
+        const prevStepsText = existingSteps.map(s => (s.content ?? "")).join(" ").toLowerCase();
+        const fullSignal = `${(analysis.companyName ?? "").toLowerCase()} ${(analysis.industry ?? "").toLowerCase()} ${prevStepsText.slice(0, 6000)}`;
+
+        const hotThemes: { label: string; premiumPct: number; sotp: boolean }[] = [];
+
+        if (/boston dynamics|보스턴다이나믹스|로보틱스|robotics|humanoid|인간형\s*로봇/.test(fullSignal)) {
+          hotThemes.push({ label: "로보틱스/휴머노이드(보스턴다이나믹스)", premiumPct: 20, sotp: true });
+        }
+        if (/자율주행|autonomous driving|sdv|소프트웨어 정의 자동차|software.defined vehicle/.test(fullSignal)) {
+          hotThemes.push({ label: "SDV/자율주행", premiumPct: 15, sotp: true });
+        }
+        if (/ai.반도체|ai chip|hbm|high bandwidth memory|ai 가속기|npu/.test(fullSignal)) {
+          hotThemes.push({ label: "AI반도체/HBM", premiumPct: 25, sotp: false });
+        }
+        if (/k.방산|방위산업|방산수출|defense export|k.defense/.test(fullSignal)) {
+          hotThemes.push({ label: "K-방산", premiumPct: 20, sotp: false });
+        }
+        if (/우주|space launch|발사체|위성통신|sat.?com|뉴스페이스/.test(fullSignal)) {
+          hotThemes.push({ label: "우주항공/뉴스페이스", premiumPct: 30, sotp: true });
+        }
+
+        if (hotThemes.length > 0) {
+          const needsSotp = hotThemes.some(t => t.sotp);
+          const avgPremium = Math.round(hotThemes.reduce((s, t) => s + t.premiumPct, 0) / hotThemes.length);
+          const themeLabels = hotThemes.map(t => t.label).join(", ");
+
+          let themeBlock = `\n\n[🚀 테마 프리미엄 보정 — 핫 테마 노출 감지: ${themeLabels}]\n`;
+          themeBlock += `이 종목은 시장에서 고배수를 받는 핫 테마에 노출됩니다. 상대가치 평가 시 아래를 적용하세요:\n`;
+          themeBlock += `① 전통 업종 피어 배수에 +${avgPremium}% 테마 프리미엄 가산\n`;
+          themeBlock += `   - 근거: 해당 테마 사업부의 매출 기여도·공시된 성장 모멘텀을 정량적으로 제시할 것\n`;
+          themeBlock += `   - 테마 가시성이 높을수록(계약·양산·고객사 발표 등) 프리미엄 범위 상향 가능\n`;
+          if (needsSotp) {
+            themeBlock += `② SOTP(Sum-of-the-Parts) 분석 권장:\n`;
+            themeBlock += `   · [전통 사업부] 동종 피어 배수로 평가\n`;
+            themeBlock += `   · [테마 사업부 — ${hotThemes.filter(t => t.sotp).map(t => t.label).join(", ")}] 성장주 EV/Sales 또는 프리미엄 EV/EBITDA로 별도 평가\n`;
+            themeBlock += `   · 두 가치 합산 → 주당 SOTP 가치를 목표주가로 제시\n`;
+          }
+          themeBlock += `③ 피어 참고: 전통 섹터 피어 외에 테마 선도 기업을 보조 벤치마크로 추가\n`;
+          themeBlock += `④ 테마 냉각(실적 미달·규제 리스크 현실화) 시 프리미엄 절반 이하로 축소`;
+
+          enrichedContext = enrichedContext ? enrichedContext + "\n" + themeBlock : themeBlock;
+          console.log(`[thematic-premium] 감지: ${themeLabels} | 평균 프리미엄: +${avgPremium}%`);
+        }
       }
 
       // US 주식 전용: AI 선택 실패 시 하드코딩 피어 맵으로 대체
