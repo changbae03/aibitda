@@ -372,7 +372,7 @@ export default function ThemesPage() {
                   </div>
                   <button
                     onClick={() => goAnalyze(stock.ticker, stock.name)}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#FF8A7A] border border-[#FF8A7A]/30 hover:bg-[#FF8A7A]/10 transition-colors opacity-0 group-hover:opacity-100"
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#FF8A7A] border border-[#FF8A7A]/30 hover:bg-[#FF8A7A]/10 transition-colors md:opacity-0 md:group-hover:opacity-100"
                   >
                     분석
                     <ArrowRight className="w-3 h-3" />
