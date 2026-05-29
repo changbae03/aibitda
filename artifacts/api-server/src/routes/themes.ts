@@ -456,9 +456,25 @@ ticker 규칙:
 마크다운 없이 JSON만:
 {"stocks":[{"ticker":"000000","name":"회사명","market":"KR","sector":"섹터","rationale":"이유"}]}`;
 
+    // ── STEP 2C: Gemini — 코스닥 중소형 전문기업 발굴 (병렬) ──────────────
+    const midCapKRPrompt = `투자 테마: "${trimmed}"
+
+코스닥·코스피에 상장된 중소형 테마 전문기업 6~8개를 선정하세요 (시총 300억~1조 내외).
+
+【필수 조건】
+• 반드시 한국(KR) 상장 종목만 — 미국 종목 금지
+• 해당 테마 관련 매출 또는 수주가 전체 사업의 핵심인 기업
+• 대기업(삼성·현대·SK·LG·한화·포스코·롯데·GS) 계열 제외
+• 위 largeCapPrompt·smallCapPrompt에서 이미 나올 법한 1~2위 대표 종목은 제외하고 덜 알려진 종목 위주로
+• "간접 수혜", "기대감" 수준의 연결고리 기업 제외
+• 한국: 6자리 숫자 코드만. 회사명 금지.
+
+마크다운 없이 JSON만:
+{"stocks":[{"ticker":"000000","name":"회사명","market":"KR","sector":"섹터","rationale":"이유"}]}`;
+
     const codeMap = getCorpCodeMap();
 
-    const [largeResp, smallResp] = await Promise.all([
+    const [largeResp, smallResp, midKRResp] = await Promise.all([
       ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: largeCapPrompt }] }],
@@ -469,18 +485,26 @@ ticker 규칙:
         contents: [{ role: "user", parts: [{ text: smallCapPrompt }] }],
         config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
       }),
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: midCapKRPrompt }] }],
+        config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
+      }),
     ]);
 
     const largePart = safeParseJson<DiscoverResult>(largeResp.text ?? "");
     const smallPart = safeParseJson<{ stocks: DiscoverResult["stocks"] }>(smallResp.text ?? "");
+    const midKRPart = safeParseJson<{ stocks: DiscoverResult["stocks"] }>(midKRResp.text ?? "");
     if (!largePart?.stocks?.length) throw new Error("parse fail");
 
-    // 소형주 결과 병합 (중복 ticker 제거)
+    // 세 배치 병합 (중복 ticker 제거)
     const seenTickers = new Set(largePart.stocks.map(s => s.ticker));
     const extraSmall = (smallPart?.stocks ?? []).filter(s => !seenTickers.has(s.ticker));
+    extraSmall.forEach(s => seenTickers.add(s.ticker));
+    const extraMidKR = (midKRPart?.stocks ?? []).filter(s => !seenTickers.has(s.ticker));
     const result: DiscoverResult = {
       ...largePart,
-      stocks: [...largePart.stocks, ...extraSmall],
+      stocks: [...largePart.stocks, ...extraSmall, ...extraMidKR],
     };
 
     if (!result?.stocks?.length) throw new Error("parse fail");
