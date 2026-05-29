@@ -755,16 +755,20 @@ function ReturnComparisonChart({
   data,
   future,
   symbol = "",
+  predDates,
 }: {
   data: RecentPerfPoint[];
   future?: { d1: number; d2: number; d3: number };
   symbol?: string;
+  predDates?: string[];
 }) {
   const cc = useChartColors();
 
-  // 미래 3거래일 날짜 계산 (시장별 공휴일 반영)
+  // 서버 예측 날짜 우선, 없으면 recentPerf 마지막 날짜 기준 계산
   const lastDate = data[data.length - 1]?.date ?? "";
-  const futureDates = future && lastDate ? nextTradingDays(lastDate, 3, symbol) : [];
+  const futureDates = predDates && predDates.length === 3
+    ? predDates
+    : (future && lastDate ? nextTradingDays(lastDate, 3, symbol) : []);
 
   // 차트 데이터: 과거 + 오늘 브릿지 + 미래 3포인트
   type ChartRow = {
@@ -1151,7 +1155,7 @@ export default function MarketAnalysis() {
                   const d2 = data.predictedReturn2d ?? +(data.predictedReturn3d * 2 / 3).toFixed(2);
                   const d3 = data.predictedReturn3d;
                   const up3 = d3 >= 0;
-                  const tradingDates = nextTradingDays(todayKST(), 3, data.symbol);
+                  const tradingDates = data.predictions.slice(0, 3).map(p => p.date);
                   return (
                     <button
                       key={id}
@@ -1256,11 +1260,11 @@ export default function MarketAnalysis() {
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {(() => {
-                      const dates = nextTradingDays(todayKST(), 3, current.symbol);
+                      const predDates = current.predictions.slice(0, 3).map(p => p.date);
                       return ([
-                        { label: "D+1", date: dates[0], val: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2) },
-                        { label: "D+2", date: dates[1], val: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2) },
-                        { label: "D+3", date: dates[2], val: current.predictedReturn3d },
+                        { label: "D+1", date: predDates[0] ?? "", val: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2) },
+                        { label: "D+2", date: predDates[1] ?? "", val: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2) },
+                        { label: "D+3", date: predDates[2] ?? "", val: current.predictedReturn3d },
                       ]).map(({ label, date, val }) => (
                         <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-background/60 border border-border/60">
                           <span className="text-[10px] text-muted-foreground/60 font-medium">{label}</span>
@@ -1405,6 +1409,7 @@ export default function MarketAnalysis() {
                 <ReturnComparisonChart
                   data={current.recentPerf}
                   symbol={current.symbol}
+                  predDates={current.predictions.slice(0, 3).map(p => p.date)}
                   future={{
                     d1: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2),
                     d2: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2),
