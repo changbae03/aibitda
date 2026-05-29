@@ -527,6 +527,11 @@ ticker 규칙:
       stocks: [...largePart.stocks, ...extraSmall, ...extraMidKR],
     };
 
+    // market 정규화: NYSE·NASDAQ·OTC 등 → "US", 그 외 비-KR → "US"
+    for (const s of result.stocks) {
+      if (s.market !== "KR") s.market = "US";
+    }
+
     if (!result?.stocks?.length) throw new Error("parse fail");
 
     // ── KR 종목 티커·이름 교정 및 할루시네이션 제거 ──────────────────────────
