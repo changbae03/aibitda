@@ -724,27 +724,18 @@ function IndexChart({ result, predHistory = [] }: { result: IndexResult; predHis
 }
 
 /* ── 예측 vs 실제 비교 차트 ──────────────────────────────────────────────── */
-const KRX_HOLIDAYS_FE = new Set([
-  "2025-01-01","2025-01-28","2025-01-29","2025-01-30",
-  "2025-05-05","2025-05-06","2025-06-06","2025-08-15",
-  "2025-10-03","2025-10-06","2025-10-07","2025-10-09",
-  "2025-12-25","2025-12-31",
-  "2026-01-01","2026-02-16","2026-02-17","2026-02-18",
-  "2026-03-02","2026-05-05","2026-05-25",
-  "2026-10-09","2026-12-25","2026-12-31",
-  "2027-01-01","2027-02-06","2027-02-07","2027-02-08",
-  "2027-03-01","2027-05-05","2027-06-06","2027-08-16",
-  "2027-10-04","2027-10-05","2027-10-06","2027-10-11",
-  "2027-12-24","2027-12-31",
-]);
+const KRX_H_FE = new Set(["2025-01-01","2025-01-28","2025-01-29","2025-01-30","2025-05-05","2025-05-06","2025-06-06","2025-08-15","2025-10-03","2025-10-06","2025-10-07","2025-10-09","2025-12-25","2025-12-31","2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-03-02","2026-05-05","2026-05-25","2026-10-09","2026-12-25","2026-12-31","2027-01-01","2027-02-06","2027-02-07","2027-02-08","2027-03-01","2027-05-05","2027-06-06","2027-08-16","2027-10-04","2027-10-05","2027-10-06","2027-10-11","2027-12-24","2027-12-31"]);
+const NYSE_H_FE = new Set(["2025-01-01","2025-01-20","2025-02-17","2025-04-18","2025-05-26","2025-06-19","2025-07-04","2025-09-01","2025-11-27","2025-12-25","2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25","2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24"]);
 
-function nextTradingDays(fromDateStr: string, count: number): string[] {
+function nextTradingDays(fromDateStr: string, count: number, symbol = ""): string[] {
+  const isUS = symbol && !symbol.endsWith(".KS") && !symbol.endsWith(".KQ") && !/^\d{6}$/.test(symbol);
+  const holidays = isUS ? NYSE_H_FE : KRX_H_FE;
   const result: string[] = [];
   const d = new Date(fromDateStr);
   while (result.length < count) {
     d.setDate(d.getDate() + 1);
     const ds = d.toISOString().slice(0, 10);
-    if (d.getDay() !== 0 && d.getDay() !== 6 && !KRX_HOLIDAYS_FE.has(ds)) {
+    if (d.getDay() !== 0 && d.getDay() !== 6 && !holidays.has(ds)) {
       result.push(ds);
     }
   }
@@ -754,15 +745,17 @@ function nextTradingDays(fromDateStr: string, count: number): string[] {
 function ReturnComparisonChart({
   data,
   future,
+  symbol = "",
 }: {
   data: RecentPerfPoint[];
   future?: { d1: number; d2: number; d3: number };
+  symbol?: string;
 }) {
   const cc = useChartColors();
 
-  // 미래 3거래일 날짜 계산
+  // 미래 3거래일 날짜 계산 (시장별 공휴일 반영)
   const lastDate = data[data.length - 1]?.date ?? "";
-  const futureDates = future && lastDate ? nextTradingDays(lastDate, 3) : [];
+  const futureDates = future && lastDate ? nextTradingDays(lastDate, 3, symbol) : [];
 
   // 차트 데이터: 과거 + 오늘 브릿지 + 미래 3포인트
   type ChartRow = {
@@ -1397,6 +1390,7 @@ export default function MarketAnalysis() {
                 </div>
                 <ReturnComparisonChart
                   data={current.recentPerf}
+                  symbol={current.symbol}
                   future={{
                     d1: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2),
                     d2: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2),
