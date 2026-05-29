@@ -646,14 +646,31 @@ ticker 규칙:
       if (toRemove.size) {
         result.stocks = result.stocks.filter(s => !toRemove.has(s.ticker));
       }
-      // 교정 후 중복 ticker 제거 (동일 코드로 교정된 여러 종목 → 첫 번째만 유지)
+      // US 종목 유효성 검사: 티커가 비ASCII(한글 등) → 잘못된 KR 반환이므로 제거
+      result.stocks = result.stocks.filter(s => {
+        if (s.market === "US" && !/^[A-Z]{1,6}(\.[A-Z]{1,2})?$/.test(s.ticker)) {
+          console.log(`[themes] US 비유효 ticker 제거: "${s.ticker}" (${s.name})`);
+          return false;
+        }
+        return true;
+      });
+      // 교정 후 중복 제거: ticker 중복 + US 종목 이름 유사 중복
       const seenTickers = new Set<string>();
+      const seenUsNames  = new Set<string>(); // 영문 이름 정규화 키
       result.stocks = result.stocks.filter(s => {
         if (seenTickers.has(s.ticker)) {
           console.log(`[themes] 중복 ticker 제거: ${s.ticker} (${s.name})`);
           return false;
         }
         seenTickers.add(s.ticker);
+        if (s.market === "US") {
+          const nameKey = s.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (seenUsNames.has(nameKey)) {
+            console.log(`[themes] 중복 US 이름 제거: ${s.ticker} (${s.name})`);
+            return false;
+          }
+          seenUsNames.add(nameKey);
+        }
         return true;
       });
     }
