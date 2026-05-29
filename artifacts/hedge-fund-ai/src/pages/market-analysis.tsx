@@ -764,9 +764,11 @@ function ReturnComparisonChart({
 }) {
   const cc = useChartColors();
 
-  // 차트는 recentPerf 마지막 날짜 기준으로 계산 (오늘 포함 연속 표시)
+  // predDates(서버 predictions 날짜) 우선 사용 → 카드와 동일 기준
   const lastDate = data[data.length - 1]?.date ?? "";
-  const futureDates = future && lastDate ? nextTradingDays(lastDate, 3, symbol) : [];
+  const futureDates = (predDates && predDates.length === 3)
+    ? predDates
+    : (future && lastDate ? nextTradingDays(lastDate, 3, symbol) : []);
 
   // 차트 데이터: 과거 + 오늘 브릿지 + 미래 3포인트
   type ChartRow = {
