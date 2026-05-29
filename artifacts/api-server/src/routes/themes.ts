@@ -635,14 +635,25 @@ ticker 규칙:
       });
     }
 
-    // 후처리 1: rationale에 "간접 수혜" 또는 "연관 없음·제외" 명시된 종목 제거
-    const INDIRECT_PATTERNS = /간접\s*수혜|장기적\s*(으로\s*)?(영향|수혜)|관련\s*산업\s*성장|수요\s*증가\s*기대/;
-    const NO_RELATION_PATTERNS = /연관성이\s*없|관련(이|성이)\s*없|직접적인\s*관련\s*없|테마와\s*무관|제외됩니다|제외\s*대상|수혜\s*종목이\s*아니/;
+    // 후처리 1: rationale 품질 필터
+    // ① 간접 수혜·기대감 표현
+    const INDIRECT_PATTERNS = /간접\s*(적인\s*)?(수혜|영향)|장기적\s*(으로\s*)?(영향|수혜)|관련\s*산업\s*성장|(수요|공급|매출|수주)\s*(증가|확대)\s*(가\s*)?기대|기대됩니다|기대\s*됨|가능성이\s*(있|보유)|기대감/;
+    // ② 연관 없음·제외 명시
+    const NO_RELATION_PATTERNS = /연관성이\s*(없|낮)|직접적인\s*(연관|관련)\s*(없|낮)|관련(이|성이)\s*없|테마와\s*무관|제외됩니다|제외\s*대상|수혜\s*종목이\s*아니/;
+    // ③ 지주회사·자회사 경유 간접 수혜
+    const HOLDINGCO_PATTERNS = /지주(회사)?\s*(로서|로\s*서)|(자회사|계열사)의?\s*(실적|매출|영향|성과)\s*(이|이\s*)?(반영|영향)/;
     result.stocks = result.stocks.filter(s => {
       const rat = s.rationale ?? "";
-      if (INDIRECT_PATTERNS.test(rat)) return false;
+      if (INDIRECT_PATTERNS.test(rat)) {
+        console.log(`[themes] 간접수혜·기대감 → 제거: ${s.ticker} ${s.name}`);
+        return false;
+      }
       if (NO_RELATION_PATTERNS.test(rat)) {
-        console.log(`[themes] rationale 무관 명시 → 제거: ${s.ticker} ${s.name}`);
+        console.log(`[themes] 연관 없음 명시 → 제거: ${s.ticker} ${s.name}`);
+        return false;
+      }
+      if (HOLDINGCO_PATTERNS.test(rat)) {
+        console.log(`[themes] 지주·자회사 경유 → 제거: ${s.ticker} ${s.name}`);
         return false;
       }
       return true;
