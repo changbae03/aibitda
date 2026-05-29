@@ -46,6 +46,7 @@ export default function ThemesPage() {
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [marketFilter, setMarketFilter] = useState<"all" | "KR" | "US">("all");
 
   useEffect(() => {
     setTrendingLoading(true);
@@ -62,6 +63,7 @@ export default function ThemesPage() {
     setResult(null);
     setError(null);
     setInvalidTheme(null);
+    setMarketFilter("all");
     try {
       const r = await fetch(getApiUrl("api/themes/discover"), {
         method: "POST",
@@ -284,10 +286,41 @@ export default function ThemesPage() {
 
             {/* 종목 리스트 */}
             <div className="space-y-2">
-              <p className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
-                관련 종목 {result.stocks.length}개
-              </p>
-              {result.stocks.map((stock, i) => (
+              {/* 시장 필터 탭 */}
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
+                  관련 종목{" "}
+                  {marketFilter === "all"
+                    ? result.stocks.length
+                    : result.stocks.filter(s => s.market === marketFilter).length}개
+                </p>
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+                  {(["all", "KR", "US"] as const).map((f) => {
+                    const label = f === "all" ? "전체" : f === "KR" ? "한국" : "미국";
+                    const count = f === "all" ? result.stocks.length : result.stocks.filter(s => s.market === f).length;
+                    return (
+                      <button
+                        key={f}
+                        onClick={() => setMarketFilter(f)}
+                        className={cn(
+                          "px-3 py-1.5 transition-colors",
+                          marketFilter === f
+                            ? "bg-[#FF8A7A] text-white"
+                            : "text-foreground/50 hover:text-foreground/80 hover:bg-muted/60"
+                        )}
+                      >
+                        {label}
+                        {count > 0 && (
+                          <span className={cn("ml-1 text-[10px]", marketFilter === f ? "opacity-80" : "opacity-50")}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {result.stocks.filter(s => marketFilter === "all" || s.market === marketFilter).map((stock, i) => (
                 <motion.div
                   key={stock.ticker}
                   initial={{ opacity: 0, x: -8 }}
