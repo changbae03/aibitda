@@ -1365,9 +1365,15 @@ function buildResultFromModel(
   // [v29] 이진 분류 GBDT
   gbdtDirModels?: GBDTModel[],
 ): IndexResult {
-  // 오늘(KST) 장중 미완성 데이터 제외 — 항상 어제 종가 기준으로 예측
   const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-  const trimmedRows = rows.filter(r => r.date < todayKST);
+  // KRX 장마감(16:00 KST) 이후: 오늘 종가가 확정됐으므로 포함 → D+1=다음 거래일
+  // 미국 지수(S&P, NASDAQ)는 KST 16:00 기준 여전히 장중 → 오늘 제외 유지
+  const _kstNow = new Date(Date.now() + 9 * 3600_000);
+  const _kstMin = _kstNow.getUTCHours() * 60 + _kstNow.getUTCMinutes();
+  const isKRX = symbol === "^KS11" || symbol === "^KQ11";
+  const isAfterKRXClose = isKRX && _kstMin >= 16 * 60;
+  // 오늘(KST) 장중 미완성 데이터 제외 — 장마감 후 KRX는 오늘 포함
+  const trimmedRows = isAfterKRXClose ? rows : rows.filter(r => r.date < todayKST);
   const { feats, closes, dates } = buildFeatures(trimmedRows.length >= 60 ? trimmedRows : rows, extMap);
 
   const { X, y, anchorDateIdxs } = makeSeqs(feats, closes, LOOKBACK, PRED_H);
@@ -1517,7 +1523,8 @@ function buildResultFromModel(
     if (i < LOOKBACK) continue;
     const dateLabel = dates[i] ?? `G${i}`;
     // 오늘(장중) 날짜는 미완성 데이터 — recentPerf에서 제외
-    if (dateLabel === todayKST_str) continue;
+    // 단, KRX 장마감(16:00 KST) 이후에는 오늘 종가 확정 → 포함
+    if (!isAfterKRXClose && dateLabel === todayKST_str) continue;
     // GBDT 입력 벡터 구성 (makeSeqs 와 동일한 방식)
     const v = new Float64Array(LOOKBACK * F + 1);
     for (let t = 0; t < LOOKBACK; t++)
@@ -1834,13 +1841,53 @@ export async function tryRestoreFromDB(): Promise<boolean> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/**
+ * 오늘(KST) 기준으로 다음 N거래일 날짜 배열을 계산합니다.
+ * getStatus()에서 캐시된 predictions 날짜를 요청 시점에 갱신할 때 사용.
+ */
+function computeFutureDates(anchor: string, isUS: boolean, count: number): string[] {
+  const KRX_H = new Set(["2025-01-01","2025-01-28","2025-01-29","2025-01-30","2025-05-05","2025-05-06","2025-06-06","2025-08-15","2025-10-03","2025-10-06","2025-10-07","2025-10-09","2025-12-25","2025-12-31","2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-03-02","2026-05-05","2026-05-25","2026-10-09","2026-12-25","2026-12-31","2027-01-01","2027-02-06","2027-02-07","2027-02-08","2027-03-01","2027-05-05","2027-06-06","2027-08-16","2027-10-04","2027-10-05","2027-10-06","2027-10-11","2027-12-24","2027-12-31"]);
+  const NYSE_H = new Set(["2025-01-01","2025-01-20","2025-02-17","2025-04-18","2025-05-26","2025-06-19","2025-07-04","2025-09-01","2025-11-27","2025-12-25","2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25","2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24"]);
+  const holidays = isUS ? NYSE_H : KRX_H;
+  const result: string[] = [];
+  const cur = new Date(anchor + "T00:00:00");
+  while (result.length < count) {
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    const ds = cur.toISOString().slice(0, 10);
+    if (cur.getUTCDay() !== 0 && cur.getUTCDay() !== 6 && !holidays.has(ds))
+      result.push(ds);
+  }
+  return result;
+}
+
+/**
+ * IndexResult의 predictions 날짜를 오늘(KST) 기준으로 갱신합니다.
+ * 캐시된 결과가 이전 날짜를 가리킬 때 요청 시점에 보정합니다.
+ */
+function refreshPredDates(
+  result: IndexResult | undefined,
+  isUS: boolean,
+): IndexResult | undefined {
+  if (!result) return undefined;
+  const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const freshDates = computeFutureDates(todayKST, isUS, result.predictions.length);
+  return {
+    ...result,
+    predictions: result.predictions.map((p, i) => ({ ...p, date: freshDates[i] ?? p.date })),
+  };
+}
+
 export function getStatus(): PipelineStatus & { initializing?: boolean } {
   return {
     running:_status.running, ready:_status.ready,
     steps:_status.steps.map(s=>({...s})),
     error:_status.error, trainedAt:_status.trainedAt,
     trainingMs:_status.trainingMs, modelVersion:MODEL_VERSION,
-    kospi:_status.kospi, kosdaq:_status.kosdaq, snp500:_status.snp500, nasdaq:_status.nasdaq,
+    // predictions 날짜를 요청 시점(오늘 KST) 기준으로 갱신 — 캐시된 결과가 어제 날짜를 가리키는 문제 해결
+    kospi:   refreshPredDates(_status.kospi,   false),
+    kosdaq:  refreshPredDates(_status.kosdaq,  false),
+    snp500:  refreshPredDates(_status.snp500,  true),
+    nasdaq:  refreshPredDates(_status.nasdaq,  true),
     initializing: (_status as any).initializing ?? false,
   };
 }
