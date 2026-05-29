@@ -158,6 +158,7 @@ function MarketBriefSection({
   onRefresh: () => void;
   showRefresh?: boolean;
 }) {
+  const [storyExpanded, setStoryExpanded] = useState(false);
   const sentimentConfig = brief?.sentiment === "bullish"
     ? { color: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "상승 우세", bar: "bg-red-500 dark:bg-red-400" }
     : brief?.sentiment === "bearish"
@@ -277,33 +278,42 @@ function MarketBriefSection({
 
             {/* AI 해설 — 과거→현재→미래 내러티브 */}
             {brief.storyLine && (() => {
-              // 인삿말·날짜 서두 제거 (캐시된 구버전 응답 대응)
               const cleaned = brief.storyLine
                 .replace(/^(안녕하세요[^。！!?\n]*[。！!?\n]?\s*)/i, "")
                 .replace(/^(개인\s*투자자\s*여러분[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-                .replace(/^(\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^。！!?\n]*[。！!?]\s*)/i, "")
+                .replace(/^(\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^。！!?]\s*)/i, "")
                 .replace(/^(오늘도[^。！!?\n]*[。！!?\n]?\s*)/i, "")
                 .replace(/^(주말\s*잘\s*보내[^。！!?\n]*[。！!?\n]?\s*)/i, "")
                 .replace(/^(반갑습니다[^。！!?\n]*[。！!?\n]?\s*)/i, "")
                 .trim();
               const paras = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+              const visibleParas = storyExpanded ? paras : paras.slice(0, 1);
               return (
                 <div className="space-y-1 pt-1">
                   <SectionLabel label="시장 해설" />
-                  <div className="space-y-3.5 pt-2">
-                    {paras.map((para, i) => (
+                  <div className="space-y-3 pt-2">
+                    {visibleParas.map((para, i) => (
                       <p
                         key={i}
                         className={cn(
-                          "leading-[1.85]",
+                          "leading-[1.8]",
                           i === 0
-                            ? "text-[13.5px] text-foreground/85 font-medium"
-                            : "text-[13px] text-foreground/65"
+                            ? "text-[13px] text-foreground/80 font-medium"
+                            : "text-[12.5px] text-foreground/65"
                         )}
                       >
                         {para}
                       </p>
                     ))}
+                    {paras.length > 1 && (
+                      <button
+                        onClick={() => setStoryExpanded(v => !v)}
+                        className="flex items-center gap-1 text-[11px] text-primary/70 hover:text-primary font-medium transition-colors"
+                      >
+                        <ChevronDown className={cn("w-3 h-3 transition-transform", storyExpanded && "rotate-180")} />
+                        {storyExpanded ? "접기" : `더 보기 (${paras.length - 1}개 단락)`}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -329,7 +339,7 @@ function MarketBriefSection({
                                   {dc.label}
                                 </span>
                               </div>
-                              <p className="text-[12px] text-foreground/55 leading-relaxed">{ev.impact}</p>
+                              <p className="text-[12px] text-foreground/55 leading-relaxed line-clamp-2">{ev.impact}</p>
                             </div>
                           </div>
                         );
@@ -347,7 +357,7 @@ function MarketBriefSection({
                         <div key={i} className="border border-border rounded-xl px-3.5 py-3 space-y-1.5 bg-card">
                           <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">{mf.factor}</p>
                           <p className="text-[15px] font-bold text-foreground leading-tight">{mf.status}</p>
-                          <p className="text-[11px] text-foreground/50 leading-relaxed">
+                          <p className="text-[11px] text-foreground/50 leading-relaxed line-clamp-2">
                             {mf.implication}
                           </p>
                         </div>
@@ -368,9 +378,9 @@ function MarketBriefSection({
                           </span>
                           <div className="flex-1 space-y-1">
                             <p className="text-[13.5px] font-semibold text-foreground leading-snug">{fw.point}</p>
-                            <p className="text-[12px] text-foreground/58 leading-relaxed">{fw.detail}</p>
-                            <p className="text-[11px] text-foreground/35 flex items-center gap-1 pt-0.5">
-                              체크 <ChevronRight className="w-2.5 h-2.5 inline" /> {fw.watchFor}
+                            <p className="text-[12px] text-foreground/58 leading-relaxed line-clamp-2">{fw.detail}</p>
+                            <p className="text-[11px] text-foreground/35 flex items-center gap-1 pt-0.5 line-clamp-1">
+                              체크 <ChevronRight className="w-2.5 h-2.5 inline shrink-0" /> {fw.watchFor}
                             </p>
                           </div>
                         </div>
@@ -398,7 +408,7 @@ function MarketBriefSection({
                                   {ic.label}
                                 </span>
                               </div>
-                              <p className="text-[12px] text-foreground/55 leading-relaxed">{ev.description}</p>
+                              <p className="text-[12px] text-foreground/55 leading-relaxed line-clamp-2">{ev.description}</p>
                             </div>
                           </div>
                         );
@@ -422,13 +432,13 @@ function MarketBriefSection({
                         };
                         const cls = catColor[topic.category] ?? "bg-stone-100 border-stone-300 text-stone-600 dark:bg-muted/40 dark:border-border dark:text-muted-foreground";
                         return (
-                          <div key={i} className="flex items-start gap-3">
-                            <span className={cn("shrink-0 mt-[1px] text-[9px] font-bold px-1.5 py-0.5 rounded border", cls)}>
+                          <div key={i} className="flex items-start gap-2.5 py-2 border-b border-border/40 last:border-0">
+                            <span className={cn("shrink-0 mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border leading-tight", cls)}>
                               {topic.category}
                             </span>
-                            <div className="flex-1">
-                              <span className="text-[13px] font-semibold text-foreground mr-2">{topic.keyword}</span>
-                              <span className="text-[12px] text-foreground/55 leading-relaxed">{topic.description}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-semibold text-foreground leading-snug">{topic.keyword}</p>
+                              <p className="text-[11.5px] text-foreground/50 leading-relaxed line-clamp-1 mt-0.5">{topic.description}</p>
                             </div>
                           </div>
                         );
