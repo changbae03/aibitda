@@ -351,7 +351,8 @@ async function runQCCheck(
   stepKey: AgentKey,
   content: string,
   companyName: string,
-  ticker: string
+  ticker: string,
+  dartFloorAuk?: number | null
 ): Promise<{ approved: boolean; score: number; feedback: string }> {
   const agentName = AGENTS[stepKey].name;
   const isFundamental = stepKey === "company_analysis";
@@ -384,7 +385,8 @@ async function runQCCheck(
    - 올해E 또는 내년E 영업이익률이 전년 실적 대비 +15%p 이상 점프했는데 전망 근거에 구체적 드라이버(원가 구조 변화·매출 레버리지·사업 믹스 개선 등) 없으면: 불승인
    - 컨텍스트에 이익 품질(현금전환율 OCF/순이익) 경고가 있음에도 순이익·EPS 추정에 이를 반영하지 않으면: 불승인
    - 컨텍스트에 GPM(매출총이익률) 추세가 있음에도 GPM 추세에 역행하는 OPM 추정을 근거 없이 제시하면: 불승인
-   - 컨텍스트에 서프라이즈 보정 지침(Beat/Miss 패턴)이 있음에도 추정치에 해당 보정을 전혀 반영하지 않으면: 감점(−2점)` : isRelativeValuation ? `
+   - 컨텍스트에 서프라이즈 보정 지침(Beat/Miss 패턴)이 있음에도 추정치에 해당 보정을 전혀 반영하지 않으면: 감점(−2점)${(dartFloorAuk && dartFloorAuk > 0) ? `
+   - [⛔ DART 확정 분기 하한선 체크] DART에서 확정된 올해 분기 영업이익 합계 = ${dartFloorAuk.toFixed(1)}억원. 이 값은 수학적 최솟값입니다(확정 분기 이후 분기들은 최소 0이므로). 보고서 실적 추정 테이블에서 올해E 영업이익을 찾아 단위를 변환(백만원→억 ÷10, 원→억 ÷1억)하여 비교하세요. 올해E 영업이익이 ${dartFloorAuk.toFixed(1)}억원 미만으로 추정되어 있으면: 즉시 불승인 (피드백에 "올해E 영업이익 수학적 하한선 위반: 확정 ${dartFloorAuk.toFixed(1)}억 > 추정 X억" 명시).` : ""}` : isRelativeValuation ? `
 
 5. 목표가 산출 정합성 — 팀장 직접 조율 검수 (전용 필수 검증):
 
@@ -5632,7 +5634,16 @@ async function executeStep(
 
     if (QC_STEPS.has(stepKey) && content && !content.startsWith("분석 오류")) {
       onEvent?.({ qc: "checking" });
-      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker);
+      // DART 확정 분기 하한선 추출: enrichedContext에서 "수학적 하한선: X억원" 파싱
+      let dartFloorAuk: number | null = null;
+      if (stepKey === "company_analysis" && enrichedContext) {
+        const floorMatch = enrichedContext.match(/수학적 하한선.*?합계\s*=\s*(\d+(?:\.\d+)?)억원/);
+        if (floorMatch) {
+          dartFloorAuk = parseFloat(floorMatch[1]);
+          console.log(`[QC] DART floor extracted: ${dartFloorAuk}억원 for ${analysis.ticker}`);
+        }
+      }
+      const qcResult = await runQCCheck(stepKey, content, analysis.companyName, analysis.ticker, dartFloorAuk);
       console.log(`[QC] ${stepKey} score=${qcResult.score} approved=${qcResult.approved}`);
 
       if (!qcResult.approved) {
