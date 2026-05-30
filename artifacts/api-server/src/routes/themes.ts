@@ -329,15 +329,16 @@ router.get("/themes/trending", async (_req, res) => {
       return res.json(trendingCache.themes);
     }
 
-    const today = new Date().toLocaleDateString("ko-KR", {
-      year: "numeric", month: "long", day: "numeric",
-    });
+    // KST 기준 오늘 날짜 (서버가 UTC여도 정확하게)
+    const kstDate = new Date(Date.now() + 9 * 3600_000);
+    const today = `${kstDate.getUTCFullYear()}년 ${kstDate.getUTCMonth() + 1}월 ${kstDate.getUTCDate()}일`;
 
-    const prompt = `${today} 기준으로 최근 1~2주간 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰린 테마와 섹터 8개를 선정해주세요.
+    const prompt = `오늘은 ${today}입니다. 이 날짜 기준으로 최근 1~2주간 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰린 테마와 섹터 8개를 선정해주세요.
 
 조건:
+- 반드시 ${today} 시점에도 여전히 진행 중인 이슈여야 합니다 — 이미 끝난 이벤트(예: 미국 대선, 월드컵 등 과거 행사)는 절대 포함하지 마세요
 - "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하세요
-- 구체적인 드라이버가 있는 테마여야 합니다 (예: 트럼프 관세 → K-방산 수출 수혜, 데이터센터 전력 부족 → HVDC·변압기, 비만치료제 GLP-1 확산 → CMO·원료의약품)
+- 구체적인 드라이버가 있는 테마여야 합니다 (예: 관세 협상 → 수출 수혜, 데이터센터 전력 부족 → HVDC·변압기, GLP-1 확산 → CMO·원료의약품)
 - 최근 실적·수주·정책 이슈로 섹터 로테이션이 일어난 경우 우선
 - 한국 코스피·코스닥과 미국 시장을 모두 커버
 
