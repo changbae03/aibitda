@@ -2152,6 +2152,14 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         }
         lines.push(`  Q2E+Q3E+Q4E 합산: ${fmtNum(fwdOpSum, currency)}`);
         lines.push(`  ─→ ${targetYear}E 연간 영업이익 (bottom-up 중심값): ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
+        // 분기별 OPM 차이가 0.3%p 미만이면 계절성 미반영 경고
+        const qOpms = [fwdOpmByQ[2], fwdOpmByQ[3], fwdOpmByQ[4]];
+        const opmSpread = Math.max(...qOpms) - Math.min(...qOpms);
+        if (opmSpread < 0.3) {
+          lines.push(`  ⚠️ [서버 경고] 서버 산출 Q2~Q4 OPM 편차 ${opmSpread.toFixed(1)}%p — 계절성 데이터 부족으로 분기별 차이가 거의 없음.`);
+          lines.push(`  ⚠️ AI 판단 필수: 업종 특성(건설·소비재·반도체 등)에 따른 계절성을 직접 추가하고, 촉매 분석의 하반기 이슈를 Q3E·Q4E OPM에 명시적으로 가감하세요.`);
+          lines.push(`  ⚠️ 건설 소재·인프라: Q1 약세(-1~-2%p) / Q2 중립(±0) / Q3 중립~약세(-0.5%p) / Q4 강세(+2~+3%p) 패턴 적용 검토 필요.`);
+        }
         lines.push(`⛔⛔ 위 분기별 추정값을 출발점으로 삼아 업황·촉매 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
         lines.push(`⛔⛔ TOP-DOWN 절대 금지: 연간 OPM 먼저 설정 후 역산 금지. 반드시 분기 bottom-up → 연간 합산.`);
       }
