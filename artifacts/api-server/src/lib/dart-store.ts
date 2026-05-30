@@ -240,13 +240,29 @@ export async function fetchAndStoreDartQuarterly(stockCode: string): Promise<voi
       return;
     }
 
-    const currentYear = new Date().getFullYear();
-    // 연간: 최근 3년 / 분기: 최근 2년
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+
+    // 연간: 최근 3년
     const annualYears = [currentYear - 1, currentYear - 2, currentYear - 3];
+    // 분기: 기본 과거 2년 + 올해 이미 제출된 분기 포함
+    // DART 분기보고서 제출 마감: Q1(3월말) → 5월15일, Q2(6월말) → 8월14일, Q3(9월말) → 11월14일
     const quarterYears = [currentYear - 1, currentYear - 2];
 
+    // 올해 분기 중 제출 마감이 지난 분기는 currentYear도 포함
+    // Q1(11013): 5월 이후, Q2(11012): 8월 이후, Q3(11014): 11월 이후
+    const currentYearQuarters = new Set<string>();
+    if (currentMonth >= 5)  currentYearQuarters.add("11013"); // Q1
+    if (currentMonth >= 8)  currentYearQuarters.add("11012"); // Q2
+    if (currentMonth >= 11) currentYearQuarters.add("11014"); // Q3
+
     for (const { code, label } of REPRT_CODES) {
-      const years = code === "11011" ? annualYears : quarterYears;
+      const years = code === "11011"
+        ? annualYears
+        : currentYearQuarters.has(code)
+          ? [currentYear, ...quarterYears]
+          : quarterYears;
 
       for (const year of years) {
         if (await isFresh(stockCode, year, code)) {
