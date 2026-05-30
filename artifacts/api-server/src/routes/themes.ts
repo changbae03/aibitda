@@ -298,6 +298,112 @@ function extractThemeKeywords(theme: string): string[] {
 let trendingCache: { themes: TrendingTheme[]; cachedAt: number } | null = null;
 const TRENDING_TTL = 3 * 60 * 60 * 1000;
 
+// ─── 핫 테마 피드: 트렌딩 테마 + 관련주 ──────────────────────────────────────
+
+interface ThemeFeedItem extends TrendingTheme {
+  summary: string;
+  stocks: Array<{
+    ticker: string;
+    name: string;
+    market: "KR" | "US";
+    sector?: string;
+    rationale: string;
+  }>;
+}
+
+let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
+const FEED_TTL = 3 * 60 * 60 * 1000;
+
+function _normFN(s: string) {
+  return s.toLowerCase()
+    .replace(/\s*\(주\)\s*|\s*주식회사\s*/gi, "")
+    .replace(/[\s\-·,.]/g, "");
+}
+function _strictMatch(a: string, b: string): boolean {
+  const na = _normFN(a), nb = _normFN(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const [sh, lo] = na.length <= nb.length ? [na, nb] : [nb, na];
+  return sh.length >= 3 && lo.includes(sh);
+}
+
+async function discoverThemeFast(
+  theme: TrendingTheme,
+  krxList: Array<{ code: string; name: string }>,
+): Promise<ThemeFeedItem> {
+  const prompt = `투자 테마: "${theme.name}" — ${theme.description}
+
+이 테마에 가장 직접적인 수혜를 받는 상장 주식 4개를 선정하세요 (한국 2개 + 미국 2개 권장).
+- 한국(KR): ticker 필드에 한국어 회사명 그대로 (예: "삼성SDI")
+- 미국(US): NYSE/NASDAQ 심볼 (예: "NVDA")
+- 직접 생산·납품·개발 기업만. 지주사 제외.
+
+마크다운 없이 JSON만:
+{"summary":"테마 한 줄 설명(30자 이내)","stocks":[{"ticker":"삼성SDI","name":"삼성SDI","market":"KR","sector":"배터리","rationale":"수혜 이유(30자 이내)"}]}`;
+
+  const resp = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
+  });
+
+  const parsed = safeParseJson<{ summary: string; stocks: ThemeFeedItem["stocks"] }>(resp.text ?? "");
+  let stocks: ThemeFeedItem["stocks"] = (parsed?.stocks ?? []).map(s => ({
+    ...s, market: s.market === "KR" ? "KR" : "US",
+  }));
+
+  // KR: 이름 → 코드 매핑 / US: 심볼 유효성 체크
+  stocks = stocks.flatMap(s => {
+    if (s.market === "US") {
+      return /^[A-Z]{1,6}(\.[A-Z]{1,2})?$/.test(s.ticker) ? [s] : [];
+    }
+    const gName = s.name || s.ticker;
+    if (/^\d{6}$/.test(s.ticker)) {
+      const k = krxList.find(k => k.code === s.ticker);
+      return k ? [{ ...s, ticker: k.code, name: k.name }] : [];
+    }
+    const k = krxList.find(k => _strictMatch(k.name, gName));
+    return k ? [{ ...s, ticker: k.code, name: k.name }] : [];
+  });
+
+  // 중복 제거
+  const seen = new Set<string>();
+  stocks = stocks.filter(s => !seen.has(s.ticker) && seen.add(s.ticker) !== undefined);
+
+  return { ...theme, summary: parsed?.summary ?? theme.description, stocks: stocks.slice(0, 4) };
+}
+
+router.get("/themes/trending-feed", async (_req, res) => {
+  try {
+    if (feedCache && Date.now() - feedCache.cachedAt < FEED_TTL) {
+      return res.json(feedCache.feed);
+    }
+    // trending 테마: 이미 캐시 있으면 재활용, 없으면 FALLBACK
+    const themes: TrendingTheme[] = trendingCache?.themes?.length
+      ? trendingCache.themes
+      : FALLBACK_THEMES;
+
+    const krxList = await loadKRXList().catch(() => getKRXCache());
+
+    const settled = await Promise.allSettled(
+      themes.map(t => discoverThemeFast(t, krxList)),
+    );
+    const feed: ThemeFeedItem[] = settled.map((r, i) =>
+      r.status === "fulfilled"
+        ? r.value
+        : { ...themes[i], summary: themes[i].description, stocks: [] },
+    );
+    feedCache = { feed, cachedAt: Date.now() };
+    return res.json(feed);
+  } catch (e) {
+    console.error("[themes/trending-feed]", e);
+    return res.status(500).json({ error: "피드 로드 실패" });
+  }
+});
+
+// 트렌딩 테마 갱신 시 피드 캐시도 무효화 (같이 갱신되도록)
+function invalidateFeedCache() { feedCache = null; }
+
 function safeParseJson<T>(text: string): T | null {
   const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   // 1) 전체 텍스트 직접 파싱 (마크다운 제거 후 순수 JSON인 경우)
@@ -388,6 +494,7 @@ ${topics}
     if (!themes || !Array.isArray(themes) || themes.length === 0) throw new Error("parse fail");
 
     trendingCache = { themes, cachedAt: Date.now() };
+    invalidateFeedCache(); // 트렌딩 갱신 시 피드도 재생성
     return res.json(themes);
   } catch (e) {
     console.error("[themes/trending]", e);
