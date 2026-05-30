@@ -72,13 +72,40 @@ export default function ThemesPage() {
   const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
-    setFeedLoading(true);
-    setFeedError(false);
-    fetch(getApiUrl("api/themes/trending-feed"))
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => setFeed(Array.isArray(data) ? data : []))
-      .catch(() => setFeedError(true))
-      .finally(() => setFeedLoading(false));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function loadFeed(attempt = 0) {
+      if (cancelled) return;
+      setFeedLoading(true);
+      setFeedError(false);
+      try {
+        const r = await fetch(getApiUrl("api/themes/trending-feed"));
+        if (!r.ok) throw new Error("bad response");
+        const data = await r.json();
+        if (cancelled) return;
+        if (Array.isArray(data) && data.length > 0) {
+          setFeed(data);
+          setFeedLoading(false);
+        } else if (attempt < 8) {
+          // 서버가 백그라운드 생성 중 — 5초 후 재시도
+          retryTimer = setTimeout(() => loadFeed(attempt + 1), 5000);
+        } else {
+          setFeedError(true);
+          setFeedLoading(false);
+        }
+      } catch {
+        if (cancelled) return;
+        setFeedError(true);
+        setFeedLoading(false);
+      }
+    }
+
+    loadFeed();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   async function discover(theme: string) {

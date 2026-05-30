@@ -313,6 +313,81 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v1";
+let feedRebuildInProgress = false;
+
+async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
+  try {
+    const data = JSON.stringify(feed);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일 보관
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET data = $2, expires_at = $3`,
+      [FEED_CACHE_DB_KEY, data, expiresAt]
+    );
+  } catch (e: any) {
+    console.error("[themes] feed DB 저장 실패:", e.message);
+  }
+}
+
+async function loadFeedCacheFromDB(): Promise<ThemeFeedItem[] | null> {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_cache (
+        key TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `);
+    const r = await pool.query(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [FEED_CACHE_DB_KEY]
+    );
+    if (r.rows.length > 0) {
+      const parsed = JSON.parse(r.rows[0].data) as ThemeFeedItem[];
+      console.log(`[themes] feed DB 복원 완료: ${parsed.length}개 테마`);
+      return parsed;
+    }
+  } catch (e: any) {
+    console.error("[themes] feed DB 로드 실패:", e.message);
+  }
+  return null;
+}
+
+async function rebuildFeedInBackground(): Promise<void> {
+  if (feedRebuildInProgress) return;
+  feedRebuildInProgress = true;
+  try {
+    const themes: TrendingTheme[] = trendingCache?.themes?.length
+      ? trendingCache.themes
+      : FALLBACK_THEMES;
+    const krxList = await loadKRXList().catch(() => getKRXCache());
+    const settled = await Promise.allSettled(
+      themes.map(t => discoverThemeFast(t, krxList))
+    );
+    const feed: ThemeFeedItem[] = settled.map((r, i) =>
+      r.status === "fulfilled"
+        ? r.value
+        : { ...themes[i], summary: themes[i].description, stocks: [] }
+    );
+    feedCache = { feed, cachedAt: Date.now() };
+    await saveFeedCacheToDB(feed);
+    console.log("[themes] feed 백그라운드 갱신 완료");
+  } catch (e) {
+    console.error("[themes] feed 백그라운드 갱신 실패:", e);
+  } finally {
+    feedRebuildInProgress = false;
+  }
+}
+
+// 서버 시작 시 DB에서 피드 캐시 복원
+(async () => {
+  const stored = await loadFeedCacheFromDB();
+  if (stored) {
+    feedCache = { feed: stored, cachedAt: Date.now() - FEED_TTL + 30 * 60 * 1000 }; // 30분 뒤 갱신
+  }
+})();
 
 function _normFN(s: string) {
   return s.toLowerCase()
@@ -375,26 +450,25 @@ async function discoverThemeFast(
 
 router.get("/themes/trending-feed", async (_req, res) => {
   try {
-    if (feedCache && Date.now() - feedCache.cachedAt < FEED_TTL) {
+    const now = Date.now();
+    const isFresh = feedCache && (now - feedCache.cachedAt < FEED_TTL);
+    const isStale = feedCache && !isFresh;
+
+    // 신선한 캐시 → 즉시 반환
+    if (isFresh && feedCache) {
       return res.json(feedCache.feed);
     }
-    // trending 테마: 이미 캐시 있으면 재활용, 없으면 FALLBACK
-    const themes: TrendingTheme[] = trendingCache?.themes?.length
-      ? trendingCache.themes
-      : FALLBACK_THEMES;
 
-    const krxList = await loadKRXList().catch(() => getKRXCache());
+    // 만료된 캐시(stale) → 즉시 반환 + 백그라운드 갱신
+    if (isStale && feedCache) {
+      res.json(feedCache.feed);
+      rebuildFeedInBackground();
+      return;
+    }
 
-    const settled = await Promise.allSettled(
-      themes.map(t => discoverThemeFast(t, krxList)),
-    );
-    const feed: ThemeFeedItem[] = settled.map((r, i) =>
-      r.status === "fulfilled"
-        ? r.value
-        : { ...themes[i], summary: themes[i].description, stocks: [] },
-    );
-    feedCache = { feed, cachedAt: Date.now() };
-    return res.json(feed);
+    // 캐시 없음(첫 시작) → 백그라운드 갱신 시작하고 빈 배열 반환 (프론트가 재시도)
+    rebuildFeedInBackground();
+    return res.json([]);
   } catch (e) {
     console.error("[themes/trending-feed]", e);
     return res.status(500).json({ error: "피드 로드 실패" });
