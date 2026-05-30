@@ -357,6 +357,29 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
       `⚠️ DART OpenAPI 원천 데이터. 현 시점 기준 최신 수집분. 단위 표기 포함.`,
     ];
 
+    // ── 최신 분기 사전 분석: 흑자전환/적자전환 감지 + 연간 앵커 표시 ──────────
+    const latestQRow = r.rows.find(row => !row.period_label?.endsWith("FY"));
+    const latestFYRow = r.rows.find(row => row.period_label?.endsWith("FY"));
+    if (latestQRow) {
+      const qOp  = parseAmt(latestQRow.operating_income);
+      const fyOp = latestFYRow ? parseAmt(latestFYRow.operating_income) : null;
+      let turnNote = "";
+      if (qOp !== null && fyOp !== null) {
+        if (qOp > 0 && fyOp <= 0)
+          turnNote = " 🔄⚠️ 흑자전환 감지(직전 연간 적자→분기 흑자) — 연간 추정 상향 바이어스 반영 검토";
+        else if (qOp < 0 && fyOp >= 0)
+          turnNote = " 🔴⚠️ 적자전환 감지(직전 연간 흑자→분기 적자) — 연간 추정 하향 바이어스 반영 검토";
+      }
+      lines.push(
+        ``,
+        `📌 [최신 확정 분기: ${latestQRow.period_label}${turnNote}]`,
+        `   ① 연간 추정 앵커: 이 분기를 기준으로 잔여 분기를 추정해 올해E를 산출하세요.`,
+        `   ② 계절성 보정: 건설·인프라(Q1 약세/Q4 강세) · 소비재·뷰티(Q4 강세) · 반도체·전자(Q1 약세/Q3 강세) · 조선(연간 균등).`,
+        `   ③ 연환산 공식: 단순 ×4 금지 — 반드시 분기별 계절성 가중치 적용 후 합산.`,
+        ``,
+      );
+    }
+
     for (const row of r.rows) {
       const fs = row.fs_type === "CFS" ? "연결" : "별도";
       const rev = parseAmt(row.revenue);
@@ -372,7 +395,11 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
         ? ` (OPM ${(op / rev * 100).toFixed(1)}%)`
         : "";
 
-      const parts: string[] = [`▸ ${row.period_label}(${fs})`];
+      // 최신 확정 분기에 ★ 마커 부착
+      const isLatestQ = latestQRow && row.period_label === latestQRow.period_label;
+      const prefix = isLatestQ ? `★확정★ ${row.period_label}(${fs})` : `▸ ${row.period_label}(${fs})`;
+
+      const parts: string[] = [prefix];
       if (rev !== null) parts.push(`매출 ${fmtKrw(rev)}`);
       if (op  !== null) parts.push(`영업이익 ${fmtKrw(op)}${opMargin}`);
       if (ni  !== null) parts.push(`순이익 ${fmtKrw(ni)}`);
