@@ -437,6 +437,22 @@ function searchKorean(query: string): ReturnType<typeof toResult>[] {
 
 function searchEnglishLocal(query: string): ReturnType<typeof toResult>[] {
   const q = query.toLowerCase().replace(/[\s\-\.&]/g, "");
+
+  // 미국 종목 우선 검색 (US_KOREAN_MAP): 심볼 정확 매칭 > 이름 포함 > 키워드
+  const usResults = US_KOREAN_MAP.filter(c => {
+    const symbolNorm = c.symbol.toLowerCase();
+    const nameNorm = c.name.toLowerCase().replace(/[\s\-\.&]/g, "");
+    if (symbolNorm === q || symbolNorm.startsWith(q)) return true;
+    if (nameNorm.includes(q) || q.includes(nameNorm)) return true;
+    return c.keywords.some(k => {
+      const kn = k.toLowerCase().replace(/[\s\-\.&]/g, "");
+      return kn.includes(q) || q.includes(kn);
+    });
+  }).slice(0, 8).map(c => ({ symbol: c.symbol, shortname: `${c.name} (${c.symbol})`, exchange: c.exchange, quoteType: "EQUITY" as const }));
+
+  if (usResults.length > 0) return usResults;
+
+  // 한국 종목 폴백 (KOREAN_COMPANY_MAP): 심볼·이름 영문 매칭
   return KOREAN_COMPANY_MAP.filter(c => {
     const nameNorm = c.name.toLowerCase().replace(/[\s\-\.&]/g, "");
     if (nameNorm.includes(q) || q.includes(nameNorm)) return true;
@@ -444,7 +460,7 @@ function searchEnglishLocal(query: string): ReturnType<typeof toResult>[] {
       const kn = k.replace(/[\s\-\.&]/g, "");
       return kn.includes(q) || q.includes(kn);
     });
-  }).slice(0, 8).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" }));
+  }).slice(0, 8).map(c => ({ symbol: c.symbol, shortname: c.name, exchange: c.exchange, quoteType: "EQUITY" as const }));
 }
 
 function searchByCode(digits: string): ReturnType<typeof toResult>[] {
