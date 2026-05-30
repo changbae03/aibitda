@@ -2020,6 +2020,69 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
           `  ${p}: 매출 ${rv != null ? fmtNum(rv, currency) : "-"} | 영업이익 ${op != null ? fmtNum(op, currency) : "-"}${opM} | 순이익 ${ni != null ? fmtNum(ni, currency) : "-"}${epsStr}${cfStr}${fcfStr}`
         );
       }
+
+      // ── 서버 산출 bottom-up 앵커: OPM 추세 기반 전망 범위 ──────────────────
+      // 최근 4분기 OPM 수집
+      const opmSeries: { period: string; rev: number; op: number; opm: number }[] = [];
+      for (const p of qPeriods.slice(0, 4)) {
+        const rv = qRev.find(x => x.period === p)?.value ?? null;
+        const op = qOp.find(x => x.period === p)?.value ?? null;
+        if (rv != null && rv > 0 && op != null) {
+          opmSeries.push({ period: p, rev: rv, op, opm: (op / rv) * 100 });
+        }
+      }
+
+      if (opmSeries.length >= 2) {
+        const latest = opmSeries[0];   // 가장 최신 확정 분기
+        const prevQ  = opmSeries[1];
+
+        // 추세 방향 (QoQ 변화)
+        const trendQoQ = latest.opm - prevQ.opm;
+
+        // 가중평균 OPM: 최신→과거 순서로 [0.5, 0.3, 0.2] 가중
+        const wts = opmSeries.length >= 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
+        const weightedAvgOpm = opmSeries.slice(0, wts.length)
+          .reduce((s, d, i) => s + d.opm * wts[i], 0);
+
+        // 트렌드 개선 시 최신 분기를 더 반영한 forward OPM 중심값
+        const fwdOpmCenter = trendQoQ > 0
+          ? latest.opm * 0.65 + weightedAvgOpm * 0.35   // 개선 추세: 최신 분기 더 가중
+          : latest.opm * 0.5  + weightedAvgOpm * 0.5;   // 하락/횡보: 균등 가중
+
+        // 범위 ± 2.5%p, 단 하한은 최솟값 - 3%p 이하로 내려가지 않도록
+        const fwdOpmLow  = Math.max(fwdOpmCenter - 2.5, Math.min(...opmSeries.map(d => d.opm)) - 3);
+        const fwdOpmHigh = fwdOpmCenter + 2.5;
+
+        // 미래 분기 매출 기준: 최근 2분기 평균
+        const avgFwdRev = opmSeries.slice(0, Math.min(2, opmSeries.length))
+          .reduce((s, d) => s + d.rev, 0) / Math.min(2, opmSeries.length);
+
+        // Q2~Q4 합산 영업이익 범위 (3개 분기)
+        const fwdOpLow  = avgFwdRev * (fwdOpmLow  / 100) * 3;
+        const fwdOpHigh = avgFwdRev * (fwdOpmHigh / 100) * 3;
+
+        // 현재 연도 (가장 최신 분기의 연도 = 확정 연도)
+        const confirmedYear = parseInt(latest.period.slice(0, 4), 10);
+        const currentYear   = new Date().getFullYear();
+        const targetYear    = confirmedYear >= currentYear ? confirmedYear : currentYear;
+
+        // bottom-up 연간 합산 (Q1확정 + Q2~Q4 추정)
+        const annualOpLow  = latest.op + fwdOpLow;
+        const annualOpHigh = latest.op + fwdOpHigh;
+
+        lines.push(`\n⛔⛔ [서버 산출 — bottom-up OPM 앵커 (${targetYear}E 전망 시 반드시 이 값을 기준으로 사용, 무시 금지)]`);
+        lines.push(`  OPM 추이 (오래된 → 최신): ${[...opmSeries].reverse().map(d => `${d.period} ${d.opm.toFixed(1)}%`).join(' → ')}`);
+        lines.push(`  추세 방향: ${trendQoQ >= 0 ? '개선' : '악화'} (QoQ ${trendQoQ >= 0 ? '+' : ''}${trendQoQ.toFixed(1)}%p)`);
+        lines.push(`  ★ 최신 확정 분기 ${latest.period}: OPM ${latest.opm.toFixed(1)}%, 영업이익 ${fmtNum(latest.op, currency)} — 이후 분기 OPM 추정의 기준점`);
+        lines.push(`  가중평균 OPM: ${weightedAvgOpm.toFixed(1)}%`);
+        lines.push(`  서버 산출 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}% (범위: ${fwdOpmLow.toFixed(1)}%~${fwdOpmHigh.toFixed(1)}%)`);
+        lines.push(`  미래 분기 평균 매출 기준값: ${fmtNum(avgFwdRev, currency)}`);
+        lines.push(`  Q2E+Q3E+Q4E 합산 영업이익 추정 범위: ${fmtNum(fwdOpLow, currency)} ~ ${fmtNum(fwdOpHigh, currency)}`);
+        lines.push(`  ─→ ${targetYear}E 연간 영업이익 bottom-up 범위: ${fmtNum(annualOpLow, currency)} ~ ${fmtNum(annualOpHigh, currency)}`);
+        lines.push(`  ─→ ${targetYear}E 연간 OPM(bottom-up): ${(annualOpLow / (avgFwdRev * 4) * 100).toFixed(1)}%~${(annualOpHigh / (avgFwdRev * 4) * 100).toFixed(1)}%`);
+        lines.push(`⛔⛔ 이 범위를 크게 벗어나는 ${targetYear}E 추정은 반드시 명시적 근거(업황 급변, 비용 구조 변화 등)를 제시해야 합니다.`);
+        lines.push(`⛔⛔ TOP-DOWN 절대 금지: "${targetYear}E 연간 OPM=X%"를 먼저 설정한 뒤 분기로 역산하지 마세요. 반드시 분기 bottom-up → 연간 합산 순서로 작업하세요.`);
+      }
     }
   }
 

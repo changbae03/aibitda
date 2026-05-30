@@ -398,6 +398,59 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
         return `   ★ ${label} (확정): 매출 ${rev !== null ? fmtKrw(rev) : "—"} | 영업이익 ${op !== null ? fmtKrw(op) : "—"}${opm ? ` (OPM ${opm}%)` : ""} ← 분기 테이블 Q${label.includes("Q") ? label.slice(-1) : "?"} 셀에 그대로 기입`;
       });
 
+      // ── Q2~Q4 OPM 합리 범위 계산 (최근 비-현재연도 분기 OPM 추세 기반) ──
+      const allQRows = r.rows.filter(row => !row.period_label?.endsWith("FY"));
+      const prevYearQRows = allQRows.filter(row => !row.period_label?.startsWith(currentYearStr));
+      // 최신 순으로 정렬된 최근 3분기 OPM 추출
+      const recentOPMs: { label: string; opm: number }[] = [];
+      for (const row of prevYearQRows.slice(0, 4)) {
+        const rev = parseAmt(row.revenue);
+        const op  = parseAmt(row.operating_income);
+        if (rev && op !== null && rev !== 0) {
+          recentOPMs.push({ label: row.period_label ?? "", opm: op / rev * 100 });
+        }
+      }
+      // 현재연도 확정 분기 OPM도 포함
+      const confirmedOPMs: { label: string; opm: number }[] = [];
+      for (const row of confirmedThisYearRows) {
+        const rev = parseAmt(row.revenue);
+        const op  = parseAmt(row.operating_income);
+        if (rev && op !== null && rev !== 0) {
+          confirmedOPMs.push({ label: row.period_label ?? "", opm: op / rev * 100 });
+        }
+      }
+
+      // 최신 확정 분기 OPM 기반 범위 계산
+      const latestConfirmedOPM = confirmedOPMs.length > 0 ? confirmedOPMs[confirmedOPMs.length - 1].opm : null;
+      const latestPrevOPM = recentOPMs.length > 0 ? recentOPMs[0].opm : null;
+
+      let opmRangeNote = "";
+      if (latestConfirmedOPM !== null) {
+        // 추세 파악: 직전 분기와 최신 확정 분기 비교
+        const trendDir = latestPrevOPM !== null
+          ? (latestConfirmedOPM > latestPrevOPM ? "개선" : latestConfirmedOPM < latestPrevOPM ? "악화" : "횡보")
+          : "확인불가";
+
+        // Q2~Q4 권고 범위: 최신 확정 OPM 기준 ±3pp, 단 직전분기 OPM도 반영
+        const refOPMs = [latestConfirmedOPM, ...(latestPrevOPM !== null ? [latestPrevOPM] : [])].filter(v => v > -20);
+        const rangeLow  = (Math.min(...refOPMs) - 1).toFixed(1);
+        const rangeHigh = (Math.max(...refOPMs) + 2).toFixed(1);
+
+        const recentTrend = recentOPMs.slice(0, 3)
+          .map(r2 => `${r2.label}: ${r2.opm.toFixed(1)}%`)
+          .join(" → ");
+        const confirmedTrend = confirmedOPMs
+          .map(r2 => `${r2.label}★: ${r2.opm.toFixed(1)}%`)
+          .join(" → ");
+
+        opmRangeNote = [
+          `   ⛔ [Q2~Q4 OPM bottom-up 추정 앵커 — 코드 계산값]`,
+          `      최근 분기 OPM 추세: ${recentTrend}${recentTrend && confirmedTrend ? " → " : ""}${confirmedTrend} (추세: ${trendDir})`,
+          `      Q2~Q4 OPM 합리 범위: ${rangeLow}% ~ ${rangeHigh}% (최신 확정 분기 OPM 기준 ±조정)`,
+          `      이 범위 밖으로 추정하면 반드시 이탈 사유 명시 — 특히 최신 분기 OPM(${latestConfirmedOPM.toFixed(1)}%)보다 ${Math.abs(parseFloat(rangeLow))}pp 이상 낮게 잡는 것은 근거 필수`,
+        ].join("\n");
+      }
+
       lines.push(
         ``,
         `📌 [최신 확정 분기: ${latestQRow.period_label}${turnNote}]`,
@@ -409,6 +462,7 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
           `   ⛔ [분기별 전망 테이블 — 확정값 직접 사용]:`,
           ...confirmedQTableRows,
         ] : []),
+        ...(opmRangeNote ? [opmRangeNote] : []),
         ``,
       );
     }
