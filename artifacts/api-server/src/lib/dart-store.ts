@@ -389,6 +389,15 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
           ? `   ⚠️ 수학적 참고: ${currentYearStr}년 확정 ${confirmedCount}개 분기 영업이익 합계 = ${fmtKrw(confirmedOpSum)} (적자 분기 포함).`
           : "";
 
+      // 확정 분기별 구조화 데이터 (분기 테이블에 직접 사용)
+      const confirmedQTableRows = confirmedThisYearRows.map(row => {
+        const rev = parseAmt(row.revenue);
+        const op  = parseAmt(row.operating_income);
+        const opm = (rev && op && rev !== 0) ? (op / rev * 100).toFixed(1) : null;
+        const label = row.period_label ?? "";
+        return `   ★ ${label} (확정): 매출 ${rev !== null ? fmtKrw(rev) : "—"} | 영업이익 ${op !== null ? fmtKrw(op) : "—"}${opm ? ` (OPM ${opm}%)` : ""} ← 분기 테이블 Q${label.includes("Q") ? label.slice(-1) : "?"} 셀에 그대로 기입`;
+      });
+
       lines.push(
         ``,
         `📌 [최신 확정 분기: ${latestQRow.period_label}${turnNote}]`,
@@ -396,6 +405,10 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
         `   ② 계절성 보정: 건설·인프라(Q1 약세/Q4 강세) · 소비재·뷰티(Q4 강세) · 반도체·전자(Q1 약세/Q3 강세) · 조선(연간 균등).`,
         `   ③ 연환산 공식: 단순 ×4 금지 — 반드시 분기별 계절성 가중치 적용 후 합산.`,
         ...(floorNote ? [floorNote] : []),
+        ...(confirmedQTableRows.length > 0 ? [
+          `   ⛔ [분기별 전망 테이블 — 확정값 직접 사용]:`,
+          ...confirmedQTableRows,
+        ] : []),
         ``,
       );
     }
