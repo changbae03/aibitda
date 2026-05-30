@@ -2086,6 +2086,10 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         }
         const hasSeasonal = Object.values(seasonIdx).some(v => v !== null);
 
+        // ── 계절성 fallback: 데이터 부족 시 한국 일반 제조업 기본 패턴 적용 ──
+        // Q2: 봄철 생산·공사 시작(+0.2), Q3: 여름 비수기(-0.3), Q4: 연말 집행 강세(+1.2)
+        const DEFAULT_SEASONAL: Record<number, number> = { 2: 0.2, 3: -0.3, 4: 1.2 };
+
         // ── 분기별 매출 추정: 최근 동분기 평균 ────────────────────────────────
         // 각 분기 번호(2,3,4)의 역사적 매출 평균 (최근 2년치 우선)
         const qRevByQNum: Record<number, number[]> = {2: [], 3: [], 4: []};
@@ -2108,12 +2112,18 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         }
 
         // ── 분기별 OPM 추정 ───────────────────────────────────────────────────
+        // 계절 인덱스가 있으면 사용, 없으면 기본 제조업 패턴 적용
         const fwdOpmByQ: Record<number, number> = {};
+        const usedFallback: Record<number, boolean> = {};
         for (const q of [2, 3, 4]) {
           const sIdx = seasonIdx[q];
-          fwdOpmByQ[q] = sIdx !== null
-            ? fwdOpmCenter + sIdx        // 계절 인덱스 반영
-            : fwdOpmCenter;              // 데이터 부족 시 중심값 사용
+          if (sIdx !== null && Math.abs(sIdx) >= 0.15) {
+            fwdOpmByQ[q] = fwdOpmCenter + sIdx;   // 실제 계절 인덱스
+            usedFallback[q] = false;
+          } else {
+            fwdOpmByQ[q] = fwdOpmCenter + DEFAULT_SEASONAL[q];  // fallback
+            usedFallback[q] = true;
+          }
         }
 
         // ── 분기별 영업이익 추정 ──────────────────────────────────────────────
@@ -2138,29 +2148,17 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         lines.push(`  추세 방향: ${trendQoQ >= 0 ? '개선' : '악화'} (QoQ ${trendQoQ >= 0 ? '+' : ''}${trendQoQ.toFixed(1)}%p)`);
         lines.push(`  ★ 최신 확정 분기 ${latest.period}: OPM ${latest.opm.toFixed(1)}%, 영업이익 ${fmtNum(latest.op, currency)}`);
         lines.push(`  forward OPM 중심값 (가중추세): ${fwdOpmCenter.toFixed(1)}%`);
-        if (hasSeasonal && seasonYears >= 1) {
-          lines.push(`  계절성 분석 (${seasonYears}년치 데이터 기반${seasonYears < 2 ? ', 참고용' : ''}):`);
-          for (const q of [2, 3, 4]) {
-            const sIdx = seasonIdx[q];
-            const sNote = sIdx != null ? ` (계절 조정 ${sIdx >= 0 ? '+' : ''}${sIdx!.toFixed(1)}%p)` : '';
-            lines.push(`    Q${q}E: 매출 ${fmtNum(estRevByQ[q], currency)} × OPM ${fwdOpmByQ[q].toFixed(1)}%${sNote} = 영업이익 ${fmtNum(fwdOpByQ[q], currency)}`);
-          }
-        } else {
-          for (const q of [2, 3, 4]) {
-            lines.push(`    Q${q}E: 매출 ${fmtNum(estRevByQ[q], currency)} × OPM ${fwdOpmByQ[q].toFixed(1)}% = 영업이익 ${fmtNum(fwdOpByQ[q], currency)}`);
-          }
+        for (const q of [2, 3, 4]) {
+          const rawIdx = seasonIdx[q];
+          const applied = usedFallback[q] ? DEFAULT_SEASONAL[q] : rawIdx!;
+          const note = usedFallback[q]
+            ? ` (계절 조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p, 제조업 기본패턴 적용)`
+            : ` (계절 조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`;
+          lines.push(`    Q${q}E: 매출 ${fmtNum(estRevByQ[q], currency)} × OPM ${fwdOpmByQ[q].toFixed(1)}%${note} = 영업이익 ${fmtNum(fwdOpByQ[q], currency)}`);
         }
         lines.push(`  Q2E+Q3E+Q4E 합산: ${fmtNum(fwdOpSum, currency)}`);
         lines.push(`  ─→ ${targetYear}E 연간 영업이익 (bottom-up 중심값): ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
-        // 분기별 OPM 차이가 0.3%p 미만이면 계절성 미반영 경고
-        const qOpms = [fwdOpmByQ[2], fwdOpmByQ[3], fwdOpmByQ[4]];
-        const opmSpread = Math.max(...qOpms) - Math.min(...qOpms);
-        if (opmSpread < 0.3) {
-          lines.push(`  ⚠️ [서버 경고] 서버 산출 Q2~Q4 OPM 편차 ${opmSpread.toFixed(1)}%p — 계절성 데이터 부족으로 분기별 차이가 거의 없음.`);
-          lines.push(`  ⚠️ AI 판단 필수: 업종 특성(건설·소비재·반도체 등)에 따른 계절성을 직접 추가하고, 촉매 분석의 하반기 이슈를 Q3E·Q4E OPM에 명시적으로 가감하세요.`);
-          lines.push(`  ⚠️ 건설 소재·인프라: Q1 약세(-1~-2%p) / Q2 중립(±0) / Q3 중립~약세(-0.5%p) / Q4 강세(+2~+3%p) 패턴 적용 검토 필요.`);
-        }
-        lines.push(`⛔⛔ 위 분기별 추정값을 출발점으로 삼아 업황·촉매 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
+        lines.push(`⛔⛔ 위 분기별 추정값을 출발점으로 삼아 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
         lines.push(`⛔⛔ TOP-DOWN 절대 금지: 연간 OPM 먼저 설정 후 역산 금지. 반드시 분기 bottom-up → 연간 합산.`);
       }
     }
