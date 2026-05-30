@@ -370,12 +370,32 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
         else if (qOp < 0 && fyOp >= 0)
           turnNote = " 🔴⚠️ 적자전환 감지(직전 연간 흑자→분기 적자) — 연간 추정 하향 바이어스 반영 검토";
       }
+      // 확정 분기 수학적 하한선 계산
+      // 복수 확정 분기가 있으면 모두 합산 (예: Q1+Q2 확정)
+      const confirmedQRows = r.rows.filter(row => !row.period_label?.endsWith("FY"));
+      // 같은 회계연도 분기만(올해E 기준)
+      const currentYearStr = String(new Date().getFullYear());
+      const confirmedThisYearRows = confirmedQRows.filter(row =>
+        row.period_label?.startsWith(currentYearStr)
+      );
+      const confirmedOpSum = confirmedThisYearRows.reduce((sum, row) => {
+        const op = parseAmt(row.operating_income);
+        return op !== null ? sum + op : sum;
+      }, 0);
+      const confirmedCount = confirmedThisYearRows.length;
+      const floorNote = confirmedCount > 0 && confirmedOpSum > 0
+        ? `   ⛔ 수학적 하한선: ${currentYearStr}년 확정 ${confirmedCount}개 분기 영업이익 합계 = ${fmtKrw(confirmedOpSum)} → 연간E 영업이익은 반드시 이 값 이상이어야 합니다.`
+        : confirmedCount > 0
+          ? `   ⚠️ 수학적 참고: ${currentYearStr}년 확정 ${confirmedCount}개 분기 영업이익 합계 = ${fmtKrw(confirmedOpSum)} (적자 분기 포함).`
+          : "";
+
       lines.push(
         ``,
         `📌 [최신 확정 분기: ${latestQRow.period_label}${turnNote}]`,
         `   ① 연간 추정 앵커: 이 분기를 기준으로 잔여 분기를 추정해 올해E를 산출하세요.`,
         `   ② 계절성 보정: 건설·인프라(Q1 약세/Q4 강세) · 소비재·뷰티(Q4 강세) · 반도체·전자(Q1 약세/Q3 강세) · 조선(연간 균등).`,
         `   ③ 연환산 공식: 단순 ×4 금지 — 반드시 분기별 계절성 가중치 적용 후 합산.`,
+        ...(floorNote ? [floorNote] : []),
         ``,
       );
     }
