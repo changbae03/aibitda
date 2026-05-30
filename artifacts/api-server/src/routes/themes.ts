@@ -333,14 +333,47 @@ router.get("/themes/trending", async (_req, res) => {
     const kstDate = new Date(Date.now() + 9 * 3600_000);
     const today = `${kstDate.getUTCFullYear()}년 ${kstDate.getUTCMonth() + 1}월 ${kstDate.getUTCDate()}일`;
 
-    const prompt = `오늘은 ${today}입니다. 이 날짜 기준으로 최근 1~2주간 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰린 테마와 섹터 8개를 선정해주세요.
+    // 실제 시장 브리핑 데이터를 컨텍스트로 가져옴 (실패해도 무시)
+    let briefContext = "";
+    try {
+      const MARKET_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
+      const briefRes = await fetch(`http://localhost:${MARKET_PORT}/api/market-analysis/brief`);
+      if (briefRes.ok) {
+        const brief = await briefRes.json() as Record<string, unknown>;
+        const events = (brief.marketEvents as Array<{title:string;direction:string}> | undefined)
+          ?.map(e => `- ${e.title} (${e.direction === "positive" ? "긍정" : e.direction === "negative" ? "부정" : "중립"})`)
+          .join("\n") ?? "";
+        const topics = (brief.keyTopics as Array<{keyword:string;description:string}> | undefined)
+          ?.map(t => `- ${t.keyword}: ${t.description}`)
+          .join("\n") ?? "";
+        const issues = (brief.recentIssues as string[] | undefined)?.join(", ") ?? "";
+        if (events || topics) {
+          briefContext = `
+=== 실제 시장 데이터 (AI 모델 분석 결과) ===
+코스피: ${brief.kospiCurrent ?? ""} (${(brief.kospiChange as number) >= 0 ? "+" : ""}${brief.kospiChange ?? ""}%)
+코스닥: ${brief.kosdaqCurrent ?? ""}
+
+최근 주요 이벤트:
+${events}
+
+핵심 키워드:
+${topics}
+
+최근 이슈: ${issues}
+===`;
+        }
+      }
+    } catch { /* 브리핑 실패 시 날짜만으로 진행 */ }
+
+    const prompt = `오늘은 ${today}입니다.${briefContext ? "\n" + briefContext : ""}
+
+위 실제 시장 데이터를 바탕으로, ${today} 기준 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰리고 있는 테마와 섹터 8개를 선정해주세요.
 
 조건:
-- 반드시 ${today} 시점에도 여전히 진행 중인 이슈여야 합니다 — 이미 끝난 이벤트(예: 미국 대선, 월드컵 등 과거 행사)는 절대 포함하지 마세요
-- "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하세요
-- 구체적인 드라이버가 있는 테마여야 합니다 (예: 관세 협상 → 수출 수혜, 데이터센터 전력 부족 → HVDC·변압기, GLP-1 확산 → CMO·원료의약품)
-- 최근 실적·수주·정책 이슈로 섹터 로테이션이 일어난 경우 우선
-- 한국 코스피·코스닥과 미국 시장을 모두 커버
+- 위 시장 데이터에서 드러난 실제 수급 흐름과 이슈를 우선 반영하세요
+- 반드시 ${today} 시점에도 진행 중인 이슈여야 합니다 — 이미 종료된 이벤트(미국 대선 등 과거 행사)는 절대 제외
+- "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하고 구체적인 드라이버(수주·정책·실적)를 명시하세요
+- 한국 코스피·코스닥과 미국 시장 모두 커버
 
 마크다운 없이 아래 JSON 배열만 출력하세요:
 [{"id":"영문_스네이크","name":"한글 테마명(10자 이내)","description":"수급 이유 한 줄(20자 이내)","emoji":"이모지"}]`;
@@ -348,7 +381,7 @@ router.get("/themes/trending", async (_req, res) => {
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
+      config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
     });
 
     const themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
