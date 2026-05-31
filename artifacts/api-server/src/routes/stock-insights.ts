@@ -6,6 +6,8 @@ import { fetchETFsForStock, isPykrxEnabled } from "../lib/pykrx-client.js";
 import { cache } from "../lib/mem-cache.js";
 import { getStockExposure } from "../lib/etf-analyzer.js";
 import { calcEventRisk } from "../lib/event-risk.js";
+import { pool } from "@workspace/db";
+import { fetchKISStockQuotes } from "../lib/kis-client.js";
 
 const SECTOR_TO_CATEGORY: Record<string, string> = {
   "국내주식": "시장전체",
@@ -360,12 +362,44 @@ ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피�
       return p;
     });
 
+    // ── 한국 피어 시가총액: KRX DB 일괄 조회 (Yahoo Finance보다 정확) ──────
+    const koreanPeerCodes = peers
+      .map((p: any) => (p.ticker ?? "").replace(/\.(KS|KQ)$/, ""))
+      .filter((_: string, i: number) => /^\d{6}\.(KS|KQ)$/.test(peers[i]?.ticker ?? ""));
+
+    // KRX DB mcap 맵 (원 단위)
+    const krxMcapMap = new Map<string, number>();
+    if (koreanPeerCodes.length > 0) {
+      try {
+        const krxRes = await pool.query<{ code: string; mcap: string }>(
+          `SELECT code, mcap FROM krx_peer_data
+           WHERE code = ANY($1)
+             AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
+             AND mcap IS NOT NULL`,
+          [koreanPeerCodes]
+        );
+        for (const row of krxRes.rows) {
+          krxMcapMap.set(row.code, parseFloat(row.mcap));  // 원 단위
+        }
+      } catch (e) {
+        console.warn("[peer-group] KRX DB mcap 조회 실패:", e);
+      }
+    }
+
+    // KIS 실시간 시가총액 (억원 단위)
+    const kisQuotes = koreanPeerCodes.length > 0
+      ? await fetchKISStockQuotes(koreanPeerCodes).catch(() => new Map<string, any>())
+      : new Map<string, any>();
+
     // 각 피어에 대해 Yahoo Finance 재무 데이터 병렬 조회
     const peerFinancials = await Promise.allSettled(
       peers.map(async (peer: any) => {
         const peerTicker: string = peer.ticker ?? "";
         if (!peerTicker) return { ticker: peerTicker, marketCap: null, revenue: null, operatingIncome: null, operatingMargin: null, currency: null };
         try {
+          const isKrwPeer = /^\d{6}\.(KS|KQ)$/.test(peerTicker);
+          const peerCode = peerTicker.replace(/\.(KS|KQ)$/, "");
+
           const [q, fin] = await Promise.allSettled([
             yahooFinance.quote(peerTicker, undefined, { validateResult: false } as any),
             yahooFinance.quoteSummary(peerTicker, { modules: ["financialData", "price"] } as any, { validateResult: false } as any),
@@ -373,14 +407,49 @@ ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피�
           const quote = q.status === "fulfilled" ? q.value as any : null;
           const finData = fin.status === "fulfilled" ? (fin.value as any)?.financialData : null;
           const priceData = fin.status === "fulfilled" ? (fin.value as any)?.price : null;
-          const currency: string = priceData?.currency ?? quote?.currency ?? "USD";
+          const currency: string = priceData?.currency ?? quote?.currency ?? (isKrwPeer ? "KRW" : "USD");
           const totalRevenue: number | null = finData?.totalRevenue ?? null;
           const opMargins: number | null = finData?.operatingMargins ?? null;
           const opIncome: number | null =
             totalRevenue != null && opMargins != null ? Math.round(totalRevenue * opMargins) : null;
+
+          // 한국 주식 시가총액: KRX DB(원) → KIS 실시간(억원→원) → Yahoo Finance 순
+          let marketCap: number | null = null;
+          if (isKrwPeer) {
+            const krxMcap = krxMcapMap.get(peerCode) ?? null;              // 원 단위
+            const kis     = kisQuotes.get(peerCode);
+            const kisMcap = kis?.mcap != null && kis.mcap > 0 ? kis.mcap * 1e8 : null;  // 억원→원
+            // KIS 실시간 주가×KRX 주식수 역산
+            const kisPrice     = kis?.price ?? null;
+            const kisShares    = kis?.sharesOutstanding ?? null;
+            const calcMcap     = kisPrice && kisShares ? kisPrice * kisShares : null;
+            // KRX DB가 가장 신뢰도 높음, 단 KIS 실시간 가격으로 보정 가능
+            if (kisMcap != null && kisMcap > 0) {
+              marketCap = kisMcap;          // KIS 억원 → 원
+            } else if (krxMcap != null && krxMcap > 0) {
+              marketCap = krxMcap;          // KRX DB 원 단위
+            } else if (calcMcap != null && calcMcap > 0) {
+              marketCap = calcMcap;
+            } else {
+              marketCap = quote?.marketCap ?? null;
+            }
+            // 이상치 보정: Yahoo가 KRX의 10배 이상 차이나면 KRX 우선
+            const yahooCap = quote?.marketCap ?? null;
+            if (marketCap == null && yahooCap != null) marketCap = yahooCap;
+            if (marketCap != null && krxMcap != null && krxMcap > 0) {
+              const ratio = marketCap / krxMcap;
+              if (ratio < 0.1 || ratio > 10) {
+                console.warn(`[peer-group] ${peerTicker} mcap 이상치 → KRX 우선: ${(marketCap/1e8).toFixed(0)}억 → ${(krxMcap/1e8).toFixed(0)}억원`);
+                marketCap = krxMcap;
+              }
+            }
+          } else {
+            marketCap = quote?.marketCap ?? null;
+          }
+
           return {
             ticker: peerTicker,
-            marketCap: quote?.marketCap ?? null,
+            marketCap,
             revenue: totalRevenue,
             operatingIncome: opIncome,
             operatingMargin: opMargins != null ? Math.round(opMargins * 1000) / 10 : null,
