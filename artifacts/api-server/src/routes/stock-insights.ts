@@ -8,6 +8,7 @@ import { getStockExposure } from "../lib/etf-analyzer.js";
 import { calcEventRisk } from "../lib/event-risk.js";
 import { pool } from "@workspace/db";
 import { fetchKISStockQuotes } from "../lib/kis-client.js";
+import { fetchDartCompetitorSection } from "../lib/dart-business-content.js";
 
 const SECTOR_TO_CATEGORY: Record<string, string> = {
   "국내주식": "시장전체",
@@ -298,20 +299,35 @@ router.post("/peer-group/:ticker", async (req, res) => {
     ? `\n\n════ 앞선 리서치 분석 내용 (반드시 반영) ════\n${contextParts.join("\n\n")}\n════ 분석 내용 끝 ════`
     : "";
 
+  // ── DART 사업보고서 경쟁 현황 (한국 주식만) ──────────────────────────────
+  let dartCompetitorContext = "";
+  if (isKorean) {
+    const stockCode = ticker.replace(/\.(KS|KQ)$/, "");
+    const dartSection = await fetchDartCompetitorSection(stockCode).catch(() => null);
+    if (dartSection) {
+      dartCompetitorContext = `\n\n════ DART 사업보고서 — 경쟁 현황 (최우선 반영) ════\n` +
+        `⚠️ 아래 섹션은 ${companyName}의 DART 공시 사업보고서 원문입니다.\n` +
+        `이 섹션에서 언급된 경쟁사·업체명을 피어 목록에 반드시 최우선으로 포함하세요.\n` +
+        `${dartSection}\n` +
+        `════ DART 끝 ════`;
+    }
+  }
+
   const prompt = `당신은 글로벌 주식시장 전문 애널리스트입니다.
-아래 종목에 대해 연관기업(비교 가능한 피어)을 선정하고 JSON으로만 응답하세요.${analysisContext}
+아래 종목에 대해 연관기업(비교 가능한 피어)을 선정하고 JSON으로만 응답하세요.${analysisContext}${dartCompetitorContext}
 
 분석 대상:
 - 종목: ${ticker} (${companyName})
 - 업종: ${industry ?? "불명"}
 
 선정 기준 (앞선 리서치 내용을 최대한 반영):
-- 위 리서치(특히 목표가 산출 단계의 피어 멀티플)에서 이미 언급된 기업을 우선 포함
+- **DART 사업보고서 경쟁 현황 섹션에 명시된 기업을 1순위로 포함** (위 DART 섹션 참조)
+- 위 리서치(특히 목표가 산출 단계의 피어 멀티플)에서 이미 언급된 기업을 2순위로 포함
 - 사업 모델이 유사하거나 직접적 경쟁 관계인 기업
 - 밸류에이션 비교에서 실제로 사용된 피어를 최대한 반영
 - **한국 상장 주식 3~4개** + **글로벌(미국/일본 등) 주요 기업 2~3개** 혼합, 총 5~7개
 ${!isKorean ? "- 분석 대상이 한국 주식이 아닌 경우 글로벌 피어 중심으로 선정 가능" : ""}
-- reason 필드: 앞선 리서치에서 이 기업이 언급된 맥락을 포함해 2~3문장으로 서술
+- reason 필드: DART 사업보고서에서 언급된 맥락 및 앞선 리서치 맥락 포함해 2~3문장으로 서술
 
 다음 JSON 스키마로만 응답하세요:
 {

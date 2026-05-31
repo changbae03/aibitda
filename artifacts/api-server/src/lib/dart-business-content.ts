@@ -183,6 +183,51 @@ function extractKeyContent(text: string, maxChars = 4_500): string {
   return blocks.join("\n\n---\n").slice(0, maxChars);
 }
 
+// ─── 경쟁 현황 섹션 추출 ─────────────────────────────────────────────────────
+
+const COMP_MARKERS = [
+  "경쟁 현황", "경쟁현황", "시장 점유율", "시장점유율",
+  "경쟁 업체", "경쟁업체", "주요 경쟁", "업계 현황", "경쟁사",
+];
+
+/**
+ * 사업보고서 원문에서 경쟁 현황 관련 섹션만 추출.
+ * 피어 선정 프롬프트에 주입하여 DART 기재 경쟁사를 우선 반영.
+ * - 경쟁 현황 섹션이 없으면 전체 내용 앞부분(1500자) 반환.
+ */
+export async function fetchDartCompetitorSection(stockCode: string): Promise<string | null> {
+  const full = await fetchDartBusinessContent(stockCode);
+  if (!full) return null;
+
+  const lines = full.split("\n");
+  const blocks: string[] = [];
+  let current: string[] = [];
+  let capturing = false;
+
+  for (const line of lines) {
+    const isCompMarker = COMP_MARKERS.some((m) => line.includes(m));
+    if (isCompMarker) {
+      if (current.length > 0) blocks.push(current.join("\n"));
+      current = [line];
+      capturing = true;
+    } else if (capturing) {
+      current.push(line);
+      if (current.length >= 60) {
+        blocks.push(current.join("\n"));
+        current = [];
+        capturing = false;
+      }
+    }
+  }
+  if (current.length > 0) blocks.push(current.join("\n"));
+
+  const result = blocks.join("\n\n").trim();
+  if (result.length > 80) return result.slice(0, 2_500);
+
+  // 경쟁 현황 섹션이 없으면 전체 원문 앞부분 반환
+  return full.slice(0, 2_000);
+}
+
 // ─── 공개 함수 ────────────────────────────────────────────────────────────────
 
 /**
