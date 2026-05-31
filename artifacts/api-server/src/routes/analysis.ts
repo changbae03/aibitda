@@ -25,7 +25,7 @@ import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
-import { fetchDartBusinessContent } from "../lib/dart-business-content.js";
+import { fetchDartBusinessContent, fetchDartCompetitorSection } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
@@ -209,6 +209,117 @@ ${peerTable}
 `;
   } catch (err) {
     console.error("[krx-peer] getKRXSectorPeerContext failed:", err);
+    return null;
+  }
+}
+
+// DART 사업보고서 "경쟁 현황"에서 경쟁사명 추출
+function extractCompanyNamesFromDart(text: string): string[] {
+  const names: string[] = [];
+  // 패턴 1: XXX(주) 또는 XXX㈜
+  const p1 = /([가-힣A-Za-z0-9·\-]+(?:\s[가-힣A-Za-z0-9·\-]+){0,3})\s*(?:\(주\)|㈜)/g;
+  let m: RegExpExecArray | null;
+  while ((m = p1.exec(text)) !== null) names.push(m[1].trim());
+  // 패턴 2: (주)XXX 또는 ㈜XXX
+  const p2 = /(?:\(주\)|㈜)\s*([가-힣A-Za-z0-9·\-]+(?:\s[가-힣A-Za-z0-9·\-]+){0,3})/g;
+  while ((m = p2.exec(text)) !== null) names.push(m[1].trim());
+  // 패턴 3: 주식회사 XXX
+  const p3 = /주식회사\s+([가-힣A-Za-z0-9·\-]+(?:\s[가-힣A-Za-z0-9·\-]+){0,3})/g;
+  while ((m = p3.exec(text)) !== null) names.push(m[1].trim());
+  return [...new Set(names)].filter(n => n.length >= 2 && n.length <= 20);
+}
+
+// DART 사업보고서 명시 경쟁사 KIS 실시간 피어 컨텍스트
+async function getDartCompetitorPeerContext(krxCode: string): Promise<string | null> {
+  try {
+    // 1. DART 경쟁사 섹션 원문 가져오기
+    const dartText = await fetchDartCompetitorSection(krxCode);
+    if (!dartText || dartText.length < 10) return null;
+
+    // 2. 회사명 추출
+    const companyNames = extractCompanyNamesFromDart(dartText);
+    if (companyNames.length === 0) {
+      console.log(`[dart-peer] ${krxCode}: 회사명 패턴 추출 실패 — 원문 첨부로 대체`);
+      return `\n=== 📄 DART 사업보고서 경쟁사 현황 (참고) ===\n${dartText.slice(0, 600)}\n`;
+    }
+
+    // 3. KRX DB 퍼지 매칭 (각 이름의 핵심 키워드로 검색)
+    const matchedCodes = new Map<string, string>(); // code → name
+    await Promise.allSettled(
+      companyNames.slice(0, 12).map(async (rawName) => {
+        const keyword = rawName.replace(/[\(\)（）\s]/g, "").slice(0, 8);
+        const res = await pool.query<{ code: string; name: string }>(
+          `SELECT code, name FROM krx_peer_data
+           WHERE name ILIKE $1
+             AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
+           ORDER BY mcap DESC NULLS LAST
+           LIMIT 1`,
+          [`%${keyword}%`]
+        );
+        if (res.rows.length > 0 && res.rows[0].code !== krxCode) {
+          matchedCodes.set(res.rows[0].code, res.rows[0].name);
+        }
+      })
+    );
+
+    if (matchedCodes.size === 0) {
+      // 종목코드 매칭 실패 → 원문만 첨부
+      return `\n=== 📄 DART 사업보고서 경쟁사 현황 ===\n${dartText.slice(0, 800)}\n※ 상대가치평가 시 위 경쟁사들을 기준 피어로 활용하세요.\n`;
+    }
+
+    // 4. KIS 실시간 데이터 조회
+    const codes = [krxCode, ...matchedCodes.keys()];
+    const kisData = await fetchKISStockQuotes(codes).catch(() => new Map<string, any>());
+
+    // 5. 피어 테이블 생성
+    const peerRows = [...matchedCodes.entries()].map(([code, name]) => {
+      const kis = kisData.get(code);
+      // 시가총액: KIS mcap(억원) → 표시
+      const mcapEok = kis?.mcap != null && kis.mcap > 0 ? kis.mcap : null;
+      const mcapStr = mcapEok != null
+        ? mcapEok >= 10000 ? `${(mcapEok / 10000).toFixed(2)}조원` : `${Math.round(mcapEok).toLocaleString("ko-KR")}억원`
+        : "—";
+      return `| ${code} | ${name} | ${mcapStr} | ${kis?.pbr?.toFixed(2) ?? "—"} | ${kis?.per?.toFixed(1) ?? "—"} | ${kis?.roe !== null && kis?.roe !== undefined ? kis.roe.toFixed(1) + "%" : "—"} | ${kis?.price ? kis.price.toLocaleString("ko-KR") + "원" : "—"} |`;
+    });
+
+    // 분석 대상 종목 멀티플
+    const targetKIS = kisData.get(krxCode);
+    const targetRow = targetKIS
+      ? `\n[분석 대상] PBR ${targetKIS.pbr?.toFixed(2) ?? "N/A"}배 | PER ${targetKIS.per?.toFixed(1) ?? "N/A"}배 | ROE ${targetKIS.roe?.toFixed(1) ?? "N/A"}%\n`
+      : "";
+
+    // DART 경쟁사 중 PER, PBR 유효값 기반 중앙값
+    const validPERs = [...matchedCodes.keys()]
+      .map(c => kisData.get(c)?.per)
+      .filter((v): v is number => v != null && v > 0 && v < 200);
+    const validPBRs = [...matchedCodes.keys()]
+      .map(c => kisData.get(c)?.pbr)
+      .filter((v): v is number => v != null && v > 0 && v < 30);
+    const perMedian = validPERs.length
+      ? [...validPERs].sort((a, b) => a - b)[Math.floor(validPERs.length / 2)]
+      : null;
+    const pbrMedian = validPBRs.length
+      ? [...validPBRs].sort((a, b) => a - b)[Math.floor(validPBRs.length / 2)]
+      : null;
+
+    return `
+=== 📄 DART 사업보고서 명시 직접 경쟁사 — 최우선 피어 벤치마크 ===
+⚠️ 아래 기업들은 분석 대상(${krxCode})의 DART 사업보고서 "경쟁 현황"에서 직접 명시된 경쟁사입니다.
+상대가치평가(PBR·PER·EV/EBITDA) 시 이 피어들을 1순위 기준으로 사용하세요.
+${targetRow}
+[DART 경쟁사 KIS 실시간 멀티플]
+| 종목코드 | 종목명 | 시가총액 | PBR(배) | PER(배) | ROE | 현재가 |
+|--------|--------|---------|--------|--------|-----|-------|
+${peerRows.join("\n")}
+
+[DART 경쟁사 밸류에이션 분포]
+- PER 중앙값: ${perMedian ? perMedian.toFixed(1) + "x" : "N/A (적자 기업 다수)"}
+- PBR 중앙값: ${pbrMedian ? pbrMedian.toFixed(2) + "x" : "N/A"}
+
+※ 분석 대상의 ROE·성장률이 경쟁사 평균 대비 우위인 경우에만 프리미엄 적용을 정당화하세요.
+`;
+  } catch (err) {
+    console.error("[dart-peer] getDartCompetitorPeerContext failed:", err);
     return null;
   }
 }
@@ -5389,15 +5500,36 @@ async function executeStep(
         }
       }
 
-      // 한국 주식: KRX 실데이터 기반 업종 PBR 주입 (1시간 캐시)
+      // 한국 주식: KRX 업종 PBR + DART 직접 경쟁사 병렬 조회
       const tickerKrxCode = analysis.ticker.split(".")[0];
       const isKoreanTicker = /^\d{6}$/.test(tickerKrxCode);
       if (isKoreanTicker) {
-        const krxCacheKey = `krx_peer_ctx:${tickerKrxCode}`;
-        let krxCtx: string | null = cache.get<string>(krxCacheKey) ?? null;
-        if (!krxCtx) {
-          krxCtx = await getKRXSectorPeerContext(tickerKrxCode);
-          if (krxCtx) cache.set(krxCacheKey, krxCtx, TTL.HOUR);
+        // 병렬 수집: KRX 업종 전체 + DART 명시 경쟁사
+        const krxCacheKey  = `krx_peer_ctx:${tickerKrxCode}`;
+        const dartCacheKey = `dart_peer_ctx:${tickerKrxCode}`;
+
+        const [krxCtxRaw, dartCtxRaw] = await Promise.allSettled([
+          (async () => {
+            let ctx: string | null = cache.get<string>(krxCacheKey) ?? null;
+            if (!ctx) { ctx = await getKRXSectorPeerContext(tickerKrxCode); if (ctx) cache.set(krxCacheKey, ctx, TTL.HOUR); }
+            return ctx;
+          })(),
+          (async () => {
+            let ctx: string | null = cache.get<string>(dartCacheKey) ?? null;
+            if (!ctx) { ctx = await getDartCompetitorPeerContext(tickerKrxCode); if (ctx) cache.set(dartCacheKey, ctx, TTL.HOUR); }
+            return ctx;
+          })(),
+        ]);
+
+        const krxCtx  = krxCtxRaw.status  === "fulfilled" ? krxCtxRaw.value  : null;
+        const dartCtx = dartCtxRaw.status === "fulfilled" ? dartCtxRaw.value : null;
+
+        // DART 경쟁사 먼저 주입 (AI가 가장 먼저 읽도록) → KRX 업종 전체 이어 붙임
+        if (dartCtx) {
+          enrichedContext = enrichedContext ? enrichedContext + "\n\n" + dartCtx : dartCtx;
+          console.log(`[dart-peer] Injected DART competitor peer context for ${tickerKrxCode}`);
+        } else {
+          console.log(`[dart-peer] No DART competitor data for ${tickerKrxCode}`);
         }
         if (krxCtx) {
           enrichedContext = enrichedContext ? enrichedContext + "\n\n" + krxCtx : krxCtx;
