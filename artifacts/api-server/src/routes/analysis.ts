@@ -2136,7 +2136,7 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
           }
         }
 
-        // ── 분기별 영업이익 추정 ──────────────────────────────────────────────
+        // ── 1단계: 분기별 영업이익 (계절 OPM × 매출) ────────────────────────
         const fwdOpByQ: Record<number, number> = {};
         for (const q of [2, 3, 4]) {
           fwdOpByQ[q] = estRevByQ[q] * (fwdOpmByQ[q] / 100);
@@ -2148,28 +2148,36 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const annualOpLow  = latest.op + Object.values(estRevByQ).reduce((s, v) => s + v * ((fwdOpmCenter - 2) / 100), 0);
         const annualOpHigh = latest.op + Object.values(estRevByQ).reduce((s, v) => s + v * ((fwdOpmCenter + 2) / 100), 0);
 
+        // ── 2단계: 연간 중심값 → 계절 비율 배분 (top-down 크로스체크) ─────
+        // 연간 목표에서 Q1 확정치를 빼고 남은 Q2~Q4 몫을 계절 비율로 배분
+        const restOpTarget = annualOp - latest.op;  // Q2+Q3+Q4 목표 합산
+        const totalRaw = fwdOpByQ[2] + fwdOpByQ[3] + fwdOpByQ[4];
+        const distOpByQ: Record<number, number> = {};
+        for (const q of [2, 3, 4]) {
+          distOpByQ[q] = totalRaw > 0
+            ? restOpTarget * (fwdOpByQ[q] / totalRaw)  // 계절 비율 그대로 유지
+            : restOpTarget / 3;
+        }
+
         // 현재 연도
         const confirmedYear = parseInt(latest.period.slice(0, 4), 10);
         const targetYear = Math.max(confirmedYear, new Date().getFullYear());
 
         // ── 출력 ─────────────────────────────────────────────────────────────
-        lines.push(`\n⛔⛔ [서버 산출 — bottom-up OPM 앵커 (${targetYear}E 전망 시 반드시 이 값을 기준으로 사용, 무시 금지)]`);
+        lines.push(`\n⛔⛔ [서버 산출 — 분기별 실적 앵커 (${targetYear}E 전망 시 반드시 이 값을 기준으로 사용, 무시 금지)]`);
         lines.push(`  OPM 추이 (오래된 → 최신): ${[...recentSeries].reverse().map(d => `${d.period} ${d.opm.toFixed(1)}%`).join(' → ')}`);
         lines.push(`  추세 방향: ${trendQoQ >= 0 ? '개선' : '악화'} (QoQ ${trendQoQ >= 0 ? '+' : ''}${trendQoQ.toFixed(1)}%p)`);
         lines.push(`  ★ 최신 확정 분기 ${latest.period}: OPM ${latest.opm.toFixed(1)}%, 영업이익 ${fmtNum(latest.op, currency)}`);
-        lines.push(`  forward OPM 중심값 (가중추세): ${fwdOpmCenter.toFixed(1)}%`);
+        lines.push(`  연간 영업이익 중심값: ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
+        lines.push(`  ─→ [연간 → 분기 배분 앵커] Q2E~Q4E를 아래 비율로 합산하면 연간 합계와 항상 일치:`);
         for (const q of [2, 3, 4]) {
-          const rawIdx = seasonIdx[q];
-          const applied = usedFallback[q] ? DEFAULT_SEASONAL[q] : rawIdx!;
-          const note = usedFallback[q]
-            ? ` (계절 조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p, 제조업 기본패턴 적용)`
-            : ` (계절 조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`;
-          lines.push(`    Q${q}E: 매출 ${fmtNum(estRevByQ[q], currency)} × OPM ${fwdOpmByQ[q].toFixed(1)}%${note} = 영업이익 ${fmtNum(fwdOpByQ[q], currency)}`);
+          const applied = usedFallback[q] ? DEFAULT_SEASONAL[q] : seasonIdx[q]!;
+          const pct = totalRaw > 0 ? (fwdOpByQ[q] / totalRaw * 100).toFixed(0) : '33';
+          lines.push(`    Q${q}E: 영업이익 ${fmtNum(distOpByQ[q], currency)} (연간 잔여분의 ${pct}%, OPM ${fwdOpmByQ[q].toFixed(1)}%, 계절조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`);
         }
-        lines.push(`  Q2E+Q3E+Q4E 합산: ${fmtNum(fwdOpSum, currency)}`);
-        lines.push(`  ─→ ${targetYear}E 연간 영업이익 (bottom-up 중심값): ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
-        lines.push(`⛔⛔ 위 분기별 추정값을 출발점으로 삼아 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
-        lines.push(`⛔⛔ TOP-DOWN 절대 금지: 연간 OPM 먼저 설정 후 역산 금지. 반드시 분기 bottom-up → 연간 합산.`);
+        lines.push(`  연간계: Q1(${fmtNum(latest.op, currency)}) + Q2E(${fmtNum(distOpByQ[2], currency)}) + Q3E(${fmtNum(distOpByQ[3], currency)}) + Q4E(${fmtNum(distOpByQ[4], currency)}) = ${fmtNum(annualOp, currency)}`);
+        lines.push(`⛔⛔ 위 분기별 배분값을 출발점으로 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
+        lines.push(`⛔⛔ 분기 합산은 반드시 연간 중심값(${fmtNum(annualOp, currency)}) 근방이 되도록 유지하세요. 범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)}`);
       }
     }
   }
