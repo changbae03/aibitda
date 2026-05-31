@@ -2043,141 +2043,156 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
 
       if (recentSeries.length >= 2) {
         const latest = recentSeries[0];  // 최신 확정 분기
-        const prevQ  = recentSeries[1];
-        const trendQoQ = latest.opm - prevQ.opm;
 
-        // 가중평균 OPM (최신 3분기, 최신→과거 가중)
-        const wts = recentSeries.length >= 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
+        // ── 현재 연도 및 확정 분기 수집 ───────────────────────────────────────
+        const confirmedYear = parseInt(latest.period.slice(0, 4), 10);
+        const targetYear = Math.max(confirmedYear, new Date().getFullYear());
+
+        // 현재 연도 내 모든 확정 분기 (오름차순 정렬)
+        const curYearConfirmed = fullOpmSeries
+          .filter(d => d.year === targetYear)
+          .sort((a, b) => a.qNum - b.qNum);
+
+        // 확정 분기 합산
+        const confirmedRevSum = curYearConfirmed.reduce((s, d) => s + d.rev, 0);
+        const confirmedOpSum  = curYearConfirmed.reduce((s, d) => s + d.op,  0);
+        const confirmedOpmAvg = confirmedRevSum > 0 ? (confirmedOpSum / confirmedRevSum) * 100 : null;
+        const confirmedQNums  = new Set(curYearConfirmed.map(d => d.qNum));
+        const remainingQtrs   = [1, 2, 3, 4].filter(q => !confirmedQNums.has(q));
+        const confirmedQCount = curYearConfirmed.length;
+
+        // ── forward OPM 기준값 ────────────────────────────────────────────────
+        const prevQ     = recentSeries[1];
+        const trendQoQ  = latest.opm - prevQ.opm;
+        const wts       = recentSeries.length >= 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
         const weightedAvgOpm = recentSeries.slice(0, wts.length)
           .reduce((s, d, i) => s + d.opm * wts[i], 0);
-
-        // forward OPM 중심값 (추세 개선 시 최신 분기 더 반영)
-        const fwdOpmCenter = trendQoQ > 0
+        const trendOpmCenter = trendQoQ > 0
           ? latest.opm * 0.65 + weightedAvgOpm * 0.35
           : latest.opm * 0.5  + weightedAvgOpm * 0.5;
 
-        // ── 계절성 인덱스 계산 ─────────────────────────────────────────────────
-        // 연도별 연간 평균 OPM 계산 (완전한 4분기 데이터가 있는 연도만)
+        // 확정 분기가 많을수록 확정 누적 OPM을 더 신뢰
+        // Q1만(1개): 30%, 반기(2개): 55%, Q3까지(3개): 75%
+        const confirmedWeight = confirmedQCount >= 3 ? 0.75 : confirmedQCount === 2 ? 0.55 : 0.30;
+        const fwdOpmCenter = confirmedOpmAvg !== null
+          ? confirmedOpmAvg * confirmedWeight + trendOpmCenter * (1 - confirmedWeight)
+          : trendOpmCenter;
+
+        // ── 계절성 인덱스 계산 ────────────────────────────────────────────────
         const byYear: Record<number, { opm: number; qNum: number }[]> = {};
         for (const d of fullOpmSeries) {
           if (!byYear[d.year]) byYear[d.year] = [];
           byYear[d.year].push({ opm: d.opm, qNum: d.qNum });
         }
-        // 계절 인덱스: 각 분기 번호별 (실적 - 해당연도평균) 편차의 평균
         const seasonDeltaRaw: Record<number, number[]> = {1: [], 2: [], 3: [], 4: []};
-        for (const [yr, qData] of Object.entries(byYear)) {
-          if (qData.length < 3) continue;  // 3분기 미만은 제외
+        for (const [, qData] of Object.entries(byYear)) {
+          if (qData.length < 3) continue;
           const yearAvg = qData.reduce((s, d) => s + d.opm, 0) / qData.length;
           for (const d of qData) {
             seasonDeltaRaw[d.qNum]?.push(d.opm - yearAvg);
           }
         }
-        // 각 분기 번호별 평균 계절 편차
         const seasonIdx: Record<number, number | null> = {1: null, 2: null, 3: null, 4: null};
         const seasonYears = Object.keys(byYear).filter(yr => byYear[Number(yr)].length >= 3).length;
-        // 감쇠 팩터: 데이터가 많을수록 계절성을 더 신뢰 (1년치→0.25, 2년치→0.4, 3년치+→0.55)
         const dampFactor = seasonYears >= 3 ? 0.55 : seasonYears === 2 ? 0.40 : 0.25;
         for (const q of [1, 2, 3, 4]) {
           const vals = seasonDeltaRaw[q];
           if (vals.length > 0) {
-            const avgDelta = vals.reduce((s, v) => s + v, 0) / vals.length;
-            seasonIdx[q] = avgDelta * dampFactor;
+            seasonIdx[q] = (vals.reduce((s, v) => s + v, 0) / vals.length) * dampFactor;
           }
         }
-        const hasSeasonal = Object.values(seasonIdx).some(v => v !== null);
+        // fallback: 데이터 부족 시 한국 일반 제조업 기본 패턴
+        const DEFAULT_SEASONAL: Record<number, number> = { 1: -1.0, 2: 0.2, 3: -0.3, 4: 1.2 };
 
-        // ── 계절성 fallback: 데이터 부족 시 한국 일반 제조업 기본 패턴 적용 ──
-        // Q2: 봄철 생산·공사 시작(+0.2), Q3: 여름 비수기(-0.3), Q4: 연말 집행 강세(+1.2)
-        const DEFAULT_SEASONAL: Record<number, number> = { 2: 0.2, 3: -0.3, 4: 1.2 };
-
-        // ── 분기별 매출 추정: Q1 대비 비율 기반 ────────────────────────────────
-        // 현재 확정 Q1 매출을 기준으로, 역사적 Qn/Q1 비율을 곱해 추정
-        // → Q3·Q4가 Q1보다 낮게 나오는 문제 방지 (건설·제조업 계절성 반영)
+        // ── 역사적 매출 비율 (확정 Q1 기준으로 미확정 분기 매출 추정) ─────────
         const qRevByQNum: Record<number, number[]> = {1: [], 2: [], 3: [], 4: []};
         for (const d of fullOpmSeries) {
           if (qRevByQNum[d.qNum]) qRevByQNum[d.qNum].push(d.rev);
         }
+        // 확정 Q1 매출 (가장 신뢰도 높은 기준점)
+        const confirmedQ1 = curYearConfirmed.find(d => d.qNum === 1);
+        const baseQ1Rev   = confirmedQ1?.rev ?? qRevByQNum[1][0] ?? latest.rev;
+        const histQ1Avg   = qRevByQNum[1].slice(0, 3).reduce((s, v, _, a) => s + v / a.length, 0) || baseQ1Rev;
+
+        // 미확정 분기 매출 추정: 현재 Q1 × 역사적 비율
         const estRevByQ: Record<number, number> = {};
-        const latestQ1Rev = latest.qNum === 1 ? latest.rev : null;
-        // 역사적 Q1 평균 (비율 계산 기준)
-        const histQ1Revs = qRevByQNum[1].slice(0, 3);
-        const histQ1Avg = histQ1Revs.length > 0
-          ? histQ1Revs.reduce((s, v) => s + v, 0) / histQ1Revs.length
-          : null;
-        for (const q of [2, 3, 4]) {
+        for (const q of remainingQtrs) {
           const hist = qRevByQNum[q].slice(0, 3);
-          if (hist.length > 0 && histQ1Avg && histQ1Avg > 0) {
+          if (hist.length > 0 && histQ1Avg > 0) {
             const histQAvg = hist.reduce((s, v) => s + v, 0) / hist.length;
-            const ratio = histQAvg / histQ1Avg;  // 역사적 Qn/Q1 비율
-            if (latestQ1Rev && latestQ1Rev > 0) {
-              // 현재 Q1 × 역사적 비율(70%) + 역사 절대값(30%) 혼합
-              estRevByQ[q] = (latestQ1Rev * ratio) * 0.7 + histQAvg * 0.3;
-            } else {
-              estRevByQ[q] = histQAvg;
-            }
+            const ratio    = histQAvg / histQ1Avg;
+            estRevByQ[q]   = (baseQ1Rev * ratio) * 0.7 + histQAvg * 0.3;
           } else {
-            // 데이터 없으면 Q1 기준값 사용
-            estRevByQ[q] = latestQ1Rev ?? latest.rev;
+            estRevByQ[q] = baseQ1Rev;
           }
         }
 
-        // ── 분기별 OPM 추정 ───────────────────────────────────────────────────
-        // 계절 인덱스가 있으면 사용, 없으면 기본 제조업 패턴 적용
-        const fwdOpmByQ: Record<number, number> = {};
+        // ── 미확정 분기 OPM 및 영업이익 추정 ─────────────────────────────────
+        const estOpByQ:  Record<number, number>  = {};
+        const estOpmByQ: Record<number, number>  = {};
         const usedFallback: Record<number, boolean> = {};
-        for (const q of [2, 3, 4]) {
+        for (const q of remainingQtrs) {
           const sIdx = seasonIdx[q];
           if (sIdx !== null && Math.abs(sIdx) >= 0.15) {
-            fwdOpmByQ[q] = fwdOpmCenter + sIdx;   // 실제 계절 인덱스
+            estOpmByQ[q]    = fwdOpmCenter + sIdx;
             usedFallback[q] = false;
           } else {
-            fwdOpmByQ[q] = fwdOpmCenter + DEFAULT_SEASONAL[q];  // fallback
+            estOpmByQ[q]    = fwdOpmCenter + DEFAULT_SEASONAL[q];
             usedFallback[q] = true;
           }
+          estRevByQ[q] = estRevByQ[q] ?? baseQ1Rev;
+          estOpByQ[q]  = estRevByQ[q] * (estOpmByQ[q] / 100);
         }
 
-        // ── 1단계: 분기별 영업이익 (계절 OPM × 매출) ────────────────────────
-        const fwdOpByQ: Record<number, number> = {};
-        for (const q of [2, 3, 4]) {
-          fwdOpByQ[q] = estRevByQ[q] * (fwdOpmByQ[q] / 100);
-        }
-        const fwdOpSum = fwdOpByQ[2] + fwdOpByQ[3] + fwdOpByQ[4];
-        const annualOp = latest.op + fwdOpSum;
+        // ── 연간 합산 (확정 + 추정) ───────────────────────────────────────────
+        const confirmedAnnualOp  = confirmedOpSum;
+        const confirmedAnnualRev = confirmedRevSum;
+        const estimatedOpSum  = remainingQtrs.reduce((s, q) => s + estOpByQ[q],  0);
+        const estimatedRevSum = remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0), 0);
+        const annualOp  = confirmedAnnualOp  + estimatedOpSum;
+        const annualRev = confirmedAnnualRev + estimatedRevSum;
 
-        // 범위 (불확실성 ± 2%p OPM 적용)
-        const annualOpLow  = latest.op + Object.values(estRevByQ).reduce((s, v) => s + v * ((fwdOpmCenter - 2) / 100), 0);
-        const annualOpHigh = latest.op + Object.values(estRevByQ).reduce((s, v) => s + v * ((fwdOpmCenter + 2) / 100), 0);
+        // 불확실성 범위 (미확정 분기에만 ±2%p 적용)
+        const annualOpLow  = confirmedAnnualOp + remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0) * ((fwdOpmCenter - 2) / 100), 0);
+        const annualOpHigh = confirmedAnnualOp + remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0) * ((fwdOpmCenter + 2) / 100), 0);
 
-        // ── 2단계: 연간 중심값 → 계절 비율 배분 (top-down 크로스체크) ─────
-        // 연간 목표에서 Q1 확정치를 빼고 남은 Q2~Q4 몫을 계절 비율로 배분
-        const restOpTarget = annualOp - latest.op;  // Q2+Q3+Q4 목표 합산
-        const totalRaw = fwdOpByQ[2] + fwdOpByQ[3] + fwdOpByQ[4];
+        // ── 연간 목표에서 남은 분기 배분 (합산 정합성 보장) ──────────────────
+        const restOpTarget = annualOp - confirmedAnnualOp;
+        const totalEstRaw  = estimatedOpSum || 1;
         const distOpByQ: Record<number, number> = {};
-        for (const q of [2, 3, 4]) {
-          distOpByQ[q] = totalRaw > 0
-            ? restOpTarget * (fwdOpByQ[q] / totalRaw)  // 계절 비율 그대로 유지
-            : restOpTarget / 3;
+        for (const q of remainingQtrs) {
+          distOpByQ[q] = restOpTarget * (estOpByQ[q] / totalEstRaw);
         }
-
-        // 현재 연도
-        const confirmedYear = parseInt(latest.period.slice(0, 4), 10);
-        const targetYear = Math.max(confirmedYear, new Date().getFullYear());
 
         // ── 출력 ─────────────────────────────────────────────────────────────
         lines.push(`\n⛔⛔ [서버 산출 — 분기별 실적 앵커 (${targetYear}E 전망 시 반드시 이 값을 기준으로 사용, 무시 금지)]`);
         lines.push(`  OPM 추이 (오래된 → 최신): ${[...recentSeries].reverse().map(d => `${d.period} ${d.opm.toFixed(1)}%`).join(' → ')}`);
         lines.push(`  추세 방향: ${trendQoQ >= 0 ? '개선' : '악화'} (QoQ ${trendQoQ >= 0 ? '+' : ''}${trendQoQ.toFixed(1)}%p)`);
-        lines.push(`  ★ 최신 확정 분기 ${latest.period}: OPM ${latest.opm.toFixed(1)}%, 영업이익 ${fmtNum(latest.op, currency)}`);
-        lines.push(`  연간 영업이익 중심값: ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
-        lines.push(`  ─→ [연간 → 분기 배분 앵커] Q2E~Q4E를 아래 비율로 합산하면 연간 합계와 항상 일치:`);
-        for (const q of [2, 3, 4]) {
-          const applied = usedFallback[q] ? DEFAULT_SEASONAL[q] : seasonIdx[q]!;
-          const pct = totalRaw > 0 ? (fwdOpByQ[q] / totalRaw * 100).toFixed(0) : '33';
-          lines.push(`    Q${q}E: 영업이익 ${fmtNum(distOpByQ[q], currency)} (연간 잔여분의 ${pct}%, OPM ${fwdOpmByQ[q].toFixed(1)}%, 계절조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`);
+        // 확정 분기 현황
+        if (curYearConfirmed.length > 0) {
+          const confirmedStr = curYearConfirmed.map(d => `Q${d.qNum}(${fmtNum(d.op, currency)}, OPM ${d.opm.toFixed(1)}%)`).join(' + ');
+          lines.push(`  ✅ ${targetYear}년 확정 분기(${confirmedQCount}개): ${confirmedStr}`);
+          lines.push(`     → 확정 누적 OPM: ${confirmedOpmAvg?.toFixed(1) ?? '-'}% / 확정 영업이익 합: ${fmtNum(confirmedAnnualOp, currency)}`);
+          lines.push(`     → 확정 분기 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% 적용 → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%`);
+        } else {
+          lines.push(`  forward OPM 중심값 (추세 기반): ${fwdOpmCenter.toFixed(1)}%`);
         }
-        lines.push(`  연간계: Q1(${fmtNum(latest.op, currency)}) + Q2E(${fmtNum(distOpByQ[2], currency)}) + Q3E(${fmtNum(distOpByQ[3], currency)}) + Q4E(${fmtNum(distOpByQ[4], currency)}) = ${fmtNum(annualOp, currency)}`);
+        // 미확정 분기 배분
+        if (remainingQtrs.length > 0) {
+          lines.push(`  📊 미확정 분기 추정 (연간 합계와 정합, 촉매·업황 가감 후 사용):`);
+          for (const q of remainingQtrs) {
+            const applied = usedFallback[q] ? DEFAULT_SEASONAL[q] : seasonIdx[q]!;
+            const pct = totalEstRaw > 0 ? (estOpByQ[q] / totalEstRaw * 100).toFixed(0) : '-';
+            lines.push(`    Q${q}E: 영업이익 ${fmtNum(distOpByQ[q], currency)} (잔여분의 ${pct}%, OPM ${estOpmByQ[q].toFixed(1)}%, 계절조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`);
+          }
+        }
+        const annualParts = [1, 2, 3, 4].map(q => {
+          if (confirmedQNums.has(q)) return `Q${q}✅(${fmtNum(curYearConfirmed.find(d => d.qNum === q)!.op, currency)})`;
+          return `Q${q}E(${fmtNum(distOpByQ[q] ?? 0, currency)})`;
+        }).join(' + ');
+        lines.push(`  연간계: ${annualParts} = ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
         lines.push(`⛔⛔ 위 분기별 배분값을 출발점으로 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
-        lines.push(`⛔⛔ 분기 합산은 반드시 연간 중심값(${fmtNum(annualOp, currency)}) 근방이 되도록 유지하세요. 범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)}`);
+        lines.push(`⛔⛔ 분기 합산이 연간 중심값(${fmtNum(annualOp, currency)}) 근방이 되도록 유지. 범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)}`);
       }
     }
   }
