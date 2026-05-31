@@ -1647,10 +1647,12 @@ router.get("/indicator-history", async (_req, res) => {
       }] : []),
     ];
 
-    _indicatorHistoryCache = { data: result, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
-    saveToDBCache("indicator-history-v7", result, INDICATOR_HISTORY_TTL);
-    console.log(`[indicator-history] 완료 — 지표 ${result.length}개 수집 (미국 5개, 한국 ${result.length - 5}개)`);
-    return res.json(result);
+    // 빈 data 배열인 series 제외 (클라이언트 렌더링 TypeError 방지)
+    const validResult = result.filter(s => s.data.length > 0);
+    _indicatorHistoryCache = { data: validResult, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
+    saveToDBCache("indicator-history-v8", validResult, INDICATOR_HISTORY_TTL);
+    console.log(`[indicator-history] 완료 — 지표 ${validResult.length}개 수집 (미국 5개, 한국 ${validResult.length - 5}개)`);
+    return res.json(validResult);
   } catch (err: any) {
     console.error("[indicator-history] error:", err?.message);
     return res.status(500).json({ error: err?.message ?? "지표 이력 조회 실패" });

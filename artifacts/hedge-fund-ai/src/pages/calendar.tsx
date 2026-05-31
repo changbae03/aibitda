@@ -508,7 +508,11 @@ function IndicatorHistoryTable({ series, isEn }: { series: IndicatorSeries; isEn
 function IndicatorCard({ series, isEn }: { series: IndicatorSeries; isEn: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const { color, bg, trend } = useMemo(() => getIndicatorTheme(series), [series]);
-  const vals = series.data.map(d => d.value);
+  const vals = (series.data ?? []).map(d => d.value).filter(v => v != null && !isNaN(v));
+
+  // 데이터 없으면 렌더링 생략 (빈 배열로 last.toFixed() 호출 방지)
+  if (vals.length === 0) return null;
+
   const last = vals[vals.length - 1];
   const prev = vals[vals.length - 2] ?? last;
   const delta = last - prev;
@@ -594,8 +598,11 @@ function IndicatorTrendSection() {
     fetch(getApiUrl("/api/market-data/indicator-history"), { credentials: "include" })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`${r.status}`)))
       .then((data: IndicatorSeries[]) => {
-        _indicatorCacheMut = { data, fetchedAt: Date.now() };
-        setIndicators(data);
+        const valid = (Array.isArray(data) ? data : []).filter(
+          s => Array.isArray(s.data) && s.data.length > 0
+        );
+        _indicatorCacheMut = { data: valid, fetchedAt: Date.now() };
+        setIndicators(valid);
         setError(null);
       })
       .catch(e => setError(e.message))
