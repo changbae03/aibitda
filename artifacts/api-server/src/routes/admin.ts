@@ -1368,14 +1368,25 @@ router.get("/ticker-coverage", async (req, res) => {
     }
 
     // 마스터 목록 로드
-    type MasterEntry = { ticker: string; name: string; exchange: string };
+    type MasterEntry = { ticker: string; name: string; exchange: string; mcap: number | null };
     let masterList: MasterEntry[] = [];
 
     if (market === "KR") {
       const krxList = await loadKRXList();
-      masterList = krxList.map(e => ({ ticker: e.code, name: e.name, exchange: e.exchange }));
+      // krx_peer_data에서 최신 시가총액 조회 (시총 순 정렬용)
+      const mcapRows = await pool.query<{ code: string; mcap: string | null }>(
+        `SELECT code, mcap FROM krx_peer_data
+         WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)`,
+      );
+      const mcapMap = new Map<string, number>();
+      for (const r of mcapRows.rows) {
+        if (r.mcap != null) mcapMap.set(r.code, parseFloat(r.mcap));
+      }
+      masterList = krxList
+        .map(e => ({ ticker: e.code, name: e.name, exchange: e.exchange, mcap: mcapMap.get(e.code) ?? null }))
+        .sort((a, b) => (b.mcap ?? -1) - (a.mcap ?? -1)); // 시가총액 내림차순
     } else {
-      masterList = US_MASTER_LIST.map(e => ({ ticker: e.ticker, name: e.name, exchange: e.exchange }));
+      masterList = US_MASTER_LIST.map(e => ({ ticker: e.ticker, name: e.name, exchange: e.exchange, mcap: null }));
     }
 
     // 검색 + 상태 필터
