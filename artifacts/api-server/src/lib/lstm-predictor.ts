@@ -1863,14 +1863,30 @@ function computeFutureDates(anchor: string, isUS: boolean, count: number): strin
 /**
  * IndexResult의 predictions 날짜를 오늘(KST) 기준으로 갱신합니다.
  * 캐시된 결과가 이전 날짜를 가리킬 때 요청 시점에 보정합니다.
+ *
+ * 장마감(15:30 KST) 이전에는 오늘을 D+1로 표시합니다.
+ * → anchor = 어제(전날) → computeFutureDates가 오늘을 첫 영업일로 반환
+ * 장마감 이후에는 오늘이 이미 확정됐으므로 D+1 = 내일부터 시작합니다.
  */
 function refreshPredDates(
   result: IndexResult | undefined,
   isUS: boolean,
 ): IndexResult | undefined {
   if (!result) return undefined;
-  const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-  const freshDates = computeFutureDates(todayKST, isUS, result.predictions.length);
+  const kstMs  = Date.now() + 9 * 3600_000;
+  const kstNow = new Date(kstMs);
+  const todayKST = kstNow.toISOString().slice(0, 10);
+
+  // KRX 장마감 15:30 KST = 시각(분) 기준 930분
+  const kstMinOfDay = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+  const KRX_CLOSE_MIN = 15 * 60 + 30; // 930
+
+  // 장마감 전이면 오늘이 아직 "미래 예측 대상" → anchor를 하루 앞당겨 D+1=오늘
+  const anchor = (!isUS && kstMinOfDay < KRX_CLOSE_MIN)
+    ? new Date(kstMs - 24 * 3600_000).toISOString().slice(0, 10)
+    : todayKST;
+
+  const freshDates = computeFutureDates(anchor, isUS, result.predictions.length);
   return {
     ...result,
     predictions: result.predictions.map((p, i) => ({ ...p, date: freshDates[i] ?? p.date })),
