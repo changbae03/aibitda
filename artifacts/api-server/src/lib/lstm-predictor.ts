@@ -1877,12 +1877,12 @@ function refreshPredDates(
   const kstNow = new Date(kstMs);
   const todayKST = kstNow.toISOString().slice(0, 10);
 
-  // KRX 장마감 15:30 KST = 시각(분) 기준 930분
   const kstMinOfDay = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
-  const KRX_CLOSE_MIN = 15 * 60 + 30; // 930
+  // 장마감 기준(KST): 한국 15:30 / 미국 05:00 (NYSE 16:00 ET = KST +14h → 05:00 KST 다음날)
+  const cutoffMin = isUS ? 5 * 60 : 15 * 60 + 30;
 
   // 장마감 전이면 오늘이 아직 "미래 예측 대상" → anchor를 하루 앞당겨 D+1=오늘
-  const anchor = (!isUS && kstMinOfDay < KRX_CLOSE_MIN)
+  const anchor = kstMinOfDay < cutoffMin
     ? new Date(kstMs - 24 * 3600_000).toISOString().slice(0, 10)
     : todayKST;
 
