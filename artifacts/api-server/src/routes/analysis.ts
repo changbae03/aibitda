@@ -324,6 +324,61 @@ ${peerRows.join("\n")}
   }
 }
 
+// DART 경쟁사 → Yahoo Finance 티커 구조체로 변환 (피어 선정 seed 용)
+async function getDartCompetitorTickerPeers(krxCode: string): Promise<{
+  peers: Array<{ ticker: string; name: string; exchange: string; reason: string }>;
+  hint: string; // selectPeerTickers에 주입할 힌트 텍스트 (비상장사 포함)
+} | null> {
+  try {
+    const dartText = await fetchDartCompetitorSection(krxCode);
+    if (!dartText || dartText.length < 10) return null;
+
+    const companyNames = extractCompanyNamesFromDart(dartText);
+    const hintNames = companyNames.length > 0 ? companyNames : [];
+
+    // KRX DB에서 이름 매칭 → market(KOSPI/KOSDAQ) + code 확인
+    const matchedPeers: Array<{ ticker: string; name: string; exchange: string; reason: string }> = [];
+    const seenCodes = new Set<string>();
+
+    await Promise.allSettled(
+      hintNames.slice(0, 12).map(async (rawName) => {
+        const keyword = rawName.replace(/[\(\)（）\s]/g, "").slice(0, 8);
+        const res = await pool.query<{ code: string; name: string; market: string }>(
+          `SELECT code, name, market FROM krx_peer_data
+           WHERE name ILIKE $1
+             AND snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)
+           ORDER BY mcap DESC NULLS LAST
+           LIMIT 1`,
+          [`%${keyword}%`]
+        );
+        if (res.rows.length > 0 && res.rows[0].code !== krxCode && !seenCodes.has(res.rows[0].code)) {
+          const { code, name, market } = res.rows[0];
+          seenCodes.add(code);
+          // KOSPI → .KS, KOSDAQ → .KQ
+          const suffix = market?.toUpperCase().includes("KOSDAQ") ? ".KQ" : ".KS";
+          matchedPeers.push({
+            ticker: `${code}${suffix}`,
+            name,
+            exchange: market ?? "KOSPI",
+            reason: `DART 사업보고서 "경쟁 현황"에 직접 명시된 경쟁사. 동일 제품/시장에서 직접 경쟁 관계.`,
+          });
+        }
+      })
+    );
+
+    // hint 텍스트: 상장/비상장 모두 포함 (selectPeerTickers AI가 추가로 고려)
+    const hint = hintNames.length > 0
+      ? `DART 사업보고서 명시 경쟁사: ${hintNames.slice(0, 8).join(", ")}. ` +
+        `이 중 상장사가 있다면 반드시 피어 그룹에 포함하세요.`
+      : "";
+
+    return { peers: matchedPeers, hint };
+  } catch (err) {
+    console.error("[dart-peer-tickers] failed:", err);
+    return null;
+  }
+}
+
 function extractJsonSafe(raw: string): any | null {
   if (!raw) return null;
   let s = raw.trim();
@@ -2893,13 +2948,14 @@ async function selectPeerTickers(
   companyName: string,
   industry: string,
   previousContext: string,
-  subjectTicker: string = ""
+  subjectTicker: string = "",
+  dartHint: string = ""
 ): Promise<Array<{ ticker: string; name: string; exchange: string; reason: string }>> {
   try {
     const prompt = `Company: ${companyName}, Industry: ${industry}.
 
 Based on the context below, identify 4-5 publicly traded peer companies for valuation comparison.
-
+${dartHint ? `\n⭐ [DART 공시 최우선 지시] ${dartHint}\n위 경쟁사들이 상장사라면 반드시 피어 그룹 1순위로 포함하세요. 이 지시를 어기면 피어 선정이 무효입니다.\n` : ""}
 PEER QUALITY SCORING — for each candidate, mentally score these 3 axes and only include peers that score ≥2/3:
 1. Business model match: same revenue model (product / service / subscription / royalty) and similar value chain position (upstream material / component / OEM / brand / platform)
 2. Margin profile similarity: gross margin within ±15pp of subject company, or if margin data unavailable, same structural cost driver (e.g., both fab-heavy, both asset-light)
@@ -4792,16 +4848,42 @@ async function executeStep(
     const snapName = analysis.companyName;
     const snapIndustry = analysis.industry;
     const snapTicker = analysis.ticker;
+    const snapKrxCode = snapTicker.split(".")[0];
+    const isKoreanTicker = /^\d{6}$/.test(snapKrxCode);
+
     const peerPromise: Promise<{ peers: any[]; data: string }> = (async () => {
       try {
-        let peers = await selectPeerTickers(snapName, snapIndustry, prevCtx, snapTicker);
+        // ① 한국 종목: DART 사업보고서에서 직접 경쟁사 먼저 추출 (seed 피어)
+        let dartSeedPeers: Array<{ ticker: string; name: string; exchange: string; reason: string }> = [];
+        let dartHint = "";
+        if (isKoreanTicker) {
+          const dartResult = await getDartCompetitorTickerPeers(snapKrxCode).catch(() => null);
+          if (dartResult) {
+            dartSeedPeers = dartResult.peers;
+            dartHint = dartResult.hint;
+            console.log(`[pre-fetch-peers] DART seed 피어 ${dartSeedPeers.length}개: ${dartSeedPeers.map(p => p.name).join(", ")} | hint="${dartHint.slice(0, 80)}"`);
+          }
+        }
+
+        // ② AI 피어 선정: DART 힌트 주입 + 부족한 피어 보완
+        let peers = await selectPeerTickers(snapName, snapIndustry, prevCtx, snapTicker, dartHint);
         if (peers.length === 0) {
-          peers = await selectPeerTickers(snapName, snapIndustry ?? "일반", prevCtx.slice(0, 3000), snapTicker);
+          peers = await selectPeerTickers(snapName, snapIndustry ?? "일반", prevCtx.slice(0, 3000), snapTicker, dartHint);
         }
         if (peers.length === 0 && !/^\d{6}/.test(snapTicker)) {
           const mapped = US_PEER_MAP[snapTicker.toUpperCase()];
           if (mapped?.length) peers = mapped;
         }
+
+        // ③ DART seed 피어를 최우선 병합 (중복 제거)
+        if (dartSeedPeers.length > 0) {
+          const aiTickers = new Set(peers.map(p => p.ticker));
+          const dartOnly = dartSeedPeers.filter(p => !aiTickers.has(p.ticker));
+          // DART 피어 앞에 배치 (피어 테이블에서 먼저 보이도록)
+          peers = [...dartOnly, ...peers].slice(0, 6); // 최대 6개
+          console.log(`[pre-fetch-peers] 최종 피어 (DART+AI): ${peers.map(p => p.name).join(", ")}`);
+        }
+
         const data = peers.length > 0 ? await fetchPeerFinancials(peers) : "";
         console.log(`[pre-fetch-peers] #${id} 완료 — ${peers.length}개 피어, ${data.length}chars`);
         return { peers, data };
