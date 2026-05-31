@@ -2104,24 +2104,51 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         // fallback: 데이터 부족 시 한국 일반 제조업 기본 패턴
         const DEFAULT_SEASONAL: Record<number, number> = { 1: -1.0, 2: 0.2, 3: -0.3, 4: 1.2 };
 
-        // ── 역사적 매출 비율 (확정 Q1 기준으로 미확정 분기 매출 추정) ─────────
+        // ── 매출 추정: 확정 분기 YoY 성장률 + 역사적 비율 혼합 ──────────────
         const qRevByQNum: Record<number, number[]> = {1: [], 2: [], 3: [], 4: []};
         for (const d of fullOpmSeries) {
           if (qRevByQNum[d.qNum]) qRevByQNum[d.qNum].push(d.rev);
         }
-        // 확정 Q1 매출 (가장 신뢰도 높은 기준점)
+
+        // 분기별 전년 동기 빠른 조회 맵 (year_qNum → rev)
+        const revMap: Record<string, number> = {};
+        for (const d of fullOpmSeries) {
+          revMap[`${d.year}_${d.qNum}`] = d.rev;
+        }
+
+        // ① 확정 분기들의 YoY 매출 성장률 계산
+        const yoyGrowths: number[] = [];
+        for (const d of curYearConfirmed) {
+          const prevRev = revMap[`${d.year - 1}_${d.qNum}`];
+          if (prevRev && prevRev > 0) {
+            yoyGrowths.push((d.rev - prevRev) / prevRev);
+          }
+        }
+        // 확정 평균 YoY 성장률 (없으면 null)
+        const confirmedYoYGrowth = yoyGrowths.length > 0
+          ? yoyGrowths.reduce((s, v) => s + v, 0) / yoyGrowths.length
+          : null;
+
+        // ② 미확정 분기 매출 추정
+        // 기준점: 확정 Q1 또는 최신 확정 분기 매출
         const confirmedQ1 = curYearConfirmed.find(d => d.qNum === 1);
         const baseQ1Rev   = confirmedQ1?.rev ?? qRevByQNum[1][0] ?? latest.rev;
         const histQ1Avg   = qRevByQNum[1].slice(0, 3).reduce((s, v, _, a) => s + v / a.length, 0) || baseQ1Rev;
 
-        // 미확정 분기 매출 추정: 현재 Q1 × 역사적 비율
         const estRevByQ: Record<number, number> = {};
         for (const q of remainingQtrs) {
-          const hist = qRevByQNum[q].slice(0, 3);
-          if (hist.length > 0 && histQ1Avg > 0) {
-            const histQAvg = hist.reduce((s, v) => s + v, 0) / hist.length;
-            const ratio    = histQAvg / histQ1Avg;
-            estRevByQ[q]   = (baseQ1Rev * ratio) * 0.7 + histQAvg * 0.3;
+          const prevYearRev = revMap[`${targetYear - 1}_${q}`];
+          const hist        = qRevByQNum[q].slice(0, 3);
+          const histQAvg    = hist.length > 0 ? hist.reduce((s, v) => s + v, 0) / hist.length : null;
+
+          if (confirmedYoYGrowth !== null && prevYearRev && prevYearRev > 0) {
+            // 확정 YoY 성장률로 전년 동기에 적용 (70%) + 역사적 절대값 (30%)
+            const yoyEst = prevYearRev * (1 + confirmedYoYGrowth);
+            estRevByQ[q] = histQAvg ? yoyEst * 0.7 + histQAvg * 0.3 : yoyEst;
+          } else if (histQAvg && histQ1Avg > 0) {
+            // 역사적 Qn/Q1 비율 적용
+            const ratio  = histQAvg / histQ1Avg;
+            estRevByQ[q] = (baseQ1Rev * ratio) * 0.7 + histQAvg * 0.3;
           } else {
             estRevByQ[q] = baseQ1Rev;
           }
@@ -2152,47 +2179,67 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const annualOp  = confirmedAnnualOp  + estimatedOpSum;
         const annualRev = confirmedAnnualRev + estimatedRevSum;
 
-        // 불확실성 범위 (미확정 분기에만 ±2%p 적용)
+        // 매출 불확실성 범위 (미확정 분기에만 ±5% 적용)
+        const annualRevLow  = confirmedAnnualRev + remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0) * 0.95, 0);
+        const annualRevHigh = confirmedAnnualRev + remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0) * 1.05, 0);
+        // 영업이익 불확실성 범위 (미확정 분기에만 ±2%p OPM 적용)
         const annualOpLow  = confirmedAnnualOp + remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0) * ((fwdOpmCenter - 2) / 100), 0);
         const annualOpHigh = confirmedAnnualOp + remainingQtrs.reduce((s, q) => s + (estRevByQ[q] ?? 0) * ((fwdOpmCenter + 2) / 100), 0);
 
         // ── 연간 목표에서 남은 분기 배분 (합산 정합성 보장) ──────────────────
-        const restOpTarget = annualOp - confirmedAnnualOp;
-        const totalEstRaw  = estimatedOpSum || 1;
-        const distOpByQ: Record<number, number> = {};
+        const restOpTarget  = annualOp  - confirmedAnnualOp;
+        const restRevTarget = annualRev - confirmedAnnualRev;
+        const totalEstRaw   = estimatedOpSum  || 1;
+        const totalEstRevRaw = estimatedRevSum || 1;
+        const distOpByQ:  Record<number, number> = {};
+        const distRevByQ: Record<number, number> = {};
         for (const q of remainingQtrs) {
-          distOpByQ[q] = restOpTarget * (estOpByQ[q] / totalEstRaw);
+          distOpByQ[q]  = restOpTarget  * (estOpByQ[q]         / totalEstRaw);
+          distRevByQ[q] = restRevTarget * ((estRevByQ[q] ?? 0) / totalEstRevRaw);
         }
 
         // ── 출력 ─────────────────────────────────────────────────────────────
         lines.push(`\n⛔⛔ [서버 산출 — 분기별 실적 앵커 (${targetYear}E 전망 시 반드시 이 값을 기준으로 사용, 무시 금지)]`);
         lines.push(`  OPM 추이 (오래된 → 최신): ${[...recentSeries].reverse().map(d => `${d.period} ${d.opm.toFixed(1)}%`).join(' → ')}`);
         lines.push(`  추세 방향: ${trendQoQ >= 0 ? '개선' : '악화'} (QoQ ${trendQoQ >= 0 ? '+' : ''}${trendQoQ.toFixed(1)}%p)`);
-        // 확정 분기 현황
+
+        // 확정 분기 현황 (매출 + 영업이익 함께)
         if (curYearConfirmed.length > 0) {
-          const confirmedStr = curYearConfirmed.map(d => `Q${d.qNum}(${fmtNum(d.op, currency)}, OPM ${d.opm.toFixed(1)}%)`).join(' + ');
+          const confirmedStr = curYearConfirmed
+            .map(d => `Q${d.qNum}(매출 ${fmtNum(d.rev, currency)}, 영업이익 ${fmtNum(d.op, currency)}, OPM ${d.opm.toFixed(1)}%)`)
+            .join(' | ');
           lines.push(`  ✅ ${targetYear}년 확정 분기(${confirmedQCount}개): ${confirmedStr}`);
-          lines.push(`     → 확정 누적 OPM: ${confirmedOpmAvg?.toFixed(1) ?? '-'}% / 확정 영업이익 합: ${fmtNum(confirmedAnnualOp, currency)}`);
-          lines.push(`     → 확정 분기 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% 적용 → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%`);
+          lines.push(`     → 확정 누적: 매출 ${fmtNum(confirmedAnnualRev, currency)}, 영업이익 ${fmtNum(confirmedAnnualOp, currency)} (OPM ${confirmedOpmAvg?.toFixed(1) ?? '-'}%)`);
+          if (confirmedYoYGrowth !== null) {
+            lines.push(`     → 확정 분기 YoY 매출 성장률: ${(confirmedYoYGrowth * 100).toFixed(1)}% → 미확정 분기 매출 추정에 반영`);
+          }
+          lines.push(`     → OPM 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%`);
         } else {
           lines.push(`  forward OPM 중심값 (추세 기반): ${fwdOpmCenter.toFixed(1)}%`);
         }
-        // 미확정 분기 배분
+
+        // 미확정 분기 배분 (매출 + 영업이익)
         if (remainingQtrs.length > 0) {
-          lines.push(`  📊 미확정 분기 추정 (연간 합계와 정합, 촉매·업황 가감 후 사용):`);
+          lines.push(`  📊 미확정 분기 추정 (연간 합계 정합, 촉매·업황 가감 후 사용):`);
           for (const q of remainingQtrs) {
             const applied = usedFallback[q] ? DEFAULT_SEASONAL[q] : seasonIdx[q]!;
-            const pct = totalEstRaw > 0 ? (estOpByQ[q] / totalEstRaw * 100).toFixed(0) : '-';
-            lines.push(`    Q${q}E: 영업이익 ${fmtNum(distOpByQ[q], currency)} (잔여분의 ${pct}%, OPM ${estOpmByQ[q].toFixed(1)}%, 계절조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`);
+            lines.push(`    Q${q}E: 매출 ${fmtNum(distRevByQ[q], currency)} / 영업이익 ${fmtNum(distOpByQ[q], currency)} (OPM ${estOpmByQ[q].toFixed(1)}%, 계절조정 ${applied >= 0 ? '+' : ''}${applied.toFixed(1)}%p)`);
           }
         }
-        const annualParts = [1, 2, 3, 4].map(q => {
+
+        // 연간계 (매출 + 영업이익 모두 표시)
+        const revParts = [1, 2, 3, 4].map(q => {
+          if (confirmedQNums.has(q)) return `Q${q}✅(${fmtNum(curYearConfirmed.find(d => d.qNum === q)!.rev, currency)})`;
+          return `Q${q}E(${fmtNum(distRevByQ[q] ?? 0, currency)})`;
+        }).join(' + ');
+        const opParts = [1, 2, 3, 4].map(q => {
           if (confirmedQNums.has(q)) return `Q${q}✅(${fmtNum(curYearConfirmed.find(d => d.qNum === q)!.op, currency)})`;
           return `Q${q}E(${fmtNum(distOpByQ[q] ?? 0, currency)})`;
         }).join(' + ');
-        lines.push(`  연간계: ${annualParts} = ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
+        lines.push(`  연간 매출계: ${revParts} = ${fmtNum(annualRev, currency)} (범위: ${fmtNum(annualRevLow, currency)}~${fmtNum(annualRevHigh, currency)})`);
+        lines.push(`  연간 영업이익계: ${opParts} = ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
         lines.push(`⛔⛔ 위 분기별 배분값을 출발점으로 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
-        lines.push(`⛔⛔ 분기 합산이 연간 중심값(${fmtNum(annualOp, currency)}) 근방이 되도록 유지. 범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)}`);
+        lines.push(`⛔⛔ 분기 합산이 연간 중심값(매출 ${fmtNum(annualRev, currency)}, 영업이익 ${fmtNum(annualOp, currency)}) 근방이 되도록 유지.`);
       }
     }
   }
