@@ -1373,18 +1373,19 @@ router.get("/ticker-coverage", async (req, res) => {
 
     if (market === "KR") {
       const krxList = await loadKRXList();
-      // krx_peer_data에서 최신 시가총액 조회 (시총 순 정렬용)
-      const mcapRows = await pool.query<{ code: string; mcap: string | null }>(
-        `SELECT code, mcap FROM krx_peer_data
-         WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM krx_peer_data)`,
+      // krx_stocks에서 시가총액 조회 (Yahoo Finance 수집값 — Neon DB에 저장됨)
+      const mcapRows = await pool.query<{ code: string; market_cap: string | null }>(
+        `SELECT code, market_cap FROM krx_stocks WHERE market_cap IS NOT NULL`,
       );
       const mcapMap = new Map<string, number>();
       for (const r of mcapRows.rows) {
-        if (r.mcap != null) mcapMap.set(r.code, parseFloat(r.mcap));
+        if (r.market_cap != null) mcapMap.set(r.code, parseFloat(r.market_cap));
       }
       masterList = krxList
         .map(e => ({ ticker: e.code, name: e.name, exchange: e.exchange, mcap: mcapMap.get(e.code) ?? null }))
         .sort((a, b) => (b.mcap ?? -1) - (a.mcap ?? -1)); // 시가총액 내림차순
+      const top5 = masterList.slice(0, 5).map(e => `${e.name}(${e.ticker},mcap=${e.mcap ?? 'null'})`).join(' | ');
+      console.log(`[ticker-coverage] mcapMap크기=${mcapMap.size} 정렬후상위5: ${top5}`);
     } else {
       masterList = US_MASTER_LIST.map(e => ({ ticker: e.ticker, name: e.name, exchange: e.exchange, mcap: null }));
     }
