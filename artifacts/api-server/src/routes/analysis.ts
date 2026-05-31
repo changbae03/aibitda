@@ -2090,24 +2090,34 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         // Q2: 봄철 생산·공사 시작(+0.2), Q3: 여름 비수기(-0.3), Q4: 연말 집행 강세(+1.2)
         const DEFAULT_SEASONAL: Record<number, number> = { 2: 0.2, 3: -0.3, 4: 1.2 };
 
-        // ── 분기별 매출 추정: 최근 동분기 평균 ────────────────────────────────
-        // 각 분기 번호(2,3,4)의 역사적 매출 평균 (최근 2년치 우선)
-        const qRevByQNum: Record<number, number[]> = {2: [], 3: [], 4: []};
+        // ── 분기별 매출 추정: Q1 대비 비율 기반 ────────────────────────────────
+        // 현재 확정 Q1 매출을 기준으로, 역사적 Qn/Q1 비율을 곱해 추정
+        // → Q3·Q4가 Q1보다 낮게 나오는 문제 방지 (건설·제조업 계절성 반영)
+        const qRevByQNum: Record<number, number[]> = {1: [], 2: [], 3: [], 4: []};
         for (const d of fullOpmSeries) {
-          if (d.qNum === 2 || d.qNum === 3 || d.qNum === 4) {
-            qRevByQNum[d.qNum].push(d.rev);
-          }
+          if (qRevByQNum[d.qNum]) qRevByQNum[d.qNum].push(d.rev);
         }
         const estRevByQ: Record<number, number> = {};
-        const avgRecent2Rev = recentSeries.slice(0, 2).reduce((s, d) => s + d.rev, 0) / Math.min(2, recentSeries.length);
+        const latestQ1Rev = latest.qNum === 1 ? latest.rev : null;
+        // 역사적 Q1 평균 (비율 계산 기준)
+        const histQ1Revs = qRevByQNum[1].slice(0, 3);
+        const histQ1Avg = histQ1Revs.length > 0
+          ? histQ1Revs.reduce((s, v) => s + v, 0) / histQ1Revs.length
+          : null;
         for (const q of [2, 3, 4]) {
-          const hist = qRevByQNum[q].slice(0, 2);  // 최근 2년치
-          if (hist.length > 0) {
-            const histAvg = hist.reduce((s, v) => s + v, 0) / hist.length;
-            // 역사적 평균과 최근 분기 평균을 혼합 (60:40)
-            estRevByQ[q] = histAvg * 0.6 + avgRecent2Rev * 0.4;
+          const hist = qRevByQNum[q].slice(0, 3);
+          if (hist.length > 0 && histQ1Avg && histQ1Avg > 0) {
+            const histQAvg = hist.reduce((s, v) => s + v, 0) / hist.length;
+            const ratio = histQAvg / histQ1Avg;  // 역사적 Qn/Q1 비율
+            if (latestQ1Rev && latestQ1Rev > 0) {
+              // 현재 Q1 × 역사적 비율(70%) + 역사 절대값(30%) 혼합
+              estRevByQ[q] = (latestQ1Rev * ratio) * 0.7 + histQAvg * 0.3;
+            } else {
+              estRevByQ[q] = histQAvg;
+            }
           } else {
-            estRevByQ[q] = avgRecent2Rev;
+            // 데이터 없으면 Q1 기준값 사용
+            estRevByQ[q] = latestQ1Rev ?? latest.rev;
           }
         }
 
