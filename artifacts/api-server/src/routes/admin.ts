@@ -1345,22 +1345,26 @@ router.get("/ticker-coverage", async (req, res) => {
   const limit   = Math.min(100, Math.max(10, parseInt(String(req.query.limit ?? "50"), 10)));
 
   try {
-    // DB에서 AI 자동 분석이 있는 종목별 통계 조회
+    // DB에서 분석이 있는 종목별 통계 조회 (자동 생성 + 사용자 직접 생성 모두 포함)
     const covRows = await pool.query(`
       SELECT ticker,
              COUNT(*)                                        AS report_count,
              MAX(created_at AT TIME ZONE 'Asia/Seoul')::date AS last_date
       FROM analyses
-      WHERE user_id IS NULL
       GROUP BY ticker
     `);
 
     const covMap = new Map<string, { reportCount: number; lastDate: string }>();
     for (const r of covRows.rows) {
-      covMap.set(r.ticker, {
+      const entry = {
         reportCount: parseInt(r.report_count, 10),
         lastDate: String(r.last_date).slice(0, 10),
-      });
+      };
+      // 원본 티커 저장 (US 종목 등)
+      covMap.set(r.ticker, entry);
+      // 6자리 코드 정규화: "228340.KS" / "228340.KQ" / "228340.KO" → "228340"
+      const normalized = r.ticker.replace(/\.(KS|KQ|KO)$/i, "");
+      if (normalized !== r.ticker) covMap.set(normalized, entry);
     }
 
     // 마스터 목록 로드
