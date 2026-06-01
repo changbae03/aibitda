@@ -313,7 +313,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v1";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v5";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -345,7 +345,8 @@ async function loadFeedCacheFromDB(): Promise<ThemeFeedItem[] | null> {
       [FEED_CACHE_DB_KEY]
     );
     if (r.rows.length > 0) {
-      const parsed = JSON.parse(r.rows[0].data) as ThemeFeedItem[];
+      const raw = r.rows[0].data;
+      const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as ThemeFeedItem[];
       console.log(`[themes] feed DB 복원 완료: ${parsed.length}개 테마`);
       return parsed;
     }
@@ -381,11 +382,15 @@ async function rebuildFeedInBackground(): Promise<void> {
   }
 }
 
-// 서버 시작 시 DB에서 피드 캐시 복원
+// 서버 시작 시 DB에서 피드 캐시 복원 (없으면 자동 rebuild)
 (async () => {
   const stored = await loadFeedCacheFromDB();
   if (stored) {
     feedCache = { feed: stored, cachedAt: Date.now() - FEED_TTL + 30 * 60 * 1000 }; // 30분 뒤 갱신
+    console.log(`[themes] 피드 캐시 복원 완료 (${stored.length}개 테마) — 키: ${FEED_CACHE_DB_KEY}`);
+  } else {
+    console.log(`[themes] 피드 캐시 없음 (키: ${FEED_CACHE_DB_KEY}) — 자동 rebuild 시작`);
+    rebuildFeedInBackground();
   }
 })();
 
@@ -406,15 +411,45 @@ async function discoverThemeFast(
   theme: TrendingTheme,
   krxList: Array<{ code: string; name: string }>,
 ): Promise<ThemeFeedItem> {
+  // 테마 키워드로 KRX 후보 종목 필터링 (Gemini에게 실제 코드 제공)
+  const kwRaw = `${theme.name} ${theme.description}`;
+  const keywords = kwRaw
+    .split(/[\s·,\-·]+/)
+    .map(k => k.replace(/[()（）]/g, "").trim())
+    .filter(k => k.length >= 2);
+  const candidateMap = new Map<string, string>();
+  for (const item of krxList) {
+    for (const kw of keywords) {
+      if (item.name.includes(kw)) {
+        candidateMap.set(item.code, item.name);
+        break;
+      }
+    }
+    if (candidateMap.size >= 100) break;
+  }
+  const candidateLines = [...candidateMap.entries()]
+    .slice(0, 80)
+    .map(([code, name]) => `${code} ${name}`)
+    .join(", ");
+
   const prompt = `투자 테마: "${theme.name}" — ${theme.description}
 
-이 테마에 가장 직접적인 수혜를 받는 상장 주식 4개를 선정하세요 (한국 2개 + 미국 2개 권장).
-- 한국(KR): ticker 필드에 한국어 회사명 그대로 (예: "삼성SDI")
-- 미국(US): NYSE/NASDAQ 심볼 (예: "NVDA")
-- 직접 생산·납품·개발 기업만. 지주사 제외.
+아래 KRX 후보 종목(코드+이름) 목록에서 + 필요하면 추가 종목으로 정확히 7개를 선정하세요: 한국 5개 + 미국 2개.
+
+【KRX 후보 종목】(아래 중 직접 수혜 종목 우선 사용, 코드 그대로 사용):
+${candidateLines || "없음 — 직접 선정"}
+
+【한국 5개 구성 — ticker 필드에 반드시 6자리 숫자 코드】
+① 대형주 2개: 테마 핵심 대기업 (시총 2조 이상)
+② 중소형주 3개: 핵심 부품·소재·장비 납품 중소기업 (시총 2조 미만)
+   후보 없으면 실존 코스피/코스닥 종목코드로 직접 작성
+
+【미국 2개 — NYSE/NASDAQ 심볼】
+
+【제외】지주사·금융주·ETF·SPAC
 
 마크다운 없이 JSON만:
-{"summary":"테마 한 줄 설명(30자 이내)","stocks":[{"ticker":"삼성SDI","name":"삼성SDI","market":"KR","sector":"배터리","rationale":"수혜 이유(30자 이내)"}]}`;
+{"summary":"30자 이내 테마 요약","stocks":[{"ticker":"094820","name":"일진파워","market":"KR","sector":"전력기기","rationale":"HVDC 부품 납품"},{"ticker":"GEV","name":"GE Vernova","market":"US","sector":"전력","rationale":"HVDC 시스템"}]}`;
 
   const resp = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -422,7 +457,9 @@ async function discoverThemeFast(
     config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
   });
 
-  const parsed = safeParseJson<{ summary: string; stocks: ThemeFeedItem["stocks"] }>(resp.text ?? "");
+  const rawText = resp.text ?? "";
+  console.log(`[themes][${theme.name}] Gemini raw: ${rawText.slice(0, 400)}`);
+  const parsed = safeParseJson<{ summary: string; stocks: ThemeFeedItem["stocks"] }>(rawText);
   let stocks: ThemeFeedItem["stocks"] = (parsed?.stocks ?? []).map(s => ({
     ...s, market: s.market === "KR" ? "KR" : "US",
   }));
@@ -445,11 +482,20 @@ async function discoverThemeFast(
   const seen = new Set<string>();
   stocks = stocks.filter(s => !seen.has(s.ticker) && seen.add(s.ticker) !== undefined);
 
-  return { ...theme, summary: parsed?.summary ?? theme.description, stocks: stocks.slice(0, 4) };
+  return { ...theme, summary: parsed?.summary ?? theme.description, stocks: stocks.slice(0, 8) };
 }
 
-router.get("/themes/trending-feed", async (_req, res) => {
+router.get("/themes/trending-feed", async (req, res) => {
   try {
+    const forceRebuild = req.query["rebuild"] === "true";
+    if (forceRebuild) {
+      feedCache = null;
+      feedRebuildInProgress = false;
+      pool.query(`DELETE FROM system_cache WHERE key = $1`, [FEED_CACHE_DB_KEY]).catch(() => {});
+      rebuildFeedInBackground();
+      return res.json([]);
+    }
+
     const now = Date.now();
     const isFresh = feedCache && (now - feedCache.cachedAt < FEED_TTL);
     const isStale = feedCache && !isFresh;

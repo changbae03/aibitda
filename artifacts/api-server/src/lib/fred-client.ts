@@ -54,14 +54,29 @@ async function fredFetch(
   const key = getApiKey();
   if (!key) return [];
   const url = `${BASE_URL}?series_id=${seriesId}&api_key=${key}&file_type=json&sort_order=${sortOrder}&limit=${limit}`;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return [];
-    const data = await res.json() as any;
-    return (data?.observations ?? []).filter((o: any) => o.value !== ".");
-  } catch {
-    return [];
+  const delays = [0, 2000, 5000];
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt] > 0) await new Promise(r => setTimeout(r, delays[attempt]));
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const data = await res.json() as any;
+      if (res.status === 429) {
+        if (attempt < delays.length - 1) continue;
+        console.error(`[FRED] Rate limit [${seriesId}] — 재시도 소진`);
+        return [];
+      }
+      if (!res.ok || data?.error_code) {
+        console.error(`[FRED] API 오류 [${seriesId}] HTTP ${res.status}: ${data?.error_message ?? JSON.stringify(data).slice(0, 100)}`);
+        return [];
+      }
+      return (data?.observations ?? []).filter((o: any) => o.value !== ".");
+    } catch (e: any) {
+      if (attempt < delays.length - 1) continue;
+      console.error(`[FRED] 네트워크 오류 [${seriesId}]: ${e?.message}`);
+      return [];
+    }
   }
+  return [];
 }
 
 function latestVal(

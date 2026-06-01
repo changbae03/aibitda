@@ -1485,7 +1485,7 @@ router.get("/indicator-history", async (_req, res) => {
     return res.json(_indicatorHistoryCache.data);
   }
 
-  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v7");
+  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v8");
   if (dbCached) {
     _indicatorHistoryCache = { data: dbCached, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
     return res.json(dbCached);
@@ -1502,8 +1502,12 @@ router.get("/indicator-history", async (_req, res) => {
 
     async function fredGet(series: string): Promise<IndicatorPoint[]> {
       const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${FRED_KEY}&file_type=json&observation_start=${startStr}&sort_order=asc&limit=300`;
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
       const d = await r.json();
+      if (!r.ok || d.error_code) {
+        console.error(`[indicator-history] FRED API 오류 [${series}] HTTP ${r.status}: ${d.error_message ?? JSON.stringify(d).slice(0, 120)}`);
+        return [];
+      }
       return (d.observations ?? [])
         .filter((o: any) => o.value !== ".")
         .map((o: any) => ({ date: o.date, value: parseFloat(o.value) }));
