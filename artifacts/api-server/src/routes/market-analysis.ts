@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getStatus, runPipeline, runDailyIncrementalUpdate } from "../lib/lstm-predictor.js";
-import { getAllLiveAccuracy, getPredictionHistory } from "../lib/prediction-tracker.js";
+import { getAllLiveAccuracy, getPredictionHistory, getTodayPredictions } from "../lib/prediction-tracker.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
 import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { GoogleGenAI } from "@google/genai";
@@ -770,7 +770,37 @@ ${keyTopicsRule}
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
 router.get("/status", async (req, res) => {
-  res.json(getStatus());
+  const status = getStatus();
+
+  // DB에 오늘 저장된 첫 번째 예측값으로 덮어씌워 화면 예측 고정
+  // (모델 재훈련·서버 재시작으로 pipeline 메모리 값이 바뀌어도 화면에는 오늘 첫 예측이 표시됨)
+  try {
+    const symbols = ["^KS11", "^KQ11", "^GSPC", "^IXIC"];
+    const todayPreds = await getTodayPredictions(symbols);
+
+    const overridePreds = (idx: typeof status.kospi, sym: string) => {
+      if (!idx) return idx;
+      const p = todayPreds[sym];
+      if (!p || (p.d1 === undefined && p.d2 === undefined && p.d3 === undefined)) return idx;
+      return {
+        ...idx,
+        ...(p.d1 !== undefined && { predictedReturn1d: p.d1 }),
+        ...(p.d2 !== undefined && { predictedReturn2d: p.d2 }),
+        ...(p.d3 !== undefined && { predictedReturn3d: p.d3 }),
+      };
+    };
+
+    res.json({
+      ...status,
+      kospi:  overridePreds(status.kospi,  "^KS11"),
+      kosdaq: overridePreds(status.kosdaq, "^KQ11"),
+      snp500: overridePreds(status.snp500, "^GSPC"),
+      nasdaq: overridePreds(status.nasdaq, "^IXIC"),
+    });
+  } catch (e) {
+    console.error("[status] DB 예측 조회 실패 — pipeline 값 fallback:", e);
+    res.json(status);
+  }
 });
 
 router.post("/run", async (req, res) => {

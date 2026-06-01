@@ -380,6 +380,53 @@ export interface PredictionRecord {
   model_version:   number;
 }
 
+// ─── 오늘 예측값 조회 (화면 고정용) ───────────────────────────────────────────
+
+export interface TodayPrediction {
+  d1?: number;
+  d2?: number;
+  d3?: number;
+}
+
+/**
+ * 오늘(KST) predicted_at으로 저장된 D+1/D+2/D+3 예측값을 반환.
+ * ON CONFLICT DO NOTHING으로 처음 저장된 값이 고정됨 → 화면 예측 값 불변 보장.
+ */
+export async function getTodayPredictions(
+  symbols: string[],
+): Promise<Record<string, TodayPrediction>> {
+  const today = todayKST();
+  const result: Record<string, TodayPrediction> = {};
+  for (const sym of symbols) result[sym] = {};
+
+  try {
+    const { rows } = await pool.query<{
+      symbol: string;
+      pred_horizon: number;
+      predicted_return: number;
+    }>(
+      `SELECT symbol, pred_horizon, predicted_return
+       FROM index_predictions
+       WHERE symbol = ANY($1)
+         AND predicted_at = $2
+       ORDER BY pred_horizon`,
+      [symbols, today],
+    );
+
+    for (const row of rows) {
+      const entry = result[row.symbol] ?? {};
+      if (row.pred_horizon === 1) entry.d1 = row.predicted_return;
+      if (row.pred_horizon === 2) entry.d2 = row.predicted_return;
+      if (row.pred_horizon === 3) entry.d3 = row.predicted_return;
+      result[row.symbol] = entry;
+    }
+  } catch (e) {
+    console.error("[getTodayPredictions] DB 조회 실패:", e);
+  }
+
+  return result;
+}
+
 export async function getPredictionHistory(
   symbol: string,
   limit = 20,
