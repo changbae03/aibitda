@@ -3750,7 +3750,13 @@ router.post("/", async (req, res) => {
       const kosisContext = isKoreanTicker ? buildKOSISContext(kosisData, industry ?? "") : null;
       const fullContext = [
         kisContext, sotpSubsidiaryContext, financialData, dartBalanceContext,
-        dartHistorical, dartBizContent, secEdgarContent, kosisContext, macroContext, newsData,
+        dartHistorical,
+        dartBizContent
+          ? `[⭐ DART 사업보고서 사업내용 — 시장규모·TAM·업계현황·파이프라인 1순위 근거]\n` +
+            `※ 아래 내용은 DART 공시 원문입니다. 시장 규모·TAM 추정·업계 현황 서술 시 훈련 데이터보다 이 수치를 우선 사용하세요.\n\n` +
+            dartBizContent
+          : null,
+        secEdgarContent, kosisContext, macroContext, newsData,
         userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
       ].filter(Boolean).join("\n\n") || null;
 
