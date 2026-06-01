@@ -574,7 +574,8 @@ async function runQCCheck(
    C) EV/Sales 모델: EV/Sales 배수·산출 EV·주당 내재가치 수치가 있어야 함
    D) DDM 모델: D₁·CoE·g·DDM 내재가치 수치가 있어야 함
    - 어떤 모델이든 최종 주당 내재가치(원) 수치가 없으면: 불승인
-   - 내재가치가 현재 주가 대비 터무니없이 높거나(4배↑) 낮으면(0.2배↓): 가정 재검토 여부 확인, 없으면 불승인
+   - 내재가치가 현재 주가 대비 터무니없이 높거나(소형 성장주·바이오 3.5배↑, 일반 성숙 대형주 시총 5조↑ 2.0배↑) 낮으면(0.2배↓): 가정 재검토 여부 확인, 없으면 불승인
+   - ⚠️ 성숙 대형주(시총 5조원↑, 예: 삼성전자·SK하이닉스·현대차·NAVER·카카오 등) 목표주가가 현재가 대비 +100% 초과인 경우: DCF 성장률 가정이 컨센서스를 크게 상회하거나 피어 배수 적용이 과도한 것으로 판단. Reverse DCF 역산 CAGR 명시 없으면 즉시 불승인
 
   [피어 조율 품질 검증]
    - 피어 기업이 3개 미만으로 선정되면: 불승인
@@ -3009,6 +3010,14 @@ PEER SELECTION RULES (strictly enforce):
 - For pipeline-only biotechs (pre-revenue or minimal revenue), prefer peers that are also pre-revenue or early-commercial stage with similar therapeutic area and modality (RNA, cell therapy, small molecule, etc.)
 - If a strictly comparable peer set cannot be found in Korea, include 1-2 US-listed peers of similar stage and modality.
 
+- PCB / MLB(Multi-Layer Board) / 서브스트레이트 / FPCB(연성회로기판) 제조사 규칙 (이수페타시스·대덕전자·코리아써키트·심텍·인터플렉스 등에 적용):
+  * PRIORITY PEERS: 대덕전자(353200.KS), 코리아써키트(007810.KS), 심텍(222800.KQ), 인터플렉스(051370.KQ), TTM Technologies(TTMI), Tripod Technology(3044.TW)
+  * ACCEPTABLE: 삼성전기(009150.KS) — PCB·MLCC 겸업, 전자부품 공급망 피어로 유효
+  * ❌ FORBIDDEN PEERS for PCB/기판 companies:
+    - 방산·항공우주 업체: 한화에어로스페이스(012450.KS), 한화시스템(272210.KQ), KAI(047810.KS), LIG넥스원(079550.KS), 한화오션(042660.KS) — PCB 납품 고객사이지 경쟁사 아님
+    - 소비자 가전 완성품 업체: 삼성전자(005930.KS), LG전자(066570.KS) — 부품 수요자이지 PCB 제조 경쟁사 아님
+    - 반도체 팹·패키징: TSMC(TSM), DB하이텍(000990.KS), 하나마이크론(067310.KQ) — 제조 공정 완전 상이
+
 - GLOBAL PEER → KOREAN STOCK NOTE: When any non-Korean (US/global) peer is selected for a Korean company, apply the peer multiples directly without a structural market discount.
 
 Return a JSON object with this exact schema:
@@ -5278,7 +5287,7 @@ async function executeStep(
             const medianCorrected = false;
 
             if (rawTp > 0 && sp > 0) {
-              const MAX_R = isKRtk ? 3.5 : 4.5;
+              const MAX_R = isKRtk ? 2.5 : 4.0;
               const MIN_R = isKRtk ? 0.45 : 0.25;
               const ratio = rawTp / sp;
               const validated = ratio > MAX_R ? Math.round(sp * MAX_R)
@@ -6255,7 +6264,7 @@ async function executeStep(
         if (savedStartPrice && savedStartPrice > 0) {
           // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
           // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
-          const TARGET_MAX_RATIO = isKR ? 3.5 : 4.5;
+          const TARGET_MAX_RATIO = isKR ? 2.5 : 4.0;
           const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
