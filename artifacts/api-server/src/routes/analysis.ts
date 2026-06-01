@@ -2955,7 +2955,7 @@ async function selectPeerTickers(
     const prompt = `Company: ${companyName}, Industry: ${industry}.
 
 Based on the context below, identify 4-5 publicly traded peer companies for valuation comparison.
-${dartHint ? `\n⭐ [DART 공시 최우선 지시] ${dartHint}\n위 경쟁사들이 상장사라면 반드시 피어 그룹 1순위로 포함하세요. 이 지시를 어기면 피어 선정이 무효입니다.\n` : ""}
+${dartHint ? `\n⭐ [DART 공시 참고] ${dartHint}\n위 경쟁사들이 상장사인 경우, 아래 3-axis 적합성 평가(≥2/3)를 통과할 때만 피어 그룹에 포함하세요. 사업 모델이 실질적으로 다르다면 제외하고, reason 필드에 "DART 명시 경쟁사이나 사업모델 불일치로 제외" 표기 가능.\n` : ""}
 PEER QUALITY SCORING — for each candidate, mentally score these 3 axes and only include peers that score ≥2/3:
 1. Business model match: same revenue model (product / service / subscription / royalty) and similar value chain position (upstream material / component / OEM / brand / platform)
 2. Margin profile similarity: gross margin within ±15pp of subject company, or if margin data unavailable, same structural cost driver (e.g., both fab-heavy, both asset-light)
@@ -2968,6 +2968,22 @@ PEER SELECTION RULES (strictly enforce):
 - Business model match is MANDATORY. Do NOT mix these types in the same peer group:
   * Pure pipeline biotech (파이프라인 바이오텍) vs CDMO/CMO (위탁생산기업, e.g., 삼성바이오로직스, 에스티팜, 바이넥스). EV/Sales comparison between them is invalid.
   * Drug discovery/royalty model vs self-commercialization model — flag if you must include a mixed model peer.
+
+- KOREAN BIOTECH SUBSECTOR RULES — 서브섹터 혼재 절대 금지 (한국 바이오 기업 분석 시 항상 적용):
+  ┌─ 줄기세포 치료제: 파미셀(005690.KS), 코아스템켈생(166480.KQ), 강스템바이오텍(208370.KQ), 안트로젠(065660.KQ), 바이오솔루션(086820.KQ), 차바이오텍(085660.KQ)
+  ├─ 제대혈 은행: 메디포스트(078160.KQ), 차바이오텍(085660.KQ)
+  ├─ 바이오시밀러 전문기업: 셀트리온(068270.KS), 셀트리온헬스케어(091990.KQ), 삼성바이오로직스(207940.KS)
+  ├─ 미용/보톡스/필러: 휴젤(145020.KQ), 메디톡스(086900.KQ), 대웅제약(069620.KS), 파마리서치(214450.KQ)
+  ├─ 체성분/의료기기: 인바디(041830.KQ), 뷰웍스(180640.KQ), 오스템임플란트(048260.KQ)
+  ├─ CDMO/CMO(위탁생산): 삼성바이오로직스(207940.KS), 에스티팜(237690.KQ), 바이넥스(053030.KQ)
+  └─ 신약 개발(키나제·소분자): 오스코텍(039200.KQ), 보로노이(310210.KQ), 한미약품(128940.KS)
+
+  ❌ FORBIDDEN cross-subsector mixing — 이 조합은 항상 피어 선정 오류:
+  * 줄기세포 치료제 기업 피어에 셀트리온(바이오시밀러)·휴젤(보톡스/필러)·인바디(체성분기기)·오스코텍(키나제 신약) 절대 금지
+  * 바이오시밀러 기업 피어에 줄기세포 기업·신약 파이프라인 기업 절대 금지
+  * CDMO 기업 피어에 신약 개발사 절대 금지 (수익 모델 완전히 다름)
+  * "바이오"라는 단어가 공통이더라도 실제 제품·수익 모델이 다르면 피어 불가
+  * 적자 바이오텍 피어에 흑자 대형 제약사(PER 30x) 혼합 금지 — 멀티플 왜곡
 
 - BATTERY / EV BATTERY COMPANY RULES (apply when subject is a battery cell/pack manufacturer like LG에너지솔루션, 삼성SDI, SK온, CATL, Panasonic Energy):
   * PRIORITY 1 — Korean battery peers: 삼성SDI(006400.KS), SK이노베이션(096770.KS)
