@@ -2241,9 +2241,10 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         // 확정 분기가 많을수록 확정 누적 OPM을 더 신뢰
         // Q1만(1개): 30%, 반기(2개): 55%, Q3까지(3개): 75%
         const confirmedWeight = confirmedQCount >= 3 ? 0.75 : confirmedQCount === 2 ? 0.55 : 0.30;
-        const fwdOpmCenter = confirmedOpmAvg !== null
+        const fwdOpmBase = confirmedOpmAvg !== null
           ? confirmedOpmAvg * confirmedWeight + trendOpmCenter * (1 - confirmedWeight)
           : trendOpmCenter;
+        // fwdOpmCenter 최종값은 byYear 계산 후 연간 OPM 앵커와 혼합 (아래에서 선언)
 
         // ── 계절성 인덱스 계산 ────────────────────────────────────────────────
         const byYear: Record<number, { opm: number; qNum: number }[]> = {};
@@ -2270,6 +2271,37 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         }
         // fallback: 데이터 부족 시 한국 일반 제조업 기본 패턴
         const DEFAULT_SEASONAL: Record<number, number> = { 1: -1.0, 2: 0.2, 3: -0.3, 4: 1.2 };
+
+        // ── 연간 OPM 앵커 (Q1 계절 왜곡 완화용) ───────────────────────────────
+        // 과거 완성된 연도의 연간 영업이익/매출을 집계해 가중평균 OPM 계산
+        const annualPerfByYear: Record<number, { rev: number; op: number }> = {};
+        for (const d of fullOpmSeries) {
+          if (!annualPerfByYear[d.year]) annualPerfByYear[d.year] = { rev: 0, op: 0 };
+          annualPerfByYear[d.year].rev += d.rev;
+          annualPerfByYear[d.year].op  += d.op;
+        }
+        // targetYear 제외, 3분기 이상 데이터가 있는 완성된 연도만 (최근 3개년)
+        const completeAnnualYears = Object.entries(annualPerfByYear)
+          .filter(([yr]) => Number(yr) < targetYear && (byYear[Number(yr)]?.length ?? 0) >= 3)
+          .sort(([a], [b]) => Number(b) - Number(a))
+          .slice(0, 3);
+        const anchorWts = completeAnnualYears.length >= 3 ? [0.5, 0.3, 0.2]
+          : completeAnnualYears.length === 2 ? [0.6, 0.4] : [1.0];
+        const annualOpmAnchor: number | null = completeAnnualYears.length > 0
+          ? completeAnnualYears.reduce((s, [, v], i) => {
+              const opm = v.rev > 0 ? (v.op / v.rev) * 100 : 0;
+              return s + opm * (anchorWts[i] ?? 0);
+            }, 0)
+          : null;
+
+        // ── fwdOpmCenter 최종값: Q1만 확정 시 연간 앵커를 강하게 반영 ─────────
+        // Q1 OPM이 낮더라도 Q2~Q4 회복을 전제로 연간 평균 OPM 기준 복귀를 기대
+        // Q2+ 확정 시에는 이미 충분한 실적이 있으므로 기존 방식 유지
+        const fwdOpmCenter = (confirmedQCount === 1 && annualOpmAnchor !== null)
+          ? fwdOpmBase * 0.35 + annualOpmAnchor * 0.65   // Q1만: 연간 앵커 65%
+          : (confirmedQCount === 0 && annualOpmAnchor !== null)
+            ? fwdOpmBase * 0.50 + annualOpmAnchor * 0.50  // 확정 없음: 연간 앵커 50%
+            : fwdOpmBase;                                  // Q2 이상 확정: 기존 방식
 
         // ── 매출 추정: 확정 분기 YoY 성장률 + 역사적 비율 혼합 ──────────────
         const qRevByQNum: Record<number, number[]> = {1: [], 2: [], 3: [], 4: []};
@@ -2380,9 +2412,13 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
           if (confirmedYoYGrowth !== null) {
             lines.push(`     → 확정 분기 YoY 매출 성장률: ${(confirmedYoYGrowth * 100).toFixed(1)}% → 미확정 분기 매출 추정에 반영`);
           }
-          lines.push(`     → OPM 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%`);
+          const anchorNote = confirmedQCount === 1 && annualOpmAnchor !== null
+            ? ` (Q1 단독 확정 → 연간 앵커 ${annualOpmAnchor.toFixed(1)}% 65% 반영, Q2~Q4 회복 전제)`
+            : annualOpmAnchor !== null ? ` (연간 앵커 ${annualOpmAnchor.toFixed(1)}%)` : '';
+          lines.push(`     → OPM 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%${anchorNote}`);
         } else {
-          lines.push(`  forward OPM 중심값 (추세 기반): ${fwdOpmCenter.toFixed(1)}%`);
+          const anchorNote = annualOpmAnchor !== null ? ` (연간 앵커 ${annualOpmAnchor.toFixed(1)}% 50% 반영)` : '';
+          lines.push(`  forward OPM 중심값 (추세 기반): ${fwdOpmCenter.toFixed(1)}%${anchorNote}`);
         }
 
         // 미확정 분기 배분 (매출 + 영업이익)
