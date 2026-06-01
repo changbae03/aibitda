@@ -1202,9 +1202,16 @@ stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니�
       "sentiment": "bullish 또는 neutral 또는 bearish — 뉴스와 현재 상황을 종합한 단기 sentiment",
       "thesisStatus": "유효 또는 일부변화 또는 훼손 — 분석 당시 thesis가 현재도 유효한지",
       "keyEvent": "분석 이후 발생한 가장 중요한 단일 뉴스/이벤트를 1문장으로 (없으면 빈 문자열)",
-      "update": "① 분석 이후 주요 뉴스 흐름 요약 ② 이 뉴스가 thesis(촉매/리스크)에 미친 영향 ③ 현재 시점에서 주목해야 할 포인트 — 3-4문장으로"
+      "update": "① 분석 이후 주요 뉴스 흐름 요약 ② 이 뉴스가 thesis(촉매/리스크)에 미친 영향 ③ 현재 시점에서 주목해야 할 포인트 — 3-4문장으로",
+      "action": "매도검토 또는 홀드 또는 추가매수 — thesis 훼손+약세면 매도검토, 유효+강세면 추가매수, 그 외 홀드",
+      "thesisChangeNote": "분석 당시 thesis에서 현재까지 가장 중요한 변화 1문장 (변화 없으면 '주요 thesis 변화 없음')"
     }
   ],
+  "riskScore": {
+    "grade": "A 또는 B 또는 C 또는 D — 포트폴리오 전체 리스크 등급 (A:우수, B:양호, C:주의, D:위험)",
+    "sectorConcentration": "섹터 집중도 분석 — 특정 섹터 쏠림 여부, 헥스핀달 수준 (1-2문장)",
+    "correlationRisk": "종목 간 상관관계 리스크 — 동반 하락 가능성, 분산 효과 실질 여부 (1문장)"
+  },
   "portfolioView": "전체 포트폴리오 종합 평가 — 현재 시장 환경, 섹터 노출, 전체적인 방향성 (3-4문장)",
   "concentration": "종목·섹터 집중도 분석, 상관관계 리스크, 분산 수준 평가 (2-3문장)",
   "rebalancing": "구체적 행동 제안 — 비중 조절, 손절 검토, 추가매수 기회, 우선순위 순 (3-4문장)",
@@ -1220,6 +1227,7 @@ stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니�
 주의사항:
 - sectorRecommendations는 현재 포트폴리오(${sectorList})에 없는 섹터를 2-3개 추천
 - keyEvent가 없으면 빈 문자열("")로 작성
+- action 기준: thesis 훼손+bearish → 매도검토, thesis 유효+bullish → 추가매수, 그 외 → 홀드
 - 모든 내용은 한국어, 투자자에게 직접 말하듯 구체적이고 실용적으로`;
 
     const response = await ai.models.generateContent({
@@ -1251,8 +1259,17 @@ stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니�
             thesisStatus: s.thesisStatus ?? "유효",
             keyEvent: s.keyEvent ?? "",
             update: s.update ?? "",
+            action: s.action ?? "홀드",
+            thesisChangeNote: s.thesisChangeNote ?? "",
           }))
         : [],
+      riskScore: parsed.riskScore
+        ? {
+            grade: parsed.riskScore.grade ?? "B",
+            sectorConcentration: parsed.riskScore.sectorConcentration ?? "",
+            correlationRisk: parsed.riskScore.correlationRisk ?? "",
+          }
+        : null,
       portfolioView: parsed.portfolioView ?? "",
       concentration: parsed.concentration ?? "",
       rebalancing: parsed.rebalancing ?? "",
