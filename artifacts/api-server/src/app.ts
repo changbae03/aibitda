@@ -85,11 +85,18 @@ const generalLimiter = rateLimit({
 
 const analysisLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 10,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "분석 요청이 너무 많습니다. 5분 후 다시 시도하세요." },
   skip: (req) => req.method !== "POST",
+  // Clerk 사용자 ID 기반으로 키 설정 — 프록시 환경에서 IP 공유 문제 방지
+  keyGenerator: (req) => {
+    const auth = (req as any).auth;
+    const userId = auth?.userId ?? auth?.user?.id;
+    if (userId) return `user:${userId}`;
+    return req.ip ?? "unknown";
+  },
 });
 
 const authLimiter = rateLimit({
