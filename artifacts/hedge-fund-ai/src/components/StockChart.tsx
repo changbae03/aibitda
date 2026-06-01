@@ -37,6 +37,17 @@ export interface ChartEvent {
   type: "catalyst" | "risk" | "earnings" | "news";
 }
 
+export interface PriceScenario {
+  pathType: 1 | 2 | 3 | 4 | null;
+}
+
+const FORECAST_CONFIG: Record<number, { color: string; label: string; labelEn: string; emoji: string }> = {
+  1: { color: "#f59e0b", label: "경로① 상승→되돌림", labelEn: "Path① Rise→Retrace", emoji: "🔼↩" },
+  2: { color: "#ef4444", label: "경로② 즉각 조정",   labelEn: "Path② Correction",    emoji: "🔽" },
+  3: { color: "#10b981", label: "경로③ 추세 상승",   labelEn: "Path③ Trend Up",       emoji: "📈" },
+  4: { color: "#38bdf8", label: "경로④ 박스권",      labelEn: "Path④ Range Bound",    emoji: "↔" },
+};
+
 interface PriceSwing {
   date: string;
   dateLabel: string;
@@ -61,6 +72,7 @@ interface StockChartProps {
   events?: ChartEvent[];
   currency?: "KRW" | "USD";
   isEn?: boolean;
+  priceScenario?: PriceScenario;
 }
 
 const PERIOD_OPTIONS: { value: Period; label: string; labelEn: string }[] = [
@@ -210,7 +222,7 @@ async function fetchPriceEvents(ticker: string, companyName: string | undefined,
 
 const NUM_BADGES = ["①", "②", "③", "④", "⑤"];
 
-export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, validatedTargetPrice, events = [], currency = "KRW", isEn = false }: StockChartProps) {
+export default function StockChart({ ticker, companyName, companyNameEn, chartLevels, validatedTargetPrice, events = [], currency = "KRW", isEn = false, priceScenario }: StockChartProps) {
   const [period, setPeriod] = useState<Period>("1y");
   const [interval, setInterval] = useState<Interval>("1d");
   const [showEvents, setShowEvents] = useState(true);
@@ -260,9 +272,80 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
   const currentPrice = data?.currentPrice ?? 0;
   const showValidatedTarget = validatedTargetPrice && validatedTargetPrice > 0;
 
-  const priceMin = chartData.length ? Math.min(...chartData.map((d) => d.low ?? d.close)) * 0.99 : 0;
+  // ── 예측 경로 오버레이 ─────────────────────────────────────────────────────
+  const forecastOverlay = useMemo(() => {
+    const pathType = priceScenario?.pathType;
+    if (!pathType || !chartData.length) return null;
+    const cp = currentPrice > 0 ? currentPrice : (chartData[chartData.length - 1]?.close ?? 0);
+    if (cp <= 0) return null;
+
+    const t1  = (chartLevels?.target1   && chartLevels.target1 > 0)   ? chartLevels.target1   : null;
+    const t2  = (chartLevels?.target2   && chartLevels.target2 > 0)   ? chartLevels.target2   : null;
+    const sup = (chartLevels?.support   && chartLevels.support > 0)   ? chartLevels.support   : null;
+    const res = (chartLevels?.resistance && chartLevels.resistance > 0) ? chartLevels.resistance : null;
+    const sl  = (chartLevels?.stopLoss  && chartLevels.stopLoss > 0)  ? chartLevels.stopLoss  : null;
+    const fv  = validatedTargetPrice && validatedTargetPrice > 0 ? validatedTargetPrice : null;
+
+    let prices: number[];
+    switch (pathType) {
+      case 1: { // 추가 상승 후 되돌림
+        const peak = Math.max(t1 ?? 0, res ?? 0, cp * 1.07);
+        const ret  = fv ?? sup ?? cp * 0.95;
+        prices = [cp, cp + (peak - cp) * 0.3, cp + (peak - cp) * 0.7, peak, peak * 0.975, (peak + ret) / 2, ret];
+        break;
+      }
+      case 2: { // 즉각 조정·하락
+        const s1 = sup ?? cp * 0.93;
+        const s2 = sl  ?? s1 * 0.96;
+        prices = [cp, cp * 0.985, cp * 0.97, (cp + s1) / 2, s1, (s1 + s2) / 2, s2];
+        break;
+      }
+      case 3: { // 추세 지속 상승
+        const tgt  = t1 ?? cp * 1.10;
+        const tgt2 = t2 ?? tgt * 1.04;
+        prices = [cp, cp * 1.025, cp * 1.05, cp * 0.15 + tgt * 0.85, tgt, tgt * 0.4 + tgt2 * 0.6, tgt2];
+        break;
+      }
+      case 4: { // 박스권 횡보
+        const top = res ?? cp * 1.025;
+        const bot = sup ?? cp * 0.975;
+        prices = [cp, top * 0.99, top, (top + bot) / 2, bot, (bot + cp) / 2, top * 0.998];
+        break;
+      }
+      default: return null;
+    }
+
+    // 마지막 실제 데이터 포인트의 dateLabel에 앵커
+    const anchorLabel = chartData[chartData.length - 1]?.dateLabel ?? "";
+    const forecastPoints = prices.map((price, i) => ({
+      dateLabel: i === 0 ? anchorLabel : `__fc${i}`,
+      forecast: price,
+    }));
+
+    return { points: forecastPoints, cfg: FORECAST_CONFIG[pathType] };
+  }, [priceScenario, chartData, currentPrice, chartLevels, validatedTargetPrice]);
+
+  // 실제 데이터 + 예측 포인트 합산
+  const allChartData = useMemo(() => {
+    if (!forecastOverlay) return chartDataWithSwings;
+    const result = chartDataWithSwings.map((d, i) =>
+      i === chartDataWithSwings.length - 1
+        ? { ...d, forecast: forecastOverlay.points[0].forecast }
+        : d
+    );
+    for (let i = 1; i < forecastOverlay.points.length; i++) {
+      result.push({ dateLabel: forecastOverlay.points[i].dateLabel, forecast: forecastOverlay.points[i].forecast });
+    }
+    return result;
+  }, [chartDataWithSwings, forecastOverlay]);
+
+  const forecastValues = forecastOverlay?.points.map(p => p.forecast) ?? [];
+
+  const priceMin = chartData.length
+    ? Math.min(...chartData.map((d) => d.low ?? d.close), ...forecastValues) * 0.99
+    : 0;
   const dataMax = chartData.length ? Math.max(...chartData.map((d) => d.high ?? d.close)) : 100;
-  const levelMax = Math.max(dataMax, showValidatedTarget ? validatedTargetPrice! : 0);
+  const levelMax = Math.max(dataMax, showValidatedTarget ? validatedTargetPrice! : 0, ...forecastValues);
   const priceMax = levelMax * 1.03;
   const maxVolume = chartData.length ? Math.max(...chartData.map((d) => d.volume ?? 0)) : 1;
   const volumeDomainMax = maxVolume * 5;
@@ -409,8 +492,29 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
         )}
         {data && chartData.length > 0 && (
           <>
+            {/* 예측 경로 배지 */}
+            {forecastOverlay && (
+              <div className="px-4 pb-0 pt-2 flex items-center gap-1.5">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50">
+                  {isEn ? "AI Forecast" : "AI 단기 방향"}
+                </span>
+                <span
+                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold border"
+                  style={{
+                    color: forecastOverlay.cfg.color,
+                    borderColor: `${forecastOverlay.cfg.color}40`,
+                    backgroundColor: `${forecastOverlay.cfg.color}10`,
+                  }}
+                >
+                  {forecastOverlay.cfg.emoji} {isEn ? forecastOverlay.cfg.labelEn : forecastOverlay.cfg.label}
+                </span>
+                <span className="text-[9px] text-muted-foreground/40">
+                  {isEn ? "Dashed line = projected path (3M)" : "점선 = 예상 경로 (3개월)"}
+                </span>
+              </div>
+            )}
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={chartDataWithSwings} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+              <ComposedChart data={allChartData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e7eb)" vertical={false} />
                 <XAxis
                   dataKey="dateLabel"
@@ -419,6 +523,7 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
                   axisLine={false}
                   interval={Math.floor(chartData.length / 7)}
                   tickFormatter={(v: string) => {
+                    if (v.startsWith("__fc")) return "";
                     if (!useLongDate) return v;
                     if (period === "1y") return v.slice(5, 10);
                     return v.slice(2, 7).replace("-", ".");
@@ -455,7 +560,30 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
                   strokeWidth={1.8}
                   dot={false}
                   activeDot={{ r: 3, fill: lineColor }}
+                  connectNulls={false}
                 />
+
+                {/* 예측 경로 오버레이 */}
+                {forecastOverlay && (
+                  <Line
+                    yAxisId="price"
+                    dataKey="forecast"
+                    name={isEn ? forecastOverlay.cfg.labelEn : forecastOverlay.cfg.label}
+                    stroke={forecastOverlay.cfg.color}
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    dot={(props: any) => {
+                      const { cx, cy, index } = props;
+                      if (index !== allChartData.length - 1) return <g key={index} />;
+                      return (
+                        <circle key={index} cx={cx} cy={cy} r={4} fill={forecastOverlay.cfg.color} stroke="white" strokeWidth={1.5} />
+                      );
+                    }}
+                    activeDot={{ r: 4, fill: forecastOverlay.cfg.color, stroke: "white", strokeWidth: 1.5 }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                )}
 
                 {showValidatedTarget && (
                   <ReferenceLine yAxisId="price" y={validatedTargetPrice!} stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 3" label={{ value: isEn ? "Target" : "적정주가", position: "insideTopRight", fontSize: 10, fill: "#f59e0b", fontWeight: 700 }} />

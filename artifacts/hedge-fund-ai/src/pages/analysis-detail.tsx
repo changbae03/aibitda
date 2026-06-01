@@ -3948,6 +3948,36 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
   );
 }
 
+function parsePriceScenario(content: string): import("@/components/StockChart").PriceScenario {
+  // 단기 주가 방향 분석 섹션에서 선택된 경로를 감지
+  // AI 프롬프트: "선택한 경로를 먼저 굵게 선언"
+  const nums = ["①", "②", "③", "④"] as const;
+  const pathTypeMap: Record<string, 1 | 2 | 3 | 4> = { "①": 1, "②": 2, "③": 3, "④": 4 };
+
+  // 방법 1: 볼드 선언 **경로 ① ...** 패턴 (가장 신뢰성 높음)
+  for (const n of nums) {
+    if (new RegExp(`\\*\\*경로\\s*${n}`).test(content)) {
+      return { pathType: pathTypeMap[n] };
+    }
+  }
+  // 방법 2: "경로 N 시나리오가 가장 유력" 패턴
+  for (const n of nums) {
+    if (new RegExp(`경로\\s*${n}[^\\n]{0,30}(?:가장\\s*유력|가장\\s*높은|선택)`).test(content)) {
+      return { pathType: pathTypeMap[n] };
+    }
+  }
+  // 방법 3: 단기 방향 섹션 내 첫 번째 경로 언급
+  const sectionMatch = content.match(/## 🔮 단기 주가 방향[\s\S]{0,300}/);
+  if (sectionMatch) {
+    for (const n of nums) {
+      if (sectionMatch[0].includes(`경로 ${n}`)) {
+        return { pathType: pathTypeMap[n] };
+      }
+    }
+  }
+  return { pathType: null };
+}
+
 function parseChartLevels(content: string): ChartLevels | null {
   const match = content.match(/CHART_DATA:(\{[^\n]+\})/);
   if (!match) return null;
@@ -4611,6 +4641,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const chartLevels = useMemo(() => isMarket ? parseChartLevels(content) : null, [isMarket, content]);
   const chartEvents = useMemo(() => isMarket ? parseChartEvents(content) : [], [isMarket, content]);
   const marketSignals = useMemo(() => isMarket ? parseMarketSignals(content) : null, [isMarket, content]);
+  const priceScenario = useMemo(() => isMarket ? parsePriceScenario(content) : { pathType: null }, [isMarket, content]);
   const valuationData = useMemo(() => isFundamental ? parseValuationData(content) : null, [isFundamental, content]);
   const finalValuationData = useMemo(() => isRelativeVal ? parseFinalValuationData(content) : null, [isRelativeVal, content]);
   const displayContent = useMemo(() => stripPromptInstructions(stripEstimationLabels(
@@ -4787,6 +4818,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               events={chartEvents}
               currency={priceCurrency}
               isEn={isEn}
+              priceScenario={priceScenario}
             />
           </div>
         )}
