@@ -1508,68 +1508,55 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                 const grade = review.riskScore?.grade ?? "B";
                 const gc = gradeCfg[grade] ?? gradeCfg["B"];
 
-                return (
-                  <div className="divide-y divide-border/20">
+                // ── 섹션 레이블 헬퍼 ─────────────────────────────────────
+                const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+                  <p className="text-[10.5px] font-medium text-foreground/35 mb-2.5 tracking-wide">{children}</p>
+                );
 
-                    {/* ① 행동 우선순위 카드 */}
-                    <div className="px-4 pt-3 pb-3">
-                      <div className="flex items-center gap-1.5 mb-2.5">
-                        <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">{isEn ? "Action Priority" : "행동 우선순위"}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {/* 매도 검토 */}
-                        <div className={cn("rounded-xl border p-2.5", sellGroup.length > 0 ? "border-red-500/25 bg-red-500/[0.06]" : "border-border/20 bg-background/20 opacity-40")}>
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <TrendingDown className="w-3 h-3 text-red-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-red-400">{isEn ? "Sell Review" : "매도 검토"}</span>
-                            {sellGroup.length > 0 && <span className="ml-auto text-[10px] font-bold text-red-400">{sellGroup.length}</span>}
+                return (
+                  <div className="divide-y divide-border/10">
+
+                    {/* ① 행동 요약 */}
+                    <div className="px-5 pt-4 pb-4">
+                      <SectionLabel>{isEn ? "Today's action" : "지금 할 일"}</SectionLabel>
+                      <div className="space-y-1.5">
+                        {sellGroup.length > 0 && (
+                          <div className="flex items-baseline gap-3">
+                            <span className="text-[10.5px] text-red-400/80 font-medium shrink-0 w-[52px]">
+                              {isEn ? "Sell" : "매도검토"}
+                            </span>
+                            <span className="text-[13px] text-foreground/80 leading-snug font-medium">
+                              {sellGroup.map(s => s.companyName).join("  ·  ")}
+                            </span>
                           </div>
-                          {sellGroup.length === 0
-                            ? <p className="text-[10px] text-muted-foreground/40">{isEn ? "None" : "해당 없음"}</p>
-                            : <div className="space-y-1">{sellGroup.map(s => (
-                                <p key={s.ticker} className="text-[11px] text-red-300/80 font-medium leading-snug">{s.companyName}</p>
-                              ))}</div>
-                          }
-                        </div>
-                        {/* 홀드 */}
-                        <div className={cn("rounded-xl border p-2.5", holdGroup.length > 0 ? "border-amber-500/20 bg-amber-500/[0.04]" : "border-border/20 bg-background/20 opacity-40")}>
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <Activity className="w-3 h-3 text-amber-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-amber-400">{isEn ? "Hold" : "홀드"}</span>
-                            {holdGroup.length > 0 && <span className="ml-auto text-[10px] font-bold text-amber-400">{holdGroup.length}</span>}
+                        )}
+                        {buyGroup.length > 0 && (
+                          <div className="flex items-baseline gap-3">
+                            <span className="text-[10.5px] text-emerald-400/80 font-medium shrink-0 w-[52px]">
+                              {isEn ? "Add" : "추가매수"}
+                            </span>
+                            <span className="text-[13px] text-foreground/80 leading-snug font-medium">
+                              {buyGroup.map(s => s.companyName).join("  ·  ")}
+                            </span>
                           </div>
-                          {holdGroup.length === 0
-                            ? <p className="text-[10px] text-muted-foreground/40">{isEn ? "None" : "해당 없음"}</p>
-                            : <div className="space-y-1">{holdGroup.map(s => (
-                                <p key={s.ticker} className="text-[11px] text-amber-300/80 font-medium leading-snug">{s.companyName}</p>
-                              ))}</div>
-                          }
-                        </div>
-                        {/* 추가매수 */}
-                        <div className={cn("rounded-xl border p-2.5", buyGroup.length > 0 ? "border-emerald-500/25 bg-emerald-500/[0.06]" : "border-border/20 bg-background/20 opacity-40")}>
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-emerald-400">{isEn ? "Add" : "추가매수"}</span>
-                            {buyGroup.length > 0 && <span className="ml-auto text-[10px] font-bold text-emerald-400">{buyGroup.length}</span>}
+                        )}
+                        {holdGroup.length > 0 && (
+                          <div className="flex items-baseline gap-3">
+                            <span className="text-[10.5px] text-foreground/25 font-medium shrink-0 w-[52px]">
+                              {isEn ? "Hold" : "홀드"}
+                            </span>
+                            <span className="text-[12px] text-foreground/40 leading-snug">
+                              {holdGroup.map(s => s.companyName).join("  ·  ")}
+                            </span>
                           </div>
-                          {buyGroup.length === 0
-                            ? <p className="text-[10px] text-muted-foreground/40">{isEn ? "None" : "해당 없음"}</p>
-                            : <div className="space-y-1">{buyGroup.map(s => (
-                                <p key={s.ticker} className="text-[11px] text-emerald-300/80 font-medium leading-snug">{s.companyName}</p>
-                              ))}</div>
-                          }
-                        </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* ② 수익률 기여도 & 비중 */}
+                    {/* ② 비중 & 수익률 기여도 */}
                     {hasWeights && (
-                      <div className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 mb-2.5">
-                          <PieChart className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                          <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">{isEn ? "Weight & Return Contribution" : "비중 & 수익률 기여도"}</span>
-                        </div>
+                      <div className="px-5 py-4">
+                        <SectionLabel>{isEn ? "Weight & return" : "비중 & 수익률"}</SectionLabel>
                         <div className="space-y-2">
                           {[...holdingsWithValue]
                             .sort((a, b) => (weightMap[b.ticker]?.pct ?? 0) - (weightMap[a.ticker]?.pct ?? 0))
@@ -1578,164 +1565,125 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                               if (!w) return null;
                               const ret = w.returnPct;
                               const contribution = ret != null ? (w.pct / 100) * ret : null;
-                              const retColor = ret == null ? "text-muted-foreground/40"
-                                : ret > 0 ? "text-red-400" : ret < 0 ? "text-blue-400" : "text-muted-foreground/60";
-                              const barColor = ret == null ? "bg-muted/30"
-                                : ret > 0 ? "bg-red-500/50" : ret < 0 ? "bg-blue-500/50" : "bg-muted/30";
+                              const retColor = ret == null ? "text-foreground/30"
+                                : ret > 0 ? "text-red-400" : ret < 0 ? "text-blue-400" : "text-foreground/30";
                               return (
-                                <div key={h.ticker} className="space-y-0.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[11px] text-foreground/70 w-24 truncate shrink-0">{h.companyName}</span>
-                                    <div className="flex-1 h-1.5 bg-muted/20 rounded-full overflow-hidden">
-                                      <div className={cn("h-full rounded-full", barColor)} style={{ width: `${Math.min(w.pct, 100)}%` }} />
-                                    </div>
-                                    <span className="text-[10px] text-muted-foreground/60 w-8 text-right shrink-0">{w.pct.toFixed(0)}%</span>
-                                    {ret != null && (
-                                      <span className={cn("text-[10px] font-semibold w-14 text-right shrink-0", retColor)}>
-                                        {ret >= 0 ? "+" : ""}{ret.toFixed(1)}%
-                                        {contribution != null && (
-                                          <span className="text-[9px] text-muted-foreground/40 font-normal"> ({contribution >= 0 ? "+" : ""}{contribution.toFixed(1)}p)</span>
-                                        )}
-                                      </span>
-                                    )}
+                                <div key={h.ticker} className="flex items-center gap-2.5">
+                                  <span className="text-[11.5px] text-foreground/60 w-[88px] truncate shrink-0">{h.companyName}</span>
+                                  <div className="flex-1 h-[3px] bg-foreground/[0.06] rounded-full overflow-hidden">
+                                    <div
+                                      className={cn("h-full rounded-full", ret == null ? "bg-foreground/15" : ret > 0 ? "bg-red-400/50" : ret < 0 ? "bg-blue-400/50" : "bg-foreground/15")}
+                                      style={{ width: `${Math.min(w.pct, 100)}%` }}
+                                    />
                                   </div>
+                                  <span className="text-[10.5px] text-foreground/35 w-7 text-right shrink-0 tabular-nums">{w.pct.toFixed(0)}%</span>
+                                  {ret != null && (
+                                    <span className={cn("text-[10.5px] font-medium w-16 text-right shrink-0 tabular-nums", retColor)}>
+                                      {ret >= 0 ? "+" : ""}{ret.toFixed(1)}%
+                                      {contribution != null && (
+                                        <span className="text-[9px] text-foreground/25 font-normal"> ({contribution >= 0 ? "+" : ""}{contribution.toFixed(1)}p)</span>
+                                      )}
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })}
                         </div>
-                        <p className="text-[10px] text-muted-foreground/30 mt-1.5">{isEn ? "Bar = portfolio weight · () = return contribution to total" : "막대 = 포트폴리오 비중 · () = 전체 수익률 기여도"}</p>
                       </div>
                     )}
 
-                    {/* ③ 종목별 뉴스 & thesis 점검 */}
-                    <div className="px-4 pt-3 pb-2">
-                      <div className="flex items-center gap-1.5 mb-3">
-                        <Newspaper className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                        <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">{isEn ? "Stock News & Thesis Check" : "종목별 뉴스 & Thesis 점검"}</span>
-                      </div>
-                      <div className="space-y-3">
+                    {/* ③ 종목별 점검 */}
+                    <div className="px-5 pt-4 pb-3">
+                      <SectionLabel>{isEn ? "Stock updates" : "종목별 점검"}</SectionLabel>
+                      <div className="space-y-4">
                         {review.stockUpdates.map(s => {
-                          const sentimentCfg = s.sentiment === "bullish"
-                            ? { label: isEn ? "Bullish" : "강세", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" }
+                          const borderColor = s.action === "매도검토" ? "border-red-400/35"
+                            : s.action === "추가매수" ? "border-emerald-400/35"
+                            : "border-border/20";
+                          const sentimentText = s.sentiment === "bullish"
+                            ? (isEn ? "bullish" : "강세")
                             : s.sentiment === "bearish"
-                            ? { label: isEn ? "Bearish" : "약세", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
-                            : { label: isEn ? "Neutral" : "중립", cls: "bg-muted text-muted-foreground border-border/40" };
-                          const thesisLabel = s.thesisStatus === "훼손" ? (isEn ? "Impaired" : "훼손")
-                            : s.thesisStatus === "일부변화" ? (isEn ? "Partial Change" : "일부변화")
-                            : (isEn ? "Valid" : "유효");
-                          const thesisCfg = s.thesisStatus === "훼손"
-                            ? { cls: "bg-red-500/10 text-red-400 border-red-500/20" }
-                            : s.thesisStatus === "일부변화"
-                            ? { cls: "bg-amber-500/10 text-amber-400 border-amber-500/20" }
-                            : { cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" };
-                          const actionCfg = s.action === "매도검토"
-                            ? { label: isEn ? "Sell Review" : "매도검토", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
-                            : s.action === "추가매수"
-                            ? { label: isEn ? "Add" : "추가매수", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" }
-                            : { label: isEn ? "Hold" : "홀드", cls: "bg-muted/50 text-muted-foreground border-border/30" };
+                            ? (isEn ? "bearish" : "약세")
+                            : (isEn ? "neutral" : "중립");
+                          const sentimentColor = s.sentiment === "bullish" ? "text-red-400/70"
+                            : s.sentiment === "bearish" ? "text-blue-400/70"
+                            : "text-foreground/30";
+                          const thesisText = s.thesisStatus === "훼손" ? (isEn ? "thesis impaired" : "thesis 훼손")
+                            : s.thesisStatus === "일부변화" ? (isEn ? "thesis shifting" : "thesis 변화")
+                            : null;
                           return (
-                            <div key={s.ticker} className="rounded-xl border border-border/30 bg-background/30 overflow-hidden">
-                              {/* 헤더 */}
-                              <div className="px-3 py-2 flex items-center gap-2 border-b border-border/20">
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-[12px] font-semibold text-foreground/90">{s.companyName}</span>
-                                  <span className="ml-1.5 text-[10px] text-muted-foreground/50">{s.ticker}</span>
-                                </div>
-                                <span className={cn("px-1.5 py-0.5 rounded-md text-[10px] font-semibold border", actionCfg.cls)}>
-                                  {actionCfg.label}
-                                </span>
-                                <span className={cn("px-1.5 py-0.5 rounded-md text-[10px] font-semibold border", sentimentCfg.cls)}>
-                                  {sentimentCfg.label}
-                                </span>
-                                <span className={cn("px-1.5 py-0.5 rounded-md text-[10px] font-medium border", thesisCfg.cls)}>
-                                  thesis {thesisLabel}
-                                </span>
+                            <div key={s.ticker} className={cn("pl-3.5 border-l-[2px]", borderColor)}>
+                              {/* 종목명 + 메타 */}
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[13px] font-semibold text-foreground/85">{s.companyName}</span>
+                                <span className="text-[10px] text-foreground/25 font-mono">{s.ticker}</span>
+                                <span className={cn("text-[10px] ml-auto shrink-0", sentimentColor)}>{sentimentText}</span>
+                                {thesisText && (
+                                  <span className="text-[10px] text-amber-400/60 shrink-0">{thesisText}</span>
+                                )}
                               </div>
-                              {/* thesis 변화 메모 */}
+                              {/* thesis 변화 노트 */}
                               {s.thesisChangeNote && s.thesisChangeNote !== "주요 thesis 변화 없음" && (
-                                <div className="px-3 py-1.5 bg-amber-500/[0.04] border-b border-amber-500/10 flex items-start gap-1.5">
-                                  <MoveRight className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
-                                  <p className="text-[11px] text-amber-300/80 leading-snug">{s.thesisChangeNote}</p>
-                                </div>
+                                <p className="text-[11px] text-foreground/45 italic mb-1.5 leading-snug">{s.thesisChangeNote}</p>
                               )}
                               {/* 핵심 이벤트 */}
                               {s.keyEvent && (
-                                <div className="px-3 py-1.5 bg-sky-500/[0.04] border-b border-sky-500/10 flex items-start gap-1.5">
-                                  <Bell className="w-3 h-3 text-sky-400 shrink-0 mt-0.5" />
-                                  <p className="text-[11px] text-sky-300/80 leading-snug">{s.keyEvent}</p>
-                                </div>
+                                <p className="text-[11px] text-foreground/40 mb-1.5 leading-snug">
+                                  <span className="text-foreground/20 mr-1">—</span>{s.keyEvent}
+                                </p>
                               )}
-                              {/* 상세 업데이트 */}
-                              <div className="px-3 py-2">
-                                <p className="text-[12px] text-foreground/70 leading-relaxed">{s.update}</p>
-                              </div>
+                              {/* 분석 */}
+                              <p className="text-[12px] text-foreground/65 leading-relaxed">{s.update}</p>
                             </div>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* ④ 포트폴리오 리스크 스코어 */}
+                    {/* ④ 리스크 */}
                     {review.riskScore && (
-                      <div className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 mb-2.5">
-                          <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">{isEn ? "Portfolio Risk Score" : "포트폴리오 리스크 스코어"}</span>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className={cn("shrink-0 w-10 h-10 rounded-xl border flex items-center justify-center font-black text-[18px]", gc.cls)}>
-                            {grade}
-                          </div>
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <p className={cn("text-[11px] font-bold", gc.cls.split(" ")[0])}>{gc.label}</p>
-                            <p className="text-[11px] text-foreground/65 leading-relaxed">{review.riskScore.sectorConcentration}</p>
-                            <p className="text-[11px] text-foreground/55 leading-relaxed">{review.riskScore.correlationRisk}</p>
-                          </div>
-                        </div>
+                      <div className="px-5 py-4">
+                        <SectionLabel>{isEn ? "Risk" : "리스크"}</SectionLabel>
+                        <p className="text-[12.5px] text-foreground/70 leading-relaxed">
+                          <span className={cn("font-semibold", gc.cls.split(" ")[0])}>
+                            {grade}{isEn ? "-grade" : "등급"} ({gc.label.split(" — ")[1]})
+                          </span>
+                          {" — "}{review.riskScore.sectorConcentration}
+                        </p>
+                        {review.riskScore.correlationRisk && (
+                          <p className="text-[12px] text-foreground/45 leading-relaxed mt-1">{review.riskScore.correlationRisk}</p>
+                        )}
                       </div>
                     )}
 
-                    {/* ⑤ 포트폴리오 종합 평가 */}
-                    <div className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <Compass className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{isEn ? "Portfolio Assessment" : "포트폴리오 종합 평가"}</span>
-                      </div>
-                      <p className="text-[12px] text-foreground/75 leading-relaxed">{review.portfolioView}</p>
+                    {/* ⑤ 종합 평가 */}
+                    <div className="px-5 py-4">
+                      <SectionLabel>{isEn ? "Overall view" : "종합 평가"}</SectionLabel>
+                      <p className="text-[12.5px] text-foreground/70 leading-relaxed">{review.portfolioView}</p>
                     </div>
 
-                    {/* ⑥ 리밸런싱 & 행동 제안 */}
-                    <div className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <MoveRight className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">{isEn ? "Rebalancing & Action Plan" : "리밸런싱 & 행동 제안"}</span>
-                      </div>
-                      <p className="text-[12px] text-foreground/75 leading-relaxed">{review.rebalancing}</p>
+                    {/* ⑥ 리밸런싱 제안 */}
+                    <div className="px-5 py-4">
+                      <SectionLabel>{isEn ? "Rebalancing" : "리밸런싱 제안"}</SectionLabel>
+                      <p className="text-[12.5px] text-foreground/70 leading-relaxed">{review.rebalancing}</p>
                     </div>
 
-                    {/* ⑦ 미보유 섹터 추천 */}
+                    {/* ⑦ 섹터 보완 추천 */}
                     {review.sectorRecommendations.length > 0 && (
-                      <div className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 mb-3">
-                          <Lightbulb className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                          <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider">{isEn ? "Sector Recommendations" : "포트폴리오 보완 섹터 추천"}</span>
-                        </div>
-                        <div className="space-y-2.5">
+                      <div className="px-5 py-4">
+                        <SectionLabel>{isEn ? "Sectors to consider" : "고려할 섹터"}</SectionLabel>
+                        <div className="space-y-3">
                           {review.sectorRecommendations.map((rec, i) => (
-                            <div key={i} className="rounded-xl border border-violet-500/15 bg-violet-500/[0.04] p-3">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-[12px] font-bold text-violet-300">{rec.sector}</span>
+                            <div key={i}>
+                              <div className="flex items-baseline gap-2 mb-0.5">
+                                <span className="text-[12.5px] font-semibold text-foreground/75">{rec.sector}</span>
                                 {rec.exampleTickers.length > 0 && (
-                                  <div className="flex gap-1 flex-wrap">
-                                    {rec.exampleTickers.map((t, j) => (
-                                      <span key={j} className="px-1.5 py-0.5 rounded-md bg-violet-500/10 border border-violet-500/20 text-[10px] text-violet-400 font-medium">
-                                        {t}
-                                      </span>
-                                    ))}
-                                  </div>
+                                  <span className="text-[10px] text-foreground/30 font-mono">
+                                    {rec.exampleTickers.join(" · ")}
+                                  </span>
                                 )}
                               </div>
-                              <p className="text-[12px] text-foreground/70 leading-relaxed">{rec.reason}</p>
+                              <p className="text-[12px] text-foreground/55 leading-relaxed">{rec.reason}</p>
                             </div>
                           ))}
                         </div>
@@ -1743,20 +1691,19 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                     )}
 
                     {/* 푸터 */}
-                    <div className="px-4 py-2.5 flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
-                        <Brain className="w-2.5 h-2.5" />
+                    <div className="px-5 py-2.5 flex items-center justify-between">
+                      <span className="text-[10px] text-foreground/25">
                         {isEn
-                          ? `Gemini AI · Real-time news · Generated ${new Date(review.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
-                          : `Gemini AI · 실시간 뉴스 기반 · ${new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 생성`}
+                          ? `Gemini AI · ${new Date(review.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                          : `Gemini AI · ${new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`}
                       </span>
                       <button
                         onClick={runReview}
                         disabled={loading}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-amber-400 transition-colors"
+                        className="flex items-center gap-1 text-[10px] text-foreground/20 hover:text-foreground/50 transition-colors"
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
-                        {isEn ? "Rerun (-1 credit)" : "다시 실행 (-1 크레딧)"}
+                        {isEn ? "Rerun" : "다시 실행"}
                       </button>
                     </div>
                   </div>

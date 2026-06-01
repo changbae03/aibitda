@@ -2,7 +2,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import { clerkMiddleware } from "@clerk/express";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
@@ -95,7 +95,7 @@ const analysisLimiter = rateLimit({
     const auth = (req as any).auth;
     const userId = auth?.userId ?? auth?.user?.id;
     if (userId) return `user:${userId}`;
-    return req.ip ?? "unknown";
+    return ipKeyGenerator(req);
   },
 });
 
