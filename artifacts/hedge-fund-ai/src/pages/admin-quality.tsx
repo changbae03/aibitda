@@ -355,11 +355,11 @@ function CoverageTab() {
 
       {/* 목록 */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-muted/40 border-b border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 bg-muted/40 border-b border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           <span>종목</span>
-          <span className="text-right">거래소</span>
-          <span className="text-right w-16">보고서</span>
-          <span className="text-right w-20">최근 분석</span>
+          <span className="text-right w-10">거래소</span>
+          <span className="text-right w-12">보고서</span>
+          <span className="text-right w-14">최근 분석</span>
         </div>
         {!data || data.tickers.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
@@ -368,18 +368,20 @@ function CoverageTab() {
         ) : (
           <div className="divide-y divide-border">
             {data.tickers.map(t => (
-              <div key={t.ticker} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2.5 items-center hover:bg-muted/20 transition-colors">
+              <div key={t.ticker} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2.5 items-center hover:bg-muted/20 transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.isCovered ? "bg-green-400" : "bg-muted-foreground/30")} />
-                  <span className="font-mono text-xs text-muted-foreground shrink-0">{t.ticker}</span>
-                  <span className="text-sm text-foreground truncate">{t.name}</span>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[13px] font-medium text-foreground block truncate leading-tight">{t.name}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground/50 block leading-tight">{t.ticker}</span>
+                  </div>
                 </div>
-                <span className="text-[11px] text-muted-foreground/70 text-right">{t.exchange}</span>
-                <span className={cn("text-xs font-semibold tabular-nums text-right w-16",
+                <span className="text-[11px] text-muted-foreground/70 text-right w-10">{t.exchange}</span>
+                <span className={cn("text-xs font-semibold tabular-nums text-right w-12",
                   t.reportCount > 0 ? "text-green-400" : "text-muted-foreground/30")}>
                   {t.reportCount > 0 ? `${t.reportCount}건` : "—"}
                 </span>
-                <span className="text-[11px] text-muted-foreground text-right w-20">
+                <span className="text-[11px] text-muted-foreground text-right w-14">
                   {t.lastDate ? t.lastDate.slice(5) : "—"}
                 </span>
               </div>
