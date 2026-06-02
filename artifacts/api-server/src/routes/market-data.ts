@@ -1003,8 +1003,9 @@ export async function warmupEarningsCache() {
       const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
       const kstNowMs = Date.now() + KST_OFFSET_MS;
       const kstMidnightUtc = kstNowMs - (kstNowMs % (24 * 60 * 60 * 1000)) - KST_OFFSET_MS;
-      const now      = new Date(kstMidnightUtc);
-      const rangeEnd = new Date(kstMidnightUtc + (rangeDays + 1) * 86400000);
+      const now       = new Date(kstMidnightUtc);
+      const pastStart = new Date(kstMidnightUtc - 14 * 86400000); // 최근 14일 발표 완료 포함
+      const rangeEnd  = new Date(kstMidnightUtc + (rangeDays + 1) * 86400000);
       const toKSTDateStr = (d: Date) =>
         new Date(d.getTime() + KST_OFFSET_MS).toISOString().split("T")[0];
 
@@ -1035,7 +1036,7 @@ export async function warmupEarningsCache() {
           ? (() => { const d2 = fqEndW instanceof Date ? fqEndW : new Date(fqEndW); return `${d2.toLocaleDateString("en-US",{month:"short"})} ${d2.getFullYear()}`; })()
           : null;
 
-        // earningsHistory: 전분기 어닝 서프라이즈 추출
+        // earningsHistory: 가장 최근 분기 실적 (발표 완료 시 당분기 결과, 미발표 시 전분기 참고)
         const histListW: any[] = data?.earningsHistory?.history ?? [];
         const sortedHistW = [...histListW].sort((a, b) => {
           const da = a.quarter instanceof Date ? a.quarter.getTime() : new Date(a.quarter ?? 0).getTime();
@@ -1044,11 +1045,24 @@ export async function warmupEarningsCache() {
         });
         const lastQtrW = sortedHistW[0];
 
-        for (const rawDate of dates) {
-          const ts = typeof rawDate === "number" ? rawDate * 1000
+        // 발표 완료: pastStart~now, 발표 예정: now~rangeEnd (각각 최근 날짜 1건씩)
+        const sortedDates = [...dates].sort((a, b) => {
+          const ta = typeof a === "number" ? a * 1000 : (a instanceof Date ? a.getTime() : new Date(a).getTime());
+          const tb = typeof b === "number" ? b * 1000 : (b instanceof Date ? b.getTime() : new Date(b).getTime());
+          return tb - ta; // 최신순
+        });
+        let pushedCompleted = false;
+        let pushedUpcoming  = false;
+        for (const rawDate of sortedDates) {
+          const ts   = typeof rawDate === "number" ? rawDate * 1000
             : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
           const date = new Date(ts);
-          if (date < now || date > rangeEnd) continue;
+          const isCompleted = date >= pastStart && date < now;
+          const isUpcoming  = date >= now && date <= rangeEnd;
+          if (!isCompleted && !isUpcoming) continue;
+          if (isCompleted && pushedCompleted) continue;
+          if (isUpcoming  && pushedUpcoming)  continue;
+
           const currency = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
           const isKorean = currency === "KRW";
           let displayDate = date;
@@ -1057,20 +1071,22 @@ export async function warmupEarningsCache() {
           raw.push({
             ticker, companyName: nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker,
             earningsDate: toKSTDateStr(displayDate),
-            epsEstimate:     currentQtrW?.earningsEstimate?.avg ?? cal?.earnings?.earningsAverage ?? null,
-            epsLow:          currentQtrW?.earningsEstimate?.low ?? cal?.earnings?.earningsLow ?? null,
-            epsHigh:         currentQtrW?.earningsEstimate?.high ?? cal?.earnings?.earningsHigh ?? null,
-            revenueEstimate: currentQtrW?.revenueEstimate?.avg ?? cal?.earnings?.revenueAverage ?? null,
-            revenueLow:      currentQtrW?.revenueEstimate?.low ?? null,
-            revenueHigh:     currentQtrW?.revenueEstimate?.high ?? null,
+            epsEstimate:     isCompleted ? null : (currentQtrW?.earningsEstimate?.avg ?? cal?.earnings?.earningsAverage ?? null),
+            epsLow:          isCompleted ? null : (currentQtrW?.earningsEstimate?.low ?? cal?.earnings?.earningsLow ?? null),
+            epsHigh:         isCompleted ? null : (currentQtrW?.earningsEstimate?.high ?? cal?.earnings?.earningsHigh ?? null),
+            revenueEstimate: isCompleted ? null : (currentQtrW?.revenueEstimate?.avg ?? cal?.earnings?.revenueAverage ?? null),
+            revenueLow:      isCompleted ? null : (currentQtrW?.revenueEstimate?.low ?? null),
+            revenueHigh:     isCompleted ? null : (currentQtrW?.revenueEstimate?.high ?? null),
             analyticCount:   analyticCountW,
             fiscalQuarterEnding: fiscalQuarterEndingW,
             epsActualPrev:   lastQtrW?.epsActual ?? null,
             epsEstimatePrev: lastQtrW?.epsEstimate ?? null,
             epsSurprisePct:  lastQtrW?.surprisePercent ?? null,
-            currency, isKorean,
+            currency, isKorean, isCompleted,
           });
-          break;
+          if (isCompleted) pushedCompleted = true;
+          else             pushedUpcoming  = true;
+          if (pushedCompleted && pushedUpcoming) break;
         }
       }
 
@@ -1201,8 +1217,9 @@ router.get("/earnings-calendar", async (req, res) => {
   const kstNowMs = Date.now() + KST_OFFSET_MS;
   // KST 기준 자정 (UTC 타임스탬프로 변환)
   const kstMidnightUtc = kstNowMs - (kstNowMs % (24 * 60 * 60 * 1000)) - KST_OFFSET_MS;
-  const now      = new Date(kstMidnightUtc);
-  const rangeEnd = new Date(kstMidnightUtc + (days + 1) * 24 * 60 * 60 * 1000);
+  const now       = new Date(kstMidnightUtc);
+  const pastStart = new Date(kstMidnightUtc - 14 * 24 * 60 * 60 * 1000); // 최근 14일 발표 완료 포함
+  const rangeEnd  = new Date(kstMidnightUtc + (days + 1) * 24 * 60 * 60 * 1000);
 
   /** Yahoo Finance 타임스탬프 → KST 날짜 문자열 (YYYY-MM-DD) */
   const toKSTDateStr = (d: Date) =>
@@ -1261,7 +1278,7 @@ router.get("/earnings-calendar", async (req, res) => {
     revenueEstimate: number | null; revenueLow: number | null; revenueHigh: number | null;
     analyticCount: number | null; fiscalQuarterEnding: string | null;
     epsActualPrev: number | null; epsEstimatePrev: number | null; epsSurprisePct: number | null;
-    currency: string; isKorean: boolean;
+    currency: string; isKorean: boolean; isCompleted: boolean;
   }
 
   // ── 3-A. 캐시 계층: 인메모리 → DB → Yahoo Finance 실시간 ──────────────────
@@ -1311,7 +1328,7 @@ router.get("/earnings-calendar", async (req, res) => {
           ? (() => { const d2 = fqEnd2 instanceof Date ? fqEnd2 : new Date(fqEnd2); return `${d2.toLocaleDateString("en-US",{month:"short"})} ${d2.getFullYear()}`; })()
           : null;
 
-        // earningsHistory: 전분기 서프라이즈
+        // earningsHistory: 가장 최근 분기 실적 (발표 완료 시 당분기 결과, 미발표 시 전분기 참고)
         const histList2: any[] = data?.earningsHistory?.history ?? [];
         const sortedHist2 = [...histList2].sort((a, b) => {
           const da = a.quarter instanceof Date ? a.quarter.getTime() : new Date(a.quarter ?? 0).getTime();
@@ -1320,37 +1337,51 @@ router.get("/earnings-calendar", async (req, res) => {
         });
         const lastQtr2 = sortedHist2[0];
 
-        for (const rawDate of dates) {
+        const currency2 = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
+        const isKorean2 = currency2 === "KRW";
+        const name2     = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
+
+        // 발표 완료(pastStart~now)와 발표 예정(now~rangeEnd) 각각 1건씩 수집
+        const sortedDates2 = [...dates].sort((a: any, b: any) => {
+          const ta = typeof a === "number" ? a * 1000 : (a instanceof Date ? a.getTime() : new Date(a).getTime());
+          const tb = typeof b === "number" ? b * 1000 : (b instanceof Date ? b.getTime() : new Date(b).getTime());
+          return tb - ta;
+        });
+        let pushed2Completed = false;
+        let pushed2Upcoming  = false;
+        for (const rawDate of sortedDates2) {
           const ts   = typeof rawDate === "number" ? rawDate * 1000
             : (rawDate instanceof Date ? rawDate.getTime() : new Date(rawDate).getTime());
           const date = new Date(ts);
-          if (date < now || date > rangeEnd) continue;
-
-          const currency = pr?.currency ?? (ticker.endsWith(".KS") || ticker.endsWith(".KQ") ? "KRW" : "USD");
-          const isKorean = currency === "KRW";
-          const name     = nameMap[ticker] ?? pr?.shortName ?? pr?.longName ?? ticker;
+          const isCompleted2 = date >= pastStart && date < now;
+          const isUpcoming2  = date >= now && date <= rangeEnd;
+          if (!isCompleted2 && !isUpcoming2) continue;
+          if (isCompleted2 && pushed2Completed) continue;
+          if (isUpcoming2  && pushed2Upcoming)  continue;
 
           let displayDate = date;
-          if (isKorean && date.getUTCHours() >= 4 && date.getUTCHours() <= 8) {
+          if (isKorean2 && date.getUTCHours() >= 4 && date.getUTCHours() <= 8) {
             displayDate = new Date(date.getTime() + 86400000);
           }
 
           raw.push({
-            ticker, companyName: name, earningsDate: toKSTDateStr(displayDate),
-            epsEstimate:     currentQtr2?.earningsEstimate?.avg ?? cal?.earnings?.earningsAverage ?? null,
-            epsLow:          currentQtr2?.earningsEstimate?.low ?? cal?.earnings?.earningsLow ?? null,
-            epsHigh:         currentQtr2?.earningsEstimate?.high ?? cal?.earnings?.earningsHigh ?? null,
-            revenueEstimate: currentQtr2?.revenueEstimate?.avg ?? cal?.earnings?.revenueAverage ?? null,
-            revenueLow:      currentQtr2?.revenueEstimate?.low ?? null,
-            revenueHigh:     currentQtr2?.revenueEstimate?.high ?? null,
+            ticker, companyName: name2, earningsDate: toKSTDateStr(displayDate),
+            epsEstimate:     isCompleted2 ? null : (currentQtr2?.earningsEstimate?.avg ?? cal?.earnings?.earningsAverage ?? null),
+            epsLow:          isCompleted2 ? null : (currentQtr2?.earningsEstimate?.low ?? cal?.earnings?.earningsLow ?? null),
+            epsHigh:         isCompleted2 ? null : (currentQtr2?.earningsEstimate?.high ?? cal?.earnings?.earningsHigh ?? null),
+            revenueEstimate: isCompleted2 ? null : (currentQtr2?.revenueEstimate?.avg ?? cal?.earnings?.revenueAverage ?? null),
+            revenueLow:      isCompleted2 ? null : (currentQtr2?.revenueEstimate?.low ?? null),
+            revenueHigh:     isCompleted2 ? null : (currentQtr2?.revenueEstimate?.high ?? null),
             analyticCount:   analyticCount2,
             fiscalQuarterEnding: fiscalQuarterEnding2,
             epsActualPrev:   lastQtr2?.epsActual ?? null,
             epsEstimatePrev: lastQtr2?.epsEstimate ?? null,
             epsSurprisePct:  lastQtr2?.surprisePercent ?? null,
-            currency, isKorean,
+            currency: currency2, isKorean: isKorean2, isCompleted: isCompleted2,
           });
-          break;
+          if (isCompleted2) pushed2Completed = true;
+          else              pushed2Upcoming  = true;
+          if (pushed2Completed && pushed2Upcoming) break;
         }
       }
       entries = raw;
@@ -1383,7 +1414,7 @@ router.get("/earnings-calendar", async (req, res) => {
         revenueEstimate: null, revenueLow: null, revenueHigh: null,
         analyticCount: null, fiscalQuarterEnding: null,
         epsActualPrev: null, epsEstimatePrev: null, epsSurprisePct: null,
-        currency: "KRW", isKorean: true,
+        currency: "KRW", isKorean: true, isCompleted: false,
       });
     }
   } else if (koreanTickers.length > 0) {

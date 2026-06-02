@@ -31,6 +31,7 @@ interface EarningsEntry {
   epsSurprisePct?: number | null;
   currency: string;
   isKorean: boolean;
+  isCompleted?: boolean;
 }
 
 interface DartDisclosure {
@@ -278,11 +279,14 @@ const CATEGORY_ICON: Record<string, string> = {
 // ── 서브 컴포넌트 ──────────────────────────────────────────────────────────────
 function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e: EarningsEntry) => void }) {
   const { isEn } = useLanguage();
-  const hasEps = entry.epsEstimate !== null;
-  const hasRevenue = entry.revenueEstimate !== null;
-  const hasConsensus = hasEps || hasRevenue;
-  const hasSurprise = entry.epsSurprisePct != null;
-  const shortTicker = entry.ticker.replace(/\.(KS|KQ)$/, "");
+  const isCompleted   = !!entry.isCompleted;
+  const hasEps        = entry.epsEstimate !== null;
+  const hasRevenue    = entry.revenueEstimate !== null;
+  const hasConsensus  = hasEps || hasRevenue;
+  const hasSurprise   = entry.epsSurprisePct != null;
+  const shortTicker   = entry.ticker.replace(/\.(KS|KQ)$/, "");
+  const surprisePct   = entry.epsSurprisePct ?? 0;
+  const surpriseBeat  = surprisePct >= 0;
 
   const [displayName, setDisplayName] = useState(entry.companyName);
   useEffect(() => {
@@ -295,79 +299,139 @@ function EarningsCard({ entry, onSelect }: { entry: EarningsEntry; onSelect: (e:
     }
   }, [isEn, entry.ticker, entry.companyName, entry.isKorean]);
 
-  const surprisePct = entry.epsSurprisePct ?? 0;
-  const surprisePositive = surprisePct >= 0;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={() => onSelect(entry)}
-      className="flex items-start gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent/40 active:scale-[0.99] transition-all cursor-pointer"
+      className={cn(
+        "flex items-start gap-3 p-3 rounded-xl border bg-card hover:bg-accent/40 active:scale-[0.99] transition-all cursor-pointer",
+        isCompleted && hasSurprise
+          ? surpriseBeat
+            ? "border-l-4 border-l-emerald-500 border-border"
+            : "border-l-4 border-l-red-500 border-border"
+          : "border-border"
+      )}
     >
       <StockLogo ticker={entry.ticker} companyName={entry.companyName} size="sm" className="mt-0.5" />
       <div className="flex-1 min-w-0">
+        {/* 종목명 + 뱃지 행 */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">
             {displayName}
           </span>
           <ExchangeBadge ticker={entry.ticker} isKorean={entry.isKorean} />
           <span className="text-xs text-muted-foreground">{shortTicker}</span>
-          {entry.analyticCount != null && entry.analyticCount > 0 && (
+          {isCompleted && (
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full font-medium border",
+              hasSurprise && surpriseBeat
+                ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+                : hasSurprise
+                  ? "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
+                  : "bg-muted text-muted-foreground border-border"
+            )}>
+              ✓ {isEn ? "Reported" : "발표 완료"}
+            </span>
+          )}
+          {!isCompleted && entry.analyticCount != null && entry.analyticCount > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/70 border border-border">
               {entry.analyticCount}{isEn ? " analysts" : "명 추정"}
             </span>
           )}
         </div>
+
         {entry.fiscalQuarterEnding && (
           <p className="mt-0.5 text-[10px] text-muted-foreground/50">
-            {isEn ? `Reporting: ${entry.fiscalQuarterEnding}` : `보고 분기: ${entry.fiscalQuarterEnding}`}
+            {isEn ? `Quarter: ${entry.fiscalQuarterEnding}` : `분기: ${entry.fiscalQuarterEnding}`}
           </p>
         )}
-        {hasConsensus ? (
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-            {hasEps && (
-              <span className="flex items-center gap-1">
+
+        {/* ── 발표 완료: 실제 결과 표시 ── */}
+        {isCompleted && hasSurprise ? (
+          <div className="mt-1.5 space-y-0.5">
+            {/* EPS 실제 vs 예상 */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+              <span className="flex items-center gap-1 text-muted-foreground">
                 <TrendingUp className="w-3 h-3" />
-                {isEn ? "EPS Est:" : "EPS 예상:"}{" "}
-                <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
-                {entry.epsLow !== null && entry.epsHigh !== null && (
-                  <span className="text-muted-foreground/70">({fmtEps(entry.epsLow, entry.currency)} – {fmtEps(entry.epsHigh, entry.currency)})</span>
-                )}
+                {isEn ? "EPS:" : "EPS 결과:"}
+                <span className="text-foreground font-semibold ml-0.5">
+                  {entry.epsActualPrev != null ? fmtEps(entry.epsActualPrev, entry.currency) : "—"}
+                </span>
               </span>
-            )}
-            {hasRevenue && (
-              <span className="flex items-center gap-1">
-                <DollarSign className="w-3 h-3" />
-                {isEn ? "Rev Est:" : "매출 예상:"}{" "}
-                <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
-                {entry.revenueLow != null && entry.revenueHigh != null && (
-                  <span className="text-muted-foreground/70">
-                    ({fmtRevenue(entry.revenueLow, entry.isKorean)} – {fmtRevenue(entry.revenueHigh, entry.isKorean)})
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
-        ) : (
-          <p className="mt-1 text-xs text-muted-foreground/60">{isEn ? "No consensus data" : "컨센서스 데이터 없음"}</p>
-        )}
-        {hasSurprise && (
-          <div className="mt-1.5">
+              {entry.epsEstimatePrev != null && (
+                <span className="text-muted-foreground/60 text-[11px]">
+                  {isEn ? "est." : "예상"} {fmtEps(entry.epsEstimatePrev, entry.currency)}
+                </span>
+              )}
+            </div>
+            {/* 서프라이즈 뱃지 */}
             <span className={cn(
-              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium",
-              surprisePositive
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold",
+              surpriseBeat
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                 : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
             )}>
-              {surprisePositive ? "▲" : "▼"}
-              {isEn ? " Prev Q:" : " 전분기:"}
-              {entry.epsActualPrev != null && <span className="ml-0.5">{fmtEps(entry.epsActualPrev, entry.currency)}</span>}
-              <span className="ml-0.5">
-                ({surprisePositive ? "+" : ""}{surprisePct.toFixed(1)}%{" "}{isEn ? "surprise" : "서프라이즈"})
-              </span>
+              {surpriseBeat ? "▲" : "▼"}
+              {" "}{surpriseBeat ? "+" : ""}{surprisePct.toFixed(1)}%
+              {" "}{isEn ? "surprise" : "서프라이즈"}
             </span>
           </div>
+        ) : isCompleted ? (
+          /* 발표 완료지만 서프라이즈 데이터 없음 */
+          <p className="mt-1 text-xs text-muted-foreground/60">
+            {isEn ? "Results not yet available" : "실적 데이터 집계 중"}
+          </p>
+        ) : (
+          /* ── 발표 예정: 컨센서스 예상치 표시 ── */
+          <>
+            {hasConsensus ? (
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                {hasEps && (
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    {isEn ? "EPS Est:" : "EPS 예상:"}{" "}
+                    <span className="text-foreground font-medium ml-0.5">{fmtEps(entry.epsEstimate, entry.currency)}</span>
+                    {entry.epsLow !== null && entry.epsHigh !== null && (
+                      <span className="text-muted-foreground/70">({fmtEps(entry.epsLow, entry.currency)} – {fmtEps(entry.epsHigh, entry.currency)})</span>
+                    )}
+                  </span>
+                )}
+                {hasRevenue && (
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    {isEn ? "Rev Est:" : "매출 예상:"}{" "}
+                    <span className="text-foreground font-medium ml-0.5">{fmtRevenue(entry.revenueEstimate, entry.isKorean)}</span>
+                    {entry.revenueLow != null && entry.revenueHigh != null && (
+                      <span className="text-muted-foreground/70">
+                        ({fmtRevenue(entry.revenueLow, entry.isKorean)} – {fmtRevenue(entry.revenueHigh, entry.isKorean)})
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground/60">{isEn ? "No consensus data" : "컨센서스 데이터 없음"}</p>
+            )}
+            {/* 발표 예정 카드의 전분기 서프라이즈 참고 */}
+            {hasSurprise && (
+              <div className="mt-1.5">
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium",
+                  surpriseBeat
+                    ? "bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-500"
+                    : "bg-red-100/60 text-red-700 dark:bg-red-900/20 dark:text-red-500"
+                )}>
+                  {surpriseBeat ? "▲" : "▼"}
+                  {isEn ? " Prev Q:" : " 전분기 참고:"}
+                  {entry.epsActualPrev != null && <span className="ml-0.5">{fmtEps(entry.epsActualPrev, entry.currency)}</span>}
+                  <span className="ml-0.5">
+                    ({surpriseBeat ? "+" : ""}{surprisePct.toFixed(1)}%)
+                  </span>
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
       <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 mt-1" />
