@@ -481,12 +481,18 @@ ${candidateLines || "없음 — 직접 선정"}
   // 업종-테마 불일치 필터: 자동차·항공사가 방산/HVDC/조선/금융 테마에 들어오는 오류 차단
   const BAD_SECTOR_THEME: Array<{ tickers: string[]; badThemeKW: string[] }> = [
     {
-      tickers: ["003490", "020560", "020560"], // 대한항공, 아시아나 등 항공사
+      tickers: ["003490", "020560"], // 대한항공, 아시아나 등 항공사
       badThemeKW: ["hvdc", "변압기", "방산", "조선", "lng", "반도체", "배터리", "바이오"],
     },
     {
       tickers: ["005380", "000270"], // 현대자동차, 기아 — 자동차주
       badThemeKW: ["hvdc", "변압기", "방산", "k-방산", "k방산", "방위", "조선", "lng", "금융", "은행"],
+    },
+    {
+      // 배터리/2차전지 기업 — 방산·조선·HVDC·반도체 테마 차단
+      tickers: ["006400", "373220", "096770", "247540", "003670", "066970", "005070", "112610", "357780"],
+      // 삼성SDI, LG에너지솔루션, SK이노베이션, 에코프로BM, 포스코퓨처엠, 엘앤에프, 코스모신소재, 씨에스윈드, 솔루스첨단소재
+      badThemeKW: ["방산", "k-방산", "k방산", "방위", "무기", "탄약", "함정", "전차", "조선", "lng선", "hvdc", "변압기", "전력인프라"],
     },
   ];
   const themeKwLower = `${theme.name} ${theme.description}`.toLowerCase();
@@ -1052,7 +1058,7 @@ ticker 규칙:
         { sectorIncludes: ["조선"],                                    badThemeKW: [...BIOTECH_KW, ...SEMI_KW, ...BATTERY_KW] },
         { sectorIncludes: ["자동차", "항공"],                           badThemeKW: [...BIOTECH_KW, "hvdc", "변압기", "전력인프라", "방산", "k-방산", "k방산", "방위산업", "무기", "전차", "함정", "lng선", "조선", "금융", "은행"] },
         { sectorIncludes: ["화학"],                                    badThemeKW: BIOTECH_KW },
-        { sectorIncludes: ["전기장비", "전지", "배터리"],                 badThemeKW: BIOTECH_KW },
+        { sectorIncludes: ["전기장비", "전지", "배터리"],                 badThemeKW: [...BIOTECH_KW, "방산", "k-방산", "k방산", "방위산업", "무기", "탄약", "함정", "전차"] },
       ];
 
       const thm = trimmed.toLowerCase();
