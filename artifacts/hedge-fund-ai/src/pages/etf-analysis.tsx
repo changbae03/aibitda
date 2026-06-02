@@ -37,6 +37,14 @@ interface HoldingsChanges {
   previousDate: string;
   currentDate: string;
 }
+interface EtfAiReport {
+  verdict: "매수" | "중립" | "매도";
+  confidence: "높음" | "보통" | "낮음";
+  summary: string;
+  sections: { title: string; content: string }[];
+  entry_guide: { entry_zone: string; stop_loss: string; target_3m: string; horizon: string };
+  risk_factors: string[];
+}
 interface SectorScore {
   sector: string; score: number; return5d: number; return20d: number;
   signal: string; etfCode: string; etfName: string; price?: number; change1d?: number;
@@ -317,6 +325,87 @@ function holdingConcentration(holdings: ETFHolding[]): { text: string; level: "h
   };
 }
 
+// ─── ETF AI 리포트 카드 ───────────────────────────────────────────────────────
+
+function EtfReportCard({ report, etfName }: { report: EtfAiReport; etfName: string }) {
+  const verdictCfg = {
+    매수: { bg: "bg-red-500/10", border: "border-red-500/30", text: "text-red-500", badge: "bg-red-500" },
+    중립: { bg: "bg-amber-500/10", border: "border-amber-500/30", text: "text-amber-500", badge: "bg-amber-500" },
+    매도: { bg: "bg-blue-500/10", border: "border-blue-500/30", text: "text-blue-500", badge: "bg-blue-500" },
+  }[report.verdict] ?? { bg: "bg-muted/20", border: "border-border", text: "text-foreground", badge: "bg-muted" };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-border bg-card overflow-hidden"
+    >
+      {/* 헤더 */}
+      <div className={cn("px-4 py-3 border-b border-border flex items-center justify-between gap-3", verdictCfg.bg)}>
+        <div className="flex items-center gap-2">
+          <Sparkles className={cn("w-4 h-4", verdictCfg.text)} />
+          <span className="text-[12px] font-bold text-foreground">{etfName} AI 분석 리포트</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] text-muted-foreground/50">신뢰도 {report.confidence}</span>
+          <span className={cn("text-[11px] font-bold text-white px-2.5 py-0.5 rounded-full", verdictCfg.badge)}>
+            {report.verdict}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* 요약 */}
+        <p className="text-[13px] text-foreground/80 leading-relaxed">{report.summary}</p>
+
+        {/* 섹션들 */}
+        <div className="space-y-3">
+          {report.sections.map((sec, i) => (
+            <div key={i} className="border border-border/50 rounded-xl p-3.5 space-y-1.5">
+              <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">{sec.title}</p>
+              <p className="text-[12.5px] text-foreground/75 leading-relaxed">{sec.content}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 진입 가이드 */}
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: "진입 구간", value: report.entry_guide.entry_zone },
+            { label: "손절 기준", value: report.entry_guide.stop_loss },
+            { label: "3개월 목표", value: report.entry_guide.target_3m },
+            { label: "보유 기간", value: report.entry_guide.horizon },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-muted/20 rounded-xl px-3 py-2.5 border border-border/50">
+              <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-0.5">{label}</p>
+              <p className="text-[12px] font-semibold text-foreground">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 리스크 */}
+        {report.risk_factors.length > 0 && (
+          <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 px-3.5 py-3 space-y-2">
+            <p className="text-[10px] font-bold text-amber-500/70 uppercase tracking-widest">주요 리스크</p>
+            <ul className="space-y-1">
+              {report.risk_factors.map((r, i) => (
+                <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/70">
+                  <span className="mt-1.5 shrink-0 w-1 h-1 rounded-full bg-amber-500/60" />
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="text-[10px] text-muted-foreground/30 text-right">
+          AI 생성 리포트 — 투자 참고용이며 투자 권유가 아닙니다
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── 탭 1: 검색 ───────────────────────────────────────────────────────────────
 
 interface StockSuggestion { symbol: string; shortname: string; englishName?: string; exchange: string; quoteType: string; }
@@ -330,6 +419,9 @@ function SearchTab() {
   const [searchList, setSearchList]   = useState<ETFInfo[]>([]);
   const [showList, setShowList]       = useState(false);
   const [allEtfs, setAllEtfs]         = useState<ETFInfo[]>([]);
+  const [aiReport, setAiReport]       = useState<EtfAiReport | null>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const [stockSuggestions, setStockSuggestions] = useState<StockSuggestion[]>([]);
   const [showStockDrop, setShowStockDrop]       = useState(false);
@@ -365,6 +457,8 @@ function SearchTab() {
     setLoading(true);
     setShowList(false);
     setShowStockDrop(false);
+    setAiReport(null);
+    setReportError(null);
     try {
       if (mode === "etf") {
         const r = await fetch(getApiUrl(`/api/etf/${encodeURIComponent(q.trim())}/holdings`), { credentials: "include" });
@@ -377,6 +471,26 @@ function SearchTab() {
       setLoading(false);
     }
   }, [mode]);
+
+  const handleGenerateReport = useCallback(async () => {
+    if (!etfResult?.etf) return;
+    setLoadingReport(true);
+    setReportError(null);
+    setAiReport(null);
+    try {
+      const r = await fetch(getApiUrl(`/api/etf/${encodeURIComponent(etfResult.etf.code)}/report`), {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) { setReportError(data.error ?? "리포트 생성 실패"); return; }
+      setAiReport(data);
+    } catch {
+      setReportError("네트워크 오류가 발생했습니다");
+    } finally {
+      setLoadingReport(false);
+    }
+  }, [etfResult]);
 
   const onInput = (v: string) => {
     setQuery(v);
@@ -841,6 +955,29 @@ function SearchTab() {
           ) : (
             <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
               구성 종목 데이터를 불러올 수 없습니다
+            </div>
+          )}
+
+          {/* AI 분석 리포트 */}
+          {etfResult.etf && (
+            <div className="space-y-3">
+              <button
+                onClick={handleGenerateReport}
+                disabled={loadingReport}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-sm font-semibold transition-all disabled:opacity-60"
+              >
+                {loadingReport ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> AI 리포트 생성 중... (15~30초)</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" /> {aiReport ? "AI 리포트 다시 생성" : "AI 분석 리포트 생성"}</>
+                )}
+              </button>
+              {reportError && (
+                <p className="text-xs text-red-500 text-center">{reportError}</p>
+              )}
+              {aiReport && (
+                <EtfReportCard report={aiReport} etfName={etfResult.etf.name} />
+              )}
             </div>
           )}
         </div>
