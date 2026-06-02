@@ -158,7 +158,6 @@ function MarketBriefSection({
   onRefresh: () => void;
   showRefresh?: boolean;
 }) {
-  const [storyExpanded, setStoryExpanded] = useState(false);
   const sentimentConfig = brief?.sentiment === "bullish"
     ? { color: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "상승 우세", bar: "bg-red-500 dark:bg-red-400" }
     : brief?.sentiment === "bearish"
@@ -287,12 +286,11 @@ function MarketBriefSection({
                 .replace(/^(반갑습니다[^。！!?\n]*[。！!?\n]?\s*)/i, "")
                 .trim();
               const paras = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
-              const visibleParas = storyExpanded ? paras : paras.slice(0, 1);
               return (
                 <div className="space-y-1 pt-1">
                   <SectionLabel label="시장 해설" />
                   <div className="space-y-3 pt-2">
-                    {visibleParas.map((para, i) => (
+                    {paras.map((para, i) => (
                       <p
                         key={i}
                         className={cn(
@@ -305,15 +303,6 @@ function MarketBriefSection({
                         {para}
                       </p>
                     ))}
-                    {paras.length > 1 && (
-                      <button
-                        onClick={() => setStoryExpanded(v => !v)}
-                        className="flex items-center gap-1 text-[11px] text-primary/70 hover:text-primary font-medium transition-colors"
-                      >
-                        <ChevronDown className={cn("w-3 h-3 transition-transform", storyExpanded && "rotate-180")} />
-                        {storyExpanded ? "접기" : `더 보기 (${paras.length - 1}개 단락)`}
-                      </button>
-                    )}
                   </div>
                 </div>
               );
