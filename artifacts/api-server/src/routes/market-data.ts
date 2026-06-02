@@ -6,7 +6,7 @@ import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
 import { fetchECOSBaseRateHistory } from "../lib/ecos-client.js";
-import { fetchAllEconomicActuals, type BLSReleaseDate, type FOMCDate } from "../lib/bls-client.js";
+import { fetchAllEconomicActuals, fetchBLSTimeSeries, type BLSReleaseDate, type FOMCDate } from "../lib/bls-client.js";
 
 const TTL_BATCH_QUOTES      =  3 * 60 * 1000;  //  3분 — 현재가
 const TTL_BATCH_SPARKLINES  =  6 * 60 * 60 * 1000;  //  6시간 — 90일 차트 (장 마감 후 변경)
@@ -1557,17 +1557,28 @@ router.get("/indicator-history", async (_req, res) => {
         .map((x: any) => ({ date: `${x.date}-01-01`, value: parseFloat(x.value.toFixed(2)) }));
     }
 
-    const [fedRate, cpi, corePce, unemployment, gdp,
-           krRate, krCpi, krGdpVol, krUnemployment] = await Promise.all([
-      fredGet("FEDFUNDS"),            // 미국 연방기금금리 (월별)
-      fredGet("CPIAUCSL"),            // 미국 CPI 지수 (월별) → YoY 계산
-      fredGet("PCEPILFE"),            // 미국 근원 PCE (월별) → YoY 계산
-      fredGet("UNRATE"),              // 미국 실업률 (월별)
-      fredGet("A191RL1Q225SBEA"),     // 미국 GDP 성장률 연율 (분기)
-      fetchECOSBaseRateHistory(),     // 한국은행 기준금리 (ECOS 월별)
-      fredGet("KORCPIALLMINMEI"),     // 한국 CPI 지수 (월별) → YoY 계산
-      fredGet("NAEXKP01KRQ657S"),     // 한국 GDP 거래량 지수 (분기) → YoY 계산
-      wbGetKrUnemployment(),          // 한국 실업률 (연간, World Bank)
+    const [
+      [fedRate, cpi, corePce, unemployment, gdp],
+      blsTs,
+      [krRate, krCpi, krGdpVol, krUnemployment],
+    ] = await Promise.all([
+      // FRED — 미국 지표 (rate limit 가능성 있음)
+      Promise.all([
+        fredGet("FEDFUNDS"),            // 미국 연방기금금리 (월별)
+        fredGet("CPIAUCSL"),            // 미국 CPI 지수 (월별) → YoY 계산
+        fredGet("PCEPILFE"),            // 미국 근원 PCE (월별) → YoY 계산
+        fredGet("UNRATE"),              // 미국 실업률 (월별)
+        fredGet("A191RL1Q225SBEA"),     // 미국 GDP 성장률 연율 (분기)
+      ]),
+      // BLS — FRED rate limit 시 폴백 (CPI·실업률·PPI 공식 데이터)
+      fetchBLSTimeSeries(4),
+      // 한국 지표
+      Promise.all([
+        fetchECOSBaseRateHistory(),
+        fredGet("KORCPIALLMINMEI"),
+        fredGet("NAEXKP01KRQ657S"),
+        wbGetKrUnemployment(),
+      ]),
     ]);
 
     // 전년동월비 계산
@@ -1585,60 +1596,90 @@ router.get("/indicator-history", async (_req, res) => {
       }));
     }
 
+    // FRED 실패(빈 배열) 시 BLS 데이터로 폴백
+    const usCpiData   = calcYoY(cpi).slice(-24).length > 0  ? calcYoY(cpi).slice(-24)   : blsTs.cpiYoY;
+    const usUrData    = unemployment.slice(-24).length > 0   ? unemployment.slice(-24)    : blsTs.unemployment;
+    const usPpiData   = blsTs.ppiYoY;   // BLS 항상 사용 (FRED에 없음)
+    const usNfpData   = blsTs.nfpMoM;   // BLS 항상 사용 (FRED에 없음)
+
+    const usCpiSource   = calcYoY(cpi).slice(-24).length > 0 ? "FRED" : "BLS";
+    const usUrSource    = unemployment.slice(-24).length > 0  ? "FRED" : "BLS";
+    console.log(`[indicator-history] US CPI: ${usCpiSource}(${usCpiData.length}건), UR: ${usUrSource}(${usUrData.length}건), BLS PPI: ${usPpiData.length}건, BLS NFP: ${usNfpData.length}건`);
+
     const result: IndicatorSeries[] = [
       // ── 미국 지표 ──
-      {
+      ...(fedRate.slice(-24).length > 0 ? [{
         id: "fed-rate",
         name: "연방기금금리",
         nameEn: "Fed Funds Rate",
-        country: "US",
+        country: "US" as const,
         unit: "%",
         category: "금리",
-        frequency: "monthly",
+        frequency: "monthly" as const,
         data: fedRate.slice(-24),
-      },
-      {
+      }] : []),
+      ...(usCpiData.length > 0 ? [{
         id: "us-cpi",
         name: "미국 CPI",
         nameEn: "US CPI YoY",
-        country: "US",
+        country: "US" as const,
         unit: "%",
         category: "물가",
-        frequency: "monthly",
-        data: calcYoY(cpi).slice(-24),
+        frequency: "monthly" as const,
+        data: usCpiData,
         targetLine: 2.0,
-      },
-      {
+      }] : []),
+      ...(calcYoY(corePce).slice(-24).length > 0 ? [{
         id: "core-pce",
         name: "근원 PCE",
         nameEn: "Core PCE YoY",
-        country: "US",
+        country: "US" as const,
         unit: "%",
         category: "물가",
-        frequency: "monthly",
+        frequency: "monthly" as const,
         data: calcYoY(corePce).slice(-24),
         targetLine: 2.0,
-      },
-      {
+      }] : []),
+      ...(usUrData.length > 0 ? [{
         id: "unemployment",
         name: "미국 실업률",
         nameEn: "US Unemployment",
-        country: "US",
+        country: "US" as const,
         unit: "%",
         category: "고용",
-        frequency: "monthly",
-        data: unemployment.slice(-24),
-      },
-      {
+        frequency: "monthly" as const,
+        data: usUrData,
+      }] : []),
+      ...(gdp.slice(-16).length > 0 ? [{
         id: "us-gdp",
         name: "미국 GDP 성장률",
         nameEn: "US GDP Growth",
-        country: "US",
+        country: "US" as const,
         unit: "%",
         category: "성장",
-        frequency: "quarterly",
+        frequency: "quarterly" as const,
         data: gdp.slice(-16),
-      },
+      }] : []),
+      ...(usPpiData.length > 0 ? [{
+        id: "us-ppi",
+        name: "미국 PPI",
+        nameEn: "US PPI YoY",
+        country: "US" as const,
+        unit: "%",
+        category: "물가",
+        frequency: "monthly" as const,
+        data: usPpiData,
+      }] : []),
+      ...(usNfpData.length > 0 ? [{
+        id: "us-nfp",
+        name: "비농업 고용",
+        nameEn: "Nonfarm Payrolls",
+        country: "US" as const,
+        unit: "K",
+        category: "고용",
+        frequency: "monthly" as const,
+        data: usNfpData,
+      }] : []),
       // ── 한국 지표 ──
       ...(krRate.length > 0 ? [{
         id: "kr-rate",

@@ -472,6 +472,17 @@ function getIndicatorTheme(s: IndicatorSeries): { color: string; bg: string; tre
     if (last >= 0) return { color: "#f59e0b", bg: "bg-amber-500/10", trend };
     return { color: "#ef4444", bg: "bg-red-500/10", trend };
   }
+  if (s.id === "us-ppi") {
+    if (last <= 2.5) return { color: "#22c55e", bg: "bg-emerald-500/10", trend };
+    if (last <= 4.0) return { color: "#f59e0b", bg: "bg-amber-500/10", trend };
+    return { color: trend === "down" ? "#f59e0b" : "#ef4444", bg: trend === "down" ? "bg-amber-500/10" : "bg-red-500/10", trend };
+  }
+  if (s.id === "us-nfp") {
+    // 고용 증가는 good, 감소는 bad
+    if (last >= 150) return { color: "#22c55e", bg: "bg-emerald-500/10", trend };
+    if (last >= 50) return { color: "#f59e0b", bg: "bg-amber-500/10", trend };
+    return { color: "#ef4444", bg: "bg-red-500/10", trend };
+  }
   return { color: "#6366f1", bg: "bg-indigo-500/10", trend };
 }
 

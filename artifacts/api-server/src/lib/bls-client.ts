@@ -89,6 +89,107 @@ function periodToYYYYMM(year: string, period: string): string {
   return `${year}-${period.replace("M", "").padStart(2, "0")}`;
 }
 
+// ─── 시계열 이력 (indicator-history용) ────────────────────────────────────────
+export interface IndicatorPoint { date: string; value: number; }
+
+let _tsCache: { data: Map<string, IndicatorPoint[]>; fetchedAt: number } | null = null;
+const TS_TTL = 12 * 60 * 60 * 1000; // 12시간
+
+/** 미국 주요 지표 4년 시계열 반환 (FRED 대체용) */
+export async function fetchBLSTimeSeries(years = 4): Promise<{
+  cpiYoY: IndicatorPoint[];     // CPI 전년동월비 %
+  unemployment: IndicatorPoint[]; // 실업률 %
+  ppiYoY: IndicatorPoint[];     // PPI 전년동월비 %
+  nfpMoM: IndicatorPoint[];     // 비농업 고용 전월변화 (천명)
+}> {
+  if (_tsCache && Date.now() - _tsCache.fetchedAt < TS_TTL) {
+    const c = _tsCache.data;
+    return {
+      cpiYoY:      c.get("cpiYoY")      ?? [],
+      unemployment: c.get("unemployment") ?? [],
+      ppiYoY:      c.get("ppiYoY")      ?? [],
+      nfpMoM:      c.get("nfpMoM")      ?? [],
+    };
+  }
+
+  const currentYear = new Date().getFullYear();
+  const startYear = currentYear - years - 1; // 1년 여유 (YoY 계산용)
+
+  try {
+    const payload = {
+      seriesid: [SERIES.CPI, SERIES.UNEMPLOYMENT, SERIES.PPI, SERIES.NFP],
+      startyear: String(startYear),
+      endyear: String(currentYear),
+    };
+    const res = await fetch(BLS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json() as any;
+    if (json.status !== "REQUEST_SUCCEEDED") throw new Error(json.message?.[0] ?? json.status);
+
+    // API는 desc 정렬(최신→과거) → asc로 뒤집기
+    const seriesMap = new Map<string, Array<{ year: string; period: string; value: string }>>();
+    for (const s of json.Results?.series ?? []) {
+      const sorted = [...(s.data ?? []).filter((d: any) => d.value !== "." && d.period.startsWith("M"))]
+        .sort((a: any, b: any) => {
+          const da = `${a.year}${a.period}`, db = `${b.year}${b.period}`;
+          return da.localeCompare(db);
+        });
+      seriesMap.set(s.seriesID, sorted);
+    }
+
+    function toPoints(data: Array<{ year: string; period: string; value: string }>): IndicatorPoint[] {
+      return data.map(d => ({
+        date: `${d.year}-${d.period.replace("M", "").padStart(2, "0")}-01`,
+        value: parseFloat(d.value),
+      })).filter(p => !isNaN(p.value));
+    }
+
+    function calcYoY(pts: IndicatorPoint[]): IndicatorPoint[] {
+      return pts.slice(12).map((d, i) => ({
+        date: d.date,
+        value: parseFloat(((d.value / pts[i].value - 1) * 100).toFixed(2)),
+      })).filter(p => !isNaN(p.value));
+    }
+
+    function calcMoM(pts: IndicatorPoint[]): IndicatorPoint[] {
+      return pts.slice(1).map((d, i) => ({
+        date: d.date,
+        value: Math.round(d.value - pts[i].value),
+      }));
+    }
+
+    const cpiPts = toPoints(seriesMap.get(SERIES.CPI) ?? []);
+    const ppiPts = toPoints(seriesMap.get(SERIES.PPI) ?? []);
+    const urPts  = toPoints(seriesMap.get(SERIES.UNEMPLOYMENT) ?? []);
+    const nfpPts = toPoints(seriesMap.get(SERIES.NFP) ?? []);
+
+    const result = {
+      cpiYoY:       calcYoY(cpiPts).slice(-24),
+      unemployment: urPts.slice(-24),
+      ppiYoY:       calcYoY(ppiPts).slice(-24),
+      nfpMoM:       calcMoM(nfpPts).slice(-24),
+    };
+
+    const map = new Map<string, IndicatorPoint[]>([
+      ["cpiYoY",      result.cpiYoY],
+      ["unemployment",result.unemployment],
+      ["ppiYoY",      result.ppiYoY],
+      ["nfpMoM",      result.nfpMoM],
+    ]);
+    _tsCache = { data: map, fetchedAt: Date.now() };
+    console.log(`[BLS] 시계열 로드: CPI ${result.cpiYoY.length}건, UR ${result.unemployment.length}건, PPI ${result.ppiYoY.length}건, NFP ${result.nfpMoM.length}건`);
+    return result;
+  } catch (e: any) {
+    console.warn("[BLS] timeseries 조회 실패:", e.message);
+    return { cpiYoY: [], unemployment: [], ppiYoY: [], nfpMoM: [] };
+  }
+}
+
 // ─── 실제 발표값 조회 ──────────────────────────────────────────────────────────
 export async function fetchBLSActuals(): Promise<BLSActuals | null> {
   if (_actualsCache && Date.now() - _actualsCache.fetchedAt < ACTUALS_TTL) {
