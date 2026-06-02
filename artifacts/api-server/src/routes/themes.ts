@@ -478,6 +478,29 @@ ${candidateLines || "없음 — 직접 선정"}
     return k ? [{ ...s, ticker: k.code, name: k.name }] : [];
   });
 
+  // 업종-테마 불일치 필터: 자동차·항공사가 방산/HVDC/조선/금융 테마에 들어오는 오류 차단
+  const BAD_SECTOR_THEME: Array<{ tickers: string[]; badThemeKW: string[] }> = [
+    {
+      tickers: ["003490", "020560", "020560"], // 대한항공, 아시아나 등 항공사
+      badThemeKW: ["hvdc", "변압기", "방산", "조선", "lng", "반도체", "배터리", "바이오"],
+    },
+    {
+      tickers: ["005380", "000270"], // 현대자동차, 기아 — 자동차주
+      badThemeKW: ["hvdc", "변압기", "방산", "k-방산", "k방산", "방위", "조선", "lng", "금융", "은행"],
+    },
+  ];
+  const themeKwLower = `${theme.name} ${theme.description}`.toLowerCase();
+  stocks = stocks.filter(s => {
+    for (const rule of BAD_SECTOR_THEME) {
+      if (rule.tickers.includes(s.ticker) &&
+          rule.badThemeKW.some(kw => themeKwLower.includes(kw))) {
+        console.log(`[themes][discoverFast] 업종불일치 제거: ${s.ticker}(${s.name}) ← "${theme.name}"`);
+        return false;
+      }
+    }
+    return true;
+  });
+
   // 중복 제거
   const seen = new Set<string>();
   stocks = stocks.filter(s => !seen.has(s.ticker) && seen.add(s.ticker) !== undefined);
@@ -1027,7 +1050,7 @@ ticker 규칙:
         { sectorIncludes: ["반도체", "전자부품", "컴퓨터", "통신장비"],  badThemeKW: BIOTECH_KW },
         { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기", "전력", "인프라", "데이터센터", "ai 전력", "우주", "위성", "발사체", "항공우주", "로켓"] },
         { sectorIncludes: ["조선"],                                    badThemeKW: [...BIOTECH_KW, ...SEMI_KW, ...BATTERY_KW] },
-        { sectorIncludes: ["자동차", "항공"],                           badThemeKW: BIOTECH_KW },
+        { sectorIncludes: ["자동차", "항공"],                           badThemeKW: [...BIOTECH_KW, "hvdc", "변압기", "전력인프라", "방산", "k-방산", "k방산", "방위산업", "무기", "전차", "함정", "lng선", "조선", "금융", "은행"] },
         { sectorIncludes: ["화학"],                                    badThemeKW: BIOTECH_KW },
         { sectorIncludes: ["전기장비", "전지", "배터리"],                 badThemeKW: BIOTECH_KW },
       ];
