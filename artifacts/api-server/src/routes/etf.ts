@@ -268,25 +268,17 @@ Top ${top10.length} 합산 비중: ${top10sum.toFixed(1)}%
 ## 가격 정보
 ${priceInfo}
 
-## 출력 형식 (JSON만, 마크다운 없이)
-{
-  "verdict": "매수" | "중립" | "매도",
-  "confidence": "높음" | "보통" | "낮음",
-  "summary": "핵심 요약 3~4문장 (ETF 특성 + 현재 환경 + 투자 의견)",
-  "sections": [
-    { "title": "ETF 특성 분석", "content": "추적지수·구성 전략·레버리지 리스크 등 250자 이상" },
-    { "title": "구성종목 집중도", "content": "Top 보유 종목 특성·섹터 집중도·핵심 편입 종목 분석 250자 이상" },
-    { "title": "거시·테마 환경", "content": "금리·환율·글로벌 매크로와 이 ETF 테마의 연관성 250자 이상" },
-    { "title": "기술적 모멘텀", "content": "현재가 기준 가격 추세·모멘텀·지지·저항 레벨 250자 이상" }
-  ],
-  "entry_guide": {
-    "entry_zone": "진입 구간 (가격 또는 ±% 기준)",
-    "stop_loss": "손절 기준",
-    "target_3m": "3개월 목표",
-    "horizon": "권장 보유 기간"
-  },
-  "risk_factors": ["리스크1", "리스크2", "리스크3"]
-}`;
+## 분석 지침
+- verdict: 투자 의견 (매수, 중립, 매도 중 하나)
+- confidence: 신뢰도 (높음, 보통, 낮음 중 하나)
+- summary: 핵심 요약 3~4문장 (ETF 특성 + 현재 환경 + 투자 의견)
+- sections: 아래 4개 섹션을 각 250자 이상으로 작성
+  1. ETF 특성 분석 — 추적지수·구성 전략·레버리지 리스크 등
+  2. 구성종목 집중도 — Top 보유 종목 특성·섹터 집중도·핵심 편입 종목 분석
+  3. 거시·테마 환경 — 금리·환율·글로벌 매크로와 이 ETF 테마의 연관성
+  4. 기술적 모멘텀 — 현재가 기준 가격 추세·모멘텀·지지·저항 레벨
+- entry_guide: entry_zone(진입 구간), stop_loss(손절 기준), target_3m(3개월 목표), horizon(권장 보유 기간)
+- risk_factors: 주요 리스크 3~4개`;
 
     const genAI = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!,
@@ -298,16 +290,46 @@ ${priceInfo}
     const result = await genAI.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.7, maxOutputTokens: 4096 },
+      config: {
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object" as any,
+          properties: {
+            verdict:    { type: "string" as any, enum: ["매수", "중립", "매도"] },
+            confidence: { type: "string" as any, enum: ["높음", "보통", "낮음"] },
+            summary:    { type: "string" as any },
+            sections: {
+              type: "array" as any,
+              items: {
+                type: "object" as any,
+                properties: {
+                  title:   { type: "string" as any },
+                  content: { type: "string" as any },
+                },
+                required: ["title", "content"],
+              },
+            },
+            entry_guide: {
+              type: "object" as any,
+              properties: {
+                entry_zone: { type: "string" as any },
+                stop_loss:  { type: "string" as any },
+                target_3m:  { type: "string" as any },
+                horizon:    { type: "string" as any },
+              },
+              required: ["entry_zone", "stop_loss", "target_3m", "horizon"],
+            },
+            risk_factors: { type: "array" as any, items: { type: "string" as any } },
+          },
+          required: ["verdict", "confidence", "summary", "sections", "entry_guide", "risk_factors"],
+        },
+      },
     });
 
     const raw = result.text ?? "";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      res.status(500).json({ error: "AI 응답 파싱 실패" });
-      return;
-    }
-    res.json(JSON.parse(jsonMatch[0]));
+    res.json(JSON.parse(raw));
   } catch (e: any) {
     console.error("[ETF report]", e?.message);
     res.status(500).json({ error: e?.message ?? "리포트 생성 실패" });
