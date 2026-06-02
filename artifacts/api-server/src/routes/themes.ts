@@ -494,6 +494,12 @@ ${candidateLines || "없음 — 직접 선정"}
       // 삼성SDI, LG에너지솔루션, SK이노베이션, 에코프로BM, 포스코퓨처엠, 엘앤에프, 코스모신소재, 씨에스윈드, 솔루스첨단소재
       badThemeKW: ["방산", "k-방산", "k방산", "방위", "무기", "탄약", "함정", "전차", "조선", "lng선", "hvdc", "변압기", "전력인프라"],
     },
+    {
+      // 게임/IT/플랫폼 기업 — 바이오·방산·조선·HVDC 테마 차단
+      tickers: ["263750", "036570", "251270", "035420", "035720", "293490", "112040", "194480", "377300", "259960"],
+      // 펄어비스, NC소프트, 넷마블, NAVER, 카카오, 카카오게임즈, 위메이드, 웹젠, 카카오페이, 크래프톤
+      badThemeKW: ["바이오", "제약", "치료제", "glp", "mrna", "백신", "임상", "cmo", "위탁생산", "방산", "k-방산", "조선", "hvdc", "변압기"],
+    },
   ];
   const themeKwLower = `${theme.name} ${theme.description}`.toLowerCase();
   stocks = stocks.filter(s => {
@@ -1052,8 +1058,11 @@ ticker 규칙:
       const BATTERY_KW   = ["배터리", "2차전지", "전고체"];
 
       // 섹터 → 해당 섹터와 어울리지 않는 테마 키워드
+      const GAME_KW = ["소프트웨어", "게임", "인터넷", "정보처리", "it서비스", "플랫폼", "컨텐츠"];
+
       const BLOCKLIST: Array<{ sectorIncludes: string[]; badThemeKW: string[] }> = [
         { sectorIncludes: ["반도체", "전자부품", "컴퓨터", "통신장비"],  badThemeKW: BIOTECH_KW },
+        { sectorIncludes: GAME_KW,                                     badThemeKW: [...BIOTECH_KW, "방산", "k-방산", "조선", "hvdc", "변압기"] },
         { sectorIncludes: ["의약품", "의료기기"],                       badThemeKW: [...SEMI_KW, ...SHIP_KW, ...AUTO_KW, ...BATTERY_KW, "방산", "변압기", "전력", "인프라", "데이터센터", "ai 전력", "우주", "위성", "발사체", "항공우주", "로켓"] },
         { sectorIncludes: ["조선"],                                    badThemeKW: [...BIOTECH_KW, ...SEMI_KW, ...BATTERY_KW] },
         { sectorIncludes: ["자동차", "항공"],                           badThemeKW: [...BIOTECH_KW, "hvdc", "변압기", "전력인프라", "방산", "k-방산", "k방산", "방위산업", "무기", "전차", "함정", "lng선", "조선", "금융", "은행"] },
