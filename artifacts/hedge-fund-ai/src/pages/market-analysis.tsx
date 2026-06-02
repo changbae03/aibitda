@@ -337,23 +337,6 @@ function MarketBriefSection({
                   </div>
                 )}
 
-                {/* 거시 팩터 */}
-                {(brief.macroFactors?.length ?? 0) > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <SectionLabel label="경제 지표" />
-                    <div className="grid grid-cols-2 gap-2">
-                      {brief.macroFactors!.map((mf, i) => (
-                        <div key={i} className="border border-border rounded-xl px-3.5 py-3 space-y-1.5 bg-card">
-                          <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">{mf.factor}</p>
-                          <p className="text-[15px] font-bold text-foreground leading-tight">{mf.status}</p>
-                          <p className="text-[11px] text-foreground/50 leading-relaxed line-clamp-2">
-                            {mf.implication}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* 향후 전망 */}
                 {(brief.forwardLook?.length ?? 0) > 0 && (
