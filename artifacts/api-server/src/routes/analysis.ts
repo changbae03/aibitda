@@ -2234,9 +2234,16 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
         const wts       = recentSeries.length >= 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
         const weightedAvgOpm = recentSeries.slice(0, wts.length)
           .reduce((s, d, i) => s + d.opm * wts[i], 0);
-        const trendOpmCenter = trendQoQ > 0
-          ? latest.opm * 0.65 + weightedAvgOpm * 0.35
-          : latest.opm * 0.5  + weightedAvgOpm * 0.5;
+
+        // 추세 방향에 따라 다른 가중치 적용:
+        // 상승 추세: 최신 분기에 더 가중 (모멘텀 유지)
+        // 하락 추세: 추세 지속을 더 신뢰 (평균 회귀 억제)
+        // 강한 하락(QoQ -2%p 이상): 추세 외삽 비중 대폭 확대
+        const trendOpmCenter = trendQoQ >= 0
+          ? latest.opm * 0.65 + weightedAvgOpm * 0.35   // 상승: 최신 65%
+          : trendQoQ >= -2
+            ? latest.opm * 0.65 + weightedAvgOpm * 0.35 // 완만한 하락: 동일 (최신 실적 반영)
+            : latest.opm * 0.80 + weightedAvgOpm * 0.20; // 강한 하락(-2%p↓): 최신 80%, 평균 20%
 
         // 확정 분기가 많을수록 확정 누적 OPM을 더 신뢰
         // Q1만(1개): 30%, 반기(2개): 55%, Q3까지(3개): 75%
@@ -2294,14 +2301,25 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
             }, 0)
           : null;
 
-        // ── fwdOpmCenter 최종값: Q1만 확정 시 연간 앵커를 강하게 반영 ─────────
-        // Q1 OPM이 낮더라도 Q2~Q4 회복을 전제로 연간 평균 OPM 기준 복귀를 기대
-        // Q2+ 확정 시에는 이미 충분한 실적이 있으므로 기존 방식 유지
-        const fwdOpmCenter = (confirmedQCount === 1 && annualOpmAnchor !== null)
-          ? fwdOpmBase * 0.35 + annualOpmAnchor * 0.65   // Q1만: 연간 앵커 65%
-          : (confirmedQCount === 0 && annualOpmAnchor !== null)
-            ? fwdOpmBase * 0.50 + annualOpmAnchor * 0.50  // 확정 없음: 연간 앵커 50%
-            : fwdOpmBase;                                  // Q2 이상 확정: 기존 방식
+        // ── fwdOpmCenter 최종값: 추세 방향에 따라 연간 앵커 혼합 비율 조정 ───
+        // 상승 추세: 연간 앵커(역사 평균)로 회귀 기대 → 앵커 비중 높임
+        // 하락 추세: 추세 지속 가능성 → 앵커 비중 낮춤 (평균 회귀 편향 억제)
+        const isDeclineTrend = trendQoQ < -1; // QoQ -1%p 이상 하락이면 하락 추세 판정
+        const fwdOpmCenter = (() => {
+          if (annualOpmAnchor === null) return fwdOpmBase;
+          if (confirmedQCount >= 2) return fwdOpmBase; // Q2 이상 확정: 확정 실적 우선
+          if (isDeclineTrend) {
+            // 하락 추세: 앵커 비중 낮춰 추세 반영 강화
+            return confirmedQCount === 1
+              ? fwdOpmBase * 0.65 + annualOpmAnchor * 0.35  // Q1 확정+하락: 추세 65%
+              : fwdOpmBase * 0.75 + annualOpmAnchor * 0.25; // 확정 없음+하락: 추세 75%
+          } else {
+            // 상승/횡보 추세: 원래 방식 유지
+            return confirmedQCount === 1
+              ? fwdOpmBase * 0.35 + annualOpmAnchor * 0.65  // Q1만: 연간 앵커 65%
+              : fwdOpmBase * 0.50 + annualOpmAnchor * 0.50; // 확정 없음: 연간 앵커 50%
+          }
+        })();
 
         // ── 매출 추정: 확정 분기 YoY 성장률 + 역사적 비율 혼합 ──────────────
         const qRevByQNum: Record<number, number[]> = {1: [], 2: [], 3: [], 4: []};
@@ -2413,7 +2431,9 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
             lines.push(`     → 확정 분기 YoY 매출 성장률: ${(confirmedYoYGrowth * 100).toFixed(1)}% → 미확정 분기 매출 추정에 반영`);
           }
           const anchorNote = confirmedQCount === 1 && annualOpmAnchor !== null
-            ? ` (Q1 단독 확정 → 연간 앵커 ${annualOpmAnchor.toFixed(1)}% 65% 반영, Q2~Q4 회복 전제)`
+            ? isDeclineTrend
+              ? ` (Q1 단독 확정 + 하락 추세 → 추세 65%·연간 앵커 35% 반영, 추세 지속 가정)`
+              : ` (Q1 단독 확정 → 연간 앵커 ${annualOpmAnchor.toFixed(1)}% 65% 반영)`
             : annualOpmAnchor !== null ? ` (연간 앵커 ${annualOpmAnchor.toFixed(1)}%)` : '';
           lines.push(`     → OPM 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%${anchorNote}`);
         } else {
