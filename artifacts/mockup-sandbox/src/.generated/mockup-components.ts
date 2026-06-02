@@ -7,10 +7,10 @@ export const modules: ModuleMap = {
   "./components/mockups/holding-card/NewsLine.tsx": () => import("../components/mockups/holding-card/NewsLine.tsx"),
   "./components/mockups/holding-card/Pinterest.tsx": () => import("../components/mockups/holding-card/Pinterest.tsx"),
   "./components/mockups/holding-card/SwipeUp.tsx": () => import("../components/mockups/holding-card/SwipeUp.tsx"),
+  "./components/mockups/landing-island/IslandLogin.tsx": () => import("../components/mockups/landing-island/IslandLogin.tsx"),
   "./components/mockups/macro-design/Minimal.tsx": () => import("../components/mockups/macro-design/Minimal.tsx"),
   "./components/mockups/macro-design/Modern.tsx": () => import("../components/mockups/macro-design/Modern.tsx"),
   "./components/mockups/macro-design/Premium.tsx": () => import("../components/mockups/macro-design/Premium.tsx"),
-  "./components/mockups/landing-island/IslandLogin.tsx": () => import("../components/mockups/landing-island/IslandLogin.tsx"),
   "./components/mockups/summary-cards/VariantA.tsx": () => import("../components/mockups/summary-cards/VariantA.tsx"),
   "./components/mockups/summary-cards/VariantB.tsx": () => import("../components/mockups/summary-cards/VariantB.tsx")
 };
