@@ -3354,14 +3354,35 @@ async function fetchPeerFinancials(
           const koreanMatch = peer.ticker.match(/^(\d{6})\.(KS|KQ)$/i);
           if (koreanMatch) {
             try {
+              // 1차: /basic (일반 기업 대부분)
               const nb = await fetch(
                 `https://m.stock.naver.com/api/stock/${koreanMatch[1]}/basic`,
                 { headers: NAVER_HEADERS, signal: AbortSignal.timeout(5000) }
               ).then(r => r.ok ? r.json() : null);
-              const raw = nb?.pbr;
-              if (raw != null) {
-                const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
+              const rawBasic = nb?.pbr;
+              if (rawBasic != null) {
+                const n = typeof rawBasic === "number" ? rawBasic : parseFloat(String(rawBasic).replace(/,/g, ""));
                 if (!isNaN(n) && n > 0) { pbr = n; }
+              }
+              // 2차: /integration totalInfos (금융지주·은행 등 /basic PBR 미제공 종목 fallback)
+              if (pbr == null) {
+                const ni = await fetch(
+                  `https://m.stock.naver.com/api/stock/${koreanMatch[1]}/integration`,
+                  { headers: NAVER_HEADERS, signal: AbortSignal.timeout(5000) }
+                ).then(r => r.ok ? r.json() : null);
+                if (ni) {
+                  const infoMap: Record<string, string> = {};
+                  for (const item of (ni.totalInfos ?? [])) infoMap[item.code] = item.value ?? "";
+                  if (infoMap.pbr) {
+                    const n = parseFloat(String(infoMap.pbr).replace(/[^0-9.]/g, ""));
+                    if (!isNaN(n) && n > 0) { pbr = n; }
+                  }
+                  // PER(TTM) fallback도 함께 수집 — 금융주는 KIS/Yahoo PER이 null인 경우가 많음
+                  if (trailPE == null && infoMap.per) {
+                    const n = parseFloat(String(infoMap.per).replace(/[^0-9.]/g, ""));
+                    if (!isNaN(n) && n > 0) { trailPE = n; }
+                  }
+                }
               }
             } catch { /* optional */ }
           }
