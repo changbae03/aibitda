@@ -37,18 +37,6 @@ interface HoldingsChanges {
   previousDate: string;
   currentDate: string;
 }
-interface EtfAiReport {
-  verdict: "매수" | "중립" | "매도";
-  confidence: "높음" | "보통" | "낮음";
-  target_return_3m: string;
-  key_points: string[];
-  executive_summary: string;
-  sections: { title: string; content: string }[];
-  investment_thesis: string;
-  entry_guide: { entry_zone: string; stop_loss: string; target_3m: string; horizon: string };
-  risk_factors: { factor: string; detail: string }[];
-  conclusion: string;
-}
 interface SectorScore {
   sector: string; score: number; return5d: number; return20d: number;
   signal: string; etfCode: string; etfName: string; price?: number; change1d?: number;
@@ -329,136 +317,6 @@ function holdingConcentration(holdings: ETFHolding[]): { text: string; level: "h
   };
 }
 
-// ─── ETF AI 리포트 카드 ───────────────────────────────────────────────────────
-
-const ROMAN = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ"];
-
-function EtfReportCard({ report, etfName }: { report: EtfAiReport; etfName: string }) {
-  const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
-  const vc = {
-    매수: { headerBg: "bg-red-500/8 dark:bg-red-500/12", accent: "text-red-500", badgeBg: "bg-red-500", border: "border-red-500/25" },
-    중립: { headerBg: "bg-amber-500/8 dark:bg-amber-500/12", accent: "text-amber-500", badgeBg: "bg-amber-500", border: "border-amber-500/25" },
-    매도: { headerBg: "bg-blue-500/8 dark:bg-blue-500/12", accent: "text-blue-500", badgeBg: "bg-blue-500", border: "border-blue-500/25" },
-  }[report.verdict] ?? { headerBg: "bg-muted/20", accent: "text-foreground", badgeBg: "bg-muted", border: "border-border" };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-border bg-card overflow-hidden text-foreground"
-    >
-      {/* ── 리포트 헤더 ── */}
-      <div className={cn("px-5 py-4 border-b border-border", vc.headerBg)}>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-1">ETF Research Report</p>
-            <h3 className="text-[15px] font-bold text-foreground leading-snug">{etfName}</h3>
-          </div>
-          <div className="shrink-0 flex flex-col items-end gap-1.5">
-            <span className={cn("text-[13px] font-black text-white px-3 py-1 rounded-lg", vc.badgeBg)}>
-              {report.verdict}
-            </span>
-            <span className="text-[10px] text-muted-foreground/50">{report.target_return_3m}</span>
-          </div>
-        </div>
-        {/* 메타 행 */}
-        <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground/50">
-          <span>{today} 기준</span>
-          <span>·</span>
-          <span>신뢰도 <span className="font-semibold">{report.confidence}</span></span>
-          <span>·</span>
-          <span className="text-muted-foreground/40">AI 생성 — 투자 권유 아님</span>
-        </div>
-      </div>
-
-      <div className="p-5 space-y-5">
-
-        {/* ── 투자 포인트 3개 ── */}
-        {report.key_points?.length > 0 && (
-          <div className={cn("rounded-xl border px-4 py-3.5 space-y-2", vc.border)}>
-            <p className={cn("text-[9.5px] font-black uppercase tracking-widest mb-2", vc.accent)}>핵심 투자 포인트</p>
-            {report.key_points.map((pt, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <span className={cn("shrink-0 text-[10px] font-black mt-[2px]", vc.accent)}>{i + 1}</span>
-                <p className="text-[12.5px] font-semibold text-foreground leading-snug">{pt}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Executive Summary ── */}
-        <div className="border-l-2 border-muted-foreground/20 pl-4">
-          <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest mb-1.5">Executive Summary</p>
-          <p className="text-[13px] text-foreground/80 leading-relaxed">{report.executive_summary}</p>
-        </div>
-
-        {/* ── 본문 섹션 ── */}
-        <div className="space-y-0 divide-y divide-border/40">
-          {report.sections.map((sec, i) => (
-            <div key={i} className="py-4 first:pt-0 last:pb-0">
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-[11px] font-black text-muted-foreground/30 shrink-0">{ROMAN[i] ?? String(i + 1)}</span>
-                <p className="text-[12px] font-bold text-foreground">{sec.title}</p>
-              </div>
-              <p className="text-[12.5px] text-foreground/70 leading-[1.75] pl-5">{sec.content}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* ── 투자 논거 ── */}
-        {report.investment_thesis && (
-          <div className="bg-muted/20 rounded-xl px-4 py-3.5 border border-border/50">
-            <p className="text-[9.5px] font-black uppercase tracking-widest text-muted-foreground/40 mb-1.5">투자 논거</p>
-            <p className="text-[12.5px] text-foreground/80 leading-relaxed">{report.investment_thesis}</p>
-          </div>
-        )}
-
-        {/* ── 매매 가이드 ── */}
-        <div>
-          <p className="text-[9.5px] font-black uppercase tracking-widest text-muted-foreground/40 mb-2.5">매매 가이드</p>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: "진입 구간", value: report.entry_guide.entry_zone, color: "text-emerald-500" },
-              { label: "손절 기준", value: report.entry_guide.stop_loss, color: "text-red-400" },
-              { label: "3개월 목표", value: report.entry_guide.target_3m, color: "text-blue-400" },
-              { label: "권장 보유 기간", value: report.entry_guide.horizon, color: "text-foreground/60" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-muted/20 rounded-xl px-3.5 py-3 border border-border/50 space-y-1">
-                <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">{label}</p>
-                <p className={cn("text-[12px] font-semibold leading-snug", color)}>{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 리스크 요인 ── */}
-        {report.risk_factors?.length > 0 && (
-          <div>
-            <p className="text-[9.5px] font-black uppercase tracking-widest text-muted-foreground/40 mb-2.5">리스크 요인</p>
-            <div className="space-y-2">
-              {report.risk_factors.map((r, i) => (
-                <div key={i} className="rounded-xl bg-amber-500/5 border border-amber-500/15 px-3.5 py-3">
-                  <p className="text-[11.5px] font-bold text-amber-500/80 mb-1">{r.factor}</p>
-                  <p className="text-[12px] text-foreground/60 leading-relaxed">{r.detail}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── 결론 ── */}
-        {report.conclusion && (
-          <div className={cn("rounded-xl border px-4 py-3.5", vc.border, vc.headerBg)}>
-            <p className={cn("text-[9.5px] font-black uppercase tracking-widest mb-1.5", vc.accent)}>결론 및 투자의견</p>
-            <p className="text-[12.5px] text-foreground/80 leading-relaxed">{report.conclusion}</p>
-          </div>
-        )}
-
-      </div>
-    </motion.div>
-  );
-}
-
 // ─── 탭 1: 검색 ───────────────────────────────────────────────────────────────
 
 interface StockSuggestion { symbol: string; shortname: string; englishName?: string; exchange: string; quoteType: string; }
@@ -472,10 +330,6 @@ function SearchTab() {
   const [searchList, setSearchList]   = useState<ETFInfo[]>([]);
   const [showList, setShowList]       = useState(false);
   const [allEtfs, setAllEtfs]         = useState<ETFInfo[]>([]);
-  const [aiReport, setAiReport]       = useState<EtfAiReport | null>(null);
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-
   const [stockSuggestions, setStockSuggestions] = useState<StockSuggestion[]>([]);
   const [showStockDrop, setShowStockDrop]       = useState(false);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
@@ -524,26 +378,6 @@ function SearchTab() {
       setLoading(false);
     }
   }, [mode]);
-
-  const handleGenerateReport = useCallback(async () => {
-    if (!etfResult?.etf) return;
-    setLoadingReport(true);
-    setReportError(null);
-    setAiReport(null);
-    try {
-      const r = await fetch(getApiUrl(`/api/etf/${encodeURIComponent(etfResult.etf.code)}/report`), {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await r.json();
-      if (!r.ok) { setReportError(data.error ?? "리포트 생성 실패"); return; }
-      setAiReport(data);
-    } catch {
-      setReportError("네트워크 오류가 발생했습니다");
-    } finally {
-      setLoadingReport(false);
-    }
-  }, [etfResult]);
 
   const onInput = (v: string) => {
     setQuery(v);
@@ -1011,28 +845,6 @@ function SearchTab() {
             </div>
           )}
 
-          {/* AI 분석 리포트 */}
-          {etfResult.etf && (
-            <div className="space-y-3">
-              <button
-                onClick={handleGenerateReport}
-                disabled={loadingReport}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-sm font-semibold transition-all disabled:opacity-60"
-              >
-                {loadingReport ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> AI 리포트 생성 중... (15~30초)</>
-                ) : (
-                  <><Sparkles className="w-4 h-4" /> {aiReport ? "AI 리포트 다시 생성" : "AI 분석 리포트 생성"}</>
-                )}
-              </button>
-              {reportError && (
-                <p className="text-xs text-red-500 text-center">{reportError}</p>
-              )}
-              {aiReport && (
-                <EtfReportCard report={aiReport} etfName={etfResult.etf.name} />
-              )}
-            </div>
-          )}
         </div>
       )}
 
