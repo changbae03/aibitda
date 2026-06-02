@@ -438,25 +438,63 @@ function searchKorean(query: string): ReturnType<typeof toResult>[] {
 
 function searchEnglishLocal(query: string): ReturnType<typeof toResult>[] {
   const q = query.toLowerCase().replace(/[\s\-\.&]/g, "");
+  // 짧은 쿼리(1~3자)는 이름 mid-match 금지 — 예: "sk" → "novonordisk" 오매칭 방지
+  const nameMatch = (nameNorm: string) =>
+    q.length <= 3 ? nameNorm.startsWith(q) : (nameNorm.includes(q) || q.includes(nameNorm));
 
   // 미국 종목 우선 검색 (US_KOREAN_MAP): 심볼 정확 매칭 > 이름 포함 > 키워드
   const usResults = US_KOREAN_MAP.filter(c => {
     const symbolNorm = c.symbol.toLowerCase();
     const nameNorm = c.name.toLowerCase().replace(/[\s\-\.&]/g, "");
     if (symbolNorm === q || symbolNorm.startsWith(q)) return true;
-    if (nameNorm.includes(q) || q.includes(nameNorm)) return true;
+    if (nameMatch(nameNorm)) return true;
     return c.keywords.some(k => {
       const kn = k.toLowerCase().replace(/[\s\-\.&]/g, "");
       return kn.includes(q) || q.includes(kn);
     });
   }).slice(0, 8).map(c => ({ symbol: c.symbol, shortname: `${c.name} (${c.symbol})`, exchange: c.exchange, quoteType: "EQUITY" as const }));
 
-  if (usResults.length > 0) return usResults;
+  // KRX 캐시에서 이름이 쿼리로 시작하는 종목 (예: "SK" → SK하이닉스·SK텔레콤 등)
+  // 스팩(SPAC) 판별: "X호스팩", "스팩", "SPAC" 패턴
+  const isSpac = (name: string) => /스팩|spac|\d+호스팩/i.test(name);
+  const krxCache = getKRXCache();
+  const krxResults: ReturnType<typeof toResult>[] = [];
+  if (krxCache.length > 0) {
+    const seen = new Set<string>();
+    const allMatches: { entry: StockEntry; displayName: string }[] = [];
+    for (const e of krxCache) {
+      if (isPreferredStock(e.name)) continue;
+      if (isSpac(e.name)) continue; // 스팩 제외
+      const nameNorm = e.name.toLowerCase().replace(/\s/g, "");
+      if (nameNorm.startsWith(q) && !seen.has(e.symbol)) {
+        seen.add(e.symbol);
+        allMatches.push({ entry: e, displayName: DISPLAY_NAME_OVERRIDE.get(e.symbol) ?? e.name });
+      }
+    }
+    // 정렬: KOSPI 우선 → 종목코드 오름차순 (코드 번호가 낮을수록 오래된 대형 대표 종목)
+    allMatches.sort((a, b) => {
+      if (a.entry.exchange !== b.entry.exchange) {
+        return a.entry.exchange === "KOSPI" ? -1 : 1;
+      }
+      return Number(a.entry.code) - Number(b.entry.code);
+    });
+    for (const { entry, displayName } of allMatches.slice(0, 6)) {
+      krxResults.push({ symbol: entry.symbol, shortname: displayName, exchange: entry.exchange, quoteType: "EQUITY" });
+    }
+  }
+
+  // US 심볼 매칭 + KRX 이름 매칭 병합; US 결과가 있어도 KRX 결과를 추가로 포함
+  const merged: ReturnType<typeof toResult>[] = [];
+  const seenAll = new Set<string>();
+  for (const r of [...usResults, ...krxResults]) {
+    if (!seenAll.has(r.symbol)) { seenAll.add(r.symbol); merged.push(r); }
+  }
+  if (merged.length > 0) return merged.slice(0, 8);
 
   // 한국 종목 폴백 (KOREAN_COMPANY_MAP): 심볼·이름 영문 매칭
   return KOREAN_COMPANY_MAP.filter(c => {
     const nameNorm = c.name.toLowerCase().replace(/[\s\-\.&]/g, "");
-    if (nameNorm.includes(q) || q.includes(nameNorm)) return true;
+    if (nameMatch(nameNorm)) return true;
     return c.keywords.some(k => {
       const kn = k.replace(/[\s\-\.&]/g, "");
       return kn.includes(q) || q.includes(kn);
