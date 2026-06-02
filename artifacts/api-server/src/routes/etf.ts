@@ -253,32 +253,38 @@ router.post("/etf/:code/report", async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const levLabel = etf.leverage === 1 ? "일반(1×)" : etf.leverage === 2 ? "레버리지(2×)" : etf.leverage === -1 ? "인버스(-1×)" : etf.leverage === -2 ? "인버스(−2×)" : `${etf.leverage}×`;
 
-    const prompt = `당신은 ETF 전문 애널리스트입니다. 아래 데이터를 기반으로 한국 투자자를 위한 ETF 분석 리포트를 JSON으로 작성해주세요.
+    const prompt = `당신은 국내 대형 증권사 ETF 리서치센터의 수석 애널리스트입니다.
+아래 데이터를 바탕으로 기관 투자자급 ETF 분석 리포트를 작성하십시오.
+문체는 증권사 공식 리서치 리포트 수준으로, 단정적이고 전문적이어야 합니다.
 
-## ETF 기본 정보
-- 이름: ${etf.name}  / 종목코드: ${code}
-- 운용사: ${etf.issuer ?? "N/A"}  / 추적지수: ${etf.benchmark ?? "N/A"}
-- 섹터: ${etf.sector ?? "N/A"}  / 연간 총보수: ${etf.ter != null ? `${etf.ter}%` : "N/A"}  / 레버리지: ${levLabel}
-- 분석일: ${today}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ETF 기본 데이터]
+명칭: ${etf.name} (${code})
+운용사: ${etf.issuer ?? "N/A"} | 추적지수: ${etf.benchmark ?? "N/A"}
+섹터/테마: ${etf.sector ?? "N/A"} | 연간 총보수: ${etf.ter != null ? `${etf.ter}%` : "N/A"} | 레버리지: ${levLabel}
+분석 기준일: ${today}
 
-## 구성 종목 Top ${top10.length}
-${holdingStr}
-Top ${top10.length} 합산 비중: ${top10sum.toFixed(1)}%
-
-## 가격 정보
+[가격 데이터]
 ${priceInfo}
 
-## 분석 지침
-- verdict: 투자 의견 (매수, 중립, 매도 중 하나)
-- confidence: 신뢰도 (높음, 보통, 낮음 중 하나)
-- summary: 핵심 요약 3~4문장 (ETF 특성 + 현재 환경 + 투자 의견)
-- sections: 아래 4개 섹션을 각 250자 이상으로 작성
-  1. ETF 특성 분석 — 추적지수·구성 전략·레버리지 리스크 등
-  2. 구성종목 집중도 — Top 보유 종목 특성·섹터 집중도·핵심 편입 종목 분석
-  3. 거시·테마 환경 — 금리·환율·글로벌 매크로와 이 ETF 테마의 연관성
-  4. 기술적 모멘텀 — 현재가 기준 가격 추세·모멘텀·지지·저항 레벨
-- entry_guide: entry_zone(진입 구간), stop_loss(손절 기준), target_3m(3개월 목표), horizon(권장 보유 기간)
-- risk_factors: 주요 리스크 3~4개`;
+[포트폴리오 상위 구성종목 (Top ${top10.length})]
+${holdingStr}
+→ 상위 ${top10.length}종목 합산 비중: ${top10sum.toFixed(1)}%
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[작성 지침]
+1. key_points: "Buy" 논거 3개를 각각 한 문장으로 (투자 포인트 헤드라인 스타일)
+2. executive_summary: 투자의견·핵심 논거·리스크를 담은 3~4문장 요약. 증권사 리서치 톤.
+3. sections: 아래 5개 항목을 각 300자 이상 전문적으로 기술
+   Ⅰ. ETF 구조 및 지수 분석 — 추적지수 구성 방식, 편입 기준, 운용 전략, 비용 효율성
+   Ⅱ. 포트폴리오 집중도 및 섹터 분석 — 핵심 편입 종목별 투자 논거, 섹터 쏠림, 분산도
+   Ⅲ. 거시·테마 환경 — 현재 매크로(금리·환율·경기 사이클)와 해당 테마의 연관성 및 수혜 구조
+   Ⅳ. 기술적 분석 및 수급 — 가격 추세, 이동평균, 모멘텀 지표, 거래량 동향, 지지·저항
+   Ⅴ. 동종 ETF 비교 — 유사 추적지수 상품과의 총보수·유동성·추적 오차·수익률 비교
+4. investment_thesis: 지금 이 ETF를 보유해야 하는 핵심 논거 2~3문장 (리서치 결론 스타일)
+5. entry_guide: 구체적인 가격·% 수치 포함
+6. risk_factors: factor(리스크 제목)와 detail(2~3문장 상세 설명) 3~4개
+7. conclusion: 투자의견 재확인 + 핵심 모니터링 포인트를 담은 2~3문장 최종 결론`;
 
     const genAI = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!,
@@ -292,14 +298,16 @@ ${priceInfo}
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
         responseSchema: {
           type: "object" as any,
           properties: {
-            verdict:    { type: "string" as any, enum: ["매수", "중립", "매도"] },
-            confidence: { type: "string" as any, enum: ["높음", "보통", "낮음"] },
-            summary:    { type: "string" as any },
+            verdict:           { type: "string" as any, enum: ["매수", "중립", "매도"] },
+            confidence:        { type: "string" as any, enum: ["높음", "보통", "낮음"] },
+            target_return_3m:  { type: "string" as any },
+            key_points:        { type: "array" as any, items: { type: "string" as any } },
+            executive_summary: { type: "string" as any },
             sections: {
               type: "array" as any,
               items: {
@@ -311,6 +319,7 @@ ${priceInfo}
                 required: ["title", "content"],
               },
             },
+            investment_thesis: { type: "string" as any },
             entry_guide: {
               type: "object" as any,
               properties: {
@@ -321,9 +330,20 @@ ${priceInfo}
               },
               required: ["entry_zone", "stop_loss", "target_3m", "horizon"],
             },
-            risk_factors: { type: "array" as any, items: { type: "string" as any } },
+            risk_factors: {
+              type: "array" as any,
+              items: {
+                type: "object" as any,
+                properties: {
+                  factor: { type: "string" as any },
+                  detail: { type: "string" as any },
+                },
+                required: ["factor", "detail"],
+              },
+            },
+            conclusion: { type: "string" as any },
           },
-          required: ["verdict", "confidence", "summary", "sections", "entry_guide", "risk_factors"],
+          required: ["verdict", "confidence", "target_return_3m", "key_points", "executive_summary", "sections", "investment_thesis", "entry_guide", "risk_factors", "conclusion"],
         },
       },
     });
