@@ -474,24 +474,27 @@ function FeedCard({
                   >
                     <StockLogo ticker={stock.ticker} companyName={stock.name} size="sm" className="shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                        <span className="text-sm font-semibold text-foreground leading-tight">{stock.name}</span>
-                        <span className="font-mono text-[10px] text-foreground/30">{stock.ticker}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-semibold text-foreground leading-tight truncate">{stock.name}</span>
                         <span className={cn(
-                          "text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                          "text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0",
                           stock.market === "KR"
                             ? "bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400"
                             : "bg-purple-50 dark:bg-purple-900/20 text-purple-500 dark:text-purple-400"
                         )}>
                           {stock.market}
                         </span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                        <span className="font-mono text-[10px] text-foreground/30 shrink-0">{stock.ticker}</span>
                         {stock.sector && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-foreground/40">
-                            {stock.sector}
-                          </span>
+                          <>
+                            <span className="text-foreground/20 text-[10px] shrink-0">·</span>
+                            <span className="text-[10px] text-foreground/35 truncate">{stock.sector}</span>
+                          </>
                         )}
                       </div>
-                      <p className="text-[11.5px] text-foreground/50 line-clamp-1 leading-snug">{stock.rationale}</p>
+                      <p className="text-[11px] text-foreground/50 line-clamp-2 leading-snug mt-0.5">{stock.rationale}</p>
                     </div>
                     <button
                       onClick={() => onAnalyze(stock.ticker, stock.name)}
