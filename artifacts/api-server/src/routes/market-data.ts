@@ -6,6 +6,7 @@ import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
 import { fetchECOSBaseRateHistory } from "../lib/ecos-client.js";
+import { fetchAllEconomicActuals, type BLSReleaseDate, type FOMCDate } from "../lib/bls-client.js";
 
 const TTL_BATCH_QUOTES      =  3 * 60 * 1000;  //  3분 — 현재가
 const TTL_BATCH_SPARKLINES  =  6 * 60 * 60 * 1000;  //  6시간 — 90일 차트 (장 마감 후 변경)
@@ -1721,7 +1722,12 @@ router.get("/economic-calendar", async (req, res) => {
     const endDate = new Date(kstNow.getTime() + (range === "week" ? 7 : 30) * 86400000);
     const endStr = endDate.toISOString().split("T")[0];
 
-    const prompt = `오늘은 ${todayStr}(KST)입니다.
+    // ── BLS/FOMC 실제 데이터와 Gemini를 병렬 호출 ───────────────────────────
+    const [blsResult, geminiResp] = await Promise.allSettled([
+      fetchAllEconomicActuals(),
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: `오늘은 ${todayStr}(KST)입니다.
 ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을 JSON 배열로 반환하세요.
 
 포함할 이벤트 유형:
@@ -1732,49 +1738,165 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
 - 일본: BOJ 금리결정, CPI
 
 각 이벤트를 아래 형식의 JSON으로 반환하세요:
-{
-  "date": "YYYY-MM-DD",
-  "time": "HH:MM KST",
-  "title": "이벤트명(한국어)",
-  "country": "US",
-  "category": "금리결정",
-  "importance": "high",
-  "forecast": "시장 컨센서스 예상값 (숫자+단위, 예: 2.4%, 215K, 50.2). 모를 경우 null",
-  "previous": "직전 발표값 (숫자+단위, 예: 2.8%, 228K, 50.3). 반드시 실제 수치 기입",
-  "unit": "단위 (%, K, 억달러 등)"
-}
+{"date":"YYYY-MM-DD","time":"HH:MM KST","title":"이벤트명(한국어)","country":"US","category":"금리결정","importance":"high","forecast":"예상값 또는 null","previous":"직전값","unit":"단위"}
 
 중요 규칙:
 - "previous" 필드: 해당 지표의 가장 최근 발표된 실제 수치를 반드시 기입. "N/A" 절대 금지.
-- "forecast" 필드: 시장 컨센서스(블룸버그/로이터 기준 추정치)를 기입. 알 수 없으면 null.
-- "unit" 필드: 적절한 단위 기입 (금리→"%", 고용→"K", PMI→"pt" 등)
+- "forecast" 필드: 시장 컨센서스를 기입. 알 수 없으면 null.
 - 날짜/시간은 KST(한국시간) 기준
-- JSON 배열만 반환. 다른 텍스트 절대 포함 금지.`;
+- JSON 배열만 반환. 다른 텍스트 절대 포함 금지.` }] }],
+        config: { temperature: 0.1 },
+      }),
+    ]);
 
-    const resp = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.1 },
-    });
-
-    const raw = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    // ── Gemini 결과 파싱 ────────────────────────────────────────────────────
     let events: EconomicEvent[] = [];
-    try {
-      events = JSON.parse(cleaned);
-      if (!Array.isArray(events)) events = [];
-    } catch {
-      console.error("[economic-calendar] JSON 파싱 실패:", cleaned.slice(0, 200));
-      events = [];
+    if (geminiResp.status === "fulfilled") {
+      const raw = geminiResp.value.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+      const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      try {
+        events = JSON.parse(cleaned);
+        if (!Array.isArray(events)) events = [];
+      } catch {
+        console.error("[economic-calendar] JSON 파싱 실패:", cleaned.slice(0, 200));
+        events = [];
+      }
+    }
+
+    // ── BLS 실제 데이터로 이벤트 보강 ──────────────────────────────────────
+    if (blsResult.status === "fulfilled") {
+      const { actuals, schedule, fomc } = blsResult.value;
+
+      // 1) BLS 실제값으로 previous 필드 덮어쓰기
+      if (actuals) {
+        for (const ev of events) {
+          const t = ev.title.toLowerCase();
+          const c = ev.country;
+          if (c === "US") {
+            if ((t.includes("cpi") || t.includes("소비자물가")) && actuals.cpiPrevious) {
+              ev.previous = actuals.cpiPrevious;
+              ev.unit = ev.unit ?? "%";
+            } else if ((t.includes("nfp") || t.includes("비농업") || t.includes("고용보고서")) && actuals.nfpPrevious) {
+              ev.previous = actuals.nfpPrevious;
+              ev.unit = ev.unit ?? "K";
+            } else if ((t.includes("실업률") || t.includes("unemployment")) && actuals.unemploymentPrevious) {
+              ev.previous = actuals.unemploymentPrevious;
+              ev.unit = ev.unit ?? "%";
+            } else if (t.includes("ppi") && actuals.ppiPrevious) {
+              ev.previous = actuals.ppiPrevious;
+              ev.unit = ev.unit ?? "%";
+            }
+          }
+        }
+        console.log(`[economic-calendar] BLS 실제값 주입: CPI ${actuals.cpiPrevious}, NFP ${actuals.nfpPrevious}, 실업률 ${actuals.unemploymentPrevious}`);
+      }
+
+      // 2) FOMC 날짜 교정 — AI가 틀린 날짜를 사용한 경우 공식 날짜로 교정
+      const fomcEvIdxList = events
+        .map((ev, i) => ({ ev, i }))
+        .filter(({ ev }) => ev.country === "US" && (ev.title.toLowerCase().includes("fomc") || ev.category === "금리결정" || ev.title.includes("기준금리")));
+
+      for (const { ev, i } of fomcEvIdxList) {
+        // 가장 가까운 FOMC 날짜 찾기 (±5일 허용)
+        const evDate = new Date(ev.date);
+        const match = fomc.find(f => {
+          const diff = Math.abs(new Date(f.endDate).getTime() - evDate.getTime());
+          return diff <= 5 * 86400000;
+        });
+        if (match && match.endDate !== ev.date) {
+          console.log(`[economic-calendar] FOMC 날짜 교정: ${ev.date} → ${match.endDate}`);
+          events[i] = { ...ev, date: match.endDate, time: ev.time ?? "03:00 KST" };
+        }
+      }
+
+      // 3) BLS 공식 릴리즈 날짜로 이벤트 날짜 교정 및 누락 이벤트 추가
+      const BLS_INDICATOR_MAP: Record<BLSReleaseDate["indicator"], { titleKw: string[]; titleKo: string; category: string; importance: EconomicEvent["importance"] }> = {
+        "CPI":           { titleKw: ["cpi", "소비자물가"],        titleKo: "미국 CPI (소비자물가지수)",        category: "물가",     importance: "high" },
+        "NFP":           { titleKw: ["nfp", "비농업", "고용보고"], titleKo: "미국 비농업 고용보고서 (NFP)",     category: "고용",     importance: "high" },
+        "PPI":           { titleKw: ["ppi", "생산자물가"],         titleKo: "미국 PPI (생산자물가지수)",        category: "물가",     importance: "medium" },
+        "Retail Sales":  { titleKw: ["retail", "소매판매"],        titleKo: "미국 소매판매",                    category: "소비",     importance: "medium" },
+        "Jobless Claims":{ titleKw: ["jobless", "실업수당"],        titleKo: "미국 신규실업수당청구건수",        category: "고용",     importance: "medium" },
+      };
+
+      for (const rel of schedule) {
+        if (rel.date < todayStr || rel.date > endStr) continue;
+        const meta = BLS_INDICATOR_MAP[rel.indicator];
+        if (!meta) continue;
+
+        // 해당 날짜 ±3일 내에 같은 지표 이벤트 있는지 확인
+        const exists = events.some(ev => {
+          if (ev.country !== "US") return false;
+          const titleLow = ev.title.toLowerCase();
+          if (!meta.titleKw.some(kw => titleLow.includes(kw))) return false;
+          const diff = Math.abs(new Date(ev.date).getTime() - new Date(rel.date).getTime());
+          return diff <= 3 * 86400000;
+        });
+
+        if (exists) {
+          // 날짜 교정: AI 날짜 → BLS 공식 날짜
+          events = events.map(ev => {
+            if (ev.country !== "US") return ev;
+            const titleLow = ev.title.toLowerCase();
+            if (!meta.titleKw.some(kw => titleLow.includes(kw))) return ev;
+            const diff = Math.abs(new Date(ev.date).getTime() - new Date(rel.date).getTime());
+            if (diff > 0 && diff <= 3 * 86400000) {
+              console.log(`[economic-calendar] BLS 날짜 교정 [${rel.indicator}]: ${ev.date} → ${rel.date}`);
+              return { ...ev, date: rel.date, time: rel.timeKST };
+            }
+            return ev;
+          });
+        } else {
+          // 누락 이벤트 추가
+          const prevVal = rel.indicator === "CPI"   ? actuals?.cpiPrevious
+                        : rel.indicator === "NFP"   ? actuals?.nfpPrevious
+                        : rel.indicator === "PPI"   ? actuals?.ppiPrevious
+                        : undefined;
+          console.log(`[economic-calendar] BLS 이벤트 추가: ${rel.indicator} on ${rel.date}`);
+          events.push({
+            date: rel.date,
+            time: rel.timeKST,
+            title: meta.titleKo,
+            country: "US",
+            category: meta.category,
+            importance: meta.importance,
+            forecast: undefined,
+            previous: prevVal ?? undefined,
+            unit: rel.indicator === "NFP" ? "K" : "%",
+          });
+        }
+      }
+
+      // 4) FOMC 날짜 중 이벤트 없는 것 추가
+      for (const f of fomc) {
+        if (f.endDate < todayStr || f.endDate > endStr) continue;
+        const hasFomc = events.some(ev =>
+          ev.country === "US" &&
+          (ev.title.toLowerCase().includes("fomc") || ev.category === "금리결정") &&
+          Math.abs(new Date(ev.date).getTime() - new Date(f.endDate).getTime()) <= 1 * 86400000
+        );
+        if (!hasFomc) {
+          console.log(`[economic-calendar] FOMC 이벤트 추가: ${f.endDate}`);
+          events.push({
+            date: f.endDate,
+            time: "03:00 KST",
+            title: "FOMC 금리결정",
+            country: "US",
+            category: "금리결정",
+            importance: "high",
+            forecast: undefined,
+            previous: actuals?.cpiPrevious ? undefined : undefined,
+            unit: "%",
+          });
+        }
+      }
     }
 
     events = events.filter(e => e.date >= todayStr && e.date <= endStr);
     events.sort((a, b) => a.date.localeCompare(b.date));
 
     _economicCalCache.set(cacheKey, { data: events, expiresAt: Date.now() + ECONOMIC_CAL_TTL_MS });
-    // DB에도 저장 (재시작 후 즉시 사용)
     saveToDBCache(`cal-economic-${range}`, events, ECONOMIC_CAL_TTL_MS);
-    console.log(`[economic-calendar] ${range}: ${events.length}개 이벤트 생성`);
+    console.log(`[economic-calendar] ${range}: ${events.length}개 이벤트 생성 (BLS 보강 포함)`);
     return res.json(events);
   } catch (err: any) {
     console.error("[economic-calendar] error:", err?.message);
