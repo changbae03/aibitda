@@ -288,10 +288,6 @@ export async function getLiveAccuracy(
     [symbol],
   );
 
-  // D+3 기준으로 전체 적중률 계산 (기존 방식 유지)
-  const h3rows = resolved.filter(r => r.pred_horizon === 3).slice(0, n);
-  const total   = h3rows.length;
-  const correct = h3rows.filter(r => r.correct).length;
   const pending = parseInt(pendingRows[0]?.cnt ?? "0", 10);
 
   // 각 horizon별 적중률
@@ -306,6 +302,10 @@ export async function getLiveAccuracy(
       accuracy: hTotal >= 5 ? Math.round((hCorrect / hTotal) * 1000) / 10 : null,
     };
   }
+
+  // D+1·D+2·D+3 전체 합산으로 전체 적중률 계산
+  const total   = Object.values(byHorizon).reduce((s, v) => s + v.total, 0);
+  const correct = Object.values(byHorizon).reduce((s, v) => s + v.correct, 0);
 
   return {
     symbol,
