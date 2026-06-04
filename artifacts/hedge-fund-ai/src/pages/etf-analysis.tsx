@@ -2220,16 +2220,7 @@ function MomentumTab() {
 
 // ─── 메인 페이지 ──────────────────────────────────────────────────────────────
 
-type Tab = "search" | "momentum";
-
 export default function ETFAnalysis() {
-  const { isEn }      = useLanguage();
-  const initTab = (): Tab => {
-    const p = new URLSearchParams(window.location.search).get("tab");
-    return p === "momentum" ? "momentum" : "search";
-  };
-  const [tab, setTab] = useState<Tab>(initTab);
-
   return (
     <div className="space-y-5 pb-20">
       {/* 헤더 */}
@@ -2238,41 +2229,11 @@ export default function ETFAnalysis() {
           ETF 분석
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          국내·해외 ETF 구성 종목 · 매크로 기반 섹터 모멘텀 분석
+          국내·해외 ETF 구성 종목 분석
         </p>
       </div>
 
-      {/* 탭 */}
-      <div className="flex gap-1 p-1 rounded-2xl bg-muted/30 border border-border">
-        <button
-          onClick={() => setTab("search")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
-            tab === "search"
-              ? "bg-card text-foreground shadow-sm border border-border"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Search className="w-3.5 h-3.5" />
-          <span>ETF / 종목 검색</span>
-        </button>
-        <button
-          onClick={() => setTab("momentum")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
-            tab === "momentum"
-              ? "bg-card text-foreground shadow-sm border border-border"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Activity className="w-3.5 h-3.5" />
-          <span>ETF 모멘텀 분석</span>
-        </button>
-      </div>
-
-      {/* 탭 콘텐츠 */}
-      {tab === "search"   && <SearchTab />}
-      {tab === "momentum" && <MomentumTab />}
+      <SearchTab />
     </div>
   );
 }
