@@ -333,6 +333,8 @@ function SearchTab() {
   const [stockSuggestions, setStockSuggestions] = useState<StockSuggestion[]>([]);
   const [showStockDrop, setShowStockDrop]       = useState(false);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const [aiReport, setAiReport]       = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const stockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
