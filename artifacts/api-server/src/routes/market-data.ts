@@ -342,6 +342,9 @@ const US_KOREAN_MAP: { symbol: string; name: string; exchange: string; keywords:
   { symbol: "MA",    name: "Mastercard",           exchange: "NYSE",   keywords: ["마스터카드"] },
   { symbol: "BRK-B", name: "Berkshire Hathaway",   exchange: "NYSE",   keywords: ["버크셔해서웨이", "버크셔", "워렌버핏"] },
   { symbol: "COIN",  name: "Coinbase",             exchange: "NASDAQ", keywords: ["코인베이스"] },
+  { symbol: "HOOD",  name: "Robinhood Markets",    exchange: "NASDAQ", keywords: ["로빈후드"] },
+  { symbol: "SOFI",  name: "SoFi Technologies",    exchange: "NASDAQ", keywords: ["소파이", "소파이테크"] },
+  { symbol: "AFRM",  name: "Affirm Holdings",      exchange: "NASDAQ", keywords: ["어펌"] },
   // 소비재·리테일
   { symbol: "AMZN",  name: "Amazon",               exchange: "NASDAQ", keywords: ["아마존"] },
   { symbol: "WMT",   name: "Walmart",              exchange: "NYSE",   keywords: ["월마트"] },
