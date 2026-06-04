@@ -500,7 +500,7 @@ function FeedCard({
                       onClick={() => onAnalyze(stock.ticker, stock.name)}
                       className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-[#FF8A7A] border border-[#FF8A7A]/30 bg-[#FF8A7A]/5 hover:bg-[#FF8A7A]/15 active:bg-[#FF8A7A]/20 transition-colors whitespace-nowrap"
                     >
-                      분석하기
+                      분석
                     </button>
                   </motion.div>
                 ))}
