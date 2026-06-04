@@ -141,7 +141,7 @@ function formatDate(dateStr: string, short = false): string {
 function SectionLabel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[10px] font-semibold text-foreground/35 tracking-[0.16em] uppercase shrink-0">
+      <span className="text-[11.5px] font-bold text-foreground/55 tracking-[0.10em] shrink-0">
         {label}
       </span>
       <div className="flex-1 h-px bg-border/60" />
@@ -289,15 +289,15 @@ function MarketBriefSection({
               return (
                 <div className="space-y-1 pt-1">
                   <SectionLabel label="시장 해설" />
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-4 pt-2">
                     {paras.map((para, i) => (
                       <p
                         key={i}
                         className={cn(
-                          "leading-[1.8]",
+                          "leading-[1.95]",
                           i === 0
-                            ? "text-[13px] text-foreground/80 font-medium"
-                            : "text-[12.5px] text-foreground/65"
+                            ? "text-[14.5px] text-foreground/85 font-semibold"
+                            : "text-[14px] text-foreground/70"
                         )}
                       >
                         {para}
@@ -323,12 +323,12 @@ function MarketBriefSection({
                             <span className={cn("mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
+                                <p className="text-[14px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                                <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
                                   {dc.label}
                                 </span>
                               </div>
-                              <p className="text-[12px] text-foreground/55 leading-relaxed line-clamp-2">{ev.impact}</p>
+                              <p className="text-[13px] text-foreground/60 leading-relaxed">{ev.impact}</p>
                             </div>
                           </div>
                         );
@@ -349,9 +349,9 @@ function MarketBriefSection({
                             {String(i + 1).padStart(2, "0")}
                           </span>
                           <div className="flex-1 space-y-1">
-                            <p className="text-[13.5px] font-semibold text-foreground leading-snug">{fw.point}</p>
-                            <p className="text-[12px] text-foreground/58 leading-relaxed line-clamp-2">{fw.detail}</p>
-                            <p className="text-[11px] text-foreground/35 flex items-center gap-1 pt-0.5 line-clamp-1">
+                            <p className="text-[14px] font-semibold text-foreground leading-snug">{fw.point}</p>
+                            <p className="text-[13px] text-foreground/65 leading-relaxed">{fw.detail}</p>
+                            <p className="text-[12px] text-foreground/40 flex items-center gap-1 pt-0.5 line-clamp-1">
                               체크 <ChevronRight className="w-2.5 h-2.5 inline shrink-0" /> {fw.watchFor}
                             </p>
                           </div>
@@ -374,13 +374,13 @@ function MarketBriefSection({
                             <span className={cn("mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full", dc.dot)} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="text-[11px] font-semibold text-foreground/35 shrink-0">{ev.date}</span>
-                                <p className="text-[13px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>
+                                <span className="text-[12px] font-semibold text-foreground/45 shrink-0">{ev.date}</span>
+                                <p className="text-[14px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                                <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>
                                   {ic.label}
                                 </span>
                               </div>
-                              <p className="text-[12px] text-foreground/55 leading-relaxed line-clamp-2">{ev.description}</p>
+                              <p className="text-[13px] text-foreground/60 leading-relaxed">{ev.description}</p>
                             </div>
                           </div>
                         );
