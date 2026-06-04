@@ -91,7 +91,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 29;  // [v29] 이진 분류 GBDT(로지스틱 손실), 신뢰도 필터 적중률, 분류기·회귀기 결합 방향 예측
+const MODEL_VERSION = 30;  // [v30] KOSDAQ 전용 피처 교체: sp500Ret→나스닥, foreignNet→개인5일누적, 하이퍼파라미터 강화
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -127,17 +127,20 @@ const INDEX_HP: Record<string, IndexHP> = {
     dirPenalty: 1.8,
   },
   /**
-   * KOSDAQ [v26] — graduated dirPenalty 1.8, depth 5→4 (과적합 완화)
-   * · 코스닥 개인투자자 주도 → 단기 반전 신호(ret3dLag) 효과적
-   * · depth 5→4: 풍부한 피처 수(34)에 맞춰 트리 복잡도 조정
+   * KOSDAQ [v30] — 개인 수급 누적 피처 + 나스닥 연동 강화
+   * · sp500Ret 슬롯 → 나스닥 등락 (KOSDAQ-NASDAQ 상관 ≈ 0.85, S&P보다 높음)
+   * · foreignNet 슬롯 → 개인 5일 누적 순매수 모멘텀 (연속 매수/매도 방향 포착)
+   * · halfLifeDays 21→14: 코스닥 레짐 전환 주기 ~2주 반영, 최신 수급에 집중
+   * · nEnsemble 18→22: 앙상블 확대로 개인 수급 노이즈에 강건
+   * · gbdtTrees 400→500, recentWindow 30→20: 최근 30일 알파 빠른 조정
    */
   KQ11: {
-    gbdtTrees: 400, gbdtLR: 0.009, gbdtDepth: 4, gbdtLeaf: 8,
-    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 18,
+    gbdtTrees: 500, gbdtLR: 0.008, gbdtDepth: 4, gbdtLeaf: 8,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 22,
     lstmEpochs: 130, lstmLR: 0.0008, lstmDrop: 0.30,
-    recentWindow: 30,
-    halfLifeDays: 21,  // [v27] 42→21: 코스닥 개인주도 레짐 더 빠른 전환 대응
-    dirPenalty: 1.8,
+    recentWindow: 20,
+    halfLifeDays: 14,  // [v30] 21→14: 코스닥 개인주도 레짐 전환 주기 ~2주, 최신 패턴 집중
+    dirPenalty: 2.0,   // [v30] 1.8→2.0: 방향 오류에 더 강한 패널티 (적중률 35%→50%+ 목표)
   },
   /**
    * S&P500 [v26] — nEnsemble 5→12, 트리 200→400, LR 0.025→0.012
@@ -658,9 +661,9 @@ async function fetchExternalData(
     return result;
   }
 
-  // [v25] 닛케이225(^N225), SOX(^SOX), WTI(CL=F) 추가
+  // [v25] 닛케이225(^N225), SOX(^SOX), WTI(CL=F) 추가 / [v30] NASDAQ(^IXIC) KOSDAQ용 추가
   const [sp500Rows, usdkrwRows, bondRows, investorRows, shortRows, vixRows, usb10Rows, usb2Rows,
-         nikkeiRows, soxRows, wtiRows] = await Promise.all([
+         nikkeiRows, soxRows, wtiRows, nasdaqRows] = await Promise.all([
     fetchYahooSeries("^GSPC", years),
     fetchYahooSeries("USDKRW=X", years),
     fredFetchSeries("IRLTLT01KRM156N", startISO),  // 한국 장기국채 (월별, OECD) – 3Y ≈ 10Y – 0.4pp
@@ -672,6 +675,7 @@ async function fetchExternalData(
     fetchYahooSeries("^N225", years),              // [v25] 닛케이225 — KOSPI 최강 예측변수
     fetchYahooSeries("^SOX",  years),              // [v25] 필라델피아 반도체 — 한국 반도체 채널
     fetchYahooSeries("CL=F",  years),              // [v25] WTI 원유 — 한국 에너지 비용
+    fetchYahooSeries("^IXIC", years),              // [v30] 나스닥 — KOSDAQ-NASDAQ 상관 ≈ 0.85
   ]);
 
   // ── S&P500 일별 수익률 Map ──
@@ -755,7 +759,12 @@ async function fetchExternalData(
   for (let i = 1; i < wtiRows.length; i++)
     wtiRetMap.set(wtiRows[i].date, (wtiRows[i].close - wtiRows[i-1].close) / (wtiRows[i-1].close || 1));
 
-  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행, VIX ${vixRows.length}행, 닛케이 ${nikkeiRows.length}행, SOX ${soxRows.length}행, WTI ${wtiRows.length}행`);
+  // ── [v30] 나스닥 일별 수익률 (KOSDAQ sp500Ret 슬롯에 주입) ──
+  const nasdaqRetMap = new Map<string, number>();
+  for (let i = 1; i < nasdaqRows.length; i++)
+    nasdaqRetMap.set(nasdaqRows[i].date, (nasdaqRows[i].close - nasdaqRows[i-1].close) / (nasdaqRows[i-1].close || 1));
+
+  console.log(`[ext] 완료 — S&P500 ${sp500Rows.length}행, 환율 ${usdkrwRows.length}행, 국고채 ${bondRows.length}행, 투자자 ${investorRows.length}행, 공매도 ${shortRows.length}행, VIX ${vixRows.length}행, 닛케이 ${nikkeiRows.length}행, SOX ${soxRows.length}행, WTI ${wtiRows.length}행, NASDAQ ${nasdaqRows.length}행`);
 
   // ── KOSPI/KOSDAQ 날짜에 맞춰 forward-fill ──
   const result = new Map<string, ExtPoint>();
@@ -764,6 +773,9 @@ async function fetchExternalData(
   let lastVix5dMom2 = 0, lastVixRet2 = 0;
   let lastUsb10 = 4.5, lastUsb2 = 4.0;
   let lastNikkeiRet = 0, lastNikkei5dMom = 0, lastSoxRet = 0, lastWtiRet = 0;  // [v25]
+  let lastNasdaqRet = 0;                                                          // [v30] KOSDAQ용
+  const indiv5dBuf: number[] = [];                                                // [v30] 개인 5일 순매수 버퍼
+  let lastIndiv5dMom = 0;                                                         // [v30] 개인 5일 누적 모멘텀
   let bondIdx = 0, b10Idx2 = 0, b2Idx2 = 0;
 
   for (const date of dates) {
@@ -776,38 +788,51 @@ async function fetchExternalData(
     while (b2Idx2 < usb2Entries.length && usb2Entries[b2Idx2].date <= date) {
       lastUsb2 = usb2Entries[b2Idx2].value; b2Idx2++;
     }
-    if (sp500RetMap.has(date))      lastSP500       = sp500RetMap.get(date)!;
-    if (usdkrwRetMap.has(date))     lastUSDKRW      = usdkrwRetMap.get(date)!;
+    if (sp500RetMap.has(date))    lastSP500      = sp500RetMap.get(date)!;
+    if (usdkrwRetMap.has(date))   lastUSDKRW     = usdkrwRetMap.get(date)!;
+    if (nasdaqRetMap.has(date))   lastNasdaqRet  = nasdaqRetMap.get(date)!;  // [v30]
     if (investorMap.has(date)) {
       const iv = investorMap.get(date)!;
       lastForeign = iv.foreignNet;
       // [v21] KOSDAQ: 기관(instNet)이 아닌 개인(individualNet)이 시장 방향 주도
-      // 기관은 코스닥 상승 시 오히려 차익실현 경향 → 역상관 노이즈 제거
-      lastInst = market === "KOSDAQ" ? (iv.individualNet ?? iv.instNet) : iv.instNet;
+      const indivRaw = iv.individualNet ?? iv.instNet;
+      lastInst = market === "KOSDAQ" ? indivRaw : iv.instNet;
+      // [v30] KOSDAQ 개인 5일 누적 모멘텀: 연속 매수/매도 방향 추세 포착
+      if (market === "KOSDAQ") {
+        indiv5dBuf.push(indivRaw);
+        if (indiv5dBuf.length > 5) indiv5dBuf.shift();
+        lastIndiv5dMom = indiv5dBuf.reduce((a, b) => a + b, 0);
+      }
     }
-    if (shortMap.has(date))         lastShort       = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
-    if (vix5dMomMap2.has(date))     lastVix5dMom2   = vix5dMomMap2.get(date)!;
-    if (vixRetMap2.has(date))       lastVixRet2     = vixRetMap2.get(date)!;
-    if (nikkeiRetMap.has(date))     lastNikkeiRet   = nikkeiRetMap.get(date)!;     // [v25]
-    if (nikkei5dMomMap.has(date))   lastNikkei5dMom = nikkei5dMomMap.get(date)!;  // [v25]
-    if (soxRetMap.has(date))        lastSoxRet      = soxRetMap.get(date)!;        // [v25]
-    if (wtiRetMap.has(date))        lastWtiRet      = wtiRetMap.get(date)!;        // [v25]
+    if (shortMap.has(date))       lastShort      = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
+    if (vix5dMomMap2.has(date))   lastVix5dMom2  = vix5dMomMap2.get(date)!;
+    if (vixRetMap2.has(date))     lastVixRet2    = vixRetMap2.get(date)!;
+    if (nikkeiRetMap.has(date))   lastNikkeiRet  = nikkeiRetMap.get(date)!;
+    if (nikkei5dMomMap.has(date)) lastNikkei5dMom = nikkei5dMomMap.get(date)!;
+    if (soxRetMap.has(date))      lastSoxRet     = soxRetMap.get(date)!;
+    if (wtiRetMap.has(date))      lastWtiRet     = wtiRetMap.get(date)!;
 
     result.set(date, {
-      sp500Ret:    lastSP500,
+      // [v30] KOSDAQ: sp500Ret 슬롯 → 나스닥 등락 (KOSDAQ 기술주 연동이 S&P 대비 훨씬 강함)
+      sp500Ret:    market === "KOSDAQ"
+        ? Math.max(-1, Math.min(1, lastNasdaqRet / 0.03))  // 나스닥 ±3% → ±1 정규화
+        : lastSP500,
       usdkrwRet:   lastUSDKRW,
       bond3y:      lastBond,
-      foreignNet:  lastForeign / fnetScale,  // ≈ −1 ~ +1
-      instNet:     lastInst    / inetScale,  // ≈ −1 ~ +1
-      shortRatio:  lastShort,                // IQR 정규화 (−3~+3)
-      vix5dMom:    lastVix5dMom2,            // [v13] VIX 5일 모멘텀 (음수=회복신호)
-      vixRet:      lastVixRet2,              // VIX 일별 변화율
-      yieldSpread: lastUsb10 - lastUsb2,     // 10Y-2Y 금리차
-      // [v25] 신규 4개 피처
-      nikkeiRet:   Math.max(-0.1, Math.min(0.1, lastNikkeiRet)),   // 닛케이 등락 (±10% 클리핑)
-      nikkei5dMom: Math.max(-0.15, Math.min(0.15, lastNikkei5dMom)), // 닛케이 5일 모멘텀
-      soxRet:      Math.max(-0.1, Math.min(0.1, lastSoxRet)),      // SOX 등락 (±10% 클리핑)
-      wtiRet:      Math.max(-0.1, Math.min(0.1, lastWtiRet)),      // WTI 등락 (±10% 클리핑)
+      // [v30] KOSDAQ: foreignNet 슬롯 → 개인 5일 누적 순매수 모멘텀 (외국인 비중 낮아 노이즈, 개인 추세가 핵심)
+      foreignNet:  market === "KOSDAQ"
+        ? Math.max(-1, Math.min(1, lastIndiv5dMom / (inetScale * 4.5 + 1)))  // 5일 누적 ≈ ±1 정규화
+        : lastForeign / fnetScale,
+      instNet:     lastInst / inetScale,  // KOSDAQ: 개인 당일 / KOSPI: 기관 당일 (v21)
+      shortRatio:  lastShort,             // IQR 정규화 (−3~+3)
+      vix5dMom:    lastVix5dMom2,
+      vixRet:      lastVixRet2,
+      yieldSpread: lastUsb10 - lastUsb2,
+      // [v25] 닛케이/SOX/WTI
+      nikkeiRet:   Math.max(-0.1, Math.min(0.1, lastNikkeiRet)),
+      nikkei5dMom: Math.max(-0.15, Math.min(0.15, lastNikkei5dMom)),
+      soxRet:      Math.max(-0.1, Math.min(0.1, lastSoxRet)),
+      wtiRet:      Math.max(-0.1, Math.min(0.1, lastWtiRet)),
     });
   }
 
