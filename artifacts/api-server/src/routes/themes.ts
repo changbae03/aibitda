@@ -314,7 +314,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v9";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v13";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -469,11 +469,23 @@ async function discoverThemeFast(
       ],
     },
     {
-      themeKW: ["금리", "금리인하", "부동산", "리츠"],
+      // 금리 인하 수혜 — 대출 증가, 자산 가격 상승
+      themeKW: ["금리인하", "부동산", "리츠", "금리 인하"],
       tickers: [
         ["105560", "KB금융"], ["055550", "신한지주"], ["086790", "하나금융지주"],
         ["316140", "우리금융지주"], ["138040", "메리츠금융지주"], ["139130", "DGB금융지주"],
         ["000060", "메리츠화재"], ["088350", "한화생명"],
+      ],
+    },
+    {
+      // 금리 인상 수혜 — 예금·보험·저축은행 이자수익 증가
+      themeKW: ["금리인상", "고금리", "금리 인상", "인상", "예금", "보험유입"],
+      tickers: [
+        ["032830", "삼성생명"], ["088350", "한화생명"], ["000060", "메리츠화재"],
+        ["001450", "현대해상"], ["000370", "한화손해보험"], ["105560", "KB금융"],
+        ["055550", "신한지주"], ["086790", "하나금융지주"], ["316140", "우리금융지주"],
+        ["138040", "메리츠금융지주"], ["175330", "JB금융지주"], ["139130", "DGB금융지주"],
+        ["006360", "GS건설"], ["000720", "현대건설"],
       ],
     },
     {
@@ -864,16 +876,26 @@ ${topics}
   } catch { /* 브리핑 실패 시 무시 */ }
 
   // ── 금리 실데이터 (FRED/ECOS) ────────────────────────────────────────────
+  // 함수 스코프에 선언 — 사후 교정 코드에서도 접근 가능
+  let krRate: number | null = null;
+  let krCpi:  number | null = null;
   let rateContext = "";
   try {
     const macroRes = await fetch(`http://localhost:8080/api/macro/dashboard`);
     if (macroRes.ok) {
       const macro = await macroRes.json() as Record<string, any>;
-      const krRate   = macro?.kr?.기준금리   ?? macro?.기준금리   ?? null;
-      const usRate   = macro?.us?.기준금리목표 ?? macro?.기준금리목표 ?? null;
-      const us10y    = macro?.us?.["10Y"]   ?? macro?.["10Y"]   ?? null;
-      const krCpi    = macro?.kr?.CPI_YoY   ?? macro?.CPI_YoY   ?? null;
-      const usCpi    = macro?.us?.CPI_YoY   ?? null;
+      // 실제 구조: { categories: [{id, items: [{id, value}]}] }
+      type MacroItem = { id: string; value: number | null };
+      type MacroCat  = { id: string; items: MacroItem[] };
+      const cats = (macro?.categories ?? []) as MacroCat[];
+      const flatten = cats.flatMap(c => c.items ?? []);
+      const findVal = (id: string): number | null =>
+        flatten.find(i => i.id === id)?.value ?? null;
+      krRate = findVal("bok-rate");
+      krCpi  = findVal("kr-cpi");
+      const usRate = findVal("us-rate") ?? null;
+      const us10y  = findVal("us10y")  ?? null;
+      const usCpi  = findVal("us-cpi") ?? null;
       const parts: string[] = [];
       if (krRate  != null) parts.push(`한국 기준금리: ${krRate}%`);
       if (usRate  != null) parts.push(`미국 기준금리: ${usRate}`);
@@ -881,9 +903,21 @@ ${topics}
       if (krCpi   != null) parts.push(`한국 CPI(YoY): ${krCpi}%`);
       if (usCpi   != null) parts.push(`미국 CPI(YoY): ${usCpi}%`);
       if (parts.length) {
+        // CPI vs 기준금리 비교로 금리 방향 자동 판단
+        const krRateNum  = typeof krRate === "number" ? krRate : parseFloat(String(krRate));
+        const krCpiNum   = typeof krCpi  === "number" ? krCpi  : parseFloat(String(krCpi));
+        let rateDirection = "";
+        if (!isNaN(krRateNum) && !isNaN(krCpiNum)) {
+          if (krCpiNum > krRateNum + 0.3) {
+            rateDirection = `\n⚠️ 금리 방향 판단: 한국 물가(${krCpiNum}%)가 기준금리(${krRateNum}%)를 크게 상회 → 금리 인상 또는 동결 압력. "금리인하 기대" 테마는 현재 상황과 맞지 않으므로 생성 금지. 대신 "금리 인상 대비", "고금리 수혜", "예금·보험 유입" 등 인상 방향 테마를 생성할 것.`;
+          } else if (krCpiNum < krRateNum - 0.3) {
+            rateDirection = `\n💡 금리 방향 판단: 물가(${krCpiNum}%)가 기준금리(${krRateNum}%) 아래 → 금리 인하 여력 존재. "금리인하 기대" 테마 생성 가능.`;
+          } else {
+            rateDirection = `\n💡 금리 방향 판단: 물가(${krCpiNum}%)와 기준금리(${krRateNum}%) 비슷 → 동결 또는 소폭 인하 가능성. 확정적 방향 테마는 신중하게 생성할 것.`;
+          }
+        }
         rateContext = `=== 현재 금리·물가 실데이터 ===
-${parts.join(", ")}
-※ 금리 관련 테마를 선정할 때는 반드시 위 실제 수치를 기준으로 금리 방향(인상/동결/인하)을 판단하세요.
+${parts.join(", ")}${rateDirection}
 ===`;
       }
     }
@@ -923,8 +957,33 @@ ${parts.join(", ")}
     },
   });
 
-  const themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
+  let themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
   if (!themes || !Array.isArray(themes) || themes.length === 0) throw new Error("parse fail");
+
+  // ── 금리 방향 사후 교정 ────────────────────────────────────────────────────
+  // AI가 프롬프트 경고를 무시하고 틀린 방향 테마를 생성할 경우 서버에서 교체
+  try {
+    const krRateNum = typeof krRate === "number" ? krRate : parseFloat(String(krRate ?? ""));
+    const krCpiNum  = typeof krCpi  === "number" ? krCpi  : parseFloat(String(krCpi  ?? ""));
+    if (!isNaN(krRateNum) && !isNaN(krCpiNum) && krCpiNum > krRateNum + 0.3) {
+      // 물가 > 기준금리 → 인상 압력: "금리인하" 테마 교체
+      themes = themes.map(t => {
+        const txt = `${t.name} ${t.description}`.toLowerCase();
+        if (txt.includes("금리인하") || txt.includes("금리 인하")) {
+          console.log(`[themes] 금리 방향 교정: "${t.name}" → "고금리 수혜" (CPI ${krCpiNum}% > 기준금리 ${krRateNum}%)`);
+          return {
+            ...t,
+            id: "high_rate_beneficiary",
+            name: "고금리 수혜주",
+            description: "물가 상승·금리인상 기대, 보험·은행 이익 개선",
+            emoji: "🏦",
+          };
+        }
+        return t;
+      });
+    }
+  } catch { /* 교정 실패 시 원본 유지 */ }
+
   return themes;
 }
 
