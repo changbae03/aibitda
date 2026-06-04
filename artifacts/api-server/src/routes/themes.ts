@@ -469,24 +469,45 @@ async function discoverThemeFast(
     ? "정확히 7개 (한국 코스닥 중소형주만)"
     : "정확히 7개: 한국 5개 + 미국 2개";
 
+  const systemInstruction = `당신은 한국 주식시장 테마주 전문 애널리스트입니다. 증권사 리서치센터에서 15년간 테마주·섹터 분석을 담당했으며, 다음 원칙을 철저히 지킵니다:
+
+1. 종목 선정 원칙
+   - 해당 기업의 실제 매출·사업에서 테마 연관 매출 비중이 명확한 종목만 선정
+   - 회사 이름이나 업종 분류가 비슷해 보여도 실질 사업이 다르면 절대 선정하지 않음
+     예) 도메인/호스팅 회사 → 방산 테마 불가 / 자동차 회사 → 조선 테마 불가
+   - KRX 후보 목록에 없는 종목은 확실히 아는 경우에만 추가 (불확실하면 목록 내에서만 선정)
+   
+2. 시장 분류 원칙
+   - 코스닥/중소형 테마: 코스닥 상장 기업 + 시총 2조 미만 → 삼성전자·SK하이닉스 등 코스피 대형주 절대 제외
+   - 일반 테마: 대형주(직접 수혜 핵심주) + 중소형주(부품·소재·장비 공급사) 균형 있게 선정
+
+3. 출력 형식
+   - rationale: 그 기업이 테마에서 수혜를 받는 구체적 이유 (매출 연관성, 수주 현황, 공급망 위치 등) 한 문장으로
+   - sector: 해당 기업의 실제 업종 (테마명이 아닌 실제 사업 분류)
+   - 마크다운 없이 JSON만 출력`;
+
   const prompt = `투자 테마: "${theme.name}" — ${theme.description}
 
-아래 KRX 후보 종목(코드+이름) 목록에서 + 필요하면 추가 종목으로 ${totalNote}를 선정하세요.
+아래 KRX 후보 종목(코드+이름) 목록에서 ${totalNote}를 선정하세요.
 
-【KRX 후보 종목】(아래 중 직접 수혜 종목 우선 사용, 코드 그대로 사용):
+【KRX 후보 종목】(직접 수혜 종목 우선, 코드 그대로 사용):
 ${candidateLines || "없음 — 직접 선정"}
 
 ${krComposition}${usComposition}
 
-【제외】지주사·금융주·ETF·SPAC
+【제외】지주사·금융주·ETF·SPAC·테마와 실질 연관 없는 기업
 
-마크다운 없이 JSON만:
-{"summary":"30자 이내 테마 요약","stocks":[{"ticker":"094820","name":"일진파워","market":"KR","sector":"전력기기","rationale":"HVDC 부품 납품"},{"ticker":"GEV","name":"GE Vernova","market":"US","sector":"전력","rationale":"HVDC 시스템"}]}`;
+JSON만 출력:
+{"summary":"30자 이내 테마 요약","stocks":[{"ticker":"094820","name":"일진파워","market":"KR","sector":"전력기기","rationale":"HVDC 케이블 접속재 독점 공급, 수주 급증"},{"ticker":"GEV","name":"GE Vernova","market":"US","sector":"전력","rationale":"HVDC 시스템 글로벌 1위, 북미 데이터센터 전력 수주 확대"}]}`;
 
   const resp = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
+    config: {
+      temperature: 0.3,
+      thinkingConfig: { thinkingBudget: 0 },
+      systemInstruction,
+    },
   });
 
   const rawText = resp.text ?? "";
@@ -749,10 +770,22 @@ ${parts.join(", ")}
 마크다운 없이 아래 JSON 배열만 출력하세요:
 [{"id":"영문_스네이크","name":"한글 테마명(10자 이내)","description":"수급 이유 한 줄(20자 이내)","emoji":"이모지"}]`;
 
+  const themeAnalystSystem = `당신은 한국 주식시장 테마주 전문 애널리스트입니다. 기관·외국인 수급 데이터를 기반으로 시장을 주도하는 투자 테마를 발굴하는 것이 전문입니다.
+
+핵심 원칙:
+- 실제 KRX 수급 데이터와 뉴스를 교차 검증하여 테마를 선정합니다
+- 금리·환율 등 매크로 지표는 반드시 제공된 실데이터 수치 기준으로 판단합니다 (훈련 데이터의 과거 방향을 투영하지 않음)
+- "AI 반도체", "2차전지" 같은 만년 테마가 아니라, 지금 이 순간 수급이 집중되는 구체적 드라이버(특정 수주·정책·실적 발표)를 포착합니다
+- 이미 종료된 이벤트(과거 선거·지나간 실적 시즌 등)는 절대 테마로 선정하지 않습니다`;
+
   const resp = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
+    config: {
+      temperature: 0.5,
+      thinkingConfig: { thinkingBudget: 0 },
+      systemInstruction: themeAnalystSystem,
+    },
   });
 
   const themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
