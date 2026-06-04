@@ -314,7 +314,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v6";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v7";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -450,16 +450,17 @@ async function discoverThemeFast(
   const isKospiLargeCap  = ["코스피", "대형주", "블루칩"].some(kw => themeTextLower.includes(kw));
 
   const krComposition = isKosdaqSmallCap
-    ? `【한국 7개 — 반드시 코스닥 상장 중소형주만 (시총 2조 미만), 코스피 대형주(삼성전자·SK하이닉스·현대차 등) 절대 제외】
-   ticker 필드에 반드시 6자리 숫자 코드`
+    ? `【한국 7개 — 반드시 위 KRX 후보 목록 코드만 사용, 코스닥 상장 중소형주만, 코스피 대형주 절대 제외】
+   ※ 후보 목록에 없는 코드는 절대 사용 금지`
     : isKospiLargeCap
-    ? `【한국 5개 구성 — ticker 필드에 반드시 6자리 숫자 코드】
+    ? `【한국 5개 구성 — 반드시 위 KRX 후보 목록 코드만 사용】
 ① 대형주 3개: 코스피 핵심 대기업 (시총 2조 이상)
-② 중형주 2개: 관련 중견기업`
-    : `【한국 5개 구성 — ticker 필드에 반드시 6자리 숫자 코드】
+② 중형주 2개: 관련 중견기업
+   ※ 후보 목록에 없는 코드는 절대 사용 금지`
+    : `【한국 5개 구성 — 반드시 위 KRX 후보 목록 코드만 사용】
 ① 대형주 2개: 테마 핵심 대기업 (시총 2조 이상)
 ② 중소형주 3개: 핵심 부품·소재·장비 납품 중소기업 (시총 2조 미만)
-   후보 없으면 실존 코스피/코스닥 종목코드로 직접 작성`;
+   ※ 후보 목록에 없는 코드는 절대 사용 금지 — 부족해도 목록 안에서만 선정`;
 
   const usComposition = isKosdaqSmallCap
     ? "" // 코스닥 중소형주 테마엔 미국 종목 불필요
@@ -584,6 +585,12 @@ JSON만 출력:
       tickers: ["263750", "036570", "251270", "035420", "035720", "293490", "112040", "194480", "377300", "259960"],
       badThemeKW: ["바이오", "제약", "치료제", "glp", "mrna", "백신", "임상", "cmo", "위탁생산", "방산", "k-방산", "조선", "hvdc", "변압기"],
     },
+    {
+      // 영화관·엔터·미디어 기업 — 방산·반도체·조선·HVDC 테마 차단
+      tickers: ["079160", "036120", "035760", "041510", "067160"],
+      // CJ CGV, 씨젠(혼동 방지), CJ ENM, S.M., 하이브
+      badThemeKW: ["방산", "k-방산", "k방산", "방위", "무기", "반도체", "조선", "lng", "hvdc", "변압기", "바이오", "제약"],
+    },
   ];
   const themeKwLower = `${theme.name} ${theme.description}`.toLowerCase();
   stocks = stocks.filter(s => {
@@ -595,6 +602,16 @@ JSON만 출력:
       }
     }
     return true;
+  });
+
+  // ── 후보 목록 외 KR 종목 차단 (hallucination 핵심 방어선) ────────────────
+  // AI가 후보 목록에 없는 코드를 임의로 추가하는 것을 서버에서 최종 차단
+  stocks = stocks.filter(s => {
+    if (s.market !== "KR") return true; // 미국 종목은 통과
+    if (candidateMap.has(s.ticker)) return true; // 후보 목록 내 → 통과
+    // 후보 목록 밖 → 차단 (로그 남김)
+    console.log(`[themes][discoverFast] 후보목록 외 제거: ${s.ticker}(${s.name}) ← "${theme.name}"`);
+    return false;
   });
 
   // 중복 제거
