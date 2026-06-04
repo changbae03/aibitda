@@ -314,7 +314,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v5";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v6";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -361,9 +361,20 @@ async function rebuildFeedInBackground(): Promise<void> {
   if (feedRebuildInProgress) return;
   feedRebuildInProgress = true;
   try {
-    const themes: TrendingTheme[] = trendingCache?.themes?.length
-      ? trendingCache.themes
-      : FALLBACK_THEMES;
+    // trendingCache가 유효하면 재사용, 없으면 AI로 새로 생성 (FALLBACK 대신)
+    let themes: TrendingTheme[];
+    if (trendingCache && Date.now() - trendingCache.cachedAt < TRENDING_TTL) {
+      themes = trendingCache.themes;
+    } else {
+      try {
+        themes = await generateTrendingThemes();
+        trendingCache = { themes, cachedAt: Date.now() };
+        console.log("[themes] 트렌딩 테마 AI 생성 완료:", themes.map(t => t.name).join(", "));
+      } catch (e) {
+        console.warn("[themes] AI 생성 실패, 폴백 사용:", e);
+        themes = FALLBACK_THEMES;
+      }
+    }
     const krxList = await loadKRXList().catch(() => getKRXCache());
     const settled = await Promise.allSettled(
       themes.map(t => discoverThemeFast(t, krxList))
@@ -585,67 +596,55 @@ const FALLBACK_THEMES: TrendingTheme[] = [
   { id: "battery_solid",     name: "전고체 배터리",    description: "2027 양산 경쟁·소재·장비주 선반영",   emoji: "🔋" },
 ];
 
-router.get("/themes/trending", async (_req, res) => {
+/** AI + KRX 실데이터로 트렌딩 테마 8개 생성 (캐시 미고려 순수 생성) */
+async function generateTrendingThemes(): Promise<TrendingTheme[]> {
+  const kstNow = new Date(Date.now() + 9 * 3600_000);
+  const today = `${kstNow.getUTCFullYear()}년 ${kstNow.getUTCMonth() + 1}월 ${kstNow.getUTCDate()}일`;
+
+  // ── 최근 3거래일 기관·외국인 순매수 실데이터 ────────────────────────────
+  const toDate = kstNow.toISOString().slice(0, 10);
+  const fromDateObj = new Date(kstNow);
+  fromDateObj.setDate(fromDateObj.getDate() - 7); // 주말·공휴일 포함해도 3거래일 확보
+  const fromDate = fromDateObj.toISOString().slice(0, 10);
+
+  let investorContext = "";
   try {
-    if (trendingCache && Date.now() - trendingCache.cachedAt < TRENDING_TTL) {
-      return res.json(trendingCache.themes);
-    }
-
-    // KST 기준 오늘 날짜 (서버가 UTC여도 정확하게)
-    const kstDate = new Date(Date.now() + 9 * 3600_000);
-    const today = `${kstDate.getUTCFullYear()}년 ${kstDate.getUTCMonth() + 1}월 ${kstDate.getUTCDate()}일`;
-
-    // ── 최근 3 거래일 기관·외국인 순매수 실데이터 수집 ─────────────────────
-    const kstNow = new Date(Date.now() + 9 * 3600_000);
-    const toDate = kstNow.toISOString().slice(0, 10);
-    // 5 영업일 전부터 조회하면 주말·공휴일이 끼어도 3거래일치 확보 가능
-    const fromDateObj = new Date(kstNow);
-    fromDateObj.setDate(fromDateObj.getDate() - 7);
-    const fromDate = fromDateObj.toISOString().slice(0, 10);
-
-    let investorContext = "";
-    try {
-      const [kospiRows, kosdaqRows] = await Promise.all([
-        fetchInvestorData("KOSPI",  fromDate, toDate),
-        fetchInvestorData("KOSDAQ", fromDate, toDate),
-      ]);
-
-      const fmt = (rows: typeof kospiRows) =>
-        rows.slice(-3).map(r =>
-          `  ${r.date}: 외국인 ${r.foreign >= 0 ? "+" : ""}${r.foreign.toLocaleString()}억, 기관 ${r.institution >= 0 ? "+" : ""}${r.institution.toLocaleString()}억`
-        ).join("\n");
-
-      const kospiText  = fmt(kospiRows);
-      const kosdaqText = fmt(kosdaqRows);
-
-      if (kospiText || kosdaqText) {
-        investorContext = `
-=== 최근 3거래일 실제 기관·외국인 순매수 (KRX 데이터) ===
+    const [kospiRows, kosdaqRows] = await Promise.all([
+      fetchInvestorData("KOSPI",  fromDate, toDate),
+      fetchInvestorData("KOSDAQ", fromDate, toDate),
+    ]);
+    const fmt = (rows: typeof kospiRows) =>
+      rows.slice(-3).map(r =>
+        `  ${r.date}: 외국인 ${r.foreign >= 0 ? "+" : ""}${r.foreign.toLocaleString()}억, 기관 ${r.institution >= 0 ? "+" : ""}${r.institution.toLocaleString()}억`
+      ).join("\n");
+    const kospiText  = fmt(kospiRows);
+    const kosdaqText = fmt(kosdaqRows);
+    if (kospiText || kosdaqText) {
+      investorContext = `=== 최근 3거래일 실제 기관·외국인 순매수 (KRX 데이터) ===
 [KOSPI]
 ${kospiText || "  데이터 없음"}
 
 [KOSDAQ]
 ${kosdaqText || "  데이터 없음"}
 ===`;
-      }
-    } catch { /* pykrx 실패 시 무시 */ }
+    }
+  } catch { /* pykrx 실패 시 무시 */ }
 
-    // 시장 브리핑 데이터 (뉴스·키워드)
-    let briefContext = "";
-    try {
-      const MARKET_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
-      const briefRes = await fetch(`http://localhost:${MARKET_PORT}/api/market-analysis/brief`);
-      if (briefRes.ok) {
-        const brief = await briefRes.json() as Record<string, unknown>;
-        const events = (brief.marketEvents as Array<{title:string;direction:string}> | undefined)
-          ?.map(e => `- ${e.title} (${e.direction === "positive" ? "긍정" : e.direction === "negative" ? "부정" : "중립"})`)
-          .join("\n") ?? "";
-        const topics = (brief.keyTopics as Array<{keyword:string;description:string}> | undefined)
-          ?.map(t => `- ${t.keyword}: ${t.description}`)
-          .join("\n") ?? "";
-        if (events || topics) {
-          briefContext = `
-=== 시장 뉴스·키워드 ===
+  // ── 시장 브리핑 (뉴스·키워드) ───────────────────────────────────────────
+  let briefContext = "";
+  try {
+    const MARKET_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
+    const briefRes = await fetch(`http://localhost:${MARKET_PORT}/api/market-analysis/brief`);
+    if (briefRes.ok) {
+      const brief = await briefRes.json() as Record<string, unknown>;
+      const events = (brief.marketEvents as Array<{title:string;direction:string}> | undefined)
+        ?.map(e => `- ${e.title} (${e.direction === "positive" ? "긍정" : e.direction === "negative" ? "부정" : "중립"})`)
+        .join("\n") ?? "";
+      const topics = (brief.keyTopics as Array<{keyword:string;description:string}> | undefined)
+        ?.map(t => `- ${t.keyword}: ${t.description}`)
+        .join("\n") ?? "";
+      if (events || topics) {
+        briefContext = `=== 시장 뉴스·키워드 ===
 코스피: ${brief.kospiCurrent ?? ""} (${(brief.kospiChange as number) >= 0 ? "+" : ""}${brief.kospiChange ?? ""}%)
 코스닥: ${brief.kosdaqCurrent ?? ""}
 주요 이벤트:
@@ -653,13 +652,13 @@ ${events}
 핵심 키워드:
 ${topics}
 ===`;
-        }
       }
-    } catch { /* 브리핑 실패 시 무시 */ }
+    }
+  } catch { /* 브리핑 실패 시 무시 */ }
 
-    const contextBlock = [investorContext, briefContext].filter(Boolean).join("\n");
+  const contextBlock = [investorContext, briefContext].filter(Boolean).join("\n\n");
 
-    const prompt = `오늘은 ${today}입니다.${contextBlock ? "\n" + contextBlock : ""}
+  const prompt = `오늘은 ${today}입니다.${contextBlock ? "\n\n" + contextBlock : ""}
 
 위 실제 데이터를 바탕으로, 최근 3거래일 기준 기관·외국인 순매수가 집중된 테마 8개를 선정해주세요.
 
@@ -672,17 +671,25 @@ ${topics}
 마크다운 없이 아래 JSON 배열만 출력하세요:
 [{"id":"영문_스네이크","name":"한글 테마명(10자 이내)","description":"수급 이유 한 줄(20자 이내)","emoji":"이모지"}]`;
 
-    const resp = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
-    });
+  const resp = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: { temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
+  });
 
-    const themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
-    if (!themes || !Array.isArray(themes) || themes.length === 0) throw new Error("parse fail");
+  const themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
+  if (!themes || !Array.isArray(themes) || themes.length === 0) throw new Error("parse fail");
+  return themes;
+}
 
+router.get("/themes/trending", async (_req, res) => {
+  try {
+    if (trendingCache && Date.now() - trendingCache.cachedAt < TRENDING_TTL) {
+      return res.json(trendingCache.themes);
+    }
+    const themes = await generateTrendingThemes();
     trendingCache = { themes, cachedAt: Date.now() };
-    invalidateFeedCache(); // 트렌딩 갱신 시 피드도 재생성
+    invalidateFeedCache();
     return res.json(themes);
   } catch (e) {
     console.error("[themes/trending]", e);
