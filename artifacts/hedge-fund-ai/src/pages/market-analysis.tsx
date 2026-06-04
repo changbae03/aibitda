@@ -293,12 +293,7 @@ function MarketBriefSection({
                     {paras.map((para, i) => (
                       <p
                         key={i}
-                        className={cn(
-                          "leading-[1.95]",
-                          i === 0
-                            ? "text-[14.5px] text-foreground/85 font-semibold"
-                            : "text-[14px] text-foreground/70"
-                        )}
+                        className="text-[14px] text-foreground/75 font-medium leading-[1.95]"
                       >
                         {para}
                       </p>
