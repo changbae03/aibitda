@@ -541,6 +541,11 @@ ${krComposition}${usComposition}
       badThemeKW: ["코스닥", "중소형", "소형주"],
     },
     {
+      // IT·도메인·호스팅 기업 — 방산·조선·HVDC·반도체·바이오 테마 차단
+      tickers: ["079940", "047050", "035600"], // 가비아, 네이블, K아이컴 등 IT서비스
+      badThemeKW: ["방산", "k-방산", "k방산", "방위", "무기", "탄약", "함정", "전차", "조선", "lng", "hvdc", "변압기", "반도체", "바이오", "제약"],
+    },
+    {
       tickers: ["003490", "020560"], // 대한항공, 아시아나 등 항공사
       badThemeKW: ["hvdc", "변압기", "방산", "조선", "lng", "반도체", "배터리", "바이오"],
     },
@@ -676,7 +681,7 @@ ${kosdaqText || "  데이터 없음"}
     }
   } catch { /* pykrx 실패 시 무시 */ }
 
-  // ── 시장 브리핑 (뉴스·키워드) ───────────────────────────────────────────
+  // ── 시장 브리핑 (뉴스·키워드) + 금리 실데이터 ────────────────────────────
   let briefContext = "";
   try {
     const MARKET_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
@@ -702,7 +707,33 @@ ${topics}
     }
   } catch { /* 브리핑 실패 시 무시 */ }
 
-  const contextBlock = [investorContext, briefContext].filter(Boolean).join("\n\n");
+  // ── 금리 실데이터 (FRED/ECOS) ────────────────────────────────────────────
+  let rateContext = "";
+  try {
+    const macroRes = await fetch(`http://localhost:8080/api/macro/dashboard`);
+    if (macroRes.ok) {
+      const macro = await macroRes.json() as Record<string, any>;
+      const krRate   = macro?.kr?.기준금리   ?? macro?.기준금리   ?? null;
+      const usRate   = macro?.us?.기준금리목표 ?? macro?.기준금리목표 ?? null;
+      const us10y    = macro?.us?.["10Y"]   ?? macro?.["10Y"]   ?? null;
+      const krCpi    = macro?.kr?.CPI_YoY   ?? macro?.CPI_YoY   ?? null;
+      const usCpi    = macro?.us?.CPI_YoY   ?? null;
+      const parts: string[] = [];
+      if (krRate  != null) parts.push(`한국 기준금리: ${krRate}%`);
+      if (usRate  != null) parts.push(`미국 기준금리: ${usRate}`);
+      if (us10y   != null) parts.push(`미국 10년 국채: ${us10y}%`);
+      if (krCpi   != null) parts.push(`한국 CPI(YoY): ${krCpi}%`);
+      if (usCpi   != null) parts.push(`미국 CPI(YoY): ${usCpi}%`);
+      if (parts.length) {
+        rateContext = `=== 현재 금리·물가 실데이터 ===
+${parts.join(", ")}
+※ 금리 관련 테마를 선정할 때는 반드시 위 실제 수치를 기준으로 금리 방향(인상/동결/인하)을 판단하세요.
+===`;
+      }
+    }
+  } catch { /* 실패 시 무시 */ }
+
+  const contextBlock = [investorContext, rateContext, briefContext].filter(Boolean).join("\n\n");
 
   const prompt = `오늘은 ${today}입니다.${contextBlock ? "\n\n" + contextBlock : ""}
 
@@ -711,6 +742,7 @@ ${topics}
 조건:
 - KRX 실데이터에서 기관·외국인이 실제로 순매수한 섹터·테마를 최우선으로 반영하세요
 - 반드시 ${today} 시점에도 진행 중인 이슈여야 합니다 — 이미 종료된 이벤트는 절대 제외
+- 금리 관련 테마는 위 실데이터(기준금리·CPI·장기금리) 기준으로 현재 방향(인상/동결/인하)을 정확히 반영하세요 — 실데이터와 다른 방향의 테마 생성 금지
 - "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하고 구체적인 수급 드라이버(수주·정책·실적·이벤트)를 명시하세요
 - 한국 코스피·코스닥 중심, 관련 미국 시장 테마도 포함 가능
 
