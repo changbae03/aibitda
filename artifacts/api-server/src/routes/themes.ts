@@ -314,7 +314,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v13";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v14";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -983,6 +983,15 @@ ${parts.join(", ")}${rateDirection}
       });
     }
   } catch { /* 교정 실패 시 원본 유지 */ }
+
+  // ── 중복 테마 제거 (이름 기준, 첫 번째 유지) ─────────────────────────────
+  const seen = new Set<string>();
+  themes = themes.filter(t => {
+    const key = t.name.trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   return themes;
 }
