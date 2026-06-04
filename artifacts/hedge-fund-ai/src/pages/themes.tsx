@@ -163,7 +163,7 @@ export default function ThemesPage() {
           <h1 className="text-lg font-semibold text-foreground">핫 테마 피드</h1>
         </div>
         <p className="text-sm text-foreground/55">
-          최근 1~2주 수급이 몰리는 테마와 관련주를 자동으로 분석합니다 · 3시간마다 갱신
+          최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신
         </p>
       </div>
 

@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import AdmZip from "adm-zip";
 import { pool } from "@workspace/db";
 import { loadKRXList, getKRXCache } from "../lib/krx-cache";
+import { fetchInvestorData } from "../lib/pykrx-client";
 
 const router = Router();
 
@@ -594,7 +595,42 @@ router.get("/themes/trending", async (_req, res) => {
     const kstDate = new Date(Date.now() + 9 * 3600_000);
     const today = `${kstDate.getUTCFullYear()}년 ${kstDate.getUTCMonth() + 1}월 ${kstDate.getUTCDate()}일`;
 
-    // 실제 시장 브리핑 데이터를 컨텍스트로 가져옴 (실패해도 무시)
+    // ── 최근 3 거래일 기관·외국인 순매수 실데이터 수집 ─────────────────────
+    const kstNow = new Date(Date.now() + 9 * 3600_000);
+    const toDate = kstNow.toISOString().slice(0, 10);
+    // 5 영업일 전부터 조회하면 주말·공휴일이 끼어도 3거래일치 확보 가능
+    const fromDateObj = new Date(kstNow);
+    fromDateObj.setDate(fromDateObj.getDate() - 7);
+    const fromDate = fromDateObj.toISOString().slice(0, 10);
+
+    let investorContext = "";
+    try {
+      const [kospiRows, kosdaqRows] = await Promise.all([
+        fetchInvestorData("KOSPI",  fromDate, toDate),
+        fetchInvestorData("KOSDAQ", fromDate, toDate),
+      ]);
+
+      const fmt = (rows: typeof kospiRows) =>
+        rows.slice(-3).map(r =>
+          `  ${r.date}: 외국인 ${r.foreign >= 0 ? "+" : ""}${r.foreign.toLocaleString()}억, 기관 ${r.institution >= 0 ? "+" : ""}${r.institution.toLocaleString()}억`
+        ).join("\n");
+
+      const kospiText  = fmt(kospiRows);
+      const kosdaqText = fmt(kosdaqRows);
+
+      if (kospiText || kosdaqText) {
+        investorContext = `
+=== 최근 3거래일 실제 기관·외국인 순매수 (KRX 데이터) ===
+[KOSPI]
+${kospiText || "  데이터 없음"}
+
+[KOSDAQ]
+${kosdaqText || "  데이터 없음"}
+===`;
+      }
+    } catch { /* pykrx 실패 시 무시 */ }
+
+    // 시장 브리핑 데이터 (뉴스·키워드)
     let briefContext = "";
     try {
       const MARKET_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
@@ -607,34 +643,31 @@ router.get("/themes/trending", async (_req, res) => {
         const topics = (brief.keyTopics as Array<{keyword:string;description:string}> | undefined)
           ?.map(t => `- ${t.keyword}: ${t.description}`)
           .join("\n") ?? "";
-        const issues = (brief.recentIssues as string[] | undefined)?.join(", ") ?? "";
         if (events || topics) {
           briefContext = `
-=== 실제 시장 데이터 (AI 모델 분석 결과) ===
+=== 시장 뉴스·키워드 ===
 코스피: ${brief.kospiCurrent ?? ""} (${(brief.kospiChange as number) >= 0 ? "+" : ""}${brief.kospiChange ?? ""}%)
 코스닥: ${brief.kosdaqCurrent ?? ""}
-
-최근 주요 이벤트:
+주요 이벤트:
 ${events}
-
 핵심 키워드:
 ${topics}
-
-최근 이슈: ${issues}
 ===`;
         }
       }
-    } catch { /* 브리핑 실패 시 날짜만으로 진행 */ }
+    } catch { /* 브리핑 실패 시 무시 */ }
 
-    const prompt = `오늘은 ${today}입니다.${briefContext ? "\n" + briefContext : ""}
+    const contextBlock = [investorContext, briefContext].filter(Boolean).join("\n");
 
-위 실제 시장 데이터를 바탕으로, ${today} 기준 한국·글로벌 주식시장에서 기관·외국인 수급이 실제로 몰리고 있는 테마와 섹터 8개를 선정해주세요.
+    const prompt = `오늘은 ${today}입니다.${contextBlock ? "\n" + contextBlock : ""}
+
+위 실제 데이터를 바탕으로, 최근 3거래일 기준 기관·외국인 순매수가 집중된 테마 8개를 선정해주세요.
 
 조건:
-- 위 시장 데이터에서 드러난 실제 수급 흐름과 이슈를 우선 반영하세요
-- 반드시 ${today} 시점에도 진행 중인 이슈여야 합니다 — 이미 종료된 이벤트(미국 대선 등 과거 행사)는 절대 제외
-- "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하고 구체적인 드라이버(수주·정책·실적)를 명시하세요
-- 한국 코스피·코스닥과 미국 시장 모두 커버
+- KRX 실데이터에서 기관·외국인이 실제로 순매수한 섹터·테마를 최우선으로 반영하세요
+- 반드시 ${today} 시점에도 진행 중인 이슈여야 합니다 — 이미 종료된 이벤트는 절대 제외
+- "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하고 구체적인 수급 드라이버(수주·정책·실적·이벤트)를 명시하세요
+- 한국 코스피·코스닥 중심, 관련 미국 시장 테마도 포함 가능
 
 마크다운 없이 아래 JSON 배열만 출력하세요:
 [{"id":"영문_스네이크","name":"한글 테마명(10자 이내)","description":"수급 이유 한 줄(20자 이내)","emoji":"이모지"}]`;
