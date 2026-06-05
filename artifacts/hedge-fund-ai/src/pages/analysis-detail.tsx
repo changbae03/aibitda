@@ -4816,7 +4816,13 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               companyName={companyName}
               companyNameEn={companyNameEn}
               chartLevels={chartLevels ?? undefined}
-              validatedTargetPrice={validatedTargetPrice ?? undefined}
+              validatedTargetPrice={
+                // finalValuationData.base(밸류에이션 패널 원본)가 있으면 우선 사용
+                // — DB targetPrice는 과거 2.5x 캡으로 잘린 경우가 있어 불일치 발생
+                (finalValuationData?.base && finalValuationData.base > 0)
+                  ? finalValuationData.base
+                  : (validatedTargetPrice ?? undefined)
+              }
               events={chartEvents}
               currency={priceCurrency}
               isEn={isEn}

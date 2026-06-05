@@ -6339,9 +6339,11 @@ async function executeStep(
         }
 
         if (savedStartPrice && savedStartPrice > 0) {
-          // ── 목표주가 하드캡: KR 3.5x / US 4.5x ─────────────────────────
+          // ── 목표주가 하드캡: KR 6.0x / US 8.0x ─────────────────────────
           // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
-          const TARGET_MAX_RATIO = isKR ? 2.5 : 4.0;
+          // ⚠️ 2.5x 캡은 소형 바이오·턴어라운드 종목의 합리적 고업사이드를 잘라내는 문제가 있어 6.0x로 완화
+          // (예: 10,660원 종목 → 53,600원 목표가 = 5.03x → 구 2.5x 캡 시 26,650원으로 잘림 → 6.0x 이상이면 보존)
+          const TARGET_MAX_RATIO = isKR ? 6.0 : 8.0;
           const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
