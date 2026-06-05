@@ -985,6 +985,29 @@ export default function NewAnalysis() {
               </p>
             )}
 
+            {/* 비로그인 → 적정주가 로그인 유도 */}
+            {user === null && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 mb-4 flex items-center gap-3">
+                <Lock className="w-4 h-4 text-amber-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12.5px] font-semibold text-foreground/80 leading-snug">
+                    {isEn ? "Log in to unlock the target price" : "로그인하면 적정주가를 볼 수 있어요"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {isEn ? "Valuation · Investment strategy · Full report" : "밸류에이션 · 투자전략 · 전체 리포트 공개"}
+                  </p>
+                </div>
+                <a
+                  href="/login"
+                  className="shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-bold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: "#FF8A7A" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {isEn ? "Log in" : "로그인"}
+                </a>
+              </div>
+            )}
+
             {/* 버튼 */}
             <div className="flex gap-2.5">
               <button
