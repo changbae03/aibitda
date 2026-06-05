@@ -425,6 +425,11 @@ async function generateBrief(): Promise<MarketBriefResult> {
 첫 문장은 반드시 시장 상황·수치·이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
 "안녕하세요", "여러분", "개인 투자자 여러분", "오늘도", "반갑습니다", "잘 지내고 계신가요", "좋은 아침", "안녕들 하세요", 날짜·요일로 시작하는 인삿말, 날씨·계절 언급, 감성적 서두.
 
+⚠️ 간밤 미국 시장 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
+S&P500: ${snpL ? `${snpL.close.toLocaleString()}pt, ${snpL.change != null ? (snpL.change > 0 ? `▲+${snpL.change}% 상승` : snpL.change < 0 ? `▼${snpL.change}% 하락` : "보합") : "N/A"}` : "데이터 없음"}
+나스닥: ${nasdaqL ? `${nasdaqL.close.toLocaleString()}pt, ${nasdaqL.change != null ? (nasdaqL.change > 0 ? `▲+${nasdaqL.change}% 상승` : nasdaqL.change < 0 ? `▼${nasdaqL.change}% 하락` : "보합") : "N/A"}` : "데이터 없음"}
+→ 미국 지수가 하락했으면 반드시 하락으로, 상승했으면 상승으로 서술하세요.
+
 [간밤 미국 주요 지수 (최신)]
 ${usIndicesBlock || "데이터 없음"}
 
@@ -483,6 +488,7 @@ ${keyTopicsSchema},
 }
 
 작성 원칙:
+- ⚠️ 최우선 수칙: 프롬프트 상단 "간밤 미국 시장 방향" 블록의 S&P500·나스닥 등락을 반드시 그대로 사용하세요. 미국 지수가 하락했으면 하락으로 서술해야 합니다. 이를 어기면 심각한 사실 오보입니다.
 - 미국 지수 수치(S&P500, 나스닥, 다우, SOX)와 달러인덱스를 구체적으로 인용하세요
 - SOX(필라델피아 반도체)는 삼성전자·SK하이닉스와 직결되므로 반드시 포함하세요
 - 달러 강약이 원화·수출주에 미치는 영향을 설명하세요
@@ -495,10 +501,19 @@ ${keyTopicsRule}
 - 문체: 친근한 해요체`;
 
   // ── 장마감 프롬프트 ────────────────────────────────────────────────────────
+  // 방향 guardrail 헬퍼
+  const dirLabel = (ch: number | null) =>
+    ch == null ? "N/A" : ch > 0 ? `▲+${ch}% 상승 마감` : ch < 0 ? `▼${ch}% 하락 마감` : "보합";
+
   const closingPrompt = `당신은 시장 해설가입니다. 오늘은 ${today}입니다.
 오늘 한국 주식시장이 마감됐어요. 오늘 어떤 일이 있었는지, 왜 그랬는지, 앞으로 어떻게 될지를 쉽게 설명해 주세요.
 첫 문장은 반드시 오늘 시장 수치나 핵심 이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
 "안녕하세요", "여러분", "개인 투자자 여러분", "오늘도", "반갑습니다", "잘 지내고 계신가요", "좋은 저녁", 날짜·요일로 시작하는 인삿말, 감성적 서두.
+
+⚠️ 오늘 한국 시장 마감 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
+코스피: ${kospiLatest ? `${kospiLatest.close.toLocaleString()}pt, ${dirLabel(kospiLatest.change)}` : "데이터 없음"}
+코스닥: ${kosdaqLatest ? `${kosdaqLatest.close.toLocaleString()}pt, ${dirLabel(kosdaqLatest.change)}` : "데이터 없음"}
+→ 코스피가 하락이면 반드시 "하락 마감"으로, 상승이면 "상승 마감"으로 서술하세요. 뉴스나 특정 섹터가 좋더라도 지수 전체가 하락이면 하락입니다.
 
 [오늘 포함 최근 5거래일 KOSPI]
 ${kospiHistory}
@@ -559,6 +574,7 @@ ${keyTopicsSchema},
 }
 
 작성 원칙:
+- ⚠️ 최우선 수칙: 프롬프트 최상단 "오늘 한국 시장 마감 방향" 블록의 코스피·코스닥 등락을 반드시 그대로 사용하세요. 코스피가 하락이면 storyLine·leadParagraph에도 하락으로, sentiment도 bearish(또는 neutral)로 써야 합니다. 뉴스 헤드라인이 긍정적이어도 지수 전체가 하락이면 하락입니다. 이를 어기면 심각한 사실 오보입니다.
 - 오늘 코스피·코스닥 수치를 구체적으로 인용하세요
 - marketEvents 7개를 반드시 채우세요: 글로벌·기업·정치·반도체·섹터·환율/수급 카테고리를 골고루 커버
 - 삼성전자·SK하이닉스·현대차·LG에너지솔루션 같은 기업 이슈, 정치 이슈(관세·규제·파업 등) 반드시 포함
@@ -574,6 +590,11 @@ ${keyTopicsRule}
 지금 장 중반 흐름이 어떤지, 오후에 어떻게 될지, 마감까지 꼭 챙겨봐야 할 것은 무엇인지 쉽게 설명해 주세요.
 첫 문장은 반드시 현재 지수 수치나 장 중 이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
 "안녕하세요", "여러분", "개인 투자자 여러분", "오늘도", "반갑습니다", 날짜·요일로 시작하는 인삿말, 감성적 서두.
+
+⚠️ 오전 장 현재 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
+코스피: ${kospiLatest ? `${kospiLatest.close.toLocaleString()}pt, ${kospiLatest.change != null ? (kospiLatest.change > 0 ? `▲+${kospiLatest.change}% 상승 중` : kospiLatest.change < 0 ? `▼${kospiLatest.change}% 하락 중` : "보합") : "N/A"}` : "데이터 없음"}
+코스닥: ${kosdaqLatest ? `${kosdaqLatest.close.toLocaleString()}pt, ${kosdaqLatest.change != null ? (kosdaqLatest.change > 0 ? `▲+${kosdaqLatest.change}% 상승 중` : kosdaqLatest.change < 0 ? `▼${kosdaqLatest.change}% 하락 중` : "보합") : "N/A"}` : "데이터 없음"}
+→ 위 방향을 반드시 그대로 서술하세요. 이를 어기면 심각한 사실 오보입니다.
 
 [오전 포함 최근 KOSPI 흐름]
 ${kospiHistory}
