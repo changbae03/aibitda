@@ -302,7 +302,21 @@ async function fetchRecentIndexData() {
   const vix    = extractYahoo(vixData, 3);
   const sox    = extractYahoo(soxData, 3);
   const dxy    = extractYahoo(dxyData, 3);
-  return { kospi, kosdaq, snp500, nasdaq, dow, vix, sox, dxy };
+
+  // ── [날짜 검증] Naver API가 전일 데이터를 반환하는 경우 감지 ─────────────
+  // KRX 결제는 15:30 이후 ~30분 소요 → Naver API가 당일 데이터를 반영하지 않을 수 있음
+  const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const kospiLatestDate  = kospi?.at(-1)?.date ?? null;
+  const kosdaqLatestDate = kosdaq?.at(-1)?.date ?? null;
+  const kospiDataStale  = kospiLatestDate  !== null && kospiLatestDate  < todayKST;
+  const kosdaqDataStale = kosdaqLatestDate !== null && kosdaqLatestDate < todayKST;
+  if (kospiDataStale || kosdaqDataStale) {
+    console.warn(`[market-brief] ⚠️ Naver API 전일 데이터 반환 — KOSPI: ${kospiLatestDate}, KOSDAQ: ${kosdaqLatestDate}, 오늘 KST: ${todayKST}`);
+  } else if (kospiLatestDate) {
+    console.log(`[market-brief] Naver 날짜 검증 OK — KOSPI 최신: ${kospiLatestDate}`);
+  }
+
+  return { kospi, kosdaq, snp500, nasdaq, dow, vix, sox, dxy, kospiDataStale, kosdaqDataStale, todayKST };
 }
 
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
@@ -505,15 +519,34 @@ ${keyTopicsRule}
   const dirLabel = (ch: number | null) =>
     ch == null ? "N/A" : ch > 0 ? `▲+${ch}% 상승 마감` : ch < 0 ? `▼${ch}% 하락 마감` : "보합";
 
+  // 데이터 staleness 경고 블록
+  const dataStaleWarning = (idx?.kospiDataStale || idx?.kosdaqDataStale)
+    ? `\n🚨 데이터 시차 경고: 아래 KOSPI/KOSDAQ 수치는 전일(${idx?.kospi?.at(-1)?.date ?? "??"}) 데이터입니다.
+오늘 마감 데이터가 아직 반영되지 않았습니다. 오늘 방향은 확정할 수 없으므로 "오늘 최종 데이터 기준"이 아닌 "전일 기준" 또는 "장 중 흐름 기준"으로 작성하세요.`
+    : "";
+
+  // 급락·급등 강조 블록 (|변화율| > 3%)
+  const kospiChange  = kospiLatest?.change  ?? 0;
+  const kosdaqChange = kosdaqLatest?.change ?? 0;
+  const extremeMove  = Math.abs(kospiChange) >= 3 || Math.abs(kosdaqChange) >= 3;
+  const extremeBlock = extremeMove
+    ? `\n🚨 대폭 변동 경고: 오늘 코스피(${kospiChange >= 0 ? "+" : ""}${kospiChange}%) 또는 코스닥(${kosdaqChange >= 0 ? "+" : ""}${kosdaqChange}%)이 ±3% 이상의 극단적 움직임을 보였습니다.
+이는 패닉 셀링 또는 급격한 랠리 수준입니다. sentiment는 반드시 ${kospiChange < -3 || kosdaqChange < -3 ? '"bearish"' : '"bullish"'}여야 하고,
+leadParagraph와 storyLine에 이 폭락/급등의 원인과 규모를 반드시 명확히 서술하세요.
+뉴스 헤드라인에 긍정적 내용이 있더라도 지수가 -3% 이상 하락했으면 전반적 하락장으로 서술해야 합니다.`
+    : "";
+
   const closingPrompt = `당신은 시장 해설가입니다. 오늘은 ${today}입니다.
 오늘 한국 주식시장이 마감됐어요. 오늘 어떤 일이 있었는지, 왜 그랬는지, 앞으로 어떻게 될지를 쉽게 설명해 주세요.
 첫 문장은 반드시 오늘 시장 수치나 핵심 이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
 "안녕하세요", "여러분", "개인 투자자 여러분", "오늘도", "반갑습니다", "잘 지내고 계신가요", "좋은 저녁", 날짜·요일로 시작하는 인삿말, 감성적 서두.
+${dataStaleWarning}${extremeBlock}
 
 ⚠️ 오늘 한국 시장 마감 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
 코스피: ${kospiLatest ? `${kospiLatest.close.toLocaleString()}pt, ${dirLabel(kospiLatest.change)}` : "데이터 없음"}
 코스닥: ${kosdaqLatest ? `${kosdaqLatest.close.toLocaleString()}pt, ${dirLabel(kosdaqLatest.change)}` : "데이터 없음"}
 → 코스피가 하락이면 반드시 "하락 마감"으로, 상승이면 "상승 마감"으로 서술하세요. 뉴스나 특정 섹터가 좋더라도 지수 전체가 하락이면 하락입니다.
+→ 데이터 날짜: 코스피 ${idx?.kospi?.at(-1)?.date ?? "??"}, 코스닥 ${idx?.kosdaq?.at(-1)?.date ?? "??"} (오늘 KST: ${idx?.todayKST ?? today})
 
 [오늘 포함 최근 5거래일 KOSPI]
 ${kospiHistory}

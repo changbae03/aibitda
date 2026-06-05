@@ -3,7 +3,7 @@
  * ─────────────────
  * - 장전 브리핑 갱신    : 평일 06:00 KST (= 21:00 UTC 전날) → Gemini 브리핑 캐시만 초기화
  * - 장중 브리핑 갱신    : 평일 13:00 KST (= 04:00 UTC)      → Gemini 브리핑 캐시만 초기화
- * - 장마감 브리핑 갱신  : 평일 15:30 KST (= 06:30 UTC)      → 장 종료 즉시 브리핑 캐시 초기화
+ * - 장마감 브리핑 갱신  : 평일 16:00 KST (= 07:00 UTC)      → Naver API 안정화 후 브리핑 캐시 초기화 (⚠️ 15:30→16:00 지연: 전일 데이터 방지)
  * - 장마감 증분 업데이트 : 평일 16:30 KST (= 07:30 UTC)     → LSTM+5트리 + 브리핑 캐시 초기화
  * - 월간 완전 재학습    : 매월 1일 00:00 KST (= 전날 15:00 UTC) → 5년 완전 재학습
  * - 서버 재시작 시      : 디스크 → DB → 즉시 학습 순서로 복원
@@ -78,11 +78,12 @@ function checkAndRun() {
     invalidateBriefCache();
   }
 
-  // ── 장마감 브리핑 갱신: 평일 15:30 KST = 06:30 UTC (장 종료 즉시) ─────────
-  // 장이 끝난 직후 캐시를 초기화해 다음 요청부터 "장마감 브리핑"으로 전환
-  if (utcH === 6 && utcM === 30 && dow >= 1 && dow <= 5 && closingBriefToday !== dateStr) {
+  // ── 장마감 브리핑 갱신: 평일 16:00 KST = 07:00 UTC ─────────────────────────
+  // ⚠️ 15:30 KST(장 종료 직후)가 아닌 16:00으로 지연:
+  //   Naver API는 KRX 결제 완료 후 ~15~30분 후 데이터 반영 → 15:30 호출 시 전일 데이터 반환 위험
+  if (utcH === 7 && utcM === 0 && dow >= 1 && dow <= 5 && closingBriefToday !== dateStr) {
     closingBriefToday = dateStr;
-    console.log("[scheduler] 장마감 브리핑 갱신 (15:30 KST — 장 종료)");
+    console.log("[scheduler] 장마감 브리핑 갱신 (16:00 KST — Naver API 안정화 후)");
     invalidateBriefCache();
   }
 
@@ -185,6 +186,7 @@ export function startMarketScheduler() {
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
   console.log("  - 장전 브리핑:   평일 06:00 KST (21:00 UTC 전날)");
   console.log("  - 장중 브리핑:   평일 13:00 KST (04:00 UTC)");
+  console.log("  - 장마감 브리핑:   평일 16:00 KST (07:00 UTC) ← Naver 데이터 안정화 후");
   console.log("  - 장마감 업데이트: 평일 16:30 KST (07:30 UTC)");
   console.log("  - 주간 재학습:   매주 일요일 10:00 KST (01:00 UTC)");
   console.log("  - 월간 재학습:   매월 1일 00:00 KST (전달 15:00 UTC)");
