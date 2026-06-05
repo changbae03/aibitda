@@ -6339,21 +6339,17 @@ async function executeStep(
         }
 
         if (savedStartPrice && savedStartPrice > 0) {
-          // ── 목표주가 하드캡: KR 6.0x / US 8.0x ─────────────────────────
-          // AI 프롬프트의 소프트 가드레일을 무시하는 극단값을 서버에서 강제 보정
-          // ⚠️ 2.5x 캡은 소형 바이오·턴어라운드 종목의 합리적 고업사이드를 잘라내는 문제가 있어 6.0x로 완화
-          // (예: 10,660원 종목 → 53,600원 목표가 = 5.03x → 구 2.5x 캡 시 26,650원으로 잘림 → 6.0x 이상이면 보존)
-          const TARGET_MAX_RATIO = isKR ? 6.0 : 8.0;
+          // ── 목표주가 상한 캡 제거 ──────────────────────────────────────────
+          // FINAL_VALUATION_DATA.base는 AI가 DCF/rNPV+SOTP 단계에서 산출한 값으로,
+          // 후처리 배수 캡이 오히려 밸류에이션 결과를 무력화하는 문제가 있었음.
+          // (예: 10,660원 → FINAL_VALUATION_DATA.base 53,600원(5.03x) → 구 2.5x 캡으로 26,650원으로 잘림)
+          // 캡이 필요하다면 valuation 프롬프트 단계에서 소프트 가드레일로 적용.
+          //
+          // ── 하한 플로어만 유지: DART 재무 데이터 부재 시 AI 오산출 방지 ──
           const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
-            if (tRatio > TARGET_MAX_RATIO) {
-              const capped = Math.round(savedStartPrice * TARGET_MAX_RATIO);
-              console.warn(
-                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (>${TARGET_MAX_RATIO}x ${isKR ? "KR" : "US"} cap) — clamped to ${capped}`
-              );
-              targetPrice = capped;
-            } else if (tRatio < TARGET_MIN_RATIO) {
+            if (tRatio < TARGET_MIN_RATIO) {
               const floored = Math.round(savedStartPrice * TARGET_MIN_RATIO);
               console.warn(
                 `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (<${TARGET_MIN_RATIO}x ${isKR ? "KR" : "US"} floor) — raised to ${floored}`
@@ -6364,11 +6360,10 @@ async function executeStep(
                 );
               }
               targetPrice = floored;
+            } else {
+              console.log(`[analysis ${id}] target_price ${targetPrice} (${tRatio.toFixed(2)}x startPrice ${savedStartPrice}) — 캡 없이 FINAL_VALUATION_DATA 원본 사용`);
             }
           }
-
-          // 중앙값 클램핑 제거: AI 결론 본문과 DB 저장값 불일치 원인이었음
-          // 비율 가드(0.45x~3.5x)만으로 극단값을 충분히 방지
 
           // ── 진입가·손절가 3.5배 가드 ────────────────────────────────────
           const MAX_RATIO = 3.5;
