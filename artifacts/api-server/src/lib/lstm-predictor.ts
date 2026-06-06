@@ -91,7 +91,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 30;  // [v30] KOSDAQ 전용 피처 교체: sp500Ret→나스닥, foreignNet→개인5일누적, 하이퍼파라미터 강화
+const MODEL_VERSION = 31;  // [v31] KOSDAQ 적중률 개선: dirPenalty 완화(2.0→1.5), halfLifeDays 확대(14→22), GBDT 심화(700트리/depth5), LSTM 강화(180epoch/drop0.25), 앙상블 30개
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -127,20 +127,22 @@ const INDEX_HP: Record<string, IndexHP> = {
     dirPenalty: 1.8,
   },
   /**
-   * KOSDAQ [v30] — 개인 수급 누적 피처 + 나스닥 연동 강화
-   * · sp500Ret 슬롯 → 나스닥 등락 (KOSDAQ-NASDAQ 상관 ≈ 0.85, S&P보다 높음)
-   * · foreignNet 슬롯 → 개인 5일 누적 순매수 모멘텀 (연속 매수/매도 방향 포착)
-   * · halfLifeDays 21→14: 코스닥 레짐 전환 주기 ~2주 반영, 최신 수급에 집중
-   * · nEnsemble 18→22: 앙상블 확대로 개인 수급 노이즈에 강건
-   * · gbdtTrees 400→500, recentWindow 30→20: 최근 30일 알파 빠른 조정
+   * KOSDAQ [v31] — dirPenalty 완화 + 레짐 인식 범위 확대 + 모델 용량 강화
+   * · dirPenalty 2.0→1.5: 방향 패널티 과적합이 39.8% 역상관의 주원인 → 완화
+   *   (훈련 시 방향 오류 2배 패널티 → 테스트/실전에서 반대 방향 오버슈팅)
+   * · halfLifeDays 14→22: 2주 반감기가 급락 구간에만 과집중 → 3주로 확대
+   * · gbdtTrees 500→700, gbdtLR 0.008→0.006, gbdtDepth 4→5: GBDT 심화
+   * · lstmEpochs 130→180, lstmDrop 0.30→0.25: underfitting 해소
+   * · nEnsemble 22→30: 앙상블 분산 감소 → 개인 수급 노이즈 평활화
+   * · recentWindow 20→25: 알파 동적 조정 창 확대 → 안정적 GBDT/LSTM 가중치
    */
   KQ11: {
-    gbdtTrees: 500, gbdtLR: 0.008, gbdtDepth: 4, gbdtLeaf: 8,
-    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 22,
-    lstmEpochs: 130, lstmLR: 0.0008, lstmDrop: 0.30,
-    recentWindow: 20,
-    halfLifeDays: 14,  // [v30] 21→14: 코스닥 개인주도 레짐 전환 주기 ~2주, 최신 패턴 집중
-    dirPenalty: 2.0,   // [v30] 1.8→2.0: 방향 오류에 더 강한 패널티 (적중률 35%→50%+ 목표)
+    gbdtTrees: 700, gbdtLR: 0.006, gbdtDepth: 5, gbdtLeaf: 8,
+    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 30,
+    lstmEpochs: 180, lstmLR: 0.0007, lstmDrop: 0.25,
+    recentWindow: 25,
+    halfLifeDays: 22,  // [v31] 14→22: 급락 구간 과집중 완화, 3주 레짐 균형 인식
+    dirPenalty: 1.5,   // [v31] 2.0→1.5: 과도한 방향 패널티 → 역상관 오버슈팅 완화
   },
   /**
    * S&P500 [v26] — nEnsemble 5→12, 트리 200→400, LR 0.025→0.012
