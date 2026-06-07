@@ -458,6 +458,13 @@ function FeedCard({
             transition={{ duration: 0.22, ease: "easeInOut" }}
             className="overflow-hidden border-t border-border/40"
           >
+            {/* 왜 핫한지 전문 설명 */}
+            {item.description && (
+              <div className="px-4 py-3 bg-muted/20 border-b border-border/30">
+                <p className="text-[11px] text-foreground/60 leading-relaxed">{item.description}</p>
+              </div>
+            )}
+
             {item.stocks.length === 0 ? (
               <div className="px-4 py-4 text-center text-xs text-foreground/35">
                 관련주 데이터를 불러오지 못했습니다
