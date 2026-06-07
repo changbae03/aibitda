@@ -492,7 +492,7 @@ async function discoverThemeFast(
       // 코스닥·중소형주 테마 — 코스닥 대표 종목 씨드
       themeKW: ["코스닥", "중소형", "소형주"],
       tickers: [
-        ["086980", "메디톡스"], ["042700", "한미반도체"], ["196170", "알테오젠"],
+        ["086980", "쇼박스"], ["042700", "한미반도체"], ["196170", "알테오젠"],
         ["039030", "이오테크닉스"], ["253450", "스튜디오드래곤"], ["214150", "클래시스"],
         ["263720", "디앤씨미디어"], ["122870", "와이지엔터테인먼트"], ["035900", "JYP엔터테인먼트"],
         ["240810", "원익IPS"], ["357780", "솔브레인"], ["036540", "SFA반도체"],
@@ -984,10 +984,17 @@ ${parts.join(", ")}${rateDirection}
     }
   } catch { /* 교정 실패 시 원본 유지 */ }
 
-  // ── 중복 테마 제거 (이름 기준, 첫 번째 유지) ─────────────────────────────
+  // ── 중복 테마 제거 (정규화 이름 기준, 첫 번째 유지) ──────────────────────
+  // "고금리 수혜주" / "고금리 수혜" 처럼 조사·접미사만 다른 경우도 같은 테마로 처리
+  const normalizeThemeName = (name: string) =>
+    name.trim()
+      .replace(/주$/, "")          // 말미 "주" 제거 (수혜주→수혜)
+      .replace(/\s+/g, "")         // 공백 제거
+      .toLowerCase();
+
   const seen = new Set<string>();
   themes = themes.filter(t => {
-    const key = t.name.trim();
+    const key = normalizeThemeName(t.name);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
