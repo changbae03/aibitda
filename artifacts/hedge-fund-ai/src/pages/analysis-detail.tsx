@@ -2631,7 +2631,7 @@ export default function AnalysisDetail() {
                     <p className="text-muted-foreground text-[11px] mt-0.5">{isEn ? "Sign up and start your own AI analysis" : "가입하고 직접 AI 분석을 시작해 보세요"}</p>
                   </div>
                   <a
-                    href="/sign-in"
+                    href="/login"
                     className="flex-shrink-0 px-4 py-2 rounded-xl bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors whitespace-nowrap"
                   >
                     {isEn ? "Start Analysis →" : "분석 시작하기 →"}
