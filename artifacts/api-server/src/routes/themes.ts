@@ -1101,16 +1101,27 @@ router.post("/themes/discover", async (req, res) => {
       });
     }
 
-    // ── CACHE CHECK: 동일 테마 1시간 캐시 (Gemini 호출 4회 절약) ────────────
-    const THEME_CACHE_TTL = 60 * 60 * 1000; // 1시간
+    // ── CACHE CHECK: 동일 테마 24시간 캐시 (theme_stock_cache 우선, system_cache 폴백) ─
+    const THEME_CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
     const themeCacheKey = `themes_discover_v2_${trimmed.toLowerCase().replace(/\s+/g, "_")}`;
+    try {
+      const cached = await pool.query(
+        `SELECT data FROM theme_stock_cache WHERE theme_key = $1 AND expires_at > NOW()`,
+        [themeCacheKey]
+      );
+      if (cached.rows.length) {
+        console.log(`[themes] 캐시 히트(theme_stock_cache): "${trimmed}"`);
+        return res.json(JSON.parse(cached.rows[0].data));
+      }
+    } catch (_) { /* 캐시 미스 시 정상 진행 */ }
+    // 레거시 system_cache 폴백
     try {
       const cached = await pool.query(
         `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
         [themeCacheKey]
       );
       if (cached.rows.length) {
-        console.log(`[themes] 캐시 히트: "${trimmed}"`);
+        console.log(`[themes] 캐시 히트(system_cache): "${trimmed}"`);
         return res.json(JSON.parse(cached.rows[0].data));
       }
     } catch (_) { /* 캐시 미스 시 정상 진행 */ }
@@ -1381,6 +1392,36 @@ ticker 규칙:
       if (toRemove.size) {
         result.stocks = result.stocks.filter(s => !toRemove.has(s.ticker));
       }
+
+      // ── KRX DB 섹터 교정: AI 생성 섹터를 krx_stocks 실제 값으로 덮어쓰기 ──
+      // AI가 "위장품 ODM" 같은 엉뚱한 섹터를 붙여도 DB 실제 섹터로 교정됨
+      {
+        const krCodes = result.stocks
+          .filter(s => s.market === "KR" && /^\d{6}$/.test(s.ticker))
+          .map(s => s.ticker);
+        if (krCodes.length > 0) {
+          try {
+            const { rows } = await pool.query<{ code: string; sector: string }>(
+              `SELECT code, sector FROM krx_stocks WHERE code = ANY($1)`,
+              [krCodes]
+            );
+            const dbSectorMap = new Map(rows.map(r => [r.code, r.sector]));
+            for (const stock of result.stocks) {
+              if (stock.market !== "KR") continue;
+              const dbSector = dbSectorMap.get(stock.ticker);
+              if (dbSector) {
+                if (stock.sector !== dbSector) {
+                  console.log(`[themes] 섹터 교정: ${stock.ticker}(${stock.name}) AI="${stock.sector}" → DB="${dbSector}"`);
+                }
+                stock.sector = dbSector;
+              }
+            }
+          } catch (e: any) {
+            console.warn("[themes] krx_stocks 섹터 조회 실패 (무시):", e?.message);
+          }
+        }
+      }
+
       // US 종목 유효성 검사: 티커가 비ASCII(한글 등) → 잘못된 KR 반환이므로 제거
       result.stocks = result.stocks.filter(s => {
         if (s.market === "US" && !/^[A-Z]{1,6}(\.[A-Z]{1,2})?$/.test(s.ticker)) {
@@ -1504,6 +1545,52 @@ ticker 규칙:
       });
     }
 
+    // ── KRX 섹터 기반 명백 불일치 제거 (API 없이, krx_stocks DB 값 사용) ─────
+    // 예: 운송장비·부품(한국타이어) → 헬스케어 테마 제거
+    {
+      const thm = trimmed.toLowerCase();
+
+      const isHealthTheme   = ["헬스케어", "헬스 케어", "의약", "바이오", "제약", "의료", "헬스"].some(k => thm.includes(k));
+      const isSemiTheme     = ["반도체", "hbm", "메모리", "파운드리"].some(k => thm.includes(k));
+      const isShipTheme     = ["조선", "lng선", "컨테이너선"].some(k => thm.includes(k));
+      const isDefenseTheme  = ["방산", "k-방산", "방위산업", "k방산"].some(k => thm.includes(k));
+      const isFinanceTheme  = ["금융", "은행", "보험", "증권", "핀테크"].some(k => thm.includes(k));
+      const isGameTheme     = ["게임", "gaming", "모바일게임"].some(k => thm.includes(k));
+
+      // 헬스케어 테마에서 허용되는 섹터
+      const HEALTH_OK = new Set(["제약", "의료·정밀기기", "생활용품", "음식료·담배", "화학"]);
+      // 반도체 테마에서 허용되는 섹터
+      const SEMI_OK   = new Set(["전기·전자", "IT 서비스", "화학", "기계·장비"]);
+      // 조선 테마에서 허용되는 섹터
+      const SHIP_OK   = new Set(["운송장비·부품", "기계·장비", "금속", "화학", "전기·전자"]);
+      // 방산 테마에서 허용되는 섹터
+      const DEF_OK    = new Set(["기계·장비", "운송장비·부품", "전기·전자", "IT 서비스", "항공", "화학"]);
+      // 금융 테마에서 허용되는 섹터
+      const FIN_OK    = new Set(["금융", "기타금융", "증권", "보험", "은행", "IT 서비스"]);
+      // 게임 테마에서 허용되는 섹터
+      const GAME_OK   = new Set(["IT 서비스", "전기·전자", "오락·문화"]);
+
+      result.stocks = result.stocks.filter(stock => {
+        if (stock.market !== "KR") return true;
+        const sector = (stock.sector ?? "").trim();
+        if (!sector) return true; // 섹터 없으면 판단 보류
+
+        let blocked = false;
+        if (isHealthTheme  && !HEALTH_OK.has(sector)) blocked = true;
+        if (isSemiTheme    && !SEMI_OK.has(sector))   blocked = true;
+        if (isShipTheme    && !SHIP_OK.has(sector))   blocked = true;
+        if (isDefenseTheme && !DEF_OK.has(sector))    blocked = true;
+        if (isFinanceTheme && !FIN_OK.has(sector))    blocked = true;
+        if (isGameTheme    && !GAME_OK.has(sector))   blocked = true;
+
+        if (blocked) {
+          console.log(`[themes] KRX 섹터 불일치 → 제거: ${stock.ticker} ${stock.name} (sector=${sector}, theme="${trimmed}")`);
+          return false;
+        }
+        return true;
+      });
+    }
+
     if (!result.stocks.length) throw new Error("no verified stocks");
 
     // ── STEP 3: AI 최종 관련성 검증 패스 ────────────────────────────────────
@@ -1572,16 +1659,24 @@ ${stockList}
 
     if (!result.stocks.length) throw new Error("no verified stocks");
 
-    // ── CACHE SAVE ──────────────────────────────────────────────────────────
+    // ── CACHE SAVE (theme_stock_cache 24h + system_cache 폴백) ───────────────
     try {
       const expiresAt = new Date(Date.now() + THEME_CACHE_TTL);
+      const dataStr = JSON.stringify(result);
+      await pool.query(
+        `INSERT INTO theme_stock_cache (theme_key, theme_name, data, expires_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (theme_key) DO UPDATE SET data = $3, expires_at = $4, created_at = NOW()`,
+        [themeCacheKey, trimmed, dataStr, expiresAt]
+      );
+      // system_cache에도 저장 (레거시 호환)
       await pool.query(
         `INSERT INTO system_cache (key, data, expires_at)
          VALUES ($1, $2, $3)
          ON CONFLICT (key) DO UPDATE SET data = $2, expires_at = $3`,
-        [themeCacheKey, JSON.stringify(result), expiresAt]
-      );
-      console.log(`[themes] 캐시 저장: "${trimmed}" (1시간)`);
+        [themeCacheKey, dataStr, expiresAt]
+      ).catch(() => {});
+      console.log(`[themes] 캐시 저장: "${trimmed}" (24시간, ${result.stocks.length}개 종목)`);
     } catch (e: any) {
       console.warn("[themes] 캐시 저장 실패 (무시):", e?.message);
     }
