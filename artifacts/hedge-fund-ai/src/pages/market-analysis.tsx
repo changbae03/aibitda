@@ -984,14 +984,18 @@ export default function MarketAnalysis() {
       if (r.ok) {
         const data = await r.json();
         setBrief(data);
-        // 아직 생성 중이면 5초 뒤 재시도
         if (data.generating) {
           briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
         } else {
           if (briefPollRef.current) clearTimeout(briefPollRef.current);
         }
+      } else {
+        // 서버 시작 중(502 등) — 5초 후 재시도
+        briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
       }
-    } catch {} finally {
+    } catch {
+      briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
+    } finally {
       setBriefLoading(false);
     }
   }, []);
@@ -1019,13 +1023,18 @@ export default function MarketAnalysis() {
   useEffect(() => { fetchBrief(); }, [fetchBrief]);
 
   useEffect(() => {
-    if (!status) return undefined;
+    if (!status) {
+      const t = setTimeout(fetchStatus, 3000);
+      return () => clearTimeout(t);
+    }
     if (status.running) {
       const t = setInterval(fetchStatus, 2000);
       return () => clearInterval(t);
     }
     if (!status.ready && !status.running && !status.error) {
+      const t = setTimeout(fetchStatus, 4000);
       triggerRun(false);
+      return () => clearTimeout(t);
     }
     return undefined;
   }, [status, fetchStatus, triggerRun]);

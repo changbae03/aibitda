@@ -136,9 +136,9 @@ export function startMarketScheduler() {
               .catch(e => console.error("[scheduler] 시작 즉시 증분 업데이트 실패:", e?.message));
           }
         } else {
-          // 모델이 없거나 버전 불일치 → 백그라운드 전체 재학습 (기존 DB 캐시 데이터는 유지)
-          console.log("[scheduler] 디스크 모델 없음 — 백그라운드 전체 재학습 시작 (기존 데이터 유지)");
-          runPipeline(true, true).catch(e => console.error("[scheduler] 백그라운드 재학습 실패:", e?.message));
+          // DB 캐시가 이미 서빙 중 → startup 재학습 생략 (주간 스케줄에서 처리)
+          // TF.js 전체학습은 메모리를 많이 사용해 서버를 불안정하게 만들 수 있음
+          console.log("[scheduler] 디스크 모델 없음 — DB 캐시 사용 중이므로 startup 재학습 생략 (주간 스케줄에서 갱신 예정)");
         }
       }, 5_000);
       return;
