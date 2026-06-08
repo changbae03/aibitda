@@ -4,6 +4,7 @@ import AdmZip from "adm-zip";
 import { pool } from "@workspace/db";
 import { loadKRXList, getKRXCache } from "../lib/krx-cache";
 import { fetchInvestorData } from "../lib/pykrx-client";
+import { setCorpCodeMap } from "../lib/dart-corp-cache.js";
 
 const router = Router();
 
@@ -89,6 +90,7 @@ async function loadCorpCodeMapFromDB(): Promise<boolean> {
     const obj: Record<string, string> = typeof raw === "string" ? JSON.parse(raw) : raw;
     corpCodeMap = new Map(Object.entries(obj));
     corpCodeCachedAt = Date.now();
+    setCorpCodeMap(corpCodeMap);
     console.log(`[DART] corp code map DB 복원 완료: ${corpCodeMap.size}개`);
     return true;
   } catch (e: any) {
@@ -131,6 +133,7 @@ async function loadCorpCodeMap(): Promise<void> {
 
     corpCodeMap = map;
     corpCodeCachedAt = Date.now();
+    setCorpCodeMap(map);
     console.log(`[DART] corp code map 로드 완료: ${map.size}개`);
 
     // 3) DB에 저장 (다음 재시작 때 즉시 복원)

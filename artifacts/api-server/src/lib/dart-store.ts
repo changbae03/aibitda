@@ -8,6 +8,7 @@
  */
 
 import { pool } from "@workspace/db";
+import { getCorpCodeFromCache } from "./dart-corp-cache.js";
 
 // ─── reprt_code 정의 ─────────────────────────────────────────────────────────
 
@@ -55,16 +56,25 @@ async function ensureTable(): Promise<void> {
 }
 
 // ─── DART corp_code 조회 ─────────────────────────────────────────────────────
-// 우선순위: ① system_cache(themes.ts가 3967개 XML 로드 후 저장) → ② ticker_financials DB → ③ DART API 직접
+// 우선순위: ① 공유 인메모리 캐시(themes.ts가 로드 후 setCorpCodeMap 호출) →
+//           ② system_cache DB (TTL 만료돼도 사용 — corp_code는 거의 변하지 않음) →
+//           ③ ticker_financials DB → ④ DART API 직접
 
 async function lookupCorpCode(stockCode: string): Promise<string | null> {
   const key = process.env["DART_API_KEY"];
   if (!key) return null;
 
-  // 1순위: system_cache의 dart_corp_code_map_v1 (themes.ts가 주기적으로 3967개 갱신)
+  // 0순위: 공유 인메모리 캐시 (themes.ts가 서버 시작 시 로드한 3967개 맵)
+  const cached = getCorpCodeFromCache(stockCode);
+  if (cached) {
+    console.log(`[dart-store] ${stockCode} corp_code=${cached} (in-memory cache)`);
+    return cached;
+  }
+
+  // 1순위: system_cache DB — TTL 만료돼도 허용 (corp_code는 거의 불변)
   try {
     const r = await pool.query<{ data: string }>(
-      `SELECT data FROM system_cache WHERE key = 'dart_corp_code_map_v1' AND expires_at > NOW() LIMIT 1`
+      `SELECT data FROM system_cache WHERE key = 'dart_corp_code_map_v1' ORDER BY expires_at DESC LIMIT 1`
     );
     if (r.rows[0]?.data) {
       const map = JSON.parse(r.rows[0].data) as Record<string, string>;
