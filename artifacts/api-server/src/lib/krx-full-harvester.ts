@@ -22,8 +22,42 @@ const DELAY_MS      = 200;   // 배치 간 딜레이
 const BATCH_LIMIT   = 300;   // 1회 실행 최대 처리 건수
 const REFRESH_DAYS  = 7;     // 이 일수 이상 지난 종목은 재수집
 
+// ─── 테이블 초기화 (멱등) ──────────────────────────────────────────────────────
+let tableReady = false;
+async function ensureTable(): Promise<void> {
+  if (tableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS krx_stocks (
+      code          VARCHAR(10)  PRIMARY KEY,
+      name          VARCHAR(100) NOT NULL,
+      exchange      VARCHAR(10)  NOT NULL,
+      symbol        VARCHAR(15),
+      sector        VARCHAR(50),
+      industry      VARCHAR(100),
+      market_cap    BIGINT,
+      current_price REAL,
+      per           REAL,
+      pbr           REAL,
+      roe           REAL,
+      opm           REAL,
+      rev_growth    REAL,
+      revenue       BIGINT,
+      net_income    BIGINT,
+      shares_out    BIGINT,
+      beta          REAL,
+      week52_high   REAL,
+      week52_low    REAL,
+      data_fetched  BOOLEAN      DEFAULT false,
+      fetch_error   VARCHAR(50),
+      last_updated  TIMESTAMPTZ
+    )
+  `);
+  tableReady = true;
+}
+
 // ─── 1단계: KRX 전체 목록 동기화 ─────────────────────────────────────────────
 export async function syncKrxList(): Promise<{ inserted: number; total: number }> {
+  await ensureTable();
   const list = await loadKRXList();
   if (list.length === 0) return { inserted: 0, total: 0 };
 

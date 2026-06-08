@@ -414,8 +414,41 @@ export const US_MASTER_LIST: UsStockEntry[] = [
   { ticker: "HUT",   name: "Hut 8 Corp",               exchange: "NASDAQ" },
 ];
 
+// ─── 테이블 초기화 (멱등) ──────────────────────────────────────────────────────
+let tableReady = false;
+async function ensureTable(): Promise<void> {
+  if (tableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS us_stocks (
+      ticker        VARCHAR(20)  PRIMARY KEY,
+      name          VARCHAR(200) NOT NULL,
+      exchange      VARCHAR(20)  NOT NULL,
+      sector        VARCHAR(50),
+      industry      VARCHAR(100),
+      market_cap    BIGINT,
+      current_price REAL,
+      per           REAL,
+      pbr           REAL,
+      roe           REAL,
+      opm           REAL,
+      rev_growth    REAL,
+      revenue       BIGINT,
+      net_income    BIGINT,
+      shares_out    BIGINT,
+      beta          REAL,
+      week52_high   REAL,
+      week52_low    REAL,
+      data_fetched  BOOLEAN      DEFAULT false,
+      fetch_error   VARCHAR(50),
+      last_updated  TIMESTAMPTZ
+    )
+  `);
+  tableReady = true;
+}
+
 // ─── 1단계: 마스터 리스트 → DB 동기화 ────────────────────────────────────────
 export async function syncUsList(): Promise<{ inserted: number; total: number }> {
+  await ensureTable();
   let inserted = 0;
   for (const stock of US_MASTER_LIST) {
     const res = await pool.query(
