@@ -16,8 +16,8 @@ import { classifySector } from "../routes/performance.js";
 const yahoo = new YahooFinance();
 
 const CONCURRENCY  = 10;
-const DELAY_MS     = 200;
-const BATCH_LIMIT  = 300;
+const DELAY_MS     = 150;
+const BATCH_LIMIT  = 9999;
 const REFRESH_DAYS = 7;
 
 // ─── 미국 주요 종목 마스터 리스트 (~600개) ────────────────────────────────────

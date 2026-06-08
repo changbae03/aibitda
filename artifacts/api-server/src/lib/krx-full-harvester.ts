@@ -18,8 +18,8 @@ import { classifySector } from "../routes/performance.js";
 const yahoo = new YahooFinance();
 
 const CONCURRENCY   = 10;
-const DELAY_MS      = 200;   // 배치 간 딜레이
-const BATCH_LIMIT   = 300;   // 1회 실행 최대 처리 건수
+const DELAY_MS      = 150;   // 배치 간 딜레이
+const BATCH_LIMIT   = 9999;  // 전체 수집 (스케줄러가 알아서 증분 처리)
 const REFRESH_DAYS  = 7;     // 이 일수 이상 지난 종목은 재수집
 
 // ─── 테이블 초기화 (멱등) ──────────────────────────────────────────────────────

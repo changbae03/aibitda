@@ -3,7 +3,8 @@ import { pool } from "@workspace/db";
 import { getUserId } from "../lib/credits.js";
 import { clearBatchDateForToday, runDailyAutoBatch } from "../lib/auto-batch-runner.js";
 import { loadKRXList } from "../lib/krx-cache.js";
-import { US_MASTER_LIST } from "../lib/us-full-harvester.js";
+import { US_MASTER_LIST, runUsFullHarvest } from "../lib/us-full-harvester.js";
+import { runKrxFullHarvest } from "../lib/krx-full-harvester.js";
 import { SECTOR_PRIORS } from "./performance.js";
 
 const router = Router();
@@ -1575,6 +1576,78 @@ router.delete("/sector-priors/:sector", async (req, res) => {
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "failed" });
+  }
+});
+
+// POST /api/admin/harvest-now — KRX + US 전체 종목 즉시 수집 (관리자 전용)
+let harvestRunning = false;
+router.post("/harvest-now", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+  if (harvestRunning) {
+    return res.json({ ok: false, message: "이미 수집 중입니다. 잠시 후 확인하세요." });
+  }
+
+  const market = String(req.body?.market ?? "all").toLowerCase();
+  res.json({ ok: true, message: `${market === "kr" ? "KRX" : market === "us" ? "US" : "KRX + US"} 전체 종목 수집을 백그라운드에서 시작합니다.` });
+
+  harvestRunning = true;
+  (async () => {
+    try {
+      if (market === "kr" || market === "all") {
+        console.log("[admin] KRX 전체 수집 시작 (수동 트리거)");
+        await runKrxFullHarvest();
+        console.log("[admin] KRX 전체 수집 완료");
+      }
+      if (market === "us" || market === "all") {
+        console.log("[admin] US 전체 수집 시작 (수동 트리거)");
+        await runUsFullHarvest();
+        console.log("[admin] US 전체 수집 완료");
+      }
+    } catch (e: any) {
+      console.error("[admin] harvest-now 실패:", e?.message);
+    } finally {
+      harvestRunning = false;
+    }
+  })();
+});
+
+// GET /api/admin/harvest-status — 수집 현황 조회
+router.get("/harvest-status", async (req, res) => {
+  const userId = getUserId(req);
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "forbidden" }); return; }
+
+  try {
+    const [krx, us] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE data_fetched = true) AS fetched,
+          COUNT(*) FILTER (WHERE fetch_error IS NOT NULL) AS errors,
+          COUNT(*) FILTER (WHERE data_fetched = false AND fetch_error IS NULL) AS pending,
+          COUNT(*) FILTER (WHERE industry IS NOT NULL) AS with_industry,
+          COUNT(*) FILTER (WHERE per IS NOT NULL) AS with_per,
+          MAX(last_updated) AS last_updated
+        FROM krx_stocks
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE data_fetched = true) AS fetched,
+          COUNT(*) FILTER (WHERE fetch_error IS NOT NULL) AS errors,
+          COUNT(*) FILTER (WHERE data_fetched = false AND fetch_error IS NULL) AS pending,
+          MAX(last_updated) AS last_updated
+        FROM us_stocks
+      `),
+    ]);
+    res.json({
+      running: harvestRunning,
+      krx: krx.rows[0],
+      us: us.rows[0],
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
   }
 });
 
