@@ -31,6 +31,7 @@ import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
 import { getLatestMarketRegime } from "../lib/market-regime-updater.js";
 import { getSectorLearningNote } from "../lib/sector-learning.js";
+import { buildFmpContext } from "../lib/fmp-client.js";
 
 const router: IRouter = Router();
 const yahooFinance = new YahooFinance();
@@ -3773,7 +3774,7 @@ router.post("/", async (req, res) => {
   (async () => {
     try {
       const needsSOTPData = isKoreanTicker && hasSOTPSubsidiaryData(krxCode);
-      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent] = await Promise.all([
+      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext] = await Promise.all([
         fetchFinancialContext(resolvedSymbol),
         fetchCompanyNews(companyName ?? ""),
         isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -3786,6 +3787,7 @@ router.post("/", async (req, res) => {
         needsSOTPData ? buildSOTPSubsidiaryContext(krxCode).catch(() => null) : Promise.resolve(null),
         isKoreanTicker ? fetchDartBusinessContent(krxCode).catch(() => null) : Promise.resolve(null),
         !isKoreanTicker ? fetchSECEdgarContent(resolvedSymbol).catch(() => null) : Promise.resolve(null),
+        buildFmpContext(resolvedSymbol).catch(() => null),
       ]);
 
       const kisContext = kisResult?.context ?? null;
@@ -3842,6 +3844,7 @@ router.post("/", async (req, res) => {
             `※ 아래 내용은 DART 공시 원문입니다. 시장 규모·TAM 추정·업계 현황 서술 시 훈련 데이터보다 이 수치를 우선 사용하세요.\n\n` +
             dartBizContent
           : null,
+        fmpContext,
         secEdgarContent, kosisContext, macroContext, newsData,
         userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
       ].filter(Boolean).join("\n\n") || null;

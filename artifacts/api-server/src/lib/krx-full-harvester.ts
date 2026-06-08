@@ -14,6 +14,7 @@ import { pool } from "@workspace/db";
 import YahooFinance from "yahoo-finance2";
 import { loadKRXList } from "./krx-cache.js";
 import { classifySector } from "../routes/performance.js";
+import { getFmpValuation } from "./fmp-client.js";
 
 const yahoo = new YahooFinance();
 
@@ -98,33 +99,39 @@ interface StockMetrics {
 async function fetchMetrics(symbol: string): Promise<StockMetrics | null> {
   try {
     const summary = await yahoo.quoteSummary(symbol, {
-      modules: ["price", "financialData", "defaultKeyStatistics", "summaryProfile"],
+      modules: ["price", "financialData", "defaultKeyStatistics", "summaryProfile", "summaryDetail"],
     });
 
     const p  = summary.price;
     const fd = summary.financialData;
     const ks = summary.defaultKeyStatistics;
     const sp = summary.summaryProfile as any;
+    const sd = (summary as any).summaryDetail;
 
     const industry = sp?.industry ?? (fd as any)?.industry ?? null;
     const sector   = industry ? classifySector(industry, "KR") : null;
+
+    // PER: summaryDetail.trailingPE 우선 → 직접 계산 fallback
+    const perFromSD   = sd?.trailingPE ?? null;
+    const perCalc     = ks?.trailingEps != null && p?.regularMarketPrice != null
+                          ? p.regularMarketPrice / ks.trailingEps
+                          : null;
+    const per = perFromSD ?? perCalc;
 
     return {
       sector,
       industry,
       market_cap:    p?.marketCap              ?? null,
       current_price: p?.regularMarketPrice     ?? null,
-      per:           ks?.trailingEps != null && p?.regularMarketPrice != null
-                       ? p.regularMarketPrice / ks.trailingEps
-                       : null,
-      pbr:           ks?.priceToBook           ?? null,
+      per,
+      pbr:           ks?.priceToBook ?? sd?.priceToBook ?? null,
       roe:           fd?.returnOnEquity != null  ? fd.returnOnEquity * 100  : null,
       opm:           fd?.operatingMargins != null ? fd.operatingMargins * 100 : null,
       rev_growth:    fd?.revenueGrowth != null    ? fd.revenueGrowth * 100   : null,
       revenue:       fd?.totalRevenue            ?? null,
       net_income:    fd?.netIncomeToCommon       ?? null,
       shares_out:    ks?.sharesOutstanding       ?? null,
-      beta:          ks?.beta                    ?? null,
+      beta:          ks?.beta ?? sd?.beta        ?? null,
       week52_high:   p?.fiftyTwoWeekHigh         ?? null,
       week52_low:    p?.fiftyTwoWeekLow          ?? null,
     };
@@ -139,7 +146,7 @@ export async function fetchPending(): Promise<{ processed: number; succeeded: nu
 
   const { rows: pending } = await pool.query<{ code: string; symbol: string }>(
     `SELECT code, symbol FROM krx_stocks
-     WHERE (data_fetched = false OR last_updated < $1)
+     WHERE (data_fetched = false OR last_updated < $1 OR per IS NULL)
      ORDER BY last_updated ASC NULLS FIRST
      LIMIT $2`,
     [cutoff, BATCH_LIMIT]
