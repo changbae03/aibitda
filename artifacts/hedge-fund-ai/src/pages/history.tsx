@@ -697,7 +697,7 @@ export default function History() {
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-[22px] font-black tracking-tight text-foreground" style={{ fontFamily: "'Spoqa Han Sans Neo', sans-serif" }}>
-            {isEn ? "My Reports" : "내가 본 자료"}
+            {isEn ? "Recent Reports" : "최근 본 분석"}
           </h1>
           {list.length > 0 && (() => {
             const buyCount  = list.filter((a) => (a.investmentVerdict ?? "").toLowerCase().includes("buy")).length;

@@ -99,7 +99,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/analysis/new", label: "AI 기업분석",   labelEn: "AI Analysis", Icon: Sparkles },
       { href: "/portfolio",    label: "내 포트폴리오",  labelEn: "Portfolio",   Icon: Briefcase },
-      { href: "/history",      label: "내가 본 자료",   labelEn: "My Reports",  Icon: BookOpen },
+      { href: "/history",      label: "최근 본 분석",   labelEn: "Recent Reports",  Icon: BookOpen },
       { href: "/themes",       label: "테마종목발굴",   labelEn: "Theme Picks", Icon: Lightbulb },
       { href: "/popular",      label: "애빛다 통계",    labelEn: "Statistics",  Icon: BarChart2 },
     ],

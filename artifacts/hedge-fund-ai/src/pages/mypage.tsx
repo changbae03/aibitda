@@ -379,7 +379,7 @@ export default function MyPage() {
             />
             <MenuRow
               icon={History}
-              label={t("내가 본 자료", "My History")}
+              label={t("최근 본 분석", "Recent Reports")}
               sublabel={t("분석 히스토리", "Analysis History")}
               href="/history"
             />
