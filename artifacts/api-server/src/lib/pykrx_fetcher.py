@@ -205,7 +205,7 @@ def main():
                     return None
 
             result = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
                 futures = [pool.submit(check_etf, etf) for etf in MAJOR_ETFS]
                 for future in concurrent.futures.as_completed(futures, timeout=55):
                     try:

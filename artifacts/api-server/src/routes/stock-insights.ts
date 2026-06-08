@@ -109,37 +109,10 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
     if (cached) {
       domesticEtfs = cached;
     } else {
-      // pykrx 실데이터 시도
-      let pykrxEtfs: typeof domesticEtfs = [];
-      if (isPykrxEnabled()) {
-        try {
-          const holdings = await fetchETFsForStock(koreanCode);
-          const isKosdaqStock = exchange === "KOSDAQ";
-          const filtered = holdings.filter(h => {
-            const nameUp = h.etfName.toUpperCase();
-            const isKosdaqEtf = nameUp.includes("KOSDAQ") || h.etfName.includes("코스닥");
-            if (isKosdaqEtf && !isKosdaqStock) return false;
-            return true;
-          });
-          pykrxEtfs = filtered.map(h => ({
-            code:       h.etfCode,
-            name:       h.etfName,
-            manager:    h.manager,
-            category:   h.category,
-            weight:     h.weight,
-            dataSource: "real" as const,
-          }));
-          console.log(`[etf-inclusion] pykrx ${koreanCode}: ${pykrxEtfs.length}개`);
-        } catch (e: any) {
-          console.warn("[etf-inclusion] pykrx 실패:", e?.message);
-        }
-      }
-
-      // ETF 분석 페이지와 동일한 MAJOR_ETFS 데이터로 보완
-      let majorEtfs: typeof domesticEtfs = [];
+      // ── 즉시 응답: MAJOR_ETFS 인메모리 데이터 (fast path, ~1초) ──
       try {
         const exposure = await getStockExposure(koreanCode);
-        majorEtfs = exposure.map(({ etf, holding }) => ({
+        const majorEtfs = exposure.map(({ etf, holding }) => ({
           code:       etf.code,
           name:       etf.name,
           manager:    etf.issuer,
@@ -147,18 +120,45 @@ router.get("/etf-inclusion/:ticker", async (req, res) => {
           weight:     holding.weight,
           dataSource: "real" as const,
         }));
-        console.log(`[etf-inclusion] MAJOR_ETFS ${koreanCode}: ${majorEtfs.length}개`);
+        domesticEtfs = majorEtfs.sort((a, b) => b.weight - a.weight);
+        // 30분 단기 캐시 (pykrx 백그라운드 완료 전 중복 호출 방지)
+        cache.set(cacheKey, domesticEtfs, 30 * 60 * 1000);
+        console.log(`[etf-inclusion] MAJOR_ETFS(fast) ${koreanCode}: ${domesticEtfs.length}개`);
       } catch (e: any) {
         console.warn("[etf-inclusion] MAJOR_ETFS 조회 실패:", e?.message);
       }
 
-      // 병합: pykrx 우선, 중복(ETF코드) 제거 후 MAJOR_ETFS로 보완
-      const pykrxCodes = new Set(pykrxEtfs.map(e => e.code));
-      const supplemental = majorEtfs.filter(e => !pykrxCodes.has(e.code));
-      domesticEtfs = [...pykrxEtfs, ...supplemental].sort((a, b) => b.weight - a.weight);
-
-      cache.set(cacheKey, domesticEtfs, TTL_ETF);
-      console.log(`[etf-inclusion] ${koreanCode}(${exchange}): 최종 ${domesticEtfs.length}개 (pykrx ${pykrxEtfs.length} + 보완 ${supplemental.length})`);
+      // ── 백그라운드: pykrx 실데이터로 캐시 갱신 (다음 방문부터 풀 데이터) ──
+      if (isPykrxEnabled()) {
+        const isKosdaqStock = exchange === "KOSDAQ";
+        fetchETFsForStock(koreanCode)
+          .then(holdings => {
+            const filtered = holdings.filter(h => {
+              const nameUp = h.etfName.toUpperCase();
+              const isKosdaqEtf = nameUp.includes("KOSDAQ") || h.etfName.includes("코스닥");
+              if (isKosdaqEtf && !isKosdaqStock) return false;
+              return true;
+            });
+            const pykrxEtfs = filtered.map(h => ({
+              code:       h.etfCode,
+              name:       h.etfName,
+              manager:    h.manager,
+              category:   h.category,
+              weight:     h.weight,
+              dataSource: "real" as const,
+            }));
+            // 기존 MAJOR_ETFS와 병합 후 6시간 풀 캐시 갱신
+            const currentMajor = cache.get<typeof domesticEtfs>(cacheKey) ?? domesticEtfs;
+            const pykrxCodes = new Set(pykrxEtfs.map(e => e.code));
+            const supplemental = currentMajor.filter(e => !pykrxCodes.has(e.code));
+            const merged = [...pykrxEtfs, ...supplemental].sort((a, b) => b.weight - a.weight);
+            cache.set(cacheKey, merged, TTL_ETF);
+            console.log(`[etf-inclusion] pykrx BG완료 ${koreanCode}: ${pykrxEtfs.length}개 → 캐시 갱신`);
+          })
+          .catch((e: any) => {
+            console.warn("[etf-inclusion] pykrx BG 실패:", e?.message);
+          });
+      }
     }
   }
 
