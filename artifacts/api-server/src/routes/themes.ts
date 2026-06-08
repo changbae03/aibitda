@@ -314,7 +314,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v15";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v16";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -546,24 +546,23 @@ async function discoverThemeFast(
       ],
     },
     {
-      // 원전·SMR·핵에너지 테마
-      themeKW: ["원전", "원자력", "smr", "소형모듈", "핵에너지", "원자로", "체코원전", "원전수출", "원전 수출"],
+      // 원전·SMR·핵에너지 테마 — 핵심 원전 설비·설계·정비 기업만 (조선·방산 제외)
+      themeKW: ["원전", "원자력", "smr", "소형모듈", "핵에너지", "원자로", "체코원전", "원전수출", "원전 수출", "핵발전"],
       tickers: [
         ["034020", "두산에너빌리티"],  // 원자로·증기발생기 핵심 설비 제조
-        ["052690", "한전기술"],        // 원전 설계 독점
-        ["051600", "한전KPS"],         // 원전 정비·보수 독점
+        ["052690", "한전기술"],        // 원전 설계 독점 (한수원 자회사)
+        ["051600", "한전KPS"],         // 원전 정비·보수 독점 (한수원 자회사)
         ["015760", "한국전력"],        // 원전 운영 모기업
-        ["083650", "비에이치아이"],    // 원전 열교환기·보조기기
-        ["032820", "우리기술"],        // 원전 계측제어 시스템
-        ["298040", "효성중공업"],      // 원전 전력기기
-        ["010120", "LS ELECTRIC"],     // 원전 전기설비
-        ["000720", "현대건설"],        // 원전 EPC
-        ["047040", "대우건설"],        // 원전 건설
-        ["006360", "GS건설"],          // 원전 건설
-        ["042660", "한화오션"],        // 부유식 원전(SMR 해양)
-        ["009540", "HD한국조선해양"], // SMR 부유식 발전 기술
-        ["017890", "한국알콜산업"],    // 핵연료 관련
-        ["014620", "성광벤드"],        // 원전 배관 피팅
+        ["083650", "비에이치아이"],    // 원전 열교환기·압력용기 제조
+        ["032820", "우리기술"],        // 원전 계측제어 시스템(MMIS)
+        ["298040", "효성중공업"],      // 원전 변압기·전력기기
+        ["010120", "LS ELECTRIC"],     // 원전 전기설비·차단기
+        ["000720", "현대건설"],        // 원전 EPC (체코 수주 주관사)
+        ["047040", "대우건설"],        // 원전 토건·시공
+        ["006360", "GS건설"],          // 원전 건설 참여
+        ["014620", "성광벤드"],        // 원전 배관 피팅·연결재
+        ["082640", "동양이엔피"],      // 원전 1차 계통 부품
+        ["064350", "현대로템"],        // 원전 특수 부품 제조
       ],
     },
   ];
@@ -581,9 +580,19 @@ async function discoverThemeFast(
   }
 
   // 이름 기반 키워드 매칭으로 추가 후보 보완
+  // ※ 부분문자열 오매칭 방지: 회사명 앞부분 or 공백 경계에서만 허용
+  //   예) "원전" 키워드 → "대원전선" 매칭 차단 (대+원전 구조), "원전기술" 허용
+  function nameMatchesKeyword(companyName: string, kw: string): boolean {
+    const n = companyName.trim();
+    if (n === kw) return true;
+    if (n.startsWith(kw)) return true;
+    // 공백 뒤에 등장하는 경우만 허용 ("한국 원전기술" 등)
+    return n.includes(` ${kw}`);
+  }
+
   for (const item of krxList) {
     for (const kw of keywords) {
-      if (item.name.includes(kw)) {
+      if (nameMatchesKeyword(item.name, kw)) {
         candidateMap.set(item.code, item.name);
         break;
       }
@@ -712,6 +721,22 @@ JSON만 출력:
       // 코스피 대형주 — 코스닥·중소형주 테마에서 제외
       tickers: KOSPI_LARGE_CAPS,
       badThemeKW: ["코스닥", "중소형", "소형주"],
+    },
+    {
+      // 방산·조선·비철금속 기업 — 원전 테마에서 차단 (부품 납품 명목 혼입 방지)
+      tickers: [
+        "012450", // 한화에어로스페이스 (방산·항공)
+        "079550", // LIG넥스원 (방산)
+        "047810", // 한국항공우주 (방산)
+        "010140", // 삼성중공업 (조선)
+        "009540", // HD한국조선해양 (조선)
+        "042660", // 한화오션 (조선)
+        "267250", // HD현대 (조선 지주)
+        "103140", // 풍산 (비철금속·탄약)
+        "006340", // 대원전선 (케이블)
+        "064350", // 현대로템 (K2전차·방산)
+      ],
+      badThemeKW: ["원전", "원자력", "smr", "소형모듈", "핵에너지", "원자로", "체코원전", "핵발전"],
     },
     {
       // IT·도메인·호스팅 기업 — 방산·조선·HVDC·반도체·바이오 테마 차단
