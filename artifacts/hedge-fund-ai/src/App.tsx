@@ -28,6 +28,7 @@ const Popular          = lazy(() => import("@/pages/popular"));
 const Browse           = lazy(() => import("@/pages/browse"));
 const SettingsPage     = lazy(() => import("@/pages/settings"));
 const AboutPage        = lazy(() => import("@/pages/about"));
+const OGPreview        = lazy(() => import("@/pages/og-preview"));
 const SharePage        = lazy(() => import("@/pages/share"));
 const CalendarPage      = lazy(() => import("@/pages/calendar"));
 const MarketAnalysis    = lazy(() => import("@/pages/market-analysis"));
@@ -261,6 +262,7 @@ function Router() {
         <Route path="/login" component={Landing} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/share/:id" component={SharePage} />
+        <Route path="/og-preview" component={OGPreview} />
         <Route path="/terms" component={PublicTermsPage} />
         <Route path="/privacy" component={PublicPrivacyPage} />
 
