@@ -3093,6 +3093,14 @@ function TldrCard({ analysis, isEn }: { analysis: any; isEn: boolean }) {
           )}
         </div>
         <div className="flex-1 min-w-0 space-y-3.5">
+          {json?.plain_verdict && (
+            <div>
+              <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-widest mb-1">
+                {isEn ? "In Plain Language" : "쉽게 말하면"}
+              </p>
+              <p className="text-[13px] font-medium text-foreground leading-relaxed">{json.plain_verdict}</p>
+            </div>
+          )}
           {json?.key_issue && (
             <div>
               <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">
@@ -3387,7 +3395,15 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               </div>
             </div>
 
-            {/* ── ② 핵심 이슈 ── */}
+            {/* ── ② 일반 투자자 한 줄 요약 (plain_verdict) ── */}
+            {json.plain_verdict && (
+              <div className="px-4 sm:px-6 py-4 border-b border-border bg-gradient-to-r from-foreground/[0.04] to-transparent">
+                <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-widest mb-1.5">{isEn ? "In Plain Language" : "쉽게 말하면"}</p>
+                <p className="text-[14px] text-foreground leading-relaxed font-medium">{json.plain_verdict}</p>
+              </div>
+            )}
+
+            {/* ── ③ 핵심 이슈 ── */}
             {json.key_issue && (
               <div className="px-4 sm:px-6 py-4 bg-amber-50/60 dark:bg-amber-900/15">
                 <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">{isEn ? "Key Issue" : "핵심 이슈"}</p>
@@ -3395,7 +3411,7 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
               </div>
             )}
 
-            {/* ── ③ 투자 논거 요약 ── */}
+            {/* ── ④ 투자 논거 요약 ── */}
             {json.summary && (
               <div className="px-4 sm:px-6 py-5 bg-muted/25 border-b border-border">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2.5">
