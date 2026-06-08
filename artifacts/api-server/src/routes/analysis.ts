@@ -4427,6 +4427,108 @@ router.get("/tracker", async (_req, res) => {
   }
 });
 
+// ─── 저평가 스캐너: AI 적정주가 대비 상승여력 큰 종목 실시간 스캔 ────────────
+router.get("/scanner", async (req, res) => {
+  try {
+    const market = req.query.market ? String(req.query.market) : "ALL"; // ALL | KR | US
+    const minUpside = parseFloat(String(req.query.minUpside ?? "10"));
+    const SCANNER_TTL = 5 * 60 * 1000;
+    const CACHE_KEY = `scanner_v2_${market}_${minUpside}`;
+    const cached = cache.get<any[]>(CACHE_KEY);
+    if (cached) { res.json(cached); return; }
+
+    // 최근 6개월 분석 중 티커별 최신 1건만 (Buy/Strong Buy, target_price 있는 것)
+    const conditions = [
+      `status = 'completed'`,
+      `is_public = 'true'`,
+      `target_price IS NOT NULL`,
+      `investment_verdict IN ('Buy','Strong Buy')`,
+      `created_at >= NOW() - INTERVAL '6 months'`,
+    ];
+    if (market === "KR") conditions.push(`(ticker ~ '^[0-9]')`);
+    if (market === "US") conditions.push(`NOT (ticker ~ '^[0-9]')`);
+
+    const rows = await rawQuery(
+      `SELECT DISTINCT ON (ticker)
+         id, ticker, company_name, english_name, industry, investment_verdict,
+         target_price, start_price, created_at
+       FROM analyses
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ticker, created_at DESC
+       LIMIT 120`
+    );
+
+    // Yahoo Finance 현재가 배치 조회 (10개씩 병렬)
+    async function fetchQuote(ticker: string): Promise<{ price: number | null; changePct: number | null }> {
+      try {
+        const isKR = /^\d{5,6}$/.test(ticker);
+        if (isKR) {
+          const [ks, kq] = await Promise.allSettled([
+            yahooFinance.quote(`${ticker}.KS`),
+            yahooFinance.quote(`${ticker}.KQ`),
+          ]);
+          const q = (ks.status === "fulfilled" && (ks.value as any)?.regularMarketPrice)
+            ? ks.value
+            : (kq.status === "fulfilled" ? kq.value : null);
+          if (!q) return { price: null, changePct: null };
+          return {
+            price: (q as any).regularMarketPrice ?? null,
+            changePct: (q as any).regularMarketChangePercent ?? null,
+          };
+        } else {
+          const q = await yahooFinance.quote(ticker);
+          return {
+            price: (q as any).regularMarketPrice ?? null,
+            changePct: (q as any).regularMarketChangePercent ?? null,
+          };
+        }
+      } catch { return { price: null, changePct: null }; }
+    }
+
+    // 10개씩 배치
+    const BATCH = 10;
+    const quotes: Map<string, { price: number | null; changePct: number | null }> = new Map();
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const batch = rows.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map((r: any) => fetchQuote(r.ticker)));
+      batch.forEach((r: any, j: number) => quotes.set(r.ticker, results[j]));
+    }
+
+    // 상승여력 계산 후 필터링
+    const items = rows
+      .map((r: any) => {
+        const q = quotes.get(r.ticker) ?? { price: null, changePct: null };
+        const currentPrice = q.price;
+        const targetPrice = r.target_price as number;
+        const upside = currentPrice && currentPrice > 0
+          ? ((targetPrice - currentPrice) / currentPrice) * 100
+          : null;
+        return {
+          id: r.id as number,
+          ticker: r.ticker as string,
+          companyName: r.company_name as string,
+          englishName: (r.english_name ?? null) as string | null,
+          industry: (r.industry ?? null) as string | null,
+          investmentVerdict: r.investment_verdict as string,
+          targetPrice,
+          startPrice: (r.start_price ?? null) as number | null,
+          currentPrice,
+          upside,
+          todayChangePct: q.changePct,
+          analysisDate: r.created_at,
+        };
+      })
+      .filter(item => item.upside !== null && item.upside >= minUpside)
+      .sort((a, b) => (b.upside ?? 0) - (a.upside ?? 0));
+
+    cache.set(CACHE_KEY, items, SCANNER_TTL);
+    res.json(items);
+  } catch (err: any) {
+    console.error("[GET /analysis/scanner]", err?.message);
+    res.status(500).json({ error: "scanner error", detail: err?.message });
+  }
+});
+
 // ─── 공유 전용 공개 엔드포인트 (인증 불필요, is_public=true인 경우만) ────────
 router.get("/share/:id", async (req, res) => {
   const id = parseInt(req.params.id);

@@ -6,7 +6,7 @@ import {
   User, Search, ChevronRight, Download, Share, Briefcase, Lightbulb,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
-  ShieldCheck, Shield, Newspaper, Globe,
+  ShieldCheck, Shield, Newspaper, Globe, Zap,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -101,6 +101,7 @@ const NAV_GROUPS = [
       { href: "/portfolio",    label: "내 포트폴리오",  labelEn: "Portfolio",   Icon: Briefcase },
       { href: "/history",      label: "내가 본 자료",   labelEn: "My Reports",  Icon: BookOpen },
       { href: "/themes",       label: "테마종목발굴",   labelEn: "Theme Picks", Icon: Lightbulb },
+      { href: "/scanner",      label: "저평가 스캐너",  labelEn: "Value Scanner", Icon: Zap },
       { href: "/popular",      label: "애빛다 통계",    labelEn: "Statistics",  Icon: BarChart2 },
     ],
   },

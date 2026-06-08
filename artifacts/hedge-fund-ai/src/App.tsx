@@ -29,6 +29,7 @@ const Browse           = lazy(() => import("@/pages/browse"));
 const SettingsPage     = lazy(() => import("@/pages/settings"));
 const AboutPage        = lazy(() => import("@/pages/about"));
 const OGPreview        = lazy(() => import("@/pages/og-preview"));
+const Scanner          = lazy(() => import("@/pages/scanner"));
 const SharePage        = lazy(() => import("@/pages/share"));
 const CalendarPage      = lazy(() => import("@/pages/calendar"));
 const MarketAnalysis    = lazy(() => import("@/pages/market-analysis"));
@@ -280,6 +281,7 @@ function Router() {
                 <Route path="/news" component={News} />
                 <Route path="/stats" component={Stats} />
                 <Route path="/tracker" component={Tracker} />
+                <Route path="/scanner" component={Scanner} />
                 <Route path="/popular" component={Popular} />
                 <Route path="/admin/live" component={AdminLive} />
                 <Route path="/admin/analyses" component={AdminAnalyses} />
