@@ -935,6 +935,7 @@ function StatCard({
 export default function MarketAnalysis() {
   const { isEn } = useLanguage();
   const [status, setStatus]           = useState<PipelineStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq" | "snp500" | "nasdaq">("kospi");
   const [isStarting, setIsStarting]   = useState(false);
   const [techOpen, setTechOpen]       = useState(false);
@@ -1004,7 +1005,12 @@ export default function MarketAnalysis() {
     try {
       const r = await fetch(getApiUrl("/api/market-analysis/status"), { credentials: "include" });
       if (r.ok) setStatus(await r.json());
-    } catch {}
+    } catch {
+      // 실패 시 3초 후 재시도
+      setTimeout(() => fetchStatus(), 3000);
+    } finally {
+      setStatusLoading(false);
+    }
   }, []);
 
   const triggerRun = useCallback(async (force = false) => {
@@ -1106,7 +1112,19 @@ export default function MarketAnalysis() {
         </div>
       )}
 
-      {!status?.ready && !status?.running && !status?.error && !status?.kospi && (
+      {/* 첫 API 호출 대기 중 */}
+      {statusLoading && !status && (
+        <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground">예측 데이터를 불러오는 중이에요</p>
+            <p className="text-xs text-muted-foreground mt-1">잠시만 기다려 주세요</p>
+          </div>
+        </div>
+      )}
+
+      {/* API 응답 후 아직 준비 안 된 경우 */}
+      {!statusLoading && !status?.ready && !status?.running && !status?.error && !status?.kospi && (
         <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
           <BrainCircuit className="w-8 h-8 text-muted-foreground/40" />
           <div className="text-center">
