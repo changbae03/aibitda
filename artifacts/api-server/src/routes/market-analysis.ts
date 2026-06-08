@@ -235,18 +235,46 @@ async function fetchMarketNews(): Promise<string> {
 
 /** 네이버 증권 API로 KOSPI/KOSDAQ 당일 데이터 취득 (Yahoo Finance보다 하루 빠름) */
 async function fetchNaverIndex(indexCode: "KOSPI" | "KOSDAQ", n = 5) {
+  // 1차: 네이버 모바일 API
   try {
     const res = await fetch(
       `https://m.stock.naver.com/api/index/${indexCode}/price`,
       { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) },
     );
-    if (!res.ok) return null;
-    const rows: any[] = await res.json();
-    return rows.slice(0, n).reverse().map((r: any) => ({
-      date:   r.localTradedAt as string,
-      close:  +String(r.closePrice).replace(/,/g, ""),
-      change: r.fluctuationsRatio != null ? +Number(r.fluctuationsRatio).toFixed(2) : null,
-    }));
+    if (res.ok) {
+      const rows: any[] = await res.json();
+      if (rows?.length) {
+        return rows.slice(0, n).reverse().map((r: any) => ({
+          date:   r.localTradedAt as string,
+          close:  +String(r.closePrice).replace(/,/g, ""),
+          change: r.fluctuationsRatio != null ? +Number(r.fluctuationsRatio).toFixed(2) : null,
+        }));
+      }
+    }
+  } catch { /* fall through to Yahoo */ }
+
+  // 2차: Yahoo Finance fallback (^KS11 = KOSPI, ^KQ11 = KOSDAQ)
+  try {
+    const yahooSymbol = indexCode === "KOSPI" ? "^KS11" : "^KQ11";
+    const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 14);
+    const data = await (yahoo as any).chart(yahooSymbol, { period1: start, period2: end, interval: "1d" });
+    const all = (data?.quotes ?? []).filter((q: any) => q.close != null);
+    const window = all.slice(-(n + 1));
+    if (window.length < 2) return null;
+    return window.slice(1).map((q: any, i: number) => {
+      const prevClose = window[i]?.close ?? null;
+      const change = prevClose && q.close
+        ? +(((q.close - prevClose) / prevClose) * 100).toFixed(2)
+        : null;
+      return {
+        date:   new Date(q.date).toISOString().slice(0, 10),
+        close:  +(q.close as number).toFixed(2),
+        change,
+      };
+    });
   } catch { return null; }
 }
 
@@ -536,15 +564,19 @@ leadParagraph와 storyLine에 이 폭락/급등의 원인과 규모를 반드시
 뉴스 헤드라인에 긍정적 내용이 있더라도 지수가 -3% 이상 하락했으면 전반적 하락장으로 서술해야 합니다.`
     : "";
 
+  const kospiStr  = kospiLatest  ? `${kospiLatest.close.toLocaleString()}pt, ${dirLabel(kospiLatest.change)}`  : "(마감 데이터 수집 중 — 이 칸은 공백으로 두고 뉴스 기반으로 서술하세요)";
+  const kosdaqStr = kosdaqLatest ? `${kosdaqLatest.close.toLocaleString()}pt, ${dirLabel(kosdaqLatest.change)}` : "(마감 데이터 수집 중 — 이 칸은 공백으로 두고 뉴스 기반으로 서술하세요)";
+
   const closingPrompt = `당신은 시장 해설가입니다. 오늘은 ${today}입니다.
 오늘 한국 주식시장이 마감됐어요. 오늘 어떤 일이 있었는지, 왜 그랬는지, 앞으로 어떻게 될지를 쉽게 설명해 주세요.
 첫 문장은 반드시 오늘 시장 수치나 핵심 이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
 "안녕하세요", "여러분", "개인 투자자 여러분", "오늘도", "반갑습니다", "잘 지내고 계신가요", "좋은 저녁", 날짜·요일로 시작하는 인삿말, 감성적 서두.
+⛔ 절대 금지: "데이터 없음"이라는 표현을 브리핑 본문에 절대 쓰지 마세요. 데이터가 없으면 해당 항목은 생략하고 다른 정보로 서술하세요.
 ${dataStaleWarning}${extremeBlock}
 
 ⚠️ 오늘 한국 시장 마감 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
-코스피: ${kospiLatest ? `${kospiLatest.close.toLocaleString()}pt, ${dirLabel(kospiLatest.change)}` : "데이터 없음"}
-코스닥: ${kosdaqLatest ? `${kosdaqLatest.close.toLocaleString()}pt, ${dirLabel(kosdaqLatest.change)}` : "데이터 없음"}
+코스피: ${kospiStr}
+코스닥: ${kosdaqStr}
 → 코스피가 하락이면 반드시 "하락 마감"으로, 상승이면 "상승 마감"으로 서술하세요. 뉴스나 특정 섹터가 좋더라도 지수 전체가 하락이면 하락입니다.
 → 데이터 날짜: 코스피 ${idx?.kospi?.at(-1)?.date ?? "??"}, 코스닥 ${idx?.kosdaq?.at(-1)?.date ?? "??"} (오늘 KST: ${idx?.todayKST ?? today})
 
