@@ -101,7 +101,6 @@ const NAV_GROUPS = [
       { href: "/portfolio",    label: "내 포트폴리오",  labelEn: "Portfolio",   Icon: Briefcase },
       { href: "/history",      label: "내가 본 자료",   labelEn: "My Reports",  Icon: BookOpen },
       { href: "/themes",       label: "테마종목발굴",   labelEn: "Theme Picks", Icon: Lightbulb },
-      { href: "/scanner",      label: "저평가 스캐너",  labelEn: "Value Scanner", Icon: Zap },
       { href: "/popular",      label: "애빛다 통계",    labelEn: "Statistics",  Icon: BarChart2 },
     ],
   },
@@ -123,6 +122,7 @@ const ADMIN_GROUPS = [
     items: [
       { href: "/admin/dashboard",     label: "대시보드",       Icon: LayoutDashboard },
       { href: "/admin/live",          label: "실시간 분석",    Icon: Activity },
+      { href: "/scanner",             label: "저평가 스캐너",  Icon: Zap },
     ],
   },
   {
