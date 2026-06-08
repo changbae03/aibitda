@@ -1640,6 +1640,19 @@ export default function AnalysisDetail() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // 분석 중 스크롤 위치 고정 — 새 콘텐츠 추가 시 뷰포트 이동 방지
+  useEffect(() => {
+    const isGenerating = analysis?.status === "in_progress" || analysis?.status === "queued";
+    if (!isGenerating) return;
+    const prev = document.documentElement.style.overflowAnchor;
+    document.documentElement.style.overflowAnchor = "none";
+    document.body.style.overflowAnchor = "none";
+    return () => {
+      document.documentElement.style.overflowAnchor = prev;
+      document.body.style.overflowAnchor = "";
+    };
+  }, [analysis?.status]);
+
   // 피드백 상태
   const [feedbackRating, setFeedbackRating] = useState<1 | 5 | null>(null);
   const [feedbackChips, setFeedbackChips] = useState<string[]>([]);
@@ -2406,7 +2419,7 @@ export default function AnalysisDetail() {
       <SummaryCardsB analysis={analysis} isEn={isEn} streamingStepKey={streamingStep?.key ?? null} />
 
       {/* Analysis Steps Feed */}
-      <div className="space-y-4">
+      <div className="space-y-4" style={{ overflowAnchor: "none" }}>
         <AnimatePresence>
           {[...analysis.steps]
             .sort((a, b) => ANALYSIS_STEPS_ORDER.indexOf(a.stepKey as any) - ANALYSIS_STEPS_ORDER.indexOf(b.stepKey as any))
@@ -2419,9 +2432,9 @@ export default function AnalysisDetail() {
           ))}
         </AnimatePresence>
 
-        {/* Streaming card — live typewriter while AI writes */}
-        <div className="print:hidden" style={{ contain: "layout", overflowAnchor: "none" }}>
-          <AnimatePresence>
+        {/* Streaming card + 대기 카드 — 단일 컨테이너로 높이 안정화 */}
+        <div className="print:hidden" style={{ overflowAnchor: "none", contain: "layout" }}>
+          <AnimatePresence mode="wait">
             {streamingStep && (
               <StreamingCard
                 key={streamingStep.key}
@@ -2440,8 +2453,8 @@ export default function AnalysisDetail() {
         {/* 큐 대기 중 UI */}
         {analysis.status === 'queued' && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="print:hidden bg-card border border-blue-500/20 rounded-xl p-5 flex items-center gap-4"
           >
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
@@ -2466,8 +2479,8 @@ export default function AnalysisDetail() {
         {/* AI API 오류로 분석 실패 UI */}
         {isError && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="print:hidden bg-card border border-red-500/20 rounded-xl p-5 flex items-center gap-4"
           >
             <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
@@ -2506,9 +2519,10 @@ export default function AnalysisDetail() {
               if (!agent) return null;
               return (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
                   className="bg-card rounded-2xl overflow-hidden"
                   style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
                 >
@@ -2549,8 +2563,8 @@ export default function AnalysisDetail() {
       {/* ETF 편입 현황 — 분석 완료 후 표시 */}
       {isComplete && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.4, ease: "easeOut", delay: 0.3 }}
           className="mt-4 print:hidden"
         >
@@ -2565,8 +2579,8 @@ export default function AnalysisDetail() {
       {/* 주요 뉴스 타임라인 — 분석 완료 후 표시 */}
       {isComplete && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.4, ease: "easeOut", delay: 0.5 }}
           className="mt-4 print:hidden"
         >
