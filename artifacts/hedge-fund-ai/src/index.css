@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-display: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
   --color-background: hsl(var(--background));
@@ -34,26 +34,26 @@
 }
 
 :root {
-  /* 배경: 쿨 화이트 — 황색 크림 제거, 산뜻하고 모던한 블루-화이트 톤 */
-  --background: 220 25% 97%;
-  --foreground: 222 20% 10%;
+  /* Richgo 스타일 — 순백 배경, 높은 대비, 쿨 그레이 계열 */
+  --background: 0 0% 100%;
+  --foreground: 220 25% 8%;
   --card: 0 0% 100%;
-  --card-foreground: 222 20% 10%;
+  --card-foreground: 220 25% 8%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 20% 10%;
+  --popover-foreground: 220 25% 8%;
 
-  --primary: 222 20% 10%;
+  --primary: 220 25% 8%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 18% 93%;
-  --secondary-foreground: 222 16% 20%;
+  --secondary: 220 16% 95%;
+  --secondary-foreground: 220 18% 22%;
 
-  /* muted: 쿨 톤, foreground는 충분히 진하게 */
-  --muted: 220 16% 93%;
-  --muted-foreground: 220 10% 36%;
+  /* muted: 쿨 라이트 그레이, foreground 충분히 진하게 */
+  --muted: 220 14% 95%;
+  --muted-foreground: 220 10% 38%;
 
-  --accent: 220 14% 91%;
-  --accent-foreground: 222 20% 10%;
+  --accent: 220 12% 93%;
+  --accent-foreground: 220 25% 8%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -64,10 +64,10 @@
   --warning: 38 92% 48%;
   --warning-foreground: 0 0% 100%;
 
-  /* 보더: 쿨 톤으로 통일, 살짝 밝게 */
-  --border: 220 14% 87%;
-  --input: 220 14% 91%;
-  --ring: 222 20% 10%;
+  /* 보더: 얇고 선명한 쿨 그레이 */
+  --border: 220 12% 88%;
+  --input: 220 12% 92%;
+  --ring: 220 25% 8%;
 
   --radius: 0.5rem;
 }
@@ -140,10 +140,10 @@
   }
 }
 
-/* ── 라이트 배경 미세 그라디언트 ── */
+/* ── 라이트 배경 — Richgo 스타일: 순백에 극히 미세한 쿨 블루 그라디언트 ── */
 body {
-  background: radial-gradient(ellipse 120% 50% at 0% 0%, hsl(40 30% 97%) 0%, hsl(40 18% 96%) 60%),
-              radial-gradient(ellipse 60% 40% at 100% 100%, hsl(220 20% 96%) 0%, transparent 60%);
+  background: radial-gradient(ellipse 140% 60% at 0% 0%, hsl(215 30% 99%) 0%, hsl(0 0% 100%) 55%),
+              radial-gradient(ellipse 60% 40% at 100% 100%, hsl(220 22% 98%) 0%, transparent 60%);
 }
 
 /* ── 다크 배경 미세 그라디언트 ── */
