@@ -37,6 +37,7 @@ import {
   savePrediction, resolveExpiredPredictions, shouldTriggerRetrain,
   getComponentLiveAccuracy, type ComponentLiveAccuracy, type PredictionContext,
 } from "./prediction-tracker.js";
+import { GoogleGenAI } from "@google/genai";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -63,6 +64,14 @@ export interface IndexResult {
   agreementSignal: "up" | "down" | "neutral";
   /** [v22] 합의 강도: |gbdtReturn| + |lstmReturn| 의 평균 (클수록 양쪽 모두 강하게 예측) */
   agreementStrength: number;
+  /** [AI Overlay] Gemini가 ML 예측 + 매크로 + 뉴스를 종합해 생성한 코멘터리 */
+  aiOverlay?: {
+    direction: "up" | "down" | "neutral";
+    confidence: "high" | "medium" | "low";
+    comment: string;
+    reasoning: string;
+    generatedAt: string;
+  };
 }
 export interface PipelineStep {
   key: string; label: string;
@@ -2287,4 +2296,108 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
     }).catch(e => console.error("[tracker] 결과 확인 실패:", e?.message));
     console.log(`[gbdt] 증분 완료 ${Date.now()-t0}ms | updateCount=${(meta?.updateCount??0)+1}`);
   } catch(e:any){console.error("[gbdt] 증분 실패:",e?.message??e);}
+}
+
+// ─── AI Overlay ───────────────────────────────────────────────────────────────
+
+/**
+ * Gemini가 ML 예측(GBDT+LSTM) + 매크로 + 뉴스를 종합 분석해 각 지수별 코멘터리를 생성합니다.
+ * - GBDT·LSTM 불일치(neutral) 시 중재: 어느 모델을 신뢰할지 판단
+ * - 매크로(VIX, 금리, 환율) + 뉴스 헤드라인 반영
+ * - 결과를 _status의 각 IndexResult.aiOverlay에 저장 + DB 갱신
+ */
+export async function runAIOverlay(newsBlock?: string): Promise<void> {
+  if (!_status.ready || !_status.kospi) {
+    console.log("[ai-overlay] 예측 결과 없음 — 스킵");
+    return;
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.log("[ai-overlay] GEMINI_API_KEY 없음 — 스킵");
+    return;
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const indices: Array<{ key: "kospi" | "kosdaq" | "snp500" | "nasdaq"; label: string; isKR: boolean }> = [
+    { key: "kospi",  label: "KOSPI",  isKR: true  },
+    { key: "kosdaq", label: "KOSDAQ", isKR: true  },
+    { key: "snp500", label: "S&P500", isKR: false },
+    { key: "nasdaq", label: "NASDAQ", isKR: false },
+  ];
+
+  for (const { key, label, isKR } of indices) {
+    const result = _status[key];
+    if (!result) continue;
+
+    const gbdt = result.gbdtForecastRet ?? 0;
+    const lstm = result.lstmForecastRet ?? 0;
+    const ensemble = result.predictedReturn3d;
+    const agreement = result.agreementSignal;
+    const vix = result.lastVix5dMom;
+    const vol = result.curVol20;
+
+    const conflictDesc = agreement === "neutral"
+      ? `GBDT: ${gbdt >= 0 ? "+" : ""}${gbdt.toFixed(2)}%, LSTM: ${lstm >= 0 ? "+" : ""}${lstm.toFixed(2)}% — 두 모델 방향 불일치`
+      : `GBDT: ${gbdt >= 0 ? "+" : ""}${gbdt.toFixed(2)}%, LSTM: ${lstm >= 0 ? "+" : ""}${lstm.toFixed(2)}% — 두 모델 합의 (${agreement})`;
+
+    const prompt = `당신은 퀀트 애널리스트입니다. ${label} 지수에 대해 GBDT+LSTM 머신러닝 앙상블 예측을 검토하고, 뉴스와 매크로 지표를 반영해 최종 판단을 내려주세요.
+
+[ML 예측 데이터]
+- 앙상블 3일 예측 수익률: ${ensemble >= 0 ? "+" : ""}${ensemble.toFixed(2)}%
+- ${conflictDesc}
+- 20일 변동성: ${vol != null ? (vol * 100).toFixed(1) + "%" : "N/A"}
+- VIX 5일 모멘텀: ${vix != null ? vix.toFixed(4) : "N/A"}
+- 6주 방향 적중률: ${result.rolling30dDirAcc}%
+
+${newsBlock ? `[최신 시장 뉴스 헤드라인 (${isKR ? "한국" : "미국"} 관련 발췌)]\n${newsBlock.split("\n").slice(0, 15).join("\n")}` : ""}
+
+위 데이터를 종합해 다음 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+{
+  "direction": "up" | "down" | "neutral",
+  "confidence": "high" | "medium" | "low",
+  "comment": "한 줄 핵심 판단 (40자 이내, 한국어)",
+  "reasoning": "ML 예측 근거 + 매크로/뉴스 보강 설명 (80~120자, 한국어)"
+}
+
+판단 기준:
+- ML 모델 합의(agreementSignal≠neutral) + 뉴스/매크로 지지 → confidence: high
+- ML 모델 불일치(neutral) → 뉴스·매크로·VIX로 중재 판단, confidence: medium 또는 low
+- VIX 급등(vix5dMom > 0.5) → 하방 리스크 강조
+- 변동성 20일 > 1.5% → 불확실성 언급`;
+
+    try {
+      const res = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { temperature: 0.3, maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } },
+      });
+      const raw = res.text?.trim() ?? "";
+      // 마크다운 코드블록 제거 후 JSON 추출
+      const cleaned = raw.replace(/```(?:json)?\s*/gi, "").replace(/```\s*/gi, "").trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { console.warn(`[ai-overlay] ${label} JSON 파싱 실패 — raw: ${raw.slice(0, 200)}`); continue; }
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        direction: "up" | "down" | "neutral";
+        confidence: "high" | "medium" | "low";
+        comment: string;
+        reasoning: string;
+      };
+      const overlay = { ...parsed, generatedAt: new Date().toISOString() };
+      (_status as any)[key] = { ...result, aiOverlay: overlay };
+      console.log(`[ai-overlay] ${label} 완료 — ${overlay.direction} (${overlay.confidence}): ${overlay.comment}`);
+    } catch (e: any) {
+      console.warn(`[ai-overlay] ${label} Gemini 오류:`, e?.message?.slice(0, 120));
+    }
+
+    // 지수 간 0.5초 딜레이 (rate limit 대응)
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  // 업데이트된 상태 DB에 저장
+  if (_status.kospi && _status.kosdaq && _status.snp500) {
+    saveResultsToDB(_status.kospi, _status.kosdaq, _status.snp500, _status.nasdaq ?? undefined)
+      .catch(() => {});
+  }
+  console.log("[ai-overlay] 전체 AI 오버레이 완료");
 }

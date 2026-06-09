@@ -11,7 +11,7 @@
  * node-cron 없이 1분 간격 setInterval로 구현
  * (Replit 환경에서 외부 패키지 의존 최소화)
  */
-import { runPipeline, runDailyIncrementalUpdate, tryRestoreFromDisk, tryRestoreFromDB, loadMeta } from "./lstm-predictor.js";
+import { runPipeline, runDailyIncrementalUpdate, tryRestoreFromDisk, tryRestoreFromDB, loadMeta, runAIOverlay } from "./lstm-predictor.js";
 import { invalidateBriefCache } from "../routes/market-analysis.js";
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
 import { pool } from "@workspace/db";
@@ -92,10 +92,12 @@ function checkAndRun() {
     dailyRunToday = dateStr;
     console.log("[scheduler] 장마감 증분 업데이트 시작 (16:30 KST)");
     runDailyIncrementalUpdate()
-      .then(() => {
+      .then(async () => {
         // 학습 완료 후 브리핑 캐시도 초기화 → 당일 마감 데이터 반영
         invalidateBriefCache();
         console.log("[scheduler] 장마감 증분 업데이트 완료 — 브리핑 캐시 초기화");
+        // AI 오버레이: Gemini가 ML 예측 + 뉴스 종합 분석
+        runAIOverlay().catch(e => console.error("[scheduler] AI 오버레이 실패:", e?.message));
         // 일별 섹터 재보정 (30일+ 분석 기준) — 자동 학습 루프
         autoRecalibrate()
           .then(async (r) => {
@@ -132,8 +134,14 @@ export function startMarketScheduler() {
           if (lastUpdated.slice(0, 10) < todayStr && dow >= 1 && dow <= 5) {
             console.log(`[scheduler] 마지막 갱신(${lastUpdated.slice(0,10)}) < 오늘(${todayStr}) → 즉시 증분 업데이트 시작`);
             runDailyIncrementalUpdate()
-              .then(() => console.log("[scheduler] 시작 시 즉시 증분 업데이트 완료"))
+              .then(() => {
+                console.log("[scheduler] 시작 시 즉시 증분 업데이트 완료");
+                runAIOverlay().catch(e => console.error("[scheduler] AI 오버레이 실패:", e?.message));
+              })
               .catch(e => console.error("[scheduler] 시작 즉시 증분 업데이트 실패:", e?.message));
+          } else {
+            // 증분 불필요 → 복원된 예측으로 바로 AI 오버레이 실행
+            runAIOverlay().catch(e => console.error("[scheduler] AI 오버레이 실패:", e?.message));
           }
         } else {
           // DB 캐시가 이미 서빙 중 → startup 재학습 생략 (주간 스케줄에서 처리)

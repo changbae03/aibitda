@@ -1253,6 +1253,40 @@ export default function MarketAnalysis() {
                   </div>
                 ) : null}
 
+                {/* ── Gemini AI 오버레이 ──────────────────────────────────── */}
+                {current.aiOverlay && (() => {
+                  const ov = current.aiOverlay!;
+                  const dirIcon = ov.direction === "up" ? "📈" : ov.direction === "down" ? "📉" : "➡️";
+                  const confLabel = ov.confidence === "high" ? "고신뢰" : ov.confidence === "medium" ? "중신뢰" : "저신뢰";
+                  const confColor = ov.confidence === "high"
+                    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
+                    : ov.confidence === "medium"
+                    ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
+                    : "text-orange-400 bg-orange-500/10 border-orange-500/30";
+                  const dirColor = ov.direction === "up" ? "text-red-400" : ov.direction === "down" ? "text-blue-400" : "text-muted-foreground";
+                  return (
+                    <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 px-4 py-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🤖</span>
+                        <span className="text-xs font-bold text-violet-400">Gemini AI 종합 판단</span>
+                        <span className={cn("ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full border", confColor)}>
+                          {confLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg mt-0.5">{dirIcon}</span>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className={cn("text-sm font-bold", dirColor)}>{ov.comment}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{ov.reasoning}</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/40 text-right">
+                        {new Date(ov.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 분석
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 <p className="text-xs text-muted-foreground/60 mb-1 font-medium flex items-center gap-1">
                   <Shield className="w-3.5 h-3.5" /> AI 예측 성능 — 이 정도로 믿을 수 있어요
                 </p>
