@@ -86,6 +86,8 @@ export interface IndexResult {
   tripleConsensus?: boolean;
   /** [Gemini-led] Gemini 판단 반영 후 조정된 3일 예측 수익률 */
   adjustedReturn3d?: number;
+  /** [KOSDAQ] 개인 5일 누적 순매수 모멘텀 (정규화, 양수=연속매수) */
+  lastIndivMom?: number;
   /** [Gemini-Sentiment] Gemini가 판단한 상승 확률 0~100 */
   geminiUpProb?: number;
   /** [Gemini-Sentiment] Gemini가 판단한 하락 확률 0~100 */
@@ -1760,6 +1762,10 @@ function buildResultFromModel(
     })(),
     agreementSignal,
     agreementStrength: +agreementStrength.toFixed(3),
+    // [KOSDAQ] 개인 5일 누적 순매수 모멘텀 — foreignNet 슬롯이 KOSDAQ에서는 개인 5d mom
+    lastIndivMom: market === "KOSDAQ" && lastExt != null
+      ? +lastExt.foreignNet.toFixed(4)
+      : undefined,
   };
 }
 
@@ -2348,14 +2354,14 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const indices: Array<{ key: "kospi" | "kosdaq" | "snp500" | "nasdaq"; label: string; isKR: boolean }> = [
+  const indices: Array<{ key: "kospi" | "kosdaq" | "snp500" | "nasdaq"; label: string; isKR: boolean; isKosdaq?: boolean }> = [
     { key: "kospi",  label: "KOSPI",  isKR: true  },
-    { key: "kosdaq", label: "KOSDAQ", isKR: true  },
+    { key: "kosdaq", label: "KOSDAQ", isKR: true,  isKosdaq: true },
     { key: "snp500", label: "S&P500", isKR: false },
     { key: "nasdaq", label: "NASDAQ", isKR: false },
   ];
 
-  for (const { key, label, isKR } of indices) {
+  for (const { key, label, isKR, isKosdaq } of indices) {
     const result = _status[key];
     if (!result) continue;
 
@@ -2396,18 +2402,96 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
       ].filter(Boolean).join(", ");
     }
 
-    // 뉴스 헤드라인 필터링 (한국/미국 관련)
+    // [KOSDAQ] NASDAQ 최근 5거래일 수익률 — KOSDAQ-NASDAQ 상관 ≈ 0.85
+    let nasdaqContextStr = "";
+    if (isKosdaq && _status.nasdaq) {
+      const nHist = _status.nasdaq.historical ?? [];
+      const nReturns = nHist.slice(-6).map((h, i, arr) => {
+        if (i === 0) return null;
+        const prev = arr[i - 1].value;
+        return prev > 0 ? +((h.value - prev) / prev * 100).toFixed(2) : null;
+      }).filter((v): v is number => v !== null).slice(-5);
+      if (nReturns.length > 0) {
+        nasdaqContextStr = nReturns.map((r, i) => `D-${nReturns.length - i}: ${r >= 0 ? "+" : ""}${r}%`).join(", ");
+      }
+    }
+
+    // [KOSDAQ] 개인 순매수 모멘텀 방향 해석
+    let indivMomStr = "";
+    if (isKosdaq && result.lastIndivMom != null) {
+      const m = result.lastIndivMom;
+      const dir = m > 0.15 ? "강한 순매수" : m > 0.03 ? "소폭 순매수" : m < -0.15 ? "강한 순매도" : m < -0.03 ? "소폭 순매도" : "중립";
+      indivMomStr = `개인 5일 누적 순매수 모멘텀: ${dir} (정규화값 ${m >= 0 ? "+" : ""}${m.toFixed(3)})`;
+    }
+
+    // 뉴스 헤드라인 필터링
     let newsLines = "";
     if (newsBlock) {
       const lines = newsBlock.split("\n").filter(l => l.startsWith("•"));
-      // 한국 지수면 미국 뉴스 우선순위 낮춤, 반대도 마찬가지
-      const relevant = isKR
-        ? lines.filter(l => !/nasdaq|s&p|dow|nyse/i.test(l)).slice(0, 20)
-        : lines.filter(l => !/코스피|코스닥|삼성전자|SK하이닉스/i.test(l)).slice(0, 20);
+      let relevant: string[];
+      if (isKosdaq) {
+        // KOSDAQ: NASDAQ/반도체/바이오 뉴스 포함, 다우/NYSE 제외
+        // (KOSDAQ-NASDAQ 상관 ≈ 0.85 — 나스닥 뉴스가 핵심 신호)
+        relevant = lines.filter(l => !/dow jones|nyse|\bdjia\b/i.test(l)).slice(0, 20);
+      } else if (isKR) {
+        // KOSPI: 미국 지수 뉴스 필터
+        relevant = lines.filter(l => !/nasdaq|s&p|dow|nyse/i.test(l)).slice(0, 20);
+      } else {
+        // 미국 지수: 한국 뉴스 제외
+        relevant = lines.filter(l => !/코스피|코스닥|삼성전자|SK하이닉스/i.test(l)).slice(0, 20);
+      }
       newsLines = (relevant.length > 0 ? relevant : lines.slice(0, 15)).join("\n");
     }
 
-    const prompt = `당신은 시장 예측 앙상블의 AI 멤버입니다. GBDT+LSTM 두 ML 모델의 예측을 검토하고, 뉴스와 매크로·시장 분위기를 반영해 **방향 확률**을 판단하세요.
+    // ── 프롬프트 구성 (KOSDAQ 특화 vs 일반) ──────────────────────────────────
+    let prompt: string;
+
+    if (isKosdaq) {
+      // KOSDAQ 전용 프롬프트: 개인 수급 + NASDAQ 연동 + 변동성 특화
+      prompt = `당신은 코스닥 전문 시장 예측 AI입니다. KOSDAQ은 개인 투자자 비중이 높고 나스닥과 약 0.85의 높은 상관관계를 가집니다. GBDT+LSTM ML 모델 예측과 아래 KOSDAQ 특화 정보를 종합해 **방향 확률**을 판단하세요.
+
+[ML 모델 예측 — KOSDAQ]
+- 앙상블 3일 예측 수익률: ${ensemble >= 0 ? "+" : ""}${ensemble.toFixed(2)}%
+- GBDT: ${gbdt >= 0 ? "+" : ""}${gbdt.toFixed(2)}%, LSTM: ${lstm >= 0 ? "+" : ""}${lstm.toFixed(2)}%
+- ML 합의 신호: ${agreement} / 6주 방향 적중률: ${result.rolling30dDirAcc}%
+- 20일 변동성: ${vol20 != null ? (vol20 * 100).toFixed(1) + "%" : "N/A"}
+- VIX 5일 모멘텀: ${vixMom != null ? (vixMom >= 0 ? "+" : "") + vixMom.toFixed(4) : "N/A"} (양수=공포증가)
+
+[KOSDAQ 최근 5거래일 실제 수익률]
+${recentRetStr}
+
+[NASDAQ 최근 5거래일 수익률 — KOSDAQ 핵심 연동 지수]
+${nasdaqContextStr || "N/A"}
+
+[KOSDAQ 핵심 수급 지표]
+${indivMomStr || "개인 순매수 데이터 없음"}
+※ 코스닥은 개인 투자자가 거래의 약 70%를 차지 — 개인 수급 방향이 단기 추세의 핵심
+
+[현재 매크로 지표 — 한국]
+${macroStr || "N/A"}
+
+${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없음]"}
+
+위 데이터를 종합해 다음 JSON으로만 응답하세요 (다른 텍스트 없이):
+{
+  "upProbability": 0~100,
+  "downProbability": 0~100,
+  "sentiment": "fear" | "neutral" | "greed",
+  "comment": "핵심 판단 (40자 이내, 한국어)",
+  "keyRisk": "최대 리스크 요인 (30자 이내, 한국어)"
+}
+
+KOSDAQ 판단 규칙:
+- upProbability + downProbability 합계는 반드시 100 이하
+- 나스닥 5거래일 연속 하락 → 코스닥 하락 확률 강하게 반영 (개인 투자심리 위축)
+- 개인 순매수 강한 + 나스닥 상승 추세 → 상승 신호 강화
+- 개인 순매도 + VIX 상승 → 하락 확률 크게 증가, sentiment: fear
+- ML 합의 신호가 neutral이어도 나스닥 방향 + 개인 수급이 일치하면 그 방향으로 판단
+- ML 6주 적중률이 낮을수록(50% 이하) 뉴스/수급 판단 비중을 높이세요
+- 변동성이 높을수록 확률 차이를 작게 (횡보 가능성 반영)`;
+    } else {
+      // 일반 프롬프트 (KOSPI / S&P500 / NASDAQ)
+      prompt = `당신은 시장 예측 앙상블의 AI 멤버입니다. GBDT+LSTM 두 ML 모델의 예측을 검토하고, 뉴스와 매크로·시장 분위기를 반영해 **방향 확률**을 판단하세요.
 
 [ML 모델 예측 — ${label}]
 - 앙상블 3일 예측 수익률: ${ensemble >= 0 ? "+" : ""}${ensemble.toFixed(2)}%
@@ -2440,6 +2524,7 @@ ${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없
 - VIX 모멘텀 > 0.3 (VIX 급등) → 하락 확률 증가, sentiment: fear
 - 최근 3거래일 연속 음수 수익률 → 하락 추세 반영
 - sentiment: greed는 강한 상승 뉴스·매크로·모멘텀 때만 사용`;
+    }
 
     try {
       const res = await ai.models.generateContent({
