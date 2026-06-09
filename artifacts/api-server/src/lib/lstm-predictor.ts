@@ -37,7 +37,8 @@ import { getCachedFredMacro } from "./fred-client.js";
 import { getCachedEcosMacro } from "./ecos-client.js";
 import {
   savePrediction, resolveExpiredPredictions, shouldTriggerRetrain,
-  getComponentLiveAccuracy, type ComponentLiveAccuracy, type PredictionContext,
+  getComponentLiveAccuracy, logRecentDirectionComparison,
+  type ComponentLiveAccuracy, type PredictionContext,
 } from "./prediction-tracker.js";
 import { GoogleGenAI } from "@google/genai";
 
@@ -2684,4 +2685,7 @@ ${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없
       .catch(() => {});
   }
   console.log("[ai-overlay] 전체 AI 오버레이 완료");
+
+  // AI Overlay 완료 이후 최근 7일치 KOSDAQ·KOSPI 실제 vs 예측 방향 비교 로그
+  logRecentDirectionComparison(["^KQ11", "^KS11"], 7).catch(() => {});
 }

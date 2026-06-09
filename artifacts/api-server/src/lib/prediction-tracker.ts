@@ -462,16 +462,157 @@ export async function getPredictionHistory(
 
 // ─── 자동 재학습 판단 ──────────────────────────────────────────────────────────
 
+/**
+ * rolling30dDirAcc 기반 자동 재학습 판단 — D+3 예측 기준, 최근 30샘플.
+ *
+ * rolling30dDirAcc = 최근 30거래일(30샘플) D+3 방향 적중률. 모델 내부 지표와 동일한 기준.
+ * KOSDAQ(^KQ11)은 구조적 변동성이 높아 더 민감한 기준 적용:
+ *   - KOSDAQ: rolling30d D+3 적중률 55% 미만 → 즉시 재학습
+ *   - 기타  : rolling30d D+3 적중률 40% 미만 → 재학습
+ */
 export async function shouldTriggerRetrain(
   symbol: string,
-  minSamples = 10,
-  retrainThreshold = 0.40,
+  rollingWindow = 30,
+  retrainThreshold?: number,
 ): Promise<boolean> {
-  const acc = await getLiveAccuracy(symbol, minSamples);
-  if (acc.total < minSamples || acc.accuracy === null) return false;
-  const trigger = acc.accuracy / 100 < retrainThreshold;
+  // 심볼별 임계값: KOSDAQ은 55%, 나머지는 40%
+  const threshold = retrainThreshold ?? (symbol === "^KQ11" ? 0.55 : 0.40);
+
+  // D+3 전용 최근 rollingWindow 샘플 조회
+  const { rows } = await pool.query<{ correct: boolean }>(
+    `SELECT correct
+     FROM index_predictions
+     WHERE symbol = $1
+       AND correct IS NOT NULL
+       AND pred_horizon = 3
+     ORDER BY predicted_at DESC
+     LIMIT $2`,
+    [symbol, rollingWindow],
+  );
+
+  const minSamples = 10;
+  if (rows.length < minSamples) return false;
+
+  const correctCount = rows.filter(r => r.correct).length;
+  const rollingAcc   = correctCount / rows.length;
+
+  const trigger = rollingAcc < threshold;
+  const accPct   = (rollingAcc * 100).toFixed(1);
   if (trigger) {
-    console.log(`[tracker] ${symbol} 라이브 적중률 ${acc.accuracy}% — 재학습 트리거`);
+    console.log(
+      `[tracker] ${symbol} rolling${rows.length}d D+3 적중률 ${accPct}% — 재학습 트리거 (기준: ${(threshold * 100).toFixed(0)}%)`
+    );
+  } else {
+    console.log(
+      `[tracker] ${symbol} rolling${rows.length}d D+3 적중률 ${accPct}% — 재학습 불필요 (기준: ${(threshold * 100).toFixed(0)}%)`
+    );
   }
   return trigger;
+}
+
+// ─── AI Overlay 이후 실제 vs 예측 방향 비교 로그 ─────────────────────────────
+
+/**
+ * AI Overlay 개선 이후 최근 N일치 실제 vs 예측 방향을 콘솔에 기록.
+ * symbols 기본값: KOSDAQ·KOSPI (분리 추적 목적)
+ */
+export async function logRecentDirectionComparison(
+  symbols = ["^KQ11", "^KS11"],
+  days = 7,
+): Promise<void> {
+  try {
+    const { rows } = await pool.query<{
+      symbol: string;
+      predicted_at: string;
+      predicted_dir: number;
+      actual_dir: number | null;
+      correct: boolean | null;
+    }>(
+      `SELECT symbol, predicted_at::text, predicted_dir, actual_dir, correct
+       FROM index_predictions
+       WHERE symbol = ANY($1)
+         AND correct IS NOT NULL
+         AND pred_horizon = 3
+         AND predicted_at >= (CURRENT_DATE - ($2 || ' days')::interval)::date
+       ORDER BY symbol, predicted_at DESC`,
+      [symbols, days],
+    );
+
+    const grouped: Record<string, typeof rows> = {};
+    for (const row of rows) {
+      if (!grouped[row.symbol]) grouped[row.symbol] = [];
+      grouped[row.symbol]!.push(row);
+    }
+
+    for (const [sym, symRows] of Object.entries(grouped)) {
+      const correct = symRows.filter(r => r.correct).length;
+      const total   = symRows.length;
+      const acc     = total > 0 ? ((correct / total) * 100).toFixed(1) : "—";
+      console.log(`[dir-log] ${sym} 최근 ${days}일 방향 비교 (D+3): ${correct}/${total} 적중 (${acc}%)`);
+      for (const r of symRows) {
+        const pred   = r.predicted_dir === 1 ? "↑상승" : "↓하락";
+        const actual = r.actual_dir   === 1 ? "↑상승" : r.actual_dir === -1 ? "↓하락" : "—";
+        const mark   = r.correct ? "✓" : "✗";
+        console.log(`  ${r.predicted_at} | 예측=${pred} 실제=${actual} ${mark}`);
+      }
+    }
+  } catch (e: any) {
+    console.warn("[dir-log] 방향 비교 로그 실패:", e?.message);
+  }
+}
+
+// ─── KOSDAQ/KOSPI 주별 적중률 히스토리 ────────────────────────────────────────
+
+export interface AccuracyHistoryPoint {
+  week: string;
+  kospiAcc:  number | null;
+  kosdaqAcc: number | null;
+  kospiN:    number;
+  kosdaqN:   number;
+}
+
+/**
+ * KOSPI·KOSDAQ 주별(월요일 기준) 적중률 히스토리.
+ * pred_horizon = 3 (D+3) 기준, 최근 weeksBack 주간 데이터 반환.
+ */
+export async function getAccuracyHistory(weeksBack = 8): Promise<AccuracyHistoryPoint[]> {
+  const { rows } = await pool.query<{
+    symbol:        string;
+    week_start:    string;
+    correct_count: number;
+    total_count:   number;
+  }>(
+    `SELECT
+       symbol,
+       DATE_TRUNC('week', predicted_at)::date::text AS week_start,
+       COUNT(*) FILTER (WHERE correct = true)::int   AS correct_count,
+       COUNT(*)::int                                  AS total_count
+     FROM index_predictions
+     WHERE symbol IN ('^KS11', '^KQ11')
+       AND correct IS NOT NULL
+       AND pred_horizon = 3
+       AND predicted_at >= CURRENT_DATE - ($1 * 7 || ' days')::interval
+     GROUP BY symbol, DATE_TRUNC('week', predicted_at)
+     ORDER BY week_start`,
+    [weeksBack],
+  );
+
+  const weeksSet = new Set<string>(rows.map(r => r.week_start));
+  const weeks    = [...weeksSet].sort();
+
+  return weeks.map(week => {
+    const ki = rows.find(r => r.symbol === "^KS11" && r.week_start === week);
+    const qi = rows.find(r => r.symbol === "^KQ11" && r.week_start === week);
+    return {
+      week,
+      kospiAcc:  ki && ki.total_count >= 3
+        ? Math.round((ki.correct_count / ki.total_count) * 1000) / 10
+        : null,
+      kosdaqAcc: qi && qi.total_count >= 3
+        ? Math.round((qi.correct_count / qi.total_count) * 1000) / 10
+        : null,
+      kospiN:  ki?.total_count  ?? 0,
+      kosdaqN: qi?.total_count  ?? 0,
+    };
+  });
 }

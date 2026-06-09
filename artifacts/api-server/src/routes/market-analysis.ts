@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getStatus, runPipeline, runDailyIncrementalUpdate } from "../lib/lstm-predictor.js";
-import { getAllLiveAccuracy, getPredictionHistory, getTodayPredictions } from "../lib/prediction-tracker.js";
+import { getAllLiveAccuracy, getPredictionHistory, getTodayPredictions, getAccuracyHistory } from "../lib/prediction-tracker.js";
 import { fetchFREDMacro } from "../lib/fred-client.js";
 import { fetchECOSMacro } from "../lib/ecos-client.js";
 import { GoogleGenAI } from "@google/genai";
@@ -986,6 +986,17 @@ router.get("/prediction-history/:symbol", async (req, res) => {
     const limit  = Math.min(50, parseInt(String(req.query.limit ?? "20"), 10));
     const rows   = await getPredictionHistory(symbol, limit);
     res.json(rows);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
+  }
+});
+
+// GET /api/market-analysis/accuracy-history — KOSDAQ/KOSPI 주별 분리 적중률 히스토리
+router.get("/accuracy-history", async (req, res) => {
+  try {
+    const weeks = Math.min(16, Math.max(4, parseInt(String(req.query.weeks ?? "8"), 10)));
+    const data  = await getAccuracyHistory(weeks);
+    res.json(data);
   } catch (e: any) {
     res.status(500).json({ error: e?.message });
   }
