@@ -88,6 +88,8 @@ export interface IndexResult {
   adjustedReturn3d?: number;
   /** [KOSDAQ] 개인 5일 누적 순매수 모멘텀 (정규화, 양수=연속매수) */
   lastIndivMom?: number;
+  /** [KOSDAQ] Gemini가 평가한 핵심 섹터 이벤트 리스크 (high=바이오/반도체 단기 이벤트 고위험) */
+  kosdaqSectorRisk?: "high" | "medium" | "low";
   /** [Gemini-Sentiment] Gemini가 판단한 상승 확률 0~100 */
   geminiUpProb?: number;
   /** [Gemini-Sentiment] Gemini가 판단한 하락 확률 0~100 */
@@ -1763,7 +1765,7 @@ function buildResultFromModel(
     agreementSignal,
     agreementStrength: +agreementStrength.toFixed(3),
     // [KOSDAQ] 개인 5일 누적 순매수 모멘텀 — foreignNet 슬롯이 KOSDAQ에서는 개인 5d mom
-    lastIndivMom: market === "KOSDAQ" && lastExt != null
+    lastIndivMom: symbol === "^KQ11" && lastExt != null
       ? +lastExt.foreignNet.toFixed(4)
       : undefined,
   };
@@ -2424,6 +2426,16 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
       indivMomStr = `개인 5일 누적 순매수 모멘텀: ${dir} (정규화값 ${m >= 0 ? "+" : ""}${m.toFixed(3)})`;
     }
 
+    // [KOSDAQ] 핵심 섹터 뉴스 별도 추출 (바이오·반도체·2차전지·게임·방산)
+    // KOSDAQ 주도 섹터 이벤트(FDA 승인/임상/수출/실적)는 지수 방향에 즉각 영향
+    const KOSDAQ_SECTOR_RE = /바이오|제약|셀트리온|HLB|삼성바이오|유한양행|한미약품|에코프로|2차전지|배터리|양극재|음극재|FDA|임상|식약처|허가|카카오게임|위메이드|넷마블|크래프톤|게임|리노공업|원익|솔브레인|이오테크닉스|피에스케이|동진쎄미|방산.*코스닥|코스닥.*방산/i;
+    let kosdaqSectorLines = "";
+    if (isKosdaq && newsBlock) {
+      const allLines = newsBlock.split("\n").filter(l => l.startsWith("•"));
+      const sectorNews = allLines.filter(l => KOSDAQ_SECTOR_RE.test(l));
+      kosdaqSectorLines = sectorNews.slice(0, 8).join("\n");
+    }
+
     // 뉴스 헤드라인 필터링
     let newsLines = "";
     if (newsBlock) {
@@ -2432,7 +2444,8 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
       if (isKosdaq) {
         // KOSDAQ: NASDAQ/반도체/바이오 뉴스 포함, 다우/NYSE 제외
         // (KOSDAQ-NASDAQ 상관 ≈ 0.85 — 나스닥 뉴스가 핵심 신호)
-        relevant = lines.filter(l => !/dow jones|nyse|\bdjia\b/i.test(l)).slice(0, 20);
+        // 섹터 뉴스는 kosdaqSectorLines에 이미 분리됨 → 일반 뉴스는 비섹터 위주로
+        relevant = lines.filter(l => !/dow jones|nyse|\bdjia\b/i.test(l)).slice(0, 15);
       } else if (isKR) {
         // KOSPI: 미국 지수 뉴스 필터
         relevant = lines.filter(l => !/nasdaq|s&p|dow|nyse/i.test(l)).slice(0, 20);
@@ -2447,8 +2460,8 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
     let prompt: string;
 
     if (isKosdaq) {
-      // KOSDAQ 전용 프롬프트: 개인 수급 + NASDAQ 연동 + 변동성 특화
-      prompt = `당신은 코스닥 전문 시장 예측 AI입니다. KOSDAQ은 개인 투자자 비중이 높고 나스닥과 약 0.85의 높은 상관관계를 가집니다. GBDT+LSTM ML 모델 예측과 아래 KOSDAQ 특화 정보를 종합해 **방향 확률**을 판단하세요.
+      // KOSDAQ 전용 프롬프트: 개인 수급 + NASDAQ 연동 + 섹터 이벤트 + 변동성 특화
+      prompt = `당신은 코스닥 전문 시장 예측 AI입니다. KOSDAQ은 개인 투자자 비중이 높고 나스닥과 약 0.85의 높은 상관관계를 가집니다. 바이오·반도체·2차전지·게임 섹터가 지수를 주도합니다. GBDT+LSTM ML 모델 예측과 아래 KOSDAQ 특화 정보를 종합해 **방향 확률**을 판단하세요.
 
 [ML 모델 예측 — KOSDAQ]
 - 앙상블 3일 예측 수익률: ${ensemble >= 0 ? "+" : ""}${ensemble.toFixed(2)}%
@@ -2467,16 +2480,21 @@ ${nasdaqContextStr || "N/A"}
 ${indivMomStr || "개인 순매수 데이터 없음"}
 ※ 코스닥은 개인 투자자가 거래의 약 70%를 차지 — 개인 수급 방향이 단기 추세의 핵심
 
+[KOSDAQ 핵심 섹터 뉴스 — 바이오·반도체·2차전지·게임]
+${kosdaqSectorLines || "현재 섹터 관련 주요 뉴스 없음"}
+※ FDA 승인/임상 결과/수출 규제/배터리 화재 등 섹터 이벤트는 코스닥 지수에 즉각 반영됨
+
 [현재 매크로 지표 — 한국]
 ${macroStr || "N/A"}
 
-${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없음]"}
+${newsLines ? `[최신 시장 뉴스 헤드라인 (일반)]\n${newsLines}` : "[뉴스 없음]"}
 
 위 데이터를 종합해 다음 JSON으로만 응답하세요 (다른 텍스트 없이):
 {
   "upProbability": 0~100,
   "downProbability": 0~100,
   "sentiment": "fear" | "neutral" | "greed",
+  "sectorRisk": "high" | "medium" | "low",
   "comment": "핵심 판단 (40자 이내, 한국어)",
   "keyRisk": "최대 리스크 요인 (30자 이내, 한국어)"
 }
@@ -2488,7 +2506,11 @@ KOSDAQ 판단 규칙:
 - 개인 순매도 + VIX 상승 → 하락 확률 크게 증가, sentiment: fear
 - ML 합의 신호가 neutral이어도 나스닥 방향 + 개인 수급이 일치하면 그 방향으로 판단
 - ML 6주 적중률이 낮을수록(50% 이하) 뉴스/수급 판단 비중을 높이세요
-- 변동성이 높을수록 확률 차이를 작게 (횡보 가능성 반영)`;
+- 변동성이 높을수록 확률 차이를 작게 (횡보 가능성 반영)
+- sectorRisk 평가 기준:
+  · "high": FDA 승인/임상 실패/배터리 화재 등 섹터 충격 이벤트 뉴스 존재, 또는 특정 섹터 급등락 뉴스
+  · "medium": 섹터 관련 불확실성 뉴스 (임상 진행 중, 규제 검토 등) 또는 섹터 혼조
+  · "low": 섹터 특이 이벤트 없음, 뉴스 없음`;
     } else {
       // 일반 프롬프트 (KOSPI / S&P500 / NASDAQ)
       prompt = `당신은 시장 예측 앙상블의 AI 멤버입니다. GBDT+LSTM 두 ML 모델의 예측을 검토하고, 뉴스와 매크로·시장 분위기를 반영해 **방향 확률**을 판단하세요.
@@ -2541,6 +2563,7 @@ ${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없
         upProbability: number;
         downProbability: number;
         sentiment: "fear" | "neutral" | "greed";
+        sectorRisk?: "high" | "medium" | "low";
         comment: string;
         keyRisk: string;
       };
@@ -2603,6 +2626,17 @@ ${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없
 
       adjustedReturn3d = +adjustedReturn3d.toFixed(2);
 
+      // [KOSDAQ] 섹터 리스크 반영: high이면 예측 신뢰도 추가 감소
+      const sectorRisk = isKosdaq ? (parsed.sectorRisk ?? "low") : undefined;
+      if (isKosdaq && sectorRisk === "high") {
+        // 섹터 충격 이벤트 → 불확실성 크게 증가 → adjustedReturn3d 20% 축소
+        adjustedReturn3d = +(adjustedReturn3d * 0.80).toFixed(2);
+        console.log(`[ai-overlay] KOSDAQ 섹터리스크=high → adjRet 20% 축소: ${adjustedReturn3d}%`);
+      } else if (isKosdaq && sectorRisk === "medium") {
+        // 섹터 불확실성 → 10% 축소
+        adjustedReturn3d = +(adjustedReturn3d * 0.90).toFixed(2);
+      }
+
       // aiOverlay 하위 호환성 유지 (direction/confidence/comment/reasoning)
       const overlay = {
         direction: geminiDir,
@@ -2613,7 +2647,8 @@ ${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없
       };
 
       const tag = tripleConsensus ? "삼중합의🔥" : geminiResolved ? "Gemini중재" : finalSignal !== agreement ? "Gemini반대→보수" : "";
-      console.log(`[ai-overlay] ${label} 완료 — ↑${upP.toFixed(0)}% ↓${downP.toFixed(0)}% sentiment=${parsed.sentiment} [${tag || "ML유지"}] | finalSignal=${finalSignal} adjRet=${adjustedReturn3d}%`);
+      const sectorTag = sectorRisk && sectorRisk !== "low" ? ` 섹터리스크=${sectorRisk}` : "";
+      console.log(`[ai-overlay] ${label} 완료 — ↑${upP.toFixed(0)}% ↓${downP.toFixed(0)}% sentiment=${parsed.sentiment} [${tag || "ML유지"}]${sectorTag} | finalSignal=${finalSignal} adjRet=${adjustedReturn3d}%`);
 
       (_status as any)[key] = {
         ...result,
@@ -2628,6 +2663,7 @@ ${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없
         geminiDownProb: +downP.toFixed(1),
         marketSentiment: parsed.sentiment,
         keyRisk: parsed.keyRisk ?? "",
+        ...(isKosdaq ? { kosdaqSectorRisk: sectorRisk } : {}),
       };
     } catch (e: any) {
       console.warn(`[ai-overlay] ${label} Gemini 오류:`, e?.message?.slice(0, 120));
