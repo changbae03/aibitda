@@ -524,7 +524,7 @@ const STATIC_HOLDINGS: Record<string, ETFHolding[]> = {
     { rank:10, stockCode:"120110", stockName:"코오롱인더",          weight: 3.25 },
     { rank:11, stockCode:"003550", stockName:"LG",                  weight: 2.89 },
     { rank:12, stockCode:"006800", stockName:"미래에셋증권",        weight: 2.87 },
-    { rank:13, stockCode:"161390", stockName:"한국콜마",              weight: 2.87 },
+    { rank:13, stockCode:"161390", stockName:"한국타이어앤테크놀로지", weight: 2.87 },
     { rank:14, stockCode:"033780", stockName:"KT&G",               weight: 2.62 },
     { rank:15, stockCode:"011070", stockName:"LG이노텍",            weight: 2.60 },
   ],

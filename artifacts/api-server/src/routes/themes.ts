@@ -532,7 +532,7 @@ async function discoverThemeFast(
       // 중국·소비재·수출 테마
       themeKW: ["중국", "소비재", "화장품", "k-뷰티", "면세"],
       tickers: [
-        ["090430", "아모레퍼시픽"], ["051600", "한국전력"], ["161390", "한국콜마"],
+        ["090430", "아모레퍼시픽"], ["051600", "한국전력"], ["161890", "한국콜마"],
         ["002790", "아모레G"], ["085660", "차바이오텍"], ["000120", "CJ대한통운"],
         ["069960", "현대백화점"], ["023530", "롯데쇼핑"], ["004170", "신세계"],
         ["008770", "호텔신라"], ["187790", "코디아이엔씨"], ["214420", "토니모리"],
@@ -1577,6 +1577,13 @@ ticker 규칙:
 
         let blocked = false;
         if (isHealthTheme  && !HEALTH_OK.has(sector)) blocked = true;
+        // 헬스케어 테마: 화학 섹터이지만 타이어·자동차 관련 업종은 명시적 차단
+        if (isHealthTheme && sector === "화학") {
+          const nm = (stock.name ?? "").toLowerCase();
+          if (["타이어", "tire", "자동차", "auto", "rubber", "고무"].some(kw => nm.includes(kw))) {
+            blocked = true;
+          }
+        }
         if (isSemiTheme    && !SEMI_OK.has(sector))   blocked = true;
         if (isShipTheme    && !SHIP_OK.has(sector))   blocked = true;
         if (isDefenseTheme && !DEF_OK.has(sector))    blocked = true;
