@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import StockChart, { type ChartLevels, type ChartEvent } from "@/components/StockChart";
+import SummaryCardsB from "@/components/SummaryCardsB";
+import ETFSection from "@/components/ETFSection";
+import StockNewsTimeline from "@/components/StockNewsTimeline";
 
 function isUSTicker(ticker: string) {
   if (!ticker) return false;
@@ -527,7 +530,7 @@ export default function SharePage() {
   const keyIssue = (stratJson?.key_issue as string | undefined) ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="dark min-h-screen bg-slate-950 flex flex-col">
 
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/50">
@@ -656,6 +659,15 @@ export default function SharePage() {
         </motion.div>
       </div>
 
+      {/* ── 투자요약 한눈에보기 ── */}
+      {sortedSteps.length > 0 && (
+        <div className="flex flex-col items-center px-4 gap-3">
+          <div className="w-full max-w-2xl">
+            <SummaryCardsB analysis={analysis} isEn={false} streamingStepKey={null} />
+          </div>
+        </div>
+      )}
+
       {/* ── Full Report ── */}
       {sortedSteps.length > 0 && (
         <div className="flex flex-col items-center px-4 pb-10 gap-3">
@@ -726,6 +738,23 @@ export default function SharePage() {
                   </motion.div>
                 );
               })}
+            </div>
+
+            {/* ETF 편입 현황 */}
+            <div className="mt-5">
+              <ETFSection
+                ticker={analysis.ticker}
+                companyName={analysis.companyName}
+                industry={analysis.industry ?? undefined}
+              />
+            </div>
+
+            {/* 주요 뉴스 타임라인 */}
+            <div className="mt-5">
+              <StockNewsTimeline
+                ticker={analysis.ticker}
+                companyName={analysis.companyName}
+              />
             </div>
 
             {/* CTA */}
