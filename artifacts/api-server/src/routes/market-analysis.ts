@@ -103,20 +103,32 @@ async function loadBriefFromDb(): Promise<void> {
 loadBriefFromDb().catch(() => {});
 
 /** 스케줄러에서 호출 — 백그라운드에서 즉시 브리핑 생성 시작 (유저 대기 없음) */
-export function refreshBriefInBackground(reason = "") {
+export function refreshBriefInBackground(reason = "", retryCount = 0) {
   if (_briefRefreshing) {
     console.log("[market-brief] 이미 갱신 중 — 스킵");
     return;
   }
   _briefRefreshing = true;
-  console.log(`[market-brief] 백그라운드 갱신 시작${reason ? ` (${reason})` : ""}`);
+  const maxRetries = 3;
+  console.log(`[market-brief] 백그라운드 갱신 시작${reason ? ` (${reason})` : ""}${retryCount > 0 ? ` [재시도 ${retryCount}/${maxRetries}]` : ""}`);
   generateBrief()
     .then(result => {
       _briefCache = { data: result, cachedAt: Date.now() };
       return saveBriefToDb(_briefCache);
     })
     .then(() => console.log("[market-brief] 백그라운드 갱신 완료"))
-    .catch(err => console.error("[market-brief] 백그라운드 갱신 실패:", err?.message))
+    .catch(err => {
+      console.error("[market-brief] 백그라운드 갱신 실패:", err?.message);
+      if (retryCount < maxRetries) {
+        const delay = (retryCount + 1) * 5 * 60_000; // 5분, 10분, 15분 후 재시도
+        console.log(`[market-brief] ${delay / 60_000}분 후 재시도 예정`);
+        setTimeout(() => {
+          _briefRefreshing = false;
+          refreshBriefInBackground(reason + "-retry", retryCount + 1);
+        }, delay);
+        return;
+      }
+    })
     .finally(() => { _briefRefreshing = false; });
 }
 
@@ -925,15 +937,17 @@ router.get("/brief", async (req, res) => {
   const force = req.query.force === "true";
 
   // ① 인메모리 캐시 유효 → 즉시 반환 (~1ms)
+  // sessionType은 캐시 저장 시점이 아닌 현재 시각 기준으로 오버라이드
+  // (예: 장마감 캐시가 남아있어도 장전 시간대에 접근하면 "morning"으로 표시)
   if (!force && _briefCache && Date.now() - _briefCache.cachedAt < BRIEF_TTL) {
-    res.json({ ...(_briefCache.data), cached: true });
+    res.json({ ...(_briefCache.data), sessionType: detectSession(), cached: true });
     return;
   }
 
   // ② 캐시 만료 or force → 이미 캐시가 있으면 즉시 반환 후 백그라운드 갱신
   if (!force && _briefCache) {
-    // 만료된 캐시라도 즉시 반환 (사용자는 바로 볼 수 있음)
-    res.json({ ...(_briefCache.data), cached: true, stale: true });
+    // 만료된 캐시라도 즉시 반환 (사용자는 바로 볼 수 있음), sessionType은 현재 시각 기준
+    res.json({ ...(_briefCache.data), sessionType: detectSession(), cached: true, stale: true });
     // 이미 갱신 중이 아닐 때만 백그라운드 재생성
     if (!_briefRefreshing) {
       _briefRefreshing = true;
