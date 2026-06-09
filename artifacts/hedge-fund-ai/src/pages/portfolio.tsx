@@ -853,7 +853,6 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
 function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDelete: (id: number) => void; onRefresh: () => void }) {
   const { isEn } = useLanguage();
   const [, setLocation] = useLocation();
-  const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmNewReport, setConfirmNewReport] = useState(false);
   const [changes, setChanges] = useState<ChangesResult | null>(null);
@@ -1123,156 +1122,30 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
 
       {/* ── 하단 액션 바 ──────────────────────────────────────── */}
-      <div className="border-t border-border/60 px-3 py-2 flex items-center gap-1.5">
-        {/* 기존 보고서 보기 */}
+      <div className="border-t border-border/60 px-3 py-2 flex items-center gap-2">
+        {/* 보고서 보기 */}
         {a && (
           <button
             onClick={() => setLocation(`/analysis/${a.id}`)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
           >
-            <ExternalLink className="w-3 h-3 shrink-0" />
-            <span>{isEn ? "Report" : "보고서"}</span>
-            <span className="text-muted-foreground/40 font-normal">
-              {format(new Date(a.createdAt), "M/d", { locale: ko })}
-            </span>
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            <span>{isEn ? "View Report" : "보고서 보기"}</span>
           </button>
         )}
 
         <div className="flex-1" />
 
-        {/* 새 보고서 산출하기 */}
+        {/* 새 보고서 작성하기 */}
         <button
           onClick={() => setConfirmNewReport(true)}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] text-primary/70 hover:text-primary hover:bg-primary/8 border border-transparent hover:border-primary/20 transition-colors"
-          title="이 종목으로 새 보고서 산출"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-primary/80 hover:text-primary hover:bg-primary/8 border border-primary/20 hover:border-primary/40 transition-colors"
         >
-          <RefreshCw className="w-3 h-3 shrink-0" />
-          <span>{isEn ? "New Report" : "새 보고서"}</span>
+          <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+          <span>{isEn ? "New Report" : "새 보고서 작성하기"}</span>
         </button>
-
-        {/* AI 리서치 요약 토글 */}
-        {a && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className={cn(
-              "flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] transition-colors",
-              expanded
-                ? "text-foreground bg-muted/60"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-            )}
-          >
-            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            {isEn ? "Summary" : "요약"}
-          </button>
-        )}
       </div>
 
-      {/* ── 확장: AI 리서치 요약 ─────────────────────────────── */}
-      <AnimatePresence initial={false}>
-        {expanded && a && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-border/60 bg-muted/40 divide-y divide-border/40">
-              {/* 분석 메타 */}
-              <div className="px-4 py-3 flex items-center gap-3">
-                <Brain className="w-4 h-4 text-primary shrink-0" />
-                <div>
-                  <p className="text-[11px] font-semibold text-foreground">{isEn ? "AI Research Summary" : "AI 리서치 요약"}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {isEn
-                      ? format(new Date(a.createdAt), "MMM d, yyyy")
-                      : `${format(new Date(a.createdAt), "yyyy년 M월 d일", { locale: ko })} 분석`}
-                    {a.qaScore != null && (isEn ? ` · Score: ${a.qaScore}` : ` · 신뢰도 ${a.qaScore}점`)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setLocation(`/analysis/${a.id}`)}
-                  className="ml-auto text-[10px] text-primary hover:underline flex items-center gap-0.5"
-                >
-                  {isEn ? "View All" : "전체 보기"} <ExternalLink className="w-2.5 h-2.5" />
-                </button>
-              </div>
-
-              {/* 핵심 촉매 */}
-              {a.catalysts && cleanStepText(a.catalysts) && (
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{isEn ? "Key Catalysts" : "핵심 촉매"}</span>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {cleanStepText(a.catalysts)}
-                  </p>
-                </div>
-              )}
-
-              {/* 주요 리스크 */}
-              {a.risks && cleanStepText(a.risks) && (
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">{isEn ? "Key Risks" : "주요 리스크"}</span>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {cleanStepText(a.risks)}
-                  </p>
-                </div>
-              )}
-
-              {/* 전략 요약 (촉매·리스크 없을 때) */}
-              {!a.catalysts && !a.risks && a.strategy && cleanStepText(a.strategy) && (
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <Target className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-[10px] font-bold text-primary/80 uppercase tracking-wider">{isEn ? "Investment Strategy" : "투자 전략"}</span>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {cleanStepText(a.strategy)}
-                  </p>
-                </div>
-              )}
-
-              {/* 분석 없을 때 */}
-              {!a.catalysts && !a.risks && !a.strategy && (
-                <div className="px-4 py-6 text-center">
-                  <p className="text-[12px] text-muted-foreground mb-2">{isEn ? "No detailed analysis data" : "세부 분석 데이터가 없습니다"}</p>
-                  <button
-                    onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
-                    className="text-[11px] text-primary hover:underline"
-                  >{isEn ? "Request new analysis →" : "새 분석 요청하기 →"}</button>
-                </div>
-              )}
-
-              {/* 손절가 · 위험보상 - 작게 표시 */}
-              {(a.stopLoss != null || a.riskRewardRatio != null) && (
-                <div className="px-4 py-2.5 flex gap-4">
-                  {a.stopLoss != null && (
-                    <div>
-                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{isEn ? "Stop Loss" : "손절가"}</p>
-                      <p className="text-[12px] font-medium text-foreground/70 tabular-nums">
-                        {fmtPrice(a.stopLoss, holding.priceCurrency, isEn)}
-                      </p>
-                    </div>
-                  )}
-                  {a.riskRewardRatio != null && (
-                    <div>
-                      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{isEn ? "Risk/Reward" : "위험보상"}</p>
-                      <p className="text-[12px] font-medium text-foreground/70 tabular-nums">
-                        1 : {a.riskRewardRatio.toFixed(1)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
     </motion.div>
 
