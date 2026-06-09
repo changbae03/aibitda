@@ -451,27 +451,33 @@ function trimToOneLiner(text: string, maxLen = 62): string {
   return cut + " …";
 }
 
-/** investment_strategy JSON의 summary/key_issue에서 THESIS 문장 추출 */
+/** investment_strategy JSON에서 개조체 핵심 투자포인트 추출 */
 function parseStrategyThesis(raw: string | null | undefined, max = 3): string[] {
   const obj = parseStrategyJson(raw);
   if (obj) {
-    // thesis_points 배열이 있으면 우선 사용
-    if (Array.isArray(obj.thesis_points)) {
-      return obj.thesis_points.slice(0, max)
-        .map((t: any) => trimToOneLiner(String(t)))
+    // 1순위: monitoring_indicators 배열 — 이미 짧고 개조체에 가까움
+    if (Array.isArray(obj.monitoring_indicators) && obj.monitoring_indicators.length > 0) {
+      return obj.monitoring_indicators
+        .slice(0, max)
+        .map((t: any) => String(t).replace(/\*\*/g, "").replace(/\.$/, "").trim())
         .filter(t => t.length > 5);
     }
+    // 2순위: thesis_points 배열
+    if (Array.isArray(obj.thesis_points) && obj.thesis_points.length > 0) {
+      return obj.thesis_points.slice(0, max)
+        .map((t: any) => String(t).replace(/\*\*/g, "").replace(/\.$/, "").trim())
+        .filter(t => t.length > 5);
+    }
+    // 3순위: summary 문장 분할 (마침표 기준)
     const text = String(obj.summary ?? obj.key_issue ?? "");
     if (text.length > 10) {
       const sentences = text
         .split(/(?<=[.!。])\s+/)
-        .map(s => s.replace(/\*\*/g, "").trim())
+        .map(s => s.replace(/\*\*/g, "").replace(/\.$/, "").trim())
         .filter(s => s.length > 15);
-      if (sentences.length > 0)
-        return sentences.slice(0, max);
+      if (sentences.length > 0) return sentences.slice(0, max);
     }
   }
-  // fallback: catalyst_analysis markdown 단락
   return parseBullets(raw, max);
 }
 
@@ -852,10 +858,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
   const [confirmNewReport, setConfirmNewReport] = useState(false);
   const [changes, setChanges] = useState<ChangesResult | null>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
-  const [brief, setBrief] = useState<DailyBrief | null>(null);
-  const [briefExpanded, setBriefExpanded] = useState(false);
-  const [briefLoading, setBriefLoading] = useState(false);
-
   const a = holding.analysis;
 
   useEffect(() => {
@@ -864,28 +866,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       .then(d => { if (d) setChanges(d); })
       .catch(() => {});
   }, [holding.ticker]);
-
-  // 마운트 시 브리핑 자동 로드 — 분석이 없으면 fetch 자체를 생략
-  useEffect(() => {
-    if (!holding.analysis) return;
-    setBriefLoading(true);
-    fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}`), { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.summary) setBrief(d); })
-      .catch(() => {})
-      .finally(() => setBriefLoading(false));
-  }, [holding.ticker, holding.analysis]);
-
-  async function refreshBrief() {
-    setBriefLoading(true);
-    setBrief(null);
-    try {
-      const r = await fetch(getApiUrl(`/api/portfolio/brief/${encodeURIComponent(holding.ticker)}?force=true`), { credentials: "include" });
-      const d = r.ok ? await r.json() : null;
-      if (d?.summary) setBrief(d);
-    } catch {}
-    setBriefLoading(false);
-  }
 
   async function handleDelete() {
     if (!confirm(isEn ? `Remove ${holding.ticker} from portfolio?` : `${holding.ticker}를 포트폴리오에서 제거할까요?`)) return;
@@ -1141,105 +1121,6 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
         </button>
       )}
 
-      {/* ── AI 데일리 이슈 브리핑 (뉴스라인: 한 줄 + 확장) ─────── */}
-      {a && (brief || briefLoading) && (() => {
-        const sections = brief ? parseBrief(brief.summary) : [];
-        const coreSection = sections.find(s => s.icon === "core");
-        const detailSections = sections.filter(s => s.icon !== "core");
-        const headlineText = coreSection?.text ?? (sections[0]?.text ?? "");
-        return (
-          <div className="mx-3 mb-3 rounded-xl border border-border bg-muted/30 overflow-hidden">
-            {/* 한 줄 헤더 — 항상 보임 */}
-            <button
-              onClick={() => setBriefExpanded(v => !v)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
-            >
-              {briefLoading
-                ? <Loader2 className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
-                : <Newspaper className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              }
-              {briefLoading ? (
-                <span className="flex-1 text-[12px] text-muted-foreground/50">{isEn ? "Generating briefing..." : "브리핑 생성 중…"}</span>
-              ) : (
-                <p className={cn("flex-1 text-[12px] text-foreground/70 leading-snug min-w-0", !briefExpanded && "line-clamp-1")}>
-                  {headlineText}
-                </p>
-              )}
-              {/* 멀티뷰 배지 */}
-              {brief && !briefLoading && brief.source === "analysis" && (brief.contributorCount ?? 0) > 0 && (
-                <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-400">
-                  <Users className="w-2.5 h-2.5" />{brief.contributorCount}
-                </span>
-              )}
-              {brief && !briefLoading && (
-                briefExpanded
-                  ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
-                  : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
-              )}
-            </button>
-
-            {/* 확장: 촉매 + 리스크 상세 */}
-            <AnimatePresence initial={false}>
-              {briefExpanded && brief && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  exit={{ height: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="overflow-hidden"
-                >
-                  <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2.5">
-                    {/* 나머지 섹션 (촉매·리스크) */}
-                    {detailSections.map((sec, i) => (
-                      <div key={i} className="flex gap-2">
-                        {sec.icon === "risk"     && <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />}
-                        {sec.icon === "catalyst" && <Zap           className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />}
-                        <div>
-                          <p className={cn(
-                            "text-[10px] font-bold uppercase tracking-wider mb-0.5",
-                            sec.icon === "risk"     && "text-red-400/80",
-                            sec.icon === "catalyst" && "text-emerald-400/80",
-                          )}>{sec.label}</p>
-                          <p className="text-[12px] text-foreground/70 leading-relaxed">{sec.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {/* 푸터: 멀티뷰 출처 + 새로고침 */}
-                    <div className="flex items-center justify-between pt-0.5">
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/40">
-                        {brief.source === "analysis" ? (
-                          <>
-                            <Users className="w-2.5 h-2.5 text-emerald-400/60" />
-                            <span className="text-emerald-400/60">
-                              {isEn ? "Multi-View based" : "멀티뷰 기반"}
-                              {(brief.contributorCount ?? 0) > 0 && (isEn ? ` · ${brief.contributorCount} analysts` : ` · ${brief.contributorCount}명 분석`)}
-                            </span>
-                            {brief.analysisDate && (
-                              <span>· {brief.analysisDate}</span>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <Brain className="w-2.5 h-2.5" />
-                            <span>{isEn ? `AI generated · ${brief.date}` : `AI 생성 · ${brief.date}`}</span>
-                          </>
-                        )}
-                      </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); refreshBrief(); }}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                      >
-                        <RefreshCw className="w-2.5 h-2.5" />
-                        {isEn ? "Refresh" : "새로고침"}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })()}
 
       {/* ── 하단 액션 바 ──────────────────────────────────────── */}
       <div className="border-t border-border/60 px-3 py-2 flex items-center gap-1.5">
