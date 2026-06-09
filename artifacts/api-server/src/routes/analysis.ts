@@ -24,7 +24,7 @@ import {
 import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
-import { getDartHistoricalContext, fetchAndStoreDartQuarterly } from "../lib/dart-store.js";
+import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
 import { fetchDartBusinessContent, fetchDartCompetitorSection } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
@@ -1278,8 +1278,8 @@ async function computeHistoricalBeta(
   }
 }
 
-async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
-  const fcCacheKey = `financial:${resolvedSymbol}`;
+async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: DartAnchorNumerics | null): Promise<string> {
+  const fcCacheKey = dartNumerics ? `financial:${resolvedSymbol}:dart` : `financial:${resolvedSymbol}`;
   const fcCached = cache.get<string>(fcCacheKey);
   if (fcCached) {
     return fcCached;
@@ -1634,6 +1634,26 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
   const cashTsMap = toYearMap("annualCashAndCashEquivalentsAndShortTermInvestments");
   const arMap     = toYearMap("annualAccountsReceivable");
   const invMap    = toYearMap("annualInventory");
+
+  // ── DART 앵커 우선 적용 (한국 종목) ─────────────────────────────────────────
+  // Yahoo Finance는 K-IFRS 연결 기준이 아닌 경우가 있어 OPM 앵커가 틀릴 수 있음.
+  // DART OpenAPI 원천 데이터가 있으면 revMap·opMap·niMap·eqMap을 덮어써서
+  // DCF OPM 상한·ROIC·ROE 앵커를 정확한 K-IFRS 값 기준으로 강제한다.
+  if (dartNumerics) {
+    const dartYears = new Set([
+      ...Object.keys(dartNumerics.annualRev),
+      ...Object.keys(dartNumerics.annualOp),
+    ]);
+    if (dartYears.size > 0) {
+      console.log(`[financial-context] DART 앵커 적용 (${resolvedSymbol}): ${[...dartYears].sort().join(", ")} — Yahoo 수치 override`);
+      for (const y of dartYears) {
+        if (dartNumerics.annualRev[y] != null) revMap[y] = dartNumerics.annualRev[y];
+        if (dartNumerics.annualOp[y]  != null) opMap[y]  = dartNumerics.annualOp[y];
+        if (dartNumerics.annualNi[y]  != null) niMap[y]  = dartNumerics.annualNi[y];
+        if (dartNumerics.annualEq[y]  != null) eqMap[y]  = dartNumerics.annualEq[y];
+      }
+    }
+  }
 
   const allYears = [...new Set([
     ...Object.keys(revMap), ...Object.keys(gpMap), ...Object.keys(opMap), ...Object.keys(niMap)
@@ -2474,13 +2494,19 @@ async function fetchFinancialContext(resolvedSymbol: string): Promise<string> {
     lines.push("\n[EPS 및 매출 전망 (애널리스트 컨센서스)]");
     lines.push("  ⚠️ 주의: 아래 '매출 성장률(YoY)'은 직전 연도 실제 매출 대비 계산값임. 'EPS 성장률'과 완전히 다른 수치. DCF에는 매출 성장률만 사용할 것.");
 
-    // 직전 실제 연간 매출 (timeseries annualTotalRevenue 우선, 없으면 income statement)
+    // 직전 실제 연간 매출 — DART(한국 종목) 우선, 없으면 Yahoo timeseries, 없으면 income statement
     const tsRevArr: any[] = tsResult?.annualTotalRevenue ?? [];
     const isArr: any[] = (result as any)?.incomeStatementHistory?.incomeStatementHistory ?? [];
     let priorActualRev: number | null = null;
-    if (tsRevArr.length > 0) {
+    // ① DART primary (KRW 종목)
+    if (dartNumerics?.latestFYRev != null) {
+      priorActualRev = dartNumerics.latestFYRev;
+      console.log(`[financial-context] priorActualRev DART 오버라이드 (${resolvedSymbol}): ${priorActualRev} (${dartNumerics.latestFYYear}FY)`);
+    // ② Yahoo timeseries fallback
+    } else if (tsRevArr.length > 0) {
       const sorted = [...tsRevArr].sort((a, b) => new Date(b.asOfDate ?? 0).getTime() - new Date(a.asOfDate ?? 0).getTime());
       priorActualRev = sorted[0]?.reportedValue?.raw ?? sorted[0]?.reportedValue ?? null;
+    // ③ income statement fallback
     } else if (isArr.length > 0) {
       priorActualRev = isArr[0]?.totalRevenue?.raw ?? isArr[0]?.totalRevenue ?? null;
     }
@@ -3774,8 +3800,16 @@ router.post("/", async (req, res) => {
   (async () => {
     try {
       const needsSOTPData = isKoreanTicker && hasSOTPSubsidiaryData(krxCode);
+      // DART 앵커 수치 먼저 조회 (DB 쿼리, 빠름) — fetchFinancialContext에 전달해 Yahoo 오버라이드
+      const dartAnchorNumerics = isKoreanTicker
+        ? await getDartAnchorNumerics(krxCode).catch(() => null)
+        : null;
+      if (dartAnchorNumerics) {
+        const years = Object.keys(dartAnchorNumerics.annualRev).sort();
+        console.log(`[analysis] #${_analysisId} DART 앵커 수치 로드 완료: ${years.join(", ")} (${krxCode})`);
+      }
       const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext] = await Promise.all([
-        fetchFinancialContext(resolvedSymbol),
+        fetchFinancialContext(resolvedSymbol, dartAnchorNumerics),
         fetchCompanyNews(companyName ?? ""),
         isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
         isKoreanTicker ? fetchECOSMacro() : Promise.resolve(null),

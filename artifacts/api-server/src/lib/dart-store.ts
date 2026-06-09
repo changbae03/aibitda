@@ -541,3 +541,67 @@ export async function getDartHistoricalContext(stockCode: string): Promise<strin
     return null;
   }
 }
+
+// ─── 앵커 수치 구조체 (서버 계산용) ──────────────────────────────────────────
+
+export interface DartAnchorNumerics {
+  annualRev:    Record<string, number>;
+  annualOp:     Record<string, number>;
+  annualNi:     Record<string, number>;
+  annualEq:     Record<string, number>;
+  latestFYRev:  number | null;
+  latestFYYear: string | null;
+}
+
+/**
+ * ticker_financials DB에서 연간(FY) 앵커 수치를 숫자 구조체로 반환.
+ * fetchFinancialContext가 Yahoo 데이터 대신 이 값을 우선 사용하도록 전달된다.
+ * 데이터 없으면 null 반환.
+ */
+export async function getDartAnchorNumerics(stockCode: string): Promise<DartAnchorNumerics | null> {
+  if (!/^\d{6}$/.test(stockCode)) return null;
+  try {
+    await ensureTable();
+    const r = await pool.query<{
+      bsns_year: number;
+      revenue: string | null;
+      operating_income: string | null;
+      net_income: string | null;
+      equity: string | null;
+    }>(
+      `SELECT bsns_year, revenue, operating_income, net_income, equity
+       FROM ticker_financials
+       WHERE ticker = $1 AND reprt_code = '11011'
+       ORDER BY bsns_year DESC
+       LIMIT 5`,
+      [stockCode]
+    );
+    if (r.rows.length === 0) return null;
+
+    const annualRev: Record<string, number> = {};
+    const annualOp:  Record<string, number> = {};
+    const annualNi:  Record<string, number> = {};
+    const annualEq:  Record<string, number> = {};
+
+    for (const row of r.rows) {
+      const y   = String(row.bsns_year);
+      const rev = row.revenue           ? Number(row.revenue)           : null;
+      const op  = row.operating_income  ? Number(row.operating_income)  : null;
+      const ni  = row.net_income        ? Number(row.net_income)        : null;
+      const eq  = row.equity            ? Number(row.equity)            : null;
+      if (rev != null) annualRev[y] = rev;
+      if (op  != null) annualOp[y]  = op;
+      if (ni  != null) annualNi[y]  = ni;
+      if (eq  != null) annualEq[y]  = eq;
+    }
+
+    const latestRow   = r.rows[0];
+    const latestFYRev  = latestRow.revenue ? Number(latestRow.revenue) : null;
+    const latestFYYear = String(latestRow.bsns_year);
+
+    return { annualRev, annualOp, annualNi, annualEq, latestFYRev, latestFYYear };
+  } catch (e) {
+    console.error(`[dart-store] getDartAnchorNumerics 오류:`, e);
+    return null;
+  }
+}
