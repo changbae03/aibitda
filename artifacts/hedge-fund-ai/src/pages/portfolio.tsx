@@ -468,11 +468,11 @@ function parseStrategyThesis(raw: string | null | undefined, max = 3): string[] 
         .map(s => s.replace(/\*\*/g, "").trim())
         .filter(s => s.length > 15);
       if (sentences.length > 0)
-        return sentences.slice(0, max).map(s => trimToOneLiner(s));
+        return sentences.slice(0, max);
     }
   }
   // fallback: catalyst_analysis markdown 단락
-  return parseBullets(raw, max).map(b => trimToOneLiner(b));
+  return parseBullets(raw, max);
 }
 
 /** investment_strategy JSON의 key_issue에서 Catalyst 한 줄 추출 */
@@ -1088,50 +1088,42 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
 
       {/* ── 리서치 패널: THESIS + KEY RISK (항상 표시) ──────────────────────── */}
       {a && hasResearch && (
-        <div className="border-t border-border/50 mx-0">
-          {/* THESIS + KEY RISK 2열 */}
-          {(thesisBullets.length > 0 || riskBullets.length > 0) && (
-            <div className={cn(
-              "px-4 pt-3 pb-2 gap-4",
-              thesisBullets.length > 0 && riskBullets.length > 0 ? "grid grid-cols-2" : "flex"
-            )}>
-              {/* THESIS */}
-              {thesisBullets.length > 0 && (
-                <div className="min-w-0 overflow-hidden">
-                  <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5">THESIS</p>
-                  <div className="space-y-1">
-                    {thesisBullets.map((b, i) => (
-                      <div key={i} className="flex items-baseline gap-1 min-w-0">
-                        <span className="text-muted-foreground/40 select-none shrink-0 text-[12px]">—</span>
-                        <span className="text-[12px] text-foreground/75 leading-snug truncate">{b}</span>
-                      </div>
-                    ))}
-                  </div>
+        <div className="border-t border-border/50">
+          <div className="px-4 pt-3 pb-2 space-y-3">
+            {/* THESIS — 전체 너비 */}
+            {thesisBullets.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-1.5">THESIS</p>
+                <div className="space-y-1">
+                  {thesisBullets.map((b, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <span className="text-muted-foreground/35 select-none shrink-0 text-[11px] mt-px">—</span>
+                      <span className="text-[12px] text-foreground/75 leading-snug line-clamp-2">{b}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
-              {/* KEY RISK */}
-              {riskBullets.length > 0 && (
-                <div className="min-w-0 overflow-hidden">
-                  <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-wider mb-1.5">KEY RISK</p>
-                  <div className="space-y-1">
-                    {riskBullets.map((b, i) => (
-                      <div key={i} className="flex items-baseline gap-1 min-w-0">
-                        <span className="text-red-400/60 select-none shrink-0 text-[12px]">!</span>
-                        <span className="text-[12px] text-foreground/75 leading-snug truncate">{b}</span>
-                      </div>
-                    ))}
-                  </div>
+              </div>
+            )}
+            {/* KEY RISK — 전체 너비 */}
+            {riskBullets.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-red-400/60 uppercase tracking-wider mb-1.5">KEY RISK</p>
+                <div className="space-y-1">
+                  {riskBullets.map((b, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <span className="text-red-400/50 select-none shrink-0 text-[11px] mt-px">!</span>
+                      <span className="text-[12px] text-foreground/70 leading-snug line-clamp-2">{b}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
           {/* Catalyst 한 줄 */}
           {catalystLine && (
-            <div className="px-4 pb-3 flex items-start gap-2">
-              <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0 mt-0.5">
-                {isEn ? "Catalyst" : "Catalyst"}
-              </span>
-              <span className="text-[12px] text-foreground/65 leading-snug">{catalystLine}</span>
+            <div className="px-4 pb-3 flex items-start gap-2 border-t border-border/30">
+              <span className="text-[10px] font-semibold text-muted-foreground/50 shrink-0 mt-0.5 pt-2">Catalyst</span>
+              <span className="text-[12px] text-foreground/60 leading-snug line-clamp-2 pt-2">{catalystLine}</span>
             </div>
           )}
         </div>
