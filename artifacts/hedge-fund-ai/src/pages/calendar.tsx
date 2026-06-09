@@ -73,6 +73,7 @@ interface IndicatorSeries {
   frequency: "monthly" | "quarterly";
   data: IndicatorPoint[];
   targetLine?: number;
+  rangeLabel?: string;  // FOMC 기준금리 레인지 (예: "4.25~4.50%")
 }
 
 // ── 클라이언트 캐시 ────────────────────────────────────────────────────────────
@@ -619,19 +620,38 @@ function IndicatorCard({ series, isEn }: { series: IndicatorSeries; isEn: boolea
         {/* 값 + 스파크라인 */}
         <div className="flex items-end justify-between gap-2">
           <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl font-bold text-foreground font-mono leading-none">
-                {last.toFixed(series.id === "us-gdp" ? 1 : 2)}
-              </span>
-              <span className="text-[10px] text-muted-foreground/60">{series.unit}</span>
-            </div>
-            <div className="flex items-center gap-1 mt-0.5">
-              <TrendIcon className="w-2.5 h-2.5" style={{ color }} />
-              <span className="text-[10px] font-mono" style={{ color }}>
-                {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
-              </span>
-              <span className="text-[9px] text-muted-foreground/40">{dateLabel}</span>
-            </div>
+            {series.rangeLabel ? (
+              /* FOMC 레인지 표시 (연방기금금리) */
+              <>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-lg font-bold text-foreground font-mono leading-none tracking-tight">
+                    {series.rangeLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[9px] text-muted-foreground/50">{isEn ? "FOMC target range" : "FOMC 목표 레인지"}</span>
+                  <span className="text-[9px] text-muted-foreground/30">·</span>
+                  <span className="text-[9px] text-muted-foreground/40">{dateLabel}</span>
+                </div>
+              </>
+            ) : (
+              /* 일반 단일값 표시 */
+              <>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl font-bold text-foreground font-mono leading-none">
+                    {last.toFixed(series.id === "us-gdp" ? 1 : 2)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60">{series.unit}</span>
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <TrendIcon className="w-2.5 h-2.5" style={{ color }} />
+                  <span className="text-[10px] font-mono" style={{ color }}>
+                    {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/40">{dateLabel}</span>
+                </div>
+              </>
+            )}
           </div>
           <Sparkline data={vals} color={color} targetLine={series.targetLine} />
         </div>

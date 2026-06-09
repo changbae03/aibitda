@@ -1714,6 +1714,7 @@ interface IndicatorSeries {
   frequency: "monthly" | "quarterly";
   data: IndicatorPoint[];
   targetLine?: number;
+  rangeLabel?: string;  // FOMC 기준금리 레인지 (예: "4.25~4.50%")
 }
 
 let _indicatorHistoryCache: { data: IndicatorSeries[]; expiresAt: number } | null = null;
@@ -1724,7 +1725,7 @@ router.get("/indicator-history", async (_req, res) => {
     return res.json(_indicatorHistoryCache.data);
   }
 
-  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v8");
+  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v9");
   if (dbCached) {
     _indicatorHistoryCache = { data: dbCached, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
     return res.json(dbCached);
@@ -1765,7 +1766,7 @@ router.get("/indicator-history", async (_req, res) => {
     }
 
     const [
-      [fedRate, cpi, corePce, unemployment, gdp],
+      [fedRate, cpi, corePce, unemployment, gdp, fedTargetUpper, fedTargetLower],
       blsTs,
       [krRate, krCpi, krGdpVol, krUnemployment],
     ] = await Promise.all([
@@ -1776,6 +1777,8 @@ router.get("/indicator-history", async (_req, res) => {
         fredGet("PCEPILFE"),            // 미국 근원 PCE (월별) → YoY 계산
         fredGet("UNRATE"),              // 미국 실업률 (월별)
         fredGet("A191RL1Q225SBEA"),     // 미국 GDP 성장률 연율 (분기)
+        fredGet("DFEDTARU"),            // FOMC 기준금리 목표 상단 (일별)
+        fredGet("DFEDTARL"),            // FOMC 기준금리 목표 하단 (일별)
       ]),
       // BLS — FRED rate limit 시 폴백 (CPI·실업률·PPI 공식 데이터)
       fetchBLSTimeSeries(4),
@@ -1813,6 +1816,14 @@ router.get("/indicator-history", async (_req, res) => {
     const usUrSource    = unemployment.slice(-24).length > 0  ? "FRED" : "BLS";
     console.log(`[indicator-history] US CPI: ${usCpiSource}(${usCpiData.length}건), UR: ${usUrSource}(${usUrData.length}건), BLS PPI: ${usPpiData.length}건, BLS NFP: ${usNfpData.length}건`);
 
+    // FOMC 기준금리 레인지 빌드 (최신값 기준)
+    const latestFedUpper = fedTargetUpper.length > 0 ? fedTargetUpper[fedTargetUpper.length - 1].value : null;
+    const latestFedLower = fedTargetLower.length > 0 ? fedTargetLower[fedTargetLower.length - 1].value : null;
+    const fedRangeLabel  = latestFedUpper != null && latestFedLower != null
+      ? `${latestFedLower}~${latestFedUpper}%`
+      : null;
+    if (fedRangeLabel) console.log(`[indicator-history] FOMC 기준금리 레인지: ${fedRangeLabel}`);
+
     const result: IndicatorSeries[] = [
       // ── 미국 지표 ──
       ...(fedRate.slice(-24).length > 0 ? [{
@@ -1824,6 +1835,7 @@ router.get("/indicator-history", async (_req, res) => {
         category: "금리",
         frequency: "monthly" as const,
         data: fedRate.slice(-24),
+        ...(fedRangeLabel ? { rangeLabel: fedRangeLabel } : {}),
       }] : []),
       ...(usCpiData.length > 0 ? [{
         id: "us-cpi",
@@ -1934,7 +1946,7 @@ router.get("/indicator-history", async (_req, res) => {
     // 빈 data 배열인 series 제외 (클라이언트 렌더링 TypeError 방지)
     const validResult = result.filter(s => s.data.length > 0);
     _indicatorHistoryCache = { data: validResult, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
-    saveToDBCache("indicator-history-v8", validResult, INDICATOR_HISTORY_TTL);
+    saveToDBCache("indicator-history-v9", validResult, INDICATOR_HISTORY_TTL);
     console.log(`[indicator-history] 완료 — 지표 ${validResult.length}개 수집 (미국 5개, 한국 ${validResult.length - 5}개)`);
     return res.json(validResult);
   } catch (err: any) {
