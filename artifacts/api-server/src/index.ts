@@ -153,19 +153,13 @@ const server = app.listen(port, () => {
       if (err?.cause) console.error("[MIGRATION] 원인:", err.cause);
     });
 
-  setTimeout(() => {
-    console.log("[SCHEDULER] 초기 모델 리뷰 시작");
-    triggerModelReview().catch((e) =>
-      console.error("[SCHEDULER] 초기 리뷰 실패:", e?.message ?? e)
-    );
-  }, 60 * 1000);
-
-  setInterval(() => {
-    console.log("[SCHEDULER] 정기 모델 리뷰 시작 (6시간 주기)");
-    triggerModelReview().catch((e) =>
-      console.error("[SCHEDULER] 정기 리뷰 실패:", e?.message ?? e)
-    );
-  }, SIX_HOURS_MS);
+  // ── 모델 리뷰 — 비활성화됨 (섹터 재보정과 역할 중복, Gemini 부하 절감) ────────
+  // setTimeout(() => {
+  //   triggerModelReview().catch((e) => console.error("[SCHEDULER] 초기 리뷰 실패:", e?.message ?? e));
+  // }, 60 * 1000);
+  // setInterval(() => {
+  //   triggerModelReview().catch((e) => console.error("[SCHEDULER] 정기 리뷰 실패:", e?.message ?? e));
+  // }, SIX_HOURS_MS);
 
   setTimeout(() => {
     warmupEarningsCache().catch((e) =>
@@ -237,20 +231,13 @@ const server = app.listen(port, () => {
   }, 7 * ONE_DAY_MS);
 
   // ── 동적 시장 학습 시스템 ────────────────────────────────────────────────────
-  // Layer 1: 매일 KOSPI/코스닥 트렌드 읽어 시장 레짐 컨텍스트 생성
-  setTimeout(() => {
-    console.log("[SCHEDULER] 시장 레짐 초기 업데이트 시작");
-    updateMarketRegime().catch((e) =>
-      console.error("[SCHEDULER] 시장 레짐 초기 업데이트 실패:", e?.message ?? e)
-    );
-  }, 3 * 60 * 1000); // 서버 시작 3분 후 첫 실행
-
-  setInterval(() => {
-    console.log("[SCHEDULER] 시장 레짐 일일 업데이트 시작");
-    updateMarketRegime().catch((e) =>
-      console.error("[SCHEDULER] 시장 레짐 일일 업데이트 실패:", e?.message ?? e)
-    );
-  }, ONE_DAY_MS);
+  // Layer 1: 시장 레짐 — 비활성화됨 (분석 품질 기여도 낮음, Gemini 부하 절감)
+  // setTimeout(() => {
+  //   updateMarketRegime().catch((e) => console.error("[SCHEDULER] 시장 레짐 초기 업데이트 실패:", e?.message ?? e));
+  // }, 3 * 60 * 1000);
+  // setInterval(() => {
+  //   updateMarketRegime().catch((e) => console.error("[SCHEDULER] 시장 레짐 일일 업데이트 실패:", e?.message ?? e));
+  // }, ONE_DAY_MS);
 
   // Layer 2: 주 1회 섹터별 예측 정확도 → AI 가이던스 노트 생성
   // 시작 2시간 후 실행 (사용자 분석 요청 집중 시간대 이후), 최근 6일 내 갱신된 섹터는 스킵
