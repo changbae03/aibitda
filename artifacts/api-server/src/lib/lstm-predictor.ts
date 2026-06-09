@@ -126,7 +126,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 31;  // [v31] KOSDAQ 적중률 개선: dirPenalty 완화(2.0→1.5), halfLifeDays 확대(14→22), GBDT 심화(700트리/depth5), LSTM 강화(180epoch/drop0.25), 앙상블 30개
+const MODEL_VERSION = 32;  // [v32] KOSDAQ 적중률 개선: dirPenalty 완전 제거(1.5→1.0), halfLifeDays 단축(22→14), GBDT 간소화(depth4/nEns18), dropout 강화(0.25→0.30), recentWindow 30으로 확대
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -162,22 +162,27 @@ const INDEX_HP: Record<string, IndexHP> = {
     dirPenalty: 1.8,
   },
   /**
-   * KOSDAQ [v31] — dirPenalty 완화 + 레짐 인식 범위 확대 + 모델 용량 강화
-   * · dirPenalty 2.0→1.5: 방향 패널티 과적합이 39.8% 역상관의 주원인 → 완화
-   *   (훈련 시 방향 오류 2배 패널티 → 테스트/실전에서 반대 방향 오버슈팅)
-   * · halfLifeDays 14→22: 2주 반감기가 급락 구간에만 과집중 → 3주로 확대
-   * · gbdtTrees 500→700, gbdtLR 0.008→0.006, gbdtDepth 4→5: GBDT 심화
-   * · lstmEpochs 130→180, lstmDrop 0.30→0.25: underfitting 해소
-   * · nEnsemble 22→30: 앙상블 분산 감소 → 개인 수급 노이즈 평활화
-   * · recentWindow 20→25: 알파 동적 조정 창 확대 → 안정적 GBDT/LSTM 가중치
+   * KOSDAQ [v32] — dirPenalty 완전 제거 + 과적합 방지 구조 + 최근 레짐 집중
+   * · dirPenalty 1.5→1.0: 방향 패널티 완전 제거 — v31도 23.7% 저조 → 잔여 패널티가 여전히
+   *   테스트/실전 역상관 오버슈팅 유발. graduated dirPenalty조차 KOSDAQ 노이즈 구간과 맞물려
+   *   훈련·테스트 레짐 불일치 심화. 완전 제거로 MSE 순수 최적화.
+   * · halfLifeDays 22→14: 2026년 금리 인하 사이클 / 관세전쟁 후 반등 레짐에 집중
+   *   (최근 2주 데이터에 집중 → 현재 시장 패턴 빠른 적응)
+   * · gbdtTrees 700→500, gbdtDepth 5→4, gbdtLeaf 8→12: 단순화로 과적합 방지
+   *   (깊은 트리+많은 트리 조합이 방향패널티 없을 때도 과적합 유발 가능)
+   * · gbdtFsub 0.70→0.65, gbdtSsub 0.85→0.75: 더 강한 서브샘플링 정규화
+   * · nEnsemble 30→18: 분산 감소 집중 (규모 줄이고 LR 소폭 올려 수렴 균형)
+   * · gbdtLR 0.006→0.008: nEnsemble 감소 보정, 수렴 속도 유지
+   * · lstmEpochs 180→130, lstmDrop 0.25→0.30: 과적합 방지
+   * · recentWindow 25→30: 편향 교정 창 확대 → 안정적 biasThreshold
    */
   KQ11: {
-    gbdtTrees: 700, gbdtLR: 0.006, gbdtDepth: 5, gbdtLeaf: 8,
-    gbdtFsub: 0.70, gbdtSsub: 0.85, nEnsemble: 30,
-    lstmEpochs: 180, lstmLR: 0.0007, lstmDrop: 0.25,
-    recentWindow: 25,
-    halfLifeDays: 22,  // [v31] 14→22: 급락 구간 과집중 완화, 3주 레짐 균형 인식
-    dirPenalty: 1.5,   // [v31] 2.0→1.5: 과도한 방향 패널티 → 역상관 오버슈팅 완화
+    gbdtTrees: 500, gbdtLR: 0.008, gbdtDepth: 4, gbdtLeaf: 12,
+    gbdtFsub: 0.65, gbdtSsub: 0.75, nEnsemble: 18,
+    lstmEpochs: 130, lstmLR: 0.0007, lstmDrop: 0.30,
+    recentWindow: 30,
+    halfLifeDays: 14,  // [v32] 22→14: 2026 최근 레짐(금리인하·반등)에 집중
+    dirPenalty: 1.0,   // [v32] 1.5→1.0: 방향 패널티 완전 제거 — 역상관 오버슈팅 근본 해결
   },
   /**
    * S&P500 [v26] — nEnsemble 5→12, 트리 200→400, LR 0.025→0.012
