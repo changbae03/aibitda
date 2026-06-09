@@ -1279,38 +1279,6 @@ export default function MarketAnalysis() {
                     );
                   }
 
-                  if (current.geminiResolved && fs && fs !== "neutral") {
-                    // ② Gemini 중재 — ML neutral이었으나 Gemini가 방향 결정
-                    const confLabel = current.geminiConfidence === "high" ? "고신뢰" : current.geminiConfidence === "medium" ? "중신뢰" : "저신뢰";
-                    const confColor = current.geminiConfidence === "high"
-                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
-                      : current.geminiConfidence === "medium"
-                      ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
-                      : "text-orange-400 bg-orange-500/10 border-orange-500/30";
-                    return (
-                      <div className={cn(
-                        "flex items-center gap-3 rounded-xl border px-4 py-3",
-                        fs === "up" ? "border-violet-400/40 bg-violet-500/8" : "border-violet-400/40 bg-violet-500/8",
-                      )}>
-                        <span className="text-2xl">{fs === "up" ? "🤖📈" : "🤖📉"}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className={cn("text-sm font-bold", fs === "up" ? "text-violet-300" : "text-violet-300")}>
-                              {fs === "up" ? "Gemini 중재 — 상승 우세 판단" : "Gemini 중재 — 하락 우세 판단"}
-                            </p>
-                            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", confColor)}>
-                              {confLabel}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            ML 모델 불일치 → Gemini가 뉴스·매크로로 중재.
-                            <span className="font-medium text-foreground ml-1">ML 합의 대비 낮은 신뢰</span>
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-
                   if (fs === "neutral" && hasGemini && current.agreementSignal !== "neutral") {
                     // ③ Gemini 반대 — ML은 합의했지만 Gemini가 반대 → 보수적 neutral
                     return (
@@ -1505,94 +1473,6 @@ export default function MarketAnalysis() {
               </div>
             )}
 
-            {/* ── 라이브 적중률 (실제 기록) ────────────────────────────── */}
-            {current && (() => {
-              const symMap: Record<string, string> = { kospi:"^KS11", kosdaq:"^KQ11", snp500:"^GSPC", nasdaq:"^IXIC" };
-              const la = liveAcc?.[symMap[activeIdx]];
-              if (!la) return null;
-              const hasData = la.total >= 5;
-              const pctColor = la.accuracy === null ? "text-muted-foreground"
-                : la.accuracy >= 60 ? "text-emerald-400"
-                : la.accuracy >= 50 ? "text-yellow-400"
-                : "text-red-400";
-              return (
-                <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    <h2 className="text-base font-bold text-foreground">실제 예측 성과 기록</h2>
-                    <span className="text-[10px] text-muted-foreground/50 ml-auto">오늘부터 매일 기록됩니다</span>
-                  </div>
-                  {!hasData ? (
-                    <div className="flex items-center gap-3 py-2">
-                      <div className="w-2 h-2 rounded-full bg-yellow-400/60 animate-pulse" />
-                      <p className="text-sm text-muted-foreground">
-                        아직 데이터 수집 중 —{" "}
-                        {la.pending > 0 ? `${la.pending}건 대기 중` : "오늘부터 예측을 기록하기 시작했어요"}.
-                        {" "}5건 이상 쌓이면 실제 적중률이 표시됩니다.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
-                          <span className="text-[11px] text-muted-foreground/70 font-medium">🎯 전체 적중률</span>
-                          <span className={cn("text-2xl font-bold", pctColor)}>
-                            {la.accuracy !== null ? `${la.accuracy}%` : "—"}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground/55">실제 맞힌 비율</span>
-                        </div>
-                        <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
-                          <span className="text-[11px] text-muted-foreground/70 font-medium">📋 누적 기록</span>
-                          <span className="text-2xl font-bold text-foreground">
-                            {la.correct}/{la.total}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground/55">맞힌 수 / 전체</span>
-                        </div>
-                        <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border bg-muted/20">
-                          <span className="text-[11px] text-muted-foreground/70 font-medium">⏳ 결과 대기</span>
-                          <span className="text-2xl font-bold text-foreground">{la.pending}</span>
-                          <span className="text-[11px] text-muted-foreground/55">결과 확인 대기 중</span>
-                        </div>
-                      </div>
-                      {la.byHorizon && (la.byHorizon["1"] || la.byHorizon["2"] || la.byHorizon["3"]) && (
-                        <div className="space-y-1.5">
-                          <p className="text-[11px] text-muted-foreground/55 font-medium">예측 구간별 적중률</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            {([
-                              { key: "1", label: "D+1 (내일)" },
-                              { key: "2", label: "D+2 (모레)" },
-                              { key: "3", label: "D+3 (3일 후)" },
-                            ]).map(({ key, label }) => {
-                              const h = la.byHorizon?.[key];
-                              if (!h || h.total < 3) return (
-                                <div key={key} className="flex flex-col items-center gap-0.5 py-2 rounded-lg border border-border/50 bg-muted/10">
-                                  <span className="text-[10px] text-muted-foreground/50">{label}</span>
-                                  <span className="text-sm font-bold text-muted-foreground/40">—</span>
-                                </div>
-                              );
-                              const acc = h.accuracy;
-                              const color = acc === null ? "text-muted-foreground"
-                                : acc >= 60 ? "text-emerald-400"
-                                : acc >= 50 ? "text-yellow-400"
-                                : "text-red-400";
-                              return (
-                                <div key={key} className="flex flex-col items-center gap-0.5 py-2 rounded-lg border border-border/50 bg-muted/10">
-                                  <span className="text-[10px] text-muted-foreground/55 font-medium">{label}</span>
-                                  <span className={cn("text-base font-bold", color)}>
-                                    {acc !== null ? `${acc}%` : "—"}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground/40">{h.correct}/{h.total}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
 
             {/* ── 예측 vs 실제 비교 ─────────────────────────────────────── */}
             {current && current.recentPerf && current.recentPerf.length > 0 && (
