@@ -52,6 +52,14 @@ interface IndexResult {
   tripleConsensus?: boolean;
   /** Gemini 반영 후 조정된 3일 예측 수익률 */
   adjustedReturn3d?: number;
+  /** [Gemini-Sentiment] Gemini가 판단한 상승 확률 0~100 */
+  geminiUpProb?: number;
+  /** [Gemini-Sentiment] Gemini가 판단한 하락 확률 0~100 */
+  geminiDownProb?: number;
+  /** [Gemini-Sentiment] 시장 분위기: fear / neutral / greed */
+  marketSentiment?: "fear" | "neutral" | "greed";
+  /** [Gemini-Sentiment] 핵심 리스크 요인 */
+  keyRisk?: string;
   /** [AI Overlay] Gemini 종합 코멘터리 */
   aiOverlay?: {
     direction: "up" | "down" | "neutral";
@@ -1353,33 +1361,86 @@ export default function MarketAnalysis() {
                   );
                 })()}
 
-                {/* ── Gemini AI 코멘터리 ───────────────────────────────────── */}
+                {/* ── Gemini AI 시장 분위기 + 확률 판단 ───────────────────── */}
                 {current.aiOverlay && (() => {
                   const ov = current.aiOverlay!;
-                  const dirIcon = ov.direction === "up" ? "📈" : ov.direction === "down" ? "📉" : "➡️";
+                  const upP  = current.geminiUpProb   ?? 0;
+                  const downP = current.geminiDownProb ?? 0;
+                  const sentiment = current.marketSentiment;
+                  const keyRisk   = current.keyRisk;
+                  const hasProbability = current.geminiUpProb != null;
+
+                  const sentimentConfig = {
+                    fear:    { label: "공포", icon: "😨", color: "text-red-400 bg-red-500/10 border-red-500/30" },
+                    neutral: { label: "중립", icon: "😐", color: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30" },
+                    greed:   { label: "탐욕", icon: "🤑", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
+                  };
+                  const sc = sentiment ? sentimentConfig[sentiment] : null;
+
                   const confLabel = ov.confidence === "high" ? "고신뢰" : ov.confidence === "medium" ? "중신뢰" : "저신뢰";
                   const confColor = ov.confidence === "high"
                     ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
                     : ov.confidence === "medium"
                     ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
                     : "text-orange-400 bg-orange-500/10 border-orange-500/30";
-                  const dirColor = ov.direction === "up" ? "text-red-400" : ov.direction === "down" ? "text-blue-400" : "text-muted-foreground";
+
                   return (
-                    <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 px-4 py-3 space-y-2">
+                    <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 px-4 py-3 space-y-3">
+                      {/* 헤더 */}
                       <div className="flex items-center gap-2">
                         <span className="text-base">🤖</span>
-                        <span className="text-xs font-bold text-violet-400">Gemini AI 종합 판단</span>
+                        <span className="text-xs font-bold text-violet-400">Gemini AI 시장 분석</span>
+                        {sc && (
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border flex items-center gap-0.5", sc.color)}>
+                            {sc.icon} 시장 {sc.label}
+                          </span>
+                        )}
                         <span className={cn("ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full border", confColor)}>
                           {confLabel}
                         </span>
                       </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-lg mt-0.5">{dirIcon}</span>
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <p className={cn("text-sm font-bold", dirColor)}>{ov.comment}</p>
-                          <p className="text-xs text-muted-foreground leading-relaxed">{ov.reasoning}</p>
+
+                      {/* 확률 바 */}
+                      {hasProbability && (
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-[11px] font-semibold">
+                            <span className="text-emerald-400">상승 {upP.toFixed(0)}%</span>
+                            <span className="text-muted-foreground/50 text-[10px]">
+                              횡보 {Math.max(0, 100 - upP - downP).toFixed(0)}%
+                            </span>
+                            <span className="text-red-400">하락 {downP.toFixed(0)}%</span>
+                          </div>
+                          {/* 3구간 바: 상승 | 횡보 | 하락 */}
+                          <div className="flex h-2.5 rounded-full overflow-hidden gap-px bg-muted/30">
+                            <div
+                              className="bg-emerald-500/80 rounded-l-full transition-all duration-700"
+                              style={{ width: `${upP}%` }}
+                            />
+                            <div
+                              className="bg-muted/50 transition-all duration-700"
+                              style={{ width: `${Math.max(0, 100 - upP - downP)}%` }}
+                            />
+                            <div
+                              className="bg-red-500/70 rounded-r-full transition-all duration-700"
+                              style={{ width: `${downP}%` }}
+                            />
+                          </div>
                         </div>
+                      )}
+
+                      {/* 핵심 판단 + 리스크 */}
+                      <div className="space-y-1">
+                        {ov.comment && (
+                          <p className="text-xs font-semibold text-foreground leading-snug">{ov.comment}</p>
+                        )}
+                        {keyRisk && (
+                          <p className="text-[11px] text-muted-foreground flex items-start gap-1">
+                            <span className="text-amber-400 mt-px shrink-0">⚡</span>
+                            <span>핵심 리스크: <span className="text-amber-300/80">{keyRisk}</span></span>
+                          </p>
+                        )}
                       </div>
+
                       <p className="text-[10px] text-muted-foreground/40 text-right">
                         {new Date(ov.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 분석
                       </p>

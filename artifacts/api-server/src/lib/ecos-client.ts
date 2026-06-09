@@ -20,7 +20,7 @@ const BASE_URL = "https://ecos.bok.or.kr/api/StatisticSearch";
 const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6시간 캐시
 
-interface EcosMacro {
+export interface EcosMacro {
   baseRate: number | null;           // 한국은행 기준금리 (%)
   cpiIndex: number | null;          // CPI 지수 (2020=100)
   cpiYoY: number | null;            // CPI 전년동월비 (%)
@@ -242,6 +242,11 @@ export async function fetchECOSMacro(): Promise<EcosMacro | null> {
     console.error("[ECOS] 거시지표 조회 실패:", err.message);
     return null;
   }
+}
+
+/** 캐시된 ECOS 매크로 즉시 반환 (네트워크 호출 없음) */
+export function getCachedEcosMacro(): EcosMacro | null {
+  return macroCache;
 }
 
 /**

@@ -185,7 +185,7 @@ export interface MarketBriefResult {
 // ─── 실시간 시장 뉴스 수집 ───────────────────────────────────────────────────
 
 /** Google News RSS + 네이버 금융 뉴스로 최신 한국 시장 뉴스 헤드라인 수집 */
-async function fetchMarketNews(): Promise<string> {
+export async function fetchMarketNews(): Promise<string> {
   const queries = [
     "코스피 코스닥 증시 주식 이슈",
     "삼성전자 SK하이닉스 현대차 LG에너지솔루션 기업",

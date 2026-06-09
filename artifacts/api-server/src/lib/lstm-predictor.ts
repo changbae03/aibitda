@@ -33,6 +33,8 @@ import * as tf from "@tensorflow/tfjs";
 import YahooFinance from "yahoo-finance2";
 import { pool } from "@workspace/db";
 import { fetchInvestorData, fetchShortRatio, isPykrxEnabled } from "./pykrx-client.js";
+import { getCachedFredMacro } from "./fred-client.js";
+import { getCachedEcosMacro } from "./ecos-client.js";
 import {
   savePrediction, resolveExpiredPredictions, shouldTriggerRetrain,
   getComponentLiveAccuracy, type ComponentLiveAccuracy, type PredictionContext,
@@ -64,7 +66,7 @@ export interface IndexResult {
   agreementSignal: "up" | "down" | "neutral";
   /** [v22] 합의 강도: |gbdtReturn| + |lstmReturn| 의 평균 (클수록 양쪽 모두 강하게 예측) */
   agreementStrength: number;
-  /** [AI Overlay] Gemini가 ML 예측 + 매크로 + 뉴스를 종합해 생성한 코멘터리 */
+  /** [AI Overlay] Gemini 분석 결과 */
   aiOverlay?: {
     direction: "up" | "down" | "neutral";
     confidence: "high" | "medium" | "low";
@@ -78,17 +80,20 @@ export interface IndexResult {
   geminiConfidence?: "high" | "medium" | "low";
   /** [Gemini-led] Gemini가 ML neutral을 중재하여 방향을 결정했는가 */
   geminiResolved?: boolean;
-  /**
-   * [Gemini-led] 최종 합성 신호:
-   * - ML합의 + Gemini동의(high) → "triple" (삼중합의, agreementSignal 값 유지)
-   * - ML neutral + Gemini방향 → Gemini 중재
-   * - ML합의 + Gemini반대 → "neutral" (보수적)
-   */
+  /** [Gemini-led] 최종 합성 신호 */
   finalSignal?: "up" | "down" | "neutral";
   /** [Gemini-led] 삼중 합의 여부 (ML두모델 + Gemini 모두 동의, confidence=high) */
   tripleConsensus?: boolean;
   /** [Gemini-led] Gemini 판단 반영 후 조정된 3일 예측 수익률 */
   adjustedReturn3d?: number;
+  /** [Gemini-Sentiment] Gemini가 판단한 상승 확률 0~100 */
+  geminiUpProb?: number;
+  /** [Gemini-Sentiment] Gemini가 판단한 하락 확률 0~100 */
+  geminiDownProb?: number;
+  /** [Gemini-Sentiment] 시장 분위기: fear / neutral / greed */
+  marketSentiment?: "fear" | "neutral" | "greed";
+  /** [Gemini-Sentiment] Gemini가 지목한 핵심 리스크 요인 */
+  keyRisk?: string;
 }
 export interface PipelineStep {
   key: string; label: string;
@@ -2318,10 +2323,13 @@ export async function runDailyIncrementalUpdate(): Promise<void> {
 // ─── AI Overlay ───────────────────────────────────────────────────────────────
 
 /**
- * Gemini가 ML 예측(GBDT+LSTM) + 매크로 + 뉴스를 종합 분석해 각 지수별 코멘터리를 생성합니다.
- * - GBDT·LSTM 불일치(neutral) 시 중재: 어느 모델을 신뢰할지 판단
- * - 매크로(VIX, 금리, 환율) + 뉴스 헤드라인 반영
- * - 결과를 _status의 각 IndexResult.aiOverlay에 저장 + DB 갱신
+ * Gemini가 ML 예측(GBDT+LSTM) + 매크로 + 뉴스 + 시장 분위기를 종합해
+ * 각 지수별 **상승/하락 확률**과 **시장 센티먼트**를 생성합니다.
+ *
+ * - 확률 기반 출력: upProbability / downProbability (0~100)
+ * - 센티먼트: fear / neutral / greed
+ * - 뉴스 헤드라인 + 매크로(FRED/ECOS 캐시) + 최근 5거래일 실제 수익률 반영
+ * - finalSignal, adjustedReturn3d를 확률 기반으로 계산
  */
 export async function runAIOverlay(newsBlock?: string): Promise<void> {
   if (!_status.ready || !_status.kospi) {
@@ -2333,6 +2341,10 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
     console.log("[ai-overlay] GEMINI_API_KEY 없음 — 스킵");
     return;
   }
+
+  // 매크로 캐시 즉시 가져오기 (네트워크 호출 없음)
+  const fredMacro = getCachedFredMacro();
+  const ecosMacro = getCachedEcosMacro();
 
   const ai = new GoogleGenAI({ apiKey });
 
@@ -2351,116 +2363,186 @@ export async function runAIOverlay(newsBlock?: string): Promise<void> {
     const lstm = result.lstmForecastRet ?? 0;
     const ensemble = result.predictedReturn3d;
     const agreement = result.agreementSignal;
-    const vix = result.lastVix5dMom;
-    const vol = result.curVol20;
+    const vixMom = result.lastVix5dMom;
+    const vol20 = result.curVol20; // 이미 소수 (0.01 = 1%)
 
-    const conflictDesc = agreement === "neutral"
-      ? `GBDT: ${gbdt >= 0 ? "+" : ""}${gbdt.toFixed(2)}%, LSTM: ${lstm >= 0 ? "+" : ""}${lstm.toFixed(2)}% — 두 모델 방향 불일치`
-      : `GBDT: ${gbdt >= 0 ? "+" : ""}${gbdt.toFixed(2)}%, LSTM: ${lstm >= 0 ? "+" : ""}${lstm.toFixed(2)}% — 두 모델 합의 (${agreement})`;
+    // 최근 5거래일 실제 수익률 (historical에서 추출)
+    const hist = result.historical ?? [];
+    const recentReturns = hist.slice(-6).map((h, i, arr) => {
+      if (i === 0) return null;
+      const prev = arr[i - 1].value;
+      return prev > 0 ? +((h.value - prev) / prev * 100).toFixed(2) : null;
+    }).filter((v): v is number => v !== null).slice(-5);
+    const recentRetStr = recentReturns.length > 0
+      ? recentReturns.map((r, i) => `D-${recentReturns.length - i}: ${r >= 0 ? "+" : ""}${r}%`).join(", ")
+      : "N/A";
 
-    const prompt = `당신은 퀀트 애널리스트입니다. ${label} 지수에 대해 GBDT+LSTM 머신러닝 앙상블 예측을 검토하고, 뉴스와 매크로 지표를 반영해 최종 판단을 내려주세요.
+    // 매크로 컨텍스트 (지역별)
+    let macroStr = "";
+    if (isKR && ecosMacro) {
+      macroStr = [
+        ecosMacro.baseRate != null ? `한국은행 기준금리: ${ecosMacro.baseRate}%` : "",
+        ecosMacro.usdKrw != null ? `원/달러: ${ecosMacro.usdKrw.toFixed(1)}원` : "",
+        ecosMacro.bondYield3Y != null ? `국고채 3Y: ${ecosMacro.bondYield3Y.toFixed(2)}%` : "",
+        ecosMacro.cpiYoY != null ? `한국 CPI(YoY): ${ecosMacro.cpiYoY.toFixed(2)}%` : "",
+      ].filter(Boolean).join(", ");
+    } else if (!isKR && fredMacro) {
+      macroStr = [
+        fredMacro.fedTargetUpper != null ? `연방기금금리 상단: ${fredMacro.fedTargetUpper}%` : "",
+        fredMacro.t10y != null ? `미국 10Y: ${fredMacro.t10y.toFixed(2)}%` : "",
+        fredMacro.yieldSpread != null ? `장단기스프레드: ${fredMacro.yieldSpread.toFixed(2)}%` : "",
+        fredMacro.cpiYoY != null ? `미국 CPI(YoY): ${fredMacro.cpiYoY.toFixed(2)}%` : "",
+        fredMacro.wtiOil != null ? `WTI: $${fredMacro.wtiOil.toFixed(1)}` : "",
+      ].filter(Boolean).join(", ");
+    }
 
-[ML 예측 데이터]
+    // 뉴스 헤드라인 필터링 (한국/미국 관련)
+    let newsLines = "";
+    if (newsBlock) {
+      const lines = newsBlock.split("\n").filter(l => l.startsWith("•"));
+      // 한국 지수면 미국 뉴스 우선순위 낮춤, 반대도 마찬가지
+      const relevant = isKR
+        ? lines.filter(l => !/nasdaq|s&p|dow|nyse/i.test(l)).slice(0, 20)
+        : lines.filter(l => !/코스피|코스닥|삼성전자|SK하이닉스/i.test(l)).slice(0, 20);
+      newsLines = (relevant.length > 0 ? relevant : lines.slice(0, 15)).join("\n");
+    }
+
+    const prompt = `당신은 시장 예측 앙상블의 AI 멤버입니다. GBDT+LSTM 두 ML 모델의 예측을 검토하고, 뉴스와 매크로·시장 분위기를 반영해 **방향 확률**을 판단하세요.
+
+[ML 모델 예측 — ${label}]
 - 앙상블 3일 예측 수익률: ${ensemble >= 0 ? "+" : ""}${ensemble.toFixed(2)}%
-- ${conflictDesc}
-- 20일 변동성: ${vol != null ? (vol * 100).toFixed(1) + "%" : "N/A"}
-- VIX 5일 모멘텀: ${vix != null ? vix.toFixed(4) : "N/A"}
-- 6주 방향 적중률: ${result.rolling30dDirAcc}%
+- GBDT: ${gbdt >= 0 ? "+" : ""}${gbdt.toFixed(2)}%, LSTM: ${lstm >= 0 ? "+" : ""}${lstm.toFixed(2)}%
+- ML 합의 신호: ${agreement} / 6주 방향 적중률: ${result.rolling30dDirAcc}%
+- 20일 변동성: ${vol20 != null ? (vol20 * 100).toFixed(1) + "%" : "N/A"}
+- VIX 5일 모멘텀: ${vixMom != null ? (vixMom >= 0 ? "+" : "") + vixMom.toFixed(4) : "N/A"} (양수=VIX상승=공포증가)
 
-${newsBlock ? `[최신 시장 뉴스 헤드라인 (${isKR ? "한국" : "미국"} 관련 발췌)]\n${newsBlock.split("\n").slice(0, 15).join("\n")}` : ""}
+[최근 5거래일 실제 수익률]
+${recentRetStr}
 
-위 데이터를 종합해 다음 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+[현재 매크로 지표${isKR ? " — 한국" : " — 미국"}]
+${macroStr || "N/A"}
+
+${newsLines ? `[최신 시장 뉴스 헤드라인]\n${newsLines}` : "[뉴스 없음]"}
+
+위 데이터를 종합해 다음 JSON으로만 응답하세요 (다른 텍스트 없이):
 {
-  "direction": "up" | "down" | "neutral",
-  "confidence": "high" | "medium" | "low",
-  "comment": "한 줄 핵심 판단 (40자 이내, 한국어)",
-  "reasoning": "ML 예측 근거 + 매크로/뉴스 보강 설명 (80~120자, 한국어)"
+  "upProbability": 0~100,
+  "downProbability": 0~100,
+  "sentiment": "fear" | "neutral" | "greed",
+  "comment": "핵심 판단 (40자 이내, 한국어)",
+  "keyRisk": "최대 리스크 요인 (30자 이내, 한국어)"
 }
 
-판단 기준:
-- ML 모델 합의(agreementSignal≠neutral) + 뉴스/매크로 지지 → confidence: high
-- ML 모델 불일치(neutral) → 뉴스·매크로·VIX로 중재 판단, confidence: medium 또는 low
-- VIX 급등(vix5dMom > 0.5) → 하방 리스크 강조
-- 변동성 20일 > 1.5% → 불확실성 언급`;
+작성 규칙:
+- upProbability + downProbability 합계는 반드시 100 이하 (나머지=횡보 가능성)
+- ML 합의(up/down) + 뉴스·매크로 지지 → 해당 방향 60~80%
+- ML 불일치(neutral) → 뉴스·매크로 판단, 50% 근방
+- VIX 모멘텀 > 0.3 (VIX 급등) → 하락 확률 증가, sentiment: fear
+- 최근 3거래일 연속 음수 수익률 → 하락 추세 반영
+- sentiment: greed는 강한 상승 뉴스·매크로·모멘텀 때만 사용`;
 
     try {
       const res = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { temperature: 0.3, maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } },
+        config: { temperature: 0.2, maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 } },
       });
       const raw = res.text?.trim() ?? "";
-      // 마크다운 코드블록 제거 후 JSON 추출
       const cleaned = raw.replace(/```(?:json)?\s*/gi, "").replace(/```\s*/gi, "").trim();
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       if (!jsonMatch) { console.warn(`[ai-overlay] ${label} JSON 파싱 실패 — raw: ${raw.slice(0, 200)}`); continue; }
-      const parsed = JSON.parse(jsonMatch[0]) as {
-        direction: "up" | "down" | "neutral";
-        confidence: "high" | "medium" | "low";
-        comment: string;
-        reasoning: string;
-      };
-      const overlay = { ...parsed, generatedAt: new Date().toISOString() };
 
-      // ── Gemini-led 신호 합성 ────────────────────────────────────────────────
-      // ML 합의 신호와 Gemini 판단을 조합해 finalSignal + adjustedReturn3d 계산
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        upProbability: number;
+        downProbability: number;
+        sentiment: "fear" | "neutral" | "greed";
+        comment: string;
+        keyRisk: string;
+      };
+
+      // 확률 정규화 (합계 > 100이면 비례 축소)
+      let upP = Math.max(0, Math.min(100, parsed.upProbability ?? 50));
+      let downP = Math.max(0, Math.min(100, parsed.downProbability ?? 50));
+      if (upP + downP > 100) { const s = upP + downP; upP = upP / s * 100; downP = downP / s * 100; }
+
+      // ── 확률 → 방향/신뢰도 변환 ───────────────────────────────────────────
+      const margin = Math.abs(upP - downP);
+      let geminiDir: "up" | "down" | "neutral";
+      if (upP > 58 && upP > downP + 12) geminiDir = "up";
+      else if (downP > 58 && downP > upP + 12) geminiDir = "down";
+      else geminiDir = "neutral";
+
+      let geminiConf: "high" | "medium" | "low";
+      if (margin >= 28) geminiConf = "high";
+      else if (margin >= 14) geminiConf = "medium";
+      else geminiConf = "low";
+
+      // ── Gemini-led 신호 합성 ───────────────────────────────────────────────
       let finalSignal: "up" | "down" | "neutral" = agreement;
       let adjustedReturn3d = ensemble;
       let geminiResolved = false;
       let tripleConsensus = false;
 
+      // 확률 기반 조정 강도 (dominant 방향 확률 50~100 → 0~1 스케일)
+      const dominantP = Math.max(upP, downP);
+      const probStrength = Math.max(0, (dominantP - 50) / 50); // 0..1
+
       if (agreement === "neutral") {
         // ① ML 모델 불일치 → Gemini가 중재
-        if (parsed.direction !== "neutral") {
-          finalSignal = parsed.direction;
+        if (geminiDir !== "neutral") {
+          finalSignal = geminiDir;
           geminiResolved = true;
-          // 중재 magnitude: Gemini 신뢰도에 비례, 최소값 보장
           const baseAbs = Math.max(Math.abs(ensemble), 0.10);
-          const confScale = parsed.confidence === "high" ? 0.75 : parsed.confidence === "medium" ? 0.50 : 0.30;
-          adjustedReturn3d = (parsed.direction === "up" ? 1 : -1) * baseAbs * confScale;
+          adjustedReturn3d = (geminiDir === "up" ? 1 : -1) * baseAbs * (0.30 + probStrength * 0.45);
         } else {
           finalSignal = "neutral";
           adjustedReturn3d = ensemble;
         }
       } else {
-        // ML 모델 합의 상태
-        const mlDir = agreement; // "up" | "down"
-        if (parsed.direction === mlDir) {
-          // ② ML + Gemini 동의
-          if (parsed.confidence === "high") {
-            // 삼중 합의: 10% 증폭
-            adjustedReturn3d = ensemble * 1.10;
-            tripleConsensus = true;
-          } else if (parsed.confidence === "medium") {
-            adjustedReturn3d = ensemble * 1.04;
-          } else {
-            adjustedReturn3d = ensemble; // low → 현상 유지
-          }
+        const mlDir = agreement;
+        if (geminiDir === mlDir) {
+          // ② ML + Gemini 동의 → 확률 기반 증폭
+          adjustedReturn3d = ensemble * (1 + probStrength * 0.18); // 최대 18% 증폭
+          if (geminiConf === "high") tripleConsensus = true;
           finalSignal = mlDir;
-        } else if (parsed.direction === "neutral") {
+        } else if (geminiDir === "neutral") {
           // ③ Gemini 불확실 → 약한 감소
-          adjustedReturn3d = ensemble * 0.88;
+          adjustedReturn3d = ensemble * (0.82 + probStrength * 0.08); // 8~18% 감소
           finalSignal = mlDir;
         } else {
-          // ④ Gemini가 ML과 반대 방향 → 보수적 처리
-          adjustedReturn3d = ensemble * 0.70;
+          // ④ Gemini가 ML과 반대 → 반대 확률이 클수록 더 보수적
+          adjustedReturn3d = ensemble * (0.70 - probStrength * 0.10); // 최대 30% 감소
           finalSignal = "neutral";
         }
       }
 
       adjustedReturn3d = +adjustedReturn3d.toFixed(2);
+
+      // aiOverlay 하위 호환성 유지 (direction/confidence/comment/reasoning)
+      const overlay = {
+        direction: geminiDir,
+        confidence: geminiConf,
+        comment: parsed.comment ?? "",
+        reasoning: parsed.keyRisk ?? "",
+        generatedAt: new Date().toISOString(),
+      };
+
       const tag = tripleConsensus ? "삼중합의🔥" : geminiResolved ? "Gemini중재" : finalSignal !== agreement ? "Gemini반대→보수" : "";
-      console.log(`[ai-overlay] ${label} 완료 — ${overlay.direction} (${overlay.confidence}): ${overlay.comment}${tag ? ` [${tag}]` : ""} | finalSignal=${finalSignal} adjRet=${adjustedReturn3d}%`);
+      console.log(`[ai-overlay] ${label} 완료 — ↑${upP.toFixed(0)}% ↓${downP.toFixed(0)}% sentiment=${parsed.sentiment} [${tag || "ML유지"}] | finalSignal=${finalSignal} adjRet=${adjustedReturn3d}%`);
 
       (_status as any)[key] = {
         ...result,
         aiOverlay: overlay,
-        geminiSignal: parsed.direction,
-        geminiConfidence: parsed.confidence,
+        geminiSignal: geminiDir,
+        geminiConfidence: geminiConf,
         geminiResolved,
         finalSignal,
         tripleConsensus,
         adjustedReturn3d,
+        geminiUpProb: +upP.toFixed(1),
+        geminiDownProb: +downP.toFixed(1),
+        marketSentiment: parsed.sentiment,
+        keyRisk: parsed.keyRisk ?? "",
       };
     } catch (e: any) {
       console.warn(`[ai-overlay] ${label} Gemini 오류:`, e?.message?.slice(0, 120));

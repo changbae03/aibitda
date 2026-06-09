@@ -190,6 +190,11 @@ export async function fetchFREDMacro(): Promise<FredMacro | null> {
   }
 }
 
+/** 캐시된 FRED 매크로 즉시 반환 (네트워크 호출 없음) */
+export function getCachedFredMacro(): FredMacro | null {
+  return macroCache;
+}
+
 /**
  * AI 프롬프트에 주입할 미국 거시경제 컨텍스트 문자열 생성
  */
