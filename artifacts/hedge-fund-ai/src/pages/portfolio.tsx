@@ -441,26 +441,38 @@ function parseStrategyRisks(raw: string | null | undefined, max = 3): string[] {
   return parseBullets(raw, max);
 }
 
+/** 긴 문장을 ~60자 안에서 자연스럽게 잘라내기 */
+function trimToOneLiner(text: string, maxLen = 62): string {
+  const s = text.replace(/\*\*/g, "").trim();
+  if (s.length <= maxLen) return s;
+  // 쉼표·세미콜론·대시 등 자연 구분점에서 자르기
+  const breakAt = s.slice(0, maxLen).search(/[,;—–\s]\s*\S*$/);
+  const cut = breakAt > 20 ? s.slice(0, breakAt).trimEnd() : s.slice(0, maxLen).trimEnd();
+  return cut + " …";
+}
+
 /** investment_strategy JSON의 summary/key_issue에서 THESIS 문장 추출 */
 function parseStrategyThesis(raw: string | null | undefined, max = 3): string[] {
   const obj = parseStrategyJson(raw);
   if (obj) {
     // thesis_points 배열이 있으면 우선 사용
     if (Array.isArray(obj.thesis_points)) {
-      return obj.thesis_points.slice(0, max).map((t: any) => String(t).replace(/\*\*/g, "").trim()).filter(t => t.length > 5);
+      return obj.thesis_points.slice(0, max)
+        .map((t: any) => trimToOneLiner(String(t)))
+        .filter(t => t.length > 5);
     }
     const text = String(obj.summary ?? obj.key_issue ?? "");
     if (text.length > 10) {
-      // 문장 단위 분할 (마침표/느낌표 기준)
       const sentences = text
         .split(/(?<=[.!。])\s+/)
         .map(s => s.replace(/\*\*/g, "").trim())
         .filter(s => s.length > 15);
-      if (sentences.length > 0) return sentences.slice(0, max);
+      if (sentences.length > 0)
+        return sentences.slice(0, max).map(s => trimToOneLiner(s));
     }
   }
   // fallback: catalyst_analysis markdown 단락
-  return parseBullets(raw, max);
+  return parseBullets(raw, max).map(b => trimToOneLiner(b));
 }
 
 /** investment_strategy JSON의 key_issue에서 Catalyst 한 줄 추출 */
@@ -1085,26 +1097,28 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
             )}>
               {/* THESIS */}
               {thesisBullets.length > 0 && (
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-2">THESIS</p>
-                  <div className="space-y-1.5">
+                <div className="min-w-0 overflow-hidden">
+                  <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5">THESIS</p>
+                  <div className="space-y-1">
                     {thesisBullets.map((b, i) => (
-                      <p key={i} className="text-[12px] text-foreground/75 leading-snug">
-                        <span className="text-muted-foreground/40 select-none">— </span>{b}
-                      </p>
+                      <div key={i} className="flex items-baseline gap-1 min-w-0">
+                        <span className="text-muted-foreground/40 select-none shrink-0 text-[12px]">—</span>
+                        <span className="text-[12px] text-foreground/75 leading-snug truncate">{b}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
               {/* KEY RISK */}
               {riskBullets.length > 0 && (
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-wider mb-2">KEY RISK</p>
-                  <div className="space-y-1.5">
+                <div className="min-w-0 overflow-hidden">
+                  <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-wider mb-1.5">KEY RISK</p>
+                  <div className="space-y-1">
                     {riskBullets.map((b, i) => (
-                      <p key={i} className="text-[12px] text-foreground/75 leading-snug">
-                        <span className="text-red-400/60 select-none">! </span>{b}
-                      </p>
+                      <div key={i} className="flex items-baseline gap-1 min-w-0">
+                        <span className="text-red-400/60 select-none shrink-0 text-[12px]">!</span>
+                        <span className="text-[12px] text-foreground/75 leading-snug truncate">{b}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
