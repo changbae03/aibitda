@@ -410,6 +410,103 @@ interface DailyBrief {
   analysisDate?: string | null;
 }
 
+/** investment_strategy JSON 파싱 헬퍼 */
+function parseStrategyJson(raw: string | null | undefined): Record<string, any> | null {
+  if (!raw) return null;
+  // 코드펜스/따옴표 제거 후 첫 { ~ 마지막 } 블록만 추출
+  let s = raw.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").replace(/"+\s*$/, "").trim();
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end === -1) return null;
+  s = s.slice(start, end + 1);
+  try { return JSON.parse(s); } catch { /* 계속 */ }
+  try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { return null; }
+}
+
+/** investment_strategy JSON의 risks 필드에서 리스크 불릿 추출 */
+function parseStrategyRisks(raw: string | null | undefined, max = 3): string[] {
+  const obj = parseStrategyJson(raw);
+  if (obj) {
+    const risks = obj.risks;
+    if (Array.isArray(risks)) {
+      return risks.slice(0, max).map((r: any) => String(r).replace(/\*\*/g, "").replace(/^[-—·]\s*/, "").trim()).filter(r => r.length > 5);
+    }
+    if (typeof risks === "string" && risks.length > 5) {
+      return risks.split(/\n+/)
+        .map(l => l.replace(/^[-—·•\d\.\)]+\s*/, "").replace(/\*\*/g, "").trim())
+        .filter(l => l.length > 5)
+        .slice(0, max);
+    }
+  }
+  return parseBullets(raw, max);
+}
+
+/** investment_strategy JSON의 summary/key_issue에서 THESIS 문장 추출 */
+function parseStrategyThesis(raw: string | null | undefined, max = 3): string[] {
+  const obj = parseStrategyJson(raw);
+  if (obj) {
+    // thesis_points 배열이 있으면 우선 사용
+    if (Array.isArray(obj.thesis_points)) {
+      return obj.thesis_points.slice(0, max).map((t: any) => String(t).replace(/\*\*/g, "").trim()).filter(t => t.length > 5);
+    }
+    const text = String(obj.summary ?? obj.key_issue ?? "");
+    if (text.length > 10) {
+      // 문장 단위 분할 (마침표/느낌표 기준)
+      const sentences = text
+        .split(/(?<=[.!。])\s+/)
+        .map(s => s.replace(/\*\*/g, "").trim())
+        .filter(s => s.length > 15);
+      if (sentences.length > 0) return sentences.slice(0, max);
+    }
+  }
+  // fallback: catalyst_analysis markdown 단락
+  return parseBullets(raw, max);
+}
+
+/** investment_strategy JSON의 key_issue에서 Catalyst 한 줄 추출 */
+function parseKeyCatalyst(strategyRaw: string | null | undefined, catalystRaw: string | null | undefined): string {
+  // 1순위: investment_strategy.key_issue (한 줄 핵심)
+  const obj = parseStrategyJson(strategyRaw);
+  if (obj) {
+    const ki = obj.key_issue ?? obj.monitoring_indicators?.[0] ?? "";
+    const kiStr = String(ki).replace(/\*\*/g, "").trim();
+    if (kiStr.length > 10) return kiStr.length > 120 ? kiStr.slice(0, 117) + "…" : kiStr;
+  }
+  // 2순위: catalyst_analysis markdown
+  const catText = cleanStepText(catalystRaw);
+  if (catText) {
+    const m = catText.match(/(?:Catalyst|카탈리스트|핵심 모니터링|Monitor)[:\s]+([^\n]+)/i);
+    if (m) return m[1].replace(/\*\*/g, "").trim();
+    // 첫 단락 한 줄
+    const firstPara = catText.split(/\n\n+/)[0]?.replace(/^#+\s*/gm, "").replace(/\*\*/g, "").trim();
+    if (firstPara && firstPara.length > 10) return firstPara.length > 120 ? firstPara.slice(0, 117) + "…" : firstPara;
+  }
+  return "";
+}
+
+/** 텍스트에서 불릿 포인트 추출 — em-dash, 하이픈, 번호 시작 줄 (fallback) */
+function parseBullets(raw: string | null | undefined, max = 4): string[] {
+  const text = cleanStepText(raw);
+  if (!text) return [];
+  const lines = text.split(/\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 6)
+    .filter(l => /^[—\-·•!\✓※▶▷→]/.test(l) || /^\d+[\.\)]\s/.test(l))
+    .filter(l => !l.startsWith("#"))
+    .map(l => l.replace(/^[—\-·•!\✓※▶▷→\d\.\)]+\s*/, "").replace(/\*\*/g, "").trim())
+    .filter(l => l.length > 6);
+  return lines.slice(0, max);
+}
+
+/** 텍스트에서 Catalyst 한 줄 추출 */
+function extractCatalystLine(raw: string | null | undefined): string {
+  const text = cleanStepText(raw);
+  if (!text) return "";
+  const m = text.match(/(?:Catalyst|카탈리스트|핵심 모니터링|모니터링 포인트|Monitor)[:\s]+([^\n]+)/i);
+  if (m) return m[1].trim().replace(/\*\*/g, "");
+  return "";
+}
+
 /** analysis_steps content가 JSON 문자열일 수 있어 파싱 후 읽기 좋은 텍스트 추출 */
 function cleanStepText(raw: string | null | undefined): string {
   if (!raw) return "";
@@ -806,6 +903,12 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
     return Math.round(((barTarget - lo) / (hi - lo)) * 100);
   })();
 
+  // ── 리서치 패널 데이터 (항상 표시) ─────────────────────────────────────────
+  const thesisBullets = parseStrategyThesis(a?.strategy, 3);
+  const riskBullets   = parseStrategyRisks(a?.strategy, 3);
+  const catalystLine  = parseKeyCatalyst(a?.strategy, a?.catalysts);
+  const hasResearch   = thesisBullets.length > 0 || riskBullets.length > 0 || !!catalystLine;
+
   // 종목 이니셜 배지 색상 — 회사명 첫 글자 기준으로 고정 색상
   const BADGE_COLORS = [
     "bg-rose-500/20 text-rose-300",
@@ -855,19 +958,43 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
           {/* 종목 정보 */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[15px] font-bold text-foreground leading-tight truncate">
                   {isEn && holding.englishName ? holding.englishName : holding.companyName}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                   <span className="font-mono text-[11px] text-muted-foreground/60">{holding.ticker}</span>
+                  {a?.verdict && (
+                    <span className={cn(
+                      "text-[10px] px-1.5 py-0 rounded font-bold border",
+                      verdictBg(a.verdict), verdictColor(a.verdict)
+                    )}>
+                      {a.verdict === "Strong Buy" ? "BUY+" : a.verdict === "Buy" ? "BUY" : a.verdict === "Hold" ? "HOLD" : a.verdict === "Sell" ? "SELL" : a.verdict === "Strong Sell" ? "SELL-" : a.verdict}
+                    </span>
+                  )}
                   {a?.industry && (
-                    <span className="text-[10px] text-muted-foreground/50">· {a.industry}</span>
+                    <span className="text-[10px] text-muted-foreground/40">· {a.industry}</span>
                   )}
                 </div>
               </div>
-              {/* 편집 · 삭제 */}
-              <div className="flex items-center gap-0.5 shrink-0">
+              {/* TP + 편집·삭제 */}
+              <div className="flex items-start gap-1 shrink-0">
+                {/* TP 우측 표시 */}
+                {a?.targetPrice != null && (
+                  <div className="text-right mr-1">
+                    <p className="text-[13px] font-bold text-foreground leading-none tabular-nums">
+                      TP {fmtPrice(a.targetPrice, holding.priceCurrency, isEn)}
+                    </p>
+                    {a.upsidePct != null && (
+                      <p className={cn(
+                        "text-[11px] tabular-nums mt-0.5 font-semibold",
+                        a.upsidePct >= 0 ? "text-emerald-500" : "text-red-400"
+                      )}>
+                        {a.upsidePct >= 0 ? "+" : ""}{a.upsidePct.toFixed(1)}% {isEn ? "upside" : "여력"}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <InlineEdit
                   holdingId={holding.id}
                   avgPrice={holding.avgPrice}
@@ -884,164 +1011,117 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
                 </button>
               </div>
             </div>
-            {/* 판정 배지 */}
-            {a && (
-              <div className="mt-1.5">
-                <span className={cn(
-                  "inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border font-semibold",
-                  verdictBg(a.verdict), verdictColor(a.verdict)
-                )}>
-                  {isEn ? (a.verdict) : (VERDICT_KO[a.verdict] ?? a.verdict)}
-                </span>
-                {holding.note && (
-                  <span className="ml-2 text-[11px] text-muted-foreground/50 truncate">{holding.note}</span>
-                )}
-              </div>
+            {holding.note && (
+              <p className="mt-1 text-[11px] text-muted-foreground/50 truncate">{holding.note}</p>
             )}
           </div>
         </div>
 
-        {/* ── 현재가 · 적정주가 ───────────────────────────────── */}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {/* 현재가 */}
-          <div className="rounded-xl bg-muted/20 border border-border/60 px-3 py-2.5">
-            <p className="text-[10px] text-muted-foreground mb-1">{isEn ? "Current Price" : "현재가"}</p>
-            {holding.currentPrice != null ? (
-              <>
-                <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                  {fmtPrice(holding.currentPrice, holding.priceCurrency, isEn)}
-                </p>
-                {holding.change1d != null && (
-                  <p className={cn("text-[11px] tabular-nums mt-1 font-medium", changeColor)}>
-                    {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""} {fmtPct(holding.change1d)} {isEn ? "today" : "오늘"}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-[15px] text-muted-foreground/40 mt-1">—</p>
-            )}
-          </div>
-
-          {/* AI 적정주가 — 내 분석 + 집단지성 */}
-          {(() => {
-            const myTP = a?.targetPrice ?? null;
-            const colTP = a?.collectiveTargetPrice ?? null;
-            const hasBoth = myTP != null && colTP != null;
-            // 대표 upside (카드 배경색 판단용)
-            const primaryUpside = a?.upsidePct ?? null;
-            const bgCls = primaryUpside != null && primaryUpside > 0
-              ? "bg-emerald-500/5 border-emerald-500/20"
-              : primaryUpside != null && primaryUpside < 0
-              ? "bg-red-500/5 border-red-500/20"
-              : "bg-muted/20 border-border/60";
-
-            return (
-              <div className={cn("rounded-xl border px-3 py-2.5", bgCls)}>
-                <p className="text-[10px] text-muted-foreground mb-1.5">{isEn ? "AI Fair Value" : "AI 적정주가"}</p>
-
-                {hasBoth ? (
-                  /* ── 두 목표가: 세로 스택으로 겹침 방지 ── */
-                  <div className="flex flex-col gap-1.5">
-                    {/* 내 분석 */}
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="text-[9px] text-muted-foreground/60 shrink-0">{isEn ? "My Analysis" : "내 분석"}</p>
-                      <div className="flex items-baseline gap-1.5 min-w-0">
-                        <p className="text-[13px] font-bold tabular-nums leading-none text-foreground truncate">
-                          {fmtPrice(myTP!, holding.priceCurrency, isEn)}
-                        </p>
-                        {a!.upsidePct != null && (
-                          <p className={cn("text-[10px] tabular-nums font-semibold shrink-0",
-                            a!.upsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
-                            {a!.upsidePct >= 0 ? "▲" : "▼"}{fmtPct(Math.abs(a!.upsidePct))}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {/* 멀티뷰 */}
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="text-[9px] text-muted-foreground/60 flex items-center gap-0.5 shrink-0">
-                        <Users className="w-2.5 h-2.5" />{isEn ? "Multi-View" : "멀티뷰"}
-                      </p>
-                      <div className="flex items-baseline gap-1.5 min-w-0">
-                        <p className="text-[13px] font-bold tabular-nums leading-none text-foreground truncate">
-                          {fmtPrice(colTP!, holding.priceCurrency, isEn)}
-                        </p>
-                        {a!.collectiveUpsidePct != null && (
-                          <p className={cn("text-[10px] tabular-nums font-semibold shrink-0",
-                            a!.collectiveUpsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
-                            {a!.collectiveUpsidePct >= 0 ? "▲" : "▼"}{fmtPct(Math.abs(a!.collectiveUpsidePct))}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : myTP != null ? (
-                  /* ── 내 분석만 있을 때 ── */
-                  <>
-                    <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                      {fmtPrice(myTP, holding.priceCurrency, isEn)}
-                    </p>
-                    {a!.upsidePct != null && (
-                      <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
-                        a!.upsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
-                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} {isEn ? "upside" : "여력"}
-                      </p>
-                    )}
-                  </>
-                ) : colTP != null ? (
-                  /* ── 멀티뷰만 있을 때 ── */
-                  <>
-                    <p className="text-[9px] text-muted-foreground/60 -mt-0.5 mb-0.5 flex items-center gap-0.5">
-                      <Users className="w-2.5 h-2.5" />{isEn ? "Multi-View" : "멀티뷰"}
-                    </p>
-                    <p className="text-[18px] font-bold text-foreground tabular-nums leading-none">
-                      {fmtPrice(colTP, holding.priceCurrency, isEn)}
-                    </p>
-                    {a!.upsidePct != null && (
-                      <p className={cn("text-[11px] tabular-nums mt-1 font-semibold",
-                        a!.upsidePct >= 0 ? "text-red-500" : "text-blue-500")}>
-                        {a!.upsidePct >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(a!.upsidePct))} {isEn ? "upside" : "여력"}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-[15px] text-muted-foreground/40 mt-1">—</p>
-                )}
-              </div>
-            );
-          })()}
+        {/* ── 현재가 컴팩트 행 ─────────────────────────────────── */}
+        <div className="mt-2 flex items-center gap-3">
+          {holding.currentPrice != null ? (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] text-muted-foreground/60">{isEn ? "Price" : "현재가"}</span>
+              <span className="text-[14px] font-bold text-foreground tabular-nums">
+                {fmtPrice(holding.currentPrice, holding.priceCurrency, isEn)}
+              </span>
+              {holding.change1d != null && (
+                <span className={cn("text-[11px] tabular-nums font-medium", changeColor)}>
+                  {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""}{fmtPct(Math.abs(holding.change1d))}
+                </span>
+              )}
+            </div>
+          ) : null}
+          {/* 멀티뷰 TP */}
+          {a?.collectiveTargetPrice != null && (
+            <div className="flex items-baseline gap-1 ml-auto">
+              <Users className="w-2.5 h-2.5 text-muted-foreground/40" />
+              <span className="text-[10px] text-muted-foreground/50">{isEn ? "Multi" : "멀티뷰"}</span>
+              <span className="text-[12px] font-semibold text-foreground/70 tabular-nums">
+                {fmtPrice(a.collectiveTargetPrice, holding.priceCurrency, isEn)}
+              </span>
+              {a.collectiveUpsidePct != null && (
+                <span className={cn("text-[10px] tabular-nums font-medium",
+                  a.collectiveUpsidePct >= 0 ? "text-emerald-500" : "text-red-400")}>
+                  {a.collectiveUpsidePct >= 0 ? "+" : ""}{a.collectiveUpsidePct.toFixed(1)}%
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 현재가 vs 목표가 바 */}
         {priceBarPct != null && targetBarPct != null && (
-          <div className="mt-2.5 px-0.5">
-            <div className="relative h-1.5 bg-muted/40 rounded-full overflow-visible">
-              {/* 목표가 위치 마커 */}
+          <div className="mt-2 px-0.5">
+            <div className="relative h-1 bg-muted/40 rounded-full overflow-visible">
               <div
                 className={cn(
-                  "absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-background z-10",
+                  "absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full border border-background z-10",
                   a?.upsidePct != null && a.upsidePct >= 0 ? "bg-emerald-400" : "bg-red-400"
                 )}
                 style={{ left: `clamp(0%, ${targetBarPct}%, 98%)` }}
               />
-              {/* 현재가 위치 */}
               <div
-                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-foreground border-2 border-background z-20"
+                className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-foreground border border-background z-20"
                 style={{ left: `clamp(0%, ${priceBarPct}%, 98%)` }}
               />
-              {/* 채워진 구간 */}
               <div
                 className="absolute inset-y-0 left-0 rounded-full bg-primary/30"
                 style={{ width: `${priceBarPct}%` }}
               />
             </div>
-            <div className="flex justify-between mt-0.5">
-              <span className="text-[9px] text-muted-foreground/50">{isEn ? "Current" : "현재가"}</span>
-              <span className="text-[9px] text-muted-foreground/50">{isEn ? "Fair Value" : "적정주가"}</span>
-            </div>
           </div>
         )}
       </div>
+
+      {/* ── 리서치 패널: THESIS + KEY RISK (항상 표시) ──────────────────────── */}
+      {a && hasResearch && (
+        <div className="border-t border-border/50 mx-0">
+          {/* THESIS + KEY RISK 2열 */}
+          {(thesisBullets.length > 0 || riskBullets.length > 0) && (
+            <div className={cn(
+              "px-4 pt-3 pb-2 gap-4",
+              thesisBullets.length > 0 && riskBullets.length > 0 ? "grid grid-cols-2" : "flex"
+            )}>
+              {/* THESIS */}
+              {thesisBullets.length > 0 && (
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-2">THESIS</p>
+                  <div className="space-y-1.5">
+                    {thesisBullets.map((b, i) => (
+                      <p key={i} className="text-[12px] text-foreground/75 leading-snug">
+                        <span className="text-muted-foreground/40 select-none">— </span>{b}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* KEY RISK */}
+              {riskBullets.length > 0 && (
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-wider mb-2">KEY RISK</p>
+                  <div className="space-y-1.5">
+                    {riskBullets.map((b, i) => (
+                      <p key={i} className="text-[12px] text-foreground/75 leading-snug">
+                        <span className="text-red-400/60 select-none">! </span>{b}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Catalyst 한 줄 */}
+          {catalystLine && (
+            <div className="px-4 pb-3 flex items-start gap-2">
+              <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0 mt-0.5">
+                {isEn ? "Catalyst" : "Catalyst"}
+              </span>
+              <span className="text-[12px] text-foreground/65 leading-snug">{catalystLine}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 분석 없음 → 분석 유도 배너 ─────────────────────────── */}
       {!a && (

@@ -81,7 +81,7 @@ async function _attachSteps(rows: any[]): Promise<any[]> {
     `SELECT analysis_id, step_key, content
      FROM analysis_steps
      WHERE analysis_id = ANY($1::int[])
-       AND step_key IN ('key_catalysts','risk_factors','investment_strategy')`,
+       AND step_key IN ('catalyst_analysis','key_catalysts','risk_factors','investment_strategy')`,
     [ids]
   );
   const byId = new Map<number, Record<string, string>>();
@@ -91,7 +91,12 @@ async function _attachSteps(rows: any[]): Promise<any[]> {
   }
   return rows.map((r) => {
     const s = byId.get(r.id) ?? {};
-    return { ...r, catalysts: s["key_catalysts"] ?? null, risks: s["risk_factors"] ?? null, strategy: s["investment_strategy"] ?? null };
+    return {
+      ...r,
+      catalysts: s["catalyst_analysis"] ?? s["key_catalysts"] ?? null,
+      risks: s["risk_factors"] ?? null,
+      strategy: s["investment_strategy"] ?? null,
+    };
   });
 }
 
