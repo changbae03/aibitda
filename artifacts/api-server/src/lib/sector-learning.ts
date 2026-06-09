@@ -109,7 +109,9 @@ export async function updateSectorLearning(sector: string): Promise<void> {
   }
 }
 
-export async function updateAllSectorLearning(): Promise<void> {
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export async function updateAllSectorLearning(skipIfFreshDays = 0): Promise<void> {
   await ensureTable();
   const r = await pool.query(
     `SELECT DISTINCT sector FROM model_calibration WHERE sample_count >= 3`
@@ -118,10 +120,28 @@ export async function updateAllSectorLearning(): Promise<void> {
     console.log("[sector-learning] 학습 데이터 없음 (sample_count >= 3인 섹터 없음)");
     return;
   }
+
+  let skipped = 0;
+  let updated = 0;
   for (const row of r.rows) {
+    // skipIfFreshDays > 0이면 최근 N일 이내 업데이트된 섹터는 건너뜀
+    if (skipIfFreshDays > 0) {
+      const existing = await pool.query(
+        `SELECT updated_at FROM sector_learning WHERE sector = $1`, [row.sector]
+      );
+      if (existing.rows.length > 0) {
+        const ageMs = Date.now() - new Date(existing.rows[0].updated_at).getTime();
+        if (ageMs < skipIfFreshDays * 24 * 3600_000) {
+          skipped++;
+          continue;
+        }
+      }
+    }
     await updateSectorLearning(row.sector);
+    updated++;
+    await sleep(2000); // API 속도 제한 완화: 섹터 간 2초 대기
   }
-  console.log(`[sector-learning] 전체 ${r.rows.length}개 섹터 업데이트 완료`);
+  console.log(`[sector-learning] 전체 ${r.rows.length}개 섹터 — 갱신 ${updated}개, 스킵 ${skipped}개`);
 }
 
 export async function getSectorLearningNote(

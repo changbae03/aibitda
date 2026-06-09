@@ -253,12 +253,13 @@ const server = app.listen(port, () => {
   }, ONE_DAY_MS);
 
   // Layer 2: 주 1회 섹터별 예측 정확도 → AI 가이던스 노트 생성
+  // 시작 2시간 후 실행 (사용자 분석 요청 집중 시간대 이후), 최근 6일 내 갱신된 섹터는 스킵
   setTimeout(() => {
     console.log("[SCHEDULER] 섹터 학습 노트 초기 생성 시작");
-    updateAllSectorLearning().catch((e) =>
+    updateAllSectorLearning(6).catch((e) =>
       console.error("[SCHEDULER] 섹터 학습 노트 초기 생성 실패:", e?.message ?? e)
     );
-  }, 10 * 60 * 1000); // 서버 시작 10분 후 첫 실행
+  }, 2 * 60 * 60 * 1000); // 서버 시작 2시간 후 첫 실행
 
   setInterval(() => {
     console.log("[SCHEDULER] 섹터 학습 노트 주간 업데이트 시작");
