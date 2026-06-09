@@ -72,6 +72,23 @@ export interface IndexResult {
     reasoning: string;
     generatedAt: string;
   };
+  /** [Gemini-led] Gemini의 방향 판단 */
+  geminiSignal?: "up" | "down" | "neutral";
+  /** [Gemini-led] Gemini의 신뢰도 */
+  geminiConfidence?: "high" | "medium" | "low";
+  /** [Gemini-led] Gemini가 ML neutral을 중재하여 방향을 결정했는가 */
+  geminiResolved?: boolean;
+  /**
+   * [Gemini-led] 최종 합성 신호:
+   * - ML합의 + Gemini동의(high) → "triple" (삼중합의, agreementSignal 값 유지)
+   * - ML neutral + Gemini방향 → Gemini 중재
+   * - ML합의 + Gemini반대 → "neutral" (보수적)
+   */
+  finalSignal?: "up" | "down" | "neutral";
+  /** [Gemini-led] 삼중 합의 여부 (ML두모델 + Gemini 모두 동의, confidence=high) */
+  tripleConsensus?: boolean;
+  /** [Gemini-led] Gemini 판단 반영 후 조정된 3일 예측 수익률 */
+  adjustedReturn3d?: number;
 }
 export interface PipelineStep {
   key: string; label: string;
@@ -2384,8 +2401,67 @@ ${newsBlock ? `[최신 시장 뉴스 헤드라인 (${isKR ? "한국" : "미국"}
         reasoning: string;
       };
       const overlay = { ...parsed, generatedAt: new Date().toISOString() };
-      (_status as any)[key] = { ...result, aiOverlay: overlay };
-      console.log(`[ai-overlay] ${label} 완료 — ${overlay.direction} (${overlay.confidence}): ${overlay.comment}`);
+
+      // ── Gemini-led 신호 합성 ────────────────────────────────────────────────
+      // ML 합의 신호와 Gemini 판단을 조합해 finalSignal + adjustedReturn3d 계산
+      let finalSignal: "up" | "down" | "neutral" = agreement;
+      let adjustedReturn3d = ensemble;
+      let geminiResolved = false;
+      let tripleConsensus = false;
+
+      if (agreement === "neutral") {
+        // ① ML 모델 불일치 → Gemini가 중재
+        if (parsed.direction !== "neutral") {
+          finalSignal = parsed.direction;
+          geminiResolved = true;
+          // 중재 magnitude: Gemini 신뢰도에 비례, 최소값 보장
+          const baseAbs = Math.max(Math.abs(ensemble), 0.10);
+          const confScale = parsed.confidence === "high" ? 0.75 : parsed.confidence === "medium" ? 0.50 : 0.30;
+          adjustedReturn3d = (parsed.direction === "up" ? 1 : -1) * baseAbs * confScale;
+        } else {
+          finalSignal = "neutral";
+          adjustedReturn3d = ensemble;
+        }
+      } else {
+        // ML 모델 합의 상태
+        const mlDir = agreement; // "up" | "down"
+        if (parsed.direction === mlDir) {
+          // ② ML + Gemini 동의
+          if (parsed.confidence === "high") {
+            // 삼중 합의: 10% 증폭
+            adjustedReturn3d = ensemble * 1.10;
+            tripleConsensus = true;
+          } else if (parsed.confidence === "medium") {
+            adjustedReturn3d = ensemble * 1.04;
+          } else {
+            adjustedReturn3d = ensemble; // low → 현상 유지
+          }
+          finalSignal = mlDir;
+        } else if (parsed.direction === "neutral") {
+          // ③ Gemini 불확실 → 약한 감소
+          adjustedReturn3d = ensemble * 0.88;
+          finalSignal = mlDir;
+        } else {
+          // ④ Gemini가 ML과 반대 방향 → 보수적 처리
+          adjustedReturn3d = ensemble * 0.70;
+          finalSignal = "neutral";
+        }
+      }
+
+      adjustedReturn3d = +adjustedReturn3d.toFixed(2);
+      const tag = tripleConsensus ? "삼중합의🔥" : geminiResolved ? "Gemini중재" : finalSignal !== agreement ? "Gemini반대→보수" : "";
+      console.log(`[ai-overlay] ${label} 완료 — ${overlay.direction} (${overlay.confidence}): ${overlay.comment}${tag ? ` [${tag}]` : ""} | finalSignal=${finalSignal} adjRet=${adjustedReturn3d}%`);
+
+      (_status as any)[key] = {
+        ...result,
+        aiOverlay: overlay,
+        geminiSignal: parsed.direction,
+        geminiConfidence: parsed.confidence,
+        geminiResolved,
+        finalSignal,
+        tripleConsensus,
+        adjustedReturn3d,
+      };
     } catch (e: any) {
       console.warn(`[ai-overlay] ${label} Gemini 오류:`, e?.message?.slice(0, 120));
     }

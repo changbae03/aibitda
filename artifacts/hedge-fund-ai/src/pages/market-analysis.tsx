@@ -41,6 +41,25 @@ interface IndexResult {
   agreementSignal?: "up" | "down" | "neutral";
   /** [v22] 합의 강도: 클수록 두 모델이 강하게 동일 방향 예측 */
   agreementStrength?: number;
+  /** [Gemini-led] Gemini의 방향 판단 */
+  geminiSignal?: "up" | "down" | "neutral";
+  geminiConfidence?: "high" | "medium" | "low";
+  /** Gemini가 ML neutral을 중재하여 방향을 결정했는가 */
+  geminiResolved?: boolean;
+  /** 최종 합성 신호 (ML합의 or Gemini중재) */
+  finalSignal?: "up" | "down" | "neutral";
+  /** 삼중 합의 여부 (ML두모델 + Gemini 모두 동의, confidence=high) */
+  tripleConsensus?: boolean;
+  /** Gemini 반영 후 조정된 3일 예측 수익률 */
+  adjustedReturn3d?: number;
+  /** [AI Overlay] Gemini 종합 코멘터리 */
+  aiOverlay?: {
+    direction: "up" | "down" | "neutral";
+    confidence: "high" | "medium" | "low";
+    comment: string;
+    reasoning: string;
+    generatedAt: string;
+  };
 }
 interface LiveAccuracy {
   symbol:   string;
@@ -1219,41 +1238,122 @@ export default function MarketAnalysis() {
             {/* ── AI 적중률 카드 ────────────────────────────────────────── */}
             {current && (
               <div className="space-y-3">
-                {/* ── 합의 신호 배너 ─────────────────────────────────────── */}
-                {current.agreementSignal && current.agreementSignal !== "neutral" ? (
-                  <div className={cn(
-                    "flex items-center gap-3 rounded-xl border px-4 py-3",
-                    current.agreementSignal === "up"
-                      ? "border-emerald-500/40 bg-emerald-500/10"
-                      : "border-red-500/40 bg-red-500/10",
-                  )}>
-                    <span className="text-2xl">{current.agreementSignal === "up" ? "🤝📈" : "🤝📉"}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={cn("text-sm font-bold", current.agreementSignal === "up" ? "text-emerald-400" : "text-red-400")}>
-                        {current.agreementSignal === "up" ? "두 AI 모델 모두 상승 예측" : "두 AI 모델 모두 하락 예측"}
-                        {current.agreementStrength != null && (
-                          <span className="ml-2 text-xs font-normal opacity-70">
-                            (합의 강도 {current.agreementStrength.toFixed(2)}%)
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        GBDT·LSTM이 같은 방향 → <span className="font-medium text-foreground">고신뢰 신호</span>.
-                        역사적으로 합의 시 적중률이 단독 신호보다 높습니다.
+                {/* ── 최종 합성 신호 배너 (Gemini-led) ───────────────── */}
+                {(() => {
+                  const fs = current.finalSignal ?? current.agreementSignal;
+                  const hasGemini = !!current.geminiSignal;
+
+                  if (current.tripleConsensus && fs && fs !== "neutral") {
+                    // ① 삼중 합의 — 최고 신뢰
+                    return (
+                      <div className={cn(
+                        "flex items-center gap-3 rounded-xl border px-4 py-3",
+                        fs === "up" ? "border-emerald-400/50 bg-emerald-500/10" : "border-red-400/50 bg-red-500/10",
+                      )}>
+                        <span className="text-2xl">{fs === "up" ? "🔥📈" : "🔥📉"}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={cn("text-sm font-bold", fs === "up" ? "text-emerald-400" : "text-red-400")}>
+                              {fs === "up" ? "삼중 합의 — 강력 상승 신호" : "삼중 합의 — 강력 하락 신호"}
+                            </p>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                              GBDT · LSTM · Gemini 일치
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            두 ML 모델과 Gemini AI가 모두 같은 방향 — <span className="font-medium text-foreground">최고 신뢰 구간</span>.
+                            {current.adjustedReturn3d != null && current.adjustedReturn3d !== current.predictedReturn3d && (
+                              <span className="ml-1 opacity-70">예측 수익률 +10% 강화 적용</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (current.geminiResolved && fs && fs !== "neutral") {
+                    // ② Gemini 중재 — ML neutral이었으나 Gemini가 방향 결정
+                    const confLabel = current.geminiConfidence === "high" ? "고신뢰" : current.geminiConfidence === "medium" ? "중신뢰" : "저신뢰";
+                    const confColor = current.geminiConfidence === "high"
+                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
+                      : current.geminiConfidence === "medium"
+                      ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
+                      : "text-orange-400 bg-orange-500/10 border-orange-500/30";
+                    return (
+                      <div className={cn(
+                        "flex items-center gap-3 rounded-xl border px-4 py-3",
+                        fs === "up" ? "border-violet-400/40 bg-violet-500/8" : "border-violet-400/40 bg-violet-500/8",
+                      )}>
+                        <span className="text-2xl">{fs === "up" ? "🤖📈" : "🤖📉"}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={cn("text-sm font-bold", fs === "up" ? "text-violet-300" : "text-violet-300")}>
+                              {fs === "up" ? "Gemini 중재 — 상승 우세 판단" : "Gemini 중재 — 하락 우세 판단"}
+                            </p>
+                            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", confColor)}>
+                              {confLabel}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            ML 모델 불일치 → Gemini가 뉴스·매크로로 중재.
+                            <span className="font-medium text-foreground ml-1">ML 합의 대비 낮은 신뢰</span>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (fs === "neutral" && hasGemini && current.agreementSignal !== "neutral") {
+                    // ③ Gemini 반대 — ML은 합의했지만 Gemini가 반대 → 보수적 neutral
+                    return (
+                      <div className="flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-2.5">
+                        <span className="text-xl">⚠️</span>
+                        <p className="text-xs text-muted-foreground">
+                          ML 합의 신호 있으나 Gemini 반대 — <span className="font-medium text-orange-400">보수적 중립 처리</span>.
+                          예측 수익률 30% 하향 조정됨.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  if (fs && fs !== "neutral") {
+                    // ④ 일반 ML 합의 (Gemini 없거나 낮은 신뢰)
+                    return (
+                      <div className={cn(
+                        "flex items-center gap-3 rounded-xl border px-4 py-3",
+                        fs === "up" ? "border-emerald-500/40 bg-emerald-500/10" : "border-red-500/40 bg-red-500/10",
+                      )}>
+                        <span className="text-2xl">{fs === "up" ? "🤝📈" : "🤝📉"}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-sm font-bold", fs === "up" ? "text-emerald-400" : "text-red-400")}>
+                            {fs === "up" ? "두 AI 모델 모두 상승 예측" : "두 AI 모델 모두 하락 예측"}
+                            {current.agreementStrength != null && (
+                              <span className="ml-2 text-xs font-normal opacity-70">
+                                (합의 강도 {current.agreementStrength.toFixed(2)}%)
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            GBDT·LSTM이 같은 방향 → <span className="font-medium text-foreground">고신뢰 신호</span>.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ⑤ 완전 neutral (ML불일치 + Gemini도 불확실)
+                  return (
+                    <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5">
+                      <span className="text-xl">🤔</span>
+                      <p className="text-xs text-muted-foreground">
+                        두 AI 모델 방향 불일치 — <span className="font-medium text-foreground">저신뢰 구간</span>.
+                        GBDT·LSTM이 서로 다른 방향을 가리켜 신호 신뢰도가 낮습니다.
                       </p>
                     </div>
-                  </div>
-                ) : current.agreementSignal === "neutral" ? (
-                  <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5">
-                    <span className="text-xl">🤔</span>
-                    <p className="text-xs text-muted-foreground">
-                      두 AI 모델 방향 불일치 — <span className="font-medium text-foreground">저신뢰 구간</span>.
-                      GBDT·LSTM이 서로 다른 방향을 가리켜 신호 신뢰도가 낮습니다.
-                    </p>
-                  </div>
-                ) : null}
+                  );
+                })()}
 
-                {/* ── Gemini AI 오버레이 ──────────────────────────────────── */}
+                {/* ── Gemini AI 코멘터리 ───────────────────────────────────── */}
                 {current.aiOverlay && (() => {
                   const ov = current.aiOverlay!;
                   const dirIcon = ov.direction === "up" ? "📈" : ov.direction === "down" ? "📉" : "➡️";
