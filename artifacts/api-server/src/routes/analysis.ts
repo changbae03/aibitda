@@ -5464,18 +5464,18 @@ async function executeStep(
             const isKRtk = /^\d{6}$/.test(tkr);
 
             // 중앙값 클램핑 제거: AI 결론 본문과 DB 저장값 불일치 원인
-            // 비율 가드(0.45x~3.5x)만으로 극단값 방지
+            // 상한 캡도 제거(DB 저장 로직과 일치): 하한 플로어만 유지
             const originalTp = rawTp;
             const medianCorrected = false;
 
             if (rawTp > 0 && sp > 0) {
-              const MAX_R = isKRtk ? 2.5 : 4.0;
+              // ⚠️ 상한 캡 제거: DB 저장 로직과 일치 — rNPV/SOTP 등 고배수 밸류에이션을 캡으로
+              // 무력화하지 않도록. 하한 플로어(DART 부재 오산출 방지)만 유지.
               const MIN_R = isKRtk ? 0.45 : 0.25;
               const ratio = rawTp / sp;
-              const validated = ratio > MAX_R ? Math.round(sp * MAX_R)
-                             : ratio < MIN_R ? Math.round(sp * MIN_R)
+              const validated = ratio < MIN_R ? Math.round(sp * MIN_R)
                              : Math.round(rawTp);
-              // corrected = true if ANY adjustment occurred (median clamp OR ratio clamp)
+              // corrected = true if ANY adjustment occurred (median clamp OR floor clamp)
               const ratioCorrected = validated !== Math.round(rawTp);
               const corrected = ratioCorrected || medianCorrected;
               const valRatio = validated / sp;
@@ -5492,7 +5492,7 @@ async function executeStep(
                 : ratioCorrected
                   ? (originalRatio < 0.1
                       ? `⚠️ 재무 데이터 미확보 경고: AI가 산출한 적정주가 ${fmtTp(Math.round(originalTp))}(현재가의 ${(originalRatio * 100).toFixed(1)}%)는 DART 재무 데이터 부재로 인한 오산출로 판단됨. 서버가 하한선(현재가 × ${MIN_R})인 ${fmtTp(validated)}으로 기계적 보정. 이 목표주가는 AI 밸류에이션이 아닌 최소 안전값이므로 실제 적정주가 도출을 위해 반드시 재무제표 기반 DCF/멀티플 분석을 수행할 것.\n`
-                      : `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 합리성 한도(현재가 대비 ${MIN_R}x~${MAX_R}x) 초과로 ${fmtTp(validated)}으로 자동 보정됨\n`)
+                      : `※ AI 원산출값 ${fmtTp(Math.round(originalTp))}이 하한선(현재가 대비 ${MIN_R}x) 미만으로 ${fmtTp(validated)}으로 자동 보정됨\n`)
                   : "";
               const tpBlock = `\n\n[⛔ 밸류에이션 확정 목표주가 — 보고서 전체 일관성 필수]\n`
                 + `현재가(분석 시작 기준): ${fmtTp(sp)}\n`
