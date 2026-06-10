@@ -3093,6 +3093,18 @@ PEER SELECTION RULES (strictly enforce):
 - For pipeline-only biotechs (pre-revenue or minimal revenue), prefer peers that are also pre-revenue or early-commercial stage with similar therapeutic area and modality (RNA, cell therapy, small molecule, etc.)
 - If a strictly comparable peer set cannot be found in Korea, include 1-2 US-listed peers of similar stage and modality.
 
+- AI / 머신비전 / 컴퓨터비전 / 얼굴인식 / 딥러닝 솔루션 기업 규칙 (알체라·라온피플·코난테크놀로지·딥노이드·뷰런테크놀로지·수아랩·아이코아 등에 적용):
+  * PRIORITY 1 — 한국 AI 비전/인식 기업: 라온피플(300120.KQ), 코난테크놀로지(402030.KQ), 딥노이드(315640.KQ), 뷰런테크놀로지(310210.KQ)
+  * PRIORITY 2 — 한국 AI 소프트웨어/플랫폼: 셀바스AI(108310.KQ), 마인즈랩(377480.KQ), 솔트룩스(304100.KQ), 이스트소프트(047560.KQ)
+  * PRIORITY 3 — 글로벌 AI 비전/인식 기업: NEC(6701.T) — 얼굴인식 솔루션 글로벌 리더, Cogent Systems/IDEMIA(비상장이면 제외), Aware Inc.(AWRE) — 생체인증/얼굴인식 상장사
+  * ❌ FORBIDDEN PEERS for AI/CV 기업 — 이 조합은 항상 피어 선정 오류:
+    - 핀테크/결제 플랫폼 (카카오페이·비바리퍼블리카·NHN페이코·핀크): 수익 모델 완전 다름, AI 솔루션 B2B와 비교 불가
+    - 헬스케어/바이오/제대혈 (메디포스트·차바이오텍·파미셀·코아스템): 사업 영역·수익 모델 완전 다름
+    - B2B SI/ERP/솔루션통합업체 (누리플렉스·신세계I&C·SK C&C·삼성SDS): AI 전문 기업이 아닌 IT 서비스 통합사
+    - AI 반도체/칩 설계사: AI 소프트웨어 솔루션 기업과 사업 모델 구조적으로 다름
+    - "AI"·"tech"·"디지털" 키워드만 공통이고 실제 제품·수익 모델이 다른 기업 절대 금지
+    - 영상보안(CCTV 제조·설치) vs AI 영상분석 소프트웨어는 다른 사업 모델임에 주의
+
 - PCB / MLB(Multi-Layer Board) / 서브스트레이트 / FPCB(연성회로기판) 제조사 규칙 (이수페타시스·대덕전자·코리아써키트·심텍·인터플렉스 등에 적용):
   * PRIORITY PEERS: 대덕전자(353200.KS), 코리아써키트(007810.KS), 심텍(222800.KQ), 인터플렉스(051370.KQ), TTM Technologies(TTMI), Tripod Technology(3044.TW)
   * ACCEPTABLE: 삼성전기(009150.KS) — PCB·MLCC 겸업, 전자부품 공급망 피어로 유효
@@ -3314,7 +3326,29 @@ async function fetchPeerFinancials(
           : (price && (quote as any).sharesOutstanding)
             ? price * (quote as any).sharesOutstanding
             : null;
-        let mcap = kisMcap ?? yahooMcap ?? calcMcap;
+
+        // 네이버 시가총액 fallback — KIS 없는 한국주 중 Yahoo가 부정확한 경우 보정
+        let naverMcap: number | null = null;
+        if (isKrw && !kisMcap && kisCode) {
+          try {
+            const naverInteg = await fetch(
+              `https://m.stock.naver.com/api/stock/${kisCode}/integration`,
+              { headers: NAVER_HEADERS, signal: AbortSignal.timeout(5000) }
+            ).then(r => r.ok ? r.json() : null);
+            const totalInfos: any[] = naverInteg?.totalInfos ?? [];
+            const mcapItem = totalInfos.find((i: any) => i?.code === "marketValue");
+            if (mcapItem?.value) {
+              const raw = String(mcapItem.value).replace(/[,\s]/g, "");
+              const trillM = raw.match(/^([\d.]+)조$/);
+              const hundM  = raw.match(/^([\d.]+)억$/);
+              if (trillM) naverMcap = parseFloat(trillM[1]) * 1e12;
+              else if (hundM) naverMcap = parseFloat(hundM[1]) * 1e8;
+              if (naverMcap) console.log(`[peer-data] ${peer.name} 네이버 시총: ${(naverMcap/1e8).toFixed(0)}억원`);
+            }
+          } catch { /* 네트워크 오류 무시 */ }
+        }
+
+        let mcap = kisMcap ?? naverMcap ?? yahooMcap ?? calcMcap;
         // Yahoo가 원 단위인데 너무 작으면(1,000억원 미만) 역산 결과로 교체
         if (isKrw && mcap != null && mcap < 1e11 && calcMcap != null && calcMcap > mcap) {
           console.warn(`[peer-data] ${peer.name} mcap 이상 보정: ${(mcap/1e8).toFixed(0)}억원 → ${(calcMcap/1e8).toFixed(0)}억원 (price×shares 역산)`);
