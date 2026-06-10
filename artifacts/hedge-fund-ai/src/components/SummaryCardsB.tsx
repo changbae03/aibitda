@@ -418,11 +418,11 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
             <div className={`font-black leading-tight ${isEn ? "text-4xl" : "text-2xl"}`} style={{ color: STEP_CFG.investment_strategy.hex }}>
               {verdictLabel || "—"}
             </div>
-            <div className="text-white/40 text-xs mt-0.5">{isEn ? "12M Verdict" : "12개월 투자의견"}</div>
+            <div className="text-muted-foreground text-xs mt-0.5">{isEn ? "12M Verdict" : "12개월 투자의견"}</div>
           </div>
           {upside !== null && (
             <div className="text-right">
-              <div className="text-2xl font-bold text-white">{fmtP(targetP, isUS, isEn)}</div>
+              <div className="text-2xl font-bold text-foreground">{fmtP(targetP, isUS, isEn)}</div>
               <div className="text-sm font-semibold" style={{ color: STEP_CFG.investment_strategy.hex }}>{fmtPct(upside)}</div>
             </div>
           )}
@@ -434,8 +434,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
             [isEn ? "R/R" : "손익비", rr ? `${rr.toFixed(2)}:1` : "—"],
           ] as [string, string][]).map(([l, v]) => (
             <div key={l} className="rounded-xl p-2.5" style={{ background: ab(STEP_CFG.investment_strategy.rgb, 0.08) }}>
-              <div className="text-[10px] text-white/40 mb-0.5">{l}</div>
-              <div className="text-sm font-bold text-white">{v}</div>
+              <div className="text-[10px] text-muted-foreground mb-0.5">{l}</div>
+              <div className="text-sm font-bold text-foreground">{v}</div>
             </div>
           ))}
         </div>
@@ -445,8 +445,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
               const isBull = s.case === "Bull", isBear = s.case === "Bear";
               const col = isBull ? "#7AE8B4" : isBear ? "#FF8A7A" : "#7AB8FF";
               return (
-                <div key={s.case} className="flex-1 rounded-xl p-2 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-                  <div className="text-[10px] text-white/40">{s.case}</div>
+                <div key={s.case} className="flex-1 rounded-xl p-2 text-center" style={{ background: "rgba(0,0,0,0.04)" }}>
+                  <div className="text-[10px] text-muted-foreground">{s.case}</div>
                   <div className="text-xs font-bold mt-0.5" style={{ color: col }}>
                     {s.upside ? (typeof s.upside === "number" ? fmtPct(s.upside) : s.upside) : fmtP(s.target_price, isUS, isEn)}
                   </div>
@@ -473,8 +473,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         {base && (
           <div className="flex items-end justify-between">
             <div>
-              <div className="text-2xl font-bold text-white">{fmtP(base, isUS, isEn)}</div>
-              <div className="text-xs text-white/40 mt-0.5">{isEn ? "Base Target" : "목표주가 (Base)"}</div>
+              <div className="text-2xl font-bold text-foreground">{fmtP(base, isUS, isEn)}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{isEn ? "Base Target" : "목표주가 (Base)"}</div>
             </div>
             {upside !== null && (
               <div className="rounded-xl px-2.5 py-1 text-sm font-bold"
@@ -486,31 +486,31 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         )}
         {bear && bull && (
           <div>
-            <div className="flex justify-between text-[10px] text-white/30 mb-1.5">
+            <div className="flex justify-between text-[10px] text-muted-foreground/70 mb-1.5">
               <span>Bear {fmtP(bear, isUS, isEn)}</span>
               <span>Bull {fmtP(bull, isUS, isEn)}</span>
             </div>
-            <div className="relative h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <div className="relative h-2.5 rounded-full" style={{ background: "rgba(0,0,0,0.06)" }}>
               <div className="absolute inset-0 rounded-full"
                 style={{ background: "linear-gradient(90deg,#FF5A5A,#FF8A7A 30%,#7AB8FF 70%,#7AE8B4)" }} />
               {cur && <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${curPct}%` }}>
-                <div className="w-0.5 h-5 bg-white rounded-full" />
+                <div className="w-0.5 h-5 bg-foreground/60 rounded-full" />
               </div>}
               {base && <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${basePct}%` }}>
-                <div className="w-3 h-3 rounded-full border-2 border-white" style={{ background: cfg.hex }} />
+                <div className="w-3 h-3 rounded-full border-2 border-foreground/60" style={{ background: cfg.hex }} />
               </div>}
             </div>
           </div>
         )}
         <div className="grid grid-cols-3 gap-2">
           {([["Bear", bear, "#FF8A7A"], ["Base", base, cfg.hex], ["Bull", bull, "#7AE8B4"]] as [string,number|null,string][]).map(([l,v,c]) => (
-            <div key={l} className="rounded-xl p-2.5 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-              <div className="text-[10px] text-white/40 mb-0.5">{l}</div>
+            <div key={l} className="rounded-xl p-2.5 text-center" style={{ background: "rgba(0,0,0,0.04)" }}>
+              <div className="text-[10px] text-muted-foreground mb-0.5">{l}</div>
               <div className="text-xs font-bold" style={{ color: c }}>{fmtP(v, isUS, isEn)}</div>
             </div>
           ))}
         </div>
-        {!base && <div className="text-sm text-white/40">{extractLeadText(content)}</div>}
+        {!base && <div className="text-sm text-muted-foreground">{extractLeadText(content)}</div>}
       </div>
     );
   }
@@ -528,7 +528,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
     return (
       <div className="flex flex-col gap-3">
         {narrative && (
-          <p className="text-[12px] text-white/60 leading-relaxed">{narrative}</p>
+          <p className="text-[12px] text-muted-foreground leading-relaxed">{narrative}</p>
         )}
         {hasTable ? (
           <div className="grid grid-cols-2 gap-2">
@@ -538,8 +538,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                 <div className="text-[11px] font-bold mb-0.5" style={{ color: cfg.hex }}>{label}</div>
                 {rev && (
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="text-[10px] text-white/35 shrink-0">{isEn ? "Rev" : "매출"}</span>
-                    <span className="text-xs font-semibold text-white text-right">
+                    <span className="text-[10px] text-muted-foreground shrink-0">{isEn ? "Rev" : "매출"}</span>
+                    <span className="text-xs font-semibold text-foreground text-right">
                       {rev}
                       {growth && growth !== "—" && (
                         <span className="ml-1 text-[10px] font-normal" style={{ color: cfg.hex }}>
@@ -551,14 +551,14 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                 )}
                 {opm && (
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="text-[10px] text-white/35 shrink-0">{isEn ? "OPM" : "영업이익률"}</span>
-                    <span className="text-xs font-semibold text-white">{opm}%</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{isEn ? "OPM" : "영업이익률"}</span>
+                    <span className="text-xs font-semibold text-foreground">{opm}%</span>
                   </div>
                 )}
                 {eps && (
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="text-[10px] text-white/35 shrink-0">EPS</span>
-                    <span className="text-xs font-semibold text-white">{eps}{isEn ? "" : "원"}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">EPS</span>
+                    <span className="text-xs font-semibold text-foreground">{eps}{isEn ? "" : "원"}</span>
                   </div>
                 )}
               </div>
@@ -569,16 +569,16 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           <div className="flex flex-col gap-2">
             {extractBullets(content, 3).map((b, i) => (
               <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
-                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(0,0,0,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
                   style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
-                <div className="text-white/80 text-sm leading-snug">{b}</div>
+                <div className="text-foreground/80 text-sm leading-snug">{b}</div>
               </div>
             ))}
           </div>
         )}
         {fc?.revUnit && (
-          <div className="text-[10px] text-white/25 text-right">단위: {fc.revUnit}</div>
+          <div className="text-[10px] text-muted-foreground/60 text-right">단위: {fc.revUnit}</div>
         )}
       </div>
     );
@@ -596,7 +596,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
     return (
       <div className="flex flex-col gap-3">
         {firstPara && (
-          <p className="text-[12.5px] text-white/70 leading-relaxed">{firstPara}</p>
+          <p className="text-[12.5px] text-muted-foreground leading-relaxed">{firstPara}</p>
         )}
         {keyIssue && (
           <div className="rounded-xl px-3 py-2.5 flex items-start gap-2.5"
@@ -606,7 +606,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
               <div className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: cfg.hex }}>
                 {isEn ? "Key Issue" : "핵심 이슈"}
               </div>
-              <div className="text-[12px] text-white/85 leading-snug">{keyIssue}</div>
+              <div className="text-[12px] text-foreground/90 leading-snug">{keyIssue}</div>
             </div>
           </div>
         )}
@@ -614,10 +614,10 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           <div className="flex flex-col gap-2">
             {bullets.map((b, i) => (
               <div key={i} className="flex items-start gap-2 rounded-xl p-2.5"
-                style={{ background: "rgba(255,255,255,0.04)" }}>
+                style={{ background: "rgba(0,0,0,0.04)" }}>
                 <div className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
                   style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
-                <div className="text-white/75 text-[12px] leading-snug">{b}</div>
+                <div className="text-foreground/75 text-[12px] leading-snug">{b}</div>
               </div>
             ))}
           </div>
@@ -641,7 +641,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
       <div className="flex flex-col gap-2">
         {/* 리드 텍스트: 항목이 있을 때는 짧게, 없을 때는 길게 */}
         {lead && (
-          <p className="text-[12px] text-white/65 leading-relaxed mb-1">
+          <p className="text-[12px] text-muted-foreground leading-relaxed mb-1">
             {industryItems.length > 0 ? truncateAtSentence(lead, 160) : lead}
           </p>
         )}
@@ -649,16 +649,16 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           industryItems.map((b, i) => (
             <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
               style={{
-                background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)",
+                background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(0,0,0,0.04)",
                 border: i === 0 ? bd(cfg.rgb, 0.2) : "1px solid transparent",
               }}>
               <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
                 style={{ background: ab(cfg.rgb, 0.18), color: cfg.hex }}>{i + 1}</div>
-              <div className="text-white/80 text-[12.5px] leading-snug">{b}</div>
+              <div className="text-foreground/80 text-[12.5px] leading-snug">{b}</div>
             </div>
           ))
         ) : (
-          !lead && <div className="text-sm text-white/30 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>
+          !lead && <div className="text-sm text-muted-foreground/70 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>
         )}
       </div>
     );
@@ -685,19 +685,19 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                   </span>
                 )}
               </div>
-              <p className="text-[12px] text-white/85 leading-snug">{isEn ? stripKoreanParens(issueDesc) : issueDesc}</p>
+              <p className="text-[12px] text-foreground/90 leading-snug">{isEn ? stripKoreanParens(issueDesc) : issueDesc}</p>
             </div>
             <div className="flex flex-col gap-2">
               {bullCase && (
                 <div className="rounded-xl p-2.5" style={{ background: "rgba(122,232,180,0.06)", border: "1px solid rgba(122,232,180,0.15)" }}>
                   <div className="text-[9px] font-bold text-emerald-400 mb-1">✅ {isEn ? "If realized" : "실현 시"}</div>
-                  <p className="text-[12px] text-white/70 leading-snug">{isEn ? stripKoreanParens(bullCase) : bullCase}</p>
+                  <p className="text-[12px] text-muted-foreground leading-snug">{isEn ? stripKoreanParens(bullCase) : bullCase}</p>
                 </div>
               )}
               {bearCase && (
                 <div className="rounded-xl p-2.5" style={{ background: "rgba(255,138,122,0.06)", border: "1px solid rgba(255,138,122,0.15)" }}>
                   <div className="text-[9px] font-bold text-[#FF8A7A] mb-1">⚠️ {isEn ? "If not realized" : "미실현 시"}</div>
-                  <p className="text-[12px] text-white/70 leading-snug">{isEn ? stripKoreanParens(bearCase) : bearCase}</p>
+                  <p className="text-[12px] text-muted-foreground leading-snug">{isEn ? stripKoreanParens(bearCase) : bearCase}</p>
                 </div>
               )}
             </div>
@@ -706,10 +706,10 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           <div className="flex flex-col gap-2">
             {bullets.map((b, i) => (
               <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
-                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(0,0,0,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
                   style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
-                <div className="text-white/80 text-[12.5px] leading-snug">{isEn ? stripKoreanParens(b) : b}</div>
+                <div className="text-foreground/80 text-[12.5px] leading-snug">{isEn ? stripKoreanParens(b) : b}</div>
               </div>
             ))}
           </div>
@@ -730,16 +730,16 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         {/* 📡 매매 신호 테이블 — 우선 표시 */}
         {signals.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <div className="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-0.5">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">
               {isEn ? "Key Signals" : "📡 핵심 매매 신호"}
             </div>
             {signals.map(s => (
               <div key={s.type} className="flex items-start gap-2 rounded-lg px-3 py-2"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                style={{ background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.07)" }}>
                 <span className="text-sm shrink-0">{s.emoji}</span>
                 <div>
-                  <span className="text-[9px] font-bold text-white/40 mr-1.5">{s.type}</span>
-                  <span className="text-[11.5px] text-white/80">{s.text}</span>
+                  <span className="text-[9px] font-bold text-muted-foreground mr-1.5">{s.type}</span>
+                  <span className="text-[11.5px] text-foreground/80">{s.text}</span>
                 </div>
               </div>
             ))}
@@ -749,7 +749,7 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
         {/* 지지/저항 레벨 테이블 */}
         {levels.length > 0 && (
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-1.5">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
               {isEn ? "Key Levels" : "지지 · 저항 레벨"}
             </div>
             <div className="grid grid-cols-2 gap-1.5">
@@ -758,10 +758,10 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
                 const color = isSupport ? "#7AE8B4" : "#FF8A7A";
                 return (
                   <div key={i} className="rounded-xl px-2.5 py-2 flex items-center justify-between gap-1"
-                    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid rgba(255,255,255,0.07)` }}>
+                    style={{ background: "rgba(0,0,0,0.04)", border: `1px solid rgba(0,0,0,0.07)` }}>
                     <div>
-                      <div className="text-[8.5px] text-white/35 mb-0.5">{lv.label}</div>
-                      <div className="text-xs font-bold text-white tabular-nums">{lv.price}</div>
+                      <div className="text-[8.5px] text-muted-foreground mb-0.5">{lv.label}</div>
+                      <div className="text-xs font-bold text-foreground tabular-nums">{lv.price}</div>
                     </div>
                     <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
                   </div>
@@ -776,8 +776,8 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           <div className="flex flex-col gap-1.5">
             {trends.map(tr => (
               <div key={tr.label} className="flex items-start gap-2.5 text-[11.5px]">
-                <span className="text-white/30 shrink-0 w-10 text-right text-[10px]">{tr.label}</span>
-                <span className="text-white/75 leading-snug">{tr.value}</span>
+                <span className="text-muted-foreground/70 shrink-0 w-10 text-right text-[10px]">{tr.label}</span>
+                <span className="text-foreground/75 leading-snug">{tr.value}</span>
               </div>
             ))}
           </div>
@@ -788,10 +788,10 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
           <div className="flex flex-col gap-2">
             {bullets.map((b, i) => (
               <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
-                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+                style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(0,0,0,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
                   style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>{i + 1}</div>
-                <div className="text-white/80 text-sm leading-snug">{b}</div>
+                <div className="text-foreground/80 text-sm leading-snug">{b}</div>
               </div>
             ))}
           </div>
@@ -806,18 +806,18 @@ function buildCardContent(stepKey: string, content: string, analysis: any, isEn:
   const lead = bullets.length === 0 ? extractLeadText(content, 160) : "";
   return (
     <div className="flex flex-col gap-2.5">
-      {lead && <div className="text-sm text-white/70 leading-relaxed">{lead}</div>}
+      {lead && <div className="text-sm text-muted-foreground leading-relaxed">{lead}</div>}
       {bullets.map((b, i) => (
         <div key={i} className="flex items-start gap-2.5 rounded-xl p-3"
-          style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(255,255,255,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
+          style={{ background: i === 0 ? ab(cfg.rgb, 0.08) : "rgba(0,0,0,0.04)", border: i === 0 ? bd(cfg.rgb, 0.15) : "1px solid transparent" }}>
           <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5"
             style={{ background: ab(cfg.rgb, 0.2), color: cfg.hex }}>
             {i + 1}
           </div>
-          <div className="text-white/80 text-sm leading-snug">{b}</div>
+          <div className="text-foreground/80 text-sm leading-snug">{b}</div>
         </div>
       ))}
-      {bullets.length === 0 && !lead && <div className="text-sm text-white/30 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>}
+      {bullets.length === 0 && !lead && <div className="text-sm text-muted-foreground/70 italic">{isEn ? "No summary available." : "요약 내용 없음"}</div>}
     </div>
   );
 }
@@ -834,21 +834,21 @@ function StepSummaryCard({ stepKey, step, analysis, isEn, isStreaming }: {
   return (
     <div className="rounded-2xl p-4" style={{
       background: isDone
-        ? `linear-gradient(145deg,${ab(cfg.rgb, 0.1)} 0%,rgba(255,255,255,0.02) 100%)`
-        : "rgba(255,255,255,0.03)",
-      border: isDone ? bd(cfg.rgb, 0.2) : "1px solid rgba(255,255,255,0.07)",
+        ? `linear-gradient(145deg,${ab(cfg.rgb, 0.1)} 0%,rgba(0,0,0,0.01) 100%)`
+        : "rgba(0,0,0,0.02)",
+      border: isDone ? bd(cfg.rgb, 0.2) : "1px solid rgba(0,0,0,0.07)",
     }}>
       {/* 카드 헤더 */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-base">{cfg.emoji}</span>
         <div className="flex-1 min-w-0">
-          <div className="font-bold text-white text-sm leading-tight">
+          <div className="font-bold text-foreground text-sm leading-tight">
             {isEn ? cfg.labelEn : cfg.label}
           </div>
         </div>
         {isDone && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
         {isStreaming && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" style={{ color: cfg.hex }} />}
-        {!isDone && !isStreaming && <Clock className="w-3.5 h-3.5 text-white/20 shrink-0" />}
+        {!isDone && !isStreaming && <Clock className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />}
       </div>
 
       {/* 카드 본문 */}
@@ -862,7 +862,7 @@ function StepSummaryCard({ stepKey, step, analysis, isEn, isStreaming }: {
           ) : (
             <div className="space-y-2 mt-1">
               {[80, 60, 40].map((w, i) => (
-                <div key={i} className="h-3 rounded-full" style={{ background: "rgba(255,255,255,0.06)", width: `${w}%` }} />
+                <div key={i} className="h-3 rounded-full" style={{ background: "rgba(0,0,0,0.05)", width: `${w}%` }} />
               ))}
             </div>
           )}
@@ -937,7 +937,7 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
         </p>
       </div>
 
-      <div className="dark rounded-2xl overflow-hidden bg-neutral-950 border border-white/[0.06]"
+      <div className="rounded-2xl overflow-hidden bg-card border border-border"
         onTouchStart={handleTouchStart}
         onTouchEnd={(e) => handleTouchEnd(e, total)}>
         <div className="p-4 sm:p-5">
@@ -965,7 +965,7 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
               onClick={() => setActiveIdx(i => Math.max(0, i - 1))}
               disabled={safe === 0}
               className={cn("w-9 h-9 rounded-full flex items-center justify-center transition-all",
-                safe === 0 ? "bg-white/4 text-white/20 cursor-not-allowed" : "bg-white/10 text-white hover:bg-white/15")}
+                safe === 0 ? "bg-muted/40 text-muted-foreground/40 cursor-not-allowed" : "bg-muted text-foreground hover:bg-muted/80")}
             ><ChevronLeft className="w-4 h-4" /></button>
 
             {/* 스텝 도트 */}
@@ -983,10 +983,10 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
                       background: active
                         ? cfg.hex
                         : done
-                        ? "rgba(255,255,255,0.4)"
+                        ? "rgba(0,0,0,0.2)"
                         : streaming
                         ? `rgba(${STEP_CFG[k].rgb},0.5)`
-                        : "rgba(255,255,255,0.1)",
+                        : "rgba(0,0,0,0.08)",
                     }}
                   />
                 );
@@ -997,7 +997,7 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
               onClick={() => setActiveIdx(i => Math.min(total - 1, i + 1))}
               disabled={safe === total - 1}
               className={cn("w-9 h-9 rounded-full flex items-center justify-center transition-all",
-                safe === total - 1 ? "bg-white/4 text-white/20 cursor-not-allowed" : "bg-white/10 text-white hover:bg-white/15")}
+                safe === total - 1 ? "bg-muted/40 text-muted-foreground/40 cursor-not-allowed" : "bg-muted text-foreground hover:bg-muted/80")}
             ><ChevronRight className="w-4 h-4" /></button>
           </div>
 
@@ -1012,8 +1012,8 @@ export default function SummaryCardsB({ analysis, isEn = false, streamingStepKey
                 <button key={k} onClick={() => setActiveIdx(i)}
                   className="flex-shrink-0 rounded-full px-2.5 py-1.5 text-xs flex items-center gap-1 transition-all"
                   style={{
-                    background: active ? `rgba(${c.rgb},0.15)` : "rgba(255,255,255,0.05)",
-                    color: active ? c.hex : done ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)",
+                    background: active ? `rgba(${c.rgb},0.15)` : "rgba(0,0,0,0.04)",
+                    color: active ? c.hex : done ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.25)",
                     border: `1px solid ${active ? `rgba(${c.rgb},0.3)` : "transparent"}`,
                   }}>
                   {c.emoji}
