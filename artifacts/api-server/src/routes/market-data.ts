@@ -746,7 +746,7 @@ router.get("/search/:query", async (req, res) => {
     const local = searchEnglishLocal(query);
     let yahoo: any[] = [];
     try {
-      const result = await (yahooFinance as any).search(query, { newsCount: 0, quotesCount: 20 });
+      const result = await (yahooFinance as any).search(query, { newsCount: 0, quotesCount: 20 }, { validateResult: false });
       const quotes: any[] = result?.quotes ?? [];
       // 지원 거래소: KOSPI·KOSDAQ (한국), NYSE·NASDAQ·AMEX (미국) 만 허용
       const ALLOWED_EXCHANGES = new Set(["KOSPI", "KOSDAQ", "NASDAQ", "NYSE", "AMEX"]);
@@ -775,7 +775,27 @@ router.get("/search/:query", async (req, res) => {
     const seen = new Set(local.map(r => r.symbol));
     const yahooBySymbol = new Map(yahoo.map((r: any) => [r.symbol, r.shortname as string]));
     const mergedWithEn = local.map(r => ({ ...r, englishName: yahooBySymbol.get(r.symbol) }));
-    const merged = [...mergedWithEn, ...yahoo.filter((r: any) => !seen.has(r.symbol))].slice(0, 10);
+    let merged = [...mergedWithEn, ...yahoo.filter((r: any) => !seen.has(r.symbol))].slice(0, 10);
+
+    // Fallback: 결과 없고 쿼리가 티커처럼 보이면(1~5 알파) Yahoo quote 직접 조회
+    if (merged.length === 0 && /^[A-Za-z]{1,5}$/.test(query.trim())) {
+      const sym = query.trim().toUpperCase();
+      try {
+        const ALLOWED_EXCHANGES = new Set(["KOSPI", "KOSDAQ", "NASDAQ", "NYSE", "AMEX"]);
+        const q = await yahooFinance.quote(sym, {}, { validateResult: false });
+        if (q && q.symbol) {
+          let exchange = (q as any).exchange ?? "";
+          if (exchange === "NMS" || exchange === "NGM" || exchange === "NCM") exchange = "NASDAQ";
+          else if (exchange === "NYQ" || exchange === "NYS") exchange = "NYSE";
+          else if (exchange === "ASE" || exchange === "AMX") exchange = "AMEX";
+          const name = (q as any).longName || (q as any).shortName || sym;
+          if (ALLOWED_EXCHANGES.has(exchange) && name) {
+            merged = [{ symbol: q.symbol, shortname: `${name} (${q.symbol})`, exchange, quoteType: "EQUITY" }];
+          }
+        }
+      } catch { /* fallthrough */ }
+    }
+
     res.json(merged);
     return;
   }
