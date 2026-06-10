@@ -34,8 +34,8 @@
 }
 
 :root {
-  /* Richgo 스타일 — 순백 배경, 높은 대비, 쿨 그레이 계열 */
-  --background: 0 0% 100%;
+  /* Richgo 스타일 — 쿨 그레이 배경, 흰 카드, 높은 대비 */
+  --background: 220 20% 96%;
   --foreground: 220 25% 8%;
   --card: 0 0% 100%;
   --card-foreground: 220 25% 8%;
