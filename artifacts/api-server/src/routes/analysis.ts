@@ -2326,7 +2326,7 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
         // 상승 추세: 연간 앵커(역사 평균)로 회귀 기대 → 앵커 비중 높임
         // 하락 추세: 추세 지속 가능성 → 앵커 비중 낮춤 (평균 회귀 편향 억제)
         const isDeclineTrend = trendQoQ < -1; // QoQ -1%p 이상 하락이면 하락 추세 판정
-        const fwdOpmCenter = (() => {
+        const fwdOpmCenterRaw = (() => {
           if (annualOpmAnchor === null) return fwdOpmBase;
           if (confirmedQCount >= 2) return fwdOpmBase; // Q2 이상 확정: 확정 실적 우선
           if (isDeclineTrend) {
@@ -2340,6 +2340,23 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
               ? fwdOpmBase * 0.35 + annualOpmAnchor * 0.65  // Q1만: 연간 앵커 65%
               : fwdOpmBase * 0.50 + annualOpmAnchor * 0.50; // 확정 없음: 연간 앵커 50%
           }
+        })();
+
+        // ── 흑자 전환 보호: 확정 OPM이 양호한데 과거 적자 추세로 fwdOpmCenter가 음수/과소가 되면 하한 보정 ──
+        // 케이스: 기업이 과거 1~2년 적자 후 최근 분기 흑자 전환. annualOpmAnchor가 음수여서
+        // fwdOpmCenter가 음수가 되고 미확정 분기가 모두 적자로 추정되는 문제 방지.
+        const confirmedIsProfit = confirmedOpmAvg !== null && confirmedOpmAvg > 2.0; // 확정 OPM이 2% 초과 흑자
+        let fwdOpmTurnaroundNote = "";
+        const fwdOpmCenter = (() => {
+          if (!confirmedIsProfit) return fwdOpmCenterRaw; // 확정 OPM이 미미하면 보호 불필요
+          if (fwdOpmCenterRaw >= confirmedOpmAvg! * 0.15) return fwdOpmCenterRaw; // 충분히 합리적이면 유지
+          // 확정 OPM의 25%를 하한으로 설정 (계절성 감안, 하반기가 상반기보다 약한 업종도 커버)
+          const turnaroundFloor = confirmedOpmAvg! * 0.25;
+          const adjusted = Math.max(fwdOpmCenterRaw, turnaroundFloor);
+          if (adjusted !== fwdOpmCenterRaw) {
+            fwdOpmTurnaroundNote = ` ⚠️ [흑자전환보호] 원산출 ${fwdOpmCenterRaw.toFixed(1)}% → ${adjusted.toFixed(1)}%로 하한 보정 (확정 OPM ${confirmedOpmAvg!.toFixed(1)}%의 25% 최솟값. 과거 적자 추세가 최근 흑자 전환 실적을 과도하게 상쇄하지 않도록 조정)`;
+          }
+          return adjusted;
         })();
 
         // ── 매출 추정: 확정 분기 YoY 성장률 + 역사적 비율 혼합 ──────────────
@@ -2447,7 +2464,11 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
             .map(d => `Q${d.qNum}(매출 ${fmtNum(d.rev, currency)}, 영업이익 ${fmtNum(d.op, currency)}, OPM ${d.opm.toFixed(1)}%)`)
             .join(' | ');
           lines.push(`  ✅ ${targetYear}년 확정 분기(${confirmedQCount}개): ${confirmedStr}`);
+          // 수학적 하한선 텍스트 — QA checker가 이 패턴을 파싱해 dartFloorAuk로 사용 (정규식 일치 필수)
+          const confirmedOpAuk = currency === "KRW" ? confirmedAnnualOp / 1e8 : confirmedAnnualOp;
+          const aukUnit = currency === "KRW" ? "억원" : "";
           lines.push(`     → 확정 누적: 매출 ${fmtNum(confirmedAnnualRev, currency)}, 영업이익 ${fmtNum(confirmedAnnualOp, currency)} (OPM ${confirmedOpmAvg?.toFixed(1) ?? '-'}%)`);
+          lines.push(`     → [수학적 하한선] 올해E 영업이익 합계 = ${confirmedOpAuk.toFixed(1)}${aukUnit} (확정 분기 합계 — 이 값은 수학적 최솟값. 미확정 분기 영업이익 최소 0 가정시 연간 최솟값임)`);
           if (confirmedYoYGrowth !== null) {
             lines.push(`     → 확정 분기 YoY 매출 성장률: ${(confirmedYoYGrowth * 100).toFixed(1)}% → 미확정 분기 매출 추정에 반영`);
           }
@@ -2456,7 +2477,7 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
               ? ` (Q1 단독 확정 + 하락 추세 → 추세 65%·연간 앵커 35% 반영, 추세 지속 가정)`
               : ` (Q1 단독 확정 → 연간 앵커 ${annualOpmAnchor.toFixed(1)}% 65% 반영)`
             : annualOpmAnchor !== null ? ` (연간 앵커 ${annualOpmAnchor.toFixed(1)}%)` : '';
-          lines.push(`     → OPM 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%${anchorNote}`);
+          lines.push(`     → OPM 신뢰 가중치 ${(confirmedWeight * 100).toFixed(0)}% → 조정 forward OPM 중심값: ${fwdOpmCenter.toFixed(1)}%${anchorNote}${fwdOpmTurnaroundNote}`);
         } else {
           const anchorNote = annualOpmAnchor !== null ? ` (연간 앵커 ${annualOpmAnchor.toFixed(1)}% 50% 반영)` : '';
           lines.push(`  forward OPM 중심값 (추세 기반): ${fwdOpmCenter.toFixed(1)}%${anchorNote}`);
@@ -2484,6 +2505,13 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
         lines.push(`  연간 영업이익계: ${opParts} = ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
         lines.push(`⛔⛔ 위 분기별 배분값을 출발점으로 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
         lines.push(`⛔⛔ 분기 합산이 연간 중심값(매출 ${fmtNum(annualRev, currency)}, 영업이익 ${fmtNum(annualOp, currency)}) 근방이 되도록 유지.`);
+        // 흑자전환 기업 특별 경고
+        if (confirmedIsProfit && annualOp > 0 && annualOpmAnchor !== null && annualOpmAnchor < 0) {
+          lines.push(`⛔⛔ [흑자전환기업 추정 필수 원칙] 이 기업은 과거 적자에서 최근 흑자 전환한 기업입니다.`);
+          lines.push(`  - 확정 분기 OPM(${confirmedOpmAvg!.toFixed(1)}%)이 흑자인데 연간 추정이 적자가 되면 수학적으로 불가능하거나(확정 분기 합계가 연간 추정보다 크면), 극도로 비관적인 하반기 가정을 전제하는 것입니다.`);
+          lines.push(`  - 연간 영업이익 추정은 최소 확정 분기 합계(${fmtNum(confirmedOpSum, currency)}) 이상이어야 합니다. 하반기를 적자로 추정하려면 구체적인 실적 악화 근거(수주 취소, 원가 급등 등)를 반드시 명시하세요.`);
+          lines.push(`  - 흑자 전환 추세 반영: 과거 적자는 이미 시장에 알려진 정보이며, 최근 분기 흑자 전환이 핵심 투자 포인트입니다. 연간 추정에서 흑자 전환 추세를 우선 반영하세요.`);
+        }
       }
     }
   }
@@ -3112,6 +3140,27 @@ PEER SELECTION RULES (strictly enforce):
     - 방산·항공우주 업체: 한화에어로스페이스(012450.KS), 한화시스템(272210.KQ), KAI(047810.KS), LIG넥스원(079550.KS), 한화오션(042660.KS) — PCB 납품 고객사이지 경쟁사 아님
     - 소비자 가전 완성품 업체: 삼성전자(005930.KS), LG전자(066570.KS) — 부품 수요자이지 PCB 제조 경쟁사 아님
     - 반도체 팹·패키징: TSMC(TSM), DB하이텍(000990.KS), 하나마이크론(067310.KQ) — 제조 공정 완전 상이
+
+- 건설 / 기초건설 / 토목 / 특수건설 기업 규칙 (동양파일·삼보건설·KCC건설·대우건설·현대건설·삼성물산 건설부문 등에 적용):
+  ★ 건설업은 사업 세부 유형이 다르면 수익 구조가 크게 달라서 피어 선정 오류가 잦음. 아래 구분을 반드시 확인하세요.
+  ┌─ 기초건설/파일·항타 전문: 동양파일(228340.KQ), 삼보건설(009060.KQ), PHC파일 제조사 — 비교 피어는 동종 기초공사 업체
+  ├─ 대형 종합건설(GC): 현대건설(000720.KS), 대우건설(047040.KS), GS건설(006360.KS), 삼성물산(028260.KS)
+  ├─ 중견 주택·도급 건설: HDC현대산업개발(294870.KS), 태영건설(009410.KQ), 중흥건설(그룹 포함)
+  ├─ 플랜트·EPC 전문: 현대엔지니어링(비상장), 삼성엔지니어링(028050.KS), SK에코플랜트
+  └─ 정부 SOC·도로·터널 전문: 대림건설(매각/비상장), 한국종합기술 등
+  * ❌ FORBIDDEN cross-category mixing for 기초건설/파일 기업:
+    - 대형 종합건설(현대건설·대우건설·GS건설)을 기초건설 전문 기업 피어로 사용 금지 — 매출 규모·사업구조 완전 상이
+    - 건설장비 임대·레미콘·골재 업체 혼합 금지
+    - 부동산 개발·리츠(REITs) 업체 혼합 금지
+
+- 소재 / 중간재 / 산업용 부품 기업 규칙 (철강·알루미늄·화학소재·플라스틱 중간재 등에 적용):
+  * 동일 소재 체인 내 위치 기준: 원재료 생산(POSCO·현대제철) vs 중간재 가공(스틸텍·동국제강 선재) vs 특수 가공품 제조는 각각 다른 피어 그룹
+  * ❌ 소재 기업 피어에 완성품 수요기업(자동차·조선·가전) 혼합 금지 — 고객사이지 경쟁사 아님
+  * 수익성 지표(OPM·GPM)가 구조적으로 다르면 EV/EBITDA 대신 EV/Sales 또는 PBR로만 비교하고 근거 명시
+
+- IT서비스 / SI / ERP / 공공 SW 기업 규칙 (코스콤·삼성SDS·LG CNS·SK C&C 등에 적용):
+  * 피어 구분 필수: ① 금융 IT(코스콤·삼성증권IT) vs ② 제조 IT/MES(포스코ICT) vs ③ 공공 SI(LG CNS·SK C&C) vs ④ 클라우드/SaaS 전문 (더존비즈온·영림원소프트랩)
+  * ❌ 순수 SW SaaS 기업(더존비즈온·클라우드 전문사)을 대형 SI(삼성SDS·LG CNS) 피어로 사용 금지 — 마진·성장성 구조 완전 상이
 
 - GLOBAL PEER → KOREAN STOCK NOTE: When any non-Korean (US/global) peer is selected for a Korean company, apply the peer multiples directly without a structural market discount.
 

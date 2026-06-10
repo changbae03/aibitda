@@ -1,0 +1,3 @@
+- [실적추정-흑자전환보호](turnaround-opm-floor.md) — Q1 확정 OPM > 2%인데 fwdOpmCenter가 과소하면 확정OPM×25% 하한 보정
+- [QA-dartFloor-파싱](qa-dart-floor.md) — bottom-up 앵커에 "[수학적 하한선] 합계 = X억원" 텍스트 명시 주입, 정규식과 일치
+- [피어선정-업종규칙](peer-selection-rules.md) — 건설/소재/IT서비스/AI-CV/PCB/배터리/반도체/바이오 업종별 금지·권장 피어 규칙
