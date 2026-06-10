@@ -342,3 +342,56 @@ export async function fetchDartBusinessContent(stockCode: string): Promise<strin
     return null;
   }
 }
+
+// ─── 수주잔고·매출구조 전용 추출 ───────────────────────────────────────────────
+
+const BACKLOG_MARKERS = [
+  "수주 현황", "수주현황", "수주잔고", "수주 잔고", "신규수주", "수주액",
+  "수주 실적", "공사 수주", "잔여 수주", "수주 목표",
+  "매출 현황", "매출현황", "생산 실적", "생산실적", "판매 실적", "판매실적",
+  "생산·판매", "제품별 매출", "주요 제품 매출", "사업부별 매출",
+  "품목별 매출", "부문별 매출", "부문별 실적",
+  "ASP", "평균 판매단가", "판매단가", "판매가격", "단가 추이",
+  "판매량", "출하량", "생산량", "판매 수량", "판매물량",
+];
+
+/**
+ * DART 사업보고서에서 수주잔고·매출구조(P×Q) 관련 섹션만 추출.
+ * 실적 전망 P×Q 분해 추정의 입력 데이터로 사용.
+ * - 수주현황·생산실적·단가정보 섹션이 없으면 null 반환.
+ */
+export async function fetchDartOrderBacklog(stockCode: string): Promise<string | null> {
+  const full = await fetchDartBusinessContent(stockCode);
+  if (!full) return null;
+
+  const lines = full.split("\n");
+  const blocks: string[] = [];
+  let current: string[] = [];
+  let capturing = false;
+
+  for (const line of lines) {
+    const isMarker = BACKLOG_MARKERS.some((m) => line.includes(m));
+    if (isMarker) {
+      if (current.length > 1) blocks.push(current.join("\n"));
+      current = [line];
+      capturing = true;
+    } else if (capturing) {
+      current.push(line);
+      if (current.length >= 60) {
+        blocks.push(current.join("\n"));
+        current = [];
+        capturing = false;
+      }
+    }
+  }
+  if (current.length > 1) blocks.push(current.join("\n"));
+
+  const result = blocks.join("\n\n").trim();
+  if (result.length < 60) return null;
+
+  return [
+    `[📦 DART 수주잔고·매출구조 (P×Q 분해 추정용)]`,
+    `⚠️ DART 사업보고서 원문 발췌. 수주잔고·단가·물량 수치를 P×Q 실적 추정의 1순위 입력값으로 사용하세요.`,
+    result.slice(0, 3_000),
+  ].join("\n");
+}

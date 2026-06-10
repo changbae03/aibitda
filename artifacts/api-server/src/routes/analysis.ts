@@ -25,7 +25,7 @@ import { getCalibrationContext, classifySector } from "./performance.js";
 import { triggerModelReview } from "./model-insights.js";
 import { runQACheck } from "../lib/qa-checker.js";
 import { getDartHistoricalContext, fetchAndStoreDartQuarterly, getDartAnchorNumerics, type DartAnchorNumerics } from "../lib/dart-store.js";
-import { fetchDartBusinessContent, fetchDartCompetitorSection } from "../lib/dart-business-content.js";
+import { fetchDartBusinessContent, fetchDartCompetitorSection, fetchDartOrderBacklog } from "../lib/dart-business-content.js";
 import { fetchSECEdgarContent } from "../lib/sec-edgar-content.js";
 import { fetchKOSISData, buildKOSISContext } from "../lib/kosis-client.js";
 import { buildSOTPSubsidiaryContext, hasSOTPSubsidiaryData } from "../lib/sotp-subsidiary-context.js";
@@ -3891,7 +3891,7 @@ router.post("/", async (req, res) => {
         const years = Object.keys(dartAnchorNumerics.annualRev).sort();
         console.log(`[analysis] #${_analysisId} DART 앵커 수치 로드 완료: ${years.join(", ")} (${krxCode})`);
       }
-      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext] = await Promise.all([
+      const [financialData, newsData, dartBalance, ecosMacro, fredMacro, startQuote, kisResult, dartHistorical, kosisData, sotpSubsidiaryContext, dartBizContent, secEdgarContent, fmpContext, dartOrderBacklog] = await Promise.all([
         fetchFinancialContext(resolvedSymbol, dartAnchorNumerics),
         fetchCompanyNews(companyName ?? ""),
         isKoreanTicker ? fetchDartSubjectBalance(krxCode) : Promise.resolve(null),
@@ -3905,6 +3905,7 @@ router.post("/", async (req, res) => {
         isKoreanTicker ? fetchDartBusinessContent(krxCode).catch(() => null) : Promise.resolve(null),
         !isKoreanTicker ? fetchSECEdgarContent(resolvedSymbol).catch(() => null) : Promise.resolve(null),
         buildFmpContext(resolvedSymbol).catch(() => null),
+        isKoreanTicker ? fetchDartOrderBacklog(krxCode).catch(() => null) : Promise.resolve(null),
       ]);
 
       const kisContext = kisResult?.context ?? null;
@@ -3956,6 +3957,7 @@ router.post("/", async (req, res) => {
       const fullContext = [
         kisContext, sotpSubsidiaryContext, financialData, dartBalanceContext,
         dartHistorical,
+        dartOrderBacklog ?? null,
         dartBizContent
           ? `[⭐ DART 사업보고서 사업내용 — 시장규모·TAM·업계현황·파이프라인 1순위 근거]\n` +
             `※ 아래 내용은 DART 공시 원문입니다. 시장 규모·TAM 추정·업계 현황 서술 시 훈련 데이터보다 이 수치를 우선 사용하세요.\n\n` +
