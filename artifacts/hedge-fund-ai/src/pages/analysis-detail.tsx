@@ -5575,8 +5575,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                 </table>
               </div>
 
-              {/* 인터랙티브 DCF 슬라이더 */}
-              {(() => {
+              {/* 인터랙티브 DCF 슬라이더 — 준비 중 */}
+              {/* {(() => {
                 const dcfDefaults = parseDCFDefaults(content, valuationData.dcf_base);
                 return (
                   <InteractiveDCFPanel
@@ -5587,7 +5587,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                     color={color}
                   />
                 );
-              })()}
+              })()} */}
             </div>
           );
         })()}
