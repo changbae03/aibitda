@@ -1,7 +1,7 @@
 /**
- * 시장 예측 파이프라인 v27 — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성 + 방향 편향 교정
+ * 시장 예측 파이프라인 v33 — LSTM + GBDT 앙상블 + 외부 피처 + 수급 + 글로벌 변동성 + 방향 편향 교정
  * ──────────────────────────────────────────────────────────────────────
- * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 + 닛케이/SOX/WTI 4 + 방향특화 3 + 52W·OBV 3 = N_FEATURES = 37
+ * 기술적 15 + 거래량 3 + 매크로 3 + 수급 3 + 글로벌 변동성/금리 3 + 닛케이/SOX/WTI 4 + 방향특화 3 + 52W·OBV 3 + 중기추세·변동성가속 2 + [v33신규] MA200·개인streak 2 = N_FEATURES = 41
  *
  * [기술적 15] 수익률, MA5/20비율, RSI14, 변동성5/20일, 볼린저밴드, 모멘텀5/10일
  *             MACD Line (EMA12-EMA26)/price, MACD Signal (EMA9)/price
@@ -22,10 +22,13 @@
  *             닛케이225 5일 모멘텀           — 중기 추세 지속성                 ← v25
  *             필라델피아 반도체(SOX) 전일 등락 — 삼성·SK하이닉스 통한 KOSPI 연동  ← v25
  *             WTI 원유 전일 등락 (CL=F)      — 한국 수입 에너지 비용 영향        ← v25
+ * [v33 신규 2] 40. MA200비율: 200일 이평 대비 현재가 — 장기 추세 레짐 및 평균회귀 신호
+ *              41. 개인streak (KOSDAQ) / 외국인streak (KOSPI): 연속 순매수일 — 추세 지속성 신호
  *
  * [v25 방향 편향 교정] biasThreshold 계산 — 모델이 한쪽 방향 체계적 오류 시 임계값 자동 보정
  *   실제 상승 비율에 맞춰 예측 임계값 조정 → 36%→50%+ 보장
- * [v25 dirPenalty 제거] KS11/KQ11 dirPenalty 1.5→1.0 — 과적합 반대 예측 주범 제거
+ * [v33 이진 분류기 개선] KOSDAQ: ±0.3% dead-zone 레이블 → 노이즈 날 제거 → 분류기 신호 품질 향상
+ * [v33 CONF_THRESHOLD] KOSDAQ: 0.08→0.12 — 방향 신호 출력 조건 강화 (품질 우선)
  */
 import fs   from "node:fs";
 import path from "node:path";
@@ -116,7 +119,7 @@ export interface PipelineStatus {
 
 const LOOKBACK     = 25;   // [v17] 20→25: 한 달 영업일 전체 패턴 포함
 const PRED_H       = 3;
-const N_FEATURES   = 39;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 + 3 52W·OBV + 2 MA50·볼가속 (v28)
+const N_FEATURES   = 41;   // 15 기술적 + 3 거래량 + 3 매크로 + 3 수급 + 3 글로벌 + 4 닛케이/SOX/WTI + 3 방향특화 + 3 52W·OBV + 2 MA50·볼가속 + 2 [v33] MA200·streak
 const GBDT_BINS    = 32;
 const N_INCR_TREES = 5;
 const LSTM_UNITS   = 48;   // [v18] 32→48: KOSPI 복잡 패턴 대응 용량 확대
@@ -127,7 +130,7 @@ const CACHE_TTL    = 6 * 3600_000;
 const KRX_BASE     = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
 // 모델 버전 — 피처/아키텍처 변경 시 번호 올리면 자동 재학습
-const MODEL_VERSION = 32;  // [v32] KOSDAQ 적중률 개선: dirPenalty 완전 제거(1.5→1.0), halfLifeDays 단축(22→14), GBDT 간소화(depth4/nEns18), dropout 강화(0.25→0.30), recentWindow 30으로 확대
+const MODEL_VERSION = 33;  // [v33] KOSDAQ 적중률 개선 패키지: N_FEATURES 39→41 (MA200비율·개인streak 추가), 이진분류기 dead-zone 레이블(±0.3%), CONF_THRESHOLD 0.08→0.12, gbdtDirModels 강화(70%→100%)
 
 // ─── 인덱스별 하이퍼파라미터 ──────────────────────────────────────────────────
 
@@ -560,6 +563,8 @@ interface ExtPoint {
   nikkei5dMom: number;  // 닛케이225 5일 모멘텀 — 중기 추세
   soxRet:      number;  // 필라델피아 반도체(^SOX) 전일 등락 — 삼성·SK하이닉스 채널
   wtiRet:      number;  // WTI 원유(CL=F) 전일 등락 — 한국 에너지 비용
+  // [v33] 신규: 연속 순매수일 (KOSDAQ=개인, KOSPI=외국인) — 추세 지속성 신호
+  investorStreak: number;  // +N=N일 연속 순매수, −N=N일 연속 순매도 (±15일 범위)
 }
 
 async function fetchYahooSeries(ticker: string, years: number): Promise<{ date: string; close: number }[]> {
@@ -819,6 +824,7 @@ async function fetchExternalData(
   let lastNasdaqRet = 0;                                                          // [v30] KOSDAQ용
   const indiv5dBuf: number[] = [];                                                // [v30] 개인 5일 순매수 버퍼
   let lastIndiv5dMom = 0;                                                         // [v30] 개인 5일 누적 모멘텀
+  let lastInvestorStreak = 0;                                                     // [v33] 연속 순매수일 (양=연속매수, 음=연속매도)
   let bondIdx = 0, b10Idx2 = 0, b2Idx2 = 0;
 
   for (const date of dates) {
@@ -846,6 +852,16 @@ async function fetchExternalData(
         if (indiv5dBuf.length > 5) indiv5dBuf.shift();
         lastIndiv5dMom = indiv5dBuf.reduce((a, b) => a + b, 0);
       }
+      // [v33] 연속 순매수일 streak 업데이트 (KOSDAQ=개인, KOSPI=외국인)
+      const streakVal = market === "KOSDAQ" ? indivRaw : iv.foreignNet;
+      if (streakVal > 0) {
+        lastInvestorStreak = lastInvestorStreak > 0 ? lastInvestorStreak + 1 : 1;
+      } else if (streakVal < 0) {
+        lastInvestorStreak = lastInvestorStreak < 0 ? lastInvestorStreak - 1 : -1;
+      } else {
+        lastInvestorStreak = 0;
+      }
+      lastInvestorStreak = Math.max(-15, Math.min(15, lastInvestorStreak));
     }
     if (shortMap.has(date))       lastShort      = Math.max(-3, Math.min(3, (shortMap.get(date)! - shortMedian) / shortIQR));
     if (vix5dMomMap2.has(date))   lastVix5dMom2  = vix5dMomMap2.get(date)!;
@@ -876,6 +892,8 @@ async function fetchExternalData(
       nikkei5dMom: Math.max(-0.15, Math.min(0.15, lastNikkei5dMom)),
       soxRet:      Math.max(-0.1, Math.min(0.1, lastSoxRet)),
       wtiRet:      Math.max(-0.1, Math.min(0.1, lastWtiRet)),
+      // [v33] 연속 순매수일
+      investorStreak: lastInvestorStreak,
     });
   }
 
@@ -970,7 +988,7 @@ function buildFeatures(
       : 0.5;
     const mom5  = i>=5  ? closes[i]/closes[i-5]  - 1 : 0;
     const mom10 = i>=10 ? closes[i]/closes[i-10] - 1 : 0;
-    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:0, vix5dMom:0, vixRet:0, yieldSpread:0.5, nikkeiRet:0, nikkei5dMom:0, soxRet:0, wtiRet:0 };
+    const ext   = extMap.get(row.date) ?? { sp500Ret:0, usdkrwRet:0, bond3y:3.0, foreignNet:0, instNet:0, shortRatio:0, vix5dMom:0, vixRet:0, yieldSpread:0.5, nikkeiRet:0, nikkei5dMom:0, soxRet:0, wtiRet:0, investorStreak:0 };
     const p     = closes[i] || 1e-8;
     // ── 거래량 피처 ──
     const volMa5   = rollingMean(volumes, 5,  i);
@@ -1068,6 +1086,16 @@ function buildFeatures(
         const v20 = rollingStdFn(rets, 20, i);
         return v20 > 1e-10 ? Math.max(-1, Math.min(1, v5 / v20 - 1)) : 0;
       })(),
+      // ── [v33] 신규 피처 2개 ──────────────────────────────────────────────────
+      // 40. MA200비율: 200일 이평 대비 현재가 위치 (±20% → ±1 정규화) — 장기 추세 레짐
+      //     양수=이평 위(장기 강세/과매수), 음수=이평 아래(장기 약세/반등 가능)
+      ((): number => {
+        const ma200 = rollingMean(closes, 200, i);
+        return ma200 > 0 ? Math.max(-1, Math.min(1, (closes[i] / ma200 - 1) / 0.20)) : 0;
+      })(),
+      // 41. investorStreak: 연속 순매수일 (KOSDAQ=개인, KOSPI=외국인, ±15일 → ±1 정규화)
+      //     양수=N일 연속 순매수 모멘텀, 음수=N일 연속 순매도 압력
+      Math.max(-1, Math.min(1, (ext.investorStreak ?? 0) / 15)),
     ]);
   });
   return { feats, closes, dates };
@@ -1651,7 +1679,8 @@ function buildResultFromModel(
 
   // 테스트셋 분류기 적중률 계산 (신뢰도 필터 적용)
   // CONF_THRESHOLD: |P(상승) - 0.5| > 이 값인 예측만 고신뢰 구간으로 판정
-  const CONF_THRESHOLD = 0.08;
+  // [v33] KOSDAQ: 0.08→0.12 — 방향 신호 출력 조건 강화 (노이즈 많은 KOSDAQ은 고신뢰 구간만)
+  const CONF_THRESHOLD = symbol === "^KQ11" ? 0.12 : 0.08;
   let classifierAllAcc: number | undefined;
   let classifierConf6wAcc: number | undefined;
   let classifierConfTotal6w = 0;
@@ -1828,12 +1857,23 @@ async function trainFull(
   );
 
   // [v29] 이진 분류 GBDT 훈련 — P(D+3 상승) 직접 예측
-  // 동일 훈련셋(XtrN)에 이진 타깃(y_dir)으로 분류기 학습
-  // 하이퍼파라미터: 트리 수 70%, 앙상블 수 70% (회귀기보다 경량)
-  const hpDir = { ...hp, gbdtTrees: Math.ceil(hp.gbdtTrees * 0.7), nEnsemble: Math.max(6, Math.ceil(hp.nEnsemble * 0.7)) };
-  const yDir  = new Float64Array(trainEnd).map((_, i) => y[i] > 0 ? 1 : 0);
-  console.log(`[train] ${symbol} Dir-GBDT (${hpDir.nEnsemble}×${hpDir.gbdtTrees}) upFrac=${(Array.from(yDir).filter(v=>v>0).length/trainEnd*100).toFixed(1)}%`);
-  const gbdtDirModels = Array.from({length:hpDir.nEnsemble}, (_,e) => gbdtFitClassifier(XtrN, yDir, e*53+17, hpDir, sampleWeights));
+  // [v33] KOSDAQ: ±0.3% dead-zone 레이블 — |return| < 0.3%인 노이즈 날 제거 → 신호 품질 향상
+  //       KOSDAQ HP: 회귀기와 동일한 트리/앙상블 수 (70%→100%) — 분류기가 핵심이므로 강화
+  const isDirKosdaq = market === "KOSDAQ";
+  const DIR_DEAD_ZONE = isDirKosdaq ? 0.003 : 0.0;  // KOSDAQ: ±0.3%, 나머지: dead-zone 없음
+  // dead-zone 필터: 노이즈 날 제외 (훈련 샘플에서만, 전체 훈련셋 크기는 유지)
+  const dirIdxs = Array.from({length: trainEnd}, (_, i) => i).filter(i => Math.abs(y[i]) > DIR_DEAD_ZONE);
+  const XtrDirN = dirIdxs.map(i => XtrN[i]);
+  const yDir    = new Float64Array(dirIdxs.map(i => y[i] > 0 ? 1 : 0));
+  const swDir   = new Float64Array(dirIdxs.map(i => sampleWeights[i]));
+  // [v33] KOSDAQ: 분류기 HP 강화 (100% 회귀기 수준), 나머지: 기존 70%
+  const dirTreeRatio = isDirKosdaq ? 1.0 : 0.7;
+  const dirEnsRatio  = isDirKosdaq ? 1.0 : 0.7;
+  const hpDir = { ...hp, gbdtTrees: Math.ceil(hp.gbdtTrees * dirTreeRatio), nEnsemble: Math.max(6, Math.ceil(hp.nEnsemble * dirEnsRatio)) };
+  console.log(`[train] ${symbol} Dir-GBDT (${hpDir.nEnsemble}×${hpDir.gbdtTrees}) deadZone=${(DIR_DEAD_ZONE*100).toFixed(1)}% filteredSamples=${dirIdxs.length}/${trainEnd} upFrac=${(Array.from(yDir).filter(v=>v>0).length/(dirIdxs.length||1)*100).toFixed(1)}%`);
+  const gbdtDirModels = XtrDirN.length > 0
+    ? Array.from({length:hpDir.nEnsemble}, (_,e) => gbdtFitClassifier(XtrDirN, yDir, e*53+17, hpDir, swDir))
+    : Array.from({length:hpDir.nEnsemble}, (_,e) => gbdtFitClassifier(XtrN, new Float64Array(trainEnd).map((_,i)=>y[i]>0?1:0), e*53+17, hpDir, sampleWeights));
 
   const symKey = symbol.replace(/[\^]/g,"");
   saveModelFile(symKey, {
