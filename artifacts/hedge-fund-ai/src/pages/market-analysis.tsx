@@ -78,13 +78,6 @@ interface LiveAccuracy {
   byHorizon?: Record<string, { correct: number; total: number; accuracy: number | null }>;
 }
 
-interface AccuracyHistoryPoint {
-  week:      string;
-  kospiAcc:  number | null;
-  kosdaqAcc: number | null;
-  kospiN:    number;
-  kosdaqN:   number;
-}
 
 interface PipelineStep {
   key: string; label: string;
@@ -979,8 +972,6 @@ export default function MarketAnalysis() {
   const [briefLoading, setBriefLoading] = useState(false);
   const [liveAcc, setLiveAcc]         = useState<Record<string, LiveAccuracy> | null>(null);
   const [predHistory, setPredHistory] = useState<Record<string, PredictionRecord[]>>({});
-  const [accHistory, setAccHistory]   = useState<AccuracyHistoryPoint[]>([]);
-
   // 라이브 적중률 폴링
   useEffect(() => {
     const load = () =>
@@ -991,14 +982,6 @@ export default function MarketAnalysis() {
     load();
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
-  }, []);
-
-  // KOSDAQ/KOSPI 주별 정확도 히스토리
-  useEffect(() => {
-    fetch(getApiUrl("/api/market-analysis/accuracy-history?weeks=8"), { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then((d: AccuracyHistoryPoint[]) => Array.isArray(d) && setAccHistory(d))
-      .catch(() => {});
   }, []);
 
   // 예측 이력 fetch (지수 전환 시마다)
@@ -1321,114 +1304,6 @@ export default function MarketAnalysis() {
             )}
 
 
-            {/* ── KOSDAQ/KOSPI 분리 적중률 히스토리 차트 ─────────────── */}
-            {accHistory.length >= 2 && (
-              <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-primary" />
-                  <h2 className="text-base font-bold text-foreground">KOSDAQ · KOSPI 적중률 히스토리</h2>
-                  <span className="text-[10px] text-muted-foreground/40 ml-auto">주별 D+3 방향 적중률</span>
-                </div>
-                <p className="text-xs text-muted-foreground/60">
-                  KOSDAQ(주황)은 구조적 변동성이 높아 55% 미만 시 자동 재학습 · KOSPI(파랑)는 40% 미만 시 재학습
-                </p>
-                <div className="h-[180px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={accHistory} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" />
-                      <XAxis
-                        dataKey="week"
-                        tick={{ fontSize: 10, fill: "rgba(128,128,128,0.55)" }}
-                        tickFormatter={(v: string) => {
-                          const d = new Date(v + "T12:00:00Z");
-                          return `${d.getMonth() + 1}/${d.getDate()}`;
-                        }}
-                        interval="preserveStartEnd"
-                      />
-                      <YAxis
-                        domain={[0, 100]}
-                        tick={{ fontSize: 10, fill: "rgba(128,128,128,0.55)" }}
-                        tickFormatter={(v: number) => `${v}%`}
-                        ticks={[0, 25, 50, 75, 100]}
-                      />
-                      <Tooltip
-                        formatter={(val: number, name: string) => [
-                          val !== null ? `${val}%` : "—",
-                          name === "kosdaqAcc" ? "KOSDAQ" : "KOSPI",
-                        ]}
-                        labelFormatter={(label: string) => {
-                          const d = new Date(label + "T12:00:00Z");
-                          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} 주`;
-                        }}
-                        contentStyle={{
-                          fontSize: 12,
-                          background: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: 8,
-                        }}
-                      />
-                      <ReferenceLine y={55} stroke="#f97316" strokeDasharray="4 2" strokeWidth={1} label={{ value: "55% (KOSDAQ)", position: "insideTopRight", fontSize: 9, fill: "#f97316" }} />
-                      <ReferenceLine y={40} stroke="#3b82f6" strokeDasharray="4 2" strokeWidth={1} label={{ value: "40% (KOSPI)", position: "insideTopRight", fontSize: 9, fill: "#3b82f6" }} />
-                      <Line
-                        type="monotone"
-                        dataKey="kosdaqAcc"
-                        stroke="#f97316"
-                        strokeWidth={2}
-                        dot={{ r: 3, fill: "#f97316", strokeWidth: 0 }}
-                        connectNulls
-                        name="kosdaqAcc"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="kospiAcc"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
-                        connectNulls
-                        name="kospiAcc"
-                      />
-                      <Legend
-                        formatter={(value: string) => value === "kosdaqAcc" ? "KOSDAQ" : "KOSPI"}
-                        iconType="circle"
-                        iconSize={8}
-                        wrapperStyle={{ fontSize: 11 }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* 현재 주 요약 */}
-                {(() => {
-                  const last = accHistory[accHistory.length - 1];
-                  if (!last) return null;
-                  const kqColor = last.kosdaqAcc === null ? "text-muted-foreground"
-                    : last.kosdaqAcc >= 60 ? "text-emerald-400"
-                    : last.kosdaqAcc >= 55 ? "text-yellow-400"
-                    : "text-orange-400";
-                  const ksColor = last.kospiAcc === null ? "text-muted-foreground"
-                    : last.kospiAcc >= 60 ? "text-emerald-400"
-                    : last.kospiAcc >= 40 ? "text-yellow-400"
-                    : "text-red-400";
-                  return (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-0.5 px-3 py-2 rounded-xl border border-orange-500/20 bg-orange-500/5">
-                        <span className="text-[10px] text-orange-400/70 font-medium">이번 주 KOSDAQ</span>
-                        <span className={cn("text-xl font-bold", kqColor)}>
-                          {last.kosdaqAcc !== null ? `${last.kosdaqAcc}%` : "—"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/40">{last.kosdaqN}건 집계 · 기준 55%</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5 px-3 py-2 rounded-xl border border-blue-500/20 bg-blue-500/5">
-                        <span className="text-[10px] text-blue-400/70 font-medium">이번 주 KOSPI</span>
-                        <span className={cn("text-xl font-bold", ksColor)}>
-                          {last.kospiAcc !== null ? `${last.kospiAcc}%` : "—"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/40">{last.kospiN}건 집계 · 기준 40%</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
 
             {/* ── 예측 vs 실제 비교 ─────────────────────────────────────── */}
             {current && current.recentPerf && current.recentPerf.length > 0 && (
