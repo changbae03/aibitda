@@ -7,6 +7,7 @@ import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
 import { fetchECOSBaseRateHistory } from "../lib/ecos-client.js";
 import { fetchAllEconomicActuals, fetchBLSTimeSeries, type BLSReleaseDate, type FOMCDate } from "../lib/bls-client.js";
+import { getCachedFredMacro } from "../lib/fred-client.js";
 
 const TTL_BATCH_QUOTES      =  3 * 60 * 1000;  //  3분 — 현재가
 const TTL_BATCH_SPARKLINES  =  6 * 60 * 60 * 1000;  //  6시간 — 90일 차트 (장 마감 후 변경)
@@ -1745,7 +1746,7 @@ router.get("/indicator-history", async (_req, res) => {
     return res.json(_indicatorHistoryCache.data);
   }
 
-  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v9");
+  const dbCached = await getFromDBCache<IndicatorSeries[]>("indicator-history-v10");
   if (dbCached) {
     _indicatorHistoryCache = { data: dbCached, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
     return res.json(dbCached);
@@ -1837,12 +1838,16 @@ router.get("/indicator-history", async (_req, res) => {
     console.log(`[indicator-history] US CPI: ${usCpiSource}(${usCpiData.length}건), UR: ${usUrSource}(${usUrData.length}건), BLS PPI: ${usPpiData.length}건, BLS NFP: ${usNfpData.length}건`);
 
     // FOMC 기준금리 레인지 빌드 (최신값 기준)
-    const latestFedUpper = fedTargetUpper.length > 0 ? fedTargetUpper[fedTargetUpper.length - 1].value : null;
-    const latestFedLower = fedTargetLower.length > 0 ? fedTargetLower[fedTargetLower.length - 1].value : null;
+    // getCachedFredMacro()는 서버 기동 시 실시간 FRED API 호출로 채워진 최신값 → 우선 사용
+    const cachedMacro = getCachedFredMacro();
+    const latestFedUpper = cachedMacro?.fedTargetUpper
+      ?? (fedTargetUpper.length > 0 ? fedTargetUpper[fedTargetUpper.length - 1].value : null);
+    const latestFedLower = cachedMacro?.fedTargetLower
+      ?? (fedTargetLower.length > 0 ? fedTargetLower[fedTargetLower.length - 1].value : null);
     const fedRangeLabel  = latestFedUpper != null && latestFedLower != null
       ? `${latestFedLower}~${latestFedUpper}%`
       : null;
-    if (fedRangeLabel) console.log(`[indicator-history] FOMC 기준금리 레인지: ${fedRangeLabel}`);
+    if (fedRangeLabel) console.log(`[indicator-history] FOMC 기준금리 레인지: ${fedRangeLabel} (출처: ${cachedMacro ? "fred-client 캐시" : "시계열 마지막값"})`);
 
     const result: IndicatorSeries[] = [
       // ── 미국 지표 ──
@@ -1966,7 +1971,7 @@ router.get("/indicator-history", async (_req, res) => {
     // 빈 data 배열인 series 제외 (클라이언트 렌더링 TypeError 방지)
     const validResult = result.filter(s => s.data.length > 0);
     _indicatorHistoryCache = { data: validResult, expiresAt: Date.now() + INDICATOR_HISTORY_TTL };
-    saveToDBCache("indicator-history-v9", validResult, INDICATOR_HISTORY_TTL);
+    saveToDBCache("indicator-history-v10", validResult, INDICATOR_HISTORY_TTL);
     console.log(`[indicator-history] 완료 — 지표 ${validResult.length}개 수집 (미국 5개, 한국 ${validResult.length - 5}개)`);
     return res.json(validResult);
   } catch (err: any) {
