@@ -2349,6 +2349,20 @@ export default function AnalysisDetail() {
         <FinancialChart ticker={analysis.ticker} isEn={isEn} />
       </div>
 
+      {/* ETF 편입 현황 — 분석 진행과 동시에 표시 */}
+      <ETFSection
+        ticker={analysis.ticker}
+        companyName={analysis.companyName}
+        industry={analysis.industry ?? undefined}
+      />
+
+      {/* 주요 뉴스 타임라인 — 분석 진행과 동시에 표시 */}
+      <StockNewsTimeline
+        ticker={analysis.ticker}
+        companyName={analysis.companyName}
+        isEn={isEn}
+      />
+
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
 
@@ -2561,37 +2575,6 @@ export default function AnalysisDetail() {
         )}
       </div>
 
-      {/* ETF 편입 현황 — 분석 완료 후 표시 */}
-      {isComplete && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, ease: "easeOut", delay: 0.3 }}
-          className="mt-4 print:hidden"
-        >
-          <ETFSection
-            ticker={analysis.ticker}
-            companyName={analysis.companyName}
-            industry={analysis.industry ?? undefined}
-          />
-        </motion.div>
-      )}
-
-      {/* 주요 뉴스 타임라인 — 분석 완료 후 표시 */}
-      {isComplete && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, ease: "easeOut", delay: 0.5 }}
-          className="mt-4 print:hidden"
-        >
-          <StockNewsTimeline
-            ticker={analysis.ticker}
-            companyName={analysis.companyName}
-            isEn={isEn}
-          />
-        </motion.div>
-      )}
 
       {/* 보관하기 · 공유하기 + Disclaimer — 분석 완료 후 페이드인 */}
       <AnimatePresence>
