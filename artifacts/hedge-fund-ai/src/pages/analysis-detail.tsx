@@ -51,6 +51,7 @@ import SummaryCardsB from "@/components/SummaryCardsB";
 import ETFSection from "@/components/ETFSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 // ── 메모 헬퍼 ─────────────────────────────────────────────────────────────────
 const MEMO_KEY = "avitda-memos";
@@ -4460,6 +4461,199 @@ function stripPromptInstructions(content: string): string {
     .join("\n");
 }
 
+// ── 인터랙티브 DCF ────────────────────────────────────────────────────────────
+
+function parseDCFDefaults(content: string, dcfBase: number): {
+  wacc: number; shortG: number; termG: number; fcfPs: number;
+} {
+  const waccRaw   = parseFloat(content.match(/WACC[^0-9]*([\d.]+)\s*%/i)?.[1] ?? "NaN");
+  const shortGRaw = parseFloat(
+    content.match(/단기\s*성장률[^0-9]*([\d.]+)\s*%/i)?.[1]
+    ?? content.match(/FCF\s*성장률[^0-9]*([\d.]+)\s*%/i)?.[1]
+    ?? content.match(/성장률[^0-9]*([\d.]+)\s*%/i)?.[1]
+    ?? "NaN"
+  );
+  const termGRaw  = parseFloat(
+    content.match(/영구\s*성장률[^0-9]*([\d.]+)\s*%/i)?.[1]
+    ?? content.match(/terminal.*?growth[^0-9]*([\d.]+)\s*%/i)?.[1]
+    ?? "NaN"
+  );
+
+  const wacc   = isNaN(waccRaw)   ? 10   : Math.min(Math.max(waccRaw,   5),  30);
+  const shortG = isNaN(shortGRaw) ? 15   : Math.min(Math.max(shortGRaw, -5), 80);
+  const termG  = isNaN(termGRaw)  ? 2.5  : Math.min(Math.max(termGRaw,  0),   5);
+
+  // dcfBase = FCF_ps × multiplier  →  FCF_ps = dcfBase / multiplier
+  const r = wacc / 100, g = shortG / 100, tg = termG / 100;
+  let mult = 0;
+  for (let y = 1; y <= 5; y++) mult += Math.pow(1 + g, y) / Math.pow(1 + r, y);
+  if (r > tg) mult += Math.pow(1 + g, 5) * (1 + tg) / ((r - tg) * Math.pow(1 + r, 5));
+  const fcfPs = mult > 0.1 ? dcfBase / mult : dcfBase * 0.08;
+
+  return { wacc, shortG, termG, fcfPs: Math.max(fcfPs, 0.01) };
+}
+
+function InteractiveDCFPanel({
+  defaults, currentPrice, currency, isEn, color,
+}: {
+  defaults: ReturnType<typeof parseDCFDefaults>;
+  currentPrice: number;
+  currency: string;
+  isEn: boolean;
+  color: string;
+}) {
+  const [wacc,   setWacc]   = useState(defaults.wacc);
+  const [shortG, setShortG] = useState(defaults.shortG);
+  const [termG,  setTermG]  = useState(defaults.termG);
+  const [fcfPs,  setFcfPs]  = useState(defaults.fcfPs);
+  const [open,   setOpen]   = useState(false);
+
+  const { chartData, fairValue } = useMemo(() => {
+    const r = wacc / 100, g = shortG / 100, tg = termG / 100;
+    let pvSum = 0;
+    const rows = Array.from({ length: 5 }, (_, i) => {
+      const y = i + 1;
+      const nominal    = fcfPs * Math.pow(1 + g, y);
+      const discounted = nominal / Math.pow(1 + r, y);
+      pvSum += discounted;
+      return {
+        year: isEn ? `Yr ${y}` : `${y}년차`,
+        [isEn ? "Future (Nominal)" : "미래 가치 (명목)"]: parseFloat(nominal.toFixed(2)),
+        [isEn ? "PV (Discounted)"  : "현재 가치 (할인)"]: parseFloat(discounted.toFixed(2)),
+      };
+    });
+    if (r > tg) pvSum += fcfPs * Math.pow(1 + g, 5) * (1 + tg) / ((r - tg) * Math.pow(1 + r, 5));
+    return { chartData: rows, fairValue: pvSum };
+  }, [wacc, shortG, termG, fcfPs, isEn]);
+
+  const upside = currentPrice > 0 ? ((fairValue - currentPrice) / currentPrice * 100) : 0;
+  const isUp   = upside >= 0;
+
+  const nomKey = isEn ? "Future (Nominal)" : "미래 가치 (명목)";
+  const pvKey  = isEn ? "PV (Discounted)"  : "현재 가치 (할인)";
+
+  // 슬라이더 범위: fcfPs 기준 동적 계산
+  const fcfMin  = Math.max(defaults.fcfPs * 0.1, 0.01);
+  const fcfMax  = defaults.fcfPs * 6;
+  const fcfStep = (fcfMax - fcfMin) / 200;
+
+  function fmt(v: number) {
+    if (currency === "KRW") {
+      if (v >= 10000) return `${(v / 10000).toFixed(1)}만`;
+      return v.toFixed(0);
+    }
+    return v.toFixed(2);
+  }
+  function fmtFair(v: number) {
+    if (currency === "KRW") {
+      if (v >= 10000) return `₩${Math.round(v / 100) * 100}`;
+      return `₩${Math.round(v)}`;
+    }
+    return `$${v.toFixed(2)}`;
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border">
+      {/* 헤더 토글 버튼 */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-muted/50 hover:bg-muted/80 transition-colors text-left"
+      >
+        <BarChart2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+        <span className="text-[12px] font-semibold text-muted-foreground flex-1">
+          {isEn ? "Interactive DCF Model" : "인터랙티브 DCF 모델"}
+        </span>
+        {/* 현재 계산 결과 미리보기 */}
+        <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md shrink-0"
+          style={{ background: `${color}20`, color }}>
+          {fmtFair(fairValue)}
+        </span>
+        <span className={cn("text-[11px] font-bold shrink-0",
+          isUp ? "text-emerald-600" : "text-rose-500")}>
+          {isUp ? "+" : ""}{upside.toFixed(1)}%
+        </span>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform shrink-0",
+          open ? "rotate-180" : "")} />
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-4">
+          {/* 슬라이더 패널 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 px-1">
+            {([
+              { label: isEn ? "FCF per Share" : "주당 FCF", value: fcfPs, set: setFcfPs,
+                min: fcfMin, max: fcfMax, step: fcfStep, fmt: (v: number) => fmt(v), unit: currency === "KRW" ? "원" : "$" },
+              { label: isEn ? "Short-term Growth (1–5yr %)" : "예상 성장률 (1-5년차 %)",
+                value: shortG, set: setShortG, min: -5, max: 80, step: 0.5, fmt: (v: number) => `${v.toFixed(1)}%`, unit: "" },
+              { label: isEn ? "Terminal Growth (%)" : "영구 성장률 (%)",
+                value: termG, set: setTermG, min: 0, max: 5, step: 0.1, fmt: (v: number) => `${v.toFixed(1)}%`, unit: "" },
+              { label: isEn ? "Discount Rate / WACC (%)" : "할인율 (WACC %)",
+                value: wacc, set: setWacc, min: 5, max: 30, step: 0.5, fmt: (v: number) => `${v.toFixed(1)}%`, unit: "" },
+            ] as const).map(({ label, value, set, min, max, step, fmt: f }) => (
+              <div key={label}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[11px] text-muted-foreground">{label}</span>
+                  <span className="text-[12px] font-mono font-bold text-foreground">{f(value)}</span>
+                </div>
+                <input
+                  type="range" min={min} max={max} step={step} value={value}
+                  onChange={e => (set as (v: number) => void)(parseFloat(e.target.value))}
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                  style={{ accentColor: color }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* 막대 차트 */}
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="year" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fmt(v)} width={44} />
+                <Tooltip
+                  formatter={(v: number, name: string) => [fmtFair(v), name]}
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid var(--border)" }}
+                />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey={nomKey}  fill="#166534" radius={[3,3,0,0]} />
+                <Bar dataKey={pvKey}   fill="#1d4ed8" radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* 결과 요약 */}
+          <div className="flex flex-wrap gap-2 px-1 pb-1">
+            <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+              <span className="text-[11px] text-muted-foreground">
+                {isEn ? "DCF Fair Value" : "DCF 적정주가"}
+              </span>
+              <span className="text-[14px] font-mono font-bold text-foreground">{fmtFair(fairValue)}</span>
+            </div>
+            <div className={cn("flex items-center gap-2 rounded-lg px-3 py-2",
+              isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
+              <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
+              <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
+                {isEn ? "vs. Current" : "현재가 대비"}
+              </span>
+              <span className={cn("text-[13px] font-mono font-bold",
+                isUp ? "text-emerald-600" : "text-rose-500")}>
+                {isUp ? "+" : ""}{upside.toFixed(1)}%
+              </span>
+            </div>
+            <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 ml-auto">
+              <span className="text-[10px] text-muted-foreground/70">
+                {isEn ? "5yr DCF + Terminal" : "5년 DCF + 영구가치"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ValuationScaleBar: 방법론별 Bear/Base/Bull 범위를 공통 스케일로 시각화 ──────
 function ValuationScaleBar({
   label, bear, base, bull, current, globalMin, globalMax, currency, isEn,
@@ -5397,6 +5591,20 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                   </tbody>
                 </table>
               </div>
+
+              {/* 인터랙티브 DCF 슬라이더 */}
+              {(() => {
+                const dcfDefaults = parseDCFDefaults(content, valuationData.dcf_base);
+                return (
+                  <InteractiveDCFPanel
+                    defaults={dcfDefaults}
+                    currentPrice={valuationData.current}
+                    currency={priceCurrency}
+                    isEn={isEn}
+                    color={color}
+                  />
+                );
+              })()}
             </div>
           );
         })()}
