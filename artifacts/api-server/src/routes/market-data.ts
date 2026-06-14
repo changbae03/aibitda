@@ -1730,6 +1730,62 @@ router.get("/dart-recent-earnings", async (req, res) => {
   }
 });
 
+// ─── GET /api/market-data/dart-disclosures ───────────────────────────────────
+// 특정 종목의 최근 90일 DART 공시 목록 반환
+router.get("/dart-disclosures", async (req, res) => {
+  try {
+    const DART_KEY = process.env.DART_API_KEY;
+    if (!DART_KEY) return res.json([]);
+
+    const ticker = String(req.query.ticker ?? "");
+    const stockCodeMatch = ticker.match(/(\d{6})/);
+    if (!stockCodeMatch) return res.json([]);
+    const stockCode = stockCodeMatch[1];
+
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
+    const startDate = new Date(todayKST.getTime() - 90 * 86400000);
+    const fmt8 = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+
+    const cacheKey = `dart-disclosures-${stockCode}-${fmt8(todayKST).slice(0, 6)}`;
+
+    const dbCached = await getFromDBCache<any[]>(cacheKey);
+    if (dbCached) return res.json(dbCached);
+
+    const url =
+      `https://opendart.fss.or.kr/api/list.json` +
+      `?crtfc_key=${DART_KEY}` +
+      `&stock_code=${stockCode}` +
+      `&bgn_de=${fmt8(startDate)}&end_de=${fmt8(todayKST)}` +
+      `&sort=date&sort_mth=desc&page_no=1&page_count=20`;
+
+    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return res.json([]);
+    const data = await r.json() as Record<string, any>;
+    if (data["status"] !== "000") return res.json([]);
+
+    const list: any[] = data["list"] ?? [];
+    const result = list.slice(0, 15).map((item: any) => {
+      const dt = String(item.rcept_dt ?? "");
+      const dateStr = dt.length === 8
+        ? `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`
+        : dt;
+      return {
+        date: dateStr,
+        reportName: item.report_nm ?? "",
+        corpName: item.corp_name ?? "",
+        dartUrl: `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${item.rcept_no}`,
+      };
+    });
+
+    await saveToDBCache(cacheKey, result, 6 * 60 * 60 * 1000);
+    console.log(`[dart-disclosures] ${stockCode} ${result.length}건`);
+    res.json(result);
+  } catch (e: any) {
+    console.error("[dart-disclosures]", e?.message);
+    res.json([]);
+  }
+});
+
 // ─── GET /api/market-data/indicator-history ──────────────────────────────────
 interface IndicatorPoint { date: string; value: number; }
 interface IndicatorSeries {

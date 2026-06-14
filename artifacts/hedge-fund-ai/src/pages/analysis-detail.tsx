@@ -38,6 +38,7 @@ import {
   ExternalLink,
   ChevronUp,
   Newspaper,
+  FileText,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -1315,6 +1316,109 @@ const NEWS_CAT_COLOR: Record<string, string> = {
   Technology: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
 };
 
+// ─── 주요 공시 패널 ────────────────────────────────────────────────────────────
+interface DartDisclosure {
+  date: string;
+  reportName: string;
+  corpName: string;
+  dartUrl: string;
+}
+
+function disclosureCategory(name: string): { label: string; cls: string } {
+  if (/사업보고서|분기보고서|반기보고서/.test(name))
+    return { label: "정기", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" };
+  if (/잠정실적|실적/.test(name))
+    return { label: "실적", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" };
+  if (/유상증자|무상증자/.test(name))
+    return { label: "증자", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" };
+  if (/자기주식/.test(name))
+    return { label: "자사주", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" };
+  if (/주요사항/.test(name))
+    return { label: "주요", cls: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" };
+  return { label: "", cls: "" };
+}
+
+function StockDisclosurePanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [items, setItems] = useState<DartDisclosure[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const isKR = ticker.endsWith(".KS") || ticker.endsWith(".KQ") || /^\d{6}$/.test(ticker);
+
+  useEffect(() => {
+    if (!isKR) { setLoading(false); return; }
+    let cancelled = false;
+    fetch(getApiUrl(`/api/market-data/dart-disclosures?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : [])
+      .then((d: DartDisclosure[]) => { if (!cancelled) { setItems(d ?? []); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [ticker, isKR]);
+
+  if (!isKR || (!loading && items.length === 0)) return null;
+
+  return (
+    <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      <div className="flex items-center gap-2 mb-4">
+        <FileText className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-sm font-semibold text-foreground">
+          {isEn ? "Recent Disclosures" : "주요 공시"}
+        </h2>
+        <span className="text-[11px] text-muted-foreground/40">
+          {isEn ? "last 90 days · DART" : "최근 90일 · DART"}
+        </span>
+        {!loading && items.length > 0 && (
+          <span className="ml-auto text-[11px] font-mono text-muted-foreground/35">{items.length}</span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 animate-pulse">
+              <div className="h-3 w-16 rounded bg-muted/60 shrink-0" />
+              <div className="h-3 rounded bg-muted/40 flex-1" style={{ width: `${55 + (i * 11) % 35}%` }} />
+              <div className="h-3 w-8 rounded bg-muted/30 shrink-0" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/40">
+          {items.map((item, i) => {
+            const cat = disclosureCategory(item.reportName);
+            const dateParts = item.date.split("-");
+            const dateLabel = dateParts.length === 3
+              ? `${dateParts[1]}/${dateParts[2]}`
+              : item.date;
+            return (
+              <li key={i} className="py-2.5 first:pt-0 last:pb-0">
+                <a
+                  href={item.dartUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 group"
+                >
+                  <span className="text-[11px] font-mono text-muted-foreground/50 shrink-0 w-10 tabular-nums">
+                    {dateLabel}
+                  </span>
+                  <span className="text-[13px] text-foreground/80 flex-1 leading-snug group-hover:text-foreground transition-colors line-clamp-1">
+                    {item.reportName}
+                  </span>
+                  {cat.label && (
+                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0", cat.cls)}>
+                      {cat.label}
+                    </span>
+                  )}
+                  <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: string; companyName: string; isEn?: boolean }) {
   const [events, setEvents] = useState<StockNewsEvent[]>([]);
   const [summary, setSummary] = useState<string>("");
@@ -2362,6 +2466,9 @@ export default function AnalysisDetail() {
         companyName={analysis.companyName}
         isEn={isEn}
       />
+
+      {/* 주요 공시 — 뉴스 타임라인과 AI 파이프라인 사이 */}
+      <StockDisclosurePanel ticker={analysis.ticker} isEn={isEn} />
 
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
