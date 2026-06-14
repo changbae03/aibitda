@@ -752,7 +752,14 @@ router.get("/search/:query", async (req, res) => {
       // 지원 거래소: KOSPI·KOSDAQ (한국), NYSE·NASDAQ·AMEX (미국) 만 허용
       const ALLOWED_EXCHANGES = new Set(["KOSPI", "KOSDAQ", "NASDAQ", "NYSE", "AMEX"]);
       yahoo = quotes
-        .filter((q: any) => q.symbol && (q.quoteType === "EQUITY"))
+        .filter((q: any) => {
+          if (!q.symbol) return false;
+          const qt = (q.quoteType ?? "").toString().toUpperCase();
+          // quoteType이 파싱 실패로 빈 문자열·undefined인 경우도 EQUITY 계열로 허용
+          // ETF·MUTUALFUND·FUTURE·CURRENCY·CRYPTOCURRENCY·INDEX는 명시적으로 제외
+          const EXCLUDED = new Set(["ETF", "MUTUALFUND", "FUTURE", "CURRENCY", "CRYPTOCURRENCY", "INDEX"]);
+          return !EXCLUDED.has(qt);
+        })
         .map((q: any) => {
           let exchange = q.exchange ?? "";
           if (q.symbol.endsWith(".KS")) exchange = "KOSPI";
