@@ -1786,6 +1786,80 @@ router.get("/dart-disclosures", async (req, res) => {
   }
 });
 
+// ─── GET /api/market-data/dividend-info ──────────────────────────────────────
+// 배당 요약 + 최근 5년 이력 (Yahoo Finance summaryDetail + historical)
+router.get("/dividend-info", async (req, res) => {
+  try {
+    const ticker = String(req.query.ticker ?? "").trim();
+    if (!ticker) return res.json(null);
+
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const cacheKey = `dividend-info-v2-${ticker}-${fmt(todayKST).slice(0, 7)}`;
+
+    const dbCached = await getFromDBCache<any>(cacheKey);
+    if (dbCached) return res.json(dbCached);
+
+    const qs = await (yahooFinance as any).quoteSummary(ticker, {
+      modules: ["summaryDetail", "defaultKeyStatistics"],
+    });
+
+    const sd = (qs?.summaryDetail ?? {}) as Record<string, any>;
+    const dk = (qs?.defaultKeyStatistics ?? {}) as Record<string, any>;
+
+    const dividendRate: number | null = sd.dividendRate ?? null;
+    const dividendYield: number | null = sd.dividendYield ?? null;
+
+    if (!dividendRate && !dividendYield) {
+      await saveToDBCache(cacheKey, null, 24 * 60 * 60 * 1000);
+      return res.json(null);
+    }
+
+    // 최근 5년 배당 이력 — chart 모듈 events.dividends 연도별 합산
+    const fiveYearsAgo = new Date(todayKST.getTime() - 5 * 365.25 * 86400000);
+    let history: { date: string; amount: number }[] = [];
+    try {
+      const chartData = await (yahooFinance as any).chart(ticker, {
+        period1: fiveYearsAgo,
+        interval: "1mo",
+      });
+      const divEvents = Object.values((chartData?.events?.dividends ?? {}) as Record<string, { amount: number; date: string }>);
+      const byYear: Record<string, number> = {};
+      for (const item of divEvents) {
+        if (!item.date || item.amount == null) continue;
+        const yr = new Date(item.date).getFullYear().toString();
+        byYear[yr] = (byYear[yr] ?? 0) + item.amount;
+      }
+      history = Object.entries(byYear)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([year, amount]) => ({ date: year, amount: Math.round(amount * 100) / 100 }));
+    } catch { /* 이력 조회 실패 시 빈 배열로 계속 */ }
+
+    const toDateStr = (v: any): string | null => {
+      if (!v) return null;
+      try { return new Date(v).toISOString().slice(0, 10); } catch { return null; }
+    };
+
+    const result = {
+      dividendRate,
+      dividendYield,
+      exDividendDate: toDateStr(sd.exDividendDate),
+      payoutRatio: sd.payoutRatio ?? null,
+      fiveYearAvgDividendYield: sd.fiveYearAvgDividendYield ?? null,
+      lastDividendValue: dk.lastDividendValue ?? null,
+      lastDividendDate: toDateStr(dk.lastDividendDate),
+      history,
+    };
+
+    await saveToDBCache(cacheKey, result, 24 * 60 * 60 * 1000);
+    console.log(`[dividend-info] ${ticker} yield=${dividendYield} history=${history.length}년`);
+    res.json(result);
+  } catch (e: any) {
+    console.error("[dividend-info]", e?.message);
+    res.json(null);
+  }
+});
+
 // ─── GET /api/market-data/indicator-history ──────────────────────────────────
 interface IndicatorPoint { date: string; value: number; }
 interface IndicatorSeries {

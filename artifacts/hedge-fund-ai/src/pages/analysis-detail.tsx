@@ -1419,6 +1419,136 @@ function StockDisclosurePanel({ ticker, isEn = false }: { ticker: string; isEn?:
   );
 }
 
+// ─── 배당 정보 패널 ────────────────────────────────────────────────────────────
+interface DividendInfo {
+  dividendRate: number | null;
+  dividendYield: number | null;
+  exDividendDate: string | null;
+  payoutRatio: number | null;
+  fiveYearAvgDividendYield: number | null;
+  lastDividendValue: number | null;
+  lastDividendDate: string | null;
+  history: { date: string; amount: number }[];
+}
+
+function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [info, setInfo] = useState<DividendInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const isKR = ticker.endsWith(".KS") || ticker.endsWith(".KQ") || /^\d{6}$/.test(ticker);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl(`/api/market-data/dividend-info?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: DividendInfo | null) => { if (!cancelled) { setInfo(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  if (!loading && !info) return null;
+
+  const fmtDiv = (v: number | null) => {
+    if (v == null) return "—";
+    return isKR ? `${Math.round(v).toLocaleString("ko-KR")}원` : `$${v.toFixed(2)}`;
+  };
+  const fmtPct = (v: number | null, multiply = false) => {
+    if (v == null) return "—";
+    return `${(multiply ? v * 100 : v).toFixed(2)}%`;
+  };
+  const fmtDate = (d: string | null) => {
+    if (!d) return "—";
+    const [, m, day] = d.split("-");
+    return `${parseInt(m)}/${parseInt(day)}`;
+  };
+
+  const maxAmt = info?.history?.length ? Math.max(...info.history.map(h => h.amount)) : 1;
+
+  return (
+    <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-sm font-semibold text-foreground">
+          {isEn ? "Dividend Info" : "배당 정보"}
+        </h2>
+        {!loading && info?.dividendYield != null && (
+          <span className="ml-auto text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            {fmtPct(info.dividendYield, true)}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 animate-pulse">
+          <div className="grid grid-cols-2 gap-2.5">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-muted/40 rounded-xl h-14" />
+            ))}
+          </div>
+          <div className="flex items-end gap-2 mt-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="h-2 w-full rounded bg-muted/30" />
+                <div className="h-5 w-full rounded bg-muted/40" style={{ height: `${12 + (i * 7) % 24}px` }} />
+                <div className="h-2 w-4 rounded bg-muted/25" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : info ? (
+        <>
+          {/* 지표 그리드 */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+            {[
+              { label: isEn ? "Annual Div." : "연간 배당금", value: fmtDiv(info.dividendRate) },
+              { label: isEn ? "Ex-Div. Date" : "배당락일", value: fmtDate(info.exDividendDate) },
+              { label: isEn ? "Payout Ratio" : "배당성향", value: fmtPct(info.payoutRatio, true) },
+              { label: isEn ? "5Y Avg Yield" : "5년 평균수익률", value: info.fiveYearAvgDividendYield != null ? `${info.fiveYearAvgDividendYield.toFixed(2)}%` : "—" },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-muted/30 rounded-xl px-3 py-2.5 text-center">
+                <div className="text-[10.5px] text-muted-foreground/55 mb-1 leading-tight">{label}</div>
+                <div className="text-[13px] font-semibold text-foreground tabular-nums">{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 배당 이력 인라인 바 차트 */}
+          {info.history.length > 0 && (
+            <div>
+              <p className="text-[10.5px] text-muted-foreground/45 mb-2">
+                {isEn ? "Dividend History" : "배당 이력"}
+              </p>
+              <div className="flex items-end gap-1.5">
+                {info.history.map((h) => {
+                  const barH = Math.max(6, (h.amount / maxAmt) * 44);
+                  const amtLabel = isKR
+                    ? Math.round(h.amount).toLocaleString("ko-KR")
+                    : h.amount.toFixed(2);
+                  return (
+                    <div key={h.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                      <span className="text-[9px] font-mono text-muted-foreground/45 tabular-nums truncate w-full text-center">
+                        {amtLabel}
+                      </span>
+                      <div
+                        className="w-full rounded-sm bg-emerald-400/55 dark:bg-emerald-500/45 transition-all"
+                        style={{ height: `${barH}px` }}
+                      />
+                      <span className="text-[9px] text-muted-foreground/35 tabular-nums">
+                        {h.date.slice(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: string; companyName: string; isEn?: boolean }) {
   const [events, setEvents] = useState<StockNewsEvent[]>([]);
   const [summary, setSummary] = useState<string>("");
@@ -2469,6 +2599,9 @@ export default function AnalysisDetail() {
 
       {/* 주요 공시 — 뉴스 타임라인과 AI 파이프라인 사이 */}
       <StockDisclosurePanel ticker={analysis.ticker} isEn={isEn} />
+
+      {/* 배당 정보 */}
+      <DividendInfoPanel ticker={analysis.ticker} isEn={isEn} />
 
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
