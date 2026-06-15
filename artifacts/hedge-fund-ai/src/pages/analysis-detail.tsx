@@ -1473,9 +1473,12 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
           {isEn ? "Dividend Info" : "배당 정보"}
         </h2>
         {!loading && info?.dividendYield != null && (
-          <span className="ml-auto text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-            {fmtPct(info.dividendYield, true)}
-          </span>
+          <div className="ml-auto flex items-baseline gap-1">
+            <span className="text-xs text-muted-foreground/60">{isEn ? "Div. Yield" : "시가배당률"}</span>
+            <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+              {fmtPct(info.dividendYield, true)}
+            </span>
+          </div>
         )}
       </div>
 
