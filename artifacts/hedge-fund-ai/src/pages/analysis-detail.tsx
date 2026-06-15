@@ -1767,8 +1767,13 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
             const upside  = currentPrice ? ((mean - currentPrice) / currentPrice) * 100 : null;
 
             const fmtK = (v: number) => {
-              if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}억원`;
-              if (v >= 10_000)      return `${Math.round(v / 10_000)}만원`;
+              if (v >= 10_000) {
+                const man = v / 10_000;
+                const str = man >= 100
+                  ? `${Math.round(man)}만원`
+                  : `${parseFloat(man.toFixed(1))}만원`;
+                return str;
+              }
               return `${Math.round(v).toLocaleString()}원`;
             };
 
