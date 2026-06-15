@@ -1929,14 +1929,14 @@ router.get("/analyst-consensus", async (req, res) => {
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `analyst-consensus-v2-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
+    const cacheKey = `analyst-consensus-v3-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
 
     const modules = isBareSixDigit
-      ? ["recommendationTrend", "financialData"]
-      : ["recommendationTrend", "financialData", "upgradeDowngradeHistory"];
+      ? ["recommendationTrend", "financialData", "earningsTrend"]
+      : ["recommendationTrend", "financialData", "earningsTrend", "upgradeDowngradeHistory"];
 
     let qs: any = null;
     try {
@@ -1974,35 +1974,56 @@ router.get("/analyst-consensus", async (req, res) => {
       strongSell:t.strongSell ?? 0,
     }));
 
-    // 최근 투자의견 변경 (미국 주식, 실제 변경만)
-    const recentRatingChanges = !isBareSixDigit
-      ? (qs?.upgradeDowngradeHistory?.history ?? [])
-          .filter((h: any) => h.action === "up" || h.action === "down" || h.toGrade !== h.fromGrade)
-          .slice(0, 6)
-          .map((h: any) => ({
-            date:       new Date(h.epochGradeDate).toISOString().slice(0, 10),
-            firm:       h.firm ?? "",
-            action:     h.action ?? "main",   // "up" | "down" | "main"
-            toGrade:    h.toGrade ?? "",
-            fromGrade:  h.fromGrade ?? "",
-            targetPrice: h.currentPriceTarget ?? null,
-            priorTarget: h.priorPriceTarget   ?? null,
-          }))
-      : [];
+    // ── 기관별 목표주가 (미국: 최근 1년 이내, firm별 최신 1건) ──────────────
+    const firmTargets: { firm: string; target: number; grade: string; date: string }[] = [];
+    if (!isBareSixDigit) {
+      const oneYearAgo = Date.now() - 365 * 24 * 3600 * 1000;
+      const firmMap = new Map<string, { firm: string; target: number; grade: string; date: string }>();
+      for (const h of (qs?.upgradeDowngradeHistory?.history ?? []) as any[]) {
+        if (!h.currentPriceTarget) continue;
+        const ts = new Date(h.epochGradeDate).getTime();
+        if (ts < oneYearAgo) continue; // 1년 이상 된 것 제외
+        if (!firmMap.has(h.firm)) {   // history는 최신순이므로 첫 번째가 최신
+          firmMap.set(h.firm, {
+            firm:   h.firm ?? "",
+            target: h.currentPriceTarget,
+            grade:  h.toGrade ?? "",
+            date:   new Date(h.epochGradeDate).toISOString().slice(0, 10),
+          });
+        }
+      }
+      firmTargets.push(...[...firmMap.values()].sort((a, b) => b.target - a.target));
+    }
+
+    // ── 실적 전망 (earningsTrend 0y / +1y) ──────────────────────────────────
+    const etRaw = (qs?.earningsTrend?.trend ?? []) as any[];
+    const earningsEstimates = ["0y", "+1y"].map(period => {
+      const t = etRaw.find((x: any) => x.period === period);
+      if (!t) return null;
+      return {
+        period,
+        epsAvg:          t.earningsEstimate?.avg          ?? null,
+        epsLow:          t.earningsEstimate?.low          ?? null,
+        epsHigh:         t.earningsEstimate?.high         ?? null,
+        epsNumAnalysts:  t.earningsEstimate?.numberOfAnalysts ?? null,
+        revAvg:          t.revenueEstimate?.avg           ?? null,
+        revLow:          t.revenueEstimate?.low           ?? null,
+        revHigh:         t.revenueEstimate?.high          ?? null,
+        revNumAnalysts:  t.revenueEstimate?.numberOfAnalysts ?? null,
+      };
+    }).filter(Boolean);
 
     const result = {
       strongBuy, buy, hold, sell, strongSell, total,
-      targetMeanPrice:   fd.targetMeanPrice   ?? null,
-      targetHighPrice:   fd.targetHighPrice   ?? null,
-      targetLowPrice:    fd.targetLowPrice    ?? null,
       recommendationKey: fd.recommendationKey ?? null,
       currency: isBareSixDigit ? "KRW" : "USD",
       trendHistory,
-      recentRatingChanges,
+      firmTargets,
+      earningsEstimates,
     };
 
     await saveToDBCache(cacheKey, result, 24 * 60 * 60 * 1000);
-    console.log(`[analyst-consensus] ${ticker} total=${total} key=${result.recommendationKey} changes=${recentRatingChanges.length}`);
+    console.log(`[analyst-consensus] ${ticker} total=${total} key=${result.recommendationKey} firms=${firmTargets.length} earnings=${earningsEstimates.length}`);
     res.json(result);
   } catch (e: any) {
     console.error("[analyst-consensus]", e?.message);

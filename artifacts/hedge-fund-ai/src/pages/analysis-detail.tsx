@@ -1621,13 +1621,11 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
 // ─── 애널리스트 컨센서스 패널 ──────────────────────────────────────────────────
 interface AnalystConsensus {
   strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; total: number;
-  targetMeanPrice: number | null;
-  targetHighPrice: number | null;
-  targetLowPrice:  number | null;
   recommendationKey: string | null;
   currency: string;
   trendHistory: { period: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }[];
-  recentRatingChanges: { date: string; firm: string; action: string; toGrade: string; fromGrade: string; targetPrice: number | null; priorTarget: number | null }[];
+  firmTargets: { firm: string; target: number; grade: string; date: string }[];
+  earningsEstimates: { period: string; epsAvg: number | null; epsLow: number | null; epsHigh: number | null; epsNumAnalysts: number | null; revAvg: number | null; revNumAnalysts: number | null }[];
 }
 
 function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker: string; currentPrice?: number | null; isEn?: boolean }) {
@@ -1646,10 +1644,6 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
   if (!loading && !info) return null;
 
   const isKRW = info?.currency === "KRW";
-  const fmtPrice = (v: number | null) => {
-    if (v == null) return "—";
-    return isKRW ? `${Math.round(v).toLocaleString()}원` : `$${v.toFixed(2)}`;
-  };
 
   const buyCount  = (info?.strongBuy ?? 0) + (info?.buy ?? 0);
   const holdCount = info?.hold ?? 0;
@@ -1669,32 +1663,41 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
   const key = info?.recommendationKey ?? "";
   const consensus = keyLabel[key] ?? { label: key, color: "text-foreground" };
 
-  const upside = currentPrice && info?.targetMeanPrice
-    ? ((info.targetMeanPrice - currentPrice) / currentPrice) * 100
-    : null;
-
   // 3개월 추이 분석 (0m vs -1m)
   const th = info?.trendHistory ?? [];
   const trendDiff = th.length >= 2 ? (() => {
-    const cur  = th[0]; const prev = th[1];
-    const curBuy  = cur.strongBuy  + cur.buy;
-    const prevBuy = prev.strongBuy + prev.buy;
-    const curSell  = cur.sell  + cur.strongSell;
-    const prevSell = prev.sell + prev.strongSell;
-    return { buyDelta: curBuy - prevBuy, sellDelta: curSell - prevSell, holdDelta: cur.hold - prev.hold };
+    const cur = th[0]; const prev = th[1];
+    return {
+      buyDelta:  (cur.strongBuy + cur.buy) - (prev.strongBuy + prev.buy),
+      holdDelta: cur.hold - prev.hold,
+      sellDelta: (cur.sell + cur.strongSell) - (prev.sell + prev.strongSell),
+    };
   })() : null;
 
-  // 투자의견 변경 → 업그레이드/다운그레이드 분류
-  const ratingChanges = info?.recentRatingChanges ?? [];
-  const gradeLabel = (g: string) => {
-    const map: Record<string, string> = {
-      "Buy": isEn ? "Buy" : "매수", "Strong Buy": isEn ? "Strong Buy" : "강력매수",
-      "Outperform": isEn ? "Outperform" : "시장상회", "Overweight": isEn ? "Overweight" : "비중확대",
-      "Hold": isEn ? "Hold" : "중립", "Neutral": isEn ? "Neutral" : "중립",
-      "Underperform": isEn ? "Underperform" : "시장하회", "Sell": isEn ? "Sell" : "매도",
-      "Underweight": isEn ? "Underweight" : "비중축소",
-    };
-    return map[g] ?? g;
+  // 기관별 목표주가 (미국) — 상위 10개만
+  const firmTargets = (info?.firmTargets ?? []).slice(0, 10);
+
+  // 실적 전망 포매터
+  const fmtEps = (v: number | null) => {
+    if (v == null) return "—";
+    return isKRW ? `${Math.round(v).toLocaleString()}원` : `$${v.toFixed(2)}`;
+  };
+  const fmtRev = (v: number | null) => {
+    if (v == null) return "—";
+    if (isKRW) {
+      const tril = v / 1e12;
+      return tril >= 1 ? `${tril.toFixed(1)}조` : `${(v / 1e8).toFixed(0)}억`;
+    }
+    const bil = v / 1e9;
+    return bil >= 1000 ? `$${(bil / 1000).toFixed(1)}T` : `$${bil.toFixed(0)}B`;
+  };
+
+  const gradeColor = (g: string) => {
+    const l = g.toLowerCase();
+    if (l.includes("strong buy") || l.includes("outperform") || l.includes("overweight")) return "text-emerald-500";
+    if (l.includes("buy")) return "text-emerald-400";
+    if (l.includes("hold") || l.includes("neutral") || l.includes("market perform")) return "text-amber-400";
+    return "text-red-400";
   };
 
   return (
@@ -1709,11 +1712,12 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
       {loading ? (
         <div className="space-y-3 animate-pulse">
           <div className="h-4 rounded bg-muted/30 w-full" />
-          <div className="grid grid-cols-3 gap-2"><div className="h-12 rounded bg-muted/30" /><div className="h-12 rounded bg-muted/30" /><div className="h-12 rounded bg-muted/30" /></div>
+          <div className="h-24 rounded bg-muted/20" />
+          <div className="h-20 rounded bg-muted/20" />
         </div>
       ) : info ? (
         <div className="space-y-3">
-          {/* 스택 바 */}
+          {/* 매수/중립/매도 스택 바 */}
           <div className="flex rounded-full overflow-hidden h-2.5 gap-0.5">
             {buyPct  > 0 && <div style={{ width: `${buyPct}%`  }} className="bg-emerald-500 rounded-l-full" />}
             {holdPct > 0 && <div style={{ width: `${holdPct}%` }} className="bg-amber-400" />}
@@ -1724,28 +1728,10 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
             <span className="text-amber-400">{isEn ? "Hold" : "중립"} {holdPct}% ({holdCount})</span>
             <span className="text-red-400">{isEn ? "Sell" : "매도"} {sellPct}% ({sellCount})</span>
           </div>
-          {/* 목표주가 */}
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            {[
-              { label: isEn ? "Low" : "최저", value: fmtPrice(info.targetLowPrice) },
-              { label: isEn ? "Consensus" : "컨센서스", value: fmtPrice(info.targetMeanPrice), upside },
-              { label: isEn ? "High" : "최고", value: fmtPrice(info.targetHighPrice) },
-            ].map(({ label, value, upside: up }) => (
-              <div key={label} className="rounded-lg bg-muted/20 px-2 py-2.5 text-center">
-                <div className="text-[10px] text-muted-foreground/60 mb-1">{label}</div>
-                <div className="text-sm font-semibold tabular-nums text-foreground">{value}</div>
-                {up != null && (
-                  <div className={`text-[10px] font-medium mt-0.5 ${up >= 0 ? "text-emerald-500" : "text-red-400"}`}>
-                    {up >= 0 ? "+" : ""}{up.toFixed(1)}%
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
 
-          {/* 3개월 추이 */}
-          {trendDiff && (trendDiff.buyDelta !== 0 || trendDiff.sellDelta !== 0 || trendDiff.holdDelta !== 0) && (
-            <div className="flex items-center gap-3 pt-1 border-t border-border/20 text-[10px] text-muted-foreground/60">
+          {/* 전달 대비 추이 */}
+          {trendDiff && (trendDiff.buyDelta !== 0 || trendDiff.holdDelta !== 0 || trendDiff.sellDelta !== 0) && (
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60">
               <span>{isEn ? "vs last month" : "전달 대비"}</span>
               {trendDiff.buyDelta !== 0 && (
                 <span className={trendDiff.buyDelta > 0 ? "text-emerald-500" : "text-red-400"}>
@@ -1753,7 +1739,7 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
                 </span>
               )}
               {trendDiff.holdDelta !== 0 && (
-                <span className={trendDiff.holdDelta > 0 ? "text-amber-400" : "text-muted-foreground/60"}>
+                <span className={trendDiff.holdDelta > 0 ? "text-amber-400" : "text-muted-foreground/50"}>
                   {isEn ? "Hold" : "중립"} {trendDiff.holdDelta > 0 ? "+" : ""}{trendDiff.holdDelta}
                 </span>
               )}
@@ -1765,22 +1751,52 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
             </div>
           )}
 
-          {/* 최근 투자의견 변경 (미국 주식) */}
-          {ratingChanges.length > 0 && (
+          {/* 기관별 목표주가 (미국 주식) */}
+          {firmTargets.length > 0 && (
             <div className="space-y-1 pt-1 border-t border-border/20">
-              <div className="text-[10px] text-muted-foreground/50 mb-1.5">{isEn ? "Recent Rating Changes" : "최근 투자의견 변경"}</div>
-              {ratingChanges.map((rc, i) => (
+              <div className="text-[10px] text-muted-foreground/50 mb-1.5">{isEn ? "Target Price by Firm" : "기관별 목표주가"}</div>
+              {firmTargets.map((f, i) => (
                 <div key={i} className="flex items-center gap-2 text-[10px]">
-                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold ${rc.action === "up" ? "bg-emerald-500/15 text-emerald-500" : rc.action === "down" ? "bg-red-400/15 text-red-400" : "bg-muted/20 text-muted-foreground/60"}`}>
-                    {rc.action === "up" ? "↑" : rc.action === "down" ? "↓" : "─"}
-                  </span>
-                  <span className="flex-1 truncate text-foreground/70">{rc.firm}</span>
-                  <span className="text-muted-foreground/50 shrink-0">{gradeLabel(rc.fromGrade) || "—"} → <span className={rc.action === "up" ? "text-emerald-500" : rc.action === "down" ? "text-red-400" : "text-foreground/70"}>{gradeLabel(rc.toGrade)}</span></span>
-                  {rc.targetPrice != null && (
-                    <span className="shrink-0 tabular-nums text-foreground/50">${rc.targetPrice}</span>
-                  )}
+                  <span className={`shrink-0 text-[9px] font-medium ${gradeColor(f.grade)}`}>{f.grade || "—"}</span>
+                  <span className="flex-1 truncate text-foreground/70">{f.firm}</span>
+                  <span className="shrink-0 text-muted-foreground/40">{f.date.slice(5)}</span>
+                  <span className="shrink-0 tabular-nums font-semibold text-foreground/80">${f.target}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* 실적 전망 */}
+          {(info.earningsEstimates ?? []).length > 0 && (
+            <div className="pt-1 border-t border-border/20">
+              <div className="text-[10px] text-muted-foreground/50 mb-2">{isEn ? "Earnings Estimates" : "실적 전망"}</div>
+              <div className="grid grid-cols-2 gap-2">
+                {(info.earningsEstimates ?? []).map((e) => (
+                  <div key={e.period} className="rounded-lg bg-muted/20 px-3 py-2.5 space-y-1.5">
+                    <div className="text-[10px] font-semibold text-muted-foreground/60">
+                      {e.period === "0y" ? (isEn ? "This Year" : "올해") : (isEn ? "Next Year" : "내년")}
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-[10px] text-muted-foreground/50">EPS</span>
+                      <span className="text-xs font-semibold tabular-nums text-foreground">{fmtEps(e.epsAvg)}</span>
+                    </div>
+                    {e.epsLow != null && e.epsHigh != null && (
+                      <div className="text-[9px] text-muted-foreground/40 text-right tabular-nums">
+                        {fmtEps(e.epsLow)} ~ {fmtEps(e.epsHigh)}
+                      </div>
+                    )}
+                    {e.revAvg != null && (
+                      <div className="flex justify-between items-baseline border-t border-border/10 pt-1">
+                        <span className="text-[10px] text-muted-foreground/50">{isEn ? "Rev" : "매출"}</span>
+                        <span className="text-xs font-semibold tabular-nums text-foreground">{fmtRev(e.revAvg)}</span>
+                      </div>
+                    )}
+                    {e.epsNumAnalysts != null && (
+                      <div className="text-[9px] text-muted-foreground/30 text-right">{e.epsNumAnalysts}{isEn ? " analysts" : "명"}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
