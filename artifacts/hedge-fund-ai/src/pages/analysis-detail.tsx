@@ -1626,6 +1626,8 @@ interface AnalystConsensus {
   targetLowPrice:  number | null;
   recommendationKey: string | null;
   currency: string;
+  trendHistory: { period: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }[];
+  recentRatingChanges: { date: string; firm: string; action: string; toGrade: string; fromGrade: string; targetPrice: number | null; priorTarget: number | null }[];
 }
 
 function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker: string; currentPrice?: number | null; isEn?: boolean }) {
@@ -1670,6 +1672,30 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
   const upside = currentPrice && info?.targetMeanPrice
     ? ((info.targetMeanPrice - currentPrice) / currentPrice) * 100
     : null;
+
+  // 3개월 추이 분석 (0m vs -1m)
+  const th = info?.trendHistory ?? [];
+  const trendDiff = th.length >= 2 ? (() => {
+    const cur  = th[0]; const prev = th[1];
+    const curBuy  = cur.strongBuy  + cur.buy;
+    const prevBuy = prev.strongBuy + prev.buy;
+    const curSell  = cur.sell  + cur.strongSell;
+    const prevSell = prev.sell + prev.strongSell;
+    return { buyDelta: curBuy - prevBuy, sellDelta: curSell - prevSell, holdDelta: cur.hold - prev.hold };
+  })() : null;
+
+  // 투자의견 변경 → 업그레이드/다운그레이드 분류
+  const ratingChanges = info?.recentRatingChanges ?? [];
+  const gradeLabel = (g: string) => {
+    const map: Record<string, string> = {
+      "Buy": isEn ? "Buy" : "매수", "Strong Buy": isEn ? "Strong Buy" : "강력매수",
+      "Outperform": isEn ? "Outperform" : "시장상회", "Overweight": isEn ? "Overweight" : "비중확대",
+      "Hold": isEn ? "Hold" : "중립", "Neutral": isEn ? "Neutral" : "중립",
+      "Underperform": isEn ? "Underperform" : "시장하회", "Sell": isEn ? "Sell" : "매도",
+      "Underweight": isEn ? "Underweight" : "비중축소",
+    };
+    return map[g] ?? g;
+  };
 
   return (
     <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
@@ -1716,6 +1742,48 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
               </div>
             ))}
           </div>
+
+          {/* 3개월 추이 */}
+          {trendDiff && (trendDiff.buyDelta !== 0 || trendDiff.sellDelta !== 0 || trendDiff.holdDelta !== 0) && (
+            <div className="flex items-center gap-3 pt-1 border-t border-border/20 text-[10px] text-muted-foreground/60">
+              <span>{isEn ? "vs last month" : "전달 대비"}</span>
+              {trendDiff.buyDelta !== 0 && (
+                <span className={trendDiff.buyDelta > 0 ? "text-emerald-500" : "text-red-400"}>
+                  {isEn ? "Buy" : "매수"} {trendDiff.buyDelta > 0 ? "+" : ""}{trendDiff.buyDelta}
+                </span>
+              )}
+              {trendDiff.holdDelta !== 0 && (
+                <span className={trendDiff.holdDelta > 0 ? "text-amber-400" : "text-muted-foreground/60"}>
+                  {isEn ? "Hold" : "중립"} {trendDiff.holdDelta > 0 ? "+" : ""}{trendDiff.holdDelta}
+                </span>
+              )}
+              {trendDiff.sellDelta !== 0 && (
+                <span className={trendDiff.sellDelta < 0 ? "text-emerald-500" : "text-red-400"}>
+                  {isEn ? "Sell" : "매도"} {trendDiff.sellDelta > 0 ? "+" : ""}{trendDiff.sellDelta}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 최근 투자의견 변경 (미국 주식) */}
+          {ratingChanges.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-border/20">
+              <div className="text-[10px] text-muted-foreground/50 mb-1.5">{isEn ? "Recent Rating Changes" : "최근 투자의견 변경"}</div>
+              {ratingChanges.map((rc, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px]">
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold ${rc.action === "up" ? "bg-emerald-500/15 text-emerald-500" : rc.action === "down" ? "bg-red-400/15 text-red-400" : "bg-muted/20 text-muted-foreground/60"}`}>
+                    {rc.action === "up" ? "↑" : rc.action === "down" ? "↓" : "─"}
+                  </span>
+                  <span className="flex-1 truncate text-foreground/70">{rc.firm}</span>
+                  <span className="text-muted-foreground/50 shrink-0">{gradeLabel(rc.fromGrade) || "—"} → <span className={rc.action === "up" ? "text-emerald-500" : rc.action === "down" ? "text-red-400" : "text-foreground/70"}>{gradeLabel(rc.toGrade)}</span></span>
+                  {rc.targetPrice != null && (
+                    <span className="shrink-0 tabular-nums text-foreground/50">${rc.targetPrice}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="text-[10px] text-muted-foreground/40 text-right">{info.total}{isEn ? " analysts" : "명 애널리스트"}</div>
         </div>
       ) : null}
@@ -1729,6 +1797,9 @@ interface MajorShareholders {
   institutionsPercent: number | null;
   institutionsCount:   number | null;
   topInstitutions: { name: string; pctHeld: number; pctChange: number | null; reportDate: string | null }[];
+  dartHolders: { name: string; relate: string; pct: number; shares: number }[];
+  insiderActivity: { period: string; buyCount: number; buyShares: number; sellCount: number; sellShares: number; netShares: number; totalInsider: number } | null;
+  recentInsiderTrades: { name: string; relation: string; shares: number; value: number; date: string | null; text: string }[];
 }
 
 function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
@@ -1749,6 +1820,25 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
   const retailPct = info
     ? Math.max(0, 100 - (info.insidersPercent ?? 0) * 100 - (info.institutionsPercent ?? 0) * 100)
     : 0;
+
+  const relateLabel = (r: string) => {
+    if (r.includes("최대주주 본인")) return isEn ? "Largest SH" : "최대주주";
+    if (r.includes("특수관계인")) return isEn ? "Related" : "특수관계인";
+    if (r.includes("계열회사")) return isEn ? "Affiliate" : "계열사";
+    if (r.includes("5%") || r.includes("5%이상")) return isEn ? "5%+ SH" : "5% 이상";
+    if (r.includes("임원")) return isEn ? "Executive" : "임원";
+    return r;
+  };
+
+  const fmtShares = (n: number) => {
+    if (n >= 1e8) return `${(n / 1e8).toFixed(1)}억주`;
+    if (n >= 1e4) return `${Math.round(n / 1e4)}만주`;
+    return `${n.toLocaleString()}주`;
+  };
+
+  // 내부자 거래: Sale/Gift 구분
+  const isSale = (text: string) => /sale/i.test(text);
+  const isPurchase = (text: string) => /purchase|acquisition/i.test(text);
 
   return (
     <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
@@ -1788,9 +1878,28 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
               </div>
             );
           })()}
-          {/* 상위 기관 목록 */}
-          {info.topInstitutions.length > 0 && (
-            <div className="space-y-1 pt-1">
+
+          {/* ── 한국: DART 임원·주요주주 소유상황 ── */}
+          {(info.dartHolders ?? []).length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-border/20">
+              <div className="text-[10px] text-muted-foreground/50 mb-1.5">{isEn ? "Key Shareholders (DART)" : "임원·주요주주 소유현황 (DART)"}</div>
+              {(info.dartHolders ?? []).map((h, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs text-foreground/80 truncate">{h.name}</span>
+                    <span className="ml-1.5 text-[10px] text-muted-foreground/40">{relateLabel(h.relate)}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">{fmtShares(h.shares)}</div>
+                  <div className="text-xs font-semibold tabular-nums text-foreground shrink-0 w-12 text-right">{h.pct.toFixed(2)}%</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── 미국: 기관 보유 목록 ── */}
+          {(info.dartHolders ?? []).length === 0 && info.topInstitutions.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-border/20">
+              <div className="text-[10px] text-muted-foreground/50 mb-1.5">{isEn ? "Top Institutions" : "주요 기관"}</div>
               {info.topInstitutions.map((h, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
@@ -1804,6 +1913,40 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── 미국: 내부자 거래 요약 + 개별 거래 ── */}
+          {info.insiderActivity && (
+            <div className="pt-1 border-t border-border/20 space-y-2">
+              <div className="text-[10px] text-muted-foreground/50">{isEn ? `Insider Activity (${info.insiderActivity.period})` : `내부자 거래 현황 (${info.insiderActivity.period})`}</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-emerald-500/8 px-2.5 py-2 text-center">
+                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">{isEn ? "Buy" : "매수"}</div>
+                  <div className="text-sm font-semibold text-emerald-500 tabular-nums">{info.insiderActivity.buyCount}{isEn ? " tx" : "건"}</div>
+                  <div className="text-[10px] text-muted-foreground/40">{(info.insiderActivity.buyShares / 1000).toFixed(0)}K{isEn ? " sh" : "주"}</div>
+                </div>
+                <div className="rounded-lg bg-red-400/8 px-2.5 py-2 text-center">
+                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">{isEn ? "Sell" : "매도"}</div>
+                  <div className="text-sm font-semibold text-red-400 tabular-nums">{info.insiderActivity.sellCount}{isEn ? " tx" : "건"}</div>
+                  <div className="text-[10px] text-muted-foreground/40">{(info.insiderActivity.sellShares / 1000).toFixed(0)}K{isEn ? " sh" : "주"}</div>
+                </div>
+              </div>
+              {info.recentInsiderTrades.length > 0 && (
+                <div className="space-y-1">
+                  {info.recentInsiderTrades.slice(0, 5).map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px]">
+                      <span className={`shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold ${isPurchase(t.text) ? "bg-emerald-500/15 text-emerald-500" : isSale(t.text) ? "bg-red-400/15 text-red-400" : "bg-muted/20 text-muted-foreground/50"}`}>
+                        {isPurchase(t.text) ? (isEn ? "Buy" : "매수") : isSale(t.text) ? (isEn ? "Sell" : "매도") : (isEn ? "Other" : "기타")}
+                      </span>
+                      <span className="flex-1 truncate text-foreground/70">{t.name}</span>
+                      <span className="shrink-0 text-muted-foreground/40">{t.relation?.split(" ")[0]}</span>
+                      <span className="shrink-0 tabular-nums text-foreground/60">{t.shares >= 1000 ? `${(t.shares/1000).toFixed(0)}K` : t.shares}</span>
+                      {t.date && <span className="shrink-0 text-muted-foreground/30">{t.date.slice(5)}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

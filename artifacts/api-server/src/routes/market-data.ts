@@ -6,6 +6,7 @@ import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
 import { fetchECOSBaseRateHistory } from "../lib/ecos-client.js";
+import { getCorpCodeFromCache } from "../lib/dart-corp-cache";
 import { fetchAllEconomicActuals, fetchBLSTimeSeries, type BLSReleaseDate, type FOMCDate } from "../lib/bls-client.js";
 import { getCachedFredMacro } from "../lib/fred-client.js";
 
@@ -1928,26 +1929,27 @@ router.get("/analyst-consensus", async (req, res) => {
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `analyst-consensus-v1-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
+    const cacheKey = `analyst-consensus-v2-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
 
+    const modules = isBareSixDigit
+      ? ["recommendationTrend", "financialData"]
+      : ["recommendationTrend", "financialData", "upgradeDowngradeHistory"];
+
     let qs: any = null;
     try {
-      qs = await (yahooFinance as any).quoteSummary(ticker, {
-        modules: ["recommendationTrend", "financialData"],
-      });
+      qs = await (yahooFinance as any).quoteSummary(ticker, { modules });
     } catch {
       if (isBareSixDigit) {
         ticker = `${tickerRaw}.KQ`;
-        qs = await (yahooFinance as any).quoteSummary(ticker, {
-          modules: ["recommendationTrend", "financialData"],
-        });
+        qs = await (yahooFinance as any).quoteSummary(ticker, { modules });
       } else throw new Error("quoteSummary failed");
     }
 
-    const trend = qs?.recommendationTrend?.trend?.[0] ?? {};
+    const allTrends = qs?.recommendationTrend?.trend ?? [];
+    const trend = allTrends[0] ?? {};
     const fd    = qs?.financialData ?? {};
 
     const strongBuy  = trend.strongBuy  ?? 0;
@@ -1962,17 +1964,45 @@ router.get("/analyst-consensus", async (req, res) => {
       return res.json(null);
     }
 
+    // 3개월 추이 (0m, -1m, -2m)
+    const trendHistory = allTrends.slice(0, 3).map((t: any) => ({
+      period:    t.period ?? "0m",
+      strongBuy: t.strongBuy  ?? 0,
+      buy:       t.buy        ?? 0,
+      hold:      t.hold       ?? 0,
+      sell:      t.sell       ?? 0,
+      strongSell:t.strongSell ?? 0,
+    }));
+
+    // 최근 투자의견 변경 (미국 주식, 실제 변경만)
+    const recentRatingChanges = !isBareSixDigit
+      ? (qs?.upgradeDowngradeHistory?.history ?? [])
+          .filter((h: any) => h.action === "up" || h.action === "down" || h.toGrade !== h.fromGrade)
+          .slice(0, 6)
+          .map((h: any) => ({
+            date:       new Date(h.epochGradeDate).toISOString().slice(0, 10),
+            firm:       h.firm ?? "",
+            action:     h.action ?? "main",   // "up" | "down" | "main"
+            toGrade:    h.toGrade ?? "",
+            fromGrade:  h.fromGrade ?? "",
+            targetPrice: h.currentPriceTarget ?? null,
+            priorTarget: h.priorPriceTarget   ?? null,
+          }))
+      : [];
+
     const result = {
       strongBuy, buy, hold, sell, strongSell, total,
       targetMeanPrice:   fd.targetMeanPrice   ?? null,
       targetHighPrice:   fd.targetHighPrice   ?? null,
       targetLowPrice:    fd.targetLowPrice    ?? null,
-      recommendationKey: fd.recommendationKey ?? null, // "buy","hold","sell" etc.
+      recommendationKey: fd.recommendationKey ?? null,
       currency: isBareSixDigit ? "KRW" : "USD",
+      trendHistory,
+      recentRatingChanges,
     };
 
     await saveToDBCache(cacheKey, result, 24 * 60 * 60 * 1000);
-    console.log(`[analyst-consensus] ${ticker} total=${total} key=${result.recommendationKey}`);
+    console.log(`[analyst-consensus] ${ticker} total=${total} key=${result.recommendationKey} changes=${recentRatingChanges.length}`);
     res.json(result);
   } catch (e: any) {
     console.error("[analyst-consensus]", e?.message);
@@ -1992,22 +2022,22 @@ router.get("/major-shareholders", async (req, res) => {
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `major-shareholders-v1-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
+    const cacheKey = `major-shareholders-v3-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
 
+    const yfModules = isBareSixDigit
+      ? ["majorHoldersBreakdown", "institutionOwnership"]
+      : ["majorHoldersBreakdown", "institutionOwnership", "insiderTransactions", "netSharePurchaseActivity"];
+
     let qs: any = null;
     try {
-      qs = await (yahooFinance as any).quoteSummary(ticker, {
-        modules: ["majorHoldersBreakdown", "institutionOwnership"],
-      });
+      qs = await (yahooFinance as any).quoteSummary(ticker, { modules: yfModules });
     } catch {
       if (isBareSixDigit) {
         ticker = `${tickerRaw}.KQ`;
-        qs = await (yahooFinance as any).quoteSummary(ticker, {
-          modules: ["majorHoldersBreakdown", "institutionOwnership"],
-        });
+        qs = await (yahooFinance as any).quoteSummary(ticker, { modules: yfModules });
       } else throw new Error("quoteSummary failed");
     }
 
@@ -2024,19 +2054,100 @@ router.get("/major-shareholders", async (req, res) => {
       .slice(0, 8)
       .map((h: any) => ({
         name:      h.organization,
-        pctHeld:   Math.round(h.pctHeld * 10000) / 100, // → %
+        pctHeld:   Math.round(h.pctHeld * 10000) / 100,
         pctChange: h.pctChange != null ? Math.round(h.pctChange * 10000) / 100 : null,
         reportDate: h.reportDate ? new Date(h.reportDate).toISOString().slice(0, 10) : null,
       }));
 
-    if (insidersPercent == null && institutionsPercent == null && topInstitutions.length === 0) {
+    // ── 미국 주식: 내부자 거래 ─────────────────────────────────────────
+    let insiderActivity: any = null;
+    let recentInsiderTrades: any[] = [];
+
+    if (!isBareSixDigit) {
+      const ns = qs?.netSharePurchaseActivity;
+      if (ns) {
+        insiderActivity = {
+          period:        ns.period ?? "6m",
+          buyCount:      ns.buyInfoCount      ?? 0,
+          buyShares:     ns.buyInfoShares      ?? 0,
+          sellCount:     ns.sellInfoCount      ?? 0,
+          sellShares:    ns.sellInfoShares     ?? 0,
+          netShares:     ns.netInfoShares      ?? 0,
+          totalInsider:  ns.totalInsiderShares ?? 0,
+        };
+      }
+      recentInsiderTrades = (qs?.insiderTransactions?.transactions ?? [])
+        .filter((t: any) => t.shares > 0 && t.transactionText)
+        .slice(0, 8)
+        .map((t: any) => ({
+          name:     t.filerName     ?? "",
+          relation: t.filerRelation ?? "",
+          shares:   t.shares        ?? 0,
+          value:    t.value         ?? 0,
+          date:     t.startDate ? new Date(t.startDate).toISOString().slice(0, 10) : null,
+          text:     t.transactionText ?? "",
+        }));
+    }
+
+    // ── 한국 주식: DART 임원·주요주주 소유상황 ────────────────────────────
+    let dartHolders: any[] = [];
+
+    if (isBareSixDigit) {
+      const DART_KEY = process.env.DART_API_KEY;
+      const stockCode = tickerRaw.match(/(\d{6})/)?.[1] ?? "";
+      if (DART_KEY && stockCode) {
+        try {
+          const corpCode = getCorpCodeFromCache(stockCode);
+          if (corpCode) {
+            const year  = todayKST.getFullYear();
+            // 최신 사업보고서(11011), 없으면 반기(11012)
+            for (const reprt of ["11011", "11012"]) {
+              const url = `https://opendart.fss.or.kr/api/hyslrSttus.json?crtfc_key=${DART_KEY}&corp_code=${corpCode}&bsns_year=${year - 1}&reprt_code=${reprt}`;
+              const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+              if (!r.ok) continue;
+              const d = await r.json() as any;
+              if (d.status === "000" && (d.list ?? []).length > 0) {
+                // 중복 이름+종류 제거: 같은 사람이 보통주/우선주 따로 나오므로 합산
+                const nameMap = new Map<string, { name: string; relate: string; pct: number; shares: number }>();
+                for (const it of d.list as any[]) {
+                  if (!it.nm || it.nm === "계") continue; // 합계 행 제외
+                  const key2 = `${it.nm}|${it.relate}`;
+                  const pct  = parseFloat(it.trmend_posesn_stock_qota_rt ?? it.bsis_posesn_stock_qota_rt ?? "0");
+                  const shs  = parseInt((it.trmend_posesn_stock_co ?? it.bsis_posesn_stock_co ?? "0").replace(/,/g, ""), 10) || 0;
+                  if (nameMap.has(key2)) {
+                    const prev = nameMap.get(key2)!;
+                    prev.pct    += pct;
+                    prev.shares += shs;
+                  } else {
+                    nameMap.set(key2, { name: it.nm ?? "", relate: it.relate ?? "", pct, shares: shs });
+                  }
+                }
+                dartHolders = [...nameMap.values()]
+                  .filter(h => h.pct > 0)
+                  .sort((a, b) => b.pct - a.pct)
+                  .slice(0, 10);
+                break;
+              }
+            }
+          }
+        } catch (de: any) {
+          console.warn("[major-shareholders DART]", de?.message);
+        }
+      }
+    }
+
+    if (insidersPercent == null && institutionsPercent == null && topInstitutions.length === 0 && dartHolders.length === 0) {
       await saveToDBCache(cacheKey, null, 24 * 60 * 60 * 1000);
       return res.json(null);
     }
 
-    const result = { insidersPercent, institutionsPercent, institutionsCount, topInstitutions };
+    const result = {
+      insidersPercent, institutionsPercent, institutionsCount, topInstitutions,
+      dartHolders,
+      insiderActivity, recentInsiderTrades,
+    };
     await saveToDBCache(cacheKey, result, 24 * 60 * 60 * 1000);
-    console.log(`[major-shareholders] ${ticker} institutions=${institutionsCount}`);
+    console.log(`[major-shareholders] ${ticker} institutions=${institutionsCount} dart=${dartHolders.length} insiderTrades=${recentInsiderTrades.length}`);
     res.json(result);
   } catch (e: any) {
     console.error("[major-shareholders]", e?.message);
