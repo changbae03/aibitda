@@ -1790,19 +1790,35 @@ router.get("/dart-disclosures", async (req, res) => {
 // 배당 요약 + 최근 5년 이력 (Yahoo Finance summaryDetail + historical)
 router.get("/dividend-info", async (req, res) => {
   try {
-    const ticker = String(req.query.ticker ?? "").trim();
-    if (!ticker) return res.json(null);
+    const tickerRaw = String(req.query.ticker ?? "").trim();
+    if (!tickerRaw) return res.json(null);
+
+    // 6자리 KRX 코드(suffix 없음)일 때 .KS → .KQ 순서로 시도
+    const isBareSixDigit = /^\d{6}$/.test(tickerRaw);
+    let ticker = tickerRaw;
+    if (isBareSixDigit) ticker = `${tickerRaw}.KS`;
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `dividend-info-v2-${ticker}-${fmt(todayKST).slice(0, 7)}`;
+    const cacheKey = `dividend-info-v2-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
 
-    const qs = await (yahooFinance as any).quoteSummary(ticker, {
-      modules: ["summaryDetail", "defaultKeyStatistics"],
-    });
+    let qs: any = null;
+    try {
+      qs = await (yahooFinance as any).quoteSummary(ticker, {
+        modules: ["summaryDetail", "defaultKeyStatistics"],
+      });
+    } catch {
+      // .KS 실패 시 .KQ 시도
+      if (isBareSixDigit) {
+        ticker = `${tickerRaw}.KQ`;
+        qs = await (yahooFinance as any).quoteSummary(ticker, {
+          modules: ["summaryDetail", "defaultKeyStatistics"],
+        });
+      } else throw new Error("quoteSummary failed");
+    }
 
     const sd = (qs?.summaryDetail ?? {}) as Record<string, any>;
     const dk = (qs?.defaultKeyStatistics ?? {}) as Record<string, any>;
