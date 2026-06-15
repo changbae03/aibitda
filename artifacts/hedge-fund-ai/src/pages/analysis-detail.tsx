@@ -1623,6 +1623,9 @@ interface AnalystConsensus {
   strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; total: number;
   recommendationKey: string | null;
   currency: string;
+  targetLowPrice:  number | null;
+  targetMeanPrice: number | null;
+  targetHighPrice: number | null;
   trendHistory: { period: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }[];
   firmTargets: { firm: string; target: number; grade: string; date: string }[];
   earningsEstimates: { period: string; epsAvg: number | null; epsLow: number | null; epsHigh: number | null; epsNumAnalysts: number | null; revAvg: number | null; revNumAnalysts: number | null }[];
@@ -1751,8 +1754,35 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
             </div>
           )}
 
-          {/* 기관별 목표주가 (미국 주식) */}
-          {firmTargets.length > 0 && (
+          {/* ── 한국 주식: 목표주가 (최저 / 컨센서스 / 최고) ── */}
+          {isKRW && info.targetMeanPrice != null && (() => {
+            const fmtKRW = (v: number | null) => v == null ? "—" : `${Math.round(v).toLocaleString()}원`;
+            const upside = currentPrice && info.targetMeanPrice
+              ? ((info.targetMeanPrice - currentPrice) / currentPrice) * 100
+              : null;
+            return (
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border/20">
+                {[
+                  { label: isEn ? "Low" : "최저",        value: fmtKRW(info.targetLowPrice) },
+                  { label: isEn ? "Consensus" : "컨센서스", value: fmtKRW(info.targetMeanPrice), upside },
+                  { label: isEn ? "High" : "최고",       value: fmtKRW(info.targetHighPrice) },
+                ].map(({ label, value, upside: up }) => (
+                  <div key={label} className="rounded-lg bg-muted/20 px-2 py-2.5 text-center">
+                    <div className="text-[10px] text-muted-foreground/60 mb-1">{label}</div>
+                    <div className="text-xs font-semibold tabular-nums text-foreground">{value}</div>
+                    {up != null && (
+                      <div className={`text-[10px] font-medium mt-0.5 ${up >= 0 ? "text-emerald-500" : "text-red-400"}`}>
+                        {up >= 0 ? "+" : ""}{up.toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ── 미국 주식: 기관별 목표주가 ── */}
+          {!isKRW && firmTargets.length > 0 && (
             <div className="space-y-1 pt-1 border-t border-border/20">
               <div className="text-[10px] text-muted-foreground/50 mb-1.5">{isEn ? "Target Price by Firm" : "기관별 목표주가"}</div>
               {firmTargets.map((f, i) => (
@@ -1766,8 +1796,8 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
             </div>
           )}
 
-          {/* 실적 전망 */}
-          {(info.earningsEstimates ?? []).length > 0 && (
+          {/* ── 미국 주식: 실적 전망 (EPS / 매출) ── */}
+          {!isKRW && (info.earningsEstimates ?? []).length > 0 && (
             <div className="pt-1 border-t border-border/20">
               <div className="text-[10px] text-muted-foreground/50 mb-2">{isEn ? "Earnings Estimates" : "실적 전망"}</div>
               <div className="grid grid-cols-2 gap-2">

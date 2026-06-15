@@ -1929,7 +1929,7 @@ router.get("/analyst-consensus", async (req, res) => {
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `analyst-consensus-v3-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
+    const cacheKey = `analyst-consensus-v4-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
@@ -2017,6 +2017,9 @@ router.get("/analyst-consensus", async (req, res) => {
       strongBuy, buy, hold, sell, strongSell, total,
       recommendationKey: fd.recommendationKey ?? null,
       currency: isBareSixDigit ? "KRW" : "USD",
+      targetLowPrice:  fd.targetLowPrice  ?? null,
+      targetMeanPrice: fd.targetMeanPrice ?? null,
+      targetHighPrice: fd.targetHighPrice ?? null,
       trendHistory,
       firmTargets,
       earningsEstimates,
