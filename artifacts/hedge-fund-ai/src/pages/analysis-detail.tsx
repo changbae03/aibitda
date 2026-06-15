@@ -1535,7 +1535,7 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
                         style={{ height: `${barH}px` }}
                       />
                       <span className="text-[9px] text-muted-foreground/35 tabular-nums">
-                        {h.date.slice(2)}
+                        {h.date}
                       </span>
                     </div>
                   );
