@@ -1754,29 +1754,94 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
             </div>
           )}
 
-          {/* ── 한국 주식: 목표주가 (최저 / 컨센서스 / 최고) ── */}
+          {/* ── 한국 주식: 목표주가 레인지 바 ── */}
           {isKRW && info.targetMeanPrice != null && (() => {
-            const fmtKRW = (v: number | null) => v == null ? "—" : `${Math.round(v).toLocaleString()}원`;
-            const upside = currentPrice && info.targetMeanPrice
-              ? ((info.targetMeanPrice - currentPrice) / currentPrice) * 100
-              : null;
+            const low  = info.targetLowPrice  ?? info.targetMeanPrice!;
+            const mean = info.targetMeanPrice!;
+            const high = info.targetHighPrice ?? info.targetMeanPrice!;
+            const span = high - low || 1;
+            const pct  = (v: number) => Math.max(0, Math.min(100, ((v - low) / span) * 100));
+
+            const meanPct = pct(mean);
+            const curPct  = currentPrice != null ? pct(currentPrice) : null;
+            const upside  = currentPrice ? ((mean - currentPrice) / currentPrice) * 100 : null;
+
+            const fmtK = (v: number) => {
+              if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M원`;
+              if (v >= 10_000)   return `${Math.round(v / 1_000)}K원`;
+              return `${Math.round(v).toLocaleString()}원`;
+            };
+
             return (
-              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border/20">
-                {[
-                  { label: isEn ? "Low" : "최저",        value: fmtKRW(info.targetLowPrice) },
-                  { label: isEn ? "Consensus" : "컨센서스", value: fmtKRW(info.targetMeanPrice), upside },
-                  { label: isEn ? "High" : "최고",       value: fmtKRW(info.targetHighPrice) },
-                ].map(({ label, value, upside: up }) => (
-                  <div key={label} className="rounded-lg bg-muted/20 px-2 py-2.5 text-center">
-                    <div className="text-[10px] text-muted-foreground/60 mb-1">{label}</div>
-                    <div className="text-xs font-semibold tabular-nums text-foreground">{value}</div>
-                    {up != null && (
-                      <div className={`text-[10px] font-medium mt-0.5 ${up >= 0 ? "text-emerald-500" : "text-red-400"}`}>
-                        {up >= 0 ? "+" : ""}{up.toFixed(1)}%
+              <div className="pt-2 border-t border-border/20 space-y-3">
+                <div className="text-[10px] text-muted-foreground/50">{isEn ? "Target Price Range" : "목표주가 분포"}</div>
+
+                {/* ── 레인지 바 ── */}
+                <div className="relative h-10 select-none">
+                  {/* 트랙 */}
+                  <div className="absolute top-[18px] left-0 right-0 h-[3px] rounded-full bg-gradient-to-r from-amber-500/30 via-emerald-400/40 to-amber-500/30" />
+
+                  {/* 현재가 세로선 */}
+                  {curPct != null && (
+                    <div
+                      className="absolute top-[10px] w-[2px] h-[20px] rounded-full bg-foreground/25"
+                      style={{ left: `${curPct}%`, transform: "translateX(-50%)" }}
+                    />
+                  )}
+
+                  {/* 최저 점 */}
+                  <div className="absolute top-[15px] left-0 w-[7px] h-[7px] rounded-full bg-muted-foreground/30 border border-background" style={{ transform: "translateX(-50%)" }} />
+
+                  {/* 최고 점 */}
+                  <div className="absolute top-[15px] right-0 w-[7px] h-[7px] rounded-full bg-muted-foreground/30 border border-background" style={{ transform: "translateX(50%)" }} />
+
+                  {/* 컨센서스 다이아몬드 */}
+                  <div
+                    className="absolute top-[12px] w-[13px] h-[13px] rounded-sm bg-emerald-500 border-2 border-background shadow rotate-45"
+                    style={{ left: `${meanPct}%`, transform: `translateX(-50%) rotate(45deg)` }}
+                  />
+
+                  {/* 컨센서스 라벨 (위) */}
+                  <div
+                    className="absolute top-0 text-[9px] font-semibold text-emerald-400 whitespace-nowrap"
+                    style={{ left: `${meanPct}%`, transform: "translateX(-50%)" }}
+                  >
+                    {isEn ? "Consensus" : "컨센서스"}
+                  </div>
+                </div>
+
+                {/* ── 수치 행 ── */}
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-[9px] text-muted-foreground/50">{isEn ? "Low" : "최저"}</div>
+                    <div className="text-[10px] font-medium tabular-nums text-foreground/60">{fmtK(low)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[11px] font-bold tabular-nums text-foreground">{fmtK(mean)}</div>
+                    {upside != null && (
+                      <div className={`text-[10px] font-semibold ${upside >= 0 ? "text-emerald-500" : "text-red-400"}`}>
+                        {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
+                      </div>
+                    )}
+                    {currentPrice != null && (
+                      <div className="text-[9px] text-muted-foreground/40 mt-0.5">
+                        {isEn ? "vs current" : "현재가 대비"}
                       </div>
                     )}
                   </div>
-                ))}
+                  <div className="text-right">
+                    <div className="text-[9px] text-muted-foreground/50">{isEn ? "High" : "최고"}</div>
+                    <div className="text-[10px] font-medium tabular-nums text-foreground/60">{fmtK(high)}</div>
+                  </div>
+                </div>
+
+                {/* 현재가 범례 */}
+                {curPct != null && currentPrice != null && (
+                  <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground/50">
+                    <div className="w-2.5 h-[2px] bg-foreground/25 rounded-full" />
+                    <span>{isEn ? "Current price" : "현재가"} {fmtK(currentPrice)}</span>
+                  </div>
+                )}
               </div>
             );
           })()}
