@@ -1876,6 +1876,174 @@ router.get("/dividend-info", async (req, res) => {
   }
 });
 
+// ─── GET /api/market-data/short-info ─────────────────────────────────────────
+// KIS 공매도·대차잔고 현황 (한국 종목 전용)
+router.get("/short-info", async (req, res) => {
+  try {
+    const tickerRaw = String(req.query.ticker ?? "").trim();
+    if (!tickerRaw) return res.json(null);
+
+    const sixDigit = tickerRaw.replace(/\.(KS|KQ)$/i, "");
+    if (!/^\d{6}$/.test(sixDigit)) return res.json(null); // 미국 종목 제외
+
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const cacheKey = `short-info-v1-${sixDigit}-${fmt(todayKST)}`;
+
+    const dbCached = await getFromDBCache<any>(cacheKey);
+    if (dbCached) return res.json(dbCached);
+
+    const kis = await fetchKISStockQuote(sixDigit);
+    if (!kis) {
+      await saveToDBCache(cacheKey, null, 60 * 60 * 1000);
+      return res.json(null);
+    }
+
+    const result = {
+      loanRate:      kis.loanRate,      // 대차잔고비율 (%)
+      shortOverYn:   kis.shortOverYn,   // 공매도 과열 여부 Y/N
+      shortSaleYn:   kis.shortSaleYn,   // 공매도 가능 여부 Y/N
+      lastShortQty:  kis.lastShortQty,  // 최근 공매도 체결수량
+      price:         kis.price,
+      mcap:          kis.mcap,
+    };
+
+    await saveToDBCache(cacheKey, result, 60 * 60 * 1000);
+    res.json(result);
+  } catch (e: any) {
+    console.error("[short-info]", e?.message);
+    res.json(null);
+  }
+});
+
+// ─── GET /api/market-data/analyst-consensus ───────────────────────────────────
+// 애널리스트 투자의견 + 목표주가 (Yahoo Finance)
+router.get("/analyst-consensus", async (req, res) => {
+  try {
+    const tickerRaw = String(req.query.ticker ?? "").trim();
+    if (!tickerRaw) return res.json(null);
+
+    const isBareSixDigit = /^\d{6}$/.test(tickerRaw);
+    let ticker = isBareSixDigit ? `${tickerRaw}.KS` : tickerRaw;
+
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const cacheKey = `analyst-consensus-v1-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
+
+    const dbCached = await getFromDBCache<any>(cacheKey);
+    if (dbCached) return res.json(dbCached);
+
+    let qs: any = null;
+    try {
+      qs = await (yahooFinance as any).quoteSummary(ticker, {
+        modules: ["recommendationTrend", "financialData"],
+      });
+    } catch {
+      if (isBareSixDigit) {
+        ticker = `${tickerRaw}.KQ`;
+        qs = await (yahooFinance as any).quoteSummary(ticker, {
+          modules: ["recommendationTrend", "financialData"],
+        });
+      } else throw new Error("quoteSummary failed");
+    }
+
+    const trend = qs?.recommendationTrend?.trend?.[0] ?? {};
+    const fd    = qs?.financialData ?? {};
+
+    const strongBuy  = trend.strongBuy  ?? 0;
+    const buy        = trend.buy        ?? 0;
+    const hold       = trend.hold       ?? 0;
+    const sell       = trend.sell       ?? 0;
+    const strongSell = trend.strongSell ?? 0;
+    const total = strongBuy + buy + hold + sell + strongSell;
+
+    if (total === 0) {
+      await saveToDBCache(cacheKey, null, 24 * 60 * 60 * 1000);
+      return res.json(null);
+    }
+
+    const result = {
+      strongBuy, buy, hold, sell, strongSell, total,
+      targetMeanPrice:   fd.targetMeanPrice   ?? null,
+      targetHighPrice:   fd.targetHighPrice   ?? null,
+      targetLowPrice:    fd.targetLowPrice    ?? null,
+      recommendationKey: fd.recommendationKey ?? null, // "buy","hold","sell" etc.
+      currency: isBareSixDigit ? "KRW" : "USD",
+    };
+
+    await saveToDBCache(cacheKey, result, 24 * 60 * 60 * 1000);
+    console.log(`[analyst-consensus] ${ticker} total=${total} key=${result.recommendationKey}`);
+    res.json(result);
+  } catch (e: any) {
+    console.error("[analyst-consensus]", e?.message);
+    res.json(null);
+  }
+});
+
+// ─── GET /api/market-data/major-shareholders ──────────────────────────────────
+// 주요 주주 현황 (Yahoo Finance majorHoldersBreakdown + institutionOwnership)
+router.get("/major-shareholders", async (req, res) => {
+  try {
+    const tickerRaw = String(req.query.ticker ?? "").trim();
+    if (!tickerRaw) return res.json(null);
+
+    const isBareSixDigit = /^\d{6}$/.test(tickerRaw);
+    let ticker = isBareSixDigit ? `${tickerRaw}.KS` : tickerRaw;
+
+    const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const cacheKey = `major-shareholders-v1-${tickerRaw}-${fmt(todayKST).slice(0, 7)}`;
+
+    const dbCached = await getFromDBCache<any>(cacheKey);
+    if (dbCached) return res.json(dbCached);
+
+    let qs: any = null;
+    try {
+      qs = await (yahooFinance as any).quoteSummary(ticker, {
+        modules: ["majorHoldersBreakdown", "institutionOwnership"],
+      });
+    } catch {
+      if (isBareSixDigit) {
+        ticker = `${tickerRaw}.KQ`;
+        qs = await (yahooFinance as any).quoteSummary(ticker, {
+          modules: ["majorHoldersBreakdown", "institutionOwnership"],
+        });
+      } else throw new Error("quoteSummary failed");
+    }
+
+    const mhb  = qs?.majorHoldersBreakdown ?? {};
+    const inst = (qs?.institutionOwnership?.ownershipList ?? []) as any[];
+
+    const insidersPercent      = mhb.insidersPercentHeld ?? null;
+    const institutionsPercent  = mhb.institutionsPercentHeld ?? null;
+    const institutionsCount    = mhb.institutionsCount ?? null;
+
+    const topInstitutions = inst
+      .filter((h: any) => h.pctHeld > 0)
+      .sort((a: any, b: any) => b.pctHeld - a.pctHeld)
+      .slice(0, 8)
+      .map((h: any) => ({
+        name:      h.organization,
+        pctHeld:   Math.round(h.pctHeld * 10000) / 100, // → %
+        pctChange: h.pctChange != null ? Math.round(h.pctChange * 10000) / 100 : null,
+        reportDate: h.reportDate ? new Date(h.reportDate).toISOString().slice(0, 10) : null,
+      }));
+
+    if (insidersPercent == null && institutionsPercent == null && topInstitutions.length === 0) {
+      await saveToDBCache(cacheKey, null, 24 * 60 * 60 * 1000);
+      return res.json(null);
+    }
+
+    const result = { insidersPercent, institutionsPercent, institutionsCount, topInstitutions };
+    await saveToDBCache(cacheKey, result, 24 * 60 * 60 * 1000);
+    console.log(`[major-shareholders] ${ticker} institutions=${institutionsCount}`);
+    res.json(result);
+  } catch (e: any) {
+    console.error("[major-shareholders]", e?.message);
+    res.json(null);
+  }
+});
+
 // ─── GET /api/market-data/indicator-history ──────────────────────────────────
 interface IndicatorPoint { date: string; value: number; }
 interface IndicatorSeries {

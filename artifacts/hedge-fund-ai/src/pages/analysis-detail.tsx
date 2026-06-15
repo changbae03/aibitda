@@ -28,6 +28,7 @@ import {
   History,
   ChevronDown,
   TrendingUp,
+  TrendingDown,
   Building2,
   BarChart2,
   Table2,
@@ -39,6 +40,7 @@ import {
   ChevronUp,
   Newspaper,
   FileText,
+  Users,
 } from "lucide-react";
 import { cn, formatCurrency, isUSTicker, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -1552,6 +1554,264 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
   );
 }
 
+// ─── 공매도 현황 패널 ──────────────────────────────────────────────────────────
+interface ShortInfo {
+  loanRate: number | null;
+  shortOverYn: string | null;
+  shortSaleYn: string | null;
+  lastShortQty: number | null;
+}
+
+function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [info, setInfo] = useState<ShortInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const isKR = /^\d{6}$/.test(ticker) || ticker.endsWith(".KS") || ticker.endsWith(".KQ");
+
+  useEffect(() => {
+    if (!isKR) { setLoading(false); return; }
+    let cancelled = false;
+    fetch(getApiUrl(`/api/market-data/short-info?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: ShortInfo | null) => { if (!cancelled) { setInfo(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [ticker, isKR]);
+
+  if (!isKR || (!loading && !info)) return null;
+
+  const isOverheat = info?.shortOverYn === "Y";
+  const canShort   = info?.shortSaleYn !== "N";
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingDown className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-sm font-semibold text-foreground">{isEn ? "Short Selling" : "공매도 현황"}</h2>
+        {!loading && isOverheat && (
+          <span className="ml-auto text-xs font-semibold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
+            {isEn ? "Overheat" : "과열"}
+          </span>
+        )}
+        {!loading && !isOverheat && info && (
+          <span className="ml-auto text-xs text-muted-foreground/50">{isEn ? "Normal" : "정상"}</span>
+        )}
+      </div>
+      {loading ? (
+        <div className="grid grid-cols-3 gap-2.5 animate-pulse">
+          {[0,1,2].map(i => <div key={i} className="h-12 rounded-lg bg-muted/30" />)}
+        </div>
+      ) : info ? (
+        <div className="grid grid-cols-3 gap-2.5">
+          {[
+            { label: isEn ? "Loan Rate" : "대차잔고비율", value: info.loanRate != null ? `${info.loanRate.toFixed(2)}%` : "—", highlight: (info.loanRate ?? 0) > 5 },
+            { label: isEn ? "Short Avail." : "공매도 가능", value: canShort ? (isEn ? "Yes" : "가능") : (isEn ? "No" : "불가"), highlight: !canShort },
+            { label: isEn ? "Last Vol." : "최근 체결량", value: info.lastShortQty != null ? info.lastShortQty.toLocaleString() : "—", highlight: false },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className="rounded-lg bg-muted/20 px-3 py-2.5 text-center">
+              <div className="text-[10px] text-muted-foreground/60 mb-1">{label}</div>
+              <div className={`text-sm font-semibold tabular-nums ${highlight ? "text-red-500" : "text-foreground"}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── 애널리스트 컨센서스 패널 ──────────────────────────────────────────────────
+interface AnalystConsensus {
+  strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; total: number;
+  targetMeanPrice: number | null;
+  targetHighPrice: number | null;
+  targetLowPrice:  number | null;
+  recommendationKey: string | null;
+  currency: string;
+}
+
+function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker: string; currentPrice?: number | null; isEn?: boolean }) {
+  const [info, setInfo] = useState<AnalystConsensus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl(`/api/market-data/analyst-consensus?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: AnalystConsensus | null) => { if (!cancelled) { setInfo(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  if (!loading && !info) return null;
+
+  const isKRW = info?.currency === "KRW";
+  const fmtPrice = (v: number | null) => {
+    if (v == null) return "—";
+    return isKRW ? `${Math.round(v).toLocaleString()}원` : `$${v.toFixed(2)}`;
+  };
+
+  const buyCount  = (info?.strongBuy ?? 0) + (info?.buy ?? 0);
+  const holdCount = info?.hold ?? 0;
+  const sellCount = (info?.sell ?? 0) + (info?.strongSell ?? 0);
+  const total     = info?.total ?? 1;
+  const buyPct    = Math.round((buyCount / total) * 100);
+  const holdPct   = Math.round((holdCount / total) * 100);
+  const sellPct   = 100 - buyPct - holdPct;
+
+  const keyLabel: Record<string, { label: string; color: string }> = {
+    "strong_buy": { label: isEn ? "Strong Buy" : "강력매수", color: "text-emerald-500" },
+    "buy":        { label: isEn ? "Buy" : "매수",           color: "text-emerald-400" },
+    "hold":       { label: isEn ? "Hold" : "중립",          color: "text-amber-400" },
+    "sell":       { label: isEn ? "Sell" : "매도",          color: "text-red-400" },
+    "strong_sell":{ label: isEn ? "Strong Sell" : "강력매도", color: "text-red-500" },
+  };
+  const key = info?.recommendationKey ?? "";
+  const consensus = keyLabel[key] ?? { label: key, color: "text-foreground" };
+
+  const upside = currentPrice && info?.targetMeanPrice
+    ? ((info.targetMeanPrice - currentPrice) / currentPrice) * 100
+    : null;
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
+      <div className="flex items-center gap-2 mb-4">
+        <BarChart2 className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-sm font-semibold text-foreground">{isEn ? "Analyst Consensus" : "애널리스트 컨센서스"}</h2>
+        {!loading && info && (
+          <span className={`ml-auto text-xs font-semibold ${consensus.color}`}>{consensus.label}</span>
+        )}
+      </div>
+      {loading ? (
+        <div className="space-y-3 animate-pulse">
+          <div className="h-4 rounded bg-muted/30 w-full" />
+          <div className="grid grid-cols-3 gap-2"><div className="h-12 rounded bg-muted/30" /><div className="h-12 rounded bg-muted/30" /><div className="h-12 rounded bg-muted/30" /></div>
+        </div>
+      ) : info ? (
+        <div className="space-y-3">
+          {/* 스택 바 */}
+          <div className="flex rounded-full overflow-hidden h-2.5 gap-0.5">
+            {buyPct  > 0 && <div style={{ width: `${buyPct}%`  }} className="bg-emerald-500 rounded-l-full" />}
+            {holdPct > 0 && <div style={{ width: `${holdPct}%` }} className="bg-amber-400" />}
+            {sellPct > 0 && <div style={{ width: `${sellPct}%` }} className="bg-red-400 rounded-r-full" />}
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground/60">
+            <span className="text-emerald-500">{isEn ? "Buy" : "매수"} {buyPct}% ({buyCount})</span>
+            <span className="text-amber-400">{isEn ? "Hold" : "중립"} {holdPct}% ({holdCount})</span>
+            <span className="text-red-400">{isEn ? "Sell" : "매도"} {sellPct}% ({sellCount})</span>
+          </div>
+          {/* 목표주가 */}
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {[
+              { label: isEn ? "Low" : "최저", value: fmtPrice(info.targetLowPrice) },
+              { label: isEn ? "Consensus" : "컨센서스", value: fmtPrice(info.targetMeanPrice), upside },
+              { label: isEn ? "High" : "최고", value: fmtPrice(info.targetHighPrice) },
+            ].map(({ label, value, upside: up }) => (
+              <div key={label} className="rounded-lg bg-muted/20 px-2 py-2.5 text-center">
+                <div className="text-[10px] text-muted-foreground/60 mb-1">{label}</div>
+                <div className="text-sm font-semibold tabular-nums text-foreground">{value}</div>
+                {up != null && (
+                  <div className={`text-[10px] font-medium mt-0.5 ${up >= 0 ? "text-emerald-500" : "text-red-400"}`}>
+                    {up >= 0 ? "+" : ""}{up.toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-muted-foreground/40 text-right">{info.total}{isEn ? " analysts" : "명 애널리스트"}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── 주요 주주 현황 패널 ───────────────────────────────────────────────────────
+interface MajorShareholders {
+  insidersPercent:     number | null;
+  institutionsPercent: number | null;
+  institutionsCount:   number | null;
+  topInstitutions: { name: string; pctHeld: number; pctChange: number | null; reportDate: string | null }[];
+}
+
+function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
+  const [info, setInfo] = useState<MajorShareholders | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl(`/api/market-data/major-shareholders?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: MajorShareholders | null) => { if (!cancelled) { setInfo(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  if (!loading && !info) return null;
+
+  const retailPct = info
+    ? Math.max(0, 100 - (info.insidersPercent ?? 0) * 100 - (info.institutionsPercent ?? 0) * 100)
+    : 0;
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
+      <div className="flex items-center gap-2 mb-4">
+        <Users className="w-4 h-4 text-muted-foreground/50" />
+        <h2 className="text-sm font-semibold text-foreground">{isEn ? "Major Shareholders" : "주요 주주 현황"}</h2>
+        {!loading && info?.institutionsCount != null && (
+          <span className="ml-auto text-xs text-muted-foreground/50">
+            {info.institutionsCount.toLocaleString()}{isEn ? " institutions" : "개 기관"}
+          </span>
+        )}
+      </div>
+      {loading ? (
+        <div className="space-y-2 animate-pulse">
+          <div className="h-4 rounded bg-muted/30 w-full" />
+          <div className="h-20 rounded bg-muted/20" />
+        </div>
+      ) : info ? (
+        <div className="space-y-3">
+          {/* 보유 구성 스택 바 */}
+          {(info.insidersPercent != null || info.institutionsPercent != null) && (() => {
+            const insPct  = Math.round((info.insidersPercent ?? 0) * 100 * 10) / 10;
+            const instPct = Math.round((info.institutionsPercent ?? 0) * 100 * 10) / 10;
+            const retPct  = Math.round(retailPct * 10) / 10;
+            return (
+              <div className="space-y-1.5">
+                <div className="flex rounded-full overflow-hidden h-2 gap-0.5">
+                  {insPct  > 0 && <div style={{ width: `${insPct}%`  }} className="bg-violet-500" />}
+                  {instPct > 0 && <div style={{ width: `${instPct}%` }} className="bg-blue-500" />}
+                  {retPct  > 0 && <div style={{ width: `${retPct}%`  }} className="bg-muted/40 rounded-r-full" />}
+                </div>
+                <div className="flex gap-3 text-[10px] text-muted-foreground/60">
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-violet-500 mr-1" />{isEn ? "Insiders" : "내부자"} {insPct}%</span>
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1" />{isEn ? "Institutions" : "기관"} {instPct}%</span>
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-muted/60 mr-1" />{isEn ? "Retail" : "소액주주"} {retPct}%</span>
+                </div>
+              </div>
+            );
+          })()}
+          {/* 상위 기관 목록 */}
+          {info.topInstitutions.length > 0 && (
+            <div className="space-y-1 pt-1">
+              {info.topInstitutions.map((h, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-foreground/80 truncate">{h.name}</div>
+                  </div>
+                  <div className="text-xs font-semibold tabular-nums text-foreground shrink-0">{h.pctHeld.toFixed(2)}%</div>
+                  {h.pctChange != null && (
+                    <div className={`text-[10px] tabular-nums shrink-0 w-10 text-right ${h.pctChange > 0 ? "text-emerald-500" : h.pctChange < 0 ? "text-red-400" : "text-muted-foreground/40"}`}>
+                      {h.pctChange > 0 ? "▲" : h.pctChange < 0 ? "▼" : "─"}{Math.abs(h.pctChange).toFixed(2)}%
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: string; companyName: string; isEn?: boolean }) {
   const [events, setEvents] = useState<StockNewsEvent[]>([]);
   const [summary, setSummary] = useState<string>("");
@@ -2605,6 +2865,19 @@ export default function AnalysisDetail() {
 
       {/* 배당 정보 */}
       <DividendInfoPanel ticker={analysis.ticker} isEn={isEn} />
+
+      {/* 공매도 현황 */}
+      <ShortSellingPanel ticker={analysis.ticker} isEn={isEn} />
+
+      {/* 애널리스트 컨센서스 */}
+      <AnalystConsensusPanel
+        ticker={analysis.ticker}
+        currentPrice={(analysis as any).startPrice ?? null}
+        isEn={isEn}
+      />
+
+      {/* 주요 주주 현황 */}
+      <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
 
       {/* Peer Multiples Panel */}
       <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
