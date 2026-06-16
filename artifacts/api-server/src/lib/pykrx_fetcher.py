@@ -275,6 +275,29 @@ def main():
                 del r["qty"]   # 내부 필드 제거
             emit(result[:30])  # 상위 30개
 
+        # ── 종목별 공매도 잔고 (잔량·금액·비중) ────────────────────────────
+        elif data_type == "short_balance":
+            # market_arg = 6자리 종목코드 (예: "005930")
+            ticker = market_arg.strip()
+            with StdoutToStderr():
+                df = krx.get_shorting_balance(from_date, to_date, ticker)
+
+            if df is None or df.empty:
+                emit([])
+                return
+
+            result = []
+            for date_idx, row in df.iterrows():
+                result.append({
+                    "date":      str(date_idx)[:10],
+                    "shortQty":  int(row.get("공매도잔고", 0)),
+                    "shortAmt":  int(row.get("공매도금액", 0)),
+                    "shortRatio": float(row.get("비중", 0.0)),
+                })
+            # 최신 날짜 먼저
+            result.reverse()
+            emit(result)
+
         else:
             emit({"error": f"Unknown type: {data_type}"})
             sys.exit(1)

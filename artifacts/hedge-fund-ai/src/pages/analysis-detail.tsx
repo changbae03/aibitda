@@ -1560,6 +1560,16 @@ interface ShortInfo {
   shortOverYn: string | null;
   shortSaleYn: string | null;
   lastShortQty: number | null;
+  shortAmt: number | null;
+  shortRatio: number | null;
+}
+
+function fmtShortAmt(v: number | null): string {
+  if (v == null) return "—";
+  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+  if (v >= 1e8)  return `${Math.round(v / 1e8)}억`;
+  if (v >= 1e4)  return `${Math.round(v / 1e4)}만`;
+  return v.toLocaleString("ko-KR");
 }
 
 function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: boolean }) {
@@ -1581,6 +1591,14 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
 
   const isOverheat = info?.shortOverYn === "Y";
   const canShort   = info?.shortSaleYn !== "N";
+  const hasShortAmt = info?.shortAmt != null;
+
+  const items = [
+    { label: isEn ? "Loan Rate" : "대차잔고비율",  value: info?.loanRate   != null ? `${info.loanRate.toFixed(2)}%`   : "—", highlight: (info?.loanRate ?? 0) > 5 },
+    { label: isEn ? "Short Ratio" : "공매도잔고율", value: info?.shortRatio != null ? `${info.shortRatio.toFixed(2)}%` : "—", highlight: (info?.shortRatio ?? 0) >= 2 },
+    ...(hasShortAmt ? [{ label: isEn ? "Short Bal." : "잔고금액", value: fmtShortAmt(info?.shortAmt ?? null), highlight: false }] : []),
+    { label: isEn ? "Short Avail." : "공매도 가능", value: canShort ? (isEn ? "Yes" : "가능") : (isEn ? "No" : "불가"),      highlight: !canShort },
+  ];
 
   return (
     <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
@@ -1597,18 +1615,14 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
         )}
       </div>
       {loading ? (
-        <div className="grid grid-cols-3 gap-2.5 animate-pulse">
-          {[0,1,2].map(i => <div key={i} className="h-12 rounded-lg bg-muted/30" />)}
+        <div className="grid grid-cols-4 gap-2.5 animate-pulse">
+          {[0,1,2,3].map(i => <div key={i} className="h-12 rounded-lg bg-muted/30" />)}
         </div>
       ) : info ? (
-        <div className="grid grid-cols-3 gap-2.5">
-          {[
-            { label: isEn ? "Loan Rate" : "대차잔고비율", value: info.loanRate != null ? `${info.loanRate.toFixed(2)}%` : "—", highlight: (info.loanRate ?? 0) > 5 },
-            { label: isEn ? "Short Avail." : "공매도 가능", value: canShort ? (isEn ? "Yes" : "가능") : (isEn ? "No" : "불가"), highlight: !canShort },
-            { label: isEn ? "Last Vol." : "최근 체결량", value: info.lastShortQty != null ? info.lastShortQty.toLocaleString() : "—", highlight: false },
-          ].map(({ label, value, highlight }) => (
-            <div key={label} className="rounded-lg bg-muted/20 px-3 py-2.5 text-center">
-              <div className="text-[10px] text-muted-foreground/60 mb-1">{label}</div>
+        <div className={hasShortAmt ? "grid grid-cols-4 gap-2.5" : "grid grid-cols-3 gap-2.5"}>
+          {items.map(({ label, value, highlight }) => (
+            <div key={label} className="rounded-lg bg-muted/20 px-2 py-2.5 text-center">
+              <div className="text-[10px] text-muted-foreground/60 mb-1 leading-tight">{label}</div>
               <div className={`text-sm font-semibold tabular-nums ${highlight ? "text-red-500" : "text-foreground"}`}>{value}</div>
             </div>
           ))}

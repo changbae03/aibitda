@@ -8,6 +8,7 @@
  */
 
 import { pool } from "@workspace/db";
+import { fetchShortBalance } from "./pykrx-client.js";
 
 const KRX_BASE = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd";
 
@@ -166,7 +167,37 @@ export async function fetchKRXShortData(ticker: string, days = 10): Promise<Shor
     }
   } catch {}
 
-  // 2) 네이버 금융에서 공매도 데이터 시도 (가장 안정적)
+  // 2) pykrx로 종목별 공매도 잔고 조회 (가장 안정적 — KRX 직접 로그인)
+  try {
+    const pykrxRows = await fetchShortBalance(clean, days);
+    if (pykrxRows.length > 0) {
+      const mapped: ShortRow[] = pykrxRows.map(r => ({
+        tradeDate: r.date.replace(/-/g, ""),
+        shortQty:   r.shortQty   > 0 ? r.shortQty   : null,
+        shortAmt:   r.shortAmt   > 0 ? r.shortAmt   : null,
+        shortRatio: r.shortRatio != null ? r.shortRatio : null,
+        loanQty:    null,
+        loanRatio:  null,
+      }));
+      // DB 저장
+      for (const row of mapped) {
+        await pool.query(
+          `INSERT INTO krx_short_cache (ticker, trade_date, short_qty, short_amt, short_ratio, loan_qty, loan_ratio)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (ticker, trade_date) DO UPDATE SET
+             short_qty=EXCLUDED.short_qty, short_amt=EXCLUDED.short_amt,
+             short_ratio=EXCLUDED.short_ratio, fetched_at=NOW()`,
+          [clean, row.tradeDate, row.shortQty, row.shortAmt, row.shortRatio, row.loanQty, row.loanRatio]
+        ).catch(() => {});
+      }
+      console.log(`[krx-short] ${clean} 공매도 잔고 ${mapped.length}건 (pykrx)`);
+      return mapped.slice(0, days);
+    }
+  } catch (err) {
+    console.warn(`[krx-short] pykrx 공매도 잔고 실패 (${clean}):`, err);
+  }
+
+  // 3) 네이버 금융에서 공매도 데이터 시도
   const naverRows = await fetchKRXShortFromNaver(clean);
   if (naverRows.length > 0) {
     // DB 저장

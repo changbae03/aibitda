@@ -7,6 +7,7 @@ import { cache } from "../lib/mem-cache";
 import { fetchKISStockQuote, fetchKISDailyPriceHistory } from "../lib/kis-client";
 import { fetchECOSBaseRateHistory } from "../lib/ecos-client.js";
 import { getCorpCodeFromCache } from "../lib/dart-corp-cache";
+import { fetchKRXShortData } from "../lib/krx-short-client";
 import { fetchAllEconomicActuals, fetchBLSTimeSeries, type BLSReleaseDate, type FOMCDate } from "../lib/bls-client.js";
 import { getCachedFredMacro } from "../lib/fred-client.js";
 
@@ -1889,7 +1890,7 @@ router.get("/short-info", async (req, res) => {
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `short-info-v1-${sixDigit}-${fmt(todayKST)}`;
+    const cacheKey = `short-info-v4-${sixDigit}-${fmt(todayKST)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
@@ -1900,11 +1901,17 @@ router.get("/short-info", async (req, res) => {
       return res.json(null);
     }
 
+    // KRX/네이버에서 공매도 잔고금액·잔고비율 병렬 조회
+    const krxRows = await fetchKRXShortData(sixDigit, 1).catch(() => []);
+    const latestKrx = krxRows[0] ?? null;
+
     const result = {
       loanRate:      kis.loanRate,      // 대차잔고비율 (%)
       shortOverYn:   kis.shortOverYn,   // 공매도 과열 여부 Y/N
       shortSaleYn:   kis.shortSaleYn,   // 공매도 가능 여부 Y/N
       lastShortQty:  kis.lastShortQty,  // 최근 공매도 체결수량
+      shortAmt:      latestKrx?.shortAmt   ?? null,  // 공매도 잔고금액 (원)
+      shortRatio:    latestKrx?.shortRatio ?? null,  // 공매도 잔고비율 (%)
       price:         kis.price,
       mcap:          kis.mcap,
     };

@@ -149,6 +149,43 @@ export async function fetchShortRatio(
   }));
 }
 
+export interface ShortBalanceRow {
+  date: string;
+  /** 공매도 잔고 수량 (주) */
+  shortQty: number;
+  /** 공매도 잔고 금액 (원) */
+  shortAmt: number;
+  /** 공매도 잔고 비중 (%) */
+  shortRatio: number;
+}
+
+/**
+ * 종목별 공매도 잔고 조회 (잔량·금액·비중)
+ * pykrx get_shorting_balance 사용 — KRX_ID/KRX_PW 필요
+ */
+export async function fetchShortBalance(
+  ticker: string,
+  days = 5,
+): Promise<ShortBalanceRow[]> {
+  if (!process.env.KRX_ID || !process.env.KRX_PW) {
+    console.warn("[pykrx] KRX_ID/KRX_PW 미설정 — 공매도 잔고 스킵");
+    return [];
+  }
+  const clean = ticker.replace(/\.(KS|KQ)$/i, "");
+  if (!/^\d{6}$/.test(clean)) return [];
+
+  const toDate = toKRXDate(new Date());
+  // 조회 기간: 최근 2주 (휴장일 감안)
+  const from = new Date();
+  from.setDate(from.getDate() - 14);
+  const fromDate = toKRXDate(from);
+
+  const rows = await callPykrx("short_balance", fromDate, toDate, clean, 45000);
+  return (rows as any[])
+    .filter((r): r is ShortBalanceRow => r && typeof r.date === "string")
+    .slice(0, days);
+}
+
 /**
  * 개별 종목 OHLCV (KRX_ID 없이도 작동)
  */
