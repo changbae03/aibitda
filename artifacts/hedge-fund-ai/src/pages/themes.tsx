@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb, Search, Loader2, TrendingUp, ArrowRight,
-  RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame,
+  RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -47,6 +47,36 @@ interface DiscoverResult {
   stocks: DiscoveredStock[];
 }
 
+interface SignalStock {
+  ticker: string;
+  name: string;
+  market: "KR" | "US";
+  changePercent?: number;
+  volume?: number;
+  close?: number;
+}
+
+interface SignalGroup {
+  id: string;
+  label: string;
+  desc: string;
+  market: "US" | "KR";
+  stocks: SignalStock[];
+}
+
+function fmtChange(v?: number) {
+  if (v == null) return null;
+  const s = v > 0 ? `+${v.toFixed(1)}%` : `${v.toFixed(1)}%`;
+  return { text: s, up: v > 0 };
+}
+
+function fmtVolume(v?: number) {
+  if (!v) return null;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+  return String(v);
+}
+
 export default function ThemesPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -66,6 +96,11 @@ export default function ThemesPage() {
   const [invalidTheme, setInvalidTheme] = useState<string | null>(null);
   const [marketFilter, setMarketFilter] = useState<"all" | "KR" | "US">("all");
   const [showGuide, setShowGuide] = useState(false);
+
+  // 투자자 행동 신호
+  const [signals, setSignals] = useState<SignalGroup[]>([]);
+  const [signalsLoading, setSignalsLoading] = useState(true);
+  const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
 
   // 분석 모달
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
@@ -106,6 +141,22 @@ export default function ThemesPage() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl("api/themes/signals"))
+      .then(r => r.json())
+      .then((data: SignalGroup[]) => {
+        if (cancelled) return;
+        if (Array.isArray(data) && data.length > 0) {
+          setSignals(data);
+          setSelectedSignal(data[0].id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSignalsLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   async function discover(theme: string) {
@@ -212,6 +263,130 @@ export default function ThemesPage() {
           ))}
         </div>
       )}
+
+      {/* ── 투자자 행동 신호 ───────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Radio className="w-4 h-4 text-[#FF8A7A]" />
+          <h2 className="text-base font-semibold text-foreground">투자자 행동 신호</h2>
+        </div>
+        <p className="text-sm text-foreground/50 mb-3">
+          실시간 급등·거래량 폭발 종목 · 20분마다 갱신
+        </p>
+
+        {signalsLoading ? (
+          <div className="rounded-2xl border border-border overflow-hidden animate-pulse">
+            <div className="flex gap-2 px-4 py-3 border-b border-border/50 overflow-x-auto">
+              {[1,2,3,4].map(i => <div key={i} className="h-7 w-28 rounded-full bg-muted shrink-0" />)}
+            </div>
+            <div className="divide-y divide-border/30">
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-8 h-8 rounded-full bg-muted shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 bg-muted rounded w-1/3" />
+                    <div className="h-2.5 bg-muted/60 rounded w-1/4" />
+                  </div>
+                  <div className="h-5 w-14 bg-muted rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : signals.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-muted/20 px-4 py-6 text-center text-sm text-foreground/40">
+            시장 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border overflow-hidden">
+            {/* 탭 */}
+            <div className="flex gap-1.5 px-3 py-2.5 border-b border-border/50 overflow-x-auto scrollbar-none">
+              {signals.map(g => (
+                <button
+                  key={g.id}
+                  onClick={() => setSelectedSignal(g.id)}
+                  className={cn(
+                    "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                    selectedSignal === g.id
+                      ? "bg-[#FF8A7A] text-white"
+                      : "bg-muted/50 text-foreground/60 hover:bg-muted hover:text-foreground/80"
+                  )}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 선택된 탭 종목 리스트 */}
+            {(() => {
+              const group = signals.find(g => g.id === selectedSignal);
+              if (!group) return null;
+              return (
+                <div>
+                  <div className="px-4 py-2 border-b border-border/30 bg-muted/10">
+                    <p className="text-[11px] text-foreground/45">{group.desc}</p>
+                  </div>
+                  <div className="divide-y divide-border/30">
+                    {group.stocks.map((stock, si) => {
+                      const ch = fmtChange(stock.changePercent);
+                      const vol = fmtVolume(stock.volume);
+                      return (
+                        <motion.div
+                          key={stock.ticker}
+                          initial={{ opacity: 0, x: -4 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: si * 0.03 }}
+                          className="flex items-center gap-3 px-4 py-2.5 group hover:bg-muted/20 transition-colors"
+                        >
+                          <span className="text-xs text-foreground/30 w-4 shrink-0 text-right">{si + 1}</span>
+                          <StockLogo ticker={stock.ticker} companyName={stock.name} size="sm" className="shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-sm font-semibold text-foreground truncate leading-tight">{stock.name}</span>
+                              <span className={cn(
+                                "text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0",
+                                stock.market === "KR"
+                                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400"
+                                  : "bg-purple-50 dark:bg-purple-900/20 text-purple-500 dark:text-purple-400"
+                              )}>
+                                {stock.market}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="font-mono text-[10px] text-foreground/30">{stock.ticker}</span>
+                              {vol && (
+                                <>
+                                  <span className="text-foreground/20 text-[10px]">·</span>
+                                  <span className="text-[10px] text-foreground/35">거래량 {vol}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {ch && (
+                              <span className={cn(
+                                "text-sm font-bold tabular-nums",
+                                ch.up ? "text-red-500" : "text-blue-500"
+                              )}>
+                                {ch.text}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => goAnalyze(stock.ticker, stock.name)}
+                              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-[#FF8A7A] border border-[#FF8A7A]/30 bg-[#FF8A7A]/5 hover:bg-[#FF8A7A]/15 transition-colors md:opacity-0 md:group-hover:opacity-100"
+                            >
+                              분석
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
 
       {/* ── 직접 발굴하기 ─────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border overflow-hidden">

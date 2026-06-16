@@ -1,3 +1,2 @@
-- [실적추정-흑자전환보호](turnaround-opm-floor.md) — Q1 확정 OPM > 2%인데 fwdOpmCenter가 과소하면 확정OPM×25% 하한 보정
-- [QA-dartFloor-파싱](qa-dart-floor.md) — bottom-up 앵커에 "[수학적 하한선] 합계 = X억원" 텍스트 명시 주입, 정규식과 일치
-- [피어선정-업종규칙](peer-selection-rules.md) — 건설/소재/IT서비스/AI-CV/PCB/배터리/반도체/바이오 업종별 금지·권장 피어 규칙
+- [pykrx ohlcv_by_ticker StdoutToStderr bug](pykrx-ohlcv-stdoutstderr.md) — get_market_ohlcv_by_ticker returns all-zero values when called inside StdoutToStderr context; must call without it.
+- [KRX OHLCV today data delay](krx-ohlcv-date-fallback.md) — KRX may not publish today's OHLCV until ~2h after market close (15:30 KST); fallback to prev business day when result is empty.

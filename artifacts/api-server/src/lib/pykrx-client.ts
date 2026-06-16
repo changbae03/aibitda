@@ -251,3 +251,43 @@ export async function fetchETFsForStock(
       typeof r.etfCode === "string" && typeof r.weight === "number",
   );
 }
+
+// ── 시장 전체 종목별 OHLCV (급등·거래량 신호 탐지용) ──────────────────────────
+
+export interface MarketOHLCVRow {
+  ticker: string;
+  market?: "KOSPI" | "KOSDAQ";
+  close: number;
+  volume: number;
+  /** 등락률 (%) */
+  change: number;
+}
+
+/**
+ * 특정 날짜(YYYYMMDD) 기준 단일 시장(KOSPI 또는 KOSDAQ) OHLCV 반환.
+ * 데이터가 없으면 (휴장일 등) [] 반환.
+ */
+export async function fetchMarketOHLCV(
+  date: string,
+  market: "KOSPI" | "KOSDAQ",
+): Promise<MarketOHLCVRow[]> {
+  const rows = await callPykrx("ohlcv_market", date, date, market, 60000);
+  return (rows as any[]).filter(
+    (r): r is MarketOHLCVRow =>
+      typeof r.ticker === "string" && typeof r.change === "number",
+  );
+}
+
+/**
+ * 특정 날짜(YYYYMMDD) 기준 KOSPI + KOSDAQ 전 종목 OHLCV를 단일 Python 프로세스로 반환.
+ * KRX 로그인을 1회만 수행하므로 충돌 없이 안정적.
+ */
+export async function fetchBothMarketsOHLCV(
+  date: string,
+): Promise<MarketOHLCVRow[]> {
+  const rows = await callPykrx("ohlcv_both", date, date, "ALL", 90000);
+  return (rows as any[]).filter(
+    (r): r is MarketOHLCVRow =>
+      typeof r.ticker === "string" && typeof r.change === "number",
+  );
+}

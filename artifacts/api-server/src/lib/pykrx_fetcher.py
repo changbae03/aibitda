@@ -298,6 +298,72 @@ def main():
             result.reverse()
             emit(result)
 
+        # ── 시장 전체 종목별 OHLCV (단일 시장) ──────────────────────────────────
+        elif data_type == "ohlcv_market":
+            # from_date = 날짜 (예: '20260616'), market_arg = 'KOSPI' or 'KOSDAQ'
+            with StdoutToStderr():
+                df = krx.get_market_ohlcv_by_ticker(from_date, market=market_arg)
+
+            if df is None or df.empty:
+                emit([])
+                return
+
+            # 거래 없는 종목 제외
+            if "거래량" in df.columns:
+                df = df[df["거래량"] > 0]
+
+            result = []
+            for ticker, row in df.iterrows():
+                result.append({
+                    "ticker": str(ticker),
+                    "close":  int(row.get("종가",  0)),
+                    "volume": int(row.get("거래량", 0)),
+                    "change": round(float(row.get("등락률", 0)), 2),
+                })
+            emit(result)
+
+        # ── KOSPI+KOSDAQ 통합 OHLCV (단일 프로세스 → KRX 로그인 1회) ─────────────
+        elif data_type == "ohlcv_both":
+            import math
+            # from_date = 날짜 (예: '20260616')
+            def safe_int(v, default=0):
+                try:
+                    f = float(v)
+                    return default if math.isnan(f) else int(f)
+                except Exception:
+                    return default
+
+            def safe_float(v, default=0.0):
+                try:
+                    f = float(v)
+                    return default if math.isnan(f) else round(f, 2)
+                except Exception:
+                    return default
+
+            result = []
+            for mkt in ["KOSPI", "KOSDAQ"]:
+                # ⚠️ StdoutToStderr 컨텍스트 없이 호출해야 함.
+                # StdoutToStderr 내에서 get_market_ohlcv_by_ticker를 호출하면
+                # KRX 응답 데이터가 모두 0으로 반환되는 pykrx 버그가 있음.
+                df = krx.get_market_ohlcv_by_ticker(from_date, market=mkt)
+                if df is None or df.empty:
+                    continue
+                has_change_col = "등락률" in df.columns
+                for ticker, row in df.iterrows():
+                    vol    = safe_int(row.get("거래량", 0))
+                    close  = safe_int(row.get("종가", 0))
+                    change = safe_float(row.get("등락률", 0.0)) if has_change_col else 0.0
+                    if vol == 0:
+                        continue   # 거래 없는 종목 제외
+                    result.append({
+                        "ticker": str(ticker),
+                        "market": mkt,
+                        "close":  close,
+                        "volume": vol,
+                        "change": change,
+                    })
+            emit(result)
+
         else:
             emit({"error": f"Unknown type: {data_type}"})
             sys.exit(1)

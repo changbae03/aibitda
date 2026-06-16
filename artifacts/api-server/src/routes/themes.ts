@@ -3,10 +3,12 @@ import { GoogleGenAI } from "@google/genai";
 import AdmZip from "adm-zip";
 import { pool } from "@workspace/db";
 import { loadKRXList, getKRXCache } from "../lib/krx-cache";
-import { fetchInvestorData } from "../lib/pykrx-client";
+import { fetchInvestorData, fetchBothMarketsOHLCV } from "../lib/pykrx-client";
 import { setCorpCodeMap, setCorpInfoList, type CorpInfo } from "../lib/dart-corp-cache.js";
+import YahooFinance from "yahoo-finance2";
 
 const router = Router();
+const yf = new YahooFinance();
 
 const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.AI_INTEGRATIONS_GEMINI_API_KEY!;
 const ai = new GoogleGenAI({
@@ -1798,6 +1800,169 @@ ${stockList}
   } catch (e) {
     console.error("[themes/discover]", e);
     return res.status(500).json({ error: "테마 발굴 중 오류가 발생했습니다. 다시 시도해주세요." });
+  }
+});
+
+// ── 투자자 행동 신호 (signals) ───────────────────────────────────────────────
+
+interface SignalStock {
+  ticker: string;
+  name: string;
+  market: "KR" | "US";
+  changePercent?: number;
+  volume?: number;
+  close?: number;
+}
+
+interface SignalGroup {
+  id: string;
+  label: string;
+  desc: string;
+  market: "US" | "KR";
+  stocks: SignalStock[];
+}
+
+const SIGNALS_TTL = 20 * 60 * 1000; // 20분 캐시
+let signalsCache: { data: SignalGroup[]; cachedAt: number } | null = null;
+
+/** KST 기준 오늘 날짜 (YYYYMMDD) */
+function todayKST(): string {
+  const d = new Date(Date.now() + 9 * 3600_000);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+/** Yahoo Finance screener quote → SignalStock */
+function yfQuoteToStock(q: any): SignalStock {
+  return {
+    ticker: q.symbol,
+    name: (q.shortName || q.longName || q.symbol) as string,
+    market: "US",
+    changePercent: typeof q.regularMarketChangePercent === "number" ? q.regularMarketChangePercent : undefined,
+    volume: typeof q.regularMarketVolume === "number" ? q.regularMarketVolume : undefined,
+    close: typeof q.regularMarketPrice === "number" ? q.regularMarketPrice : undefined,
+  };
+}
+
+async function fetchSignalsData(): Promise<SignalGroup[]> {
+  const groups: SignalGroup[] = [];
+
+  // ── 미국 신호 (Yahoo Finance) ─────────────────────────────────────────
+  const [gainersRes, activeRes] = await Promise.allSettled([
+    yf.screener({ scrIds: "day_gainers", count: 15 }, { validateResult: false }),
+    yf.screener({ scrIds: "most_actives", count: 15 }, { validateResult: false }),
+  ]);
+
+  if (gainersRes.status === "fulfilled" && gainersRes.value?.quotes?.length) {
+    groups.push({
+      id: "us_gainers",
+      label: "🔥 미국 급등주",
+      desc: "오늘 상승률 상위 미국 주식 (Yahoo Finance)",
+      market: "US",
+      stocks: gainersRes.value.quotes.slice(0, 12).map(yfQuoteToStock),
+    });
+  }
+
+  if (activeRes.status === "fulfilled" && activeRes.value?.quotes?.length) {
+    groups.push({
+      id: "us_active",
+      label: "⚡ 거래량 폭발 (US)",
+      desc: "오늘 거래대금 최상위 미국 주식 (Yahoo Finance)",
+      market: "US",
+      stocks: activeRes.value.quotes.slice(0, 12).map(yfQuoteToStock),
+    });
+  }
+
+  // ── 한국 신호 (pykrx) — 단일 프로세스로 KOSPI+KOSDAQ 한번에 조회 ─────────────
+  try {
+    // KRX는 장마감 후 최대 2시간까지 당일 데이터 미확정 → 0 반환 가능.
+    // 오늘 데이터가 비면 전 영업일로 폴백.
+    const prevBusinessDate = (d: string): string => {
+      const dt = new Date(`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T00:00:00+09:00`);
+      do { dt.setDate(dt.getDate() - 1); } while (dt.getDay() === 0 || dt.getDay() === 6);
+      return dt.toISOString().slice(0,10).replace(/-/g,"");
+    };
+
+    let date = todayKST();
+    let allKRRaw = await fetchBothMarketsOHLCV(date);
+    if (allKRRaw.length === 0) {
+      date = prevBusinessDate(date);
+      console.log(`[signals] KR 오늘 데이터 없음 → 전 영업일 ${date} 폴백`);
+      allKRRaw = await fetchBothMarketsOHLCV(date);
+    }
+    console.log(`[signals] KR OHLCV both (${date}): ${allKRRaw.length}종목`);
+    const allKR = allKRRaw.filter(r => r.volume > 0 && r.change !== 0);
+
+    if (allKR.length > 0) {
+      // KRX 이름 맵
+      const krxList = getKRXCache();
+      const nameMap = new Map(krxList.map(s => [s.code, s.name]));
+
+      // 급등 TOP12
+      const gainers = [...allKR]
+        .sort((a, b) => b.change - a.change)
+        .slice(0, 12)
+        .map(r => ({
+          ticker: r.ticker,
+          name: nameMap.get(r.ticker) || r.ticker,
+          market: "KR" as const,
+          changePercent: r.change,
+          volume: r.volume,
+          close: r.close,
+        }));
+
+      if (gainers.length > 0) {
+        groups.push({
+          id: "kr_gainers",
+          label: "📈 한국 급등주",
+          desc: "오늘 KOSPI·KOSDAQ 상승률 상위",
+          market: "KR",
+          stocks: gainers,
+        });
+      }
+
+      // 거래량 TOP12
+      const topVol = [...allKR]
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, 12)
+        .map(r => ({
+          ticker: r.ticker,
+          name: nameMap.get(r.ticker) || r.ticker,
+          market: "KR" as const,
+          changePercent: r.change,
+          volume: r.volume,
+          close: r.close,
+        }));
+
+      if (topVol.length > 0) {
+        groups.push({
+          id: "kr_volume",
+          label: "💰 거래량 폭발 (KR)",
+          desc: "오늘 KOSPI·KOSDAQ 거래량 상위",
+          market: "KR",
+          stocks: topVol,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("[signals] KR 데이터 조회 실패 (무시):", e);
+  }
+
+  return groups;
+}
+
+router.get("/themes/signals", async (req, res) => {
+  try {
+    const now = Date.now();
+    const forceRefresh = req.query["refresh"] === "true";
+    if (!forceRefresh && signalsCache && now - signalsCache.cachedAt < SIGNALS_TTL) {
+      return res.json(signalsCache.data);
+    }
+    const data = await fetchSignalsData();
+    if (data.length > 0) signalsCache = { data, cachedAt: now };
+    return res.json(data);
+  } catch (e) {
+    console.error("[themes/signals]", e);
+    return res.json(signalsCache?.data ?? []);
   }
 });
 
