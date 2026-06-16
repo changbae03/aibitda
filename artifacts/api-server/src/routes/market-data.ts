@@ -2645,6 +2645,214 @@ ${todayStr}부터 ${endStr}까지의 주요 글로벌 경제 이벤트 일정을
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// 비상장 기업 분석 API (DART 기반) — /:ticker 와일드카드보다 앞에 위치해야 함
+// ════════════════════════════════════════════════════════════════════════════
+
+router.get("/dart-company-search", async (req, res) => {
+  try {
+    const q = ((req.query.q as string) || "").trim();
+    if (q.length < 1) return res.json([]);
+
+    // 1순위: corpCode.xml 인덱스 (전체 상장+비상장, 백그라운드 다운로드 완료 시)
+    const { searchCorpByName, hasCorpInfoList } = await import("../lib/dart-corp-cache.js");
+    if (hasCorpInfoList()) {
+      const raw = searchCorpByName(q, 20);
+      // corpCode.xml에 corp_cls 없음 → KRX 캐시로 보강
+      const krx = getKRXCache();
+      const krxByCode = new Map(krx.map(s => [s.code, s]));
+      const enriched = raw.map(c => {
+        if (c.corp_cls) return c; // 이미 있으면 유지
+        if (!c.stock_code) return { ...c, corp_cls: "E" }; // 비상장
+        const k = krxByCode.get(c.stock_code);
+        return { ...c, corp_cls: k ? (k.exchange === "KOSPI" ? "Y" : "K") : "E" };
+      });
+      return res.json(enriched);
+    }
+
+    // 2순위 fallback: KRX 목록(2712개 상장사)에서 이름 부분 검색 + corp_code 매핑
+    const krxList = getKRXCache();
+    if (krxList.length > 0) {
+      const lq = q.toLowerCase();
+      const matched = krxList
+        .filter(s => s.name.toLowerCase().includes(lq))
+        .slice(0, 20);
+      const results = matched.map(s => ({
+        corp_code: getCorpCodeFromCache(s.code) ?? "",
+        corp_name: s.name,
+        stock_code: s.code,
+        corp_cls: s.exchange === "KOSPI" ? "Y" : "K",
+      }));
+      return res.json(results);
+    }
+
+    // 3순위: KRX도 미준비 시 빈 배열 (서버 기동 직후 매우 짧은 시간만 해당)
+    res.json([]);
+  } catch (e: any) { res.status(500).json({ error: e?.message }); }
+});
+
+router.get("/dart-company-financials", async (req, res) => {
+  try {
+    const corp_code = ((req.query.corp_code as string) || "").trim();
+    if (!corp_code) return res.status(400).json({ error: "corp_code required" });
+    const DART_KEY = process.env.DART_API_KEY;
+    if (!DART_KEY) return res.json([]);
+    const cacheKey = `dart-co-fin-v2-${corp_code}-${new Date().getFullYear()}`;
+    const cached = await getFromDBCache<any[]>(cacheKey);
+    if (cached) return res.json(cached);
+    const thisYear = new Date().getFullYear();
+    const ACNT_MAP: Record<string, string> = {
+      "매출액": "revenue", "영업이익": "op_income", "당기순이익": "net_income",
+      "자산총계": "total_assets", "부채총계": "total_liabilities", "자본총계": "equity",
+    };
+    const results: any[] = [];
+    for (const year of [thisYear - 1, thisYear - 2, thisYear - 3, thisYear - 4]) {
+      try {
+        const url = `https://opendart.fss.or.kr/api/fnlttSinglAcnt.json?crtfc_key=${DART_KEY}&corp_code=${corp_code}&bsns_year=${year}&reprt_code=11011&fs_div=CFS`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+        const d = (await r.json()) as any;
+        if (d.status !== "000" || !d.list) continue;
+        const row: any = { year };
+        for (const item of d.list) {
+          const k = ACNT_MAP[item.account_nm];
+          if (k && item.thstrm_amount) { const v = parseInt((item.thstrm_amount as string).replace(/,/g, ""), 10); if (!isNaN(v)) row[k] = v; }
+        }
+        if (Object.keys(row).length > 1) results.push(row);
+      } catch {}
+    }
+    results.sort((a, b) => a.year - b.year);
+    if (results.length > 0) await saveToDBCache(cacheKey, results, 30 * 24 * 60);
+    res.json(results);
+  } catch (e: any) { res.status(500).json({ error: e?.message }); }
+});
+
+router.get("/dart-company-disclosures-by-corp", async (req, res) => {
+  try {
+    const corp_code = ((req.query.corp_code as string) || "").trim();
+    if (!corp_code) return res.status(400).json({ error: "corp_code required" });
+    const DART_KEY = process.env.DART_API_KEY;
+    if (!DART_KEY) return res.json([]);
+    const todayKST = new Date(Date.now() + 9 * 3_600_000);
+    const fmt8 = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+    const cacheKey = `dart-corp-disc-${corp_code}-${fmt8(todayKST).slice(0, 6)}`;
+    const cached = await getFromDBCache<any[]>(cacheKey);
+    if (cached) return res.json(cached);
+    const bgn_de = fmt8(new Date(Date.now() - 365 * 86_400_000));
+    const url = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${DART_KEY}&corp_code=${corp_code}&bgn_de=${bgn_de}&page_count=20&sort=date&sort_mth=desc`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const d = (await r.json()) as any;
+    if (d.status !== "000") return res.json([]);
+    const result = (d.list ?? []).slice(0, 20).map((item: any) => ({
+      rcept_no: item.rcept_no, report_nm: item.report_nm, rcept_dt: item.rcept_dt,
+      flr_nm: item.flr_nm, dartUrl: `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${item.rcept_no}`,
+    }));
+    await saveToDBCache(cacheKey, result, 24 * 60);
+    res.json(result);
+  } catch (e: any) { res.status(500).json({ error: e?.message }); }
+});
+
+router.post("/dart-unlisted-analysis", async (req, res) => {
+  try {
+    const { corp_code, corp_name, corp_cls } = req.body as { corp_code: string; corp_name: string; corp_cls?: string };
+    if (!corp_code || !corp_name) return res.status(400).json({ error: "corp_code, corp_name required" });
+    const DART_KEY = process.env.DART_API_KEY;
+    const GEMINI_KEY = process.env.GEMINI_API_KEY;
+    if (!DART_KEY || !GEMINI_KEY) return res.status(500).json({ error: "API keys missing" });
+    const thisYear = new Date().getFullYear();
+    const ACNT_MAP: Record<string, string> = {
+      "매출액": "revenue", "영업이익": "op_income", "당기순이익": "net_income",
+      "자산총계": "total_assets", "부채총계": "total_liabilities", "자본총계": "equity",
+    };
+    const financials: any[] = [];
+    for (const year of [thisYear - 1, thisYear - 2, thisYear - 3]) {
+      try {
+        const url = `https://opendart.fss.or.kr/api/fnlttSinglAcnt.json?crtfc_key=${DART_KEY}&corp_code=${corp_code}&bsns_year=${year}&reprt_code=11011&fs_div=CFS`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+        const d = (await r.json()) as any;
+        if (d.status !== "000" || !d.list) continue;
+        const row: any = { year };
+        for (const item of d.list) {
+          const k = ACNT_MAP[item.account_nm];
+          if (k && item.thstrm_amount) { const v = parseInt((item.thstrm_amount as string).replace(/,/g, ""), 10); if (!isNaN(v)) row[k] = v; }
+        }
+        if (Object.keys(row).length > 1) financials.push(row);
+      } catch {}
+    }
+    const bgn_de = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10).replace(/-/g, "");
+    let disclosures: string[] = [];
+    try {
+      const dr = await fetch(`https://opendart.fss.or.kr/api/list.json?crtfc_key=${DART_KEY}&corp_code=${corp_code}&bgn_de=${bgn_de}&page_count=10&sort=date&sort_mth=desc`, { signal: AbortSignal.timeout(10_000) });
+      const dd = (await dr.json()) as any;
+      disclosures = (dd.list ?? []).slice(0, 8).map((i: any) => `[${i.rcept_dt}] ${i.report_nm}`);
+    } catch {}
+    const fmtB = (v: number | undefined) => {
+      if (v == null || isNaN(v)) return "N/A";
+      if (Math.abs(v) >= 1e12) return `${(v / 1e12).toFixed(1)}조원`;
+      if (Math.abs(v) >= 1e8) return `${Math.round(v / 1e8)}억원`;
+      return `${Math.round(v / 1e6)}백만원`;
+    };
+    const finText = financials.map(f =>
+      `${f.year}년: 매출 ${fmtB(f.revenue)}, 영업이익 ${fmtB(f.op_income)}, 순이익 ${fmtB(f.net_income)}, 총자산 ${fmtB(f.total_assets)}, 부채 ${fmtB(f.total_liabilities)}, 자본 ${fmtB(f.equity)}`
+    ).join("\n");
+    const clsLbl = corp_cls === "Y" ? "유가증권시장 상장사" : corp_cls === "K" ? "코스닥 상장사" : corp_cls === "N" ? "코넥스 상장사" : "비상장 기업";
+    const prompt = `당신은 국내 비상장 기업 투자 전문 애널리스트입니다. 투자 검토 목적의 심층 분석을 제공하세요.
+
+[기업 정보]
+회사명: ${corp_name} (${clsLbl})
+
+[재무 현황 (DART 공시 연간 기준)]
+${finText || "재무 데이터 조회 불가 (소규모 기업이거나 공시 의무 없을 수 있음)"}
+
+[최근 1년 공시 목록]
+${disclosures.length > 0 ? disclosures.join("\n") : "최근 공시 없음"}
+
+위 정보를 바탕으로 **투자 검토 보고서**를 작성해주세요:
+
+## 사업 모델 및 경쟁력
+회사의 핵심 사업, 수익 구조, 시장 내 포지셔닝을 2-3문단으로 설명하세요.
+
+## 재무 건전성 분석
+- **매출 성장성**: 연도별 매출 증가율 계산 및 평가
+- **수익성**: 영업이익률, 순이익률 추이
+- **재무 안정성**: 부채비율(부채/자본), 자본 충실도
+- **종합 재무 등급**: 우수/양호/보통/취약 중 하나와 근거
+
+## 핵심 리스크 (3가지)
+각 리스크를 **리스크명**: 설명 형식으로 작성하세요.
+
+## 성장 잠재력
+시장 기회, 업종 트렌드, 사업 확장성을 분석하세요.
+
+## 유사 상장사 기반 밸류에이션 가이드
+- 적합한 비교 지표 (PER, PBR, EV/EBITDA, PSR 중 적합한 것)
+- 유사 상장 기업명 2-3개 제시
+- 합리적 밸류에이션 배수 범위
+- 대략적인 기업가치 추정 범위 (재무 데이터 있는 경우)
+
+## 종합 투자 의견
+**투자 매력도**: 상/중/하 판정과 핵심 근거 2-3가지`;
+    const genAI = new GoogleGenAI({ apiKey: GEMINI_KEY });
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Cache-Control", "no-cache");
+    const stream = await genAI.models.generateContentStream({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    for await (const chunk of stream) {
+      const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (text) res.write(text);
+    }
+    res.end();
+  } catch (e: any) {
+    if (!res.headersSent) res.status(500).json({ error: e?.message });
+    else res.end();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+
 router.get("/:ticker", async (req, res) => {
   const ticker = sanitizeTicker(req.params.ticker ?? "");
   if (!ticker) { res.status(400).json({ error: "Invalid ticker symbol" }); return; }
@@ -3539,5 +3747,6 @@ router.get("/krx-stocks", async (req, res) => {
     res.status(500).json({ error: e?.message });
   }
 });
+
 
 export default router;

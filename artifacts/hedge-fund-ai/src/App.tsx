@@ -41,8 +41,9 @@ const TermsPage        = lazy(() => import("@/pages/terms"));
 const DisclaimerPage   = lazy(() => import("@/pages/disclaimer"));
 const SupportPage      = lazy(() => import("@/pages/support"));
 const NoticesPage      = lazy(() => import("@/pages/notices"));
-const ThemesPage       = lazy(() => import("@/pages/themes"));
-const NotFound         = lazy(() => import("@/pages/not-found"));
+const ThemesPage           = lazy(() => import("@/pages/themes"));
+const UnlistedAnalysis     = lazy(() => import("@/pages/unlisted-analysis"));
+const NotFound             = lazy(() => import("@/pages/not-found"));
 
 // Admin pages — 일반 사용자 접근 없으므로 별도 청크로 완전 분리
 const AdminLive            = lazy(() => import("@/pages/admin-live"));
@@ -306,6 +307,8 @@ function Router() {
                 <Route path="/support" component={SupportPage} />
                 <Route path="/notices" component={NoticesPage} />
                 <Route path="/themes" component={ThemesPage} />
+                <Route path="/unlisted" component={UnlistedAnalysis} />
+                <Route path="/unlisted/:corpCode" component={UnlistedAnalysis} />
                 <Route component={NotFound} />
               </Switch>
             </Suspense>

@@ -4,7 +4,7 @@ import AdmZip from "adm-zip";
 import { pool } from "@workspace/db";
 import { loadKRXList, getKRXCache } from "../lib/krx-cache";
 import { fetchInvestorData } from "../lib/pykrx-client";
-import { setCorpCodeMap } from "../lib/dart-corp-cache.js";
+import { setCorpCodeMap, setCorpInfoList, type CorpInfo } from "../lib/dart-corp-cache.js";
 
 const router = Router();
 
@@ -50,6 +50,7 @@ const CORP_CODE_TTL = 24 * 60 * 60 * 1000;
 let corpCodeLoading = false;
 
 const CORP_CODE_CACHE_KEY = "dart_corp_code_map_v1";
+const CORP_INFO_CACHE_KEY = "dart_corp_info_list_v2";
 
 async function saveCorpCodeMapToDB(map: Map<string, string>): Promise<void> {
   try {
@@ -64,6 +65,22 @@ async function saveCorpCodeMapToDB(map: Map<string, string>): Promise<void> {
     console.log(`[DART] corp code map DB 저장 완료: ${map.size}개`);
   } catch (e: any) {
     console.error("[DART] DB 저장 실패:", e.message);
+  }
+}
+
+async function saveCorpInfoListToDB(list: CorpInfo[]): Promise<void> {
+  try {
+    const data = JSON.stringify(list);
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await pool.query(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET data = $2, expires_at = $3`,
+      [CORP_INFO_CACHE_KEY, data, expiresAt]
+    );
+    console.log(`[DART] corp info list DB 저장 완료: ${list.length}개`);
+  } catch (e: any) {
+    console.error("[DART] corp info list DB 저장 실패:", e.message);
   }
 }
 
@@ -92,6 +109,21 @@ async function loadCorpCodeMapFromDB(): Promise<boolean> {
     corpCodeCachedAt = Date.now();
     setCorpCodeMap(corpCodeMap);
     console.log(`[DART] corp code map DB 복원 완료: ${corpCodeMap.size}개`);
+
+    // corp info list도 함께 복원 (이름 검색용)
+    try {
+      const r2 = await pool.query(
+        `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+        [CORP_INFO_CACHE_KEY]
+      );
+      if (r2.rows.length) {
+        const raw2 = r2.rows[0].data;
+        const infoList: CorpInfo[] = typeof raw2 === "string" ? JSON.parse(raw2) : raw2;
+        setCorpInfoList(infoList);
+        console.log(`[DART] corp info list DB 복원 완료: ${infoList.length}개`);
+      }
+    } catch {}
+
     return true;
   } catch (e: any) {
     console.error("[DART] DB 복원 실패:", e.message);
@@ -108,7 +140,13 @@ async function loadCorpCodeMap(): Promise<void> {
 
   // 1) DB 캐시에서 먼저 복원 시도
   const restoredFromDB = await loadCorpCodeMapFromDB();
-  if (restoredFromDB) return;
+  // corp_code map은 있지만 corp_info list(이름 검색용)가 없으면 XML 재다운로드
+  if (restoredFromDB) {
+    const { hasCorpInfoList } = await import("../lib/dart-corp-cache.js");
+    if (hasCorpInfoList()) return;
+    console.log("[DART] corp info list 없음 — XML 재다운로드 시작 (백그라운드)");
+    // 아래로 계속 진행 (corpCodeLoading 플래그는 아래에서 설정됨)
+  }
 
   // 2) DB 캐시 없으면 DART API에서 다운로드 (백그라운드, 타임아웃 없음)
   corpCodeLoading = true;
@@ -124,20 +162,27 @@ async function loadCorpCodeMap(): Promise<void> {
 
     const xml = entry.getData().toString("utf-8");
     const map = new Map<string, string>();
+    const infoList: CorpInfo[] = [];
     for (const m of xml.matchAll(/<list>([\s\S]*?)<\/list>/g)) {
       const block = m[1];
       const cc = block.match(/<corp_code>(.*?)<\/corp_code>/)?.[1]?.trim();
-      const sc = block.match(/<stock_code>\s*(.*?)\s*<\/stock_code>/)?.[1]?.trim();
-      if (cc && sc && sc.length === 6) map.set(sc, cc);
+      const cn = block.match(/<corp_name>(.*?)<\/corp_name>/)?.[1]?.trim();
+      const sc = block.match(/<stock_code>\s*(.*?)\s*<\/stock_code>/)?.[1]?.trim() || null;
+      const cls = block.match(/<corp_cls>(.*?)<\/corp_cls>/)?.[1]?.trim() ?? "";
+      if (!cc || !cn) continue;
+      infoList.push({ corp_code: cc, corp_name: cn, stock_code: sc?.length === 6 ? sc : null, corp_cls: cls });
+      if (sc && sc.length === 6) map.set(sc, cc);
     }
 
     corpCodeMap = map;
     corpCodeCachedAt = Date.now();
     setCorpCodeMap(map);
-    console.log(`[DART] corp code map 로드 완료: ${map.size}개`);
+    setCorpInfoList(infoList);
+    console.log(`[DART] corp code map 로드 완료: 상장 ${map.size}개, 전체 ${infoList.length}개`);
 
     // 3) DB에 저장 (다음 재시작 때 즉시 복원)
     await saveCorpCodeMapToDB(map);
+    await saveCorpInfoListToDB(infoList);
   } catch (e) {
     console.error("[DART] loadCorpCodeMap error:", e);
   } finally {
