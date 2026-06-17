@@ -1890,7 +1890,7 @@ router.get("/short-info", async (req, res) => {
 
     const todayKST = new Date(Date.now() + 9 * 3600 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const cacheKey = `short-info-v4-${sixDigit}-${fmt(todayKST)}`;
+    const cacheKey = `short-info-v5-${sixDigit}-${fmt(todayKST)}`;
 
     const dbCached = await getFromDBCache<any>(cacheKey);
     if (dbCached) return res.json(dbCached);
@@ -1905,8 +1905,26 @@ router.get("/short-info", async (req, res) => {
     const krxRows = await fetchKRXShortData(sixDigit, 1).catch(() => []);
     const latestKrx = krxRows[0] ?? null;
 
+    // 대차잔고 금액 계산 (3단계 fallback)
+    // 1) KRX/Naver 직접 제공 loanQty × 현재가
+    // 2) loanRate × 상장주식수 × 현재가
+    // 3) loanRate × 시가총액 (mcap은 억원 단위 → × 1억)
+    const loanQty = latestKrx?.loanQty ?? null;
+    const loanAmt: number | null = (() => {
+      if (loanQty != null && kis.price > 0) return loanQty * kis.price;
+      if (kis.loanRate != null && kis.sharesOutstanding != null && kis.sharesOutstanding > 0 && kis.price > 0) {
+        return Math.round((kis.sharesOutstanding * kis.loanRate / 100) * kis.price);
+      }
+      if (kis.loanRate != null && kis.mcap != null && kis.mcap > 0) {
+        return Math.round(kis.mcap * 1e8 * kis.loanRate / 100);
+      }
+      return null;
+    })();
+
     const result = {
       loanRate:      kis.loanRate,      // 대차잔고비율 (%)
+      loanQty,                          // 대차잔고 수량 (주)
+      loanAmt,                          // 대차잔고 금액 (원) = loanQty × 현재가
       shortOverYn:   kis.shortOverYn,   // 공매도 과열 여부 Y/N
       shortSaleYn:   kis.shortSaleYn,   // 공매도 가능 여부 Y/N
       lastShortQty:  kis.lastShortQty,  // 최근 공매도 체결수량

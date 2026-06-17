@@ -1557,6 +1557,8 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
 // ─── 공매도 현황 패널 ──────────────────────────────────────────────────────────
 interface ShortInfo {
   loanRate: number | null;
+  loanQty: number | null;
+  loanAmt: number | null;
   shortOverYn: string | null;
   shortSaleYn: string | null;
   lastShortQty: number | null;
@@ -1592,11 +1594,13 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
   const isOverheat = info?.shortOverYn === "Y";
   const canShort   = info?.shortSaleYn !== "N";
   const hasShortAmt = info?.shortAmt != null;
+  const hasLoanAmt  = info?.loanAmt  != null;
 
   const items = [
     { label: isEn ? "Loan Rate" : "대차잔고비율",  value: info?.loanRate   != null ? `${info.loanRate.toFixed(2)}%`   : "—", highlight: (info?.loanRate ?? 0) > 5 },
+    ...(hasLoanAmt ? [{ label: isEn ? "Loan Bal." : "대차잔고금액", value: fmtShortAmt(info?.loanAmt ?? null), highlight: false }] : []),
     { label: isEn ? "Short Ratio" : "공매도잔고율", value: info?.shortRatio != null ? `${info.shortRatio.toFixed(2)}%` : "—", highlight: (info?.shortRatio ?? 0) >= 2 },
-    ...(hasShortAmt ? [{ label: isEn ? "Short Bal." : "잔고금액", value: fmtShortAmt(info?.shortAmt ?? null), highlight: false }] : []),
+    ...(hasShortAmt ? [{ label: isEn ? "Short Bal." : "공매도잔고금액", value: fmtShortAmt(info?.shortAmt ?? null), highlight: false }] : []),
     { label: isEn ? "Short Avail." : "공매도 가능", value: canShort ? (isEn ? "Yes" : "가능") : (isEn ? "No" : "불가"),      highlight: !canShort },
   ];
 
@@ -1619,7 +1623,11 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
           {[0,1,2,3].map(i => <div key={i} className="h-12 rounded-lg bg-muted/30" />)}
         </div>
       ) : info ? (
-        <div className={hasShortAmt ? "grid grid-cols-4 gap-2.5" : "grid grid-cols-3 gap-2.5"}>
+        <div className={[
+          "grid gap-2.5",
+          items.length <= 3 ? "grid-cols-3" :
+          items.length === 4 ? "grid-cols-4" : "grid-cols-3 sm:grid-cols-5",
+        ].join(" ")}>
           {items.map(({ label, value, highlight }) => (
             <div key={label} className="rounded-lg bg-muted/20 px-2 py-2.5 text-center">
               <div className="text-[10px] text-muted-foreground/60 mb-1 leading-tight">{label}</div>
