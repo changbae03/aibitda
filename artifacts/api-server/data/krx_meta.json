@@ -1,6 +1,6 @@
 {
   "lastTrained": "2026-06-14T15:12:39.537Z",
-  "lastUpdated": "2026-06-16T09:01:41.359Z",
+  "lastUpdated": "2026-06-17T01:17:38.344Z",
   "nSamples": {
     "kospi": 729,
     "kosdaq": 729,
@@ -8,22 +8,22 @@
     "nasdaq": 752
   },
   "dirAcc": {
-    "kospi": 75,
-    "kosdaq": 65.9,
+    "kospi": 72.7,
+    "kosdaq": 65.1,
     "snp500": 57.8,
     "nasdaq": 71.1
   },
   "wfDirAcc": {
-    "kospi": 67.2,
-    "kosdaq": 64.1,
-    "snp500": 52,
-    "nasdaq": 64.9
+    "kospi": 64.9,
+    "kosdaq": 63.1,
+    "snp500": 55.4,
+    "nasdaq": 61.6
   },
   "rolling30dDirAcc": {
     "kospi": 56.7,
     "kosdaq": 60,
-    "snp500": 60,
+    "snp500": 75,
     "nasdaq": 70
   },
-  "updateCount": 2
+  "updateCount": 3
 }

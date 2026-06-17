@@ -1947,6 +1947,91 @@ async function fetchSignalsData(): Promise<SignalGroup[]> {
     console.warn("[signals] KR 데이터 조회 실패 (무시):", e);
   }
 
+  // ── 인기 검색 종목 — KR (네이버 증권) ──────────────────────────────────────
+  try {
+    const naverRes = await fetch("https://finance.naver.com/sise/lastsearch2.nhn", {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(10000),
+    });
+    const rawBuf = await naverRes.arrayBuffer();
+    const html = new TextDecoder("euc-kr").decode(rawBuf);
+    const codeMatches = [...html.matchAll(/code=(\d{6})/g)];
+    const codes = [...new Set(codeMatches.map((m: RegExpMatchArray) => m[1]))].slice(0, 20);
+
+    if (codes.length > 0) {
+      const basicResults = await Promise.allSettled(
+        codes.map((code: string) =>
+          fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15",
+              "Referer": "https://m.stock.naver.com/",
+            },
+            signal: AbortSignal.timeout(5000),
+          }).then(r => r.json())
+        )
+      );
+
+      const krTrending: SignalStock[] = basicResults
+        .map((res, i) => {
+          if (res.status !== "fulfilled") return null;
+          const d = res.value as any;
+          const name: string = d.stockName || codes[i];
+          const closeRaw = String(d.closePrice ?? "").replace(/,/g, "");
+          const close = parseFloat(closeRaw) || undefined;
+          const changePercent = parseFloat(d.fluctuationsRatio ?? "0") || 0;
+          return { ticker: codes[i], name, market: "KR" as const, changePercent, volume: undefined, close };
+        })
+        .filter((s): s is SignalStock => s !== null)
+        .slice(0, 12);
+
+      if (krTrending.length > 0) {
+        groups.push({
+          id: "kr_trending",
+          label: "🔍 네이버 인기 검색 (KR)",
+          desc: "네이버 증권 실시간 인기 검색 순위 종목",
+          market: "KR",
+          stocks: krTrending,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("[signals] KR trending 조회 실패 (무시):", e);
+  }
+
+  // ── 인기 검색 종목 — US (Yahoo Finance trending) ──────────────────────────
+  try {
+    const trendRes = await fetch("https://query1.finance.yahoo.com/v1/finance/trending/US?count=20", {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(10000),
+    });
+    const trendJson = await trendRes.json() as any;
+    const trendSymbols: string[] = (trendJson?.finance?.result?.[0]?.quotes ?? [])
+      .map((q: any) => q.symbol as string)
+      .filter((s: string) => !s.includes("^") && !s.includes("="))
+      .slice(0, 15);
+
+    if (trendSymbols.length > 0) {
+      const quotes = await yf.quote(trendSymbols, {}, { validateResult: false });
+      const arr: any[] = Array.isArray(quotes) ? quotes : [quotes];
+      const usTrending = arr
+        .map(yfQuoteToStock)
+        .filter(s => !!s.ticker)
+        .slice(0, 12);
+
+      if (usTrending.length > 0) {
+        groups.push({
+          id: "us_trending",
+          label: "🔍 야후 인기 검색 (US)",
+          desc: "Yahoo Finance 실시간 인기 검색 미국 주식",
+          market: "US",
+          stocks: usTrending,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("[signals] US trending 조회 실패 (무시):", e);
+  }
+
   return groups;
 }
 
