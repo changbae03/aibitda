@@ -37,7 +37,7 @@ export default function StockNewsTimeline({
     setLoading(true);
     setError(null);
     const isForce = forceCount > 0;
-    const url = getApiUrl(`/api/news/timeline?keyword=${encodeURIComponent(keyword)}${isForce ? "&force=true" : ""}`);
+    const url = getApiUrl(`/api/news/timeline?keyword=${encodeURIComponent(keyword)}&ticker=${encodeURIComponent(ticker)}${isForce ? "&force=true" : ""}`);
     fetch(url)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d: { summary?: string; timeline?: StockNewsEvent[]; generatedAt?: number }) => {

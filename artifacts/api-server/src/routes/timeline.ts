@@ -78,45 +78,93 @@ async function fetchRss(src: RssSource): Promise<RssItem[]> {
 }
 
 /* ── Google News RSS (키워드 특화) ──────────────────────────────────────── */
-async function fetchGoogleNewsRss(keyword: string): Promise<RssItem[]> {
+async function fetchGoogleNewsRss(keyword: string, ticker?: string): Promise<RssItem[]> {
   try {
-    // 한국어 뉴스
-    const krUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=ko&gl=KR&ceid=KR:ko`;
-    // 영어 뉴스 (글로벌 종목 대응)
-    const enUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=en-US&gl=US&ceid=US:en`;
+    const HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" };
+    const TIMEOUT = { signal: AbortSignal.timeout(10000), headers: HEADERS };
 
-    const [krRes, enRes] = await Promise.allSettled([
-      fetch(krUrl, { signal: AbortSignal.timeout(10000), headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" } }),
-      fetch(enUrl, { signal: AbortSignal.timeout(10000), headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" } }),
-    ]);
-
-    const items: RssItem[] = [];
-    if (krRes.status === "fulfilled" && krRes.value.ok) {
-      items.push(...parseRssItems(await krRes.value.text(), "Google 뉴스(KR)"));
+    // 종목 티커가 있으면: 종목코드 단독 검색 + 회사명 검색 병렬 실행
+    // 종목코드만 검색하면 증권 관련 뉴스만 반환 → 도시/지명 혼동 방지
+    const requests: Promise<Response>[] = [];
+    if (ticker) {
+      // 종목코드로 검색 (가장 신뢰도 높음)
+      requests.push(fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(ticker)}&hl=ko&gl=KR&ceid=KR:ko`, TIMEOUT));
+      // 회사명 + 주식 (보조)
+      requests.push(fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(keyword + " 주식")}&hl=ko&gl=KR&ceid=KR:ko`, TIMEOUT));
+    } else {
+      // 영어 뉴스 (글로벌 종목 대응)
+      requests.push(fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=ko&gl=KR&ceid=KR:ko`, TIMEOUT));
+      requests.push(fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=en-US&gl=US&ceid=US:en`, TIMEOUT));
     }
-    if (enRes.status === "fulfilled" && enRes.value.ok) {
-      items.push(...parseRssItems(await enRes.value.text(), "Google 뉴스(EN)"));
+
+    const results = await Promise.allSettled(requests);
+    const items: RssItem[] = [];
+    const labels = ticker ? ["Google 뉴스(종목코드)", "Google 뉴스(KR)"] : ["Google 뉴스(KR)", "Google 뉴스(EN)"];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "fulfilled" && r.value.ok) {
+        items.push(...parseRssItems(await r.value.text(), labels[i]));
+      }
     }
     return items;
   } catch { return []; }
 }
 
 /* ── Gemini 타임라인 생성 ─────────────────────────────────────────────────── */
-async function generateTimeline(keyword: string, recentArticles: RssItem[]): Promise<{ summary: string; timeline: TimelineEvent[] }> {
+async function generateTimeline(keyword: string, recentArticles: RssItem[], ticker?: string): Promise<{ summary: string; timeline: TimelineEvent[] }> {
   const key = process.env["GEMINI_API_KEY"];
   if (!key) return { summary: "Gemini API 키가 없습니다.", timeline: [] };
 
-  // 최신순 정렬 후 50개 사용 (기존 30개 → 50개)
-  const sorted = [...recentArticles].sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 종목 티커가 있으면: 도시·지명 관련 기사 비율을 계산해 오염 여부 판단
+  const CITY_REGEX = /시장|군수|도지사|지자체|지방정부|공항\s*개항|해상풍력|크루즈|대산항|간척|고속도로\s*착공|면 행정|행정복지|지역개발|관광객 유치|축제|공원|도서관/;
+  const isCityArticle = (a: RssItem) => CITY_REGEX.test(a.title);
+  const cityCount = ticker ? recentArticles.filter(isCityArticle).length : 0;
+  const cityRatio = recentArticles.length > 0 ? cityCount / recentArticles.length : 0;
+  // 도시 기사가 30% 이상이면 → 오염된 것으로 판단, Gemini에 보내지 않음
+  const articlesToSend = (ticker && cityRatio >= 0.3) ? [] : recentArticles.filter(a => !isCityArticle(a));
+
+  // 최신순 정렬 후 최대 50개
+  const sorted = [...articlesToSend].sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
   const articleSnippets = sorted.slice(0, 50).map(a => {
     const d = new Date(a.pubDate);
     const dateStr = isNaN(d.getTime()) ? a.pubDate : d.toISOString().slice(0, 10);
     return `[${dateStr}] (${a.source}) ${a.title}`;
   }).join("\n");
 
-  const today = new Date().toISOString().slice(0, 10);
+  const mightBeCityArticles = ticker && cityRatio >= 0.3;
 
-  const prompt = `당신은 경제·지정학 전문 애널리스트입니다.
+  const prompt = ticker
+    ? `당신은 한국 주식시장 전문 애널리스트입니다. 오늘 날짜는 ${today}입니다.
+
+━━━ 최우선 규칙 (반드시 준수) ━━━
+이 요청은 오직 종목코드 ${ticker}, 기업명 "${keyword}"인 한국 상장 주식회사(주식/법인)에 대한 것입니다.
+"${keyword}"라는 이름의 도시, 지역, 행정구역, 공공기관은 이 요청과 무관합니다.
+
+▶ 만약 종목코드 ${ticker}의 주식회사 "${keyword}"에 대해 실적/경영/공시/M&A/제품 관련 정보를 알고 있다면 → 아래 JSON 형식으로 타임라인을 생성하세요.
+▶ 만약 이 회사에 대한 구체적인 주식 기업 정보를 알지 못한다면 → summary를 "이 기업(${ticker})에 대한 구체적인 뉴스 정보를 찾기 어렵습니다. 증권사 리포트나 DART 공시를 직접 확인하시길 권장합니다."로 설정하고 timeline은 빈 배열([])로 반환하세요.
+▶ 도시/지역/지자체에 관한 내용은 어떠한 경우에도 절대 포함하지 마세요.
+
+${articleSnippets ? `━━━ 참고 RSS 기사 (주식회사 관련 기사만 사용) ━━━\n${articleSnippets}` : ""}
+
+━━━ 출력 형식 (JSON만, 마크다운 없이) ━━━
+{
+  "summary": "종목 ${ticker} '${keyword}' 기업의 주요 흐름 요약. 기업 정보가 없으면 '뉴스 정보를 찾기 어렵습니다' 명시",
+  "timeline": [
+    {
+      "date": "YYYY-MM-DD 또는 YYYY-MM 또는 YYYY",
+      "dateLabel": "2025년 3월 15일",
+      "event": "핵심 기업 이슈 제목 (25자 이내)",
+      "detail": "기업 실적·경영·산업 관점 설명 2~3문장",
+      "importance": "high | medium | low",
+      "category": "실적/공시/M&A/제품/경영/산업/시장/기술/금융 중 하나",
+      "source": "출처 (있는 경우만)",
+      "url": "URL (있는 경우만)"
+    }
+  ]
+}`
+    : `당신은 경제·지정학 전문 애널리스트입니다.
 오늘 날짜는 ${today}입니다. 타임라인은 반드시 오늘까지의 최신 사건을 포함해야 합니다.
 키워드 "${keyword}"에 대한 이슈 타임라인을 생성해주세요.
 
@@ -147,8 +195,7 @@ ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반�
 - importance: high는 시장/외교에 결정적 영향을 준 사건, medium은 주요 사건, low는 참고 사건
 - 투자자 관점에서 실질적으로 중요한 흐름을 보여주세요
 - 날짜를 정확히 모르는 경우 연/월 단위로 표시
-- 반드시 ${today} 기준 최근 1~2주 내 뉴스가 있다면 타임라인에 포함하세요
-`;
+- 반드시 ${today} 기준 최근 1~2주 내 뉴스가 있다면 타임라인에 포함하세요`;
 
   try {
     const ai = new GoogleGenAI({ apiKey: key });
@@ -160,12 +207,27 @@ ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반�
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return { summary: "타임라인 생성 실패", timeline: [] };
     const parsed = JSON.parse(jsonMatch[0]);
-    return {
-      summary: parsed.summary ?? "",
-      timeline: (parsed.timeline ?? []).sort((a: TimelineEvent, b: TimelineEvent) =>
-        a.date.localeCompare(b.date)
-      ),
-    };
+    const summaryOut: string = parsed.summary ?? "";
+    const timelineOut: TimelineEvent[] = (parsed.timeline ?? []).sort((a: TimelineEvent, b: TimelineEvent) =>
+      a.date.localeCompare(b.date)
+    );
+
+    // 후처리: 종목 타임라인인데 도시/지자체 내용이 감지되면 빈 결과로 교체
+    if (ticker) {
+      const CITY_VERIFY = /시장(市長)?|군수|도지사|지자체|지방정부|공항\s*개항|해상풍력|크루즈|대산항|고속도로\s*착공|행정복지|지역개발|관광 활성화|관광객 유치|서산시|서산공항/;
+      const combinedText = summaryOut + " " + timelineOut.map(e => e.event + " " + e.detail).join(" ");
+      const cityHits = (combinedText.match(CITY_VERIFY) || []).length;
+      // 도시 관련 키워드 3개 이상 → 도시 내용으로 판단
+      if (cityHits >= 3) {
+        console.warn(`[timeline] "${keyword}" (${ticker}) — 도시 내용 감지 (hit=${cityHits}), 빈 결과 반환`);
+        return {
+          summary: `${keyword}(${ticker})에 대한 기업 관련 뉴스 정보를 찾기 어렵습니다. DART 공시나 증권사 리포트를 직접 확인하시길 권장합니다.`,
+          timeline: [],
+        };
+      }
+    }
+
+    return { summary: summaryOut, timeline: timelineOut };
   } catch (e: any) {
     console.error("[timeline] Gemini error:", e?.message);
     return { summary: "타임라인 생성 중 오류가 발생했습니다.", timeline: [] };
@@ -175,22 +237,24 @@ ${articleSnippets || "(최근 기사 없음 — Gemini 학습 데이터 기반�
 /* ── GET /api/news/timeline ───────────────────────────────────────────────── */
 router.get("/news/timeline", async (req, res) => {
   const keyword = (req.query.keyword as string ?? "").trim();
+  const ticker  = (req.query.ticker  as string ?? "").trim() || undefined;
   const force   = req.query.force === "true";
   if (!keyword) return res.status(400).json({ error: "keyword 파라미터가 필요합니다." });
 
-  const cacheKey = keyword.toLowerCase();
+  // ticker가 있으면 캐시 키에 포함 (같은 키워드라도 ticker 유무에 따라 다른 결과)
+  const cacheKey = ticker ? `${keyword.toLowerCase()}__${ticker}` : keyword.toLowerCase();
   const cached = _cache.get(cacheKey);
   if (!force && cached && Date.now() < cached.expiresAt) {
     return res.json(cached.data);
   }
 
   try {
-    console.log(`[timeline] 키워드 "${keyword}" 타임라인 생성 시작`);
+    console.log(`[timeline] 키워드 "${keyword}"${ticker ? ` (${ticker})` : ""} 타임라인 생성 시작`);
 
     // 1. 일반 RSS + Google News RSS 병렬 수집
     const [generalResults, googleItems] = await Promise.all([
       Promise.allSettled(RSS_SOURCES.map(s => fetchRss(s))),
-      fetchGoogleNewsRss(keyword),
+      fetchGoogleNewsRss(keyword, ticker),
     ]);
     const generalArticles = generalResults.flatMap(r => r.status === "fulfilled" ? r.value : []);
 
@@ -200,13 +264,19 @@ router.get("/news/timeline", async (req, res) => {
       a.title.toLowerCase().includes(kwLower) || a.title.includes(keyword)
     );
 
-    // 3. Google News는 이미 키워드 특화 → 바로 합산
-    const allMatching = [...googleItems, ...filteredGeneral];
+    // 3. 종목 티커가 있으면: 도시·지자체 관련 기사 제거 (시장·군수·도지사·지역개발 등)
+    const CITY_PATTERNS = /시장|군수|도지사|시의회|군의회|도의회|행정구역|지자체|지방정부|공항\s*개항|해상풍력단지|크루즈|대산항|간척|고속도로\s*착공|면 행정복지센터/;
+    const dedupeCity = (items: RssItem[]): RssItem[] => {
+      if (!ticker) return items;
+      return items.filter(a => !CITY_PATTERNS.test(a.title));
+    };
+
+    const allMatching = dedupeCity([...googleItems, ...filteredGeneral]);
 
     console.log(`[timeline] Google뉴스 ${googleItems.length}건 + 일반RSS 키워드일치 ${filteredGeneral.length}건 = 총 ${allMatching.length}건`);
 
     // 4. Gemini 타임라인 생성
-    const { summary, timeline } = await generateTimeline(keyword, allMatching);
+    const { summary, timeline } = await generateTimeline(keyword, allMatching, ticker);
 
     const result: TimelineResult = {
       keyword,
