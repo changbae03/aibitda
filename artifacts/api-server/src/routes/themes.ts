@@ -364,7 +364,7 @@ interface ThemeFeedItem extends TrendingTheme {
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v17";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v18";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -1044,8 +1044,8 @@ ${parts.join(", ")}${rateDirection}
 - "AI 반도체", "바이오", "2차전지" 같은 상시 포괄 테마는 피하고 구체적인 수급 드라이버(수주·정책·실적·이벤트)를 명시하세요
 - 한국 코스피·코스닥 중심, 관련 미국 시장 테마도 포함 가능
 
-마크다운 없이 아래 JSON 배열만 출력하세요:
-[{"id":"영문_스네이크","name":"한글 테마명(10자 이내)","description":"수급 이유 한 줄(20자 이내)","emoji":"이모지"}]`;
+마크다운 없이 아래 JSON 배열만 출력하세요 (emoji 필드에는 반드시 실제 유니코드 이모지 문자 1개만 넣으세요 — 한글/영문 텍스트 절대 금지):
+[{"id":"semiconductor_supercycle","name":"반도체 슈퍼사이클","description":"AI 수요 급증으로 메모리·파운드리 수주 폭증","emoji":"🔬"}]`;
 
   const themeAnalystSystem = `당신은 한국 주식시장 테마주 전문 애널리스트입니다. 기관·외국인 수급 데이터를 기반으로 시장을 주도하는 투자 테마를 발굴하는 것이 전문입니다.
 
@@ -1067,6 +1067,46 @@ ${parts.join(", ")}${rateDirection}
 
   let themes = safeParseJson<TrendingTheme[]>(resp.text ?? "");
   if (!themes || !Array.isArray(themes) || themes.length === 0) throw new Error("parse fail");
+
+  // ── 이모지 정규화: AI가 한글/텍스트를 emoji 필드에 넣을 경우 키워드로 매핑 ──
+  const EMOJI_KEYWORD_MAP: Array<[string[], string]> = [
+    [["반도체", "칩", "hbm", "메모리", "파운드리", "웨이퍼", "반도체"], "🔬"],
+    [["ai", "인공지능", "머신러닝", "llm", "에이전트"], "🤖"],
+    [["배터리", "2차전지", "전고체", "양극재", "음극재"], "🔋"],
+    [["바이오", "제약", "신약", "임상", "헬스케어", "의료"], "💊"],
+    [["방산", "방어", "국방", "무기", "방패", "k-방산"], "🛡️"],
+    [["금리", "채권", "금융", "보험", "은행", "저축"], "💰"],
+    [["달러", "환율", "외환", "수출", "무역"], "💵"],
+    [["전력", "hvdc", "변압기", "에너지", "전기차", "충전"], "⚡"],
+    [["조선", "lng", "선박", "해운", "항만"], "🚢"],
+    [["로봇", "자동화", "공장", "스마트팩토리"], "🏭"],
+    [["우주", "위성", "발사체", "항공", "항공우주"], "🚀"],
+    [["컴퓨터", "it", "소프트웨어", "클라우드", "서버", "데이터센터"], "💻"],
+    [["부동산", "리츠", "건설", "건물"], "🏗️"],
+    [["차트", "주가", "대형주", "블루칩", "실적", "성장주"], "📈"],
+    [["소비", "유통", "리테일", "패션", "화장품", "뷰티"], "🛍️"],
+    [["돈", "기관", "외국인", "수급", "매수"], "📊"],
+    [["원자력", "핵", "원전", "핵융합"], "☢️"],
+    [["농업", "식품", "바이오매스", "식량"], "🌾"],
+  ];
+
+  // 이모지 유니코드 범위 체크 (실제 이모지인지 판별)
+  const isActualEmoji = (s: string): boolean => {
+    if (!s || s.length === 0) return false;
+    // 이모지는 보통 surrogate pair 또는 특수 유니코드 범위
+    const cp = s.codePointAt(0) ?? 0;
+    return cp > 0x2000; // 일반 ASCII/한글(0xAC00~0xD7A3) 제외, 심볼/이모지만 허용
+  };
+
+  themes = themes.map(t => {
+    if (isActualEmoji(t.emoji)) return t;
+    // 이모지가 아닌 텍스트인 경우 — 테마명·설명에서 키워드 매칭
+    const combined = `${t.name} ${t.description} ${t.id}`.toLowerCase();
+    const matched = EMOJI_KEYWORD_MAP.find(([kws]) => kws.some(kw => combined.includes(kw)));
+    const fallbackEmoji = matched ? matched[1] : "📌";
+    console.log(`[themes] emoji 정규화: "${t.emoji}" → "${fallbackEmoji}" (테마: ${t.name})`);
+    return { ...t, emoji: fallbackEmoji };
+  });
 
   // ── 금리 방향 사후 교정 ────────────────────────────────────────────────────
   // AI가 프롬프트 경고를 무시하고 틀린 방향 테마를 생성할 경우 서버에서 교체
