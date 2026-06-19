@@ -5588,11 +5588,12 @@ async function executeStep(
             const medianCorrected = false;
 
             if (rawTp > 0 && sp > 0) {
-              // ⚠️ 상한 캡 제거: DB 저장 로직과 일치 — rNPV/SOTP 등 고배수 밸류에이션을 캡으로
-              // 무력화하지 않도록. 하한 플로어(DART 부재 오산출 방지)만 유지.
               const MIN_R = isKRtk ? 0.45 : 0.25;
+              // 상한 캡: 한국 3.0x / 미국 5.0x — LLM 오산출 방지 (소형·바이오도 3.0x면 충분)
+              const MAX_R = isKRtk ? 3.0 : 5.0;
               const ratio = rawTp / sp;
               const validated = ratio < MIN_R ? Math.round(sp * MIN_R)
+                             : ratio > MAX_R ? Math.round(sp * MAX_R)
                              : Math.round(rawTp);
               // corrected = true if ANY adjustment occurred (median clamp OR floor clamp)
               const ratioCorrected = validated !== Math.round(rawTp);
@@ -6563,14 +6564,12 @@ async function executeStep(
         }
 
         if (savedStartPrice && savedStartPrice > 0) {
-          // ── 목표주가 상한 캡 제거 ──────────────────────────────────────────
-          // FINAL_VALUATION_DATA.base는 AI가 DCF/rNPV+SOTP 단계에서 산출한 값으로,
-          // 후처리 배수 캡이 오히려 밸류에이션 결과를 무력화하는 문제가 있었음.
-          // (예: 10,660원 → FINAL_VALUATION_DATA.base 53,600원(5.03x) → 구 2.5x 캡으로 26,650원으로 잘림)
-          // 캡이 필요하다면 valuation 프롬프트 단계에서 소프트 가드레일로 적용.
-          //
-          // ── 하한 플로어만 유지: DART 재무 데이터 부재 시 AI 오산출 방지 ──
+          // ── 하한 플로어 + 상한 캡 — LLM 오산출 방지 ──────────────────────
+          // 하한: DART 재무 데이터 부재 시 AI 오산출 방지
+          // 상한: LLM이 대형주에 황당한 목표가를 산출하는 사례 방지
+          //   (삼성전자 +370% 같은 케이스는 소형주·바이오 고배수 시나리오가 아님)
           const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
+          const TARGET_MAX_RATIO = isKR ? 3.0 : 5.0;
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
             if (tRatio < TARGET_MIN_RATIO) {
@@ -6584,8 +6583,14 @@ async function executeStep(
                 );
               }
               targetPrice = floored;
+            } else if (tRatio > TARGET_MAX_RATIO) {
+              const capped = Math.round(savedStartPrice * TARGET_MAX_RATIO);
+              console.warn(
+                `[analysis ${id}] target_price ${targetPrice} is ${tRatio.toFixed(2)}x startPrice ${savedStartPrice} (>${TARGET_MAX_RATIO}x ${isKR ? "KR" : "US"} ceiling) — capped to ${capped}`
+              );
+              targetPrice = capped;
             } else {
-              console.log(`[analysis ${id}] target_price ${targetPrice} (${tRatio.toFixed(2)}x startPrice ${savedStartPrice}) — 캡 없이 FINAL_VALUATION_DATA 원본 사용`);
+              console.log(`[analysis ${id}] target_price ${targetPrice} (${tRatio.toFixed(2)}x startPrice ${savedStartPrice}) — 범위 내 정상`);
             }
           }
 
