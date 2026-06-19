@@ -22,6 +22,17 @@ import { existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
+// ── 프로세스 레벨 크래시 방지 ─────────────────────────────────────────────
+// Neon 서버리스 환경에서 DB 연결이 갑자기 끊길 때 Node.js EventEmitter가
+// 처리되지 않은 'error' 이벤트를 throw해 프로세스를 강제 종료하는 것을 방지.
+process.on("uncaughtException", (err: Error) => {
+  console.error("[PROCESS] uncaughtException (서버 유지):", err.message?.slice(0, 120));
+});
+process.on("unhandledRejection", (reason: unknown) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  console.error("[PROCESS] unhandledRejection (서버 유지):", msg?.slice(0, 120));
+});
+
 console.log("[STARTUP] API Server 기동 중…");
 
 const rawPort = process.env["PORT"];
