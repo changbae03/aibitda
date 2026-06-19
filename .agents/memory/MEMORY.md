@@ -1,3 +1,4 @@
 - [pykrx ohlcv_by_ticker StdoutToStderr bug](pykrx-ohlcv-stdoutstderr.md) — get_market_ohlcv_by_ticker returns all-zero values when called inside StdoutToStderr context; must call without it.
 - [KRX OHLCV today data delay](krx-ohlcv-date-fallback.md) — KRX may not publish today's OHLCV until ~2h after market close (15:30 KST); fallback to prev business day when result is empty.
 - [News timeline city-name collision fix](timeline-city-collision.md) — When stock name matches a city (e.g. 서산 079650), 4-layer defense needed: ticker-code Google search, city-article pre-filter, ticker-aware Gemini prompt, post-processing city-keyword validator.
+- [analysis-detail JSX structure rules](analysis-detail-jsx-structure.md) — Two recurring JSX structural pitfalls in this file; read before editing animation wrappers.

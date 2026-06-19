@@ -2793,6 +2793,16 @@ export default function AnalysisDetail() {
     <div className="p-20 text-center text-destructive text-sm">분석 데이터를 불러올 수 없습니다.</div>
   );
 
+  // ── 페이지 섹션 등장 애니메이션 variants ───────────────────────────────────
+  const pageContainer = {
+    hidden: {},
+    visible: { transition: { staggerChildren: 0.07, delayChildren: 0.04 } },
+  };
+  const pageItem = {
+    hidden: { opacity: 0, y: 16 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] } },
+  };
+
   const currentStepCount = analysis.steps.length;
   const isComplete = analysis.status === 'completed';
   const isError = analysis.status === 'error';
@@ -2901,7 +2911,14 @@ export default function AnalysisDetail() {
         <div className="flex-1 min-w-0 space-y-5 sm:space-y-6">
 
       {/* ── Report Hero ─────────────────────────────────────────────── */}
-      <div ref={headerRef} className="bg-card rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      <motion.div
+        ref={headerRef}
+        className="bg-card rounded-2xl overflow-hidden"
+        style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
 
         {/* 상단 컬러 스트라이프 */}
         <div className={cn(
@@ -2959,27 +2976,44 @@ export default function AnalysisDetail() {
 
               {/* 현재가 + 등락률 */}
               <div className="flex items-baseline gap-2.5 mt-3 mb-4">
-                {headerLivePrice ? (
-                  <>
-                    <span className="text-3xl md:text-4xl font-black tabular-nums tracking-tight text-foreground">
-                      {headerLivePrice.currency === "USD"
-                        ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : isEn
-                          ? `KRW ${Math.round(headerLivePrice.price).toLocaleString("en-US")}`
-                          : `₩${Math.round(headerLivePrice.price).toLocaleString("ko-KR")}`}
-                    </span>
-                    {headerLivePrice.change != null && (
-                      <span className={cn(
-                        "text-base font-bold",
-                        headerLivePrice.change >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
-                      )}>
-                        {headerLivePrice.change >= 0 ? "▲" : "▼"} {Math.abs(headerLivePrice.change).toFixed(2)}%
+                <AnimatePresence mode="wait">
+                  {headerLivePrice ? (
+                    <motion.div
+                      key="price"
+                      className="flex items-baseline gap-2.5"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
+                    >
+                      <span className="text-3xl md:text-4xl font-black tabular-nums tracking-tight text-foreground">
+                        {headerLivePrice.currency === "USD"
+                          ? `$${headerLivePrice.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : isEn
+                            ? `KRW ${Math.round(headerLivePrice.price).toLocaleString("en-US")}`
+                            : `₩${Math.round(headerLivePrice.price).toLocaleString("ko-KR")}`}
                       </span>
-                    )}
-                  </>
-                ) : (
-                  <div className="h-10 w-36 bg-muted/50 rounded-lg animate-pulse" />
-                )}
+                      {headerLivePrice.change != null && (
+                        <span className={cn(
+                          "text-base font-bold",
+                          headerLivePrice.change >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                        )}>
+                          {headerLivePrice.change >= 0 ? "▲" : "▼"} {Math.abs(headerLivePrice.change).toFixed(2)}%
+                        </span>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="skeleton"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="h-10 w-36 bg-muted/50 rounded-lg animate-pulse" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* 지표 그리드 */}
@@ -3109,7 +3143,8 @@ export default function AnalysisDetail() {
           )}
           </div>
         </div>
-      </div>
+        </div>
+      </motion.div>
       </div>
 
       {/* TL;DR 결론 카드 — 완료 시 최상단 표시 */}
@@ -3123,54 +3158,96 @@ export default function AnalysisDetail() {
       )}
 
       {/* Financial Chart */}
-      <div className="bg-card rounded-2xl p-4 sm:p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      <motion.div
+        className="bg-card rounded-2xl p-4 sm:p-5"
+        style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
         <FinancialChart ticker={analysis.ticker} isEn={isEn} />
-      </div>
+      </motion.div>
 
       {/* ETF 편입 현황 — 분석 진행과 동시에 표시 */}
-      <ETFSection
-        ticker={analysis.ticker}
-        companyName={analysis.companyName}
-        industry={analysis.industry ?? undefined}
-      />
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        <ETFSection
+          ticker={analysis.ticker}
+          companyName={analysis.companyName}
+          industry={analysis.industry ?? undefined}
+        />
+      </motion.div>
 
       {/* 주요 뉴스 타임라인 — 분석 진행과 동시에 표시 */}
-      <StockNewsTimeline
-        ticker={analysis.ticker}
-        companyName={analysis.companyName}
-        isEn={isEn}
-      />
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        <StockNewsTimeline
+          ticker={analysis.ticker}
+          companyName={analysis.companyName}
+          isEn={isEn}
+        />
+      </motion.div>
 
       {/* 주요 공시 — 뉴스 타임라인과 AI 파이프라인 사이 */}
-      <StockDisclosurePanel ticker={analysis.ticker} isEn={isEn} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <StockDisclosurePanel ticker={analysis.ticker} isEn={isEn} />
+      </motion.div>
 
       {/* 배당 정보 */}
-      <DividendInfoPanel ticker={analysis.ticker} isEn={isEn} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <DividendInfoPanel ticker={analysis.ticker} isEn={isEn} />
+      </motion.div>
 
       {/* 공매도 현황 */}
-      <ShortSellingPanel ticker={analysis.ticker} isEn={isEn} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <ShortSellingPanel ticker={analysis.ticker} isEn={isEn} />
+      </motion.div>
 
       {/* 애널리스트 컨센서스 */}
-      <AnalystConsensusPanel
-        ticker={analysis.ticker}
-        currentPrice={(analysis as any).startPrice ?? null}
-        isEn={isEn}
-      />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <AnalystConsensusPanel
+          ticker={analysis.ticker}
+          currentPrice={(analysis as any).startPrice ?? null}
+          isEn={isEn}
+        />
+      </motion.div>
 
       {/* 주요 주주 현황 */}
-      <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <MajorShareholdersPanel ticker={analysis.ticker} isEn={isEn} />
+      </motion.div>
 
       {/* Peer Multiples Panel */}
-      <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <PeerMultiplesPanel ticker={analysis.ticker} isEn={isEn} />
+      </motion.div>
 
       {/* Event Risk Score — 임시 비활성화 */}
       {/* <EventRiskCard ticker={analysis.ticker} isEn={isEn} /> */}
 
       {/* Version Timeline */}
-      <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <VersionTimelinePanel ticker={analysis.ticker} currentId={analysis.id} isEn={isEn} />
+      </motion.div>
 
       {/* Progress Track */}
-      <div className="bg-card rounded-2xl p-4 sm:p-5 print:hidden sticky top-12 z-20" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
+      <motion.div
+        className="bg-card rounded-2xl p-4 sm:p-5 print:hidden sticky top-12 z-20"
+        style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-sm text-foreground">
             {isEn ? 'AI Analysis Pipeline' : 'AI 분석 파이프라인'}
@@ -3225,10 +3302,12 @@ export default function AnalysisDetail() {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* 빠른 요약 카드 — 데이터가 있는 만큼 표시 (진행 중에도 노출) */}
-      <SummaryCardsB analysis={analysis} isEn={isEn} streamingStepKey={streamingStep?.key ?? null} />
+      <motion.div initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.05 }} transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <SummaryCardsB analysis={analysis} isEn={isEn} streamingStepKey={streamingStep?.key ?? null} />
+      </motion.div>
 
       {/* Analysis Steps Feed */}
       <div className="space-y-4" style={{ overflowAnchor: "none" }}>
@@ -3695,7 +3774,6 @@ export default function AnalysisDetail() {
           </motion.div>
         )}
       </AnimatePresence>
-        </div>
       </div>
 
       {/* 맨 위로 가기 버튼 */}
