@@ -726,7 +726,7 @@ JSON·마크다운 테이블 없이 번호 형식으로 간결하게 작성 (총
           contents: [{ role: "user", parts: [{ text: challengerPrompt }] }],
           config: {
             maxOutputTokens: 1024,
-            temperature: 0.25,
+            temperature: 0.1,
             topP: 0.85,
             thinkingConfig: { thinkingBudget: 0 },
           },
@@ -6431,7 +6431,7 @@ async function executeStep(
               config: {
                 systemInstruction: systemPrompt,
                 maxOutputTokens: revisedMaxTokens,
-                temperature: 0.2,
+                temperature: 0.1,
                 topP: 0.85,
                 thinkingConfig: { thinkingBudget: 0 },
               },
