@@ -2869,16 +2869,11 @@ export default function AnalysisDetail() {
               <div className="p-6">
                 {/* 타이틀 행 */}
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-500 mb-1">
-                      {isEn ? "AiBITDA Research" : "애빛다 리서치"}
-                    </p>
-                    <h3 className="text-[15px] font-bold text-foreground leading-snug">
-                      {isEn
-                        ? "7-step deep dive, from data to valuation"
-                        : "흩어진 데이터를 모아\n적정주가까지 도출합니다"}
-                    </h3>
-                  </div>
+                  <h3 className="text-[15px] font-bold text-foreground leading-snug">
+                    {isEn
+                      ? "For reference only."
+                      : "참고용 리포트입니다"}
+                  </h3>
                   <button
                     onClick={() => setShowDisclaimer(false)}
                     className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -2887,27 +2882,11 @@ export default function AnalysisDetail() {
                   </button>
                 </div>
 
-                {/* 프로세스 칩 */}
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {(isEn
-                    ? ["Macro & Industry", "Earnings Forecast", "DCF + Peer ×", "Technical", "Conclusion"]
-                    : ["산업 구조 분석", "실적 전망", "DCF + 피어 멀티플", "기술적 분석", "최종 결론"]
-                  ).map((label, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
-                    >
-                      <span className="text-[9px] font-bold text-amber-500">{i + 1}</span>
-                      {label}
-                    </span>
-                  ))}
-                </div>
-
                 {/* 본문 */}
-                <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+                <p className="text-[13px] leading-relaxed text-muted-foreground">
                   {isEn
-                    ? "We pull data from filings, news, and market signals, then apply analyst-grade methodology — DCF intrinsic value blended with peer multiples — to arrive at a target price. It's our best effort. Final investment decisions are yours to make."
-                    : "공시·뉴스·재무제표에 흩어진 정보를 직접 수집해, DCF와 피어 멀티플을 결합한 애널리스트 방법론으로 적정주가를 도출합니다. 최선을 다한 결과물이지만, 투자 최종 결정은 반드시 본인이 내려주세요."}
+                    ? "This report is built from filings, news, and market data using analyst-grade methodology. We've done our best — but investment decisions are always yours to make."
+                    : "공시·뉴스·시장 데이터를 모아 애널리스트 방법론으로 분석했습니다. 최선을 다한 결과물이지만, 투자 결정은 반드시 본인이 직접 내려주세요."}
                 </p>
 
                 {/* 구분선 */}
@@ -2918,7 +2897,7 @@ export default function AnalysisDetail() {
                   onClick={() => setShowDisclaimer(false)}
                   className="w-full rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 active:opacity-70"
                 >
-                  {isEn ? "Got it, start analysis" : "확인, 분석 시작"}
+                  {isEn ? "Understood" : "확인했습니다"}
                 </button>
 
                 {/* 자동 닫힘 progress bar */}
