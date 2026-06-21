@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language-context";
 import {
   FileText, Search, TrendingUp, TrendingDown, Minus,
-  Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, User,
+  Clock, CheckCircle2, XCircle, Loader2, ChevronLeft, ChevronRight, User, Trash2,
 } from "lucide-react";
 import { cn, getApiUrl, formatCurrency } from "@/lib/utils";
 import { format, parseISO, isValid } from "date-fns";
@@ -113,6 +113,21 @@ export default function AdminAnalyses() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
 
+  const queryClient = useQueryClient();
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    if (!confirm(isEn ? "Delete this analysis?" : "이 분석을 삭제할까요?")) return;
+    setDeletingId(id);
+    try {
+      await fetch(getApiUrl(`/api/analysis/${id}`), { method: "DELETE", credentials: "include" });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-reports"] });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const { data, isLoading, isFetching, isError } = useAllReports(page, statusFilter, search);
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
@@ -210,7 +225,7 @@ export default function AdminAnalyses() {
           <>
             {/* ─── Desktop table ─── */}
             <div className={cn("hidden md:block", isFetching && "opacity-60 pointer-events-none")}>
-              <div className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-2.5 border-b border-border bg-muted/40">
+              <div className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem_2rem] gap-x-3 px-4 py-2.5 border-b border-border bg-muted/40">
                 {[
                   "#",
                   t("기업", "Company"),
@@ -219,8 +234,9 @@ export default function AdminAnalyses() {
                   t("목표가", "Target"),
                   t("상승여력", "Upside"),
                   t("분석일시", "Date"),
-                ].map((h) => (
-                  <span key={h} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate">
+                  "",
+                ].map((h, i) => (
+                  <span key={i} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate">
                     {h}
                   </span>
                 ))}
@@ -236,7 +252,7 @@ export default function AdminAnalyses() {
                     <div
                       key={row.id}
                       onClick={() => setLocation(`/analysis/${row.id}`)}
-                      className="grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem] gap-x-3 px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors items-center"
+                      className="group grid grid-cols-[2rem_1fr_6rem_5.5rem_5.5rem_5rem_7rem_2rem] gap-x-3 px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors items-center"
                     >
                       <span className="text-[11px] font-mono text-muted-foreground/60">{row.id}</span>
 
@@ -313,6 +329,21 @@ export default function AdminAnalyses() {
                           {safeFormat(row.created_at, locale)}
                         </span>
                       </div>
+
+                      {/* 삭제 버튼 — 완료 제외 */}
+                      <div className="flex items-center justify-end">
+                        {!isCompleted && (
+                          <button
+                            onClick={(e) => handleDelete(e, row.id)}
+                            disabled={deletingId === row.id}
+                            className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 transition-all hover:bg-red-500/10 hover:text-red-500 disabled:opacity-30"
+                          >
+                            {deletingId === row.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -354,19 +385,32 @@ export default function AdminAnalyses() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {isCompleted ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                        ) : isInProgress ? (
-                          <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5 text-red-400" />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1">
+                          {isCompleted ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : isInProgress ? (
+                            <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-red-400" />
+                          )}
+                          <span className="text-[11px] text-muted-foreground">
+                            {isCompleted ? "완료" : isInProgress
+                              ? (STEP_LABEL[row.current_step ?? ""] ?? "진행중")
+                              : "실패"}
+                          </span>
+                        </div>
+                        {!isCompleted && (
+                          <button
+                            onClick={(e) => handleDelete(e, row.id)}
+                            disabled={deletingId === row.id}
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/50 transition-colors hover:bg-red-500/10 hover:text-red-500 active:bg-red-500/20 disabled:opacity-30"
+                          >
+                            {deletingId === row.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
                         )}
-                        <span className="text-[11px] text-muted-foreground">
-                          {isCompleted ? "완료" : isInProgress
-                            ? (STEP_LABEL[row.current_step ?? ""] ?? "진행중")
-                            : "실패"}
-                        </span>
                       </div>
                     </div>
 
