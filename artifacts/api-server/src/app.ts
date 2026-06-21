@@ -74,13 +74,15 @@ app.use(
 );
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────
+const isDev = process.env.NODE_ENV === "development";
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "요청이 너무 많습니다. 잠시 후 다시 시도하세요." },
-  skip: (req) => req.path.startsWith("/api/clerk"),
+  skip: (req) => isDev || req.path.startsWith("/api/clerk"),
 });
 
 const analysisLimiter = rateLimit({
@@ -89,7 +91,7 @@ const analysisLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "분석 요청이 너무 많습니다. 5분 후 다시 시도하세요." },
-  skip: (req) => req.method !== "POST",
+  skip: (req) => isDev || req.method !== "POST",
   // Clerk 사용자 ID 기반으로 키 설정 — 프록시 환경에서 IP 공유 문제 방지
   keyGenerator: (req) => {
     const auth = (req as any).auth;
@@ -105,6 +107,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "인증 요청이 너무 많습니다. 잠시 후 다시 시도하세요." },
+  skip: () => isDev,
 });
 
 const adminLimiter = rateLimit({
@@ -113,6 +116,7 @@ const adminLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "관리자 API 요청이 너무 많습니다." },
+  skip: () => isDev,
 });
 
 // ─── 헬스체크 (Clerk·Rate-limit 미들웨어 이전 등록) ──────────────────────────
