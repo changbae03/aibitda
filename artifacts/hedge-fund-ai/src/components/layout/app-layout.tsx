@@ -6,7 +6,7 @@ import {
   User, Search, ChevronRight, Download, Share, Briefcase, Lightbulb, Building2,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
-  ShieldCheck, Shield, Newspaper, Globe, Zap,
+  ShieldCheck, Shield, Newspaper, Globe, Zap, Target,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -145,8 +145,9 @@ const ADMIN_GROUPS = [
     items: [
       { href: "/admin/feedback", label: "유저 피드백",  Icon: MessageSquare },
       { href: "/admin/support",  label: "고객 문의",    Icon: Headphones },
-      { href: "/admin/quality",  label: "AI 관리",      Icon: ShieldCheck },
-      { href: "/admin/users",    label: "관리자 관리",  Icon: Shield },
+      { href: "/admin/quality",   label: "AI 관리",      Icon: ShieldCheck },
+      { href: "/admin/earnings",  label: "실적 정확도",  Icon: Target },
+      { href: "/admin/users",     label: "관리자 관리",  Icon: Shield },
     ],
   },
 ];

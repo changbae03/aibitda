@@ -58,6 +58,7 @@ const AdminNoticesPage     = lazy(() => import("@/pages/admin-notices"));
 const AdminQuality         = lazy(() => import("@/pages/admin-quality"));
 const AdminPortfolios      = lazy(() => import("@/pages/admin-portfolios"));
 const AdminCalibration     = lazy(() => import("@/pages/admin-calibration"));
+const AdminEarnings        = lazy(() => import("@/pages/admin-earnings"));
 
 const ConsentModal = lazy(() => import("@/components/consent-modal"));
 
@@ -299,6 +300,7 @@ function Router() {
                 <Route path="/admin/quality" component={AdminQuality} />
                 <Route path="/admin/portfolios" component={AdminPortfolios} />
                 <Route path="/admin/calibration" component={AdminCalibration} />
+                <Route path="/admin/earnings" component={AdminEarnings} />
                 <Route path="/market-analysis" component={MarketAnalysis} />
                 <Route path="/etf-analysis" component={ETFAnalysis} />
                 <Route path="/portfolio" component={Portfolio} />
