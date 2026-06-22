@@ -17,12 +17,13 @@ import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performanc
 import { pool } from "@workspace/db";
 
 // 실행 중복 방지용 플래그
-let morningBriefToday  = "";   // "YYYY-MM-DD" 형식
-let middayBriefToday   = "";   // "YYYY-MM-DD" 형식
-let closingBriefToday  = "";   // "YYYY-MM-DD" 형식
-let dailyRunToday      = "";   // "YYYY-MM-DD" 형식
-let monthlyRunMonth    = "";   // "YYYY-MM" 형식
-let weeklyRunWeek      = "";   // "YYYY-WNN" 형식 (주 번호)
+let morningBriefToday      = "";   // "YYYY-MM-DD" 형식
+let middayBriefToday       = "";   // "YYYY-MM-DD" 형식
+let closingBriefToday      = "";   // "YYYY-MM-DD" 형식
+let dailyRunToday          = "";   // "YYYY-MM-DD" 형식
+let monthlyRunMonth        = "";   // "YYYY-MM" 형식
+let weeklyRunWeek          = "";   // "YYYY-WNN" 형식 (주 번호)
+let weeklyCalibrationWeek  = "";   // "YYYY-WNN" 형식 — 주간 딥 캘리브레이션 중복 방지
 
 function utcNow() { return new Date(); }
 
@@ -58,6 +59,32 @@ function checkAndRun() {
     weeklyRunWeek = weekStr;
     console.log("[scheduler] 주간 완전 재학습 시작 (일요일 10:00 KST)");
     runPipeline(true).catch(e => console.error("[scheduler] 주간 재학습 실패:", e?.message));
+    // return 제거 — 이후 블록(딥 캘리브레이션)이 같은 분에 실행되지 않도록 시간을 다르게 설정
+  }
+
+  // ── 주간 딥 캘리브레이션: 매주 일요일 02:00 UTC (= 일요일 11:00 KST) ──────
+  // 평일 16:30 KST 일별 보정(가볍게)과 달리, 일요일에는 AI 진단 포함 전체 섹터 재보정
+  // sector_priors를 AI 권장값으로 자동 갱신 → 다음 주 분석 품질 향상
+  if (dow === 0 && utcH === 2 && utcM === 0 && weeklyCalibrationWeek !== weekStr) {
+    weeklyCalibrationWeek = weekStr;
+    console.log("[scheduler] 주간 딥 캘리브레이션 시작 (일요일 11:00 KST) — AI 진단 포함");
+    (async () => {
+      try {
+        const r = await autoRecalibrate();
+        console.log(
+          `[scheduler] 딥 캘리브레이션 완료 — ` +
+          `${r.analysesProcessed}건 분석, ${r.sectorsUpdated}개 섹터 업데이트`
+        );
+        if (r.sectorsUpdated > 0) {
+          await autoUpdateAllSectorPriors();
+          console.log("[scheduler] sector_priors AI 자동 업데이트 완료 — 다음 분석에 반영됨");
+        } else {
+          console.log("[scheduler] 섹터 업데이트 없음 (30일 이상 분석 데이터 부족 또는 이미 최신)");
+        }
+      } catch (e) {
+        console.error("[scheduler] 주간 딥 캘리브레이션 실패:", (e as Error)?.message ?? e);
+      }
+    })();
     return;
   }
 
@@ -198,12 +225,13 @@ export function startMarketScheduler() {
   // 3. 1분마다 스케줄 조건 확인
   setInterval(checkAndRun, 60_000);
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
-  console.log("  - 장전 브리핑:   평일 06:00 KST (21:00 UTC 전날)");
-  console.log("  - 장중 브리핑:   평일 13:00 KST (04:00 UTC)");
-  console.log("  - 장마감 브리핑:   평일 16:00 KST (07:00 UTC) ← Naver 데이터 안정화 후");
-  console.log("  - 장마감 업데이트: 평일 16:30 KST (07:30 UTC)");
-  console.log("  - 주간 재학습:   매주 일요일 10:00 KST (01:00 UTC)");
-  console.log("  - 월간 재학습:   매월 1일 00:00 KST (전달 15:00 UTC)");
+  console.log("  - 장전 브리핑:      평일 06:00 KST (21:00 UTC 전날)");
+  console.log("  - 장중 브리핑:      평일 13:00 KST (04:00 UTC)");
+  console.log("  - 장마감 브리핑:    평일 16:00 KST (07:00 UTC) ← Naver 데이터 안정화 후");
+  console.log("  - 장마감 업데이트:  평일 16:30 KST (07:30 UTC) → 일별 섹터 보정 포함");
+  console.log("  - 주간 재학습:      매주 일요일 10:00 KST (01:00 UTC) → LSTM+GBDT 재훈련");
+  console.log("  - 주간 딥 캘리브레이션: 매주 일요일 11:00 KST (02:00 UTC) → AI 진단 + sector_priors 갱신");
+  console.log("  - 월간 재학습:      매월 1일 00:00 KST (전달 15:00 UTC)");
 }
 
 export { runDailyIncrementalUpdate, loadMeta };
