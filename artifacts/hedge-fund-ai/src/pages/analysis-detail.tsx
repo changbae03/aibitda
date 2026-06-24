@@ -2885,8 +2885,8 @@ export default function AnalysisDetail() {
                 {/* 본문 */}
                 <p className="text-[13px] leading-relaxed text-muted-foreground">
                   {isEn
-                    ? "This report is built from filings, news, and market data using analyst-grade methodology. We've done our best — but investment decisions are always yours to make."
-                    : "공시·뉴스·시장 데이터를 모아 애널리스트 방법론으로 분석했습니다. 최선을 다한 결과물이지만, 투자 결정은 반드시 본인이 직접 내려주세요."}
+                    ? "AI agents collaborated using filings, news, and market data to generate this report. This is not investment advice — all investment decisions and their outcomes are solely your responsibility."
+                    : "다수의 데이터 소스를 바탕으로 애빛다 AI 에이전트들이 팀을 이루어 분석한 결과물입니다. 본 서비스는 투자 자문이 아니며, 모든 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
                 </p>
 
                 {/* 구분선 */}
