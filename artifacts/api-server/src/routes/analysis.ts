@@ -1047,6 +1047,63 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
     parseIncomeStatement(summary.chartIncomeStatement?.annual, "연간");
     parseIncomeStatement(summary.chartIncomeStatement?.quarter, "분기");
 
+    // ── 과거 연간 실적 CAGR 및 OPM 추세 사전 계산 → AI 전망 기준점 주입 ─────────
+    try {
+      const annCols: string[][] = summary.chartIncomeStatement?.annual?.columns ?? [];
+      const annTitleList: any[] = summary.chartIncomeStatement?.annual?.trTitleList ?? [];
+      const annPeriods: string[] = annCols[0]?.slice(1) ?? [];
+      const annRevs = annCols.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
+      const annOps  = annCols.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
+
+      // 확정 연도만 추출 (isConsensus != Y)
+      type AnnualRow = { period: string; rev: number; op: number };
+      const confirmed: AnnualRow[] = [];
+      annPeriods.forEach((period: string, i: number) => {
+        const isE = annTitleList[i]?.isConsensus === "Y";
+        if (!isE) {
+          const rev = Number(annRevs[i]);
+          const op  = Number(annOps[i]);
+          if (!isNaN(rev) && !isNaN(op) && rev !== 0) confirmed.push({ period, rev, op });
+        }
+      });
+
+      if (confirmed.length >= 2) {
+        const last  = confirmed[confirmed.length - 1];
+        const prev1 = confirmed[confirmed.length - 2];
+        const prev2 = confirmed.length >= 3 ? confirmed[confirmed.length - 3] : null;
+        const prev3 = confirmed.length >= 4 ? confirmed[confirmed.length - 4] : null;
+
+        const cagr1y = (last.rev / prev1.rev - 1) * 100;
+        const cagr2y = prev2 ? (Math.pow(last.rev / prev2.rev, 1/2) - 1) * 100 : null;
+        const cagr3y = prev3 ? (Math.pow(last.rev / prev3.rev, 1/3) - 1) * 100 : null;
+
+        // OPM 추세
+        const opmLast  = last.rev  > 0 ? (last.op  / last.rev)  * 100 : null;
+        const opmPrev1 = prev1.rev > 0 ? (prev1.op / prev1.rev) * 100 : null;
+        const opmDelta = (opmLast !== null && opmPrev1 !== null) ? opmLast - opmPrev1 : null;
+
+        // 대표 CAGR (3y > 2y > 1y)
+        const refCagr = cagr3y ?? cagr2y ?? cagr1y;
+        const e1guide = (refCagr * 0.9).toFixed(1);
+        const e2guide = (refCagr * 0.7).toFixed(1);
+
+        const sign = (n: number) => n >= 0 ? "+" : "";
+        const cagrParts: string[] = [
+          `매출 YoY ${sign(cagr1y)}${cagr1y.toFixed(1)}%`,
+          ...(cagr2y !== null ? [`2년CAGR ${sign(cagr2y)}${cagr2y.toFixed(1)}%`] : []),
+          ...(cagr3y !== null ? [`3년CAGR ${sign(cagr3y)}${cagr3y.toFixed(1)}%`] : []),
+          ...(opmDelta !== null ? [`OPM추세 YoY ${sign(opmDelta)}${opmDelta.toFixed(1)}pp`] : []),
+        ];
+        lines.push(`\n[⭐ 과거 실적 추이 요약 — AI 전망 기준점]`);
+        lines.push(`  ${cagrParts.join(" | ")}`);
+        lines.push(`  → E+1 성장률 기준점: ${sign(Number(e1guide))}${e1guide}% (역사CAGR×90%), E+2: ${sign(Number(e2guide))}${e2guide}% (역사CAGR×70%)`);
+        lines.push(`  ⚠️ 이 기준점에서 크게 벗어나는 전망은 반드시 구조적 근거를 명시하세요.`);
+      }
+    } catch {
+      // 계산 실패 시 무시 — 선택적 개선 데이터
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
     const epsCols: string[][] = summary.chartEps?.columns ?? [];
     const epsTitleList: any[] = summary.chartEps?.trTitleList ?? [];
     const epsPeriods: string[] = epsCols[0]?.slice(1) ?? [];
