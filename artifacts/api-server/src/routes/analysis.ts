@@ -1054,6 +1054,106 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
     parseIncomeStatement(summary.chartIncomeStatement?.annual, "연간");
     parseIncomeStatement(summary.chartIncomeStatement?.quarter, "분기");
 
+    // ── Q확정 실적 → 연간 컨센서스 괴리 분석 (Naver 기준) ───────────────────────
+    // Q1(또는 Q1+Q2) 확정 실적이 있을 때, 단순 연환산 vs Naver 연간 컨센서스를 비교해
+    // "컨센서스 상향/하향 압력"을 수치로 주입 → AI가 전망치 조정 판단에 활용
+    try {
+      const curYear = new Date().getFullYear();
+
+      // ① 현재 연도 Naver 연간 컨센서스 추출
+      const aCols: string[][] = summary.chartIncomeStatement?.annual?.columns ?? [];
+      const aTitleList: any[] = summary.chartIncomeStatement?.annual?.trTitleList ?? [];
+      const aPeriods: string[] = aCols[0]?.slice(1) ?? [];
+      const aRevs = aCols.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
+      const aOps  = aCols.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
+      const aNets = aCols.find((c: string[]) => c[0] === "당기순이익")?.slice(1) ?? [];
+
+      let cnsRev: number | null = null;
+      let cnsOp:  number | null = null;
+      let cnsNet: number | null = null;
+      let cnsYear = curYear;
+      for (let i = 0; i < aPeriods.length; i++) {
+        const yr = parseInt(aPeriods[i].slice(0, 4), 10);
+        if (aTitleList[i]?.isConsensus === "Y" && yr === curYear) {
+          cnsRev  = aRevs[i]  ? Number(aRevs[i])  * 1e8 : null;
+          cnsOp   = aOps[i]   ? Number(aOps[i])   * 1e8 : null;
+          cnsNet  = aNets[i]  ? Number(aNets[i])  * 1e8 : null;
+          cnsYear = yr;
+          break;
+        }
+      }
+
+      // ② 현재 연도 확정 분기 매출·영업이익 합산
+      const qCols2: string[][] = summary.chartIncomeStatement?.quarter?.columns ?? [];
+      const qTList: any[] = summary.chartIncomeStatement?.quarter?.trTitleList ?? [];
+      const qPeriods2: string[] = qCols2[0]?.slice(1) ?? [];
+      const qRevs2 = qCols2.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
+      const qOps2  = qCols2.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
+      const qNets2 = qCols2.find((c: string[]) => c[0] === "당기순이익")?.slice(1) ?? [];
+
+      type QActual = { qNum: number; rev: number; op: number; net: number | null };
+      const confirmedQActuals: QActual[] = [];
+      for (let i = 0; i < qPeriods2.length; i++) {
+        const yr  = parseInt(qPeriods2[i].slice(0, 4), 10);
+        const isE = qTList[i]?.isConsensus === "Y";
+        if (!isE && yr === curYear) {
+          const rev = Number(qRevs2[i]);
+          const op  = Number(qOps2[i]);
+          if (!isNaN(rev) && rev > 0) {
+            const month = parseInt(qPeriods2[i].slice(5), 10);
+            const qNum  = month > 0 ? Math.ceil(month / 3) : 0;
+            const net   = qNets2[i] != null ? Number(qNets2[i]) : null;
+            confirmedQActuals.push({
+              qNum, rev: rev * 1e8, op: op * 1e8,
+              net: (net != null && !isNaN(net)) ? net * 1e8 : null,
+            });
+          }
+        }
+      }
+
+      // ③ 괴리 계산 및 주입
+      if (confirmedQActuals.length > 0 && cnsRev != null) {
+        const nConfirmed  = confirmedQActuals.length;
+        const sumRev      = confirmedQActuals.reduce((s, d) => s + d.rev, 0);
+        const sumOp       = confirmedQActuals.reduce((s, d) => s + d.op,  0);
+        const sumNet      = confirmedQActuals.every(d => d.net != null)
+          ? confirmedQActuals.reduce((s, d) => s + (d.net ?? 0), 0) : null;
+
+        // 단순 연환산 (계절성 보정 없음 — 방향 신호용)
+        const annRev = sumRev * (4 / nConfirmed);
+        const annOp  = sumOp  * (4 / nConfirmed);
+        const annNet = sumNet != null ? sumNet * (4 / nConfirmed) : null;
+
+        const revGap = (annRev - cnsRev) / cnsRev;
+        const opGap  = (cnsOp != null && cnsOp !== 0) ? (annOp - cnsOp) / Math.abs(cnsOp) : null;
+        const netGap = (sumNet != null && cnsNet != null && cnsNet !== 0) ? (annNet! - cnsNet) / Math.abs(cnsNet) : null;
+
+        const signal = (gap: number | null) => {
+          if (gap == null) return "";
+          if (gap > 0.15)  return " ⬆️ 강한 상향 압력";
+          if (gap > 0.07)  return " ↑ 상향 압력";
+          if (gap < -0.15) return " ⬇️ 강한 하향 압력";
+          if (gap < -0.07) return " ↓ 하향 압력";
+          return " → 컨센서스 부합";
+        };
+
+        lines.push(`\n[📊 ${cnsYear}E 컨센서스 대비 실적 괴리 분석 — Q${nConfirmed} 확정 기준]`);
+        lines.push(`  ⚠️ 단순 연환산(Q${nConfirmed}×${(4/nConfirmed).toFixed(2)}) = 계절성 무시한 방향 신호값. 계절성 보정 후 사용.`);
+        lines.push(`  확정 누계(${nConfirmed}Q): 매출 ${fmtNum(sumRev, "KRW")} | 영업이익 ${fmtNum(sumOp, "KRW")}${sumNet != null ? ` | 순이익 ${fmtNum(sumNet, "KRW")}` : ''}`);
+        lines.push(`  단순 연환산:  매출 ${fmtNum(annRev, "KRW")} | 영업이익 ${fmtNum(annOp, "KRW")}${annNet != null ? ` | 순이익 ${fmtNum(annNet, "KRW")}` : ''}`);
+        lines.push(`  Naver ${cnsYear}E 컨센서스: 매출 ${fmtNum(cnsRev, "KRW")}${cnsOp != null ? ` | 영업이익 ${fmtNum(cnsOp, "KRW")}` : ''}${cnsNet != null ? ` | 순이익 ${fmtNum(cnsNet, "KRW")}` : ''}`);
+        lines.push(`  괴리: 매출 ${revGap >= 0 ? '+' : ''}${(revGap * 100).toFixed(1)}%${signal(revGap)}${opGap != null ? `  영업이익 ${opGap >= 0 ? '+' : ''}${(opGap * 100).toFixed(1)}%${signal(opGap)}` : ''}${netGap != null ? `  순이익 ${netGap >= 0 ? '+' : ''}${(netGap * 100).toFixed(1)}%${signal(netGap)}` : ''}`);
+
+        const hasUpward   = revGap > 0.07 || (opGap != null && opGap > 0.07);
+        const hasDownward = revGap < -0.07 || (opGap != null && opGap < -0.07);
+        if (hasUpward || hasDownward) {
+          lines.push(`  ⚠️ AI 전망 조정 가이드: 확정 ${nConfirmed}Q 실적이 컨센서스를 ${hasUpward ? '상회' : '하회'}하고 있습니다.`);
+          lines.push(`     → ${cnsYear}E 연간 추정치는 컨센서스보다 ${hasUpward ? '높은 쪽' : '낮은 쪽'}에서 검토하세요.`);
+          lines.push(`     → 단, 계절성(Q별 가중) 및 하반기 업황 변수를 반드시 가감하세요. 단순 연환산은 방향 참고용.`);
+        }
+      }
+    } catch { /* ignore — optional enhancement */ }
+
     // ── 과거 연간 실적 CAGR 및 OPM 추세 사전 계산 → AI 전망 기준점 주입 ─────────
     try {
       const annCols: string[][] = summary.chartIncomeStatement?.annual?.columns ?? [];
@@ -2606,6 +2706,32 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
         lines.push(`  연간 영업이익계: ${opParts} = ${fmtNum(annualOp, currency)} (범위: ${fmtNum(annualOpLow, currency)}~${fmtNum(annualOpHigh, currency)})`);
         lines.push(`⛔⛔ 위 분기별 배분값을 출발점으로 촉매·업황 요인을 가감하세요. 이 값을 크게 벗어나려면 명시적 근거 필수.`);
         lines.push(`⛔⛔ 분기 합산이 연간 중심값(매출 ${fmtNum(annualRev, currency)}, 영업이익 ${fmtNum(annualOp, currency)}) 근방이 되도록 유지.`);
+
+        // ── 바텀업 vs Yahoo 컨센서스 괴리 ──────────────────────────────────────────
+        // earningsTrend 0y 컨센서스와 서버 바텀업을 비교해 상향/하향 압력을 명시적으로 주입
+        (() => {
+          const trendList: any[] = (result.earningsTrend as any)?.trend ?? [];
+          const yr0T = trendList.find((t: any) => t.period === "0y");
+          if (!yr0T) return;
+          const cnsR = yr0T?.revenueEstimate?.avg?.raw ?? yr0T?.revenueEstimate?.avg ?? null;
+          if (cnsR == null || cnsR <= 0 || annualRev <= 0) return;
+
+          const revGap = (annualRev - cnsR) / cnsR;
+          const gapSignal = (g: number) =>
+            g > 0.15 ? "⬆️ 강한 상향 압력(+15%↑)" :
+            g > 0.07 ? "↑ 상향 압력(+7~15%)" :
+            g < -0.15 ? "⬇️ 강한 하향 압력(-15%↑)" :
+            g < -0.07 ? "↓ 하향 압력(-7~15%)" :
+            "→ 컨센서스 부합(7% 이내)";
+
+          lines.push(`\n  📊 [바텀업 vs Yahoo 컨센서스 비교]`);
+          lines.push(`     서버 바텀업 연간 매출: ${fmtNum(annualRev, currency)} vs Yahoo 컨센서스: ${fmtNum(cnsR, currency)}`);
+          lines.push(`     매출 괴리: ${revGap >= 0 ? '+' : ''}${(revGap * 100).toFixed(1)}% → ${gapSignal(revGap)}`);
+          if (Math.abs(revGap) > 0.07) {
+            lines.push(`     → AI 가이드: 서버 바텀업(확정 실적 기반)이 컨센서스를 ${revGap > 0 ? '상회' : '하회'}. 연간 매출 추정 시 컨센서스 ${revGap > 0 ? '상향' : '하향'} 조정 검토.`);
+          }
+        })();
+
         // 흑자전환 기업 특별 경고
         if (confirmedIsProfit && annualOp > 0 && annualOpmAnchor !== null && annualOpmAnchor < 0) {
           lines.push(`⛔⛔ [흑자전환기업 추정 필수 원칙] 이 기업은 과거 적자에서 최근 흑자 전환한 기업입니다.`);
