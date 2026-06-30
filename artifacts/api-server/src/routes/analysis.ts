@@ -893,8 +893,15 @@ function naverFmt(val: string | undefined | null): number | null {
 async function fetchNaverFinanceData(code: string): Promise<{ context: string; naverSharesCalc: number | null }> {
   const cacheKey = `naver:${code}`;
   const cached = cache.get<{ context: string; naverSharesCalc: number | null }>(cacheKey);
-  if (cached) {
-    return cached;
+  if (cached) return cached;
+
+  // DB 영속 캐시 체크 — 재시작 후에도 8시간 재사용
+  const dbNaverKey = `naver_fin:${code}`;
+  const dbCached = await dbCacheGet<{ context: string; naverSharesCalc: number | null }>(dbNaverKey);
+  if (dbCached) {
+    cache.set(cacheKey, dbCached, TTL.NAVER_PRICE);
+    console.log(`[naver-fin] DB 캐시 히트: ${code}`);
+    return dbCached;
   }
 
   const lines: string[] = [];
@@ -1054,16 +1061,18 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
       const annPeriods: string[] = annCols[0]?.slice(1) ?? [];
       const annRevs = annCols.find((c: string[]) => c[0] === "매출액")?.slice(1) ?? [];
       const annOps  = annCols.find((c: string[]) => c[0] === "영업이익")?.slice(1) ?? [];
+      const annNets = annCols.find((c: string[]) => c[0] === "당기순이익")?.slice(1) ?? [];
 
       // 확정 연도만 추출 (isConsensus != Y)
-      type AnnualRow = { period: string; rev: number; op: number };
+      type AnnualRow = { period: string; rev: number; op: number; net: number | null };
       const confirmed: AnnualRow[] = [];
       annPeriods.forEach((period: string, i: number) => {
         const isE = annTitleList[i]?.isConsensus === "Y";
         if (!isE) {
           const rev = Number(annRevs[i]);
           const op  = Number(annOps[i]);
-          if (!isNaN(rev) && !isNaN(op) && rev !== 0) confirmed.push({ period, rev, op });
+          const net = annNets[i] != null ? Number(annNets[i]) : null;
+          if (!isNaN(rev) && !isNaN(op) && rev !== 0) confirmed.push({ period, rev, op, net: (net != null && !isNaN(net)) ? net : null });
         }
       });
 
@@ -1098,6 +1107,32 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
         lines.push(`  ${cagrParts.join(" | ")}`);
         lines.push(`  → E+1 성장률 기준점: ${sign(Number(e1guide))}${e1guide}% (역사CAGR×90%), E+2: ${sign(Number(e2guide))}${e2guide}% (역사CAGR×70%)`);
         lines.push(`  ⚠️ 이 기준점에서 크게 벗어나는 전망은 반드시 구조적 근거를 명시하세요.`);
+
+        // ── ticker_financials DB 저장 (Naver 확정 연간 실적) ─────────────────────
+        // fire-and-forget: 저장 실패해도 분석 진행
+        const upsertRows = confirmed.map(row => {
+          const bsnsYear = parseInt(row.period.slice(0, 4), 10);
+          const revKrw   = Math.round(row.rev * 1e8);
+          const opKrw    = Math.round(row.op  * 1e8);
+          const netKrw   = row.net != null ? Math.round(row.net * 1e8) : null;
+          return { bsnsYear, revKrw, opKrw, netKrw, period: row.period };
+        }).filter(r => !isNaN(r.bsnsYear) && r.bsnsYear >= 2010);
+
+        Promise.all(upsertRows.map(r =>
+          rawQuery(
+            `INSERT INTO ticker_financials
+               (ticker, bsns_year, reprt_code, period_label, fs_type, revenue, operating_income, net_income, fetched_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+             ON CONFLICT (ticker, bsns_year, reprt_code, fs_type) DO UPDATE
+               SET revenue = EXCLUDED.revenue,
+                   operating_income = EXCLUDED.operating_income,
+                   net_income = EXCLUDED.net_income,
+                   period_label = EXCLUDED.period_label,
+                   fetched_at = NOW()`,
+            [code, r.bsnsYear, "11011", r.period, "연결",
+             r.revKrw, r.opKrw, r.netKrw]
+          ).catch(() => {})
+        )).catch(() => {});
       }
     } catch {
       // 계산 실패 시 무시 — 선택적 개선 데이터
@@ -1203,6 +1238,8 @@ async function fetchNaverFinanceData(code: string): Promise<{ context: string; n
 
   const result = { context: lines.join("\n"), naverSharesCalc };
   cache.set(cacheKey, result, TTL.NAVER_PRICE);
+  // DB 영속 캐시 저장 (8시간 TTL) — fire-and-forget
+  dbCacheSet(dbNaverKey, result, 8 * 3600).catch(() => {});
   return result;
 }
 
@@ -1338,8 +1375,15 @@ async function computeHistoricalBeta(
 async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: DartAnchorNumerics | null): Promise<string> {
   const fcCacheKey = dartNumerics ? `financial:${resolvedSymbol}:dart` : `financial:${resolvedSymbol}`;
   const fcCached = cache.get<string>(fcCacheKey);
-  if (fcCached) {
-    return fcCached;
+  if (fcCached) return fcCached;
+
+  // DB 영속 캐시 체크 — in-memory 미스 시 DB에서 복원 (재시작 후에도 8시간 유지)
+  const dbFcKey = `fin_ctx:${fcCacheKey}`;
+  const dbFcCached = await dbCacheGet<string>(dbFcKey);
+  if (dbFcCached) {
+    cache.set(fcCacheKey, dbFcCached, TTL.YAHOO_FINANCIAL);
+    console.log(`[fin-ctx] DB 캐시 히트: ${resolvedSymbol}`);
+    return dbFcCached;
   }
 
   let result: any;
@@ -2926,6 +2970,45 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
 
   const text = lines.join("\n");
   cache.set(fcCacheKey, text, TTL.YAHOO_FINANCIAL);
+
+  // ── ticker_metric_cache 업데이트 (PBR/PER/ROE/OPM) ───────────────────────────
+  // fire-and-forget: 실패해도 분석 진행
+  try {
+    const pbr      = (ks as any)?.priceToBook ?? null;
+    const perTrail = (sd as any)?.trailingPE ?? null;
+    const perFwd   = (sd as any)?.forwardPE ?? null;
+    const evEbitda = (ks as any)?.enterpriseToEbitda ?? null;
+    const roe      = (ks as any)?.returnOnEquity ?? null;
+    const opMargin = (fd as any)?.operatingMargins ?? null;
+    const mcap     = (sd as any)?.marketCap ?? (ks as any)?.marketCap ?? null;
+    const bvShare  = (ks as any)?.bookValue ?? null;
+    const shares   = (sd as any)?.sharesOutstanding ?? null;
+    const bookVal  = (bvShare != null && shares != null) ? Math.round(bvShare * shares) : null;
+
+    if (pbr != null || perTrail != null || roe != null || opMargin != null) {
+      rawQuery(
+        `INSERT INTO ticker_metric_cache
+           (ticker, pbr, per_trailing, per_fwd, ev_ebitda, roe, operating_margin, market_cap, book_value, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         ON CONFLICT (ticker) DO UPDATE
+           SET pbr = EXCLUDED.pbr,
+               per_trailing = EXCLUDED.per_trailing,
+               per_fwd = EXCLUDED.per_fwd,
+               ev_ebitda = EXCLUDED.ev_ebitda,
+               roe = EXCLUDED.roe,
+               operating_margin = EXCLUDED.operating_margin,
+               market_cap = EXCLUDED.market_cap,
+               book_value = EXCLUDED.book_value,
+               updated_at = NOW()`,
+        [resolvedSymbol, pbr, perTrail, perFwd, evEbitda, roe, opMargin,
+         mcap != null ? Math.round(mcap) : null, bookVal]
+      ).catch(() => {});
+    }
+  } catch { /* ignore */ }
+
+  // DB 영속 캐시 저장 (8시간 TTL) — fire-and-forget
+  dbCacheSet(dbFcKey, text, 8 * 3600).catch(() => {});
+
   return text;
 }
 
@@ -3702,6 +3785,30 @@ async function rawQuery<T = any>(sqlText: string, params: any[] = []): Promise<T
   } finally {
     client.release();
   }
+}
+
+// ── DB 영속 캐시 헬퍼 (system_cache 테이블, 서버 재시작 후에도 유지) ─────────────
+async function dbCacheGet<T>(key: string): Promise<T | null> {
+  try {
+    const rows = await rawQuery<{ data: T }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW() LIMIT 1`,
+      [key]
+    );
+    if (rows[0]?.data != null) return rows[0].data as T;
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function dbCacheSet(key: string, data: any, ttlSec: number): Promise<void> {
+  try {
+    await rawQuery(
+      `INSERT INTO system_cache (key, data, expires_at)
+       VALUES ($1, $2::jsonb, NOW() + ($3 || ' seconds')::interval)
+       ON CONFLICT (key) DO UPDATE
+         SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+      [key, JSON.stringify(data), String(ttlSec)]
+    );
+  } catch { /* ignore */ }
 }
 
 function mapAnalysisRow(row: any): typeof analysesTable.$inferSelect {
