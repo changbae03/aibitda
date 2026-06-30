@@ -2523,39 +2523,50 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
             }, 0)
           : null;
 
-        // ── fwdOpmCenter 최종값: 추세 방향에 따라 연간 앵커 혼합 비율 조정 ───
-        // 상승 추세: 연간 앵커(역사 평균)로 회귀 기대 → 앵커 비중 높임
-        // 하락 추세: 추세 지속 가능성 → 앵커 비중 낮춤 (평균 회귀 편향 억제)
-        const isDeclineTrend = trendQoQ < -1; // QoQ -1%p 이상 하락이면 하락 추세 판정
+        // ── 흑자전환 여부 먼저 판정 (fwdOpmCenterRaw 계산에 필요) ────────────────
+        const confirmedIsProfit = confirmedOpmAvg !== null && confirmedOpmAvg > 2.0;
+        // 과거 적자 → 현재 흑자 전환: 역사 OPM 앵커가 구 레짐(적자기)을 반영하므로 미래 추정에 부적합
+        const isDeepTurnaround  = confirmedIsProfit && annualOpmAnchor !== null && annualOpmAnchor < 0;
+
+        // ── fwdOpmCenter 최종값: 추세 방향 + 흑자전환 여부에 따라 연간 앵커 혼합 비율 조정 ──
+        // [핵심 원칙]
+        //   흑자전환 기업: 과거 적자 OPM 앵커는 구 비즈니스 레짐 → 미래 추정 배제.
+        //                  Q1 확정 OPM이 새 베이스라인. 수주 증가·원가 구조 개선이 반영된 현재 실적 우선.
+        //   일반 기업:     역사 연간 OPM으로 평균 회귀 기대 (기존 로직 유지).
+        const isDeclineTrend = trendQoQ < -1;
         const fwdOpmCenterRaw = (() => {
           if (annualOpmAnchor === null) return fwdOpmBase;
-          if (confirmedQCount >= 2) return fwdOpmBase; // Q2 이상 확정: 확정 실적 우선
+          if (confirmedQCount >= 2)     return fwdOpmBase; // Q2 이상 확정: 확정 실적 우선
+
+          // ★ 흑자전환 기업: 과거 적자 앵커 완전 배제 — 현재 확정 Q1 OPM이 새 추정 기준
+          if (isDeepTurnaround) return fwdOpmBase;
+
           if (isDeclineTrend) {
-            // 하락 추세: 앵커 비중 낮춰 추세 반영 강화
             return confirmedQCount === 1
-              ? fwdOpmBase * 0.65 + annualOpmAnchor * 0.35  // Q1 확정+하락: 추세 65%
-              : fwdOpmBase * 0.75 + annualOpmAnchor * 0.25; // 확정 없음+하락: 추세 75%
+              ? fwdOpmBase * 0.65 + annualOpmAnchor * 0.35
+              : fwdOpmBase * 0.75 + annualOpmAnchor * 0.25;
           } else {
-            // 상승/횡보 추세: 원래 방식 유지
             return confirmedQCount === 1
-              ? fwdOpmBase * 0.35 + annualOpmAnchor * 0.65  // Q1만: 연간 앵커 65%
-              : fwdOpmBase * 0.50 + annualOpmAnchor * 0.50; // 확정 없음: 연간 앵커 50%
+              ? fwdOpmBase * 0.35 + annualOpmAnchor * 0.65
+              : fwdOpmBase * 0.50 + annualOpmAnchor * 0.50;
           }
         })();
 
-        // ── 흑자 전환 보호: 확정 OPM이 양호한데 과거 적자 추세로 fwdOpmCenter가 음수/과소가 되면 하한 보정 ──
-        // 케이스: 기업이 과거 1~2년 적자 후 최근 분기 흑자 전환. annualOpmAnchor가 음수여서
-        // fwdOpmCenter가 음수가 되고 미확정 분기가 모두 적자로 추정되는 문제 방지.
-        const confirmedIsProfit = confirmedOpmAvg !== null && confirmedOpmAvg > 2.0; // 확정 OPM이 2% 초과 흑자
+        // ── 흑자전환 보호: fwdOpmCenter가 확정 OPM 대비 과소하면 하한 보정 ──────
         let fwdOpmTurnaroundNote = "";
         const fwdOpmCenter = (() => {
-          if (!confirmedIsProfit) return fwdOpmCenterRaw; // 확정 OPM이 미미하면 보호 불필요
-          if (fwdOpmCenterRaw >= confirmedOpmAvg! * 0.15) return fwdOpmCenterRaw; // 충분히 합리적이면 유지
-          // 확정 OPM의 25%를 하한으로 설정 (계절성 감안, 하반기가 상반기보다 약한 업종도 커버)
-          const turnaroundFloor = confirmedOpmAvg! * 0.25;
+          if (!confirmedIsProfit) return fwdOpmCenterRaw;
+          if (fwdOpmCenterRaw >= confirmedOpmAvg! * 0.15) return fwdOpmCenterRaw;
+          // 흑자전환 기업: floor를 55%로 높임 (지속 수주·원가 개선 반영)
+          // 일반 흑자전환: 25% floor (계절성 감안)
+          const turnaroundFloor = isDeepTurnaround
+            ? confirmedOpmAvg! * 0.55
+            : confirmedOpmAvg! * 0.25;
           const adjusted = Math.max(fwdOpmCenterRaw, turnaroundFloor);
           if (adjusted !== fwdOpmCenterRaw) {
-            fwdOpmTurnaroundNote = ` ⚠️ [흑자전환보호] 원산출 ${fwdOpmCenterRaw.toFixed(1)}% → ${adjusted.toFixed(1)}%로 하한 보정 (확정 OPM ${confirmedOpmAvg!.toFixed(1)}%의 25% 최솟값. 과거 적자 추세가 최근 흑자 전환 실적을 과도하게 상쇄하지 않도록 조정)`;
+            fwdOpmTurnaroundNote = isDeepTurnaround
+              ? ` ⚠️ [흑자전환·레짐변화] 과거 적자 앵커 배제 후 원산출 ${fwdOpmCenterRaw.toFixed(1)}% → ${adjusted.toFixed(1)}%로 하한 보정 (확정 OPM ${confirmedOpmAvg!.toFixed(1)}%의 55% 최솟값. 수주 성장·원가 구조 개선으로 분기 실적이 지속 개선 중인 기업에 적용)`
+              : ` ⚠️ [흑자전환보호] 원산출 ${fwdOpmCenterRaw.toFixed(1)}% → ${adjusted.toFixed(1)}%로 하한 보정 (확정 OPM ${confirmedOpmAvg!.toFixed(1)}%의 25% 최솟값)`;
           }
           return adjusted;
         })();
