@@ -2591,6 +2591,12 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
         const baseQ1Rev   = confirmedQ1?.rev ?? qRevByQNum[1][0] ?? latest.rev;
         const histQ1Avg   = qRevByQNum[1].slice(0, 3).reduce((s, v, _, a) => s + v / a.length, 0) || baseQ1Rev;
 
+        // ── 구조적 회복 감지: Q1 실제가 역사 Q1 평균보다 크게 상회 시 Q1-비율법 가중치 증가 ──
+        // 이유: 전년도 침체기 Q3 베이스가 낮을 때 YoY 방식만 쓰면 Q3E < Q1 실제가 되는 역설 발생.
+        // Q1 구조적 개선폭에 비례해 Q1-비율법(현재 Q1 기준 Qn/Q1 역사비율)을 최대 50% 혼합.
+        const q1StructuralGain = histQ1Avg > 0 ? (baseQ1Rev / histQ1Avg - 1) : 0;
+        const q1RatioBlend     = Math.min(0.50, Math.max(0, q1StructuralGain * 1.5)); // 구조개선 33%→혼합 50%
+
         const estRevByQ: Record<number, number> = {};
         for (const q of remainingQtrs) {
           const prevYearRev = revMap[`${targetYear - 1}_${q}`];
@@ -2598,9 +2604,15 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
           const histQAvg    = hist.length > 0 ? hist.reduce((s, v) => s + v, 0) / hist.length : null;
 
           if (confirmedYoYGrowth !== null && prevYearRev && prevYearRev > 0) {
-            // 확정 YoY 성장률로 전년 동기에 적용 (70%) + 역사적 절대값 (30%)
+            // 주 방식: 확정 YoY 성장률 × 전년 동기
             const yoyEst = prevYearRev * (1 + confirmedYoYGrowth);
-            estRevByQ[q] = histQAvg ? yoyEst * 0.7 + histQAvg * 0.3 : yoyEst;
+            // 보조 방식: 현재 Q1 기준 역사적 Qn/Q1 비율 (구조적 회복 반영)
+            const q1RatioEst = histQAvg && histQ1Avg > 0
+              ? baseQ1Rev * (histQAvg / histQ1Avg)
+              : yoyEst;
+            // 두 방식 혼합 (q1RatioBlend: Q1 구조개선 폭에 비례)
+            const blendedEst = yoyEst * (1 - q1RatioBlend) + q1RatioEst * q1RatioBlend;
+            estRevByQ[q] = histQAvg ? blendedEst * 0.7 + histQAvg * 0.3 : blendedEst;
           } else if (histQAvg && histQ1Avg > 0) {
             // 역사적 Qn/Q1 비율 적용
             const ratio  = histQAvg / histQ1Avg;
@@ -2731,6 +2743,28 @@ async function fetchFinancialContext(resolvedSymbol: string, dartNumerics?: Dart
             lines.push(`     → AI 가이드: 서버 바텀업(확정 실적 기반)이 컨센서스를 ${revGap > 0 ? '상회' : '하회'}. 연간 매출 추정 시 컨센서스 ${revGap > 0 ? '상향' : '하향'} 조정 검토.`);
           }
         })();
+
+        // ── Q1 비수기 일관성 검토 — 계절적으로 Q1이 약한데 이후 분기가 더 낮을 때 AI에 경고 ──
+        // 한국 Q1은 동절기 비수기. 외부 공사 업종(파일링·건설·토목)에서 Q3이 Q1보다 낮으면 반직관적.
+        {
+          const q1SeasonIdx = seasonIdx[1] ?? DEFAULT_SEASONAL[1]; // Q1 계절지수 (음수 = 비수기)
+          const q1IsWeak    = q1SeasonIdx < -0.3; // Q1이 연간 평균 대비 0.3%p 이상 약한 경우
+          const q1ConfRev   = curYearConfirmed.find(d => d.qNum === 1)?.rev ?? 0;
+
+          if (q1IsWeak && confirmedQNums.has(1) && q1ConfRev > 0) {
+            const weakerQs = remainingQtrs.filter(q => (distRevByQ[q] ?? 0) < q1ConfRev * 0.95);
+            if (weakerQs.length > 0) {
+              lines.push(`\n  ⚠️ [Q1 비수기 일관성 검토] 아래 분기 매출이 Q1 확정(${fmtNum(q1ConfRev, currency)})보다 낮게 추정됩니다:`);
+              lines.push(`     해당 분기: ${weakerQs.map(q => `Q${q}E(${fmtNum(distRevByQ[q] ?? 0, currency)})`).join(', ')}`);
+              lines.push(`     원인: Q1 계절지수 ${q1SeasonIdx.toFixed(1)}%p(비수기) 업종에서, 전년도 해당 분기 침체 베이스 때문에 YoY 성장 적용 후에도 Q1보다 낮게 추정될 수 있습니다.`);
+              if (q1StructuralGain > 0.10) {
+                lines.push(`     구조적 회복 감지: Q1 실제(${fmtNum(q1ConfRev, currency)})가 역사 Q1 평균보다 ${(q1StructuralGain * 100).toFixed(0)}% 상회 → Q1-비율법 ${(q1RatioBlend * 100).toFixed(0)}% 혼합 반영됨.`);
+              }
+              lines.push(`     → AI 검토: 실외 공사·파일링 등 Q1 동절기 비수기 업종이라면 Q2~Q4가 Q1보다 높아야 정상입니다. 업종 특성 및 수주 일정을 감안해 위 추정치를 상향 조정하세요.`);
+              lines.push(`     → 한국 Q3 주의: 7~8월 장마로 외부 공사가 일시 위축될 수 있으나, 연간 기준 Q3 > Q1이 일반적.`);
+            }
+          }
+        }
 
         // 흑자전환 기업 특별 경고
         if (confirmedIsProfit && annualOp > 0 && annualOpmAnchor !== null && annualOpmAnchor < 0) {
