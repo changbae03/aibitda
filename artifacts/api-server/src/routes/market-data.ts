@@ -697,7 +697,48 @@ router.get("/search/:query", async (req, res) => {
 
   // 한글 회사명 → KRX 전체 종목 검색
   if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(query)) {
-    res.json(searchKorean(query));
+    const krxResults = searchKorean(query);
+    if (krxResults.length > 0) {
+      res.json(krxResults);
+      return;
+    }
+    // KRX 캐시 미스 → 네이버 자동완성 폴백 (신규상장 포함 전체 한국 주식 지원)
+    try {
+      const naverRes = await fetch(
+        `https://ac.stock.naver.com/ac?q=${encodeURIComponent(query)}&target=stock`,
+        { headers: { "Referer": "https://finance.naver.com/", "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
+      );
+      if (naverRes.ok) {
+        const naverData = await naverRes.json() as any;
+        const items: any[] = naverData.items ?? [];
+        const results = items
+          .filter((it: any) => it.code && it.name)
+          .slice(0, 6)
+          .map((it: any) => ({
+            symbol: `${it.code}.${it.typeCode === "KOSPI" ? "KS" : "KQ"}`,
+            shortname: it.name,
+            exchange: it.typeCode ?? "KOSDAQ",
+            quoteType: "EQUITY" as const,
+          }));
+        if (results.length > 0) { res.json(results); return; }
+      }
+    } catch { /* ignore */ }
+    // 최종 폴백: Yahoo Finance
+    try {
+      const yf = await (yahooFinance as any).search(query, { quotesCount: 8, newsCount: 0 }, { validateResult: false });
+      const yfResults = ((yf.quotes ?? []) as any[])
+        .filter((q: any) => q.quoteType === "EQUITY" && q.symbol)
+        .slice(0, 6)
+        .map((q: any) => ({
+          symbol: q.symbol,
+          shortname: q.shortname || q.longname || q.symbol,
+          exchange: q.exchange || "",
+          quoteType: "EQUITY" as const,
+        }));
+      res.json(yfResults);
+    } catch {
+      res.json([]);
+    }
     return;
   }
 

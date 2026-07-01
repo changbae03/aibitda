@@ -28,7 +28,8 @@ export async function loadKRXList(): Promise<StockEntry[]> {
       const name = cells[0].replace(/<[^>]+>/g, "").trim();
       const market = cells[1].replace(/<[^>]+>/g, "").replace(/\s+/g, "");
       const code = cells[2].replace(/<[^>]+>/g, "").trim();
-      if (!name || !/^\d{6}$/.test(code)) continue;
+      // 표준 6자리 숫자 코드 + 신규 상장 영숫자 코드(예: 0088M0) 모두 허용
+      if (!name || !/^[A-Za-z0-9]{6}$/.test(code)) continue;
       const exchange: "KOSPI" | "KOSDAQ" = market.includes("코스닥") ? "KOSDAQ" : "KOSPI";
       results.push({ name, code, symbol: `${code}${exchange === "KOSPI" ? ".KS" : ".KQ"}`, exchange });
     }
