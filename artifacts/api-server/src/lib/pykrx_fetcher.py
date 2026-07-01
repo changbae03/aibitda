@@ -361,7 +361,30 @@ def main():
                         "close":  close,
                         "volume": vol,
                         "change": change,
+                        "name":   "",
                     })
+
+            # 거래량 상위 200개 + 등락률 상위 50개 종목 이름 보완
+            # (ETN·ELW·KONEX·우선주·신규상장 등 KIND 미등재 코드 포함)
+            sorted_by_vol    = sorted(result, key=lambda x: x["volume"], reverse=True)
+            sorted_by_change = sorted(result, key=lambda x: x["change"],  reverse=True)
+            top_tickers = list(dict.fromkeys(
+                [item["ticker"] for item in sorted_by_vol[:200]] +
+                [item["ticker"] for item in sorted_by_change[:50]]
+            ))
+            extra_names = {}
+            for t in top_tickers:
+                try:
+                    name = krx.get_market_ticker_name(t)
+                    if name and name != t:
+                        extra_names[t] = name
+                except Exception:
+                    pass
+            if extra_names:
+                for item in result:
+                    if item["ticker"] in extra_names:
+                        item["name"] = extra_names[item["ticker"]]
+
             emit(result)
 
         else:

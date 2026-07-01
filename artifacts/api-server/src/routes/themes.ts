@@ -2040,7 +2040,7 @@ async function fetchSignalsData(): Promise<SignalGroup[]> {
         .slice(0, 12)
         .map(r => ({
           ticker: r.ticker,
-          name: nameMap.get(r.ticker) || r.ticker,
+          name: r.name || nameMap.get(r.ticker) || r.ticker,
           market: "KR" as const,
           changePercent: r.change,
           volume: r.volume,
@@ -2063,7 +2063,7 @@ async function fetchSignalsData(): Promise<SignalGroup[]> {
         .slice(0, 12)
         .map(r => ({
           ticker: r.ticker,
-          name: nameMap.get(r.ticker) || r.ticker,
+          name: r.name || nameMap.get(r.ticker) || r.ticker,
           market: "KR" as const,
           changePercent: r.change,
           volume: r.volume,

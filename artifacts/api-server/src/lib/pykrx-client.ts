@@ -261,6 +261,8 @@ export interface MarketOHLCVRow {
   volume: number;
   /** 등락률 (%) */
   change: number;
+  /** 종목명 — 알파뉴메릭 ETN/ELW 코드는 pykrx에서 직접 조회, 일반 종목은 "" */
+  name?: string;
 }
 
 /**
