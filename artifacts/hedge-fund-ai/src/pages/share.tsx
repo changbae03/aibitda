@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
@@ -7,6 +7,7 @@ import {
   ArrowRight, TrendingUp, TrendingDown,
   Target, Building2, Loader2, AlertCircle,
   Check, Link2, ShieldCheck, Globe2, PieChart, BarChart2, Zap, Scale,
+  Users, Database, RefreshCw, FileText, ExternalLink,
 } from "lucide-react";
 import { cn, formatCurrency, getApiUrl } from "@/lib/utils";
 import StockChart, { type ChartLevels, type ChartEvent } from "@/components/StockChart";
@@ -450,6 +451,547 @@ const STEP_ORDER = [
   "investment_strategy",
 ];
 
+// ─── 공유 페이지용 패널 컴포넌트 ──────────────────────────────────────────────
+
+function fmtNum(v: number | null | undefined, decimals = 1, suffix = ""): string {
+  if (v == null) return "N/A";
+  return `${v.toFixed(decimals)}${suffix}`;
+}
+function fmtMC(v: number | null | undefined): string {
+  if (v == null) return "N/A";
+  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+  if (v >= 1e8)  return `${(v / 1e8).toFixed(0)}억`;
+  return `${(v / 1e6).toFixed(0)}M`;
+}
+function fmtShortAmt(v: number | null): string {
+  if (v == null) return "—";
+  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}조`;
+  if (v >= 1e8)  return `${Math.round(v / 1e8)}억`;
+  if (v >= 1e4)  return `${Math.round(v / 1e4)}만`;
+  return v.toLocaleString("ko-KR");
+}
+
+// ── 피어 멀티플 ───────────────────────────────────────────────────────────────
+interface PeerMultiples { name: string; marketCap: number|null; pbr: number|null; per_trailing: number|null; per_fwd: number|null; ev_ebitda: number|null; ev_sales: number|null; roe: number|null; operating_margin: number|null; revenue: number|null; net_debt: number|null; }
+interface PeerSnapshotResponse { subject: string; collected_at: string; peers: Record<string, PeerMultiples>; averages?: Partial<PeerMultiples>; }
+
+function SharePeerMultiplesPanel({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<PeerSnapshotResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(getApiUrl(`api/peers/latest?subject=${encodeURIComponent(ticker)}`));
+      if (r.ok) setData(await r.json());
+    } catch { setData(null); }
+    finally { setLoading(false); }
+  }, [ticker]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const rows = data ? Object.entries(data.peers) : [];
+  const avg = data?.averages;
+  if (!loading && !data) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 overflow-hidden">
+      <div role="button" tabIndex={0} onClick={() => setOpen(o => !o)} onKeyDown={e => e.key === "Enter" && setOpen(o => !o)}
+        className="w-full px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 transition-colors select-none">
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-blue-400" />
+          <span className="font-semibold text-sm text-slate-200">피어 멀티플</span>
+          {data && <span className="text-[10px] text-green-400 border border-green-800/50 rounded px-1.5 py-0.5 font-medium">{rows.length}개 피어</span>}
+          {loading && <Loader2 className="w-3 h-3 animate-spin text-slate-500" />}
+        </div>
+        <div className="flex items-center gap-2">
+          {data && <span className="text-[10px] text-slate-500 hidden sm:block">수집: {new Date(data.collected_at).toLocaleDateString("ko-KR")}</span>}
+          <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); load(); }} onKeyDown={e => e.key === "Enter" && (e.stopPropagation(), load())} className="p-1 rounded hover:bg-slate-700 text-slate-500 cursor-pointer"><RefreshCw className="w-3 h-3" /></span>
+          <span className="text-slate-500 text-xs">{open ? "▲" : "▼"}</span>
+        </div>
+      </div>
+      {open && data && rows.length > 0 && (
+        <div className="border-t border-slate-700/50">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-800/60">
+                  <th className="px-3 py-2 text-left font-semibold text-slate-400 whitespace-nowrap">종목</th>
+                  <th className="px-3 py-2 text-right font-semibold text-slate-400 whitespace-nowrap">P/B</th>
+                  <th className="px-3 py-2 text-right font-semibold text-slate-400 whitespace-nowrap">P/E</th>
+                  <th className="px-2 py-2 text-right font-semibold text-slate-400 whitespace-nowrap hidden sm:table-cell">P/E Fwd</th>
+                  <th className="px-2 py-2 text-right font-semibold text-slate-400 whitespace-nowrap">EV/EBIT</th>
+                  <th className="px-3 py-2 text-right font-semibold text-slate-400 whitespace-nowrap">ROE</th>
+                  <th className="px-3 py-2 text-right font-semibold text-slate-400 whitespace-nowrap">OPM</th>
+                  <th className="px-2 py-2 text-right font-semibold text-slate-400 whitespace-nowrap hidden sm:table-cell">시총</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {rows.map(([t, p]) => (
+                  <tr key={t} className="hover:bg-slate-800/30">
+                    <td className="px-3 py-1.5 whitespace-nowrap"><span className="font-mono text-blue-400 font-medium text-[11px]">{t}</span><span className="text-slate-500 ml-1 text-[9px] hidden sm:inline">{p.name}</span></td>
+                    <td className={cn("px-3 py-1.5 text-right tabular-nums", p.pbr == null ? "text-slate-600" : "text-slate-300")}>{fmtNum(p.pbr, 2, "x")}</td>
+                    <td className={cn("px-3 py-1.5 text-right tabular-nums", p.per_trailing == null ? "text-slate-600" : "text-slate-300")}>{fmtNum(p.per_trailing, 1, "x")}</td>
+                    <td className={cn("px-2 py-1.5 text-right tabular-nums hidden sm:table-cell", p.per_fwd == null ? "text-slate-600" : "text-slate-300")}>{fmtNum(p.per_fwd, 1, "x")}</td>
+                    <td className={cn("px-2 py-1.5 text-right tabular-nums", p.ev_ebitda == null ? "text-slate-600" : "text-slate-300")}>{fmtNum(p.ev_ebitda, 1, "x")}</td>
+                    <td className={cn("px-3 py-1.5 text-right tabular-nums", p.roe == null ? "text-slate-600" : "text-slate-300")}>{fmtNum(p.roe, 1, "%")}</td>
+                    <td className={cn("px-3 py-1.5 text-right tabular-nums", p.operating_margin == null ? "text-slate-600" : "text-slate-300")}>{fmtNum(p.operating_margin, 1, "%")}</td>
+                    <td className="px-2 py-1.5 text-right text-slate-500 tabular-nums hidden sm:table-cell">{fmtMC(p.marketCap)}</td>
+                  </tr>
+                ))}
+                {avg && rows.length > 1 && (
+                  <tr className="bg-blue-950/30 font-semibold border-t border-blue-800/30">
+                    <td className="px-3 py-1.5 text-blue-400 text-[11px]">피어 평균</td>
+                    <td className="px-3 py-1.5 text-right text-blue-400 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-400 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-400 tabular-nums hidden sm:table-cell">{fmtNum(avg.per_fwd, 1, "x")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-400 tabular-nums">{fmtNum(avg.ev_ebitda, 1, "x")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-400 tabular-nums">{fmtNum(avg.roe, 1, "%")}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-400 tabular-nums">{fmtNum(avg.operating_margin, 1, "%")}</td>
+                    <td className="px-2 py-1.5 text-right text-blue-400 tabular-nums hidden sm:table-cell">{fmtMC(avg.marketCap)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-4 py-2 text-[10px] text-slate-600 border-t border-slate-800/50">실측 = Yahoo Finance 자동 수집</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 주요 공시 ─────────────────────────────────────────────────────────────────
+interface DartDisclosure { date: string; reportName: string; corpName: string; dartUrl: string; }
+function disclosureCategory(name: string): { label: string; cls: string } {
+  if (/사업보고서|분기보고서|반기보고서/.test(name)) return { label: "정기", cls: "bg-blue-900/30 text-blue-300" };
+  if (/잠정실적|실적/.test(name)) return { label: "실적", cls: "bg-emerald-900/30 text-emerald-300" };
+  if (/유상증자|무상증자/.test(name)) return { label: "증자", cls: "bg-amber-900/30 text-amber-300" };
+  if (/자기주식/.test(name)) return { label: "자사주", cls: "bg-violet-900/30 text-violet-300" };
+  if (/주요사항/.test(name)) return { label: "주요", cls: "bg-rose-900/30 text-rose-300" };
+  return { label: "", cls: "" };
+}
+
+function ShareDisclosurePanel({ ticker }: { ticker: string }) {
+  const [items, setItems] = useState<DartDisclosure[]>([]);
+  const [loading, setLoading] = useState(true);
+  const isKR = ticker.endsWith(".KS") || ticker.endsWith(".KQ") || /^\d{6}$/.test(ticker);
+
+  useEffect(() => {
+    if (!isKR) { setLoading(false); return; }
+    fetch(getApiUrl(`/api/market-data/dart-disclosures?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : [])
+      .then((d: DartDisclosure[]) => { setItems(d ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [ticker, isKR]);
+
+  if (!isKR || (!loading && items.length === 0)) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <FileText className="w-4 h-4 text-slate-500" />
+        <h2 className="text-sm font-semibold text-slate-200">주요 공시</h2>
+        <span className="text-[11px] text-slate-600">최근 90일 · DART</span>
+        {!loading && items.length > 0 && <span className="ml-auto text-[11px] font-mono text-slate-600">{items.length}</span>}
+      </div>
+      {loading ? (
+        <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="flex items-center gap-3 animate-pulse"><div className="h-3 w-16 rounded bg-slate-800 shrink-0" /><div className="h-3 rounded bg-slate-800/70 flex-1" /></div>)}</div>
+      ) : (
+        <ul className="divide-y divide-slate-800/50">
+          {items.map((item, i) => {
+            const cat = disclosureCategory(item.reportName);
+            const dp = item.date.split("-");
+            return (
+              <li key={i} className="py-2.5 first:pt-0 last:pb-0">
+                <a href={item.dartUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 group">
+                  <span className="text-[11px] font-mono text-slate-600 shrink-0 w-10">{dp.length===3 ? `${dp[1]}/${dp[2]}` : item.date}</span>
+                  <span className="text-[13px] text-slate-300 flex-1 leading-snug group-hover:text-white transition-colors line-clamp-1">{item.reportName}</span>
+                  {cat.label && <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0", cat.cls)}>{cat.label}</span>}
+                  <ExternalLink className="w-3 h-3 text-slate-700 group-hover:text-slate-400 transition-colors shrink-0" />
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── 배당 정보 ─────────────────────────────────────────────────────────────────
+interface DividendInfo { dividendRate: number|null; dividendYield: number|null; exDividendDate: string|null; payoutRatio: number|null; fiveYearAvgDividendYield: number|null; lastDividendValue: number|null; lastDividendDate: string|null; history: { date: string; amount: number }[]; }
+
+function ShareDividendPanel({ ticker }: { ticker: string }) {
+  const [info, setInfo] = useState<DividendInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const isKR = ticker.endsWith(".KS") || ticker.endsWith(".KQ") || /^\d{6}$/.test(ticker);
+
+  useEffect(() => {
+    fetch(getApiUrl(`/api/market-data/dividend-info?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: DividendInfo | null) => { setInfo(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [ticker]);
+
+  if (!loading && !info) return null;
+  const fmtDiv = (v: number | null) => v == null ? "—" : isKR ? `${Math.round(v).toLocaleString("ko-KR")}원` : `$${v.toFixed(2)}`;
+  const fmtPct = (v: number | null, mul = false) => v == null ? "—" : `${(mul ? v * 100 : v).toFixed(2)}%`;
+  const fmtDate = (d: string | null) => { if (!d) return "—"; const [,m,day] = d.split("-"); return `${parseInt(m)}/${parseInt(day)}`; };
+  const maxAmt = info?.history?.length ? Math.max(...info.history.map(h => h.amount)) : 1;
+
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-slate-500" />
+        <h2 className="text-sm font-semibold text-slate-200">배당 정보</h2>
+        {!loading && info?.dividendYield != null && (
+          <div className="ml-auto flex items-baseline gap-1">
+            <span className="text-xs text-slate-500">시가배당률</span>
+            <span className="text-sm font-semibold text-emerald-400 tabular-nums">{fmtPct(info.dividendYield, true)}</span>
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <div className="animate-pulse space-y-3"><div className="grid grid-cols-2 gap-2">{[...Array(4)].map((_,i) => <div key={i} className="bg-slate-800/50 rounded-xl h-14" />)}</div></div>
+      ) : info ? (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+            {[
+              { label: "연간 배당금", value: fmtDiv(info.dividendRate) },
+              { label: "배당락일", value: fmtDate(info.exDividendDate) },
+              { label: "배당성향", value: fmtPct(info.payoutRatio, true) },
+              { label: "5년 평균수익률", value: info.fiveYearAvgDividendYield != null ? `${info.fiveYearAvgDividendYield.toFixed(2)}%` : "—" },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-slate-800/40 rounded-xl px-3 py-2.5 text-center">
+                <div className="text-[10.5px] text-slate-500 mb-1">{label}</div>
+                <div className="text-[13px] font-semibold text-slate-200 tabular-nums">{value}</div>
+              </div>
+            ))}
+          </div>
+          {info.history.length > 0 && (
+            <div>
+              <p className="text-[10.5px] text-slate-600 mb-2">배당 이력</p>
+              <div className="flex items-end gap-1.5">
+                {info.history.map(h => {
+                  const barH = Math.max(6, (h.amount / maxAmt) * 44);
+                  return (
+                    <div key={h.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                      <span className="text-[9px] font-mono text-slate-600 tabular-nums truncate w-full text-center">{isKR ? Math.round(h.amount).toLocaleString("ko-KR") : h.amount.toFixed(2)}</span>
+                      <div className="w-full rounded-sm bg-emerald-500/40" style={{ height: `${barH}px` }} />
+                      <span className="text-[9px] text-slate-700 tabular-nums">{h.date}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// ── 공매도 현황 ───────────────────────────────────────────────────────────────
+interface ShortInfo { loanRate: number|null; loanQty: number|null; loanAmt: number|null; shortOverYn: string|null; shortSaleYn: string|null; lastShortQty: number|null; shortAmt: number|null; shortRatio: number|null; }
+
+function ShareShortPanel({ ticker }: { ticker: string }) {
+  const [info, setInfo] = useState<ShortInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const isKR = /^\d{6}$/.test(ticker) || ticker.endsWith(".KS") || ticker.endsWith(".KQ");
+
+  useEffect(() => {
+    if (!isKR) { setLoading(false); return; }
+    fetch(getApiUrl(`/api/market-data/short-info?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: ShortInfo | null) => { setInfo(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [ticker, isKR]);
+
+  if (!isKR || (!loading && !info)) return null;
+  const isOverheat = info?.shortOverYn === "Y";
+  const canShort = info?.shortSaleYn !== "N";
+  const items = [
+    { label: "대차잔고비율", value: info?.loanRate != null ? `${info.loanRate.toFixed(2)}%` : "—", hl: (info?.loanRate ?? 0) > 5 },
+    ...(info?.loanAmt != null ? [{ label: "대차잔고금액", value: fmtShortAmt(info.loanAmt), hl: false }] : []),
+    { label: "공매도잔고율", value: info?.shortRatio != null ? `${info.shortRatio.toFixed(2)}%` : "—", hl: (info?.shortRatio ?? 0) >= 2 },
+    ...(info?.shortAmt != null ? [{ label: "공매도잔고금액", value: fmtShortAmt(info.shortAmt), hl: false }] : []),
+    { label: "공매도 가능", value: canShort ? "가능" : "불가", hl: !canShort },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingDown className="w-4 h-4 text-slate-500" />
+        <h2 className="text-sm font-semibold text-slate-200">공매도 현황</h2>
+        {!loading && isOverheat && <span className="ml-auto text-xs font-semibold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">과열</span>}
+        {!loading && !isOverheat && info && <span className="ml-auto text-xs text-slate-600">정상</span>}
+      </div>
+      {loading ? (
+        <div className="grid grid-cols-4 gap-2.5 animate-pulse">{[0,1,2,3].map(i => <div key={i} className="h-12 rounded-lg bg-slate-800/50" />)}</div>
+      ) : info ? (
+        <div className={cn("grid gap-2.5", items.length <= 3 ? "grid-cols-3" : items.length === 4 ? "grid-cols-4" : "grid-cols-3 sm:grid-cols-5")}>
+          {items.map(({ label, value, hl }) => (
+            <div key={label} className="rounded-lg bg-slate-800/40 px-2 py-2.5 text-center">
+              <div className="text-[10px] text-slate-500 mb-1 leading-tight">{label}</div>
+              <div className={cn("text-sm font-semibold tabular-nums", hl ? "text-red-400" : "text-slate-200")}>{value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── 애널리스트 컨센서스 ───────────────────────────────────────────────────────
+interface AnalystConsensus { strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; total: number; recommendationKey: string|null; currency: string; targetLowPrice: number|null; targetMeanPrice: number|null; targetHighPrice: number|null; trendHistory: { period: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }[]; firmTargets: { firm: string; target: number; grade: string; date: string }[]; earningsEstimates: { period: string; epsAvg: number|null; epsLow: number|null; epsHigh: number|null; epsNumAnalysts: number|null; revAvg: number|null; revNumAnalysts: number|null }[]; }
+
+function ShareAnalystPanel({ ticker, currentPrice }: { ticker: string; currentPrice?: number | null }) {
+  const [info, setInfo] = useState<AnalystConsensus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(getApiUrl(`/api/market-data/analyst-consensus?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: AnalystConsensus | null) => { setInfo(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [ticker]);
+
+  if (!loading && !info) return null;
+  const isKRW = info?.currency === "KRW";
+  const buyCount = (info?.strongBuy ?? 0) + (info?.buy ?? 0);
+  const holdCount = info?.hold ?? 0;
+  const sellCount = (info?.sell ?? 0) + (info?.strongSell ?? 0);
+  const total = info?.total ?? 1;
+  const buyPct = Math.round((buyCount / total) * 100);
+  const holdPct = Math.round((holdCount / total) * 100);
+  const sellPct = 100 - buyPct - holdPct;
+  const keyLabel: Record<string, { label: string; color: string }> = {
+    "strong_buy": { label: "강력매수", color: "text-emerald-500" },
+    "buy": { label: "매수", color: "text-emerald-400" },
+    "hold": { label: "중립", color: "text-amber-400" },
+    "sell": { label: "매도", color: "text-red-400" },
+    "strong_sell": { label: "강력매도", color: "text-red-500" },
+  };
+  const consensus = keyLabel[info?.recommendationKey ?? ""] ?? { label: info?.recommendationKey ?? "", color: "text-slate-400" };
+  const th = info?.trendHistory ?? [];
+  const trendDiff = th.length >= 2 ? { buyDelta: (th[0].strongBuy+th[0].buy)-(th[1].strongBuy+th[1].buy), holdDelta: th[0].hold-th[1].hold, sellDelta: (th[0].sell+th[0].strongSell)-(th[1].sell+th[1].strongSell) } : null;
+  const firmTargets = (info?.firmTargets ?? []).slice(0, 10);
+  const fmtEps = (v: number | null) => v == null ? "—" : isKRW ? `${Math.round(v).toLocaleString()}원` : `$${v.toFixed(2)}`;
+  const fmtRev = (v: number | null) => { if (v == null) return "—"; if (isKRW) { const t = v/1e12; return t >= 1 ? `${t.toFixed(1)}조` : `${(v/1e8).toFixed(0)}억`; } const b = v/1e9; return b >= 1000 ? `$${(b/1000).toFixed(1)}T` : `$${b.toFixed(0)}B`; };
+  const gradeColor = (g: string) => { const l = g.toLowerCase(); if (l.includes("strong buy")||l.includes("outperform")||l.includes("overweight")) return "text-emerald-500"; if (l.includes("buy")) return "text-emerald-400"; if (l.includes("hold")||l.includes("neutral")||l.includes("market perform")) return "text-amber-400"; return "text-red-400"; };
+
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <BarChart2 className="w-4 h-4 text-slate-500" />
+        <h2 className="text-sm font-semibold text-slate-200">애널리스트 컨센서스</h2>
+        {!loading && info && <span className={cn("ml-auto text-xs font-semibold", consensus.color)}>{consensus.label}</span>}
+      </div>
+      {loading ? (
+        <div className="space-y-3 animate-pulse"><div className="h-4 rounded bg-slate-800 w-full" /><div className="h-24 rounded bg-slate-800/70" /><div className="h-20 rounded bg-slate-800/50" /></div>
+      ) : info ? (
+        <div className="space-y-3">
+          <div className="flex rounded-full overflow-hidden h-2.5 gap-0.5">
+            {buyPct > 0 && <div style={{ width: `${buyPct}%` }} className="bg-emerald-500 rounded-l-full" />}
+            {holdPct > 0 && <div style={{ width: `${holdPct}%` }} className="bg-amber-400" />}
+            {sellPct > 0 && <div style={{ width: `${sellPct}%` }} className="bg-red-400 rounded-r-full" />}
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-500">
+            <span className="text-emerald-400">매수 {buyPct}% ({buyCount})</span>
+            <span className="text-amber-400">중립 {holdPct}% ({holdCount})</span>
+            <span className="text-red-400">매도 {sellPct}% ({sellCount})</span>
+          </div>
+          {trendDiff && (trendDiff.buyDelta !== 0 || trendDiff.holdDelta !== 0 || trendDiff.sellDelta !== 0) && (
+            <div className="flex items-center gap-3 text-[10px] text-slate-600">
+              <span>전달 대비</span>
+              {trendDiff.buyDelta !== 0 && <span className={trendDiff.buyDelta > 0 ? "text-emerald-400" : "text-red-400"}>매수 {trendDiff.buyDelta > 0 ? "+" : ""}{trendDiff.buyDelta}</span>}
+              {trendDiff.holdDelta !== 0 && <span className="text-amber-400">중립 {trendDiff.holdDelta > 0 ? "+" : ""}{trendDiff.holdDelta}</span>}
+              {trendDiff.sellDelta !== 0 && <span className={trendDiff.sellDelta < 0 ? "text-emerald-400" : "text-red-400"}>매도 {trendDiff.sellDelta > 0 ? "+" : ""}{trendDiff.sellDelta}</span>}
+            </div>
+          )}
+          {isKRW && info.targetMeanPrice != null && (() => {
+            const low = info.targetLowPrice ?? info.targetMeanPrice!;
+            const mean = info.targetMeanPrice!;
+            const high = info.targetHighPrice ?? info.targetMeanPrice!;
+            const span = high - low || 1;
+            const pct = (v: number) => Math.max(0, Math.min(100, ((v - low) / span) * 100));
+            const meanPct = pct(mean);
+            const curPct = currentPrice != null ? pct(currentPrice) : null;
+            const upside = currentPrice ? ((mean - currentPrice) / currentPrice) * 100 : null;
+            const fmtK = (v: number) => v >= 10_000 ? `${parseFloat((v/10_000).toFixed(1))}만원` : `${Math.round(v).toLocaleString()}원`;
+            return (
+              <div className="pt-2 border-t border-slate-700/30 space-y-3">
+                <div className="text-[10px] text-slate-600">목표주가 분포</div>
+                <div className="relative h-10 select-none">
+                  <div className="absolute top-[18px] left-0 right-0 h-[3px] rounded-full bg-gradient-to-r from-amber-500/20 via-emerald-400/30 to-amber-500/20" />
+                  {curPct != null && <div className="absolute top-[10px] w-[2px] h-[20px] rounded-full bg-slate-400/30" style={{ left: `${curPct}%`, transform: "translateX(-50%)" }} />}
+                  <div className="absolute top-[15px] left-0 w-[7px] h-[7px] rounded-full bg-slate-600" style={{ transform: "translateX(-50%)" }} />
+                  <div className="absolute top-[15px] right-0 w-[7px] h-[7px] rounded-full bg-slate-600" style={{ transform: "translateX(50%)" }} />
+                  <div className="absolute top-[12px] w-[13px] h-[13px] rounded-sm bg-emerald-500 border-2 border-slate-900 shadow rotate-45" style={{ left: `${meanPct}%`, transform: `translateX(-50%) rotate(45deg)` }} />
+                  <div className="absolute top-0 text-[9px] font-semibold text-emerald-400 whitespace-nowrap" style={{ left: `${meanPct}%`, transform: "translateX(-50%)" }}>컨센서스</div>
+                </div>
+                <div className="flex justify-between items-start">
+                  <div><div className="text-[9px] text-slate-600">최저</div><div className="text-[10px] font-medium tabular-nums text-slate-400">{fmtK(low)}</div></div>
+                  <div className="text-center">
+                    <div className="text-[11px] font-bold tabular-nums text-slate-200">{fmtK(mean)}</div>
+                    {upside != null && <div className={cn("text-[10px] font-semibold", upside >= 0 ? "text-emerald-400" : "text-red-400")}>{upside >= 0 ? "+" : ""}{upside.toFixed(1)}%</div>}
+                    {currentPrice != null && <div className="text-[9px] text-slate-600">현재가 대비</div>}
+                  </div>
+                  <div className="text-right"><div className="text-[9px] text-slate-600">최고</div><div className="text-[10px] font-medium tabular-nums text-slate-400">{fmtK(high)}</div></div>
+                </div>
+              </div>
+            );
+          })()}
+          {!isKRW && firmTargets.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-slate-700/30">
+              <div className="text-[10px] text-slate-600 mb-1.5">기관별 목표주가</div>
+              {firmTargets.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px]">
+                  <span className={cn("shrink-0 text-[9px] font-medium", gradeColor(f.grade))}>{f.grade || "—"}</span>
+                  <span className="flex-1 truncate text-slate-400">{f.firm}</span>
+                  <span className="shrink-0 text-slate-600">{f.date.slice(5)}</span>
+                  <span className="shrink-0 tabular-nums font-semibold text-slate-300">${f.target}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!isKRW && (info.earningsEstimates ?? []).length > 0 && (
+            <div className="pt-1 border-t border-slate-700/30">
+              <div className="text-[10px] text-slate-600 mb-2">실적 전망</div>
+              <div className="grid grid-cols-2 gap-2">
+                {(info.earningsEstimates ?? []).map(e => (
+                  <div key={e.period} className="rounded-lg bg-slate-800/40 px-3 py-2.5 space-y-1.5">
+                    <div className="text-[10px] font-semibold text-slate-500">{e.period === "0y" ? "올해" : "내년"}</div>
+                    <div className="flex justify-between items-baseline"><span className="text-[10px] text-slate-600">EPS</span><span className="text-xs font-semibold tabular-nums text-slate-200">{fmtEps(e.epsAvg)}</span></div>
+                    {e.revAvg != null && <div className="flex justify-between items-baseline border-t border-slate-700/20 pt-1"><span className="text-[10px] text-slate-600">매출</span><span className="text-xs font-semibold tabular-nums text-slate-200">{fmtRev(e.revAvg)}</span></div>}
+                    {e.epsNumAnalysts != null && <div className="text-[9px] text-slate-700 text-right">{e.epsNumAnalysts}명</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="text-[10px] text-slate-700 text-right">{info.total}명 애널리스트</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── 주요 주주 현황 ────────────────────────────────────────────────────────────
+interface MajorShareholders { insidersPercent: number|null; institutionsPercent: number|null; institutionsCount: number|null; topInstitutions: { name: string; pctHeld: number; pctChange: number|null; reportDate: string|null }[]; dartHolders: { name: string; relate: string; pct: number; shares: number }[]; insiderActivity: { period: string; buyCount: number; buyShares: number; sellCount: number; sellShares: number; netShares: number; totalInsider: number } | null; recentInsiderTrades: { name: string; relation: string; shares: number; value: number; date: string|null; text: string }[]; }
+
+function ShareShareholdersPanel({ ticker }: { ticker: string }) {
+  const [info, setInfo] = useState<MajorShareholders | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(getApiUrl(`/api/market-data/major-shareholders?ticker=${encodeURIComponent(ticker)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then((d: MajorShareholders | null) => { setInfo(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [ticker]);
+
+  if (!loading && !info) return null;
+  const retailPct = info ? Math.max(0, 100 - (info.insidersPercent ?? 0) * 100 - (info.institutionsPercent ?? 0) * 100) : 0;
+  const relateLabel = (r: string) => { if (r.includes("최대주주 본인")) return "최대주주"; if (r.includes("특수관계인")) return "특수관계인"; if (r.includes("계열회사")) return "계열사"; if (r.includes("5%")) return "5% 이상"; if (r.includes("임원")) return "임원"; return r; };
+  const fmtShares = (n: number) => { if (n >= 1e8) return `${(n/1e8).toFixed(1)}억주`; if (n >= 1e4) return `${Math.round(n/1e4)}만주`; return `${n.toLocaleString()}주`; };
+  const isSale = (t: string) => /sale/i.test(t);
+  const isPurchase = (t: string) => /purchase|acquisition/i.test(t);
+
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Users className="w-4 h-4 text-slate-500" />
+        <h2 className="text-sm font-semibold text-slate-200">주요 주주 현황</h2>
+        {!loading && info?.institutionsCount != null && <span className="ml-auto text-xs text-slate-600">{info.institutionsCount.toLocaleString()}개 기관</span>}
+      </div>
+      {loading ? (
+        <div className="space-y-2 animate-pulse"><div className="h-4 rounded bg-slate-800 w-full" /><div className="h-20 rounded bg-slate-800/70" /></div>
+      ) : info ? (
+        <div className="space-y-3">
+          {(info.insidersPercent != null || info.institutionsPercent != null) && (() => {
+            const insPct = Math.round((info.insidersPercent ?? 0) * 100 * 10) / 10;
+            const instPct = Math.round((info.institutionsPercent ?? 0) * 100 * 10) / 10;
+            const retPct = Math.round(retailPct * 10) / 10;
+            return (
+              <div className="space-y-1.5">
+                <div className="flex rounded-full overflow-hidden h-2 gap-0.5">
+                  {insPct > 0 && <div style={{ width: `${insPct}%` }} className="bg-violet-500" />}
+                  {instPct > 0 && <div style={{ width: `${instPct}%` }} className="bg-blue-500" />}
+                  {retPct > 0 && <div style={{ width: `${retPct}%` }} className="bg-slate-700/60 rounded-r-full" />}
+                </div>
+                <div className="flex gap-3 text-[10px] text-slate-500">
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-violet-500 mr-1" />내부자 {insPct}%</span>
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1" />기관 {instPct}%</span>
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-slate-600 mr-1" />소액주주 {retPct}%</span>
+                </div>
+              </div>
+            );
+          })()}
+          {(info.dartHolders ?? []).length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-slate-700/30">
+              <div className="text-[10px] text-slate-600 mb-1.5">임원·주요주주 소유현황 (DART)</div>
+              {(info.dartHolders ?? []).map((h, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0"><span className="text-xs text-slate-300 truncate">{h.name}</span><span className="ml-1.5 text-[10px] text-slate-600">{relateLabel(h.relate)}</span></div>
+                  <div className="text-[10px] text-slate-600 shrink-0 tabular-nums">{fmtShares(h.shares)}</div>
+                  <div className="text-xs font-semibold tabular-nums text-slate-300 shrink-0 w-12 text-right">{h.pct.toFixed(2)}%</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {(info.dartHolders ?? []).length === 0 && info.topInstitutions.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-slate-700/30">
+              <div className="text-[10px] text-slate-600 mb-1.5">주요 기관</div>
+              {info.topInstitutions.map((h, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 text-xs text-slate-300 truncate">{h.name}</div>
+                  <div className="text-xs font-semibold tabular-nums text-slate-300 shrink-0">{h.pctHeld.toFixed(2)}%</div>
+                  {h.pctChange != null && <div className={cn("text-[10px] tabular-nums shrink-0 w-10 text-right", h.pctChange > 0 ? "text-emerald-400" : h.pctChange < 0 ? "text-red-400" : "text-slate-600")}>{h.pctChange > 0 ? "▲" : h.pctChange < 0 ? "▼" : "─"}{Math.abs(h.pctChange).toFixed(2)}%</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {info.insiderActivity && (
+            <div className="pt-1 border-t border-slate-700/30 space-y-2">
+              <div className="text-[10px] text-slate-600">내부자 거래 현황 ({info.insiderActivity.period})</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-emerald-500/8 px-2.5 py-2 text-center">
+                  <div className="text-[10px] text-slate-600 mb-0.5">매수</div>
+                  <div className="text-sm font-semibold text-emerald-400 tabular-nums">{info.insiderActivity.buyCount}건</div>
+                  <div className="text-[10px] text-slate-600">{(info.insiderActivity.buyShares/1000).toFixed(0)}K주</div>
+                </div>
+                <div className="rounded-lg bg-red-400/8 px-2.5 py-2 text-center">
+                  <div className="text-[10px] text-slate-600 mb-0.5">매도</div>
+                  <div className="text-sm font-semibold text-red-400 tabular-nums">{info.insiderActivity.sellCount}건</div>
+                  <div className="text-[10px] text-slate-600">{(info.insiderActivity.sellShares/1000).toFixed(0)}K주</div>
+                </div>
+              </div>
+              {info.recentInsiderTrades.length > 0 && (
+                <div className="space-y-1">
+                  {info.recentInsiderTrades.slice(0, 5).map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px]">
+                      <span className={cn("shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold", isPurchase(t.text) ? "bg-emerald-500/15 text-emerald-400" : isSale(t.text) ? "bg-red-400/15 text-red-400" : "bg-slate-800 text-slate-500")}>
+                        {isPurchase(t.text) ? "매수" : isSale(t.text) ? "매도" : "기타"}
+                      </span>
+                      <span className="flex-1 truncate text-slate-400">{t.name}</span>
+                      <span className="shrink-0 text-slate-600">{t.relation?.split(" ")[0]}</span>
+                      <span className="shrink-0 tabular-nums text-slate-400">{t.shares >= 1000 ? `${(t.shares/1000).toFixed(0)}K` : t.shares}</span>
+                      {t.date && <span className="shrink-0 text-slate-700">{t.date.slice(5)}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SharePage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -755,6 +1297,22 @@ export default function SharePage() {
                 ticker={analysis.ticker}
                 companyName={analysis.companyName}
               />
+            </div>
+
+            {/* ── 데이터 패널 섹션 ── */}
+            <div className="mt-5 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-slate-800" />
+                <span className="text-slate-500 text-[11px] font-medium tracking-widest uppercase">실시간 데이터</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+
+              <ShareDisclosurePanel ticker={analysis.ticker} />
+              <ShareDividendPanel ticker={analysis.ticker} />
+              <ShareShortPanel ticker={analysis.ticker} />
+              <ShareAnalystPanel ticker={analysis.ticker} currentPrice={analysis.startPrice ?? analysis.entryPrice ?? null} />
+              <ShareShareholdersPanel ticker={analysis.ticker} />
+              <SharePeerMultiplesPanel ticker={analysis.ticker} />
             </div>
 
             {/* CTA */}
