@@ -80,9 +80,44 @@ interface RiskScore {
   sectorConcentration: string;
   correlationRisk: string;
 }
+interface RiskContributionItem {
+  ticker: string;
+  companyName: string;
+  volatilityTier: "high" | "medium" | "low";
+  beta: number;
+  riskSharePct: number;
+  note: string;
+}
+interface VarMdd {
+  var95: string;
+  mddEstimate: string;
+  worstCaseScenario: string;
+}
+interface CatalystItem {
+  ticker: string;
+  companyName: string;
+  thesisCore: string;
+  catalystStatus: "진행중" | "달성" | "훼손" | "미달성";
+  nextMilestone: string;
+  hardStop: string;
+}
+interface PositionSizingItem {
+  ticker: string;
+  companyName: string;
+  currentWeightPct: number;
+  suggestedWeightPct: number;
+  action: "reduce" | "hold" | "increase" | "exit";
+  rationale: string;
+}
 interface PortfolioReviewResult {
   stockUpdates: StockUpdate[];
   riskScore: RiskScore | null;
+  riskContributions: RiskContributionItem[];
+  varMdd: VarMdd | null;
+  catalystTracking: CatalystItem[];
+  positionSizing: PositionSizingItem[];
+  liquidityRisk: string;
+  correlationAlert: string;
   portfolioView: string;
   concentration: string;
   rebalancing: string;
@@ -1558,6 +1593,20 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                   <p className="text-[10.5px] font-medium text-foreground/35 mb-2.5 tracking-wide">{children}</p>
                 );
 
+                // ── 촉매 상태 색상 ──────────────────────────────────────
+                const catalystCfg: Record<string, { cls: string; label: string }> = {
+                  "진행중":  { cls: "text-sky-400 bg-sky-500/10 border-sky-500/20", label: "진행중" },
+                  "달성":    { cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", label: "달성" },
+                  "훼손":    { cls: "text-red-400 bg-red-500/10 border-red-500/20", label: "훼손" },
+                  "미달성":  { cls: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "미달성" },
+                };
+                const sizingCfg: Record<string, { cls: string; arrow: string }> = {
+                  reduce:   { cls: "text-red-400",     arrow: "↓" },
+                  increase: { cls: "text-emerald-400", arrow: "↑" },
+                  hold:     { cls: "text-foreground/35", arrow: "—" },
+                  exit:     { cls: "text-red-500",     arrow: "✕" },
+                };
+
                 return (
                   <div className="divide-y divide-border/10">
 
@@ -1567,32 +1616,20 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                       <div className="space-y-1.5">
                         {sellGroup.length > 0 && (
                           <div className="flex items-baseline gap-3">
-                            <span className="text-[10.5px] text-red-400/80 font-medium shrink-0 w-[52px]">
-                              {isEn ? "Sell" : "매도검토"}
-                            </span>
-                            <span className="text-[13px] text-foreground/80 leading-snug font-medium">
-                              {sellGroup.map(s => s.companyName).join("  ·  ")}
-                            </span>
+                            <span className="text-[10.5px] text-red-400/80 font-medium shrink-0 w-[52px]">{isEn ? "Sell" : "매도검토"}</span>
+                            <span className="text-[13px] text-foreground/80 leading-snug font-medium">{sellGroup.map(s => s.companyName).join("  ·  ")}</span>
                           </div>
                         )}
                         {buyGroup.length > 0 && (
                           <div className="flex items-baseline gap-3">
-                            <span className="text-[10.5px] text-emerald-400/80 font-medium shrink-0 w-[52px]">
-                              {isEn ? "Add" : "추가매수"}
-                            </span>
-                            <span className="text-[13px] text-foreground/80 leading-snug font-medium">
-                              {buyGroup.map(s => s.companyName).join("  ·  ")}
-                            </span>
+                            <span className="text-[10.5px] text-emerald-400/80 font-medium shrink-0 w-[52px]">{isEn ? "Add" : "추가매수"}</span>
+                            <span className="text-[13px] text-foreground/80 leading-snug font-medium">{buyGroup.map(s => s.companyName).join("  ·  ")}</span>
                           </div>
                         )}
                         {holdGroup.length > 0 && (
                           <div className="flex items-baseline gap-3">
-                            <span className="text-[10.5px] text-foreground/25 font-medium shrink-0 w-[52px]">
-                              {isEn ? "Hold" : "홀드"}
-                            </span>
-                            <span className="text-[12px] text-foreground/40 leading-snug">
-                              {holdGroup.map(s => s.companyName).join("  ·  ")}
-                            </span>
+                            <span className="text-[10.5px] text-foreground/25 font-medium shrink-0 w-[52px]">{isEn ? "Hold" : "홀드"}</span>
+                            <span className="text-[12px] text-foreground/40 leading-snug">{holdGroup.map(s => s.companyName).join("  ·  ")}</span>
                           </div>
                         )}
                       </div>
@@ -1610,24 +1647,18 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                               if (!w) return null;
                               const ret = w.returnPct;
                               const contribution = ret != null ? (w.pct / 100) * ret : null;
-                              const retColor = ret == null ? "text-foreground/30"
-                                : ret > 0 ? "text-red-400" : ret < 0 ? "text-blue-400" : "text-foreground/30";
+                              const retColor = ret == null ? "text-foreground/30" : ret > 0 ? "text-red-400" : ret < 0 ? "text-blue-400" : "text-foreground/30";
                               return (
                                 <div key={h.ticker} className="flex items-center gap-2.5">
                                   <span className="text-[11.5px] text-foreground/60 w-[88px] truncate shrink-0">{h.companyName}</span>
                                   <div className="flex-1 h-[3px] bg-foreground/[0.06] rounded-full overflow-hidden">
-                                    <div
-                                      className={cn("h-full rounded-full", ret == null ? "bg-foreground/15" : ret > 0 ? "bg-red-400/50" : ret < 0 ? "bg-blue-400/50" : "bg-foreground/15")}
-                                      style={{ width: `${Math.min(w.pct, 100)}%` }}
-                                    />
+                                    <div className={cn("h-full rounded-full", ret == null ? "bg-foreground/15" : ret > 0 ? "bg-red-400/50" : ret < 0 ? "bg-blue-400/50" : "bg-foreground/15")} style={{ width: `${Math.min(w.pct, 100)}%` }} />
                                   </div>
                                   <span className="text-[10.5px] text-foreground/35 w-7 text-right shrink-0 tabular-nums">{w.pct.toFixed(0)}%</span>
                                   {ret != null && (
                                     <span className={cn("text-[10.5px] font-medium w-16 text-right shrink-0 tabular-nums", retColor)}>
                                       {ret >= 0 ? "+" : ""}{ret.toFixed(1)}%
-                                      {contribution != null && (
-                                        <span className="text-[9px] text-foreground/25 font-normal"> ({contribution >= 0 ? "+" : ""}{contribution.toFixed(1)}p)</span>
-                                      )}
+                                      {contribution != null && <span className="text-[9px] text-foreground/25 font-normal"> ({contribution >= 0 ? "+" : ""}{contribution.toFixed(1)}p)</span>}
                                     </span>
                                   )}
                                 </div>
@@ -1637,47 +1668,90 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                       </div>
                     )}
 
-                    {/* ③ 종목별 점검 */}
+                    {/* ③ 위험 기여도 분석 (Risk Parity) */}
+                    {review.riskContributions && review.riskContributions.length > 0 && (
+                      <div className="px-5 py-4">
+                        <div className="flex items-center justify-between mb-2.5">
+                          <SectionLabel>{isEn ? "Risk contribution (Risk Parity)" : "위험 기여도 분석"}</SectionLabel>
+                          <span className="text-[9.5px] text-foreground/25">자본비중 ≠ 위험비중</span>
+                        </div>
+                        <div className="space-y-2">
+                          {[...review.riskContributions]
+                            .sort((a, b) => b.riskSharePct - a.riskSharePct)
+                            .map(r => {
+                              const capW = weightMap[r.ticker]?.pct ?? r.riskSharePct;
+                              const riskW = r.riskSharePct;
+                              const diff = riskW - capW;
+                              const volColor = r.volatilityTier === "high" ? "text-red-400" : r.volatilityTier === "low" ? "text-blue-400" : "text-amber-400/70";
+                              return (
+                                <div key={r.ticker} className="flex items-center gap-2">
+                                  <span className="text-[11px] text-foreground/55 w-[80px] truncate shrink-0">{r.companyName}</span>
+                                  <div className="flex-1 flex gap-1 items-center">
+                                    <div className="flex-1 h-[3px] bg-foreground/[0.05] rounded-full overflow-hidden relative">
+                                      <div className="h-full bg-foreground/20 rounded-full absolute" style={{ width: `${Math.min(capW, 100)}%` }} />
+                                      <div className="h-full bg-amber-400/60 rounded-full absolute" style={{ width: `${Math.min(riskW, 100)}%`, opacity: 0.8 }} />
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] text-foreground/30 tabular-nums w-8 text-right shrink-0">{capW.toFixed(0)}%</span>
+                                  <span className="text-[9px] text-foreground/20 shrink-0">→</span>
+                                  <span className={cn("text-[10.5px] font-medium tabular-nums w-9 text-right shrink-0", diff > 3 ? "text-amber-400" : diff < -3 ? "text-sky-400" : "text-foreground/45")}>{riskW.toFixed(0)}%</span>
+                                  <span className={cn("text-[9px] w-5 text-right shrink-0 tabular-nums", volColor)}>β{r.beta.toFixed(1)}</span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                        <p className="text-[10px] text-foreground/25 mt-2">{isEn ? "Gray: capital weight · Amber: risk weight" : "회색: 자본비중 · 황색: 위험기여도 — 차이가 클수록 위험 쏠림"}</p>
+                      </div>
+                    )}
+
+                    {/* ④ VaR & MDD */}
+                    {review.varMdd && (
+                      <div className="px-5 py-4">
+                        <SectionLabel>{isEn ? "VaR & MDD estimate" : "VaR · MDD 추정"}</SectionLabel>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="rounded-xl bg-red-500/[0.05] border border-red-500/15 px-3 py-2.5">
+                            <p className="text-[9.5px] text-foreground/30 mb-1 tracking-wide uppercase">95% VaR (1M)</p>
+                            <p className="text-[14px] font-bold text-red-400/80 tabular-nums leading-tight">{review.varMdd.var95}</p>
+                            <p className="text-[10px] text-foreground/30 mt-0.5">95% 신뢰수준 최대 손실</p>
+                          </div>
+                          <div className="rounded-xl bg-orange-500/[0.05] border border-orange-500/15 px-3 py-2.5">
+                            <p className="text-[9.5px] text-foreground/30 mb-1 tracking-wide uppercase">MDD Estimate</p>
+                            <p className="text-[14px] font-bold text-orange-400/80 tabular-nums leading-tight">{review.varMdd.mddEstimate.split("약 ")[1]?.split(" ")[0] ?? review.varMdd.mddEstimate.slice(0, 12)}</p>
+                            <p className="text-[10px] text-foreground/30 mt-0.5">예상 최대 낙폭</p>
+                          </div>
+                        </div>
+                        {review.varMdd.worstCaseScenario && (
+                          <div className="flex gap-2 items-start">
+                            <span className="text-[9.5px] text-foreground/25 shrink-0 mt-0.5">최악 시나리오</span>
+                            <p className="text-[11.5px] text-foreground/55 leading-relaxed">{review.varMdd.worstCaseScenario}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ⑤ 종목별 점검 */}
                     <div className="px-5 pt-4 pb-3">
                       <SectionLabel>{isEn ? "Stock updates" : "종목별 점검"}</SectionLabel>
                       <div className="space-y-4">
                         {review.stockUpdates.map(s => {
-                          const borderColor = s.action === "매도검토" ? "border-red-400/35"
-                            : s.action === "추가매수" ? "border-emerald-400/35"
-                            : "border-border/20";
-                          const sentimentText = s.sentiment === "bullish"
-                            ? (isEn ? "bullish" : "강세")
-                            : s.sentiment === "bearish"
-                            ? (isEn ? "bearish" : "약세")
-                            : (isEn ? "neutral" : "중립");
-                          const sentimentColor = s.sentiment === "bullish" ? "text-red-400/70"
-                            : s.sentiment === "bearish" ? "text-blue-400/70"
-                            : "text-foreground/30";
-                          const thesisText = s.thesisStatus === "훼손" ? (isEn ? "thesis impaired" : "thesis 훼손")
-                            : s.thesisStatus === "일부변화" ? (isEn ? "thesis shifting" : "thesis 변화")
-                            : null;
+                          const borderColor = s.action === "매도검토" ? "border-red-400/35" : s.action === "추가매수" ? "border-emerald-400/35" : "border-border/20";
+                          const sentimentText = s.sentiment === "bullish" ? (isEn ? "bullish" : "강세") : s.sentiment === "bearish" ? (isEn ? "bearish" : "약세") : (isEn ? "neutral" : "중립");
+                          const sentimentColor = s.sentiment === "bullish" ? "text-red-400/70" : s.sentiment === "bearish" ? "text-blue-400/70" : "text-foreground/30";
+                          const thesisText = s.thesisStatus === "훼손" ? (isEn ? "thesis impaired" : "thesis 훼손") : s.thesisStatus === "일부변화" ? (isEn ? "thesis shifting" : "thesis 변화") : null;
                           return (
                             <div key={s.ticker} className={cn("pl-3.5 border-l-[2px]", borderColor)}>
-                              {/* 종목명 + 메타 */}
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-[13px] font-semibold text-foreground/85">{s.companyName}</span>
                                 <span className="text-[10px] text-foreground/25 font-mono">{s.ticker}</span>
                                 <span className={cn("text-[10px] ml-auto shrink-0", sentimentColor)}>{sentimentText}</span>
-                                {thesisText && (
-                                  <span className="text-[10px] text-amber-400/60 shrink-0">{thesisText}</span>
-                                )}
+                                {thesisText && <span className="text-[10px] text-amber-400/60 shrink-0">{thesisText}</span>}
                               </div>
-                              {/* thesis 변화 노트 */}
                               {s.thesisChangeNote && s.thesisChangeNote !== "주요 thesis 변화 없음" && (
                                 <p className="text-[11px] text-foreground/45 italic mb-1.5 leading-snug">{s.thesisChangeNote}</p>
                               )}
-                              {/* 핵심 이벤트 */}
                               {s.keyEvent && (
-                                <p className="text-[11px] text-foreground/40 mb-1.5 leading-snug">
-                                  <span className="text-foreground/20 mr-1">—</span>{s.keyEvent}
-                                </p>
+                                <p className="text-[11px] text-foreground/40 mb-1.5 leading-snug"><span className="text-foreground/20 mr-1">—</span>{s.keyEvent}</p>
                               )}
-                              {/* 분석 */}
                               <p className="text-[12px] text-foreground/65 leading-relaxed">{s.update}</p>
                             </div>
                           );
@@ -1685,35 +1759,107 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                       </div>
                     </div>
 
-                    {/* ④ 리스크 */}
-                    {review.riskScore && (
+                    {/* ⑥ Catalyst Tracker */}
+                    {review.catalystTracking && review.catalystTracking.length > 0 && (
                       <div className="px-5 py-4">
-                        <SectionLabel>{isEn ? "Risk" : "리스크"}</SectionLabel>
-                        <p className="text-[12.5px] text-foreground/70 leading-relaxed">
-                          <span className={cn("font-semibold", gc.cls.split(" ")[0])}>
-                            {grade}{isEn ? "-grade" : "등급"} ({gc.label.split(" — ")[1]})
-                          </span>
-                          {" — "}{review.riskScore.sectorConcentration}
-                        </p>
-                        {review.riskScore.correlationRisk && (
-                          <p className="text-[12px] text-foreground/45 leading-relaxed mt-1">{review.riskScore.correlationRisk}</p>
-                        )}
+                        <SectionLabel>{isEn ? "Catalyst tracker & hard stop" : "Catalyst Tracker · Hard Stop"}</SectionLabel>
+                        <div className="space-y-3">
+                          {review.catalystTracking.map(c => {
+                            const cfg = catalystCfg[c.catalystStatus] ?? catalystCfg["진행중"];
+                            return (
+                              <div key={c.ticker} className="rounded-xl bg-foreground/[0.025] border border-border/20 px-3.5 py-3">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <span className="text-[12.5px] font-semibold text-foreground/80">{c.companyName}</span>
+                                  <span className={cn("text-[9.5px] font-medium px-1.5 py-0.5 rounded-md border", cfg.cls)}>{cfg.label}</span>
+                                </div>
+                                <p className="text-[11px] text-foreground/50 leading-snug mb-2 italic">{c.thesisCore}</p>
+                                <div className="space-y-1.5">
+                                  <div className="flex gap-2 items-start">
+                                    <span className="text-[9.5px] text-sky-400/60 shrink-0 mt-0.5 w-[52px]">다음 체크</span>
+                                    <p className="text-[11.5px] text-foreground/60 leading-snug">{c.nextMilestone}</p>
+                                  </div>
+                                  <div className="flex gap-2 items-start">
+                                    <span className="text-[9.5px] text-red-400/60 shrink-0 mt-0.5 w-[52px]">Hard Stop</span>
+                                    <p className="text-[11.5px] text-red-400/70 leading-snug">{c.hardStop}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
-                    {/* ⑤ 종합 평가 */}
+                    {/* ⑦ 포지션 사이징 (Kelly Criterion) */}
+                    {review.positionSizing && review.positionSizing.length > 0 && (
+                      <div className="px-5 py-4">
+                        <div className="flex items-center justify-between mb-2.5">
+                          <SectionLabel>{isEn ? "Position sizing (Kelly)" : "포지션 사이징 (Kelly)"}</SectionLabel>
+                          <span className="text-[9.5px] text-foreground/25">현재 → 권고 비중</span>
+                        </div>
+                        <div className="space-y-2">
+                          {review.positionSizing.map(p => {
+                            const cfg = sizingCfg[p.action] ?? sizingCfg.hold;
+                            const diff = p.suggestedWeightPct - p.currentWeightPct;
+                            return (
+                              <div key={p.ticker}>
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-[11.5px] text-foreground/65 w-[80px] truncate shrink-0">{p.companyName}</span>
+                                  <span className="text-[10.5px] text-foreground/35 tabular-nums shrink-0">{p.currentWeightPct.toFixed(1)}%</span>
+                                  <span className={cn("text-[11px] font-bold shrink-0", cfg.cls)}>{cfg.arrow}</span>
+                                  <span className={cn("text-[11px] font-semibold tabular-nums shrink-0", cfg.cls)}>{p.suggestedWeightPct.toFixed(1)}%</span>
+                                  {Math.abs(diff) >= 1 && (
+                                    <span className={cn("text-[9.5px] tabular-nums ml-auto shrink-0", diff > 0 ? "text-emerald-400/60" : "text-red-400/60")}>
+                                      {diff > 0 ? "+" : ""}{diff.toFixed(1)}%p
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10.5px] text-foreground/35 leading-snug pl-[88px]">{p.rationale}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ⑧ 리스크 등급 + 공분산 + 유동성 */}
+                    <div className="px-5 py-4 space-y-3">
+                      {review.riskScore && (
+                        <div>
+                          <SectionLabel>{isEn ? "Risk grade" : "리스크 등급"}</SectionLabel>
+                          <p className="text-[12.5px] text-foreground/70 leading-relaxed">
+                            <span className={cn("font-semibold", gc.cls.split(" ")[0])}>{grade}등급 ({gc.label.split(" — ")[1]})</span>
+                            {" — "}{review.riskScore.sectorConcentration}
+                          </p>
+                        </div>
+                      )}
+                      {review.correlationAlert && (
+                        <div>
+                          <p className="text-[10.5px] text-foreground/30 mb-1 tracking-wide font-medium">{isEn ? "COVARIANCE RISK" : "공분산 리스크"}</p>
+                          <p className="text-[12px] text-foreground/55 leading-relaxed">{review.correlationAlert}</p>
+                        </div>
+                      )}
+                      {review.liquidityRisk && (
+                        <div>
+                          <p className="text-[10.5px] text-foreground/30 mb-1 tracking-wide font-medium">{isEn ? "LIQUIDITY" : "유동성 감시"}</p>
+                          <p className="text-[12px] text-foreground/55 leading-relaxed">{review.liquidityRisk}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ⑨ 종합 평가 */}
                     <div className="px-5 py-4">
                       <SectionLabel>{isEn ? "Overall view" : "종합 평가"}</SectionLabel>
                       <p className="text-[12.5px] text-foreground/70 leading-relaxed">{review.portfolioView}</p>
                     </div>
 
-                    {/* ⑥ 리밸런싱 제안 */}
+                    {/* ⑩ 리밸런싱 제안 */}
                     <div className="px-5 py-4">
-                      <SectionLabel>{isEn ? "Rebalancing" : "리밸런싱 제안"}</SectionLabel>
+                      <SectionLabel>{isEn ? "Rule-based rebalancing" : "룰 기반 리밸런싱"}</SectionLabel>
                       <p className="text-[12.5px] text-foreground/70 leading-relaxed">{review.rebalancing}</p>
                     </div>
 
-                    {/* ⑦ 섹터 보완 추천 */}
+                    {/* ⑪ 섹터 보완 추천 */}
                     {review.sectorRecommendations.length > 0 && (
                       <div className="px-5 py-4">
                         <SectionLabel>{isEn ? "Sectors to consider" : "고려할 섹터"}</SectionLabel>
@@ -1723,9 +1869,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                               <div className="flex items-baseline gap-2 mb-0.5">
                                 <span className="text-[12.5px] font-semibold text-foreground/75">{rec.sector}</span>
                                 {rec.exampleTickers.length > 0 && (
-                                  <span className="text-[10px] text-foreground/30 font-mono">
-                                    {rec.exampleTickers.join(" · ")}
-                                  </span>
+                                  <span className="text-[10px] text-foreground/30 font-mono">{rec.exampleTickers.join(" · ")}</span>
                                 )}
                               </div>
                               <p className="text-[12px] text-foreground/55 leading-relaxed">{rec.reason}</p>
@@ -1742,11 +1886,7 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
                           ? `Gemini AI · ${new Date(review.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
                           : `Gemini AI · ${new Date(review.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`}
                       </span>
-                      <button
-                        onClick={runReview}
-                        disabled={loading}
-                        className="flex items-center gap-1 text-[10px] text-foreground/20 hover:text-foreground/50 transition-colors"
-                      >
+                      <button onClick={runReview} disabled={loading} className="flex items-center gap-1 text-[10px] text-foreground/20 hover:text-foreground/50 transition-colors">
                         <RefreshCw className="w-2.5 h-2.5" />
                         {isEn ? "Rerun" : "다시 실행"}
                       </button>

@@ -1360,20 +1360,38 @@ router.post("/portfolio/review", async (req, res) => {
       })
     );
 
-    // 3) 프롬프트 컨텍스트 생성 — 종목별 뉴스 + 분석 thesis 포함
+    // 3) 자본 비중 계산 (현재가 × 수량)
+    const totalValue = holdingDetails.reduce((sum, h) => {
+      const val = (h.currentPrice ?? h.avgPrice ?? 0) * 1; // quantity not in holdingDetails from DB query
+      return sum + val;
+    }, 0);
+    // 실제론 quantity가 있으므로 재계산
+    const weightedDetails = holdingDetails.map(h => {
+      const qty = holdingRows.find((r: any) => r.ticker === h.ticker)?.quantity ?? 0;
+      const val = (h.currentPrice ?? h.avgPrice ?? 0) * parseFloat(qty || 0);
+      return { ...h, qty: parseFloat(qty || 0), marketValue: val };
+    });
+    const totalMarketValue = weightedDetails.reduce((s, h) => s + h.marketValue, 0);
+    const withWeights = weightedDetails.map(h => ({
+      ...h,
+      capitalWeightPct: totalMarketValue > 0 ? (h.marketValue / totalMarketValue) * 100 : null,
+    }));
+
+    // 4) 프롬프트 컨텍스트 생성 — 종목별 뉴스 + 분석 thesis + 비중 포함
     const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
 
-    const holdingsSummary = holdingDetails.map(h => {
+    const holdingsSummary = withWeights.map(h => {
       const priceStr = h.currentPrice != null
         ? `${h.currentPrice.toLocaleString("ko-KR")} ${h.currency}`
         : "조회 불가";
       const returnStr = h.returnPct != null ? `${h.returnPct >= 0 ? "+" : ""}${h.returnPct.toFixed(1)}%` : "미기록";
       const upsideStr = h.upsidePct != null ? `${h.upsidePct >= 0 ? "+" : ""}${h.upsidePct.toFixed(1)}%` : "—";
       const daysStr = h.daysSinceAnalysis != null ? `(분석 후 ${h.daysSinceAnalysis}일 경과)` : "";
+      const weightStr = h.capitalWeightPct != null ? `${h.capitalWeightPct.toFixed(1)}%` : "미집계";
 
       return `### ${h.companyName} (${h.ticker})
 [현황]
-- 현재가: ${priceStr} | 매입 대비 수익률: ${returnStr}
+- 현재가: ${priceStr} | 매입 대비 수익률: ${returnStr} | 포트폴리오 자본 비중: ${weightStr}
 - AI 판정: ${h.verdict ?? "없음"} | 목표가 대비 업사이드: ${upsideStr}
 - 마지막 분석일: ${h.analysisDate ?? "없음"} ${daysStr}
 
@@ -1386,20 +1404,18 @@ router.post("/portfolio/review", async (req, res) => {
 ${h.recentNews}`;
     }).join("\n\n---\n\n");
 
-    // 현재 포트폴리오 섹터 목록 (Gemini에 전달)
-    const sectorList = holdingDetails
-      .map(h => h.verdict ? `${h.companyName}` : h.companyName)
-      .join(", ");
+    const sectorList = withWeights.map(h => h.companyName).join(", ");
+    const tickerList = withWeights.map(h => h.ticker);
 
-    // 4) Gemini 호출 — 종목별 + 포트폴리오 종합 분석 + 섹터 추천
-    const prompt = `당신은 시니어 포트폴리오 매니저입니다. 오늘은 ${today}입니다.
+    // 5) Gemini 호출 — 헤지펀드 PM 스타일 포트폴리오 리뷰
+    const prompt = `당신은 월스트리트 헤지펀드의 시니어 포트폴리오 매니저(PM)입니다. 오늘은 ${today}입니다.
 
-아래는 투자자의 포트폴리오 전체 보유 종목에 대한 상세 정보입니다.
-각 종목별로 분석 당시 thesis(촉매·리스크·전략)와 그 이후 실제 발생한 뉴스가 함께 제공됩니다.
+아래는 투자자의 포트폴리오 전체 보유 종목 상세 정보입니다.
+각 종목별로 ① 현재가·수익률·자본비중, ② 분석 당시 투자 thesis(촉매·리스크·전략), ③ 그 이후 실제 발생한 뉴스가 함께 제공됩니다.
 
 ${holdingsSummary}
 
-위 정보를 바탕으로 다음 JSON 형식으로 포트폴리오 리뷰를 작성하세요.
+실제 헤지펀드 PM처럼 다음 모든 섹션을 포함한 JSON으로 포트폴리오 리뷰를 작성하세요.
 stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니다.
 
 **출력 형식 (JSON만 출력, 다른 텍스트 없이):**
@@ -1408,42 +1424,82 @@ stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니�
     {
       "ticker": "종목코드",
       "companyName": "회사명",
-      "sentiment": "bullish 또는 neutral 또는 bearish — 뉴스와 현재 상황을 종합한 단기 sentiment",
-      "thesisStatus": "유효 또는 일부변화 또는 훼손 — 분석 당시 thesis가 현재도 유효한지",
-      "keyEvent": "분석 이후 발생한 가장 중요한 단일 뉴스/이벤트를 1문장으로 (없으면 빈 문자열)",
-      "update": "① 분석 이후 주요 뉴스 흐름 요약 ② 이 뉴스가 thesis(촉매/리스크)에 미친 영향 ③ 현재 시점에서 주목해야 할 포인트 — 3-4문장으로",
-      "action": "매도검토 또는 홀드 또는 추가매수 — thesis 훼손+약세면 매도검토, 유효+강세면 추가매수, 그 외 홀드",
-      "thesisChangeNote": "분석 당시 thesis에서 현재까지 가장 중요한 변화 1문장 (변화 없으면 '주요 thesis 변화 없음')"
+      "sentiment": "bullish 또는 neutral 또는 bearish",
+      "thesisStatus": "유효 또는 일부변화 또는 훼손",
+      "keyEvent": "분석 이후 가장 중요한 단일 뉴스/이벤트 1문장 (없으면 빈 문자열)",
+      "update": "① 분석 이후 주요 뉴스 흐름 요약 ② thesis(촉매/리스크)에 미친 영향 ③ 지금 주목할 포인트 — 3-4문장",
+      "action": "매도검토 또는 홀드 또는 추가매수",
+      "thesisChangeNote": "thesis 가장 중요한 변화 1문장 (변화 없으면 '주요 thesis 변화 없음')"
     }
   ],
   "riskScore": {
-    "grade": "A 또는 B 또는 C 또는 D — 포트폴리오 전체 리스크 등급 (A:우수, B:양호, C:주의, D:위험)",
-    "sectorConcentration": "섹터 집중도 분석 — 특정 섹터 쏠림 여부, 헥스핀달 수준 (1-2문장)",
-    "correlationRisk": "종목 간 상관관계 리스크 — 동반 하락 가능성, 분산 효과 실질 여부 (1문장)"
+    "grade": "A 또는 B 또는 C 또는 D",
+    "sectorConcentration": "섹터 집중도 분석 1-2문장",
+    "correlationRisk": "종목 간 상관관계 리스크 1문장"
   },
-  "portfolioView": "전체 포트폴리오 종합 평가 — 현재 시장 환경, 섹터 노출, 전체적인 방향성 (3-4문장)",
-  "concentration": "종목·섹터 집중도 분석, 상관관계 리스크, 분산 수준 평가 (2-3문장)",
-  "rebalancing": "구체적 행동 제안 — 비중 조절, 손절 검토, 추가매수 기회, 우선순위 순 (3-4문장)",
+  "riskContributions": [
+    {
+      "ticker": "종목코드",
+      "companyName": "회사명",
+      "volatilityTier": "high 또는 medium 또는 low — 종목의 역사적 변동성 수준",
+      "beta": "숫자 — 시장(코스피 또는 S&P500) 대비 베타 추정치 (소수점 1자리)",
+      "riskSharePct": "숫자 — 이 종목이 포트폴리오 전체 변동성에 기여하는 비중(%) 추정. 자본비중 × 베타 기준으로 정규화. 합산 100이 되도록",
+      "note": "이 종목의 리스크 특성 10자 이내"
+    }
+  ],
+  "varMdd": {
+    "var95": "1개월 기준 95% 신뢰수준 VaR 추정 — '약 -X% ~ -Y%' 형식으로",
+    "mddEstimate": "현재 포트폴리오 구성상 예상 최대낙폭(MDD) 추정 — '약 -X% ~ -Y%' 형식, 주요 시나리오 포함 1-2문장",
+    "worstCaseScenario": "포트폴리오 전체가 가장 크게 타격받을 수 있는 구체적 시나리오 1문장 (예: 반도체 수출 규제 강화 + 엔 약세 동시 발생 등)"
+  },
+  "catalystTracking": [
+    {
+      "ticker": "종목코드",
+      "companyName": "회사명",
+      "thesisCore": "진입 당시 핵심 thesis 한 줄 요약",
+      "catalystStatus": "진행중 또는 달성 또는 훼손 또는 미달성",
+      "nextMilestone": "다음 확인해야 할 구체적 촉매/이벤트 1문장",
+      "hardStop": "이 조건이 달성되면 기계적으로 포지션을 청산해야 하는 Hard Stop 조건 1문장"
+    }
+  ],
+  "positionSizing": [
+    {
+      "ticker": "종목코드",
+      "companyName": "회사명",
+      "currentWeightPct": "숫자 — 현재 자본 비중(%)",
+      "suggestedWeightPct": "숫자 — Kelly Criterion 기반 권고 비중(%). 현재 포트폴리오 내 승률·손익비 반영",
+      "action": "reduce 또는 hold 또는 increase 또는 exit",
+      "rationale": "조정 근거 — 현재 비중과 권고 비중 차이, Kelly 판단 기준 1-2문장"
+    }
+  ],
+  "liquidityRisk": "포트폴리오 전체 유동성 평가 — 긴급 청산 시 소요 영업일, 대형주·소형주 구분, 슬리피지 위험 1-2문장",
+  "correlationAlert": "종목 간 공분산 리스크 — 동일 섹터/팩터 노출로 인한 동반 하락 가능성, 실질 분산 효과 여부 2-3문장",
+  "portfolioView": "전체 포트폴리오 종합 평가 — 현재 시장 환경, 섹터 노출, 전체 방향성 3-4문장",
+  "concentration": "종목·섹터 집중도, 상관관계 리스크, 분산 수준 평가 2-3문장",
+  "rebalancing": "룰 기반 리밸런싱 제안 — 비중 이탈 종목, 손절 검토, 추가매수 기회, 분할 집행 권고 3-4문장",
   "sectorRecommendations": [
     {
-      "sector": "추천 섹터명 (예: 방산, 헬스케어, 금융, 에너지 등)",
-      "reason": "현재 포트폴리오와 보완 관계가 있는 이유 + 현재 시장 환경에서 매력적인 이유 (2-3문장)",
-      "exampleTickers": ["대표 종목 1 (종목명+코드)", "대표 종목 2 (종목명+코드)"]
+      "sector": "추천 섹터명",
+      "reason": "현재 포트폴리오와 보완 관계 + 현재 시장 환경 매력 이유 2-3문장",
+      "exampleTickers": ["대표 종목 1 (종목명+코드)", "대표 종목 2"]
     }
   ]
 }
 
 주의사항:
-- sectorRecommendations는 현재 포트폴리오(${sectorList})에 없는 섹터를 2-3개 추천
-- keyEvent가 없으면 빈 문자열("")로 작성
+- sectorRecommendations는 현재 포트폴리오(${sectorList})에 없는 섹터 2-3개 추천
+- riskContributions의 riskSharePct는 합산이 100이 되도록 정규화
+- positionSizing의 currentWeightPct는 위에 제공된 자본 비중을 사용
+- catalystTracking은 모든 보유 종목 포함
 - action 기준: thesis 훼손+bearish → 매도검토, thesis 유효+bullish → 추가매수, 그 외 → 홀드
-- 모든 내용은 한국어, 투자자에게 직접 말하듯 구체적이고 실용적으로`;
+- 모든 내용은 한국어, PM이 직접 투자자에게 말하듯 구체적·실용적으로
+- beta와 riskSharePct, currentWeightPct, suggestedWeightPct는 반드시 숫자(number)로`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
-        maxOutputTokens: 5000,
+        maxOutputTokens: 8000,
         temperature: 0.5,
         thinkingConfig: { thinkingBudget: 0 },
       },
@@ -1479,6 +1535,45 @@ stockUpdates는 보유 중인 모든 종목을 빠짐없이 포함해야 합니�
             correlationRisk: parsed.riskScore.correlationRisk ?? "",
           }
         : null,
+      riskContributions: Array.isArray(parsed.riskContributions)
+        ? parsed.riskContributions.map((r: any) => ({
+            ticker: r.ticker ?? "",
+            companyName: r.companyName ?? "",
+            volatilityTier: r.volatilityTier ?? "medium",
+            beta: typeof r.beta === "number" ? r.beta : parseFloat(r.beta) || 1.0,
+            riskSharePct: typeof r.riskSharePct === "number" ? r.riskSharePct : parseFloat(r.riskSharePct) || 0,
+            note: r.note ?? "",
+          }))
+        : [],
+      varMdd: parsed.varMdd
+        ? {
+            var95: parsed.varMdd.var95 ?? "",
+            mddEstimate: parsed.varMdd.mddEstimate ?? "",
+            worstCaseScenario: parsed.varMdd.worstCaseScenario ?? "",
+          }
+        : null,
+      catalystTracking: Array.isArray(parsed.catalystTracking)
+        ? parsed.catalystTracking.map((c: any) => ({
+            ticker: c.ticker ?? "",
+            companyName: c.companyName ?? "",
+            thesisCore: c.thesisCore ?? "",
+            catalystStatus: c.catalystStatus ?? "진행중",
+            nextMilestone: c.nextMilestone ?? "",
+            hardStop: c.hardStop ?? "",
+          }))
+        : [],
+      positionSizing: Array.isArray(parsed.positionSizing)
+        ? parsed.positionSizing.map((p: any) => ({
+            ticker: p.ticker ?? "",
+            companyName: p.companyName ?? "",
+            currentWeightPct: typeof p.currentWeightPct === "number" ? p.currentWeightPct : parseFloat(p.currentWeightPct) || 0,
+            suggestedWeightPct: typeof p.suggestedWeightPct === "number" ? p.suggestedWeightPct : parseFloat(p.suggestedWeightPct) || 0,
+            action: p.action ?? "hold",
+            rationale: p.rationale ?? "",
+          }))
+        : [],
+      liquidityRisk: parsed.liquidityRisk ?? "",
+      correlationAlert: parsed.correlationAlert ?? "",
       portfolioView: parsed.portfolioView ?? "",
       concentration: parsed.concentration ?? "",
       rebalancing: parsed.rebalancing ?? "",
