@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import YahooFinance from "yahoo-finance2";
-import { loadKRXList, getKRXCache, type StockEntry } from "../lib/krx-cache";
+import { loadKRXList, getKRXCache, lookupKoreanName, type StockEntry } from "../lib/krx-cache";
 import { GoogleGenAI } from "@google/genai";
 import { pool } from "@workspace/db";
 import { cache } from "../lib/mem-cache";
@@ -715,15 +715,17 @@ router.get("/search/:query", async (req, res) => {
       if (ksQ.status === "fulfilled") {
         const sym = `${query}.KS`;
         const yahooName = ksQ.value.longName || ksQ.value.shortName || "";
-        const name = DISPLAY_NAME_OVERRIDE.get(sym) || yahooName;
-        const englishName = (DISPLAY_NAME_OVERRIDE.has(sym) && yahooName && yahooName !== name) ? yahooName : undefined;
+        const koreanName = DISPLAY_NAME_OVERRIDE.get(sym) ?? lookupKoreanName(query);
+        const name = koreanName || yahooName;
+        const englishName = koreanName && yahooName && yahooName !== name ? yahooName : undefined;
         if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, englishName, exchange: "KOSPI", quoteType: "EQUITY" });
       }
       if (kqQ.status === "fulfilled") {
         const sym = `${query}.KQ`;
         const yahooName = kqQ.value.longName || kqQ.value.shortName || "";
-        const name = DISPLAY_NAME_OVERRIDE.get(sym) || yahooName;
-        const englishName = (DISPLAY_NAME_OVERRIDE.has(sym) && yahooName && yahooName !== name) ? yahooName : undefined;
+        const koreanName = DISPLAY_NAME_OVERRIDE.get(sym) ?? lookupKoreanName(query);
+        const name = koreanName || yahooName;
+        const englishName = koreanName && yahooName && yahooName !== name ? yahooName : undefined;
         if (isValidName(name, sym)) results.push({ symbol: sym, shortname: name, englishName, exchange: "KOSDAQ", quoteType: "EQUITY" });
       }
       // Fallback: if Yahoo returned nothing, still try local map
@@ -769,9 +771,15 @@ router.get("/search/:query", async (req, res) => {
           else if (exchange === "NMS" || exchange === "NGM" || exchange === "NCM") exchange = "NASDAQ";
           else if (exchange === "NYQ" || exchange === "NYS") exchange = "NYSE";
           else if (exchange === "ASE" || exchange === "AMX") exchange = "AMEX";
+          const yahooName = q.longname || q.shortname || q.symbol;
+          // 한국 종목: KRX 한국어명 우선 (Yahoo는 영문명만 반환)
+          const isKrStock = q.symbol.endsWith(".KS") || q.symbol.endsWith(".KQ");
+          const krCode = isKrStock ? q.symbol.replace(/\.(KS|KQ)$/, "") : null;
+          const koreanName = krCode ? (DISPLAY_NAME_OVERRIDE.get(q.symbol) ?? lookupKoreanName(krCode)) : null;
           return {
             symbol: q.symbol,
-            shortname: q.longname || q.shortname || q.symbol,
+            shortname: koreanName || yahooName,
+            englishName: koreanName ? yahooName : undefined,
             exchange,
             quoteType: "EQUITY",
           };

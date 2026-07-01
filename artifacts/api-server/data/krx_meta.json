@@ -1,6 +1,6 @@
 {
   "lastTrained": "2026-06-14T15:12:39.537Z",
-  "lastUpdated": "2026-06-30T15:45:44.495Z",
+  "lastUpdated": "2026-07-01T00:26:10.599Z",
   "nSamples": {
     "kospi": 729,
     "kosdaq": 729,
@@ -25,5 +25,5 @@
     "snp500": 60,
     "nasdaq": 65
   },
-  "updateCount": 9
+  "updateCount": 10
 }
