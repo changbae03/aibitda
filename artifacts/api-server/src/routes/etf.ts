@@ -356,4 +356,219 @@ ${holdingStr}
   }
 });
 
+// ─── GET /api/etf/fund-flow ───────────────────────────────────────────────────
+// 주요 국내·해외 ETF의 보유 종목을 집계해 스마트머니 흐름을 반환
+// 캐시: 2시간
+
+const KR_FLOW_ETFS = [
+  // 국내 주요 섹터 ETF (레버리지·인버스 제외)
+  { code: "069500", sector: "국내주식",   name: "KODEX 200" },
+  { code: "229200", sector: "코스닥",     name: "KODEX 코스닥150" },
+  { code: "091160", sector: "반도체",     name: "KODEX 반도체" },
+  { code: "395160", sector: "반도체",     name: "KODEX AI반도체TOP2+" },
+  { code: "305720", sector: "2차전지",    name: "KODEX 2차전지산업" },
+  { code: "305540", sector: "2차전지",    name: "TIGER 2차전지테마" },
+  { code: "143460", sector: "헬스케어",   name: "TIGER 헬스케어" },
+  { code: "266420", sector: "헬스케어",   name: "KODEX 헬스케어" },
+  { code: "266370", sector: "IT",         name: "KODEX IT" },
+  { code: "133690", sector: "해외(미국)", name: "TIGER 미국나스닥100" },
+  { code: "379800", sector: "해외(미국)", name: "KODEX 미국S&P500TR" },
+  { code: "381180", sector: "반도체(글로벌)", name: "TIGER 미국필라델피아반도체" },
+  { code: "292150", sector: "배당",       name: "TIGER KRX고배당" },
+  { code: "495850", sector: "밸류업",     name: "KODEX 코리아밸류업" },
+  { code: "102780", sector: "국내주식",   name: "KODEX 삼성그룹" },
+];
+
+const US_FLOW_ETFS = [
+  { code: "SPY",  sector: "미국시장",     name: "SPDR S&P 500 ETF" },
+  { code: "QQQ",  sector: "미국나스닥",   name: "Invesco QQQ" },
+  { code: "SMH",  sector: "미국반도체",   name: "VanEck Semiconductor" },
+  { code: "SOXX", sector: "미국반도체",   name: "iShares Semiconductor" },
+  { code: "XLV",  sector: "미국헬스케어", name: "Health Care Select SPDR" },
+  { code: "XLF",  sector: "미국금융",     name: "Financial Select SPDR" },
+  { code: "XLE",  sector: "미국에너지",   name: "Energy Select SPDR" },
+  { code: "ITA",  sector: "미국방산",     name: "iShares Aerospace & Defense" },
+  { code: "ARKK", sector: "미국혁신",     name: "ARK Innovation ETF" },
+];
+
+interface FlowStock {
+  code: string;
+  name: string;
+  etfCount: number;
+  totalWeight: number;
+  avgWeight: number;
+  etfs: string[];
+}
+
+interface SectorConc {
+  sector: string;
+  etfCount: number;
+  avgWeight: number;
+  topStock: string;
+}
+
+router.get("/etf/fund-flow", async (_req, res) => {
+  try {
+    const FLOW_TTL = 2 * 60 * 60_000;
+    const hit = cache.get("fund-flow");
+    if (hit && Date.now() - hit.ts < FLOW_TTL) {
+      res.json(hit.data);
+      return;
+    }
+
+    // 국내 ETF 보유 종목 집계
+    const krResults = await Promise.allSettled(
+      KR_FLOW_ETFS.map(async (etfMeta) => {
+        const { holdings } = await getEtfHoldings(etfMeta.code);
+        return { etfMeta, holdings };
+      })
+    );
+
+    // 해외 ETF 보유 종목 집계
+    const usResults = await Promise.allSettled(
+      US_FLOW_ETFS.map(async (etfMeta) => {
+        const { holdings } = await getEtfHoldings(etfMeta.code);
+        return { etfMeta, holdings };
+      })
+    );
+
+    // 국내 집계
+    const krMap = new Map<string, { name: string; totalWeight: number; etfs: string[]; sectors: string[] }>();
+    let krEtfOk = 0;
+    for (const r of krResults) {
+      if (r.status !== "fulfilled" || r.value.holdings.length < 3) continue;
+      krEtfOk++;
+      const { etfMeta, holdings } = r.value;
+      // 해외 ETF(미국 집중)는 해외 집계로 분리
+      if (etfMeta.sector.startsWith("해외")) {
+        // 한국 상장이지만 미국 주식을 담는 ETF는 US 집계로
+        for (const h of holdings.slice(0, 15)) {
+          const key = h.stockCode;
+          const prev = krMap.get(key);
+          if (prev) {
+            prev.totalWeight += h.weight;
+            prev.etfs.push(etfMeta.name);
+            if (!prev.sectors.includes(etfMeta.sector)) prev.sectors.push(etfMeta.sector);
+          } else {
+            krMap.set(key, { name: h.stockName, totalWeight: h.weight, etfs: [etfMeta.name], sectors: [etfMeta.sector] });
+          }
+        }
+      } else {
+        for (const h of holdings.slice(0, 20)) {
+          const key = h.stockCode;
+          const prev = krMap.get(key);
+          if (prev) {
+            prev.totalWeight += h.weight;
+            prev.etfs.push(etfMeta.name);
+            if (!prev.sectors.includes(etfMeta.sector)) prev.sectors.push(etfMeta.sector);
+          } else {
+            krMap.set(key, { name: h.stockName, totalWeight: h.weight, etfs: [etfMeta.name], sectors: [etfMeta.sector] });
+          }
+        }
+      }
+    }
+
+    // 해외 집계
+    const usMap = new Map<string, { name: string; totalWeight: number; etfs: string[]; sectors: string[] }>();
+    let usEtfOk = 0;
+    for (const r of usResults) {
+      if (r.status !== "fulfilled" || r.value.holdings.length < 3) continue;
+      usEtfOk++;
+      const { etfMeta, holdings } = r.value;
+      for (const h of holdings.slice(0, 15)) {
+        const key = h.stockCode;
+        const prev = usMap.get(key);
+        if (prev) {
+          prev.totalWeight += h.weight;
+          prev.etfs.push(etfMeta.name);
+          if (!prev.sectors.includes(etfMeta.sector)) prev.sectors.push(etfMeta.sector);
+        } else {
+          usMap.set(key, { name: h.stockName, totalWeight: h.weight, etfs: [etfMeta.name], sectors: [etfMeta.sector] });
+        }
+      }
+    }
+
+    // Top 20 정렬 — ETF 편입 수 → 총비중 순
+    const toTopList = (map: typeof krMap): FlowStock[] =>
+      [...map.entries()]
+        .map(([code, v]) => ({
+          code,
+          name: v.name,
+          etfCount: v.etfs.length,
+          totalWeight: Math.round(v.totalWeight * 10) / 10,
+          avgWeight: Math.round((v.totalWeight / v.etfs.length) * 10) / 10,
+          etfs: [...new Set(v.etfs)],
+        }))
+        .sort((a, b) => b.etfCount - a.etfCount || b.totalWeight - a.totalWeight)
+        .slice(0, 20);
+
+    const krTopStocks = toTopList(krMap);
+    const usTopStocks = toTopList(usMap);
+
+    // 섹터별 집중도 계산
+    const sectorMap = new Map<string, { etfCodes: Set<string>; totalWeights: number[]; topStocks: string[] }>();
+    for (const r of krResults) {
+      if (r.status !== "fulfilled" || r.value.holdings.length < 3) continue;
+      const { etfMeta, holdings } = r.value;
+      const s = etfMeta.sector;
+      const prev = sectorMap.get(s);
+      const top3 = holdings.slice(0, 3).map(h => h.stockName);
+      if (prev) {
+        prev.etfCodes.add(etfMeta.code);
+        prev.totalWeights.push(holdings.slice(0, 10).reduce((sum, h) => sum + h.weight, 0));
+        top3.forEach(n => { if (!prev.topStocks.includes(n)) prev.topStocks.push(n); });
+      } else {
+        sectorMap.set(s, {
+          etfCodes: new Set([etfMeta.code]),
+          totalWeights: [holdings.slice(0, 10).reduce((sum, h) => sum + h.weight, 0)],
+          topStocks: top3,
+        });
+      }
+    }
+    const sectorConcentration: SectorConc[] = [...sectorMap.entries()]
+      .map(([sector, v]) => ({
+        sector,
+        etfCount: v.etfCodes.size,
+        avgWeight: Math.round(v.totalWeights.reduce((a, b) => a + b, 0) / v.totalWeights.length),
+        topStock: v.topStocks[0] ?? "",
+      }))
+      .sort((a, b) => b.etfCount - a.etfCount);
+
+    // 테마 집중도 (0~100 수치)
+    const themeGroups: { key: string; label: string; emoji: string; sectors: string[] }[] = [
+      { key: "semiconductor", label: "반도체·AI",  emoji: "🔧", sectors: ["반도체", "반도체(글로벌)", "IT"] },
+      { key: "battery",       label: "2차전지·EV", emoji: "⚡", sectors: ["2차전지"] },
+      { key: "healthcare",    label: "헬스케어·바이오", emoji: "🧬", sectors: ["헬스케어"] },
+      { key: "us_market",     label: "미국 시장",  emoji: "🌐", sectors: ["해외(미국)"] },
+      { key: "domestic",      label: "국내 대형주", emoji: "🏢", sectors: ["국내주식", "밸류업", "배당"] },
+      { key: "kosdaq",        label: "코스닥·성장", emoji: "📈", sectors: ["코스닥"] },
+    ];
+
+    const totalKrEtfs = krEtfOk || 1;
+    const themeBreakdown = themeGroups.map(g => {
+      const matchingEtfs = KR_FLOW_ETFS.filter(e => g.sectors.includes(e.sector));
+      const okCount = krResults.filter(
+        r => r.status === "fulfilled" && r.value.holdings.length >= 3
+          && g.sectors.includes(r.value.etfMeta.sector)
+      ).length;
+      const score = Math.round((okCount / Math.max(matchingEtfs.length, 1)) * 100);
+      return { ...g, etfCount: okCount, totalEtfs: matchingEtfs.length, score };
+    });
+
+    const payload = {
+      krTopStocks,
+      usTopStocks,
+      sectorConcentration,
+      themeBreakdown,
+      coverageStats: { krEtfCount: krEtfOk, usEtfCount: usEtfOk },
+      updatedAt: new Date().toISOString(),
+    };
+
+    cache.set("fund-flow", { data: payload, ts: Date.now() });
+    res.json(payload);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "fund-flow error" });
+  }
+});
+
 export default router;
