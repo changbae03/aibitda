@@ -10,6 +10,8 @@ import {
   Building2, Globe, ArrowUpDown, Brain, Sparkles,
   Flame, Target, Activity, X, ChevronDown,
   Package, DollarSign, Landmark, ExternalLink,
+  Plus, Minus, ArrowUp, ArrowDown, GitCommitHorizontal,
+  BarChart2, Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, getApiUrl } from "@/lib/utils";
@@ -2507,10 +2509,313 @@ function FundFlowTab() {
   );
 }
 
+// ─── ETF 리밸런싱 탭 ──────────────────────────────────────────────────────────
+
+interface RebalStock {
+  ticker: string; name: string; etfs: string[];
+  weight: number; delta?: number; region: "KR" | "US"; sector: string;
+}
+interface SectorMove {
+  sector: string; region: "KR" | "US"; etfCount: number;
+  direction: "up" | "down"; delta: number; topStocks: string[];
+}
+interface RebalancingData {
+  newEntries: RebalStock[]; exits: RebalStock[];
+  bigBuys: RebalStock[]; bigSells: RebalStock[];
+  sectorMoves: SectorMove[];
+  etfsAnalyzed: number; etfsWithChanges: number;
+  hasChanges: boolean; updatedAt: string;
+}
+
+function RebalancingTab() {
+  const [data, setData]             = useState<RebalancingData | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [view, setView]             = useState<"changes" | "sector">("changes");
+
+  const load = useCallback(async (force = false) => {
+    if (force) setRefreshing(true); else setLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/etf/rebalancing"), { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setData(await r.json());
+      setError(null);
+    } catch (e: any) {
+      setError(e.message ?? "로드 실패");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <Loader2 className="w-7 h-7 animate-spin text-primary/50" />
+      <p className="text-sm text-muted-foreground">24개 ETF 리밸런싱 데이터 집계 중…</p>
+      <p className="text-xs text-muted-foreground/50">처음 로드 시 30~40초 소요</p>
+    </div>
+  );
+
+  if (error || !data) return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      <p className="text-sm text-muted-foreground">데이터를 불러오지 못했습니다.</p>
+      <button onClick={() => load(true)} className="text-xs text-primary hover:underline">다시 시도</button>
+    </div>
+  );
+
+  const updatedLabel = (() => {
+    try { return new Date(data.updatedAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+    catch { return data.updatedAt; }
+  })();
+
+  // "신규 편입 + 비중 확대" 합산 (매수 방향)
+  const buySignals = [
+    ...data.newEntries.map(s => ({ ...s, type: "new" as const })),
+    ...data.bigBuys.filter(s => !data.newEntries.find(n => n.ticker === s.ticker)).map(s => ({ ...s, type: "buy" as const })),
+  ].sort((a, b) => b.etfs.length - a.etfs.length).slice(0, 12);
+
+  // "제외 + 비중 축소" 합산 (매도 방향)
+  const sellSignals = [
+    ...data.exits.map(s => ({ ...s, type: "exit" as const })),
+    ...data.bigSells.filter(s => !data.exits.find(n => n.ticker === s.ticker)).map(s => ({ ...s, type: "sell" as const })),
+  ].sort((a, b) => b.etfs.length - a.etfs.length).slice(0, 12);
+
+  const hasBuy  = buySignals.length > 0;
+  const hasSell = sellSignals.length > 0;
+  const hasSectorMoves = data.sectorMoves.length > 0;
+
+  return (
+    <div className="space-y-4">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground/60">
+          {data.etfsAnalyzed}개 ETF 추적
+          {data.hasChanges
+            ? <span className="ml-1.5 text-primary/70">· {data.etfsWithChanges}개에서 변화 감지</span>
+            : <span className="ml-1.5 text-amber-500/70">· 기준점 수집 중</span>
+          }
+          <span className="ml-2 text-muted-foreground/40">· {updatedLabel}</span>
+        </p>
+        <button
+          onClick={() => load(true)} disabled={refreshing}
+          className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted/30"
+        >
+          <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
+          새로고침
+        </button>
+      </div>
+
+      {/* 기준점 수집 중 안내 */}
+      {!data.hasChanges && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex gap-3">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+            <GitCommitHorizontal className="w-4 h-4 text-amber-500/70" />
+          </div>
+          <div>
+            <p className="text-[13px] font-bold text-foreground">기준점 수집 중</p>
+            <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
+              처음 실행 시 현재 보유종목을 기준점으로 저장합니다. 다음 번 ETF 공시 이후 변화를 추적합니다. 아래는 현재 ETF들이 가장 많이 담고 있는 섹터입니다.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 뷰 탭 (변화 있을 때만) */}
+      {data.hasChanges && (
+        <div className="flex items-center gap-1 bg-muted/30 rounded-xl p-0.5 border border-border/50">
+          {([
+            { key: "changes", label: "종목 변화", icon: <GitCommitHorizontal className="w-3 h-3" /> },
+            { key: "sector",  label: "섹터 방향", icon: <BarChart2 className="w-3 h-3" /> },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setView(t.key)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-semibold rounded-lg transition-all",
+                view === t.key ? "bg-card text-foreground shadow-sm border border-border/60" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── 종목 변화 뷰 ── */}
+      {(!data.hasChanges || view === "changes") && (
+        <div className="space-y-3">
+          {/* 매수 신호 */}
+          {hasBuy && (
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-emerald-500/3">
+                <div className="w-5 h-5 rounded-md bg-emerald-500/15 flex items-center justify-center">
+                  <ArrowUp className="w-3 h-3 text-emerald-500" />
+                </div>
+                <span className="text-[12px] font-bold text-foreground">신규 편입 · 비중 확대</span>
+                <span className="ml-auto text-[11px] font-bold text-emerald-500">{buySignals.length}개 종목</span>
+              </div>
+              <div className="divide-y divide-border/30">
+                {buySignals.map((s) => (
+                  <div key={s.ticker} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors">
+                    {/* 타입 배지 */}
+                    <div className={cn(
+                      "shrink-0 w-6 h-6 rounded-md flex items-center justify-center",
+                      s.type === "new" ? "bg-emerald-500/15" : "bg-blue-500/10"
+                    )}>
+                      {s.type === "new"
+                        ? <Plus className="w-3 h-3 text-emerald-500" />
+                        : <ArrowUp className="w-3 h-3 text-blue-400" />
+                      }
+                    </div>
+                    {/* 종목명 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[13px] font-bold text-foreground truncate">{s.name || s.ticker}</span>
+                        <span className={cn(
+                          "text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                          s.region === "KR" ? "bg-indigo-500/10 text-indigo-400" : "bg-cyan-500/10 text-cyan-400"
+                        )}>{s.region}</span>
+                        {s.type === "new" && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">NEW</span>}
+                      </div>
+                      {/* ETF 태그 */}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {s.etfs.slice(0, 3).map(e => (
+                          <span key={e} className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground/70 truncate max-w-[110px]">{e}</span>
+                        ))}
+                        {s.etfs.length > 3 && <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted/20 text-muted-foreground/50">+{s.etfs.length - 3}</span>}
+                      </div>
+                    </div>
+                    {/* 숫자 */}
+                    <div className="text-right shrink-0">
+                      <p className="text-[13px] font-black text-foreground">{s.etfs.length}<span className="text-[9px] font-normal text-muted-foreground/60 ml-0.5">ETF</span></p>
+                      {s.delta != null && Math.abs(s.delta) > 0 && (
+                        <p className="text-[11px] font-bold text-emerald-500">+{s.delta.toFixed(1)}%</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 매도 신호 */}
+          {hasSell && (
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-red-500/3">
+                <div className="w-5 h-5 rounded-md bg-red-500/10 flex items-center justify-center">
+                  <ArrowDown className="w-3 h-3 text-red-400" />
+                </div>
+                <span className="text-[12px] font-bold text-foreground">제외 · 비중 축소</span>
+                <span className="ml-auto text-[11px] font-bold text-red-400">{sellSignals.length}개 종목</span>
+              </div>
+              <div className="divide-y divide-border/30">
+                {sellSignals.map((s) => (
+                  <div key={s.ticker} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors">
+                    <div className={cn(
+                      "shrink-0 w-6 h-6 rounded-md flex items-center justify-center",
+                      s.type === "exit" ? "bg-red-500/10" : "bg-orange-500/10"
+                    )}>
+                      {s.type === "exit"
+                        ? <Minus className="w-3 h-3 text-red-400" />
+                        : <ArrowDown className="w-3 h-3 text-orange-400" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[13px] font-bold text-foreground truncate">{s.name || s.ticker}</span>
+                        <span className={cn(
+                          "text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                          s.region === "KR" ? "bg-indigo-500/10 text-indigo-400" : "bg-cyan-500/10 text-cyan-400"
+                        )}>{s.region}</span>
+                        {s.type === "exit" && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 font-bold">EXIT</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {s.etfs.slice(0, 3).map(e => (
+                          <span key={e} className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground/70 truncate max-w-[110px]">{e}</span>
+                        ))}
+                        {s.etfs.length > 3 && <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted/20 text-muted-foreground/50">+{s.etfs.length - 3}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[13px] font-black text-foreground">{s.etfs.length}<span className="text-[9px] font-normal text-muted-foreground/60 ml-0.5">ETF</span></p>
+                      {s.delta != null && Math.abs(s.delta) > 0 && (
+                        <p className="text-[11px] font-bold text-red-400">{s.delta.toFixed(1)}%</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!hasBuy && !hasSell && data.hasChanges && (
+            <div className="py-10 text-center text-sm text-muted-foreground">감지된 변화 없음</div>
+          )}
+        </div>
+      )}
+
+      {/* ── 섹터 방향 뷰 ── */}
+      {(view === "sector" || !data.hasChanges) && hasSectorMoves && (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60">
+            <Layers className="w-3.5 h-3.5 text-primary/60" />
+            <span className="text-[12px] font-bold text-foreground">
+              {data.hasChanges ? "섹터별 매니저 방향" : "현재 ETF 섹터 분포"}
+            </span>
+          </div>
+          <div className="divide-y divide-border/30">
+            {data.sectorMoves.map((s) => {
+              const isUp = s.direction === "up";
+              return (
+                <div key={`${s.region}-${s.sector}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors">
+                  <div className={cn(
+                    "shrink-0 w-6 h-6 rounded-md flex items-center justify-center",
+                    isUp ? "bg-emerald-500/12" : "bg-red-500/10"
+                  )}>
+                    {isUp
+                      ? <TrendingUp className="w-3 h-3 text-emerald-500" />
+                      : <TrendingDown className="w-3 h-3 text-red-400" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-bold text-foreground">{s.sector}</span>
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                        s.region === "KR" ? "bg-indigo-500/10 text-indigo-400" : "bg-cyan-500/10 text-cyan-400"
+                      )}>{s.region}</span>
+                    </div>
+                    {s.topStocks.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{s.topStocks.join(", ")}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0 space-y-0.5">
+                    <p className={cn("text-[13px] font-black", isUp ? "text-emerald-500" : "text-red-400")}>
+                      {isUp ? "+" : ""}{s.delta.toFixed(1)}%
+                    </p>
+                    <p className="text-[9px] text-muted-foreground/50">{s.etfCount}개 ETF</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 면책 */}
+      <div className="flex items-start gap-2 text-[11px] text-muted-foreground/50 bg-muted/20 rounded-xl px-3 py-2.5 border border-border/50">
+        <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <p>ETF 보유 종목 공시 주기에 따라 변화 감지에 시차가 있을 수 있습니다. 한국 ETF는 KIS·삼성·미래에셋·KRX, 미국 ETF는 Yahoo Finance 기준입니다.</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export default function ETFAnalysis() {
-  const [tab, setTab] = useState<"search" | "flow">("search");
+  const [tab, setTab] = useState<"search" | "rebalancing" | "flow">("search");
 
   return (
     <div className="space-y-5 pb-20">
@@ -2527,8 +2832,9 @@ export default function ETFAnalysis() {
       {/* 탭 전환 */}
       <div className="flex gap-1 p-1 rounded-2xl bg-muted/30 border border-border">
         {([
-          { key: "search", label: "ETF 검색",  sub: "종목 검색·리포트", icon: <Search className="w-3.5 h-3.5" /> },
-          { key: "flow",   label: "ETF 흐름",   sub: "스마트머니 집중 종목", icon: <Activity className="w-3.5 h-3.5" /> },
+          { key: "search",       label: "ETF 검색",  sub: "종목 검색·리포트",      icon: <Search className="w-3.5 h-3.5" /> },
+          { key: "rebalancing",  label: "리밸런싱",   sub: "편입·제외·섹터 방향",   icon: <GitCommitHorizontal className="w-3.5 h-3.5" /> },
+          { key: "flow",         label: "집중 종목",  sub: "스마트머니 현황",        icon: <Activity className="w-3.5 h-3.5" /> },
         ] as const).map(t => (
           <button
             key={t.key}
@@ -2548,8 +2854,9 @@ export default function ETFAnalysis() {
         ))}
       </div>
 
-      {tab === "search" && <SearchTab />}
-      {tab === "flow"   && <FundFlowTab />}
+      {tab === "search"      && <SearchTab />}
+      {tab === "rebalancing" && <RebalancingTab />}
+      {tab === "flow"        && <FundFlowTab />}
     </div>
   );
 }

@@ -571,4 +571,162 @@ router.get("/etf/fund-flow", async (_req, res) => {
   }
 });
 
+// ─── GET /api/etf/rebalancing ─────────────────────────────────────────────────
+// 주요 ETF들의 종목 변화(신규 편입/제외/비중 확대·축소)를 집계해 스마트머니 방향 파악
+// 캐시: 2시간
+
+const ALL_TRACKED_ETFS: Array<{ code: string; name: string; sector: string; region: "KR" | "US" }> = [
+  ...KR_FLOW_ETFS.map(e => ({ ...e, region: "KR" as const })),
+  ...US_FLOW_ETFS.map(e => ({ ...e, region: "US" as const })),
+];
+
+interface RebalStock {
+  ticker: string;
+  name: string;
+  etfs: string[];
+  weight: number;
+  delta?: number;
+  region: "KR" | "US";
+  sector: string;
+}
+
+interface SectorMove {
+  sector: string;
+  region: "KR" | "US";
+  etfCount: number;
+  direction: "up" | "down";
+  delta: number;
+  topStocks: string[];
+}
+
+interface RebalancingData {
+  newEntries: RebalStock[];
+  exits: RebalStock[];
+  bigBuys: RebalStock[];
+  bigSells: RebalStock[];
+  sectorMoves: SectorMove[];
+  etfsAnalyzed: number;
+  etfsWithChanges: number;
+  hasChanges: boolean;
+  updatedAt: string;
+}
+
+router.get("/etf/rebalancing", async (_req, res) => {
+  try {
+    const REBAL_TTL = 2 * 60 * 60_000;
+    const hit = cache.get("rebalancing");
+    if (hit && Date.now() - hit.ts < REBAL_TTL) {
+      res.json(hit.data);
+      return;
+    }
+
+    // 모든 ETF 병렬 처리
+    const results = await Promise.allSettled(
+      ALL_TRACKED_ETFS.map(async (etfMeta) => {
+        const { holdings, dataDate } = await getEtfHoldings(etfMeta.code);
+        const changes = holdings.length >= 3
+          ? await trackHoldingsChanges(etfMeta.code, holdings, dataDate)
+          : null;
+        return { etfMeta, holdings, changes };
+      })
+    );
+
+    // 집계 맵: ticker → 변화 정보
+    type AggItem = { name: string; etfs: string[]; weight: number; delta: number; region: "KR" | "US"; sector: string };
+    const addMap    = new Map<string, AggItem>();
+    const removeMap = new Map<string, AggItem>();
+    const buyMap    = new Map<string, AggItem>();
+    const sellMap   = new Map<string, AggItem>();
+
+    // 섹터 집계: sector → { up: 총 delta, down: 총 delta, etfs: Set, topStocks }
+    const sectorUp   = new Map<string, { region: "KR"|"US"; etfs: Set<string>; delta: number; stocks: string[] }>();
+    const sectorDown = new Map<string, { region: "KR"|"US"; etfs: Set<string>; delta: number; stocks: string[] }>();
+
+    let etfsAnalyzed = 0;
+    let etfsWithChanges = 0;
+
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const { etfMeta, changes } = r.value;
+      etfsAnalyzed++;
+      if (!changes) continue;
+      etfsWithChanges++;
+
+      const { added, removed, increased, decreased } = changes;
+
+      const upsert = (map: Map<string, AggItem>, ticker: string, name: string, weight: number, delta: number) => {
+        const prev = map.get(ticker);
+        if (prev) {
+          prev.etfs.push(etfMeta.name);
+          prev.delta += delta;
+        } else {
+          map.set(ticker, { name, etfs: [etfMeta.name], weight, delta, region: etfMeta.region, sector: etfMeta.sector });
+        }
+      };
+
+      for (const h of added)     upsert(addMap,    h.stockCode, h.stockName, h.weight, h.weight);
+      for (const h of removed)   upsert(removeMap, h.stockCode, h.stockName, h.weight, -h.weight);
+      for (const h of increased) upsert(buyMap,    h.stockCode, h.stockName, h.weight, h.weightDelta ?? 0);
+      for (const h of decreased) upsert(sellMap,   h.stockCode, h.stockName, h.weight, h.weightDelta ?? 0);
+
+      // 섹터 집계
+      const sectorKey = `${etfMeta.region}:${etfMeta.sector}`;
+      if (increased.length > 0 || added.length > 0) {
+        const prev = sectorUp.get(sectorKey) ?? { region: etfMeta.region, etfs: new Set<string>(), delta: 0, stocks: [] };
+        prev.etfs.add(etfMeta.name);
+        prev.delta += [...increased, ...added].reduce((s, h) => s + Math.abs(h.weightDelta ?? h.weight), 0);
+        for (const h of [...added, ...increased].slice(0, 2)) {
+          if (!prev.stocks.includes(h.stockName)) prev.stocks.push(h.stockName);
+        }
+        sectorUp.set(sectorKey, prev);
+      }
+      if (decreased.length > 0 || removed.length > 0) {
+        const prev = sectorDown.get(sectorKey) ?? { region: etfMeta.region, etfs: new Set<string>(), delta: 0, stocks: [] };
+        prev.etfs.add(etfMeta.name);
+        prev.delta += [...decreased, ...removed].reduce((s, h) => s + Math.abs(h.weightDelta ?? h.weight), 0);
+        for (const h of [...removed, ...decreased].slice(0, 2)) {
+          if (!prev.stocks.includes(h.stockName)) prev.stocks.push(h.stockName);
+        }
+        sectorDown.set(sectorKey, prev);
+      }
+    }
+
+    const toList = (map: Map<string, AggItem>): RebalStock[] =>
+      [...map.entries()]
+        .map(([ticker, v]) => ({ ticker, ...v }))
+        .sort((a, b) => b.etfs.length - a.etfs.length || Math.abs(b.delta) - Math.abs(a.delta))
+        .slice(0, 15);
+
+    const sectorMoves: SectorMove[] = [];
+    for (const [key, v] of sectorUp) {
+      const sector = key.split(":").slice(1).join(":");
+      sectorMoves.push({ sector, region: v.region, etfCount: v.etfs.size, direction: "up", delta: Math.round(v.delta * 10) / 10, topStocks: v.stocks.slice(0, 3) });
+    }
+    for (const [key, v] of sectorDown) {
+      const sector = key.split(":").slice(1).join(":");
+      const existing = sectorMoves.find(s => s.sector === sector && s.direction === "up");
+      if (existing && v.delta < existing.delta) continue; // 업이 더 강하면 스킵
+      sectorMoves.push({ sector, region: v.region, etfCount: v.etfs.size, direction: "down", delta: Math.round(v.delta * 10) / 10, topStocks: v.stocks.slice(0, 3) });
+    }
+    sectorMoves.sort((a, b) => b.etfCount - a.etfCount || b.delta - a.delta);
+
+    const payload: RebalancingData = {
+      newEntries:     toList(addMap),
+      exits:          toList(removeMap),
+      bigBuys:        toList(buyMap),
+      bigSells:       toList(sellMap),
+      sectorMoves:    sectorMoves.slice(0, 10),
+      etfsAnalyzed,
+      etfsWithChanges,
+      hasChanges:     etfsWithChanges > 0,
+      updatedAt:      new Date().toISOString(),
+    };
+
+    cache.set("rebalancing", { data: payload, ts: Date.now() });
+    res.json(payload);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "rebalancing error" });
+  }
+});
+
 export default router;
