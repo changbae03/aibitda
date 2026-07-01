@@ -293,3 +293,35 @@ export async function fetchBothMarketsOHLCV(
       typeof r.ticker === "string" && typeof r.change === "number",
   );
 }
+
+// ── 종목별 투자자 순매수 (pykrx) ──────────────────────────────────────
+
+export interface StockInvestorFlow {
+  ticker: string;
+  individual: number;
+  institution: number;
+  foreign: number;
+}
+
+/**
+ * 특정 날짜 기준 종목 목록의 투자자별 순매수 (억원) — pykrx KRX 직접 조회.
+ * KIS 실시간 API와 달리 장 마감 후에도 정산 데이터를 반환.
+ * @param date YYYYMMDD
+ * @param tickers 6자리 종목코드 배열
+ */
+export async function fetchInvestorByStocks(
+  date: string,
+  tickers: string[],
+): Promise<StockInvestorFlow[]> {
+  if (!tickers.length) return [];
+  const rows = await callPykrx(
+    "investor_stocks",
+    date,
+    date,
+    tickers.join(","),
+    120_000,
+  );
+  return (rows as any[]).filter(
+    (r): r is StockInvestorFlow => typeof r.ticker === "string",
+  );
+}

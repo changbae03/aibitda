@@ -4,8 +4,7 @@
  * · 주요 KR 종목별 투자자 순매수 (KIS FHKST01010900)
  */
 import { Router } from "express";
-import { fetchInvestorData } from "../lib/pykrx-client.js";
-import { fetchKISInvestorFlow } from "../lib/kis-client.js";
+import { fetchInvestorData, fetchInvestorByStocks } from "../lib/pykrx-client.js";
 import { pool } from "@workspace/db";
 
 const router = Router();
@@ -56,9 +55,14 @@ interface FlowData {
 
 let flowCache: { data: FlowData; cachedAt: number } | null = null;
 
+/** ISO date "YYYY-MM-DD" → KRX format "YYYYMMDD" */
+function toKRXDate(iso: string) { return iso.replace(/-/g, ""); }
+
 async function buildFlowData(): Promise<FlowData> {
+  // 최근 거래일을 찾기 위해 오늘~10일 전 범위 조회
   const today    = new Date().toISOString().slice(0, 10);
   const fromDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayKRX = toKRXDate(today);
 
   // ── 1. 시장 전체 수급 (pykrx) ──────────────────────────────────────────
   const [kospiRows, kosdaqRows] = await Promise.allSettled([
@@ -69,14 +73,18 @@ async function buildFlowData(): Promise<FlowData> {
   const kospi  = kospiRows.status  === "fulfilled" ? kospiRows.value.slice(-5)  : [];
   const kosdaq = kosdaqRows.status === "fulfilled" ? kosdaqRows.value.slice(-5) : [];
 
-  // ── 2. 종목별 수급 (KIS) ────────────────────────────────────────────────
-  const kisResults = await Promise.allSettled(
-    WATCH_STOCKS.map(s => fetchKISInvestorFlow(s.code))
-  );
+  // 최신 거래일 확인 — pykrx 결과에서 가장 최근 날짜 사용
+  const latestDate = kospi.at(-1)?.date
+    ? toKRXDate(kospi.at(-1)!.date)
+    : todayKRX;
 
-  const stocks = WATCH_STOCKS.map((s, i) => {
-    const r = kisResults[i];
-    const f = r.status === "fulfilled" ? r.value : null;
+  // ── 2. 종목별 수급 (pykrx — KIS 실시간 API는 장외 시간 0 반환) ─────────
+  const stockCodes  = WATCH_STOCKS.map(s => s.code);
+  const stockFlows  = await fetchInvestorByStocks(latestDate, stockCodes).catch(() => []);
+  const flowMap     = new Map(stockFlows.map(f => [f.ticker, f]));
+
+  const stocks = WATCH_STOCKS.map(s => {
+    const f = flowMap.get(s.code);
     return {
       code: s.code,
       name: s.name,
@@ -87,7 +95,7 @@ async function buildFlowData(): Promise<FlowData> {
     };
   }).filter(s => s.individual !== 0 || s.institution !== 0 || s.foreign !== 0);
 
-  console.log(`[flow] 종목 수급 완료: ${stocks.length}/${WATCH_STOCKS.length}개`);
+  console.log(`[flow] 종목 수급 완료 (${latestDate}): ${stocks.length}/${WATCH_STOCKS.length}개`);
 
   return {
     marketFlow: { kospi, kosdaq },

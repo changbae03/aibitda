@@ -140,7 +140,7 @@ function StockFlowRow({ stock, sortKey, rank }: { stock: StockFlow; sortKey: Sor
       </div>
 
       {/* 로고 + 이름 */}
-      <StockLogo ticker={`${stock.code}.KS`} size={28} className="shrink-0" />
+      <StockLogo ticker={`${stock.code}.KS`} companyName={stock.name} size="sm" className="shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-semibold text-foreground truncate leading-tight">{stock.name}</div>
         {stock.sector && (

@@ -387,6 +387,37 @@ def main():
 
             emit(result)
 
+        # ── 종목별 투자자 순매수 ─────────────────────────────────────────────
+        elif data_type == "investor_stocks":
+            # market_arg = 쉼표로 구분된 종목코드 목록
+            tickers = [t.strip() for t in market_arg.split(",") if t.strip()]
+            result = []
+            for ticker in tickers:
+                try:
+                    with StdoutToStderr():
+                        df = krx.get_market_trading_value_by_investor(from_date, to_date, ticker)
+                    if df.empty:
+                        continue
+                    # DataFrame: index=투자자구분, columns=['매도','매수','순매수']
+                    def get_val(idx):
+                        try:
+                            v = df.loc[idx, "순매수"]
+                            return int(v // 100_000_000)
+                        except Exception:
+                            return 0
+                    individual  = get_val("개인")
+                    institution = get_val("기관합계")
+                    foreign     = get_val("외국인")
+                    result.append({
+                        "ticker":      ticker,
+                        "individual":  individual,
+                        "institution": institution,
+                        "foreign":     foreign,
+                    })
+                except Exception as e:
+                    print(f"[investor_stocks] {ticker} 실패: {e}", file=sys.stderr)
+            emit(result)
+
         else:
             emit({"error": f"Unknown type: {data_type}"})
             sys.exit(1)
