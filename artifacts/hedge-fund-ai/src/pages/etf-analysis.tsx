@@ -26,6 +26,7 @@ interface ETFInfo {
 }
 interface ETFHolding {
   rank: number; stockCode: string; stockName: string; weight: number;
+  ownershipPct?: number; valueBillion?: number;
 }
 interface HoldingChangeItem {
   stockCode: string; stockName: string; weight: number;
@@ -183,6 +184,7 @@ const SECTOR_COLORS: Record<string, string> = {
   "신흥국":     "#15803d", "항공우주방산":"#1e40af","로보틱스AI":"#0f766e",
   "사이버보안": "#7c3aed", "양자컴퓨팅": "#6d28d9", "클린에너지":"#16a34a",
   "리츠":       "#b45309",
+  "기관투자자": "#7c3aed",
 };
 
 // ─── 유틸 컴포넌트 ────────────────────────────────────────────────────────────
@@ -298,6 +300,7 @@ function etfDescription(etf: ETFInfo): string {
     "양자컴퓨팅":  "양자컴퓨터·머신러닝 인프라 기업에 투자합니다. 장기 성장 잠재력이 크지만 수익화 초기 단계로 변동성이 매우 높습니다.",
     "클린에너지":  "태양광·풍력·수소 등 재생에너지 기업들을 담습니다. 금리 환경과 정책 보조금에 민감하며, 장기 탄소 중립 트렌드를 반영합니다.",
     "리츠":        "부동산 임대 수익을 배분하는 리츠(REITs) ETF입니다. 금리 방향에 가장 민감하며, 데이터센터·물류창고 리츠는 AI 수요와 연동됩니다.",
+  "기관투자자":  "한국 최대 기관투자자 국민연금공단의 국내주식 포트폴리오입니다. 국민연금이 5% 이상 지분을 보유한 기업의 주가에 큰 영향력을 행사하며, 포트폴리오 변화는 시장의 중요한 수급 신호로 해석됩니다.",
   };
   return (base[etf.sector] ?? "다양한 자산에 분산 투자하는 ETF입니다.") + leverageNote;
 }
@@ -544,6 +547,12 @@ function SearchTab() {
                   { code: "ITA",  name: "ITA 방산" },
                 ],
               },
+              {
+                label: "기관투자자",
+                items: [
+                  { code: "NPS", name: "국민연금기금" },
+                ],
+              },
             ];
             return (
               <div className="space-y-3">
@@ -704,7 +713,15 @@ function SearchTab() {
                         <span className="text-[11px] text-muted-foreground/40 w-4 text-right">{h.rank}</span>
                         <div>
                           <p className="text-sm font-medium text-foreground">{h.stockName}</p>
-                          <p className="text-[11px] text-muted-foreground/50">{h.stockCode}</p>
+                          <div className="flex items-center gap-1.5">
+                            {h.stockCode && <p className="text-[11px] text-muted-foreground/50">{h.stockCode}</p>}
+                            {h.ownershipPct != null && h.ownershipPct > 0 && (
+                              <>
+                                {h.stockCode && <span className="text-muted-foreground/20">·</span>}
+                                <p className="text-[11px] text-violet-500/70">지분 {h.ownershipPct.toFixed(2)}%</p>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -727,6 +744,7 @@ function SearchTab() {
                     {etfResult.source === "krx"      && "* KRX 공시"}
                     {etfResult.source === "yahoo"    && "* Yahoo Finance — 분기별 비중 기준"}
                     {etfResult.source === "reference" && "* 참고용 — 실제 비중과 차이가 있을 수 있습니다"}
+                    {etfResult.source === "nps"      && "* 국민연금공단 공시 (fund.nps.or.kr) — 연도 말 기준 다음 해 3분기 공시"}
                   </p>
                   {etfResult.dataDate && (
                     <p className="text-[10px] text-muted-foreground/60 shrink-0 font-medium">

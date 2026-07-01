@@ -56,6 +56,18 @@ export function lookupKoreanName(tickerOrCode: string): string | null {
   return entry?.name ?? null;
 }
 
+export function lookupCodeByName(name: string): string | null {
+  if (cache.length === 0) return null;
+  const entry = cache.find(e => e.name === name);
+  return entry?.code ?? null;
+}
+
+export function lookupSymbolByName(name: string): string | null {
+  if (cache.length === 0) return null;
+  const entry = cache.find(e => e.name === name);
+  return entry?.symbol ?? null;
+}
+
 /**
  * AI가 .KS/.KQ 를 잘못 붙일 수 있으므로 KRX 캐시로 교정.
  * 6자리 코드를 추출 → 캐시에서 정확한 심볼 반환.
