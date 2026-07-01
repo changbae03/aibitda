@@ -2311,199 +2311,116 @@ function FundFlowTab() {
   })();
 
   const topList = panel === "kr" ? data.krTopStocks : data.usTopStocks;
-  const maxEtfCount = topList[0]?.etfCount ?? 1;
-  const maxWeight   = topList[0]?.totalWeight ?? 1;
+
+  // 섹터 온도 계산: themeBreakdown → heat 레이블
+  const sectorHeat = data.themeBreakdown.map(t => ({
+    ...t,
+    heat: t.score >= 75 ? "🔥" : t.score >= 40 ? "📈" : "❄️",
+    label: t.label,
+  }));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground/60">
-            국내 {data.coverageStats.krEtfCount}개 · 해외 {data.coverageStats.usEtfCount}개 ETF 집계
-            <span className="ml-2 text-muted-foreground/40">· {updatedLabel}</span>
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground/60">
+          {data.coverageStats.krEtfCount + data.coverageStats.usEtfCount}개 ETF 집계
+          <span className="ml-2 text-muted-foreground/40">· {updatedLabel}</span>
+        </p>
         <button
-          onClick={() => load(true)}
-          disabled={refreshing}
+          onClick={() => load(true)} disabled={refreshing}
           className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted/30"
         >
-          <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
-          새로고침
+          <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />새로고침
         </button>
       </div>
 
-      {/* 테마 집중도 바 */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Target className="w-3.5 h-3.5 text-primary/60" />
-          <span className="text-xs font-bold text-foreground">테마별 ETF 집중도</span>
-          <span className="text-[10px] text-muted-foreground/50 ml-auto">ETF 커버리지 기준</span>
-        </div>
-        <div className="space-y-2.5">
-          {data.themeBreakdown.map((t) => {
-            const color = THEME_BAR_COLOR[t.key] ?? "#94a3b8";
-            const heat = t.score >= 80 ? "🔥" : t.score >= 50 ? "📈" : "💤";
-            return (
-              <div key={t.key} className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-medium text-foreground flex items-center gap-1.5">
-                    <span>{t.emoji}</span>
-                    {t.label}
-                    <span className="text-[10px]">{heat}</span>
-                  </span>
-                  <span className="text-[11px] font-bold" style={{ color }}>
-                    {t.etfCount}/{t.totalEtfs} ETF
-                  </span>
-                </div>
-                <div className="h-2 bg-muted/20 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${t.score}%`, background: color }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 섹터별 집중도 */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <LayoutGrid className="w-3.5 h-3.5 text-primary/60" />
-          <span className="text-xs font-bold text-foreground">섹터별 편입 현황</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {data.sectorConcentration.map((s) => {
-            const badgeCls = SECTOR_BADGE_COLOR[s.sector] ?? "bg-muted/30 text-muted-foreground";
-            return (
-              <div key={s.sector} className="flex items-center gap-2.5 rounded-xl border border-border/50 bg-muted/10 px-3 py-2.5">
-                <div className="flex-1 min-w-0">
-                  <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-md", badgeCls)}>
-                    {s.sector}
-                  </span>
-                  <p className="text-[11px] text-muted-foreground mt-1 truncate">{s.topStock}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[13px] font-black text-foreground">{s.etfCount}</p>
-                  <p className="text-[9px] text-muted-foreground/50">ETF</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 스마트머니 집중 종목 */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        {/* 탭 스위처 */}
-        <div className="flex gap-0 border-b border-border">
-          {(["kr", "us"] as const).map(p => (
-            <button
-              key={p}
-              onClick={() => setPanel(p)}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold transition-all",
-                panel === p
-                  ? "text-primary border-b-2 border-primary bg-primary/3"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {p === "kr" ? (
-                <><Landmark className="w-3.5 h-3.5" /> 국내 집중 종목</>
-              ) : (
-                <><Globe className="w-3.5 h-3.5" /> 글로벌 집중 종목</>
-              )}
-            </button>
+      {/* 섹터 온도 — 한눈에 보는 테마 온기 */}
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-3">지금 어떤 섹터가 뜨거운가</p>
+        <div className="flex flex-wrap gap-2">
+          {sectorHeat.map(t => (
+            <div key={t.key} className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold border",
+              t.score >= 75
+                ? "bg-orange-500/10 border-orange-500/20 text-orange-500"
+                : t.score >= 40
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                  : "bg-muted/30 border-border/50 text-muted-foreground/60"
+            )}>
+              <span>{t.heat}</span>
+              <span>{t.label}</span>
+            </div>
           ))}
         </div>
+      </div>
 
-        {/* 종목 리스트 */}
-        <div className="divide-y divide-border/40">
+      {/* KR / US 탭 */}
+      <div className="flex items-center gap-1 bg-muted/30 rounded-xl p-0.5 border border-border/50">
+        {(["kr", "us"] as const).map(p => (
+          <button key={p} onClick={() => setPanel(p)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-semibold rounded-lg transition-all",
+              panel === p ? "bg-card text-foreground shadow-sm border border-border/60" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {p === "kr" ? <><Landmark className="w-3.5 h-3.5" />국내 ETF 집중 종목</> : <><Globe className="w-3.5 h-3.5" />해외 ETF 집중 종목</>}
+          </button>
+        ))}
+      </div>
+
+      {/* 종목 리스트 */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border/50 bg-muted/10">
+          <p className="text-[12px] text-muted-foreground/70">
+            {panel === "kr"
+              ? `국내 ${data.coverageStats.krEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`
+              : `해외 ${data.coverageStats.usEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`}
+          </p>
+        </div>
+        <div className="divide-y divide-border/30">
           {topList.length === 0 && (
             <div className="py-10 text-center text-sm text-muted-foreground">데이터 없음</div>
           )}
           {topList.map((stock, i) => {
-            const barW = Math.round((stock.totalWeight / maxWeight) * 100);
-            const etfW = Math.round((stock.etfCount  / maxEtfCount) * 100);
-            const rankColor = i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#b45309" : undefined;
+            const rankColor = i === 0 ? "text-amber-500" : i === 1 ? "text-slate-400" : i === 2 ? "text-amber-700" : "text-muted-foreground/30";
             return (
-              <div key={stock.code} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors">
-                {/* 순위 */}
-                <div className="w-6 text-center shrink-0">
-                  {i < 3 ? (
-                    <span className="text-sm font-black" style={{ color: rankColor }}>
-                      {i === 0 ? "①" : i === 1 ? "②" : "③"}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground/40">{i + 1}</span>
-                  )}
-                </div>
+              <div key={stock.code} className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/10 transition-colors">
+                {/* 순위 번호 */}
+                <span className={cn("w-5 text-center text-[13px] font-black shrink-0", rankColor)}>
+                  {i + 1}
+                </span>
 
                 {/* 종목 정보 */}
                 <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-bold text-foreground truncate">{stock.name || stock.code}</p>
-                    <span className="text-[10px] text-muted-foreground/50 shrink-0">{stock.code}</span>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-[14px] font-bold text-foreground">{stock.name || stock.code}</p>
+                    <span className="text-[10px] text-muted-foreground/40">{stock.code}</span>
                   </div>
-                  {/* 누적 비중 바 */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-muted/20 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${barW}%`, background: panel === "kr" ? "rgb(99,102,241)" : "rgb(6,182,212)" }}
-                      />
-                    </div>
-                    <span className="text-[11px] font-bold text-foreground w-16 text-right shrink-0">
-                      합산 {stock.totalWeight}%
-                    </span>
-                  </div>
-                  {/* ETF 태그 (최대 3개) */}
+                  {/* ETF 이름 태그 */}
                   <div className="flex flex-wrap gap-1">
-                    {stock.etfs.slice(0, 3).map(e => (
-                      <span key={e} className="text-[9px] px-1.5 py-0.5 rounded bg-muted/30 text-muted-foreground/70 truncate max-w-[120px]">
+                    {stock.etfs.slice(0, 4).map(e => (
+                      <span key={e} className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground/70 truncate max-w-[130px]">
                         {e}
                       </span>
                     ))}
-                    {stock.etfs.length > 3 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground/50">
-                        +{stock.etfs.length - 3}
+                    {stock.etfs.length > 4 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/20 text-muted-foreground/40">
+                        +{stock.etfs.length - 4}개 ETF
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* ETF 편입 수 */}
-                <div className="text-right shrink-0 space-y-0.5">
-                  <div className="flex items-center gap-1 justify-end">
-                    <div className="w-10 h-1.5 bg-muted/20 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-amber-500/70" style={{ width: `${etfW}%` }} />
-                    </div>
-                  </div>
-                  <p className="text-[12px] font-black text-foreground">{stock.etfCount}</p>
-                  <p className="text-[9px] text-muted-foreground/50">ETF</p>
+                {/* ETF 편입 수 — 핵심 지표 */}
+                <div className="text-right shrink-0">
+                  <p className="text-[18px] font-black text-foreground leading-none">{stock.etfCount}</p>
+                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">개 ETF</p>
                 </div>
               </div>
             );
           })}
         </div>
-
-        {/* 설명 */}
-        <div className="px-4 py-2.5 bg-muted/10 border-t border-border/50">
-          <p className="text-[10px] text-muted-foreground/50 leading-relaxed">
-            {panel === "kr"
-              ? "국내 상장 주요 섹터 ETF 15개의 보유 종목 집계. ETF 편입 수·합산 비중 기준 정렬."
-              : "SPY·QQQ·SMH 등 글로벌 ETF 9개의 보유 종목 집계. 편입 ETF 수·합산 비중 기준 정렬."
-            }
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-start gap-2 text-[11px] text-muted-foreground/50 bg-muted/20 rounded-xl px-3 py-2.5 border border-border/50">
-        <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-        <p>ETF 보유 종목 데이터는 KIS·삼성펀드·미래에셋·KRX·Yahoo Finance 출처이며, 실제 공시일과 차이가 있을 수 있습니다. 투자 결정에 앞서 공식 자료를 확인하세요.</p>
       </div>
     </div>
   );
@@ -2815,7 +2732,7 @@ function RebalancingTab() {
 // ─── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export default function ETFAnalysis() {
-  const [tab, setTab] = useState<"search" | "rebalancing" | "flow">("search");
+  const [tab, setTab] = useState<"search" | "rebalancing" | "flow">("flow");
 
   return (
     <div className="space-y-5 pb-20">
