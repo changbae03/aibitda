@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb, Search, Loader2, TrendingUp, ArrowRight,
-  RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio,
+  RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -23,6 +23,9 @@ interface FeedStock {
   market: "KR" | "US";
   sector?: string;
   rationale: string;
+  priceChange?: number;
+  volumeRatio?: number;
+  isLeader?: boolean;
 }
 
 interface ThemeFeedItem extends TrendingTheme {
@@ -646,46 +649,84 @@ function FeedCard({
               </div>
             ) : (
               <div className="divide-y divide-border/30">
-                {item.stocks.map((stock, si) => (
-                  <motion.div
-                    key={stock.ticker}
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: si * 0.04 }}
-                    className="flex items-center gap-3 px-4 py-3 group hover:bg-muted/20 transition-colors"
-                  >
-                    <StockLogo ticker={stock.ticker} companyName={stock.name} size="sm" className="shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-sm font-semibold text-foreground leading-tight truncate">{stock.name}</span>
-                        <span className={cn(
-                          "text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0",
-                          stock.market === "KR"
-                            ? "bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400"
-                            : "bg-purple-50 dark:bg-purple-900/20 text-purple-500 dark:text-purple-400"
-                        )}>
-                          {stock.market}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5 min-w-0">
-                        <span className="font-mono text-[10px] text-foreground/30 shrink-0">{stock.ticker}</span>
-                        {stock.sector && (
-                          <>
-                            <span className="text-foreground/20 text-[10px] shrink-0">·</span>
-                            <span className="text-[10px] text-foreground/35 truncate">{stock.sector}</span>
-                          </>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-foreground/50 line-clamp-2 leading-snug mt-0.5">{stock.rationale}</p>
-                    </div>
-                    <button
-                      onClick={() => onAnalyze(stock.ticker, stock.name)}
-                      className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-[#FF8A7A] border border-[#FF8A7A]/30 bg-[#FF8A7A]/5 hover:bg-[#FF8A7A]/15 active:bg-[#FF8A7A]/20 transition-colors whitespace-nowrap"
+                {item.stocks.map((stock, si) => {
+                  const chg = stock.priceChange;
+                  const vr  = stock.volumeRatio;
+                  const hasChg = chg != null;
+                  const chgUp  = (chg ?? 0) >= 0;
+                  const volBurst = vr != null && vr >= 1.5; // 거래량 1.5배 이상
+                  return (
+                    <motion.div
+                      key={stock.ticker}
+                      initial={{ opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: si * 0.04 }}
+                      className={cn(
+                        "flex items-start gap-3 px-4 py-3 group hover:bg-muted/20 transition-colors",
+                        stock.isLeader && "bg-amber-50/40 dark:bg-amber-900/10"
+                      )}
                     >
-                      분석
-                    </button>
-                  </motion.div>
-                ))}
+                      <StockLogo ticker={stock.ticker} companyName={stock.name} size="sm" className="shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        {/* 이름 행 */}
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          {stock.isLeader && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0">
+                              <Crown className="w-2.5 h-2.5" />주도주
+                            </span>
+                          )}
+                          <span className="text-sm font-semibold text-foreground leading-tight truncate">{stock.name}</span>
+                          <span className={cn(
+                            "text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0",
+                            stock.market === "KR"
+                              ? "bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400"
+                              : "bg-purple-50 dark:bg-purple-900/20 text-purple-500 dark:text-purple-400"
+                          )}>
+                            {stock.market}
+                          </span>
+                        </div>
+                        {/* 티커·섹터 행 */}
+                        <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                          <span className="font-mono text-[10px] text-foreground/30 shrink-0">{stock.ticker}</span>
+                          {stock.sector && (
+                            <>
+                              <span className="text-foreground/20 text-[10px] shrink-0">·</span>
+                              <span className="text-[10px] text-foreground/35 truncate">{stock.sector}</span>
+                            </>
+                          )}
+                        </div>
+                        {/* 수급 힘 지표 행 */}
+                        {(hasChg || volBurst) && (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {hasChg && (
+                              <span className={cn(
+                                "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded",
+                                chgUp
+                                  ? "text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400"
+                                  : "text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400"
+                              )}>
+                                {chgUp ? "+" : ""}{chg!.toFixed(2)}%
+                              </span>
+                            )}
+                            {volBurst && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400">
+                                <Zap className="w-2.5 h-2.5" />거래량 {vr!.toFixed(1)}배
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* 근거 */}
+                        <p className="text-[11px] text-foreground/50 line-clamp-2 leading-snug mt-0.5">{stock.rationale}</p>
+                      </div>
+                      <button
+                        onClick={() => onAnalyze(stock.ticker, stock.name)}
+                        className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-[#FF8A7A] border border-[#FF8A7A]/30 bg-[#FF8A7A]/5 hover:bg-[#FF8A7A]/15 active:bg-[#FF8A7A]/20 transition-colors whitespace-nowrap mt-0.5"
+                      >
+                        분석
+                      </button>
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
             {/* 더 많은 종목 발굴 버튼 */}

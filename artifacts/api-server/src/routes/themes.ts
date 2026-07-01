@@ -351,20 +351,28 @@ const TRENDING_TTL = 3 * 60 * 60 * 1000;
 
 // ─── 핫 테마 피드: 트렌딩 테마 + 관련주 ──────────────────────────────────────
 
+interface FeedStock {
+  ticker: string;
+  name: string;
+  market: "KR" | "US";
+  sector?: string;
+  rationale: string;
+  /** 당일 등락률 (%) — Yahoo Finance */
+  priceChange?: number;
+  /** 당일 거래량 / 평균 거래량 배율 */
+  volumeRatio?: number;
+  /** 이 테마의 주도주 여부 (힘 스코어 1위) */
+  isLeader?: boolean;
+}
+
 interface ThemeFeedItem extends TrendingTheme {
   summary: string;
-  stocks: Array<{
-    ticker: string;
-    name: string;
-    market: "KR" | "US";
-    sector?: string;
-    rationale: string;
-  }>;
+  stocks: FeedStock[];
 }
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v18";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v19";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -429,14 +437,19 @@ async function rebuildFeedInBackground(): Promise<void> {
     const settled = await Promise.allSettled(
       themes.map(t => discoverThemeFast(t, krxList))
     );
-    const feed: ThemeFeedItem[] = settled.map((r, i) =>
+    const rawFeed: ThemeFeedItem[] = settled.map((r, i) =>
       r.status === "fulfilled"
         ? r.value
         : { ...themes[i], summary: themes[i].description, stocks: [] }
     );
+    // 주도주 + 수급 힘 스코어링 (Yahoo Finance 실데이터로 보강 후 정렬)
+    const feed = await enrichFeedWithMomentum(rawFeed).catch(e => {
+      console.warn("[themes] enrichFeedWithMomentum 실패, 원본 유지:", e?.message ?? e);
+      return rawFeed;
+    });
     feedCache = { feed, cachedAt: Date.now() };
     await saveFeedCacheToDB(feed);
-    console.log("[themes] feed 백그라운드 갱신 완료");
+    console.log("[themes] feed 백그라운드 갱신 완료 (주도주 스코어링 포함)");
   } catch (e) {
     console.error("[themes] feed 백그라운드 갱신 실패:", e);
   } finally {
@@ -699,13 +712,19 @@ async function discoverThemeFast(
    - 해당 기업의 실제 매출·사업에서 테마 연관 매출 비중이 명확한 종목만 선정
    - 회사 이름이나 업종 분류가 비슷해 보여도 실질 사업이 다르면 절대 선정하지 않음
      예) 영화관(CJ CGV) → 방산 불가 / 도메인·호스팅 회사 → 방산 불가 / 자동차 회사 → 조선 불가
-   
-2. 시장 분류 원칙
+
+2. 주도주 선정 원칙 (순서가 중요함)
+   - stocks 배열의 첫 번째 종목은 반드시 이 테마의 "주도주" — 기관·외국인이 가장 집중 매수할 핵심 직접 수혜 종목
+   - 주도주 판단 기준: ① 테마 수혜 직접성 최고 ② 시총 규모 (기관이 실제 살 수 있는 유동성) ③ 수주·계약·실적 등 수급 촉매 존재
+   - rationale에는 수급 강점을 포함: "테마 핵심 직접 수혜주, 기관 매집 대상", "수주 급증으로 외국인 순매수 집중" 등 수급적 근거를 반드시 언급
+   - 이후 종목은 수급 강도 순 (직접 수혜 → 간접 수혜 순서로 배치)
+
+3. 시장 분류 원칙
    - 코스닥/중소형 테마: 코스닥 상장 기업 + 시총 2조 미만 → 삼성전자·SK하이닉스 등 코스피 대형주 절대 제외
    - 일반 테마: 대형주(직접 수혜 핵심주) + 중소형주(부품·소재·장비 공급사) 균형 있게 선정
 
-3. 출력 형식
-   - rationale: 그 기업이 테마에서 수혜를 받는 구체적 이유 (매출 연관성, 수주 현황, 공급망 위치 등) 한 문장으로
+4. 출력 형식
+   - rationale: 수급 강점 포함 — 테마 수혜 이유 + 기관·외인 관심 근거 한 문장
    - sector: 해당 기업의 실제 업종 (테마명이 아닌 실제 사업 분류)
    - 마크다운 없이 JSON만 출력`;
 
@@ -720,8 +739,10 @@ ${krComposition}${usComposition}
 
 【절대 제외】지주사·금융주·ETF·SPAC·테마와 실질 연관 없는 기업, KRX 후보 목록에 없는 한국 종목
 
+【종목 순서】첫 번째 = 주도주(테마 핵심 직접 수혜, 기관·외인 집중 매수 대상) → 이후 수급 강도 순 배치
+
 JSON만 출력:
-{"summary":"30자 이내 테마 요약","stocks":[{"ticker":"094820","name":"일진파워","market":"KR","sector":"전력기기","rationale":"HVDC 케이블 접속재 독점 공급, 수주 급증"},{"ticker":"GEV","name":"GE Vernova","market":"US","sector":"전력","rationale":"HVDC 시스템 글로벌 1위, 북미 데이터센터 전력 수주 확대"}]}`;
+{"summary":"30자 이내 테마 요약","stocks":[{"ticker":"094820","name":"일진파워","market":"KR","sector":"전력기기","rationale":"HVDC 접속재 독점 공급 — 테마 핵심 주도주, 기관 매집 대상"},{"ticker":"GEV","name":"GE Vernova","market":"US","sector":"전력","rationale":"HVDC 시스템 글로벌 1위, 외국인 순매수 집중"}]}`;
 
   const resp = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -857,6 +878,81 @@ JSON만 출력:
   stocks = stocks.filter(s => !seen.has(s.ticker) && seen.add(s.ticker) !== undefined);
 
   return { ...theme, summary: parsed?.summary ?? theme.description, stocks: stocks.slice(0, 8) };
+}
+
+// ─── 주도주 + 수급 힘 스코어링 ─────────────────────────────────────────────────
+// discoverThemeFast 결과에 Yahoo Finance 실데이터로 등락률·거래량 배율을 보강하고
+// 힘 스코어(=등락률×0.6 + (거래량배율-1)×0.4)로 정렬하여 주도주를 첫 번째로 배치
+
+async function enrichFeedWithMomentum(feed: ThemeFeedItem[]): Promise<ThemeFeedItem[]> {
+  // 모든 테마 종목 수집
+  const allStocks: Array<{ ti: number; si: number; ticker: string; market: "KR" | "US" }> = [];
+  feed.forEach((theme, ti) =>
+    theme.stocks.forEach((s, si) => allStocks.push({ ti, si, ticker: s.ticker, market: s.market }))
+  );
+  if (allStocks.length === 0) return feed;
+
+  // YF 심볼 리스트 구성: KR은 .KS / .KQ 모두 시도, US는 그대로
+  const yfSymbols: string[] = [];
+  const krTickers = [...new Set(allStocks.filter(s => s.market === "KR").map(s => s.ticker))];
+  const usTickers = [...new Set(allStocks.filter(s => s.market === "US").map(s => s.ticker))];
+  for (const t of krTickers) { yfSymbols.push(`${t}.KS`, `${t}.KQ`); }
+  for (const t of usTickers) { yfSymbols.push(t); }
+
+  // 배치 quote — 실패해도 기존 피드 그대로 반환
+  const momentumMap = new Map<string, { priceChange: number; volumeRatio: number }>();
+  try {
+    const quotes = await yf.quote(yfSymbols, {}, { validateResult: false });
+    const arr = Array.isArray(quotes) ? quotes : [quotes];
+    for (const q of arr) {
+      if (!q?.symbol) continue;
+      const change = typeof q.regularMarketChangePercent === "number" ? q.regularMarketChangePercent : 0;
+      const vol    = typeof q.regularMarketVolume === "number" ? q.regularMarketVolume : 0;
+      const avg    = typeof q.averageVolume === "number" && q.averageVolume > 0 ? q.averageVolume : vol || 1;
+      momentumMap.set(q.symbol, { priceChange: change, volumeRatio: vol / avg });
+    }
+    console.log(`[themes][momentum] YF quote 완료: ${momentumMap.size}/${yfSymbols.length}개`);
+  } catch (e: any) {
+    console.warn("[themes][momentum] YF quote 실패:", e?.message ?? e);
+    return feed;
+  }
+
+  // 원본 ticker → 데이터 매핑 (KR은 .KS 우선, 없으면 .KQ)
+  function getMomentum(ticker: string, market: "KR" | "US") {
+    if (market === "KR") return momentumMap.get(`${ticker}.KS`) ?? momentumMap.get(`${ticker}.KQ`);
+    return momentumMap.get(ticker);
+  }
+
+  // 힘 스코어 = 등락률×0.6 + (거래량배율-1)×0.4
+  function forceScore(s: { priceChange?: number; volumeRatio?: number }) {
+    const ch  = s.priceChange  ?? 0;
+    const vr  = (s.volumeRatio ?? 1) - 1;
+    return ch * 0.6 + vr * 0.4;
+  }
+
+  return feed.map(theme => {
+    // 모멘텀 데이터 부착
+    const enriched: FeedStock[] = theme.stocks.map(s => {
+      const m = getMomentum(s.ticker, s.market);
+      if (!m) return s;
+      return { ...s, priceChange: m.priceChange, volumeRatio: m.volumeRatio };
+    });
+
+    // 이미 AI가 주도주를 첫 번째로 배치했으므로, 실데이터가 있으면 힘 스코어로 재정렬
+    // (단, AI 순서와 실데이터가 없는 경우를 혼합할 때 기존 순서를 존중)
+    const hasAnyData = enriched.some(s => s.priceChange != null);
+    if (hasAnyData) {
+      enriched.sort((a, b) => forceScore(b) - forceScore(a));
+    }
+
+    // 주도주 마킹: 힘 스코어 1위이고 데이터가 있는 종목
+    const finalStocks: FeedStock[] = enriched.map((s, i) => ({
+      ...s,
+      isLeader: i === 0 && s.priceChange != null,
+    }));
+
+    return { ...theme, stocks: finalStocks };
+  });
 }
 
 router.get("/themes/trending-feed", async (req, res) => {
