@@ -11,7 +11,12 @@ import {
   Activity, Target, Lightbulb, ChevronsRight,
   Newspaper, Clock, Compass, Users,
   Sparkles, TrendingDown, CheckCircle2, MoveRight, ArrowRight,
+  BarChart3, Wallet, Scale, SlidersHorizontal,
 } from "lucide-react";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { cn, getApiUrl, formatCurrency, isUSTicker } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import { format } from "date-fns";
@@ -128,6 +133,31 @@ function fmtPct(pct: number | null, showPlus = true) {
   return `${sign}${pct.toFixed(2)}%`;
 }
 
+// ── 성과 추적 타입 ─────────────────────────────────────────────────────────
+interface HoldingDetail {
+  ticker: string; name: string;
+  avgPrice: number | null; quantity: number | null;
+  currentPrice: number | null; currency: string;
+  invested: number | null; value: number | null;
+  returnPct: number | null; plAmount: number | null;
+  change1d: number | null;
+}
+interface PerformanceSnapshot {
+  date: string;
+  investedKrw: number; valueKrw: number;
+  investedUsd: number; valueUsd: number;
+  returnPct: number | null;
+}
+interface PerformanceData {
+  today: {
+    investedKrw: number; valueKrw: number;
+    investedUsd: number; valueUsd: number;
+    returnPct: number | null; returnPctUsd: number | null;
+    holdingsDetail: HoldingDetail[];
+  } | null;
+  snapshots: PerformanceSnapshot[];
+}
+
 // ── 검색 결과 타입 ────────────────────────────────────────────────────────────
 interface SearchResult {
   symbol: string;
@@ -138,21 +168,32 @@ interface SearchResult {
 
 function isKorean(t: string) { return /[ㄱ-ㅎ가-힣]/.test(t); }
 
-// ── 종목 추가 다이얼로그 — 검색 자동완성 ────────────────────────────────────
+// ── 종목 추가 다이얼로그 — 2단계: ①검색 → ②평단가/수량 입력 ──────────────
 interface AddDialogProps { onClose: () => void; onAdded: () => void; }
 
 function AddDialog({ onClose, onAdded }: AddDialogProps) {
   const { isEn } = useLanguage();
+
+  // Step 1: search
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isComposing = useRef(false);
+
+  // Step 2: detail input
+  const [step, setStep] = useState<"search" | "detail">("search");
+  const [selectedStock, setSelectedStock] = useState<{ symbol: string; name: string; currency: string } | null>(null);
+  const [avgPriceInput, setAvgPriceInput] = useState("");
+  const [quantityInput, setQuantityInput] = useState("");
+  const [noteInput, setNoteInput] = useState("");
+
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const avgPriceRef = useRef<HTMLInputElement>(null);
 
   // 자동완성 검색
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -181,31 +222,45 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [query, fetchSuggestions]);
 
-  // 종목 선택 → 즉시 추가
-  async function addTicker(symbol: string, name: string) {
-    // 한국 종목: .KS/.KQ 제거
-    const cleanTicker = /^\d{6}\.(KS|KQ)$/.test(symbol.toUpperCase())
-      ? symbol.split(".")[0]
-      : symbol.toUpperCase();
+  // 종목 선택 → Step 2로 이동
+  function selectStock(symbol: string, name: string) {
+    const cleanTicker = /^\d{6}\.(KS|KQ)$/i.test(symbol)
+      ? symbol.split(".")[0] : symbol.toUpperCase();
     const currency = /^\d{5,6}$/.test(cleanTicker) ? "KRW" : "USD";
+    setSelectedStock({ symbol: cleanTicker, name, currency });
+    setStep("detail");
+    setTimeout(() => avgPriceRef.current?.focus(), 100);
+  }
 
+  // Step 2: 최종 추가 (평단+수량 포함)
+  async function addWithDetail(skipDetail = false) {
+    if (!selectedStock) return;
     setAdding(true); setError(null);
     try {
+      const body: Record<string, unknown> = {
+        ticker: selectedStock.symbol,
+        companyName: selectedStock.name,
+        currency: selectedStock.currency,
+      };
+      if (!skipDetail) {
+        if (avgPriceInput) body.avgPrice = parseFloat(avgPriceInput);
+        if (quantityInput) body.quantity = parseFloat(quantityInput);
+        if (noteInput) body.note = noteInput;
+      }
       const r = await fetch(getApiUrl("/api/portfolio"), {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: cleanTicker, companyName: name, currency }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? (isEn ? "Failed to add" : "추가 실패")); }
-      onAdded();
-      onClose();
+      onAdded(); onClose();
     } catch (e: any) {
       setError(e?.message ?? (isEn ? "Failed to add" : "추가 실패"));
       setAdding(false);
     }
   }
 
-  // 키보드 내비게이션
+  // 키보드 내비게이션 (Step 1)
   function handleKeyDown(e: React.KeyboardEvent) {
     if (isComposing.current) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, suggestions.length - 1)); }
@@ -214,7 +269,7 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
       e.preventDefault();
       if (selectedIndex >= 0 && suggestions[selectedIndex]) {
         const s = suggestions[selectedIndex];
-        addTicker(s.symbol, s.shortname);
+        selectStock(s.symbol, s.shortname);
       }
     }
     else if (e.key === "Escape") onClose();
@@ -237,103 +292,203 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         {/* 헤더 */}
         <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
           <Briefcase className="w-4 h-4 text-primary shrink-0" />
-          <p className="text-sm font-semibold text-foreground flex-1">{isEn ? "Add to Portfolio" : "포트폴리오에 종목 추가"}</p>
+          <p className="text-sm font-semibold text-foreground flex-1">
+            {step === "search"
+              ? (isEn ? "Add to Portfolio" : "포트폴리오에 종목 추가")
+              : (isEn ? "Enter Purchase Info" : "매수 정보 입력")}
+          </p>
+          {step === "detail" && (
+            <button onClick={() => { setStep("search"); setError(null); }} className="p-1 rounded hover:bg-muted text-muted-foreground mr-1" title="뒤로">
+              <ChevronRight className="w-4 h-4 rotate-180" />
+            </button>
+          )}
           <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
             <XIcon className="w-4 h-4" />
           </button>
         </div>
 
-        {/* 검색 입력 */}
-        <div className="px-4 pt-4 pb-2">
-          <div className="relative flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
-            {isSearching
-              ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
-              : <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-            }
-            <input
-              ref={inputRef}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
-              placeholder={isEn ? "Search by name or ticker (e.g., Samsung, AAPL)" : "종목명 또는 코드 검색 (예: 삼성전자, AAPL)"}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onCompositionStart={() => { isComposing.current = true; }}
-              onCompositionEnd={() => { isComposing.current = false; }}
-              autoComplete="off"
-            />
-            {query && (
-              <button onClick={() => { setQuery(""); setSuggestions([]); inputRef.current?.focus(); }} className="text-muted-foreground hover:text-foreground">
-                <XIcon className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
+        {/* STEP 1: 검색 */}
+        {step === "search" && (
+          <>
+            <div className="px-4 pt-4 pb-2">
+              <div className="relative flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
+                {isSearching
+                  ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
+                  : <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                }
+                <input
+                  ref={inputRef}
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                  placeholder={isEn ? "Search by name or ticker (e.g., Samsung, AAPL)" : "종목명 또는 코드 검색 (예: 삼성전자, AAPL)"}
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onCompositionStart={() => { isComposing.current = true; }}
+                  onCompositionEnd={() => { isComposing.current = false; }}
+                  autoComplete="off"
+                />
+                {query && (
+                  <button onClick={() => { setQuery(""); setSuggestions([]); inputRef.current?.focus(); }} className="text-muted-foreground hover:text-foreground">
+                    <XIcon className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
 
-        {/* 오류 */}
-        {error && (
-          <p className="mx-4 mb-2 text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>
+            <div ref={dropdownRef} className="max-h-72 overflow-y-auto pb-2">
+              {suggestions.length > 0 ? (
+                suggestions.map((s, i) => {
+                  const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
+                  const code = isKrStock ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
+                  const ex = s.exchange;
+                  const badgeStyle =
+                    ex === "KOSPI"  ? "bg-blue-500/15 text-blue-400" :
+                    ex === "KOSDAQ" ? "bg-emerald-500/15 text-emerald-400" :
+                    ex === "NASDAQ" ? "bg-violet-500/15 text-violet-400" :
+                    ex === "NYSE"   ? "bg-orange-500/15 text-orange-400" :
+                    "bg-muted/60 text-muted-foreground";
+                  const badgeLabel =
+                    ex === "KOSPI" ? "코스피" : ex === "KOSDAQ" ? "코스닥" : ex || "US";
+                  const isHighlighted = i === selectedIndex;
+                  return (
+                    <button
+                      key={s.symbol} type="button"
+                      onMouseEnter={() => setSelectedIndex(i)}
+                      onMouseDown={e => { e.preventDefault(); selectStock(s.symbol, s.shortname); }}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/40 last:border-0",
+                        isHighlighted ? "bg-muted/60" : "hover:bg-muted/30"
+                      )}
+                    >
+                      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", isHighlighted ? "bg-primary/15" : "bg-muted/60")}>
+                        <Building2 className={cn("w-4 h-4", isHighlighted ? "text-primary" : "text-muted-foreground")} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-semibold text-foreground truncate">{s.shortname}</span>
+                          <span className={cn("shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full", badgeStyle)}>{badgeLabel}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground font-mono">{code}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+                    </button>
+                  );
+                })
+              ) : query.trim().length >= 2 && !isSearching ? (
+                <div className="text-center py-10 text-sm text-muted-foreground">{isEn ? "No results" : "검색 결과가 없어요"}</div>
+              ) : (
+                <div className="text-center py-10 text-[13px] text-muted-foreground">
+                  {isEn ? "Enter a name or ticker symbol" : "종목명이나 코드를 입력하세요"}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {/* 검색 결과 목록 */}
-        <div ref={dropdownRef} className="max-h-72 overflow-y-auto pb-2">
-          {adding ? (
-            <div className="flex items-center justify-center py-10 gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" /> {isEn ? "Adding..." : "추가 중..."}
+        {/* STEP 2: 평단가/수량 입력 */}
+        {step === "detail" && selectedStock && (
+          <div className="px-4 py-5 space-y-4">
+            {/* 선택된 종목 요약 */}
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-muted/40 border border-border">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Building2 className="w-4 h-4 text-primary/60" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{selectedStock.name}</p>
+                <p className="text-[11px] text-muted-foreground font-mono">{selectedStock.symbol} · {selectedStock.currency}</p>
+              </div>
             </div>
-          ) : suggestions.length > 0 ? (
-            suggestions.map((s, i) => {
-              const isKrStock = /\.(KS|KQ)$/.test(s.symbol);
-              const code = isKrStock ? s.symbol.replace(/\.(KS|KQ)$/, "") : s.symbol;
-              const ex = s.exchange;
-              const badgeStyle =
-                ex === "KOSPI"  ? "bg-blue-500/15 text-blue-400" :
-                ex === "KOSDAQ" ? "bg-emerald-500/15 text-emerald-400" :
-                ex === "NASDAQ" ? "bg-violet-500/15 text-violet-400" :
-                ex === "NYSE"   ? "bg-orange-500/15 text-orange-400" :
-                "bg-muted/60 text-muted-foreground";
-              const badgeLabel =
-                ex === "KOSPI" ? "코스피" :
-                ex === "KOSDAQ" ? "코스닥" :
-                ex || "US";
-              const isHighlighted = i === selectedIndex;
-              return (
-                <button
-                  key={s.symbol}
-                  type="button"
-                  onMouseEnter={() => setSelectedIndex(i)}
-                  onMouseDown={e => { e.preventDefault(); addTicker(s.symbol, s.shortname); }}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/40 last:border-0",
-                    isHighlighted ? "bg-muted/60" : "hover:bg-muted/30"
-                  )}
-                >
-                  <div className={cn(
-                    "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                    isHighlighted ? "bg-primary/15" : "bg-muted/60"
-                  )}>
-                    <Building2 className={cn("w-4 h-4 transition-colors", isHighlighted ? "text-primary" : "text-muted-foreground")} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-semibold text-foreground truncate">{s.shortname}</span>
-                      <span className={cn("shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full", badgeStyle)}>
-                        {badgeLabel}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground font-mono">{code}</span>
-                  </div>
-                  <Plus className="w-4 h-4 text-primary shrink-0 opacity-0 group-hover:opacity-100" />
-                </button>
-              );
-            })
-          ) : query.trim().length >= 2 && !isSearching ? (
-            <div className="text-center py-10 text-sm text-muted-foreground">검색 결과가 없어요</div>
-          ) : query.trim().length < 2 ? (
-            <div className="text-center py-10 text-[13px] text-muted-foreground">
-              종목명이나 코드를 입력하세요
+
+            {/* 평단가 */}
+            <div>
+              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
+                {isEn ? "Average cost" : "평균 매수단가 (평단가)"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
+              </label>
+              <div className="relative">
+                <input
+                  ref={avgPriceRef}
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={selectedStock.currency === "KRW" ? "예: 85000" : "e.g. 182.50"}
+                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                  value={avgPriceInput}
+                  onChange={e => setAvgPriceInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground/40">
+                  {selectedStock.currency === "KRW" ? "원" : "USD"}
+                </span>
+              </div>
             </div>
-          ) : null}
-        </div>
+
+            {/* 수량 */}
+            <div>
+              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
+                {isEn ? "Quantity (shares)" : "보유 수량 (주)"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
+              </label>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder={isEn ? "e.g. 10" : "예: 10"}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                value={quantityInput}
+                onChange={e => setQuantityInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
+              />
+            </div>
+
+            {/* 메모 */}
+            <div>
+              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
+                {isEn ? "Memo" : "메모"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
+              </label>
+              <input
+                type="text"
+                placeholder={isEn ? "Investment thesis, target, etc." : "매수 이유, 목표 등"}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                value={noteInput}
+                onChange={e => setNoteInput(e.target.value)}
+              />
+            </div>
+
+            {/* 평단+수량 입력 시 투자금 미리보기 */}
+            {avgPriceInput && quantityInput && parseFloat(avgPriceInput) > 0 && parseFloat(quantityInput) > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
+                <Wallet className="w-3.5 h-3.5 text-primary/50 shrink-0" />
+                <span className="text-[12px] text-foreground/60">
+                  {isEn ? "Total invested:" : "총 투자금:"}{" "}
+                  <span className="font-semibold text-foreground">
+                    {selectedStock.currency === "KRW"
+                      ? `${Math.round(parseFloat(avgPriceInput) * parseFloat(quantityInput)).toLocaleString("ko-KR")}원`
+                      : `$${(parseFloat(avgPriceInput) * parseFloat(quantityInput)).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                    }
+                  </span>
+                </span>
+              </div>
+            )}
+
+            {error && <p className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>}
+
+            {/* 버튼 */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => addWithDetail(true)}
+                disabled={adding}
+                className="flex-1 py-2.5 text-sm text-muted-foreground border border-border rounded-xl hover:bg-muted/40 transition-colors"
+              >
+                {isEn ? "Skip & Add" : "건너뛰고 추가"}
+              </button>
+              <button
+                onClick={() => addWithDetail(false)}
+                disabled={adding}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
+              >
+                {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {isEn ? "Add to Portfolio" : "포트폴리오에 추가"}
+              </button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -1557,6 +1712,238 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
   );
 }
 
+// ── 포트폴리오 총수익 요약 카드 ──────────────────────────────────────────────
+function PortfolioSummaryCard({ perf }: { perf: PerformanceData | null }) {
+  const { isEn } = useLanguage();
+  if (!perf?.today) return null;
+  const { investedKrw, valueKrw, returnPct } = perf.today;
+  if (investedKrw <= 0) return null;
+
+  const plKrw = valueKrw - investedKrw;
+  const isPositive = plKrw >= 0;
+  const returnColor = returnPct == null ? "text-foreground"
+    : returnPct > 0 ? "text-red-500 dark:text-red-400"
+    : returnPct < 0 ? "text-blue-500 dark:text-blue-400"
+    : "text-foreground";
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="px-5 pt-4 pb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Wallet className="w-3.5 h-3.5 text-primary/50" />
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+            {isEn ? "Portfolio P&L (KRW)" : "포트폴리오 손익 (원화)"}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-0">
+          {/* 총 투자금 */}
+          <div>
+            <p className="text-[11px] text-muted-foreground mb-1">{isEn ? "Invested" : "투자금"}</p>
+            <p className="text-[15px] font-bold text-foreground tabular-nums">
+              {Math.round(investedKrw).toLocaleString("ko-KR")}
+              <span className="text-[11px] font-normal text-muted-foreground ml-0.5">원</span>
+            </p>
+          </div>
+          {/* 평가금액 */}
+          <div className="px-3 border-l border-border/40">
+            <p className="text-[11px] text-muted-foreground mb-1">{isEn ? "Value" : "평가금액"}</p>
+            <p className="text-[15px] font-bold text-foreground tabular-nums">
+              {Math.round(valueKrw).toLocaleString("ko-KR")}
+              <span className="text-[11px] font-normal text-muted-foreground ml-0.5">원</span>
+            </p>
+          </div>
+          {/* 수익률 */}
+          <div className="px-3 border-l border-border/40">
+            <p className="text-[11px] text-muted-foreground mb-1">{isEn ? "Return" : "수익률"}</p>
+            <p className={cn("text-[18px] font-bold tabular-nums leading-tight", returnColor)}>
+              {returnPct != null ? `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%` : "—"}
+            </p>
+            <p className={cn("text-[11px] font-medium tabular-nums", returnColor)}>
+              {isPositive ? "+" : ""}{Math.round(plKrw).toLocaleString("ko-KR")}원
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 성과 차트 ─────────────────────────────────────────────────────────────────
+function PerformanceChart({ perf, loading }: { perf: PerformanceData | null; loading: boolean }) {
+  const { isEn } = useLanguage();
+
+  const chartData = (perf?.snapshots ?? [])
+    .filter(s => s.returnPct != null)
+    .map(s => ({
+      date: s.date.slice(5).replace("-", "/"),
+      returnPct: parseFloat((s.returnPct ?? 0).toFixed(2)),
+      valueKrw: Math.round(s.valueKrw),
+    }));
+
+  const hasData = chartData.length >= 2;
+  const latestReturn = chartData.length > 0 ? chartData[chartData.length - 1].returnPct : null;
+  const isPositive = latestReturn != null && latestReturn >= 0;
+  const areaColor = isPositive ? "#ef4444" : "#3b82f6";
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/40">
+        <BarChart3 className="w-3.5 h-3.5 text-primary/60 shrink-0" />
+        <p className="text-[12px] font-semibold text-foreground/70 flex-1">
+          {isEn ? "Portfolio Performance" : "포트폴리오 성과 추적"}
+        </p>
+        {latestReturn != null && (
+          <span className={cn(
+            "text-[11px] font-semibold px-2 py-0.5 rounded-full",
+            isPositive ? "text-red-500 bg-red-500/10" : "text-blue-500 bg-blue-500/10"
+          )}>
+            {latestReturn >= 0 ? "+" : ""}{latestReturn.toFixed(2)}%
+          </span>
+        )}
+      </div>
+
+      <div className="px-4 py-3">
+        {loading ? (
+          <div className="flex items-center justify-center h-[120px] gap-2 text-muted-foreground/40">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-[12px]">{isEn ? "Loading..." : "로딩 중…"}</span>
+          </div>
+        ) : !hasData ? (
+          <div className="flex flex-col items-center justify-center h-[120px] text-center">
+            <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-2" />
+            <p className="text-[12px] text-muted-foreground/40">
+              {isEn ? "Chart builds daily — come back tomorrow!" : "매일 스냅샷을 쌓아 차트를 만들어요. 내일 다시 확인해보세요!"}
+            </p>
+            {chartData.length === 1 && (
+              <p className="text-[11px] text-muted-foreground/25 mt-1">
+                {isEn ? "First data point recorded" : "첫 번째 데이터 기록됨"} ✓
+              </p>
+            )}
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={140}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <defs>
+                <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={areaColor} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={areaColor} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "currentColor", opacity: 0.35 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10, fill: "currentColor", opacity: 0.35 }} tickLine={false} axisLine={false} tickFormatter={v => `${v > 0 ? "+" : ""}${v}%`} />
+              <Tooltip
+                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v.toFixed(2)}%`, isEn ? "Return" : "수익률"]}
+                labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+              />
+              <Area type="monotone" dataKey="returnPct" stroke={areaColor} strokeWidth={1.5} fill="url(#perfGrad)" dot={false} activeDot={{ r: 3, fill: areaColor }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+        <p className="text-[10px] text-muted-foreground/25 text-right mt-1">
+          {isEn ? `${chartData.length}-day history` : `${chartData.length}일 누적`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── 리밸런싱 카드 ─────────────────────────────────────────────────────────────
+function RebalancingCard({ perf }: { perf: PerformanceData | null }) {
+  const { isEn } = useLanguage();
+  const [expanded, setExpanded] = useState(false);
+
+  const detail = perf?.today?.holdingsDetail ?? [];
+  const withValue = detail.filter(h => h.value != null && h.value > 0 && h.currency === "KRW");
+  const totalValue = withValue.reduce((s, h) => s + (h.value ?? 0), 0);
+  if (totalValue <= 0 || withValue.length < 2) return null;
+
+  const sorted = [...withValue].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  const target = 100 / withValue.length;
+
+  const highConc = sorted.filter(h => ((h.value ?? 0) / totalValue) * 100 > 35);
+  const hasAlert = highConc.length > 0;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <button
+        className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-muted/20 transition-colors"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <Scale className={cn("w-3.5 h-3.5 shrink-0", hasAlert ? "text-amber-400" : "text-primary/60")} />
+        <p className="text-[12px] font-semibold text-foreground/70 flex-1 text-left">
+          {isEn ? "Rebalancing Analysis" : "리밸런싱 분석"}
+        </p>
+        {hasAlert && (
+          <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full shrink-0">
+            {isEn ? "Concentrated" : "집중 위험"}
+          </span>
+        )}
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/40 transition-transform shrink-0", expanded && "rotate-180")} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: "auto" }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-border/40 px-4 py-3 space-y-2.5">
+              <p className="text-[11px] text-muted-foreground/50">
+                {isEn ? `Equal weight target: ${target.toFixed(1)}% per stock` : `균등 비중 기준: 종목당 ${target.toFixed(1)}%`}
+              </p>
+              {sorted.map(h => {
+                const pct = ((h.value ?? 0) / totalValue) * 100;
+                const drift = pct - target;
+                const isOver = pct > 35;
+                const isUnder = pct < target * 0.5 && withValue.length > 3;
+                const barColor = isOver ? "bg-amber-400" : h.returnPct != null && h.returnPct > 0 ? "bg-red-400/60" : "bg-blue-400/60";
+                const retColor = h.returnPct == null ? "text-muted-foreground/30"
+                  : h.returnPct > 0 ? "text-red-400" : "text-blue-400";
+                return (
+                  <div key={h.ticker}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11.5px] text-foreground/70 font-medium truncate flex-1">{h.name || h.ticker}</span>
+                      {isOver && <span className="text-[9.5px] text-amber-400 font-semibold shrink-0">{isEn ? "HIGH" : "과집중"}</span>}
+                      {isUnder && <span className="text-[9.5px] text-muted-foreground/40 font-semibold shrink-0">{isEn ? "LOW" : "비중부족"}</span>}
+                      <span className={cn("text-[10.5px] font-semibold tabular-nums shrink-0", retColor)}>
+                        {h.returnPct != null ? `${h.returnPct >= 0 ? "+" : ""}${h.returnPct.toFixed(1)}%` : "—"}
+                      </span>
+                      <span className="text-[10.5px] text-muted-foreground/50 tabular-nums shrink-0 w-10 text-right">
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full transition-all", barColor)}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                      {/* 균등 비중 기준선 */}
+                      <div
+                        className="absolute top-0 h-full w-px bg-foreground/20"
+                        style={{ left: `${Math.min(target, 99)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/30 mt-0.5">
+                      {drift > 0 ? `+` : ""}{drift.toFixed(1)}p {isEn ? "drift" : "편차"}
+                      {isOver && (isEn ? " → Consider reducing" : " → 비중 축소 검토")}
+                      {isUnder && (isEn ? " → Consider adding" : " → 추가 매수 검토")}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ── 포트폴리오 히어로 배너 (삼쩜삼 스타일) ────────────────────────────────────
 function heroRelativeTime(date: Date, isEn = false): string {
   const sec = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -1690,6 +2077,10 @@ export default function Portfolio() {
   const [priceUpdating, setPriceUpdating] = useState(false);
   const holdingsRef = useRef<Holding[]>([]);
 
+  // 성과 추적
+  const [perf, setPerf] = useState<PerformanceData | null>(null);
+  const [perfLoading, setPerfLoading] = useState(false);
+
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     else setRefreshing(true);
@@ -1745,13 +2136,25 @@ export default function Portfolio() {
     finally { setPriceUpdating(false); }
   }, []);
 
+  // 성과 데이터 로드 (스냅샷 저장 + 이력 조회)
+  const loadPerf = useCallback(async () => {
+    setPerfLoading(true);
+    try {
+      const r = await fetch(getApiUrl("/api/portfolio/performance"), { credentials: "include" });
+      if (r.ok) setPerf(await r.json());
+    } catch { /* ignore */ }
+    finally { setPerfLoading(false); }
+  }, []);
+
   useEffect(() => {
     // 1단계: 분석/메타 데이터 즉시 렌더
     load().then(() => {
       // 2단계: 로드 직후 batch-quotes로 현재가 채움 (캐시 있으면 즉각 반영)
       refreshPrices();
     });
-  }, [load, refreshPrices]);
+    // 3단계: 성과 스냅샷 로드 (현재가 포함 계산 → 약간 느림)
+    loadPerf();
+  }, [load, refreshPrices, loadPerf]);
 
   // 30초마다 가격 자동 갱신
   useEffect(() => {
@@ -1820,6 +2223,15 @@ export default function Portfolio() {
             priceUpdating={priceUpdating}
             onAdd={() => setShowAdd(true)}
           />
+
+          {/* ── 포트폴리오 손익 요약 카드 ── */}
+          <PortfolioSummaryCard perf={perf} />
+
+          {/* ── 성과 추적 차트 ── */}
+          <PerformanceChart perf={perf} loading={perfLoading} />
+
+          {/* ── 리밸런싱 분석 카드 ── */}
+          <RebalancingCard perf={perf} />
 
           {/* ── 정렬 탭 ── */}
           <div className="flex items-center gap-1 pt-1">

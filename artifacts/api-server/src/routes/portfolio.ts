@@ -44,16 +44,30 @@ async function ensureTable() {
 // ── 현재가 조회 (Yahoo Finance) ─────────────────────────────────────────────
 async function fetchPrice(ticker: string): Promise<{ price: number | null; currency: string; change1d: number | null }> {
   try {
-    // 한국 종목: 6자리 숫자 → ".KS" suffix
-    const yticker = /^\d{5,6}$/.test(ticker) ? `${ticker}.KS` : ticker;
-    const q = await (YahooFinance as any).quote(yticker, { fields: ["regularMarketPrice", "currency", "regularMarketChangePercent"] });
+    if (/^\d{5,6}$/.test(ticker)) {
+      // 한국 종목: .KS 먼저 시도, 가격 없으면 .KQ 시도 (코스닥)
+      for (const suffix of [".KS", ".KQ"]) {
+        try {
+          const q = await (YahooFinance as any).quote(`${ticker}${suffix}`, { fields: ["regularMarketPrice", "currency", "regularMarketChangePercent"] });
+          if (q?.regularMarketPrice != null) {
+            return {
+              price: q.regularMarketPrice,
+              currency: q.currency ?? "KRW",
+              change1d: q.regularMarketChangePercent ?? null,
+            };
+          }
+        } catch { continue; }
+      }
+      return { price: null, currency: "KRW", change1d: null };
+    }
+    const q = await (YahooFinance as any).quote(ticker, { fields: ["regularMarketPrice", "currency", "regularMarketChangePercent"] });
     return {
       price: q?.regularMarketPrice ?? null,
-      currency: q?.currency ?? (yticker.endsWith(".KS") ? "KRW" : "USD"),
+      currency: q?.currency ?? "USD",
       change1d: q?.regularMarketChangePercent ?? null,
     };
   } catch {
-    return { price: null, currency: "KRW", change1d: null };
+    return { price: null, currency: /^\d{5,6}$/.test(ticker) ? "KRW" : "USD", change1d: null };
   }
 }
 
@@ -343,6 +357,133 @@ router.put("/portfolio/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── portfolio_snapshots 테이블 ───────────────────────────────────────────────
+async function ensureSnapshotsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+      id                 SERIAL PRIMARY KEY,
+      user_id            TEXT NOT NULL,
+      snapshot_date      DATE NOT NULL,
+      total_invested_krw NUMERIC DEFAULT 0,
+      total_value_krw    NUMERIC DEFAULT 0,
+      total_invested_usd NUMERIC DEFAULT 0,
+      total_value_usd    NUMERIC DEFAULT 0,
+      total_return_pct   NUMERIC,
+      holdings_json      JSONB,
+      UNIQUE (user_id, snapshot_date)
+    )
+  `);
+}
+
+// ── GET /api/portfolio/performance — 성과 추적 (스냅샷 자동 저장 + 이력 조회) ──
+router.get("/portfolio/performance", async (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) { res.status(401).json({ error: "로그인이 필요합니다" }); return; }
+
+  await ensureTable();
+  await ensureSnapshotsTable();
+
+  const { rows: holdings } = await pool.query(
+    `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1`,
+    [userId]
+  );
+
+  if (holdings.length === 0) {
+    res.json({ today: null, snapshots: [] }); return;
+  }
+
+  // 현재가 병렬 조회
+  const priceResults = await Promise.all(
+    holdings.map(async (h: any) => ({ ticker: h.ticker, ...(await fetchPrice(h.ticker)) }))
+  );
+  const priceMap = new Map(priceResults.map((p: any) => [p.ticker, p]));
+
+  let totalInvestedKrw = 0, totalValueKrw = 0;
+  let totalInvestedUsd = 0, totalValueUsd = 0;
+
+  const holdingsDetail = holdings.map((h: any) => {
+    const p = priceMap.get(h.ticker);
+    const avgPrice    = h.avg_price ? parseFloat(h.avg_price) : null;
+    const quantity    = h.quantity  ? parseFloat(h.quantity)  : null;
+    const currentPrice = p?.price ?? null;
+    const currency    = h.currency ?? "KRW";
+    const invested    = (avgPrice && quantity) ? avgPrice * quantity : null;
+    const value       = (currentPrice && quantity) ? currentPrice * quantity : null;
+    const returnPct   = (avgPrice && currentPrice)
+      ? ((currentPrice - avgPrice) / avgPrice) * 100 : null;
+    const plAmount    = (invested != null && value != null) ? value - invested : null;
+
+    if (invested != null && value != null) {
+      if (currency === "KRW") { totalInvestedKrw += invested; totalValueKrw += value; }
+      else if (currency === "USD") { totalInvestedUsd += invested; totalValueUsd += value; }
+    }
+
+    return {
+      ticker: h.ticker, name: h.company_name,
+      avgPrice, quantity, currentPrice, currency,
+      invested, value, returnPct, plAmount,
+      change1d: p?.change1d ?? null,
+    };
+  });
+
+  const totalReturnPct    = totalInvestedKrw > 0
+    ? ((totalValueKrw - totalInvestedKrw) / totalInvestedKrw) * 100 : null;
+  const totalReturnPctUsd = totalInvestedUsd > 0
+    ? ((totalValueUsd - totalInvestedUsd) / totalInvestedUsd) * 100 : null;
+
+  // 오늘 스냅샷 upsert (하루 1회 갱신)
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    await pool.query(`
+      INSERT INTO portfolio_snapshots
+        (user_id, snapshot_date, total_invested_krw, total_value_krw,
+         total_invested_usd, total_value_usd, total_return_pct, holdings_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (user_id, snapshot_date) DO UPDATE
+        SET total_invested_krw = EXCLUDED.total_invested_krw,
+            total_value_krw    = EXCLUDED.total_value_krw,
+            total_invested_usd = EXCLUDED.total_invested_usd,
+            total_value_usd    = EXCLUDED.total_value_usd,
+            total_return_pct   = EXCLUDED.total_return_pct,
+            holdings_json      = EXCLUDED.holdings_json
+    `, [userId, today, totalInvestedKrw, totalValueKrw,
+        totalInvestedUsd, totalValueUsd, totalReturnPct,
+        JSON.stringify(holdingsDetail)]);
+  } catch (e: any) {
+    console.warn("[snapshot] save failed:", (e as any)?.message?.slice(0, 80));
+  }
+
+  // 최근 90일 스냅샷 조회
+  const { rows: snapshots } = await pool.query(
+    `SELECT snapshot_date, total_invested_krw, total_value_krw,
+            total_invested_usd, total_value_usd, total_return_pct
+     FROM portfolio_snapshots
+     WHERE user_id = $1 AND snapshot_date >= NOW() - INTERVAL '90 days'
+     ORDER BY snapshot_date ASC`,
+    [userId]
+  );
+
+  res.json({
+    today: {
+      investedKrw:    totalInvestedKrw,
+      valueKrw:       totalValueKrw,
+      investedUsd:    totalInvestedUsd,
+      valueUsd:       totalValueUsd,
+      returnPct:      totalReturnPct,
+      returnPctUsd:   totalReturnPctUsd,
+      holdingsDetail,
+    },
+    snapshots: snapshots.map((s: any) => ({
+      date: String(s.snapshot_date).slice(0, 10),
+      investedKrw: parseFloat(s.total_invested_krw ?? 0),
+      valueKrw:    parseFloat(s.total_value_krw    ?? 0),
+      investedUsd: parseFloat(s.total_invested_usd ?? 0),
+      valueUsd:    parseFloat(s.total_value_usd    ?? 0),
+      returnPct:   s.total_return_pct != null ? parseFloat(s.total_return_pct) : null,
+    })),
+  });
+});
+
 // ── GET /api/portfolio/diagnose — 캐시된 진단 조회 ───────────────────────────
 router.get("/portfolio/diagnose", async (req, res) => {
   const userId = getUserId(req);
@@ -373,17 +514,54 @@ router.post("/portfolio/diagnose", async (req, res) => {
   }
 
   // 집단지성: 모든 유저의 최신 완성 분석 중 가장 최근 것 사용
-  const analyses = await Promise.all(holdings.map((h: any) => fetchBestAnalysis(h.ticker)));
+  const [analyses, priceResultsDiag] = await Promise.all([
+    Promise.all(holdings.map((h: any) => fetchBestAnalysis(h.ticker))),
+    Promise.all(holdings.map(async (h: any) => ({ ticker: h.ticker, ...(await fetchPrice(h.ticker)) }))),
+  ]);
+  const priceMapDiag = new Map(priceResultsDiag.map((p: any) => [p.ticker, p]));
 
-  // 진단용 데이터 요약
+  // 포트폴리오 총 평가금액 계산 (KRW)
+  let diagTotalValue = 0, diagTotalInvested = 0;
+  const holdingValues: Array<{ ticker: string; value: number }> = [];
+  holdings.forEach((h: any) => {
+    const p = priceMapDiag.get(h.ticker);
+    const avgPrice = h.avg_price ? parseFloat(h.avg_price) : null;
+    const qty = h.quantity ? parseFloat(h.quantity) : null;
+    const cur = p?.price ?? null;
+    if (avgPrice && qty && cur && (h.currency ?? "KRW") === "KRW") {
+      const val = cur * qty;
+      const inv = avgPrice * qty;
+      diagTotalValue += val;
+      diagTotalInvested += inv;
+      holdingValues.push({ ticker: h.ticker, value: val });
+    }
+  });
+
+  // 진단용 데이터 요약 (수익률 + 비중 포함)
   const portfolioLines = holdings.map((h: any, i: number) => {
     const a = analyses[i];
+    const p = priceMapDiag.get(h.ticker);
     const verdict  = a?.investment_verdict ?? "미분석";
     const target   = a?.target_price ? `목표가 ${parseFloat(a.target_price).toLocaleString()}` : "목표가없음";
     const industry = a?.industry ?? "업종미상";
-    const rr       = a?.risk_reward_ratio ? `리스크/리워드 1:${parseFloat(a.risk_reward_ratio).toFixed(1)}` : "";
-    return `- ${h.company_name}(${h.ticker}) | ${industry} | AI판정:${verdict} | ${target} | ${rr}`.trim();
+    const avgPrice = h.avg_price ? parseFloat(h.avg_price) : null;
+    const qty      = h.quantity  ? parseFloat(h.quantity)  : null;
+    const cur      = p?.price ?? null;
+    const returnPctStr = (avgPrice && cur) ? `수익률${((cur - avgPrice) / avgPrice * 100).toFixed(1)}%` : "수익률N/A";
+    const hv = holdingValues.find(x => x.ticker === h.ticker);
+    const weightStr = (hv && diagTotalValue > 0) ? `비중${(hv.value / diagTotalValue * 100).toFixed(1)}%` : "비중N/A";
+    const plStr = (avgPrice && qty && cur) ? `P&L${((cur - avgPrice) * qty).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원` : "";
+    return `- ${h.company_name}(${h.ticker}) | ${industry} | AI:${verdict} | ${target} | ${returnPctStr} | ${weightStr}${plStr ? ` | ${plStr}` : ""}`.trim();
   }).join("\n");
+
+  const totalReturnPctDiag = diagTotalInvested > 0
+    ? ((diagTotalValue - diagTotalInvested) / diagTotalInvested * 100).toFixed(2) : null;
+  const topConcentrated = holdingValues
+    .filter(hv => diagTotalValue > 0)
+    .map(hv => ({ ticker: hv.ticker, pct: hv.value / diagTotalValue * 100 }))
+    .filter(x => x.pct > 30)
+    .map(x => `${x.ticker}(${x.pct.toFixed(1)}%)`)
+    .join(", ");
 
   // 섹터 목록 (중복 제거)
   const sectors = [...new Set(analyses.map((a: any) => a?.industry).filter(Boolean))] as string[];
@@ -392,30 +570,35 @@ router.post("/portfolio/diagnose", async (req, res) => {
   const sellCount = analyses.filter((a: any) => a?.investment_verdict?.toLowerCase().includes("sell")).length;
   const holdCount = analyses.filter((a: any) => a?.investment_verdict === "Hold").length;
 
-  const prompt = `당신은 전문 포트폴리오 매니저입니다. 아래 포트폴리오를 종합 분석하고 한국어로 진단해주세요.
+  const prompt = `당신은 기관급 포트폴리오 매니저(PM)입니다. 아래 포트폴리오를 종합 분석하고 한국어로 진단해주세요.
 
 [포트폴리오 현황 — ${holdings.length}종목]
 ${portfolioLines}
 
-[AI 판정 분포] 매수 ${buyCount}종목 / 홀드 ${holdCount}종목 / 매도 ${sellCount}종목
-[보유 섹터] ${sectors.join(", ") || "정보없음"}
+[포트폴리오 통계]
+- KRW 총 투자금: ${diagTotalInvested > 0 ? Math.round(diagTotalInvested).toLocaleString("ko-KR") + "원" : "미입력"}
+- KRW 현재 평가금: ${diagTotalValue > 0 ? Math.round(diagTotalValue).toLocaleString("ko-KR") + "원" : "미입력"}
+- 전체 수익률: ${totalReturnPctDiag != null ? totalReturnPctDiag + "%" : "미입력"}
+- 30% 초과 집중 종목: ${topConcentrated || "없음"}
+- AI 판정 분포: 매수 ${buyCount}종목 / 홀드 ${holdCount}종목 / 매도 ${sellCount}종목
+- 보유 섹터: ${sectors.join(", ") || "정보없음"}
 
 다음 5가지 항목을 각각 2-3문장으로 작성하세요. 마크다운 볼드(**) 사용 금지. 각 항목은 정확히 아래 헤더로 구분하세요:
 
 [종합진단]
-전체 포트폴리오의 건강 상태와 균형 평가. 강점과 약점 요약.
+전체 포트폴리오의 건강 상태와 균형 평가. 수익률 현황과 강점/약점 요약.
 
 [리스크 집중도]
-업종·테마 쏠림, 상관관계 높은 종목 군집, 단일 종목 의존도 등 리스크 요인 분석.
+업종·테마 쏠림, 비중이 30% 초과하는 종목의 위험도, 상관관계 분석. 구체적 종목명 언급 필수.
 
 [기회 요인]
-현재 포트폴리오에서 가장 주목할 종목과 그 이유. 상승여력이 높거나 AI 판정이 긍정적인 종목 중심.
+현재 포트폴리오에서 가장 주목할 종목과 그 이유. 수익률·AI 판정·상승여력 종합 판단.
 
 [실행 권고]
-지금 당장 할 수 있는 1-2가지 구체적 행동 제안. 비중 축소/확대 또는 익절/손절 포함 가능.
+PM 관점에서 지금 당장 실행할 1-2가지 구체적 행동. 비중 조절 수치(예: "A 비중을 20%→15%로") 포함 권장.
 
-[섹터 보완]
-현재 포트폴리오에 빠진 섹터 또는 분산 효과를 높일 수 있는 보완 투자 방향 1-2가지 제안. 구체적인 섹터명이나 업종을 명시하세요.`;
+[리밸런싱 전략]
+수익률 및 비중 데이터를 근거로 한 리밸런싱 제안. 익절/손절 라인, 추가매수 우선순위, 섹터 보완 방향을 구체적으로 명시하세요.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -433,11 +616,12 @@ ${portfolioLines}
     const savedAt = new Date().toISOString();
     const result = {
       sections: {
-        overall:     extractSection(text, "종합진단"),
-        risk:        extractSection(text, "리스크 집중도"),
-        opportunity: extractSection(text, "기회 요인"),
-        action:      extractSection(text, "실행 권고"),
-        recommend:   extractSection(text, "섹터 보완"),
+        overall:      extractSection(text, "종합진단"),
+        risk:         extractSection(text, "리스크 집중도"),
+        opportunity:  extractSection(text, "기회 요인"),
+        action:       extractSection(text, "실행 권고"),
+        rebalancing:  extractSection(text, "리밸런싱 전략"),
+        recommend:    extractSection(text, "섹터 보완"),
       },
       stats: { total: holdings.length, buyCount, holdCount, sellCount },
       savedAt,
