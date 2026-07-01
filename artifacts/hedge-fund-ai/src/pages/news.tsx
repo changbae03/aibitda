@@ -92,9 +92,9 @@ function relTime(iso: string) {
 function dateLabel(iso: string) {
   try {
     const d = parseISO(iso);
-    if (isToday(d)) return "오늘";
-    if (isYesterday(d)) return "어제";
-    return format(d, "M월 d일 (E)", { locale: ko });
+    if (isToday(d))    return `오늘, ${format(d, "M월 d일 EEEE", { locale: ko })}`;
+    if (isYesterday(d)) return `어제, ${format(d, "M월 d일 EEEE", { locale: ko })}`;
+    return format(d, "M월 d일 EEEE", { locale: ko });
   } catch { return ""; }
 }
 
@@ -137,7 +137,7 @@ function topicColor(topic: string) {
   return TOPIC_COLORS[topic] ?? TOPIC_COLORS["기타"];
 }
 
-/* ── 뉴스 카드 ──────────────────────────────────────────────────────────── */
+/* ── 뉴스 카드 (증권플러스 스타일) ─────────────────────────────────────── */
 
 function NewsCard({
   item,
@@ -178,34 +178,34 @@ function NewsCard({
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group flex gap-4 px-3 py-3.5 rounded-xl hover:bg-muted/25 transition-colors duration-150"
+      className="group flex gap-3 px-4 py-4 border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors duration-150"
     >
-      {/* 시간 컬럼 */}
-      <div className="w-12 shrink-0 flex flex-col items-end gap-1.5 pt-0.5">
-        <span className={cn(
-          "text-[13px] tabular-nums font-semibold leading-none",
-          veryNew ? "text-primary" : "text-muted-foreground/60",
-        )}>
-          {timeStr(item.pubDate)}
-        </span>
-        {breaking && (
-          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded leading-none">
-            <Zap className="w-2.5 h-2.5" />속보
-          </span>
-        )}
-      </div>
-
-      {/* 타임라인 구분선 */}
-      <div className="relative shrink-0 flex flex-col items-center">
+      {/* 왼쪽 불릿 점 */}
+      <div className="shrink-0 pt-[7px]">
         <div className={cn(
-          "w-2 h-2 rounded-full mt-1 shrink-0 ring-2 ring-background",
+          "w-[7px] h-[7px] rounded-full",
           breaking ? "bg-primary" : veryNew ? "bg-primary/50" : "bg-border",
         )} />
-        <div className="w-px flex-1 bg-border/40 mt-1" />
       </div>
 
       {/* 본문 */}
-      <div className="flex-1 min-w-0 pb-1">
+      <div className="flex-1 min-w-0">
+        {/* 시간 + 속보 뱃지 */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className={cn(
+            "text-[12px] tabular-nums leading-none",
+            veryNew ? "text-primary font-semibold" : "text-muted-foreground/50",
+          )}>
+            {relTime(item.pubDate)}
+          </span>
+          {breaking && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full leading-none">
+              <Zap className="w-2.5 h-2.5 fill-current" />속보
+            </span>
+          )}
+        </div>
+
+        {/* 헤드라인 */}
         <a
           href={item.url}
           target="_blank"
@@ -213,27 +213,26 @@ function NewsCard({
           className="block"
         >
           <p className={cn(
-            "text-[14px] leading-snug break-keep mb-2",
-            "text-foreground/90 group-hover:text-foreground transition-colors",
-            veryNew && "font-semibold",
+            "text-[16px] leading-[1.45] break-keep mb-2",
+            "text-foreground font-medium group-hover:text-primary transition-colors",
+            (breaking || veryNew) && "font-semibold",
           )}>
             {item.title}
           </p>
         </a>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium text-muted-foreground/70">{item.source}</span>
-          <span className="text-muted-foreground/30 text-[10px]">·</span>
-          <span className="text-[11px] text-muted-foreground/50">{relTime(item.pubDate)}</span>
+
+        {/* 출처 + 액션 */}
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-muted-foreground/55 font-medium">{item.source}</span>
           <a
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto shrink-0"
+            className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={e => e.stopPropagation()}
           >
-            <ExternalLink className="w-3 h-3 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+            <ExternalLink className="w-3.5 h-3.5 text-muted-foreground/40" />
           </a>
-          {/* 스크랩 버튼 */}
           <button
             onClick={toggleScrap}
             title={
@@ -244,7 +243,7 @@ function NewsCard({
               "shrink-0 p-0.5 rounded transition-all",
               !loggedIn && "opacity-30 cursor-not-allowed",
               loggedIn && scrapped && "text-primary",
-              loggedIn && !scrapped && "text-muted-foreground/30 hover:text-primary/70",
+              loggedIn && !scrapped && "text-muted-foreground/25 hover:text-primary/70 opacity-0 group-hover:opacity-100",
               pending && "opacity-50",
             )}
           >
@@ -315,18 +314,15 @@ function BreakingBanner({ items }: { items: MacroNewsItem[] }) {
 
 function SkeletonCard() {
   return (
-    <div className="flex gap-4 px-3 py-3.5">
-      <div className="w-12 shrink-0 flex flex-col items-end gap-2 pt-1">
-        <div className="h-3.5 w-10 rounded bg-muted/50 animate-pulse" />
+    <div className="flex gap-3 px-4 py-4 border-b border-border/40">
+      <div className="shrink-0 pt-[7px]">
+        <div className="w-[7px] h-[7px] rounded-full bg-muted/50 animate-pulse" />
       </div>
-      <div className="relative shrink-0 flex flex-col items-center">
-        <div className="w-2 h-2 rounded-full bg-muted/50 animate-pulse mt-1" />
-        <div className="w-px flex-1 bg-border/30 mt-1" />
-      </div>
-      <div className="flex-1 space-y-2 pb-1">
-        <div className="h-4 w-full rounded bg-muted/50 animate-pulse" />
-        <div className="h-4 w-3/4 rounded bg-muted/40 animate-pulse" />
-        <div className="h-3 w-1/3 rounded bg-muted/30 animate-pulse mt-1" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3 w-20 rounded bg-muted/40 animate-pulse" />
+        <div className="h-5 w-full rounded bg-muted/50 animate-pulse" />
+        <div className="h-5 w-4/5 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3 w-1/4 rounded bg-muted/30 animate-pulse mt-1" />
       </div>
     </div>
   );
@@ -641,35 +637,33 @@ export default function NewsPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 pt-8 pb-16">
 
-        {/* 헤더 */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary/10">
-              <Newspaper className="w-4 h-4 text-primary" />
+        {/* 헤더 — 증권플러스 스타일 */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[22px] font-black text-foreground tracking-tight leading-none">속보</h1>
+              <Zap className="w-5 h-5 text-primary fill-primary -mx-0.5" />
+              <h2 className="text-[22px] font-black text-foreground/50 tracking-tight leading-none">주요뉴스</h2>
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground leading-none">경제 뉴스피드</h1>
-              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                한국경제 · 매일경제 · 연합뉴스 · 뉴시스 · 서울경제 등
-              </p>
+            <div className="flex items-center gap-2">
+              {tab === "feed" && cachedAt && !loading && (
+                <span className="text-[11px] text-muted-foreground/40 tabular-nums">
+                  {format(parseISO(cachedAt), "HH:mm")} 기준
+                </span>
+              )}
+              {tab === "feed" && (
+                <button
+                  onClick={() => loadFeed(true)}
+                  disabled={loading}
+                  className="p-1.5 rounded-lg hover:bg-muted/40 transition-colors text-muted-foreground/40 hover:text-foreground disabled:opacity-30"
+                >
+                  <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {tab === "feed" && cachedAt && !loading && (
-              <span className="text-[11px] text-muted-foreground/50 tabular-nums">
-                {format(parseISO(cachedAt), "HH:mm")} 기준
-              </span>
-            )}
-            {tab === "feed" && (
-              <button
-                onClick={() => loadFeed(true)}
-                disabled={loading}
-                className="p-2 rounded-lg hover:bg-muted/40 transition-colors text-muted-foreground/50 hover:text-foreground disabled:opacity-30"
-              >
-                <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-              </button>
-            )}
-          </div>
+          {/* 두꺼운 하단 구분선 */}
+          <div className="h-[2px] bg-foreground/85 mb-0" />
         </div>
 
         {/* 탭 */}
@@ -809,14 +803,15 @@ export default function NewsPage() {
                 <div className="space-y-6">
                   {grouped.map(group => (
                     <div key={group.label}>
-                      <div className="flex items-center gap-3 mb-1 px-3">
-                        <span className="text-[12px] font-bold text-muted-foreground/70 tracking-wide">
+                      {/* 날짜 헤더 — 증권플러스 스타일 */}
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-muted/20 border-b border-border/30">
+                        <span className="text-[13px] font-semibold text-foreground/70">
                           {group.label}
                         </span>
-                        <div className="flex-1 h-px bg-border/50" />
                         <span className="text-[11px] text-muted-foreground/40">{group.items.length}건</span>
                       </div>
-                      <div>
+                      {/* 뉴스 카드 목록 */}
+                      <div className="rounded-b-lg overflow-hidden">
                         {group.items.map((item, i) => (
                           <NewsCard
                             key={`${item.url}-${i}`}
