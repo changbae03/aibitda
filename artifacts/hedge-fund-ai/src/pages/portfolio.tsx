@@ -11,7 +11,7 @@ import {
   Activity, Target, Lightbulb, ChevronsRight,
   Newspaper, Clock, Compass, Users,
   Sparkles, TrendingDown, CheckCircle2, MoveRight, ArrowRight,
-  BarChart3, Wallet, Scale, SlidersHorizontal,
+  BarChart3, Wallet, Scale, SlidersHorizontal, Star,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -51,6 +51,7 @@ interface Holding {
   currency: string;
   note: string | null;
   addedAt: string;
+  holdingType: "portfolio" | "watchlist";
   currentPrice: number | null;
   change1d: number | null;
   priceCurrency: string;
@@ -169,9 +170,9 @@ interface SearchResult {
 function isKorean(t: string) { return /[ㄱ-ㅎ가-힣]/.test(t); }
 
 // ── 종목 추가 다이얼로그 — 2단계: ①검색 → ②평단가/수량 입력 ──────────────
-interface AddDialogProps { onClose: () => void; onAdded: () => void; }
+interface AddDialogProps { onClose: () => void; onAdded: () => void; defaultType?: "portfolio" | "watchlist"; }
 
-function AddDialog({ onClose, onAdded }: AddDialogProps) {
+function AddDialog({ onClose, onAdded, defaultType = "portfolio" }: AddDialogProps) {
   const { isEn } = useLanguage();
 
   // Step 1: search
@@ -190,6 +191,7 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
   const [avgPriceInput, setAvgPriceInput] = useState("");
   const [quantityInput, setQuantityInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
+  const [holdingType, setHoldingType] = useState<"portfolio" | "watchlist">(defaultType);
 
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -241,10 +243,13 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         ticker: selectedStock.symbol,
         companyName: selectedStock.name,
         currency: selectedStock.currency,
+        holdingType,
       };
-      if (!skipDetail) {
+      if (!skipDetail && holdingType === "portfolio") {
         if (avgPriceInput) body.avgPrice = parseFloat(avgPriceInput);
         if (quantityInput) body.quantity = parseFloat(quantityInput);
+        if (noteInput) body.note = noteInput;
+      } else if (!skipDetail && holdingType === "watchlist") {
         if (noteInput) body.note = noteInput;
       }
       const r = await fetch(getApiUrl("/api/portfolio"), {
@@ -290,18 +295,39 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
         className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl overflow-hidden"
       >
         {/* 헤더 */}
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
-          <Briefcase className="w-4 h-4 text-primary shrink-0" />
-          <p className="text-sm font-semibold text-foreground flex-1">
-            {step === "search"
-              ? (isEn ? "Add to Portfolio" : "포트폴리오에 종목 추가")
-              : (isEn ? "Enter Purchase Info" : "매수 정보 입력")}
-          </p>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           {step === "detail" && (
-            <button onClick={() => { setStep("search"); setError(null); }} className="p-1 rounded hover:bg-muted text-muted-foreground mr-1" title="뒤로">
+            <button onClick={() => { setStep("search"); setError(null); }} className="p-1 rounded hover:bg-muted text-muted-foreground" title="뒤로">
               <ChevronRight className="w-4 h-4 rotate-180" />
             </button>
           )}
+          {/* 보유종목 / 관심종목 탭 토글 */}
+          <div className="flex-1 flex items-center bg-muted/50 rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => setHoldingType("portfolio")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-semibold rounded-md transition-all",
+                holdingType === "portfolio"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Briefcase className="w-3 h-3" />
+              {isEn ? "Holdings" : "보유종목"}
+            </button>
+            <button
+              onClick={() => setHoldingType("watchlist")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-semibold rounded-md transition-all",
+                holdingType === "watchlist"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Star className="w-3 h-3" />
+              {isEn ? "Watchlist" : "관심종목"}
+            </button>
+          </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
             <XIcon className="w-4 h-4" />
           </button>
@@ -385,106 +411,123 @@ function AddDialog({ onClose, onAdded }: AddDialogProps) {
           </>
         )}
 
-        {/* STEP 2: 평단가/수량 입력 */}
+        {/* STEP 2: 정보 입력 */}
         {step === "detail" && selectedStock && (
           <div className="px-4 py-5 space-y-4">
             {/* 선택된 종목 요약 */}
             <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-muted/40 border border-border">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-primary/60" />
+                {holdingType === "watchlist"
+                  ? <Star className="w-4 h-4 text-amber-400" />
+                  : <Building2 className="w-4 h-4 text-primary/60" />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{selectedStock.name}</p>
                 <p className="text-[11px] text-muted-foreground font-mono">{selectedStock.symbol} · {selectedStock.currency}</p>
               </div>
+              <span className={cn(
+                "text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0",
+                holdingType === "watchlist"
+                  ? "bg-amber-400/10 text-amber-500"
+                  : "bg-primary/10 text-primary/70"
+              )}>
+                {holdingType === "watchlist" ? (isEn ? "Watchlist" : "관심종목") : (isEn ? "Holdings" : "보유종목")}
+              </span>
             </div>
 
-            {/* 평단가 */}
-            <div>
-              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
-                {isEn ? "Average cost" : "평균 매수단가 (평단가)"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
-              </label>
-              <div className="relative">
-                <input
-                  ref={avgPriceRef}
-                  type="number"
-                  inputMode="decimal"
-                  placeholder={selectedStock.currency === "KRW" ? "예: 85000" : "e.g. 182.50"}
-                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
-                  value={avgPriceInput}
-                  onChange={e => setAvgPriceInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground/40">
-                  {selectedStock.currency === "KRW" ? "원" : "USD"}
-                </span>
-              </div>
-            </div>
+            {/* 평단가 + 수량 — 보유종목만 */}
+            {holdingType === "portfolio" && (
+              <>
+                <div>
+                  <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
+                    {isEn ? "Average cost" : "평균 매수단가 (평단가)"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      ref={avgPriceRef}
+                      type="number" inputMode="decimal"
+                      placeholder={selectedStock.currency === "KRW" ? "예: 85000" : "e.g. 182.50"}
+                      className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                      value={avgPriceInput}
+                      onChange={e => setAvgPriceInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground/40">
+                      {selectedStock.currency === "KRW" ? "원" : "USD"}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
+                    {isEn ? "Quantity (shares)" : "보유 수량 (주)"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
+                  </label>
+                  <input
+                    type="number" inputMode="decimal"
+                    placeholder={isEn ? "e.g. 10" : "예: 10"}
+                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                    value={quantityInput}
+                    onChange={e => setQuantityInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
+                  />
+                </div>
+                {/* 투자금 미리보기 */}
+                {avgPriceInput && quantityInput && parseFloat(avgPriceInput) > 0 && parseFloat(quantityInput) > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
+                    <Wallet className="w-3.5 h-3.5 text-primary/50 shrink-0" />
+                    <span className="text-[12px] text-foreground/60">
+                      {isEn ? "Total invested:" : "총 투자금:"}{" "}
+                      <span className="font-semibold text-foreground">
+                        {selectedStock.currency === "KRW"
+                          ? `${Math.round(parseFloat(avgPriceInput) * parseFloat(quantityInput)).toLocaleString("ko-KR")}원`
+                          : `$${(parseFloat(avgPriceInput) * parseFloat(quantityInput)).toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
 
-            {/* 수량 */}
-            <div>
-              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
-                {isEn ? "Quantity (shares)" : "보유 수량 (주)"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
-              </label>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder={isEn ? "e.g. 10" : "예: 10"}
-                className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
-                value={quantityInput}
-                onChange={e => setQuantityInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
-              />
-            </div>
-
-            {/* 메모 */}
+            {/* 메모 (공통) */}
             <div>
               <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">
                 {isEn ? "Memo" : "메모"} <span className="text-muted-foreground/40">{isEn ? "optional" : "선택"}</span>
               </label>
               <input
+                ref={holdingType === "watchlist" ? avgPriceRef : undefined}
                 type="text"
-                placeholder={isEn ? "Investment thesis, target, etc." : "매수 이유, 목표 등"}
+                placeholder={holdingType === "watchlist"
+                  ? (isEn ? "Why watching? Target price, etc." : "관심 이유, 목표 주가 등")
+                  : (isEn ? "Investment thesis, target, etc." : "매수 이유, 목표 등")
+                }
                 className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-muted/40 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
                 value={noteInput}
                 onChange={e => setNoteInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addWithDetail(); }}
               />
             </div>
-
-            {/* 평단+수량 입력 시 투자금 미리보기 */}
-            {avgPriceInput && quantityInput && parseFloat(avgPriceInput) > 0 && parseFloat(quantityInput) > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
-                <Wallet className="w-3.5 h-3.5 text-primary/50 shrink-0" />
-                <span className="text-[12px] text-foreground/60">
-                  {isEn ? "Total invested:" : "총 투자금:"}{" "}
-                  <span className="font-semibold text-foreground">
-                    {selectedStock.currency === "KRW"
-                      ? `${Math.round(parseFloat(avgPriceInput) * parseFloat(quantityInput)).toLocaleString("ko-KR")}원`
-                      : `$${(parseFloat(avgPriceInput) * parseFloat(quantityInput)).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
-                    }
-                  </span>
-                </span>
-              </div>
-            )}
 
             {error && <p className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>}
 
             {/* 버튼 */}
             <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => addWithDetail(true)}
-                disabled={adding}
-                className="flex-1 py-2.5 text-sm text-muted-foreground border border-border rounded-xl hover:bg-muted/40 transition-colors"
-              >
-                {isEn ? "Skip & Add" : "건너뛰고 추가"}
-              </button>
+              {holdingType === "portfolio" && (
+                <button
+                  onClick={() => addWithDetail(true)}
+                  disabled={adding}
+                  className="flex-1 py-2.5 text-sm text-muted-foreground border border-border rounded-xl hover:bg-muted/40 transition-colors"
+                >
+                  {isEn ? "Skip & Add" : "건너뛰고 추가"}
+                </button>
+              )}
               <button
                 onClick={() => addWithDetail(false)}
                 disabled={adding}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
               >
                 {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                {isEn ? "Add to Portfolio" : "포트폴리오에 추가"}
+                {holdingType === "watchlist"
+                  ? (isEn ? "Add to Watchlist" : "관심종목에 추가")
+                  : (isEn ? "Add to Portfolio" : "포트폴리오에 추가")}
               </button>
             </div>
           </div>
@@ -2081,6 +2124,9 @@ export default function Portfolio() {
   const [perf, setPerf] = useState<PerformanceData | null>(null);
   const [perfLoading, setPerfLoading] = useState(false);
 
+  // 탭: 보유종목 / 관심종목
+  const [activeTab, setActiveTab] = useState<"portfolio" | "watchlist">("portfolio");
+
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     else setRefreshing(true);
@@ -2166,19 +2212,65 @@ export default function Portfolio() {
     setHoldings(prev => prev.filter(h => h.id !== id));
   }
 
-  const sorted = [...holdings].sort((a, b) => {
+  const portfolioHoldings = holdings.filter(h => (h.holdingType ?? "portfolio") === "portfolio");
+  const watchlistHoldings = holdings.filter(h => h.holdingType === "watchlist");
+  const activeHoldings = activeTab === "portfolio" ? portfolioHoldings : watchlistHoldings;
+
+  const sorted = [...activeHoldings].sort((a, b) => {
     if (sortKey === "upside") return ((b.analysis?.upsidePct) ?? -Infinity) - ((a.analysis?.upsidePct) ?? -Infinity);
     return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
   });
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      {/* 상단 헤더: 새로고침만 */}
-      <div className="flex items-center justify-end gap-2">
+      {/* ── 탭 스위처 + 새로고침 ── */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center bg-muted/50 rounded-xl p-1 gap-0.5">
+          <button
+            onClick={() => setActiveTab("portfolio")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold rounded-lg transition-all",
+              activeTab === "portfolio"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            {isEn ? "Holdings" : "보유종목"}
+            {portfolioHoldings.length > 0 && (
+              <span className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
+                activeTab === "portfolio" ? "bg-primary/10 text-primary/70" : "bg-muted text-muted-foreground"
+              )}>
+                {portfolioHoldings.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("watchlist")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold rounded-lg transition-all",
+              activeTab === "watchlist"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Star className="w-3.5 h-3.5" />
+            {isEn ? "Watchlist" : "관심종목"}
+            {watchlistHoldings.length > 0 && (
+              <span className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
+                activeTab === "watchlist" ? "bg-amber-400/15 text-amber-500" : "bg-muted text-muted-foreground"
+              )}>
+                {watchlistHoldings.length}
+              </span>
+            )}
+          </button>
+        </div>
         <button
           onClick={() => load(true)}
           disabled={refreshing}
-          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground"
+          className="p-2 rounded-xl hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground shrink-0"
           title="새로고침"
         >
           <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
@@ -2192,46 +2284,89 @@ export default function Portfolio() {
             <p className="text-[13px] text-muted-foreground">{isEn ? "Loading portfolio..." : "포트폴리오 불러오는 중…"}</p>
           </div>
         </div>
-      ) : holdings.length === 0 ? (
-        /* ── 빈 상태 ── */
-        <div className="flex flex-col items-center justify-center py-32 space-y-5 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Briefcase className="w-8 h-8 text-primary/60" />
+      ) : activeHoldings.length === 0 ? (
+        /* ── 탭별 빈 상태 ── */
+        <div className="flex flex-col items-center justify-center py-28 space-y-5 text-center">
+          <div className={cn(
+            "w-16 h-16 rounded-2xl flex items-center justify-center",
+            activeTab === "watchlist" ? "bg-amber-400/10" : "bg-primary/10"
+          )}>
+            {activeTab === "watchlist"
+              ? <Star className="w-8 h-8 text-amber-400/60" />
+              : <Briefcase className="w-8 h-8 text-primary/60" />
+            }
           </div>
           <div>
-            <p className="text-[16px] font-bold text-foreground">{isEn ? "No holdings yet" : "보유 종목이 없어요"}</p>
+            <p className="text-[16px] font-bold text-foreground">
+              {activeTab === "watchlist"
+                ? (isEn ? "Watchlist is empty" : "관심종목이 없어요")
+                : (isEn ? "No holdings yet" : "보유 종목이 없어요")
+              }
+            </p>
             <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-              {isEn
-                ? "Add stocks to see current price, fair value, and key issues at a glance."
-                : <>종목을 추가하면 AI가 현재가, 적정주가,<br/>오늘의 이슈를 한눈에 보여드려요.</>
+              {activeTab === "watchlist"
+                ? (isEn
+                    ? "Add stocks you're watching to track prices and get AI analysis."
+                    : <>사고 싶은 종목을 담아두고<br/>AI 분석으로 적정 시점을 찾아보세요.</>
+                  )
+                : (isEn
+                    ? "Add stocks to see current price, fair value, and key issues at a glance."
+                    : <>종목을 추가하면 AI가 현재가, 적정주가,<br/>오늘의 이슈를 한눈에 보여드려요.</>
+                  )
               }
             </p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-[14px] font-semibold hover:bg-primary/90 transition-colors"
+            className={cn(
+              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-[14px] font-semibold transition-colors",
+              activeTab === "watchlist"
+                ? "bg-amber-400 text-white hover:bg-amber-400/90"
+                : "bg-primary text-white hover:bg-primary/90"
+            )}
           >
-            <Plus className="w-4 h-4" /> {isEn ? "Add First Stock" : "첫 종목 추가하기"}
+            <Plus className="w-4 h-4" />
+            {activeTab === "watchlist"
+              ? (isEn ? "Add to Watchlist" : "관심종목 추가하기")
+              : (isEn ? "Add First Stock" : "첫 종목 추가하기")
+            }
           </button>
         </div>
       ) : (
         <>
-          {/* ── 히어로 배너 ── */}
-          <PortfolioHero
-            holdings={holdings}
-            lastPriceUpdate={lastPriceUpdate}
-            priceUpdating={priceUpdating}
-            onAdd={() => setShowAdd(true)}
-          />
+          {/* ── 보유종목 탭: 히어로 배너 + 성과 카드 ── */}
+          {activeTab === "portfolio" && (
+            <>
+              <PortfolioHero
+                holdings={portfolioHoldings}
+                lastPriceUpdate={lastPriceUpdate}
+                priceUpdating={priceUpdating}
+                onAdd={() => setShowAdd(true)}
+              />
+              <PortfolioSummaryCard perf={perf} />
+              <PerformanceChart perf={perf} loading={perfLoading} />
+              <RebalancingCard perf={perf} />
+            </>
+          )}
 
-          {/* ── 포트폴리오 손익 요약 카드 ── */}
-          <PortfolioSummaryCard perf={perf} />
-
-          {/* ── 성과 추적 차트 ── */}
-          <PerformanceChart perf={perf} loading={perfLoading} />
-
-          {/* ── 리밸런싱 분석 카드 ── */}
-          <RebalancingCard perf={perf} />
+          {/* ── 관심종목 탭: 간단 안내 배너 ── */}
+          {activeTab === "watchlist" && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-400/8 border border-amber-400/15">
+              <Star className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-[12px] text-foreground/60 flex-1">
+                {isEn
+                  ? "Stocks on your watchlist. AI analysis and fair value shown when available."
+                  : "사고 싶거나 모니터링 중인 종목 목록입니다. AI 분석이 있는 종목은 적정주가가 함께 표시됩니다."
+                }
+              </p>
+              <button
+                onClick={() => setShowAdd(true)}
+                className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-500 hover:text-amber-600 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> {isEn ? "Add" : "추가"}
+              </button>
+            </div>
+          )}
 
           {/* ── 정렬 탭 ── */}
           <div className="flex items-center gap-1 pt-1">
@@ -2255,10 +2390,12 @@ export default function Portfolio() {
             ))}
           </div>
 
-          {/* ── 보유종목 뉴스 피드 ── */}
-          <PortfolioNewsFeed tickers={holdings.map(h => h.ticker)} />
+          {/* ── 뉴스 피드 (보유종목 탭만) ── */}
+          {activeTab === "portfolio" && (
+            <PortfolioNewsFeed tickers={portfolioHoldings.map(h => h.ticker)} />
+          )}
 
-          {/* ── 보유 종목 목록 ── */}
+          {/* ── 종목 카드 목록 ── */}
           <div className="space-y-2.5">
             <AnimatePresence mode="popLayout">
               {sorted.map(h => (
@@ -2272,15 +2409,20 @@ export default function Portfolio() {
             </AnimatePresence>
           </div>
 
-          {/* ── 포트폴리오 전체 리뷰 ── */}
-          <PortfolioReview holdings={holdings} />
-
+          {/* ── 포트폴리오 전체 리뷰 (보유종목 탭만) ── */}
+          {activeTab === "portfolio" && <PortfolioReview holdings={portfolioHoldings} />}
         </>
       )}
 
       {/* 종목 추가 다이얼로그 */}
       <AnimatePresence>
-        {showAdd && <AddDialog onClose={() => setShowAdd(false)} onAdded={() => load()} />}
+        {showAdd && (
+          <AddDialog
+            onClose={() => setShowAdd(false)}
+            onAdded={() => { load(); loadPerf(); }}
+            defaultType={activeTab}
+          />
+        )}
       </AnimatePresence>
 
       {/* 멀티뷰 정의 */}

@@ -39,6 +39,11 @@ async function ensureTable() {
       UNIQUE (user_id, ticker)
     )
   `);
+  // 마이그레이션: holding_type 컬럼 추가 (없는 경우)
+  await pool.query(`
+    ALTER TABLE portfolio_holdings
+    ADD COLUMN IF NOT EXISTS holding_type TEXT NOT NULL DEFAULT 'portfolio'
+  `);
 }
 
 // ── 현재가 조회 (Yahoo Finance) ─────────────────────────────────────────────
@@ -200,6 +205,7 @@ router.get("/portfolio", async (req, res) => {
 
   const { rows } = await pool.query(
     `SELECT ph.id, ph.ticker, ph.company_name, ph.avg_price, ph.quantity, ph.currency, ph.note, ph.added_at,
+            ph.holding_type,
             (SELECT a.english_name FROM analyses a WHERE a.ticker = ph.ticker AND a.english_name IS NOT NULL ORDER BY a.created_at DESC LIMIT 1) AS english_name
      FROM portfolio_holdings ph
      WHERE ph.user_id = $1
@@ -268,6 +274,7 @@ router.get("/portfolio", async (req, res) => {
       currency: row.currency,
       note: row.note,
       addedAt: row.added_at,
+      holdingType: (row.holding_type ?? "portfolio") as "portfolio" | "watchlist",
       // 현재가
       currentPrice,
       change1d: priceData.change1d,
@@ -305,10 +312,11 @@ router.post("/portfolio", async (req, res) => {
 
   await ensureTable();
 
-  const { ticker, companyName, avgPrice, quantity, currency, note } = req.body as {
+  const { ticker, companyName, avgPrice, quantity, currency, note, holdingType } = req.body as {
     ticker?: string; companyName?: string;
     avgPrice?: number; quantity?: number;
     currency?: string; note?: string;
+    holdingType?: "portfolio" | "watchlist";
   };
 
   if (!ticker) { res.status(400).json({ error: "ticker는 필수입니다" }); return; }
@@ -316,19 +324,21 @@ router.post("/portfolio", async (req, res) => {
   const cleanTicker = String(ticker).trim().toUpperCase();
   const cleanName = String(companyName ?? cleanTicker).trim();
   const cleanCurrency = String(currency ?? "KRW").trim();
+  const cleanType = holdingType === "watchlist" ? "watchlist" : "portfolio";
 
   try {
     const { rows } = await pool.query(`
-      INSERT INTO portfolio_holdings (user_id, ticker, company_name, avg_price, quantity, currency, note)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO portfolio_holdings (user_id, ticker, company_name, avg_price, quantity, currency, note, holding_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (user_id, ticker) DO UPDATE
         SET company_name = EXCLUDED.company_name,
             avg_price    = COALESCE(EXCLUDED.avg_price, portfolio_holdings.avg_price),
             quantity     = COALESCE(EXCLUDED.quantity, portfolio_holdings.quantity),
             currency     = EXCLUDED.currency,
-            note         = COALESCE(EXCLUDED.note, portfolio_holdings.note)
+            note         = COALESCE(EXCLUDED.note, portfolio_holdings.note),
+            holding_type = EXCLUDED.holding_type
       RETURNING id
-    `, [userId, cleanTicker, cleanName, avgPrice ?? null, quantity ?? null, cleanCurrency, note ?? null]);
+    `, [userId, cleanTicker, cleanName, avgPrice ?? null, quantity ?? null, cleanCurrency, note ?? null, cleanType]);
 
     res.json({ ok: true, id: rows[0].id });
   } catch (e: any) {
@@ -344,15 +354,19 @@ router.put("/portfolio/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "잘못된 ID" }); return; }
 
-  const { avgPrice, quantity, note } = req.body as { avgPrice?: number; quantity?: number; note?: string };
+  const { avgPrice, quantity, note, holdingType } = req.body as {
+    avgPrice?: number; quantity?: number; note?: string;
+    holdingType?: "portfolio" | "watchlist";
+  };
 
   await pool.query(`
     UPDATE portfolio_holdings
-    SET avg_price = COALESCE($1, avg_price),
-        quantity  = COALESCE($2, quantity),
-        note      = $3
+    SET avg_price    = COALESCE($1, avg_price),
+        quantity     = COALESCE($2, quantity),
+        note         = $3,
+        holding_type = COALESCE($6, holding_type)
     WHERE id = $4 AND user_id = $5
-  `, [avgPrice ?? null, quantity ?? null, note ?? null, id, userId]);
+  `, [avgPrice ?? null, quantity ?? null, note ?? null, id, userId, holdingType ?? null]);
 
   res.json({ ok: true });
 });
