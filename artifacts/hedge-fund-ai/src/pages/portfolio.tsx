@@ -1137,8 +1137,8 @@ function HoldingCard({ holding, onDelete, onRefresh, watchlistMode = false, hasB
         <div className="flex items-start gap-3">
           {/* 회사 로고 */}
           <div className={cn(
-            "w-11 h-11 rounded-xl flex items-center justify-center text-[18px] font-bold shrink-0 overflow-hidden",
-            logoErr ? badgeColorClass : "bg-muted/60 border border-border"
+            "w-11 h-11 rounded-xl flex items-center justify-center text-[17px] font-black shrink-0 overflow-hidden",
+            logoErr ? badgeColorClass : "bg-muted/60 border border-border/70"
           )}>
             {!logoErr ? (
               <img
@@ -1157,35 +1157,34 @@ function HoldingCard({ holding, onDelete, onRefresh, watchlistMode = false, hasB
                 <p className="text-[15px] font-bold text-foreground leading-tight truncate">
                   {isEn && holding.englishName ? holding.englishName : holding.companyName}
                 </p>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  <span className="font-mono text-[11px] text-muted-foreground/60">{holding.ticker}</span>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span className="font-mono text-[11px] text-muted-foreground/50">{holding.ticker}</span>
                   {a?.verdict && (
                     <span className={cn(
-                      "text-[10px] px-1.5 py-0 rounded font-bold border",
+                      "text-[10px] px-1.5 py-0.5 rounded-md font-bold border",
                       verdictBg(a.verdict), verdictColor(a.verdict)
                     )}>
                       {a.verdict === "Strong Buy" ? "BUY+" : a.verdict === "Buy" ? "BUY" : a.verdict === "Hold" ? "HOLD" : a.verdict === "Sell" ? "SELL" : a.verdict === "Strong Sell" ? "SELL-" : a.verdict}
                     </span>
                   )}
                   {a?.industry && (
-                    <span className="text-[10px] text-muted-foreground/40">· {a.industry}</span>
+                    <span className="text-[10px] text-muted-foreground/35 bg-muted/60 px-1.5 py-0.5 rounded-md">{a.industry}</span>
                   )}
                 </div>
               </div>
               {/* TP + 편집·삭제 */}
-              <div className="flex items-start gap-1 shrink-0">
-                {/* TP 우측 표시 */}
+              <div className="flex items-start gap-0.5 shrink-0">
                 {a?.targetPrice != null && (
                   <div className="text-right mr-1">
-                    <p className="text-[13px] font-bold text-foreground leading-none tabular-nums">
+                    <p className="text-[12px] font-bold text-foreground leading-none tabular-nums">
                       TP {fmtPrice(a.targetPrice, holding.priceCurrency, isEn)}
                     </p>
                     {a.upsidePct != null && (
                       <p className={cn(
-                        "text-[11px] tabular-nums mt-0.5 font-semibold",
+                        "text-[11px] tabular-nums mt-1 font-bold",
                         a.upsidePct >= 0 ? "text-emerald-500" : "text-red-400"
                       )}>
-                        {a.upsidePct >= 0 ? "+" : ""}{a.upsidePct.toFixed(1)}% {isEn ? "upside" : "여력"}
+                        {a.upsidePct >= 0 ? "+" : ""}{a.upsidePct.toFixed(1)}%
                       </p>
                     )}
                   </div>
@@ -1200,39 +1199,49 @@ function HoldingCard({ holding, onDelete, onRefresh, watchlistMode = false, hasB
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-400 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/30 hover:text-red-400 transition-colors"
                 >
                   {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
             {holding.note && (
-              <p className="mt-1 text-[11px] text-muted-foreground/50 truncate">{holding.note}</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground/45 italic truncate">{holding.note}</p>
             )}
           </div>
         </div>
 
-        {/* ── 현재가 컴팩트 행 ─────────────────────────────────── */}
-        <div className="mt-2 flex items-center gap-3">
+        {/* ── 현재가 행 ─────────────────────────────────────────── */}
+        <div className="mt-3 flex items-center gap-3">
           {holding.currentPrice != null ? (
             <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] text-muted-foreground/60">{isEn ? "Price" : "현재가"}</span>
               <span className="text-[14px] font-bold text-foreground tabular-nums">
                 {fmtPrice(holding.currentPrice, holding.priceCurrency, isEn)}
               </span>
               {holding.change1d != null && (
-                <span className={cn("text-[11px] tabular-nums font-medium", changeColor)}>
+                <span className={cn(
+                  "text-[11px] tabular-nums font-semibold px-1.5 py-0.5 rounded-md",
+                  holding.change1d > 0 ? "text-red-500 bg-red-500/10" : holding.change1d < 0 ? "text-blue-500 bg-blue-500/10" : "text-muted-foreground bg-muted/60"
+                )}>
                   {holding.change1d > 0 ? "▲" : holding.change1d < 0 ? "▼" : ""}{fmtPct(Math.abs(holding.change1d))}
                 </span>
               )}
             </div>
           ) : null}
+          {holding.returnPct != null && holding.avgPrice != null && (
+            <span className={cn(
+              "text-[11px] font-semibold tabular-nums",
+              holding.returnPct > 0 ? "text-red-500/70" : holding.returnPct < 0 ? "text-blue-500/70" : "text-muted-foreground/40"
+            )}>
+              {holding.returnPct > 0 ? "+" : ""}{holding.returnPct.toFixed(2)}% {isEn ? "return" : "수익률"}
+            </span>
+          )}
           {/* 멀티뷰 TP */}
           {a?.collectiveTargetPrice != null && (
             <div className="flex items-baseline gap-1 ml-auto">
-              <Users className="w-2.5 h-2.5 text-muted-foreground/40" />
-              <span className="text-[10px] text-muted-foreground/50">{isEn ? "Multi" : "멀티뷰"}</span>
-              <span className="text-[12px] font-semibold text-foreground/70 tabular-nums">
+              <Users className="w-2.5 h-2.5 text-muted-foreground/35" />
+              <span className="text-[10px] text-muted-foreground/40">{isEn ? "Multi" : "멀티뷰"}</span>
+              <span className="text-[11.5px] font-semibold text-foreground/60 tabular-nums">
                 {fmtPrice(a.collectiveTargetPrice, holding.priceCurrency, isEn)}
               </span>
               {a.collectiveUpsidePct != null && (
@@ -1247,21 +1256,21 @@ function HoldingCard({ holding, onDelete, onRefresh, watchlistMode = false, hasB
 
         {/* 현재가 vs 목표가 바 */}
         {priceBarPct != null && targetBarPct != null && (
-          <div className="mt-2 px-0.5">
-            <div className="relative h-1 bg-muted/40 rounded-full overflow-visible">
+          <div className="mt-2.5 px-0.5">
+            <div className="relative h-[3px] bg-muted/50 rounded-full overflow-visible">
               <div
                 className={cn(
-                  "absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full border border-background z-10",
-                  a?.upsidePct != null && a.upsidePct >= 0 ? "bg-emerald-400" : "bg-red-400"
+                  "absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-background z-10",
+                  a?.upsidePct != null && a.upsidePct >= 0 ? "bg-emerald-400" : "bg-blue-400"
                 )}
-                style={{ left: `clamp(0%, ${targetBarPct}%, 98%)` }}
+                style={{ left: `clamp(0%, ${targetBarPct}%, 97%)` }}
               />
               <div
-                className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-foreground border border-background z-20"
-                style={{ left: `clamp(0%, ${priceBarPct}%, 98%)` }}
+                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-foreground border-2 border-background z-20 shadow-sm"
+                style={{ left: `clamp(0%, ${priceBarPct}%, 97%)` }}
               />
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-primary/30"
+                className="absolute inset-y-0 left-0 rounded-full bg-primary/25"
                 style={{ width: `${priceBarPct}%` }}
               />
             </div>
@@ -1269,83 +1278,75 @@ function HoldingCard({ holding, onDelete, onRefresh, watchlistMode = false, hasB
         )}
       </div>
 
-      {/* ── 리서치 패널: THESIS + KEY RISK (항상 표시) ──────────────────────── */}
+      {/* ── 리서치 패널 ──────────────────────────────────────────── */}
       {a && hasResearch && (
-        <div className="border-t border-border/50">
-          <div className="px-4 pt-3 pb-2 space-y-3">
-            {/* THESIS — 전체 너비 */}
+        <div className="border-t border-border/40 bg-muted/20">
+          <div className="px-4 pt-3 pb-3 space-y-3">
             {thesisBullets.length > 0 && (
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-1.5">THESIS</p>
+                <p className="text-[9.5px] font-bold text-muted-foreground/50 uppercase tracking-widest mb-2">THESIS</p>
                 <div className="space-y-1">
                   {thesisBullets.map((b, i) => (
-                    <div key={i} className="flex items-start gap-1.5">
-                      <span className="text-muted-foreground/35 select-none shrink-0 text-[11px] mt-px">—</span>
-                      <span className="text-[12px] text-foreground/75 leading-snug line-clamp-2">{b}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* KEY RISK — 전체 너비 */}
-            {riskBullets.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold text-red-400/60 uppercase tracking-wider mb-1.5">KEY RISK</p>
-                <div className="space-y-1">
-                  {riskBullets.map((b, i) => (
-                    <div key={i} className="flex items-start gap-1.5">
-                      <span className="text-red-400/50 select-none shrink-0 text-[11px] mt-px">!</span>
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-primary/30 select-none shrink-0 text-[10px] mt-0.5">—</span>
                       <span className="text-[12px] text-foreground/70 leading-snug line-clamp-2">{b}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+            {riskBullets.length > 0 && (
+              <div>
+                <p className="text-[9.5px] font-bold text-red-400/50 uppercase tracking-widest mb-2">KEY RISK</p>
+                <div className="space-y-1">
+                  {riskBullets.map((b, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-red-400/40 select-none shrink-0 text-[10px] mt-0.5">!</span>
+                      <span className="text-[12px] text-foreground/65 leading-snug line-clamp-2">{b}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          {/* Catalyst 한 줄 */}
           {catalystLine && (
-            <div className="px-4 pb-3 flex items-start gap-2 border-t border-border/30">
-              <span className="text-[10px] font-semibold text-muted-foreground/50 shrink-0 mt-0.5 pt-2">Catalyst</span>
-              <span className="text-[12px] text-foreground/60 leading-snug line-clamp-2 pt-2">{catalystLine}</span>
+            <div className="px-4 pb-3 pt-2 flex items-start gap-2 border-t border-border/30">
+              <span className="text-[9.5px] font-bold text-amber-400/60 uppercase tracking-widest shrink-0 mt-0.5">Catalyst</span>
+              <span className="text-[12px] text-foreground/55 leading-snug line-clamp-2 ml-1">{catalystLine}</span>
             </div>
           )}
         </div>
       )}
 
-      {/* ── 분석 없음 → 분석 유도 배너 ─────────────────────────── */}
+      {/* ── 분석 없음 → 유도 배너 ──────────────────────────────── */}
       {!a && (
         <button
           onClick={() => setLocation(`/analysis/new?ticker=${holding.ticker}`)}
-          className="mx-3 mb-3 w-[calc(100%-1.5rem)] flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-left"
+          className="mx-3 mb-3 w-[calc(100%-1.5rem)] flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-dashed border-primary/25 bg-primary/4 hover:bg-primary/8 transition-colors text-left"
         >
-          <Brain className="w-3.5 h-3.5 text-primary/60 shrink-0" />
-          <span className="flex-1 text-[12px] text-primary/60">{isEn ? "Request AI analysis to see fair value and today's key issues" : "AI 분석을 요청하면 적정주가와 오늘의 이슈를 확인할 수 있어요"}</span>
-          <ChevronRight className="w-3.5 h-3.5 text-primary/40 shrink-0" />
+          <Brain className="w-3.5 h-3.5 text-primary/50 shrink-0" />
+          <span className="flex-1 text-[12px] text-muted-foreground/60">{isEn ? "Request AI analysis to see fair value and today's key issues" : "AI 분석을 요청하면 적정주가와 오늘의 이슈를 확인할 수 있어요"}</span>
+          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" />
         </button>
       )}
 
-
       {/* ── 하단 액션 바 ──────────────────────────────────────── */}
-      <div className="border-t border-border/60 px-3 py-2 flex items-center gap-2">
-        {/* 보고서 보기 */}
+      <div className="border-t border-border/40 px-3 py-2 flex items-center gap-2">
         {a && (
           <button
             onClick={() => setLocation(`/analysis/${a.id}`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
           >
-            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            <ExternalLink className="w-3 h-3 shrink-0" />
             <span>{isEn ? "View Report" : "보고서 보기"}</span>
           </button>
         )}
-
         <div className="flex-1" />
-
-        {/* 새 보고서 작성하기 */}
         <button
           onClick={() => setConfirmNewReport(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-primary/80 hover:text-primary hover:bg-primary/8 border border-primary/20 hover:border-primary/40 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold text-primary/70 hover:text-primary hover:bg-primary/8 border border-primary/15 hover:border-primary/35 transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+          <Sparkles className="w-3 h-3 shrink-0" />
           <span>{isEn ? "New Report" : "새 보고서 작성하기"}</span>
         </button>
       </div>
@@ -1772,7 +1773,6 @@ function WatchlistSection({
 }) {
   const { isEn } = useLanguage();
 
-  // 주목 뱃지 결정
   function getAlertBadge(h: Holding): { label: string; color: string } | null {
     const ch = h.change1d;
     if (ch == null) return null;
@@ -1780,7 +1780,6 @@ function WatchlistSection({
     if (ch >= 3) return { label: isEn ? `📈 Up +${ch.toFixed(1)}%` : `📈 상승 +${ch.toFixed(1)}%`, color: "bg-red-400/8 border-red-400/20 text-red-400/80" };
     if (ch <= -5) return { label: isEn ? `📉 Drop ${ch.toFixed(1)}%` : `📉 급락 ${ch.toFixed(1)}%`, color: "bg-blue-500/10 border-blue-400/30 text-blue-400" };
     if (ch <= -3) return { label: isEn ? `⬇️ Down ${ch.toFixed(1)}%` : `⬇️ 하락 ${ch.toFixed(1)}%`, color: "bg-blue-400/8 border-blue-400/20 text-blue-400/80" };
-    // 상승여력 높으면 매수 시그널
     const upside = h.analysis?.upsidePct;
     if (upside != null && upside >= 20) return { label: isEn ? `⭐ Upside +${upside.toFixed(0)}%` : `⭐ 상승여력 +${upside.toFixed(0)}%`, color: "bg-amber-400/10 border-amber-400/25 text-amber-500" };
     return null;
@@ -1792,11 +1791,11 @@ function WatchlistSection({
     <div className="space-y-3">
       {/* 섹션 헤더 */}
       <div className="flex items-center gap-2 pt-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Star className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-[13px] font-bold text-foreground/70">{isEn ? "Watchlist" : "관심종목"}</span>
+          <span className="text-[12px] font-bold uppercase tracking-wider text-muted-foreground/60">{isEn ? "Watchlist" : "관심종목"}</span>
           {holdings.length > 0 && (
-            <span className="text-[10px] font-bold text-amber-500 bg-amber-400/10 px-1.5 py-0.5 rounded-full">{holdings.length}</span>
+            <span className="text-[10px] font-bold text-amber-500 bg-amber-400/10 px-1.5 py-0.5 rounded-full border border-amber-400/20">{holdings.length}</span>
           )}
         </div>
         {hasAlert && (
@@ -1865,46 +1864,48 @@ function PortfolioSummaryCard({ perf }: { perf: PerformanceData | null }) {
   const plKrw = valueKrw - investedKrw;
   const isPositive = plKrw >= 0;
   const returnColor = returnPct == null ? "text-foreground"
-    : returnPct > 0 ? "text-red-500 dark:text-red-400"
-    : returnPct < 0 ? "text-blue-500 dark:text-blue-400"
+    : returnPct > 0 ? "text-red-500"
+    : returnPct < 0 ? "text-blue-500"
     : "text-foreground";
+  const returnBg = returnPct == null ? ""
+    : returnPct > 0 ? "bg-red-500/8"
+    : returnPct < 0 ? "bg-blue-500/8"
+    : "";
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      <div className="px-5 pt-4 pb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Wallet className="w-3.5 h-3.5 text-primary/50" />
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-            {isEn ? "Portfolio P&L (KRW)" : "포트폴리오 손익 (원화)"}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50">
+        <Wallet className="w-3.5 h-3.5 text-primary/50" />
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">
+          {isEn ? "Portfolio P&L (KRW)" : "포트폴리오 손익 (원화)"}
+        </p>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-border/50">
+        {/* 총 투자금 */}
+        <div className="px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">{isEn ? "Invested" : "투자금"}</p>
+          <p className="text-[15px] font-bold text-foreground tabular-nums leading-none">
+            {Math.round(investedKrw).toLocaleString("ko-KR")}
           </p>
+          <p className="text-[10px] text-muted-foreground/50 mt-0.5">원</p>
         </div>
-        <div className="grid grid-cols-3 gap-0">
-          {/* 총 투자금 */}
-          <div>
-            <p className="text-[11px] text-muted-foreground mb-1">{isEn ? "Invested" : "투자금"}</p>
-            <p className="text-[15px] font-bold text-foreground tabular-nums">
-              {Math.round(investedKrw).toLocaleString("ko-KR")}
-              <span className="text-[11px] font-normal text-muted-foreground ml-0.5">원</span>
-            </p>
-          </div>
-          {/* 평가금액 */}
-          <div className="px-3 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground mb-1">{isEn ? "Value" : "평가금액"}</p>
-            <p className="text-[15px] font-bold text-foreground tabular-nums">
-              {Math.round(valueKrw).toLocaleString("ko-KR")}
-              <span className="text-[11px] font-normal text-muted-foreground ml-0.5">원</span>
-            </p>
-          </div>
-          {/* 수익률 */}
-          <div className="px-3 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground mb-1">{isEn ? "Return" : "수익률"}</p>
-            <p className={cn("text-[18px] font-bold tabular-nums leading-tight", returnColor)}>
-              {returnPct != null ? `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%` : "—"}
-            </p>
-            <p className={cn("text-[11px] font-medium tabular-nums", returnColor)}>
-              {isPositive ? "+" : ""}{Math.round(plKrw).toLocaleString("ko-KR")}원
-            </p>
-          </div>
+        {/* 평가금액 */}
+        <div className="px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">{isEn ? "Value" : "평가금액"}</p>
+          <p className="text-[15px] font-bold text-foreground tabular-nums leading-none">
+            {Math.round(valueKrw).toLocaleString("ko-KR")}
+          </p>
+          <p className="text-[10px] text-muted-foreground/50 mt-0.5">원</p>
+        </div>
+        {/* 수익률 */}
+        <div className={cn("px-4 py-4", returnBg)}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">{isEn ? "Return" : "수익률"}</p>
+          <p className={cn("text-[20px] font-black tabular-nums leading-none", returnColor)}>
+            {returnPct != null ? `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%` : "—"}
+          </p>
+          <p className={cn("text-[10px] font-semibold tabular-nums mt-0.5", returnColor)}>
+            {isPositive ? "+" : ""}{Math.round(plKrw).toLocaleString("ko-KR")}원
+          </p>
         </div>
       </div>
     </div>
@@ -1930,63 +1931,68 @@ function PerformanceChart({ perf, loading }: { perf: PerformanceData | null; loa
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/40">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/50">
         <BarChart3 className="w-3.5 h-3.5 text-primary/60 shrink-0" />
-        <p className="text-[12px] font-semibold text-foreground/70 flex-1">
-          {isEn ? "Portfolio Performance" : "포트폴리오 성과 추적"}
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 flex-1">
+          {isEn ? "Performance" : "포트폴리오 성과 추적"}
         </p>
         {latestReturn != null && (
           <span className={cn(
-            "text-[11px] font-semibold px-2 py-0.5 rounded-full",
+            "text-[12px] font-black tabular-nums px-2.5 py-0.5 rounded-full",
             isPositive ? "text-red-500 bg-red-500/10" : "text-blue-500 bg-blue-500/10"
           )}>
             {latestReturn >= 0 ? "+" : ""}{latestReturn.toFixed(2)}%
           </span>
         )}
+        {chartData.length > 0 && (
+          <span className="text-[10px] text-muted-foreground/30 tabular-nums">
+            {isEn ? `${chartData.length}d` : `${chartData.length}일`}
+          </span>
+        )}
       </div>
 
-      <div className="px-4 py-3">
+      <div className="px-4 py-4">
         {loading ? (
-          <div className="flex items-center justify-center h-[120px] gap-2 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-[130px] gap-2 text-muted-foreground/30">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-[12px]">{isEn ? "Loading..." : "로딩 중…"}</span>
           </div>
         ) : !hasData ? (
-          <div className="flex flex-col items-center justify-center h-[120px] text-center">
-            <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-2" />
-            <p className="text-[12px] text-muted-foreground/40">
-              {isEn ? "Chart builds daily — come back tomorrow!" : "매일 스냅샷을 쌓아 차트를 만들어요. 내일 다시 확인해보세요!"}
-            </p>
-            {chartData.length === 1 && (
-              <p className="text-[11px] text-muted-foreground/25 mt-1">
-                {isEn ? "First data point recorded" : "첫 번째 데이터 기록됨"} ✓
+          <div className="flex flex-col items-center justify-center h-[130px] text-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-muted-foreground/30" />
+            </div>
+            <div>
+              <p className="text-[12px] font-medium text-muted-foreground/50">
+                {isEn ? "Chart builds day by day" : "매일 스냅샷을 쌓아 차트를 만들어요"}
               </p>
-            )}
+              <p className="text-[11px] text-muted-foreground/30 mt-0.5">
+                {isEn ? "Come back tomorrow!" : "내일 다시 확인해보세요!"}
+                {chartData.length === 1 && " ✓"}
+              </p>
+            </div>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={140}>
             <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
               <defs>
                 <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={areaColor} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={areaColor} stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={areaColor} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={areaColor} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "currentColor", opacity: 0.35 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 10, fill: "currentColor", opacity: 0.35 }} tickLine={false} axisLine={false} tickFormatter={v => `${v > 0 ? "+" : ""}${v}%`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "currentColor", opacity: 0.3 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10, fill: "currentColor", opacity: 0.3 }} tickLine={false} axisLine={false} tickFormatter={v => `${v > 0 ? "+" : ""}${v}%`} />
               <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 11, boxShadow: "0 4px 16px rgba(0,0,0,0.12)" }}
                 formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v.toFixed(2)}%`, isEn ? "Return" : "수익률"]}
                 labelStyle={{ color: "hsl(var(--muted-foreground))" }}
               />
-              <Area type="monotone" dataKey="returnPct" stroke={areaColor} strokeWidth={1.5} fill="url(#perfGrad)" dot={false} activeDot={{ r: 3, fill: areaColor }} />
+              <Area type="monotone" dataKey="returnPct" stroke={areaColor} strokeWidth={2} fill="url(#perfGrad)" dot={false} activeDot={{ r: 4, fill: areaColor, strokeWidth: 2, stroke: "hsl(var(--card))" }} />
             </AreaChart>
           </ResponsiveContainer>
         )}
-        <p className="text-[10px] text-muted-foreground/25 text-right mt-1">
-          {isEn ? `${chartData.length}-day history` : `${chartData.length}일 누적`}
-        </p>
       </div>
     </div>
   );
@@ -2087,7 +2093,7 @@ function RebalancingCard({ perf }: { perf: PerformanceData | null }) {
   );
 }
 
-// ── 포트폴리오 히어로 배너 (삼쩜삼 스타일) ────────────────────────────────────
+// ── 포트폴리오 히어로 배너 ────────────────────────────────────────────────────
 function heroRelativeTime(date: Date, isEn = false): string {
   const sec = Math.floor((Date.now() - date.getTime()) / 1000);
   if (sec < 60)  return isEn ? `${sec}s ago` : `${sec}초 전`;
@@ -2112,85 +2118,98 @@ function PortfolioHero({
   const analysedCount = holdings.filter(h => h.analysis).length;
   const analysedPct   = holdings.length > 0 ? (analysedCount / holdings.length) * 100 : 0;
 
-  // Buy / Hold / Sell 분포
   const buyCount  = holdings.filter(h => /buy/i.test(h.analysis?.verdict ?? "")).length;
   const holdCount = holdings.filter(h => /hold/i.test(h.analysis?.verdict ?? "")).length;
   const sellCount = holdings.filter(h => /sell/i.test(h.analysis?.verdict ?? "")).length;
 
   return (
     <div className="rounded-2xl bg-card border border-border overflow-hidden">
-      {/* 상단: 주요 수치 */}
-      <div className="px-5 pt-5 pb-4">
-        <p className="text-[12px] text-muted-foreground mb-1">{isEn ? "My Portfolio" : "내 포트폴리오"}</p>
-        <div className="flex items-end gap-3">
-          <div>
-            <span className="text-[40px] font-bold text-foreground tabular-nums leading-none">
+      {/* 그라디언트 상단 띠 */}
+      <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #FF8A7A 0%, #a78bfa 50%, #38bdf8 100%)" }} />
+
+      {/* 메인 수치 */}
+      <div className="px-5 pt-5 pb-5">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-3">
+          {isEn ? "My Portfolio" : "내 포트폴리오"}
+        </p>
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[48px] font-black text-foreground tabular-nums leading-none tracking-tight">
               {holdings.length}
             </span>
-            <span className="text-[16px] text-muted-foreground ml-1.5">{isEn ? "stocks" : "개 종목"}</span>
+            <span className="text-[15px] font-medium text-muted-foreground">{isEn ? "stocks" : "개 종목"}</span>
           </div>
           {avgUpside != null && (
             <div className={cn(
-              "mb-1.5 flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] font-semibold",
-              hasPositive ? "bg-red-500/15 text-red-500" : "bg-blue-500/15 text-blue-500"
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border",
+              hasPositive
+                ? "bg-red-500/10 text-red-500 border-red-500/20"
+                : "bg-blue-500/10 text-blue-500 border-blue-500/20"
             )}>
-              {hasPositive ? "▲" : "▼"} {isEn ? `Avg. ${Math.abs(avgUpside).toFixed(1)}% upside` : `평균 ${Math.abs(avgUpside).toFixed(1)}% 여력`}
+              {hasPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              {isEn ? `Avg. ${Math.abs(avgUpside).toFixed(1)}% upside` : `평균 ${Math.abs(avgUpside).toFixed(1)}% 여력`}
             </div>
           )}
         </div>
 
-        {/* 구분선 */}
-        <div className="mt-4 pt-4 border-t border-border/40 grid grid-cols-3 gap-0">
-          {/* AI 판정 분포 */}
-          <div className="pr-3">
-            <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "AI Verdict" : "AI 판정"}</p>
+        {/* 3컬럼 스탯 */}
+        <div className="grid grid-cols-3 gap-0 rounded-xl bg-muted/40 border border-border/60 overflow-hidden">
+          {/* AI 판정 */}
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">
+              {isEn ? "AI Verdict" : "AI 판정"}
+            </p>
             <div className="flex flex-col gap-1">
               {buyCount > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 inline-block" />{buyCount} {isEn ? "Buy" : "매수"}
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />{buyCount} {isEn ? "Buy" : "매수"}
                 </span>
               )}
               {holdCount > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 inline-block" />{holdCount} {isEn ? "Hold" : "홀드"}
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />{holdCount} {isEn ? "Hold" : "홀드"}
                 </span>
               )}
               {sellCount > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-red-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0 inline-block" />{sellCount} {isEn ? "Sell" : "매도"}
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-red-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />{sellCount} {isEn ? "Sell" : "매도"}
                 </span>
               )}
               {buyCount + holdCount + sellCount === 0 && (
-                <span className="text-[13px] font-bold text-muted-foreground/50">—</span>
+                <span className="text-[13px] font-bold text-muted-foreground/30">—</span>
               )}
             </div>
           </div>
 
-          {/* AI 분석 완료 — 프로그레스 바 */}
-          <div className="px-4 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "AI Analysis" : "AI 분석"}</p>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+          {/* AI 분석 완료 */}
+          <div className="px-4 py-3 border-l border-border/60">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">
+              {isEn ? "AI Analysis" : "AI 분석"}
+            </p>
+            <div className="space-y-1.5">
+              <div className="h-1.5 rounded-full bg-border/60 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  className="h-full rounded-full bg-primary transition-all duration-700"
                   style={{ width: `${analysedPct}%` }}
                 />
               </div>
-              <span className="text-[11px] font-semibold text-foreground tabular-nums shrink-0">
-                {analysedCount}/{holdings.length}
+              <span className="text-[11px] font-semibold text-foreground tabular-nums">
+                {analysedCount}<span className="text-muted-foreground/40 font-normal">/{holdings.length}</span>
               </span>
             </div>
           </div>
 
-          {/* 가격 업데이트 — 상대 시간 */}
-          <div className="pl-4 border-l border-border/40">
-            <p className="text-[11px] text-muted-foreground mb-2">{isEn ? "Price Update" : "가격 갱신"}</p>
-            <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+          {/* 가격 갱신 */}
+          <div className="px-4 py-3 border-l border-border/60">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">
+              {isEn ? "Price" : "가격 갱신"}
+            </p>
+            <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
               {priceUpdating
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> {isEn ? "Updating" : "갱신 중"}</>
+                ? <><Loader2 className="w-3 h-3 animate-spin text-primary/60" /> <span className="text-primary/60">{isEn ? "Updating…" : "갱신 중…"}</span></>
                 : lastPriceUpdate
-                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />{heroRelativeTime(lastPriceUpdate, isEn)}</>
-                : "—"
+                ? <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />{heroRelativeTime(lastPriceUpdate, isEn)}</>
+                : <span className="text-muted-foreground/30">—</span>
               }
             </p>
           </div>
@@ -2200,7 +2219,7 @@ function PortfolioHero({
       {/* 하단 CTA */}
       <button
         onClick={onAdd}
-        className="w-full flex items-center justify-center gap-2 py-3 bg-primary/10 hover:bg-primary/15 transition-colors border-t border-primary/20 text-primary text-[13px] font-semibold"
+        className="w-full flex items-center justify-center gap-2 py-3 hover:bg-muted/40 transition-colors border-t border-border/50 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
       >
         <Plus className="w-4 h-4" /> {isEn ? "Add Stock" : "종목 추가하기"}
       </button>
@@ -2322,13 +2341,13 @@ export default function Portfolio() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
       {/* ── 헤더: 새로고침 ── */}
       <div className="flex items-center justify-end">
         <button
           onClick={() => load(true)}
           disabled={refreshing}
-          className="p-2 rounded-xl hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground"
+          className="p-2 rounded-xl hover:bg-muted/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
           title="새로고침"
         >
           <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
@@ -2344,13 +2363,18 @@ export default function Portfolio() {
         </div>
       ) : holdings.length === 0 ? (
         /* ── 완전 빈 상태 ── */
-        <div className="flex flex-col items-center justify-center py-32 space-y-5 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Briefcase className="w-8 h-8 text-primary/60" />
+        <div className="flex flex-col items-center justify-center py-28 gap-6 text-center">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/15 flex items-center justify-center shadow-lg">
+              <Briefcase className="w-9 h-9 text-primary/50" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-card border-2 border-border flex items-center justify-center">
+              <Plus className="w-3 h-3 text-muted-foreground/60" />
+            </div>
           </div>
-          <div>
-            <p className="text-[16px] font-bold text-foreground">{isEn ? "No stocks yet" : "종목이 없어요"}</p>
-            <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+          <div className="space-y-1.5">
+            <p className="text-[18px] font-black text-foreground">{isEn ? "No stocks yet" : "종목이 없어요"}</p>
+            <p className="text-[13px] text-muted-foreground leading-relaxed max-w-xs mx-auto">
               {isEn
                 ? "Add holdings or watchlist stocks to get started."
                 : <>보유 종목이나 관심종목을 추가하면<br/>AI가 분석과 이슈를 한눈에 보여드려요.</>
@@ -2359,7 +2383,7 @@ export default function Portfolio() {
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-[14px] font-semibold hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-white text-[14px] font-bold hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
           >
             <Plus className="w-4 h-4" /> {isEn ? "Add First Stock" : "첫 종목 추가하기"}
           </button>
@@ -2380,25 +2404,27 @@ export default function Portfolio() {
               <RebalancingCard perf={perf} />
 
               {/* 정렬 */}
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] text-muted-foreground mr-1">{isEn ? "Sort" : "정렬"}</span>
-                {(["added", "upside"] as const).map(k => (
-                  <button
-                    key={k}
-                    onClick={() => setSortKey(k)}
-                    className={cn(
-                      "px-3 py-1.5 text-[11px] rounded-full transition-colors",
-                      sortKey === k
-                        ? "bg-stone-200 text-stone-900 font-semibold dark:bg-foreground/10 dark:text-foreground"
-                        : "text-stone-500 hover:text-stone-900 dark:text-muted-foreground dark:hover:text-foreground"
-                    )}
-                  >
-                    {isEn
-                      ? { added: "Recently Added", upside: "By Upside" }[k]
-                      : { added: "최근 추가순", upside: "상승여력순" }[k]
-                    }
-                  </button>
-                ))}
+              <div className="flex items-center gap-1.5">
+                <SlidersHorizontal className="w-3 h-3 text-muted-foreground/40" />
+                <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5 border border-border/50">
+                  {(["added", "upside"] as const).map(k => (
+                    <button
+                      key={k}
+                      onClick={() => setSortKey(k)}
+                      className={cn(
+                        "px-3 py-1.5 text-[11px] rounded-md transition-all font-medium",
+                        sortKey === k
+                          ? "bg-card text-foreground shadow-sm border border-border/60"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {isEn
+                        ? { added: "Recent", upside: "Upside" }[k]
+                        : { added: "최근 추가순", upside: "상승여력순" }[k]
+                      }
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <PortfolioNewsFeed tickers={portfolioHoldings.map(h => h.ticker)} />
