@@ -415,7 +415,7 @@ function RoadmapTbody({ children }: { children: React.ReactNode }) {
 const MD_TABLE_COMPONENTS = {
   table: ({ children }: any) => (
     <div className="overflow-x-auto my-4 rounded-lg border border-border/50">
-      <table className="w-full text-[12.5px] border-collapse">{children}</table>
+      <table className="w-full text-[14px] border-collapse">{children}</table>
     </div>
   ),
   thead: ({ children }: any) => <thead className="bg-muted border-b border-border">{children}</thead>,
@@ -441,7 +441,7 @@ const MD_TABLE_COMPONENTS = {
       </tr>
     );
   },
-  th: ({ children }: any) => <th className="px-3 py-2.5 text-left text-[12px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{children}</th>,
+  th: ({ children }: any) => <th className="px-3 py-2.5 text-left text-[13px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{children}</th>,
   td: ({ children }: any) => <td className="px-3 py-2.5 text-foreground/90 leading-[1.75] align-top">{children}</td>,
 };
 
@@ -879,7 +879,7 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
   return (
     <div className="bg-card rounded-2xl p-5" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
       <div className="flex items-center gap-2 mb-4">
-        <h3 className="font-semibold text-sm text-foreground">
+        <h3 className="font-semibold text-base text-foreground">
           {isEn ? "Analysis Version Timeline" : "분석 버전 타임라인"}
         </h3>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
@@ -912,7 +912,7 @@ function VersionTimelinePanel({ ticker, currentId, isEn = false }: { ticker: str
                 )} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-muted-foreground font-mono">
+                    <span className="text-[13px] text-muted-foreground font-mono">
                       {new Date(v.created_at).toLocaleDateString(isEn ? "en-US" : "ko-KR", { month: "short", day: "numeric" })}
                     </span>
                     {isCurrent && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">{isEn ? "Current" : "현재"}</span>}
@@ -997,7 +997,7 @@ function EventRiskCard({ ticker, isEn = false }: { ticker: string; isEn?: boolea
       >
         <div className="flex items-center gap-2.5">
           <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />
-          <span className="font-semibold text-sm">
+          <span className="font-semibold text-base">
             {isEn ? "Event Risk Score" : "이벤트 리스크 점수"}
           </span>
           {data && (
@@ -1066,8 +1066,8 @@ function EventRiskCard({ ticker, isEn = false }: { ticker: string; isEn?: boolea
                   },
                 ].map(({ label, sub, score, max, hint }) => (
                   <div key={label} className="bg-muted/40 rounded-xl px-3 py-2.5 space-y-1.5">
-                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide truncate">{label}</div>
-                    <div className="text-sm font-bold tabular-nums leading-tight">{sub}</div>
+                    <div className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide truncate">{label}</div>
+                    <div className="text-base font-bold tabular-nums leading-tight">{sub}</div>
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                       <div
                         className={cn("h-full rounded-full", score >= max * 0.8 ? "bg-red-500" : score >= max * 0.5 ? "bg-amber-400" : "bg-emerald-500")}
@@ -1083,7 +1083,7 @@ function EventRiskCard({ ticker, isEn = false }: { ticker: string; isEn?: boolea
               {data.warnings.length > 0 && (
                 <div className="space-y-1.5">
                   {data.warnings.map((w, i) => (
-                    <div key={i} className="text-xs text-foreground/80 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 leading-snug">
+                    <div key={i} className="text-[13px] text-foreground/80 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2 leading-snug">
                       {w}
                     </div>
                   ))}
@@ -1174,7 +1174,7 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
       >
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-blue-500" />
-          <span className="font-semibold text-sm">{isEn ? "Peer Multiples (Real Data)" : "피어 멀티플 실측 데이터"}</span>
+          <span className="font-semibold text-base">{isEn ? "Peer Multiples (Real Data)" : "피어 멀티플 실측 데이터"}</span>
           {data && (
             <span className="text-[10px] dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-500 dark:border-green-800/50 rounded px-1.5 py-0.5 font-medium">
               {isEn ? `${rows.length} peers` : `${rows.length}개 피어`}
@@ -1205,7 +1205,7 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
       {open && data && rows.length > 0 && (
         <div className="border-t border-border">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-[13px]">
               <thead>
                 <tr className="bg-muted">
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{isEn ? "Ticker" : "종목"}</th>
@@ -1223,7 +1223,7 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
                 {rows.map(([t, p]) => (
                   <tr key={t} className="hover:bg-muted/20">
                     <td className="px-3 py-1.5 whitespace-nowrap max-w-[90px] sm:max-w-none">
-                      <span className="font-mono text-blue-600 font-medium text-[11px]">{t}</span>
+                      <span className="font-mono text-blue-600 font-medium text-[13px]">{t}</span>
                       <span className="text-muted-foreground ml-1 text-[9px] hidden sm:inline">{p.name}</span>
                     </td>
                     {([
@@ -1258,7 +1258,7 @@ function PeerMultiplesPanel({ ticker, isEn = false }: { ticker: string; isEn?: b
                 ))}
                 {avg && rows.length > 1 && (
                   <tr className="bg-blue-50/70 dark:bg-blue-950/30 font-semibold border-t border-blue-200/50 dark:border-blue-800/30">
-                    <td className="px-3 py-1.5 text-blue-700 dark:text-blue-400 text-[11px]">{isEn ? "Peer Avg" : "피어 평균"}</td>
+                    <td className="px-3 py-1.5 text-blue-700 dark:text-blue-400 text-[13px]">{isEn ? "Peer Avg" : "피어 평균"}</td>
                     <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.pbr, 2, "x")}</td>
                     <td className="px-3 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums">{fmtNum(avg.per_trailing, 1, "x")}</td>
                     <td className="px-2 py-1.5 text-right text-blue-700 dark:text-blue-400 tabular-nums hidden sm:table-cell">{fmtNum(avg.per_fwd, 1, "x")}</td>
@@ -1364,7 +1364,7 @@ function StockDisclosurePanel({ ticker, isEn = false }: { ticker: string; isEn?:
     <div className="bg-card rounded-2xl p-5 sm:p-6 print:hidden" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
       <div className="flex items-center gap-2 mb-4">
         <FileText className="w-4 h-4 text-muted-foreground/50" />
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 className="text-base font-semibold text-foreground">
           {isEn ? "Recent Disclosures" : "주요 공시"}
         </h2>
         <span className="text-[11px] text-muted-foreground/40">
@@ -1473,7 +1473,7 @@ function DividendInfoPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp className="w-4 h-4 text-muted-foreground/50" />
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 className="text-base font-semibold text-foreground">
           {isEn ? "Dividend Info" : "배당 정보"}
         </h2>
         {!loading && info?.dividendYield != null && (
@@ -1610,7 +1610,7 @@ function ShortSellingPanel({ ticker, isEn = false }: { ticker: string; isEn?: bo
     <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
       <div className="flex items-center gap-2 mb-4">
         <TrendingDown className="w-4 h-4 text-muted-foreground/50" />
-        <h2 className="text-sm font-semibold text-foreground">{isEn ? "Short Selling" : "공매도 현황"}</h2>
+        <h2 className="text-base font-semibold text-foreground">{isEn ? "Short Selling" : "공매도 현황"}</h2>
         {!loading && isOverheat && (
           <span className="ml-auto text-xs font-semibold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
             {isEn ? "Overheat" : "과열"}
@@ -1731,7 +1731,7 @@ function AnalystConsensusPanel({ ticker, currentPrice, isEn = false }: { ticker:
     <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
       <div className="flex items-center gap-2 mb-4">
         <BarChart2 className="w-4 h-4 text-muted-foreground/50" />
-        <h2 className="text-sm font-semibold text-foreground">{isEn ? "Analyst Consensus" : "애널리스트 컨센서스"}</h2>
+        <h2 className="text-base font-semibold text-foreground">{isEn ? "Analyst Consensus" : "애널리스트 컨센서스"}</h2>
         {!loading && info && (
           <span className={`ml-auto text-xs font-semibold ${consensus.color}`}>{consensus.label}</span>
         )}
@@ -1984,7 +1984,7 @@ function MajorShareholdersPanel({ ticker, isEn = false }: { ticker: string; isEn
     <div className="rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 mb-3">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-4 h-4 text-muted-foreground/50" />
-        <h2 className="text-sm font-semibold text-foreground">{isEn ? "Major Shareholders" : "주요 주주 현황"}</h2>
+        <h2 className="text-base font-semibold text-foreground">{isEn ? "Major Shareholders" : "주요 주주 현황"}</h2>
         {!loading && info?.institutionsCount != null && (
           <span className="ml-auto text-xs text-muted-foreground/50">
             {info.institutionsCount.toLocaleString()}{isEn ? " institutions" : "개 기관"}
@@ -2143,7 +2143,7 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
       {/* 헤더 */}
       <div className="flex items-center gap-2 mb-5">
         <Newspaper className="w-4 h-4 text-muted-foreground/50" />
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 className="text-base font-semibold text-foreground">
           {isEn ? "News Timeline" : "주요 뉴스 타임라인"}
         </h2>
         <span className="text-[11px] text-muted-foreground/40">
@@ -2169,7 +2169,7 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
 
       {/* AI 요약 */}
       {!loading && summary && (
-        <p className="text-[13px] text-muted-foreground leading-relaxed mb-5 pb-5 border-b border-border/50">
+        <p className="text-[15px] text-muted-foreground leading-relaxed mb-5 pb-5 border-b border-border/50">
           {summary}
         </p>
       )}
@@ -2262,7 +2262,7 @@ function StockNewsTimeline({ ticker, companyName, isEn = false }: { ticker: stri
                           transition={{ duration: 0.15 }}
                           className="overflow-hidden"
                         >
-                          <div className="ml-[72px] mt-2 text-[12px] text-muted-foreground leading-relaxed">
+                          <div className="ml-[72px] mt-2 text-[14px] text-muted-foreground leading-relaxed">
                             {ev.detail}
                             {ev.url && (
                               <a
@@ -3332,7 +3332,7 @@ export default function AnalysisDetail() {
       {/* Progress Track */}
       <div className="bg-card rounded-2xl p-4 sm:p-5 print:hidden sticky top-12 z-20" style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)" }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm text-foreground">
+          <h3 className="font-semibold text-base text-foreground">
             {isEn ? 'AI Analysis Pipeline' : 'AI 분석 파이프라인'}
           </h3>
           <span className="text-xs text-muted-foreground tabular-nums">
@@ -3433,7 +3433,7 @@ export default function AnalysisDetail() {
               <Loader2 className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-spin" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="text-base font-semibold text-foreground">
                 {isEn ? 'Queued for Analysis' : '분석 대기 중'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -3459,7 +3459,7 @@ export default function AnalysisDetail() {
               <svg className="w-5 h-5 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="text-base font-semibold text-foreground">
                 {isEn ? 'Analysis Failed' : '분석 생성 실패'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -3501,8 +3501,8 @@ export default function AnalysisDetail() {
                   <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
                     <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
                     <div className="flex-1">
-                      <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
-                      <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+                      <h4 className="font-semibold text-[16px] text-foreground leading-tight">{agent.role}</h4>
+                      <span className="text-[13px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
@@ -3632,7 +3632,7 @@ export default function AnalysisDetail() {
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden space-y-2.5"
                       >
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-[13px] text-muted-foreground">
                           {isEn
                             ? (feedbackRating === 5 ? "What did you like?" : "What could be better?")
                             : (feedbackRating === 5 ? "어떤 점이 좋았나요?" : "어떤 점이 아쉬웠나요?")}
@@ -3729,7 +3729,7 @@ export default function AnalysisDetail() {
               {/* AI 생성 명시 배너 (AI 기본법 투명성 의무) */}
               <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-card border border-border border-l-4 border-l-amber-400 px-4 py-3">
                 <span className="text-amber-500 text-base leading-none mt-0.5 shrink-0">⚠</span>
-                <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                   {isEn ? (
                     <><span className="font-bold text-foreground/80">AI-Generated Content.</span> This report was automatically generated by a large language model (LLM) AI based on publicly available data. It has not been reviewed by human experts and may contain factual or reasoning errors. Always verify with official filings and professional advice before making investment decisions.</>
                   ) : (
@@ -3742,20 +3742,20 @@ export default function AnalysisDetail() {
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Legal Disclaimer" : "투자 유의사항 (Legal Disclaimer)"}</p>
                 {isEn ? (
                   <>
-                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                       This report is <span className="font-semibold">for informational purposes only</span>, automatically generated by AiBITDA (operated by CBST) using publicly available financial data, market information, and corporate disclosures. This service does not constitute investment advisory or discretionary investment management.
                     </p>
                     <div className="space-y-2 mt-1">
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">Investment responsibility:</span> Price levels, scenarios, and analytical figures in this report do not constitute a recommendation to buy or sell any security. All content is for informational purposes only. The final responsibility for any investment decision rests solely with the investor.
                       </p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">AI limitations:</span> Target prices and financial estimates are predictions based on specific algorithms and assumptions. Actual results may differ materially due to data limitations, model errors, and market volatility. We make no warranty regarding the accuracy, completeness, or timeliness of this information.
                       </p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">Risk of loss:</span> Past performance or AI simulation results do not guarantee future returns. Financial instruments may result in partial or total loss of principal.
                       </p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">Independent verification recommended:</span> Before relying on this material, independently verify information through trusted sources such as official exchange filings, company press releases, and regulatory databases.
                       </p>
                     </div>
@@ -3768,20 +3768,20 @@ export default function AnalysisDetail() {
                   </>
                 ) : (
                   <>
-                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                       본 리포트는 「CBST」가 운영하는 AI 정보 서비스 「애빛다」가 공개된 재무 데이터, 시장 정보 및 기업 공시 자료를 바탕으로 자동 생성한 <span className="font-semibold">순수 참고용 정보</span>입니다. 본 서비스는 자본시장과 금융투자업에 관한 법률상 투자자문업 또는 투자일임업에 해당하지 않으며, 특정인을 대상으로 한 개별 투자 판단·조언을 제공하지 않습니다.
                     </p>
                     <div className="space-y-2 mt-1">
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">투자 책임:</span> 본 리포트에 포함된 가격 수준, 시나리오, 분석 수치는 특정 투자 행위를 권유하거나 추천하는 것이 아닙니다. 모든 내용은 정보 제공만을 목적으로 하며, 투자 판단의 최종 책임은 전적으로 투자자 본인에게 귀속됩니다.
                       </p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">AI 한계:</span> AI가 산출한 적정주가·재무 추정치는 특정 알고리즘과 가정에 기반한 예측값입니다. 학습 데이터의 한계, 모델 오류, 시장 변동성 등으로 인해 실제 결과와 크게 다를 수 있습니다. 당사는 해당 정보의 정확성, 완전성, 적시성을 보증하지 않습니다.
                       </p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">손실 위험:</span> 과거의 수익률이나 AI 시뮬레이션 성과가 미래의 수익을 보장하지 않습니다. 금융투자상품은 원금의 전부 또는 일부 손실이 발생할 수 있습니다.
                       </p>
-                      <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      <p className="text-[13.5px] text-muted-foreground leading-relaxed">
                         <span className="font-semibold text-foreground/70">독립 확인 권장:</span> 본 자료에 의존하기 전 금융감독원 전자공시시스템(DART), 거래소 공시, 공식 보도자료 등 신뢰할 수 있는 소스를 통해 정보를 독립적으로 재확인하시기 바랍니다.
                       </p>
                     </div>
@@ -4257,8 +4257,8 @@ function InvestmentStrategyCard({ step, agent, delay, ticker, companyName, creat
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-8 rounded-full bg-foreground shrink-0" />
           <div>
-            <p className="font-semibold text-[14px] text-foreground leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
-            <p className="text-[11px] text-muted-foreground">{agent.role}</p>
+            <p className="font-semibold text-[16px] text-foreground leading-tight">{isEn ? "Final Investment Strategy" : "최종 투자 전략"}</p>
+            <p className="text-[13px] text-muted-foreground">{agent.role}</p>
           </div>
         </div>
         {companyName && (
@@ -4874,8 +4874,8 @@ function StreamingCard({ stepKey, content, qcStatus, qcScore, qcFeedback, debate
       <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
         <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+          <h4 className="font-semibold text-[16px] text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[13px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
         <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
           <agent.icon className="w-3.5 h-3.5" style={{ color }} />
@@ -5532,7 +5532,7 @@ function InteractiveDCFPanel({
             ] as const).map(({ label, value, set, min, max, step, fmt: f }) => (
               <div key={label}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-[11px] text-muted-foreground">{label}</span>
+                  <span className="text-[13px] text-muted-foreground">{label}</span>
                   <span className="text-[12px] font-mono font-bold text-foreground">{f(value)}</span>
                 </div>
                 <input
@@ -5566,7 +5566,7 @@ function InteractiveDCFPanel({
           {/* 결과 요약 */}
           <div className="flex flex-wrap gap-2 px-1 pb-1">
             <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[13px] text-muted-foreground">
                 {isEn ? "DCF Fair Value" : "DCF 적정주가"}
               </span>
               <span className="text-[14px] font-mono font-bold text-foreground">{fmtFair(fairValue)}</span>
@@ -5686,25 +5686,25 @@ const BLUR_GATED_STEPS = ["company_analysis", "relative_valuation", "market_anal
 
 const MD_BODY_COMPONENTS = {
   h2: ({ children }: any) => (
-    <h2 className="text-[15px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
+    <h2 className="text-[18px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
   ),
   h3: ({ children }: any) => (
-    <h3 className="text-[15px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
+    <h3 className="text-[17px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
   ),
   h4: ({ children }: any) => (
-    <h4 className="text-[14px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
+    <h4 className="text-[16px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
   ),
   p: ({ children }: any) => {
     const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
     if (text.startsWith("출처:") || text.startsWith("출처 :")) {
       return <p className="mt-5 pt-3 border-t border-border/40 text-[12px] text-muted-foreground">{children}</p>;
     }
-    return <p className="mb-4 last:mb-0 text-foreground/90 leading-[1.95] text-[15px]">{children}</p>;
+    return <p className="mb-4 last:mb-0 text-foreground/90 leading-[1.95] text-[16px]">{children}</p>;
   },
   ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-2 list-none">{children}</ul>,
   ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
   li: ({ children }: any) => (
-    <li className="flex items-start gap-2.5 text-[15px] leading-[1.9] text-foreground/90">
+    <li className="flex items-start gap-2.5 text-[16px] leading-[1.9] text-foreground/90">
       <span className="shrink-0 w-1 h-1 rounded-full bg-muted-foreground/50 mt-[0.75em]" />
       <span className="flex-1 min-w-0">{children}</span>
     </li>
@@ -5719,7 +5719,7 @@ const MD_BODY_COMPONENTS = {
 function MdBlock({ src, isEn }: { src: string; isEn: boolean }) {
   if (!src.trim()) return null;
   return (
-    <div className="markdown-body" style={{ fontSize: "15px", lineHeight: "1.95" }}>
+    <div className="markdown-body" style={{ fontSize: "17px", lineHeight: "1.95" }}>
       <RoadmapEnContext.Provider value={isEn}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_BODY_COMPONENTS}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
       </RoadmapEnContext.Provider>
@@ -5739,8 +5739,8 @@ function BlurGateCard({ agent, color, delay, isEn }: { agent: AgentInfo; color: 
       <div className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-border/50">
         <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+          <h4 className="font-semibold text-[16px] text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[13px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
         <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
           <agent.icon className="w-3.5 h-3.5" style={{ color }} />
@@ -5935,8 +5935,8 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           style={{ background: color }}
         />
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-[14px] text-foreground leading-tight">{agent.role}</h4>
-          <span className="text-[11px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
+          <h4 className="font-semibold text-[16px] text-foreground leading-tight">{agent.role}</h4>
+          <span className="text-[13px] text-muted-foreground">{isEn ? (agent.nameEn ?? agent.name) : agent.name}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: `${color}15` }}>
@@ -6381,7 +6381,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               {/* 현재가 + 조율 업사이드 칩 */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
+                  <span className="text-[13px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(fv.current, priceCurrency, isEn)}</span>
                 </div>
                 <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
@@ -6392,7 +6392,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[11px] text-muted-foreground">{isEn ? "Band" : "밴드"}</span>
+                  <span className="text-[13px] text-muted-foreground">{isEn ? "Band" : "밴드"}</span>
                   <span className="text-[11px] font-mono text-rose-500">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
                   <span className="text-[10px] text-muted-foreground/60">~</span>
                   <span className="text-[11px] font-mono text-blue-500">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
@@ -6458,7 +6458,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
               {/* 현재가 + 평균 업사이드 요약 칩 */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[11px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
+                  <span className="text-[13px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
                   <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(valuationData.current, priceCurrency, isEn)}</span>
                 </div>
                 <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
