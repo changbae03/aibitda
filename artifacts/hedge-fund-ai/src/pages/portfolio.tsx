@@ -1048,7 +1048,10 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
 }
 
 // ── 보유 종목 카드 ────────────────────────────────────────────────────────────
-function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDelete: (id: number) => void; onRefresh: () => void }) {
+function HoldingCard({ holding, onDelete, onRefresh, watchlistMode = false, hasBadgeAbove = false }: {
+  holding: Holding; onDelete: (id: number) => void; onRefresh: () => void;
+  watchlistMode?: boolean; hasBadgeAbove?: boolean;
+}) {
   const { isEn } = useLanguage();
   const [, setLocation] = useLocation();
   const [deleting, setDeleting] = useState(false);
@@ -1124,7 +1127,10 @@ function HoldingCard({ holding, onDelete, onRefresh }: { holding: Holding; onDel
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="rounded-2xl border border-border bg-card overflow-hidden"
+      className={cn(
+        "border border-border bg-card overflow-hidden",
+        hasBadgeAbove ? "rounded-b-2xl rounded-t-none" : "rounded-2xl"
+      )}
     >
       {/* ── 헤더 ──────────────────────────────────────────────── */}
       <div className="px-4 pt-4 pb-3">
@@ -1755,6 +1761,100 @@ function PortfolioReview({ holdings }: { holdings: Holding[] }) {
   );
 }
 
+// ── 관심종목 섹션 ─────────────────────────────────────────────────────────────
+function WatchlistSection({
+  holdings, onAdd, onDelete, onRefresh,
+}: {
+  holdings: Holding[];
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+  onRefresh: () => void;
+}) {
+  const { isEn } = useLanguage();
+
+  // 주목 뱃지 결정
+  function getAlertBadge(h: Holding): { label: string; color: string } | null {
+    const ch = h.change1d;
+    if (ch == null) return null;
+    if (ch >= 5) return { label: isEn ? `🔥 Surge +${ch.toFixed(1)}%` : `🔥 급등 +${ch.toFixed(1)}%`, color: "bg-red-500/10 border-red-400/30 text-red-400" };
+    if (ch >= 3) return { label: isEn ? `📈 Up +${ch.toFixed(1)}%` : `📈 상승 +${ch.toFixed(1)}%`, color: "bg-red-400/8 border-red-400/20 text-red-400/80" };
+    if (ch <= -5) return { label: isEn ? `📉 Drop ${ch.toFixed(1)}%` : `📉 급락 ${ch.toFixed(1)}%`, color: "bg-blue-500/10 border-blue-400/30 text-blue-400" };
+    if (ch <= -3) return { label: isEn ? `⬇️ Down ${ch.toFixed(1)}%` : `⬇️ 하락 ${ch.toFixed(1)}%`, color: "bg-blue-400/8 border-blue-400/20 text-blue-400/80" };
+    // 상승여력 높으면 매수 시그널
+    const upside = h.analysis?.upsidePct;
+    if (upside != null && upside >= 20) return { label: isEn ? `⭐ Upside +${upside.toFixed(0)}%` : `⭐ 상승여력 +${upside.toFixed(0)}%`, color: "bg-amber-400/10 border-amber-400/25 text-amber-500" };
+    return null;
+  }
+
+  const hasAlert = holdings.some(h => getAlertBadge(h) != null);
+
+  return (
+    <div className="space-y-3">
+      {/* 섹션 헤더 */}
+      <div className="flex items-center gap-2 pt-2">
+        <div className="flex items-center gap-1.5">
+          <Star className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-[13px] font-bold text-foreground/70">{isEn ? "Watchlist" : "관심종목"}</span>
+          {holdings.length > 0 && (
+            <span className="text-[10px] font-bold text-amber-500 bg-amber-400/10 px-1.5 py-0.5 rounded-full">{holdings.length}</span>
+          )}
+        </div>
+        {hasAlert && (
+          <span className="text-[10px] font-semibold text-red-400/70 bg-red-400/8 px-2 py-0.5 rounded-full border border-red-400/15">
+            {isEn ? "Notable moves" : "주목 종목 있음"}
+          </span>
+        )}
+        <div className="flex-1 h-px bg-border/40" />
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-1 text-[11px] font-semibold text-amber-500 hover:text-amber-600 transition-colors"
+        >
+          <Plus className="w-3 h-3" /> {isEn ? "Add" : "추가"}
+        </button>
+      </div>
+
+      {holdings.length === 0 ? (
+        <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-dashed border-border/50 text-muted-foreground/40">
+          <Star className="w-4 h-4 shrink-0" />
+          <p className="text-[12px]">
+            {isEn ? "Add stocks you're watching — we'll highlight surges and issues." : "사고 싶은 종목을 추가하면 급등·이슈를 챙겨드려요."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          <AnimatePresence mode="popLayout">
+            {holdings.map(h => {
+              const badge = getAlertBadge(h);
+              return (
+                <motion.div key={h.id} layout>
+                  {badge && (
+                    <div className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-t-xl border border-b-0 text-[11px] font-semibold -mb-1",
+                      badge.color
+                    )}>
+                      <span>{badge.label}</span>
+                      <span className="text-current/40 font-normal">
+                        — {isEn ? "check this one" : "지금 확인해보세요"}
+                      </span>
+                    </div>
+                  )}
+                  <HoldingCard
+                    holding={h}
+                    onDelete={onDelete}
+                    onRefresh={onRefresh}
+                    watchlistMode
+                    hasBadgeAbove={!!badge}
+                  />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 포트폴리오 총수익 요약 카드 ──────────────────────────────────────────────
 function PortfolioSummaryCard({ perf }: { perf: PerformanceData | null }) {
   const { isEn } = useLanguage();
@@ -2124,8 +2224,6 @@ export default function Portfolio() {
   const [perf, setPerf] = useState<PerformanceData | null>(null);
   const [perfLoading, setPerfLoading] = useState(false);
 
-  // 탭: 보유종목 / 관심종목
-  const [activeTab, setActiveTab] = useState<"portfolio" | "watchlist">("portfolio");
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -2214,63 +2312,23 @@ export default function Portfolio() {
 
   const portfolioHoldings = holdings.filter(h => (h.holdingType ?? "portfolio") === "portfolio");
   const watchlistHoldings = holdings.filter(h => h.holdingType === "watchlist");
-  const activeHoldings = activeTab === "portfolio" ? portfolioHoldings : watchlistHoldings;
 
-  const sorted = [...activeHoldings].sort((a, b) => {
+  const sortedPortfolio = [...portfolioHoldings].sort((a, b) => {
     if (sortKey === "upside") return ((b.analysis?.upsidePct) ?? -Infinity) - ((a.analysis?.upsidePct) ?? -Infinity);
     return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
   });
+  const sortedWatchlist = [...watchlistHoldings].sort((a, b) =>
+    new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
+  );
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      {/* ── 탭 스위처 + 새로고침 ── */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 flex items-center bg-muted/50 rounded-xl p-1 gap-0.5">
-          <button
-            onClick={() => setActiveTab("portfolio")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold rounded-lg transition-all",
-              activeTab === "portfolio"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Briefcase className="w-3.5 h-3.5" />
-            {isEn ? "Holdings" : "보유종목"}
-            {portfolioHoldings.length > 0 && (
-              <span className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
-                activeTab === "portfolio" ? "bg-primary/10 text-primary/70" : "bg-muted text-muted-foreground"
-              )}>
-                {portfolioHoldings.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("watchlist")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold rounded-lg transition-all",
-              activeTab === "watchlist"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Star className="w-3.5 h-3.5" />
-            {isEn ? "Watchlist" : "관심종목"}
-            {watchlistHoldings.length > 0 && (
-              <span className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
-                activeTab === "watchlist" ? "bg-amber-400/15 text-amber-500" : "bg-muted text-muted-foreground"
-              )}>
-                {watchlistHoldings.length}
-              </span>
-            )}
-          </button>
-        </div>
+      {/* ── 헤더: 새로고침 ── */}
+      <div className="flex items-center justify-end">
         <button
           onClick={() => load(true)}
           disabled={refreshing}
-          className="p-2 rounded-xl hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground shrink-0"
+          className="p-2 rounded-xl hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground"
           title="새로고침"
         >
           <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
@@ -2284,58 +2342,32 @@ export default function Portfolio() {
             <p className="text-[13px] text-muted-foreground">{isEn ? "Loading portfolio..." : "포트폴리오 불러오는 중…"}</p>
           </div>
         </div>
-      ) : activeHoldings.length === 0 ? (
-        /* ── 탭별 빈 상태 ── */
-        <div className="flex flex-col items-center justify-center py-28 space-y-5 text-center">
-          <div className={cn(
-            "w-16 h-16 rounded-2xl flex items-center justify-center",
-            activeTab === "watchlist" ? "bg-amber-400/10" : "bg-primary/10"
-          )}>
-            {activeTab === "watchlist"
-              ? <Star className="w-8 h-8 text-amber-400/60" />
-              : <Briefcase className="w-8 h-8 text-primary/60" />
-            }
+      ) : holdings.length === 0 ? (
+        /* ── 완전 빈 상태 ── */
+        <div className="flex flex-col items-center justify-center py-32 space-y-5 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Briefcase className="w-8 h-8 text-primary/60" />
           </div>
           <div>
-            <p className="text-[16px] font-bold text-foreground">
-              {activeTab === "watchlist"
-                ? (isEn ? "Watchlist is empty" : "관심종목이 없어요")
-                : (isEn ? "No holdings yet" : "보유 종목이 없어요")
-              }
-            </p>
+            <p className="text-[16px] font-bold text-foreground">{isEn ? "No stocks yet" : "종목이 없어요"}</p>
             <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-              {activeTab === "watchlist"
-                ? (isEn
-                    ? "Add stocks you're watching to track prices and get AI analysis."
-                    : <>사고 싶은 종목을 담아두고<br/>AI 분석으로 적정 시점을 찾아보세요.</>
-                  )
-                : (isEn
-                    ? "Add stocks to see current price, fair value, and key issues at a glance."
-                    : <>종목을 추가하면 AI가 현재가, 적정주가,<br/>오늘의 이슈를 한눈에 보여드려요.</>
-                  )
+              {isEn
+                ? "Add holdings or watchlist stocks to get started."
+                : <>보유 종목이나 관심종목을 추가하면<br/>AI가 분석과 이슈를 한눈에 보여드려요.</>
               }
             </p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-[14px] font-semibold transition-colors",
-              activeTab === "watchlist"
-                ? "bg-amber-400 text-white hover:bg-amber-400/90"
-                : "bg-primary text-white hover:bg-primary/90"
-            )}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-[14px] font-semibold hover:bg-primary/90 transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            {activeTab === "watchlist"
-              ? (isEn ? "Add to Watchlist" : "관심종목 추가하기")
-              : (isEn ? "Add First Stock" : "첫 종목 추가하기")
-            }
+            <Plus className="w-4 h-4" /> {isEn ? "Add First Stock" : "첫 종목 추가하기"}
           </button>
         </div>
       ) : (
         <>
-          {/* ── 보유종목 탭: 히어로 배너 + 성과 카드 ── */}
-          {activeTab === "portfolio" && (
+          {/* ════ 보유종목 섹션 ════ */}
+          {portfolioHoldings.length > 0 && (
             <>
               <PortfolioHero
                 holdings={portfolioHoldings}
@@ -2346,71 +2378,69 @@ export default function Portfolio() {
               <PortfolioSummaryCard perf={perf} />
               <PerformanceChart perf={perf} loading={perfLoading} />
               <RebalancingCard perf={perf} />
+
+              {/* 정렬 */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-muted-foreground mr-1">{isEn ? "Sort" : "정렬"}</span>
+                {(["added", "upside"] as const).map(k => (
+                  <button
+                    key={k}
+                    onClick={() => setSortKey(k)}
+                    className={cn(
+                      "px-3 py-1.5 text-[11px] rounded-full transition-colors",
+                      sortKey === k
+                        ? "bg-stone-200 text-stone-900 font-semibold dark:bg-foreground/10 dark:text-foreground"
+                        : "text-stone-500 hover:text-stone-900 dark:text-muted-foreground dark:hover:text-foreground"
+                    )}
+                  >
+                    {isEn
+                      ? { added: "Recently Added", upside: "By Upside" }[k]
+                      : { added: "최근 추가순", upside: "상승여력순" }[k]
+                    }
+                  </button>
+                ))}
+              </div>
+
+              <PortfolioNewsFeed tickers={portfolioHoldings.map(h => h.ticker)} />
+
+              <div className="space-y-2.5">
+                <AnimatePresence mode="popLayout">
+                  {sortedPortfolio.map(h => (
+                    <HoldingCard key={h.id} holding={h} onDelete={handleDelete} onRefresh={() => load(true)} />
+                  ))}
+                </AnimatePresence>
+              </div>
+
+              <PortfolioReview holdings={portfolioHoldings} />
             </>
           )}
 
-          {/* ── 관심종목 탭: 간단 안내 배너 ── */}
-          {activeTab === "watchlist" && (
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-400/8 border border-amber-400/15">
-              <Star className="w-4 h-4 text-amber-400 shrink-0" />
-              <p className="text-[12px] text-foreground/60 flex-1">
-                {isEn
-                  ? "Stocks on your watchlist. AI analysis and fair value shown when available."
-                  : "사고 싶거나 모니터링 중인 종목 목록입니다. AI 분석이 있는 종목은 적정주가가 함께 표시됩니다."
-                }
-              </p>
+          {/* 보유종목이 없으면 빈 상태 유도 */}
+          {portfolioHoldings.length === 0 && (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Briefcase className="w-6 h-6 text-primary/50" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-foreground">{isEn ? "No holdings yet" : "보유 종목이 없어요"}</p>
+                <p className="text-[12px] text-muted-foreground mt-1">{isEn ? "Add stocks you've bought." : "실제로 보유한 종목을 추가해보세요."}</p>
+              </div>
               <button
                 onClick={() => setShowAdd(true)}
-                className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-500 hover:text-amber-600 transition-colors"
+                className="flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:text-primary/80 transition-colors"
               >
-                <Plus className="w-3 h-3" /> {isEn ? "Add" : "추가"}
+                <Plus className="w-3.5 h-3.5" /> {isEn ? "Add holding" : "보유종목 추가"}
               </button>
             </div>
           )}
 
-          {/* ── 정렬 탭 ── */}
-          <div className="flex items-center gap-1 pt-1">
-            <span className="text-[11px] text-muted-foreground mr-1">{isEn ? "Sort" : "정렬"}</span>
-            {(["added", "upside"] as const).map(k => (
-              <button
-                key={k}
-                onClick={() => setSortKey(k)}
-                className={cn(
-                  "px-3 py-1.5 text-[11px] rounded-full transition-colors",
-                  sortKey === k
-                    ? "bg-stone-200 text-stone-900 font-semibold dark:bg-foreground/10 dark:text-foreground"
-                    : "text-stone-500 hover:text-stone-900 dark:text-muted-foreground dark:hover:text-foreground"
-                )}
-              >
-                {isEn
-                  ? { added: "Recently Added", upside: "By Upside" }[k]
-                  : { added: "최근 추가순", upside: "상승여력순" }[k]
-                }
-              </button>
-            ))}
-          </div>
-
-          {/* ── 뉴스 피드 (보유종목 탭만) ── */}
-          {activeTab === "portfolio" && (
-            <PortfolioNewsFeed tickers={portfolioHoldings.map(h => h.ticker)} />
-          )}
-
-          {/* ── 종목 카드 목록 ── */}
-          <div className="space-y-2.5">
-            <AnimatePresence mode="popLayout">
-              {sorted.map(h => (
-                <HoldingCard
-                  key={h.id}
-                  holding={h}
-                  onDelete={handleDelete}
-                  onRefresh={() => load(true)}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-
-          {/* ── 포트폴리오 전체 리뷰 (보유종목 탭만) ── */}
-          {activeTab === "portfolio" && <PortfolioReview holdings={portfolioHoldings} />}
+          {/* ════ 관심종목 섹션 ════ */}
+          <WatchlistSection
+            holdings={sortedWatchlist}
+            onAdd={() => setShowAdd(true)}
+            onDelete={handleDelete}
+            onRefresh={() => load(true)}
+          />
         </>
       )}
 
@@ -2420,7 +2450,7 @@ export default function Portfolio() {
           <AddDialog
             onClose={() => setShowAdd(false)}
             onAdded={() => { load(); loadPerf(); }}
-            defaultType={activeTab}
+            defaultType="portfolio"
           />
         )}
       </AnimatePresence>
