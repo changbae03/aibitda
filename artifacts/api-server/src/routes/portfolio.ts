@@ -1008,18 +1008,24 @@ router.get("/portfolio/brief/:ticker", async (req, res) => {
   }
 });
 
-// ── GET /api/portfolio/check/:ticker — 포트폴리오 포함 여부 확인 ───────────────
+// ── GET /api/portfolio/check/:ticker — 포트폴리오/관심종목 포함 여부 확인 ────
 router.get("/portfolio/check/:ticker", async (req, res) => {
   const userId = getUserId(req);
-  if (!userId) { res.json({ inPortfolio: false }); return; }
+  if (!userId) { res.json({ inPortfolio: false, inWatchlist: false }); return; }
 
   await ensureTable();
   const ticker = String(req.params.ticker).trim().toUpperCase();
   const { rows } = await pool.query(
-    `SELECT id FROM portfolio_holdings WHERE user_id = $1 AND ticker = $2`,
+    `SELECT id, holding_type FROM portfolio_holdings WHERE user_id = $1 AND ticker = $2`,
     [userId, ticker]
   );
-  res.json({ inPortfolio: rows.length > 0, holdingId: rows[0]?.id ?? null });
+  const row = rows[0] ?? null;
+  const holdingType = row?.holding_type ?? null;
+  res.json({
+    inPortfolio: !!row && holdingType === "portfolio",
+    inWatchlist: !!row && holdingType === "watchlist",
+    holdingId: row?.id ?? null,
+  });
 });
 
 // ── GET /api/portfolio/changes/:ticker — 분석 이력 변화 감지 (본인 분석만) ──
