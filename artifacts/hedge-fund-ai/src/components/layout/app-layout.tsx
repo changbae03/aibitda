@@ -112,6 +112,7 @@ const NAV_GROUPS = [
       { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
       { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
       { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
+      { href: "/flow",            label: "수급 레이더",   labelEn: "Flow Radar",      Icon: Activity },
     ],
   },
 ];

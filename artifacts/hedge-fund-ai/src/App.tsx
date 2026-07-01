@@ -42,6 +42,7 @@ const DisclaimerPage   = lazy(() => import("@/pages/disclaimer"));
 const SupportPage      = lazy(() => import("@/pages/support"));
 const NoticesPage      = lazy(() => import("@/pages/notices"));
 const ThemesPage           = lazy(() => import("@/pages/themes"));
+const FlowPage             = lazy(() => import("@/pages/flow"));
 const UnlistedAnalysis     = lazy(() => import("@/pages/unlisted-analysis"));
 const NotFound             = lazy(() => import("@/pages/not-found"));
 
@@ -309,6 +310,7 @@ function Router() {
                 <Route path="/support" component={SupportPage} />
                 <Route path="/notices" component={NoticesPage} />
                 <Route path="/themes" component={ThemesPage} />
+                <Route path="/flow" component={FlowPage} />
                 <Route path="/unlisted" component={UnlistedAnalysis} />
                 <Route path="/unlisted/:corpCode" component={UnlistedAnalysis} />
                 <Route component={NotFound} />

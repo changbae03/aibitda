@@ -315,6 +315,88 @@ export async function fetchKISEngName(code: string): Promise<string | null> {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * 투자자별 매매동향 (FHKST01010900)
+ * 개인(개미) · 기관 · 외국인 순매수 거래대금 (억원, signed)
+ * ───────────────────────────────────────────────────────────────────────── */
+
+export interface KISInvestorFlow {
+  code: string;
+  individual: number;   // 개인 순매수 거래대금 (억원, + 매수 / - 매도)
+  institution: number;  // 기관합계 순매수 거래대금 (억원)
+  foreign: number;      // 외국인합계 순매수 거래대금 (억원)
+  name?: string;
+}
+
+export async function fetchKISInvestorFlow(
+  stockCode: string
+): Promise<KISInvestorFlow | null> {
+  const clean = stockCode.replace(/\.(KS|KQ)$/i, "");
+  if (!/^\d{6}$/.test(clean)) return null;
+
+  try {
+    const token = await getAccessToken();
+    const url = new URL(
+      `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`
+    );
+    url.searchParams.set("FID_COND_MRKT_DIV_CODE", "J");
+    url.searchParams.set("FID_INPUT_ISCD", clean);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: process.env.KIS_APP_KEY!,
+        appsecret: process.env.KIS_APP_SECRET!,
+        tr_id: "FHKST01010900",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.rt_cd !== "0") return null;
+
+    // output 배열 — 첫 번째 항목이 최근 거래일
+    const rows: any[] = Array.isArray(json.output) ? json.output : [];
+    const d = rows[0];
+    if (!d) return null;
+
+    const toOkKRW = (v: string | undefined): number => {
+      const n = parseFloat((v ?? "0").replace(/,/g, ""));
+      return isNaN(n) ? 0 : Math.round(n / 100_000_000); // 원 → 억원
+    };
+
+    return {
+      code: clean,
+      individual:  toOkKRW(d.prsn_ntby_tr_pbmn),
+      institution: toOkKRW(d.orgn_ntby_tr_pbmn),
+      foreign:     toOkKRW(d.frgn_ntby_tr_pbmn),
+    };
+  } catch (err) {
+    console.warn(`[kis] fetchKISInvestorFlow(${clean}) 실패:`, (err as any)?.message);
+    return null;
+  }
+}
+
+/**
+ * 여러 종목 투자자별 매매동향 배치 조회 (동시 최대 N개, 기본 10)
+ */
+export async function fetchKISInvestorFlowBatch(
+  stockCodes: string[],
+  concurrency = 10,
+): Promise<Map<string, KISInvestorFlow>> {
+  const map = new Map<string, KISInvestorFlow>();
+  for (let i = 0; i < stockCodes.length; i += concurrency) {
+    const chunk = stockCodes.slice(i, i + concurrency);
+    const results = await Promise.allSettled(chunk.map(c => fetchKISInvestorFlow(c)));
+    for (let j = 0; j < chunk.length; j++) {
+      const r = results[j];
+      if (r.status === "fulfilled" && r.value) map.set(chunk[j], r.value);
+    }
+  }
+  return map;
+}
+
 /**
  * 여러 종목 동시 조회 (Promise.all, 최대 20개)
  */
