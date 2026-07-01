@@ -11,7 +11,7 @@ import {
   miraePreFetchAllHoldings,
   trackHoldingsChanges,
 } from "../lib/etf-analyzer.js";
-import { getNPSHoldings } from "../lib/nps-holdings.js";
+import { getNPSDartHoldings } from "../lib/nps-dart-holdings.js";
 import { getCachedTigerEtfs } from "../lib/tiger-etf-scraper.js";
 import { getStatus } from "../lib/lstm-predictor.js";
 import { GoogleGenAI } from "@google/genai";
@@ -100,7 +100,7 @@ router.get("/etf/:code/holdings", async (req, res) => {
 
     // 국민연금 특수 처리
     if (code === "NPS") {
-      const { holdings, dataDate, totalHoldings, totalBillion } = await getNPSHoldings();
+      const { holdings, latestDate, totalHoldings } = await getNPSDartHoldings();
       const npsEtf = {
         code: "NPS",
         isuCd: "",
@@ -109,18 +109,26 @@ router.get("/etf/:code/holdings", async (req, res) => {
         issuer: "국민연금공단",
         yahooCode: "",
         leverage: 1,
-        benchmark: `국내주식 ${totalHoldings}개 종목 · ${(totalBillion / 10000).toFixed(0)}조원`,
+        benchmark: `5% 이상 대량보유 ${totalHoldings}개 종목`,
         ter: undefined as unknown as number,
       };
       const etfHoldings = holdings.map(h => ({
         rank: h.rank,
         stockCode: h.stockCode,
         stockName: h.stockName,
-        weight: h.weight,
+        weight: h.ownershipPct,
         ownershipPct: h.ownershipPct,
-        valueBillion: h.valueBillion,
+        reportDate: h.reportDate,
+        shares: h.shares,
+        sharesChange: h.sharesChange,
       }));
-      return res.json({ etf: npsEtf, holdings: etfHoldings, source: "nps", dataDate, changes: null });
+      return res.json({
+        etf: npsEtf,
+        holdings: etfHoldings,
+        source: "nps-dart",
+        dataDate: latestDate,
+        changes: null,
+      });
     }
 
     // TIGER 스크래핑분의 isuCd를 주입하여 KRX 조회 가능하게

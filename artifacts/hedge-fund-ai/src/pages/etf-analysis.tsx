@@ -27,6 +27,7 @@ interface ETFInfo {
 interface ETFHolding {
   rank: number; stockCode: string; stockName: string; weight: number;
   ownershipPct?: number; valueBillion?: number;
+  reportDate?: string; shares?: number; sharesChange?: number;
 }
 interface HoldingChangeItem {
   stockCode: string; stockName: string; weight: number;
@@ -707,7 +708,9 @@ function SearchTab() {
                   ) : null}
                 </div>
                 <div className="divide-y divide-border/50">
-                  {etfResult.holdings.map(h => (
+                  {etfResult.holdings.map(h => {
+                    const isNpsDart = etfResult.source === "nps-dart";
+                    return (
                     <div key={h.rank} className="flex items-center justify-between px-4 py-2.5">
                       <div className="flex items-center gap-3">
                         <span className="text-[11px] text-muted-foreground/40 w-4 text-right">{h.rank}</span>
@@ -715,7 +718,15 @@ function SearchTab() {
                           <p className="text-sm font-medium text-foreground">{h.stockName}</p>
                           <div className="flex items-center gap-1.5">
                             {h.stockCode && <p className="text-[11px] text-muted-foreground/50">{h.stockCode}</p>}
-                            {h.ownershipPct != null && h.ownershipPct > 0 && (
+                            {isNpsDart && h.reportDate && (
+                              <>
+                                <span className="text-muted-foreground/20">·</span>
+                                <p className="text-[11px] text-muted-foreground/40">
+                                  {h.reportDate.replace(/-/g, ".")}
+                                </p>
+                              </>
+                            )}
+                            {!isNpsDart && h.ownershipPct != null && h.ownershipPct > 0 && (
                               <>
                                 {h.stockCode && <span className="text-muted-foreground/20">·</span>}
                                 <p className="text-[11px] text-violet-500/70">지분 {h.ownershipPct.toFixed(2)}%</p>
@@ -725,30 +736,46 @@ function SearchTab() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary/70"
-                            style={{ width: `${Math.min(100, h.weight * 2.5)}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-bold text-foreground w-12 text-right">{h.weight.toFixed(2)}%</span>
+                        {isNpsDart ? (
+                          <div className="flex items-center gap-2">
+                            {h.sharesChange != null && h.sharesChange !== 0 && (
+                              <span className={`text-[10px] font-semibold ${h.sharesChange > 0 ? "text-red-500" : "text-blue-500"}`}>
+                                {h.sharesChange > 0 ? "▲" : "▼"}{Math.abs(h.sharesChange).toLocaleString()}주
+                              </span>
+                            )}
+                            <span className="text-sm font-bold text-violet-400 w-14 text-right">{h.ownershipPct?.toFixed(2)}%</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-24 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-primary/70"
+                                style={{ width: `${Math.min(100, h.weight * 2.5)}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-bold text-foreground w-12 text-right">{h.weight.toFixed(2)}%</span>
+                          </>
+                        )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="px-4 py-2.5 bg-muted/10 border-t border-border flex items-center justify-between gap-4">
                   <p className="text-[10px] text-muted-foreground/50">
-                    {etfResult.source === "kis"      && "* KIS Open API"}
-                    {etfResult.source === "samsung"  && "* 삼성자산운용 공시"}
-                    {etfResult.source === "mirae"    && "* 미래에셋자산운용 공시"}
-                    {etfResult.source === "krx"      && "* KRX 공시"}
-                    {etfResult.source === "yahoo"    && "* Yahoo Finance — 분기별 비중 기준"}
+                    {etfResult.source === "kis"       && "* KIS Open API"}
+                    {etfResult.source === "samsung"   && "* 삼성자산운용 공시"}
+                    {etfResult.source === "mirae"     && "* 미래에셋자산운용 공시"}
+                    {etfResult.source === "krx"       && "* KRX 공시"}
+                    {etfResult.source === "yahoo"     && "* Yahoo Finance — 분기별 비중 기준"}
                     {etfResult.source === "reference" && "* 참고용 — 실제 비중과 차이가 있을 수 있습니다"}
-                    {etfResult.source === "nps"      && "* 국민연금공단 공시 (fund.nps.or.kr) — 연도 말 기준 다음 해 3분기 공시"}
+                    {etfResult.source === "nps"       && "* 국민연금공단 공시 (fund.nps.or.kr) — 연도 말 기준 다음 해 3분기 공시"}
+                    {etfResult.source === "nps-dart"  && "* DART 대량보유 공시 — 국민연금 5% 이상 보유 종목 (최근 신고 기준)"}
                   </p>
                   {etfResult.dataDate && (
                     <p className="text-[10px] text-muted-foreground/60 shrink-0 font-medium">
-                      기준일 {etfResult.dataDate}
+                      {etfResult.source === "nps-dart" ? "최근 신고일" : "기준일"}{" "}
+                      {etfResult.dataDate.replace(/-/g, ".")}
                     </p>
                   )}
                 </div>

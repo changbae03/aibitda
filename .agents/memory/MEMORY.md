@@ -1,1 +1,2 @@
 - [NPS 국민연금 코드 매핑](nps-code-mapping.md) — KRX corpList 이름과 NPS 약식명 불일치 → 직접 사전 필수
+- [NPS-DART 대량보유 구현](nps-dart-strategy.md) — Excel seed(4.5%+, ~250개) → DART majorstock 배치로 최신 분기 데이터 확보
