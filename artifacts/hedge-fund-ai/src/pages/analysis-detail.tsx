@@ -3390,6 +3390,69 @@ export default function AnalysisDetail() {
       {/* 빠른 요약 카드 — 데이터가 있는 만큼 표시 (진행 중에도 노출) */}
       <SummaryCardsB analysis={analysis} isEn={isEn} streamingStepKey={streamingStep?.key ?? null} />
 
+      {/* ── 에이전트 어셈블 카드 — 첫 단계 스트리밍 전까지 표시 ── */}
+      <AnimatePresence>
+        {analysis.steps.length === 0 && !isStreaming && (analysis.status === "in_progress" || analysis.status === "queued") && (
+          <motion.div
+            key="agent-assemble"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="rounded-2xl border border-border bg-card overflow-hidden print:hidden"
+            style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06)" }}
+          >
+            {/* 상단 그라디언트 라인 */}
+            <div className="h-0.5 w-full bg-gradient-to-r from-primary/60 via-primary to-primary/40" />
+            <div className="px-5 pt-5 pb-2">
+              <div className="flex items-center gap-2.5 mb-1">
+                <Loader2 className="w-4 h-4 text-primary/60 animate-spin shrink-0" />
+                <p className="text-[14px] font-bold text-foreground">
+                  {isEn ? "Assembling AI analyst team…" : "AI 애널리스트 팀이 분석을 준비하고 있습니다"}
+                </p>
+              </div>
+              <p className="text-[11px] text-muted-foreground/50 ml-6.5 pl-0.5">
+                {isEn
+                  ? `7 specialized agents · ${analysis.companyName} deep dive`
+                  : `7명의 전문 에이전트 · ${analysis.companyName} 심층 분석`}
+              </p>
+            </div>
+            <div className="px-5 pb-5 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
+                const agent = AGENTS[stepKey];
+                if (!agent) return null;
+                return (
+                  <motion.div
+                    key={stepKey}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.12, duration: 0.3, ease: "easeOut" }}
+                    className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-card border border-border/60 flex items-center justify-center shrink-0">
+                      <agent.icon className="w-3.5 h-3.5 text-primary/60" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground truncate">
+                        {isEn ? (agent.nameEn ?? agent.name) : agent.name}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/50 truncate">
+                        {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
+                      </p>
+                    </div>
+                    <motion.div
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ delay: idx * 0.12 + 0.4, duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                      className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0"
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Analysis Steps Feed */}
       <div className="space-y-4" style={{ overflowAnchor: "none" }}>
         <AnimatePresence>
