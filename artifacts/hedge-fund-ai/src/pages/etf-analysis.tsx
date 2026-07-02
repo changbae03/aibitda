@@ -2527,10 +2527,16 @@ interface SectorMove {
   sector: string; region: "KR" | "US"; etfCount: number;
   direction: "up" | "down"; delta: number; topStocks: string[];
 }
+interface TopHolding {
+  ticker: string; name: string;
+  etfCount: number; etfs: string[];
+  totalWeight: number; region: "KR" | "US";
+}
 interface RebalancingData {
   newEntries: RebalStock[]; exits: RebalStock[];
   bigBuys: RebalStock[]; bigSells: RebalStock[];
   sectorMoves: SectorMove[];
+  topHoldings: TopHolding[];
   etfsAnalyzed: number; etfsWithChanges: number;
   hasChanges: boolean; updatedAt: string;
 }
@@ -2616,18 +2622,52 @@ function RebalancingTab() {
         </button>
       </div>
 
-      {/* 기준점 수집 중 안내 */}
+      {/* 기준점 수집 중 → 현재 상위 보유 종목 */}
       {!data.hasChanges && (
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex gap-3">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
-            <GitCommitHorizontal className="w-4 h-4 text-amber-500/70" />
-          </div>
-          <div>
-            <p className="text-[13px] font-bold text-foreground">기준점 수집 중</p>
-            <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
-              처음 실행 시 현재 보유종목을 기준점으로 저장합니다. 다음 번 ETF 공시 이후 변화를 추적합니다. 아래는 현재 ETF들이 가장 많이 담고 있는 섹터입니다.
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-3 flex items-center gap-2.5">
+            <GitCommitHorizontal className="w-3.5 h-3.5 text-amber-500/60 shrink-0" />
+            <p className="text-[11px] text-muted-foreground/60 flex-1">
+              변화 감지 기준점 저장 완료 · 다음 공시부터 편입/제외 변화가 표시됩니다
             </p>
           </div>
+          {data.topHoldings.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60">
+                <div className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center">
+                  <BarChart2 className="w-3 h-3 text-primary/60" />
+                </div>
+                <span className="text-[12px] font-bold text-foreground flex-1">현재 ETF 상위 보유 종목</span>
+                <span className="text-[11px] text-muted-foreground/40">{data.etfsAnalyzed}개 ETF 기준</span>
+              </div>
+              <div className="divide-y divide-border/30">
+                {data.topHoldings.slice(0, 15).map((h, i) => (
+                  <div key={h.ticker} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors">
+                    <span className="text-[11px] tabular-nums text-muted-foreground/30 w-4 shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[13px] font-bold text-foreground truncate">{h.name || h.ticker}</span>
+                        <span className={cn(
+                          "text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                          h.region === "KR" ? "bg-indigo-500/10 text-indigo-400" : "bg-cyan-500/10 text-cyan-400"
+                        )}>{h.region}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {h.etfs.slice(0, 3).map(e => (
+                          <span key={e} className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted/40 text-muted-foreground/70 truncate max-w-[110px]">{e}</span>
+                        ))}
+                        {h.etfs.length > 3 && <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted/20 text-muted-foreground/50">+{h.etfs.length - 3}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[12px] font-bold text-foreground tabular-nums">{h.etfCount}개 ETF</p>
+                      <p className="text-[10px] text-muted-foreground/40 tabular-nums">{h.totalWeight.toFixed(1)}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

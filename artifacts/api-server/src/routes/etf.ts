@@ -672,12 +672,22 @@ interface SectorMove {
   topStocks: string[];
 }
 
+interface TopHolding {
+  ticker: string;
+  name: string;
+  etfCount: number;
+  etfs: string[];
+  totalWeight: number;
+  region: "KR" | "US";
+}
+
 interface RebalancingData {
   newEntries: RebalStock[];
   exits: RebalStock[];
   bigBuys: RebalStock[];
   bigSells: RebalStock[];
   sectorMoves: SectorMove[];
+  topHoldings: TopHolding[];
   etfsAnalyzed: number;
   etfsWithChanges: number;
   hasChanges: boolean;
@@ -770,6 +780,32 @@ router.get("/etf/rebalancing", async (_req, res) => {
         .sort((a, b) => b.etfs.length - a.etfs.length || Math.abs(b.delta) - Math.abs(a.delta))
         .slice(0, 15);
 
+    // 전체 ETF 구성종목 합산 (변화 여부 무관) — 기준점 수집 중일 때도 보여줄 데이터
+    const holdingsMap = new Map<string, { name: string; etfs: string[]; totalWeight: number; region: "KR" | "US" }>();
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const { etfMeta, holdings } = r.value;
+      for (const h of holdings) {
+        const prev = holdingsMap.get(h.stockCode);
+        if (prev) {
+          if (!prev.etfs.includes(etfMeta.name)) prev.etfs.push(etfMeta.name);
+          prev.totalWeight += h.weight ?? 0;
+        } else {
+          holdingsMap.set(h.stockCode, {
+            name: h.stockName ?? h.stockCode,
+            etfs: [etfMeta.name],
+            totalWeight: h.weight ?? 0,
+            region: etfMeta.region,
+          });
+        }
+      }
+    }
+    const topHoldings: TopHolding[] = [...holdingsMap.entries()]
+      .map(([ticker, v]) => ({ ticker, ...v, etfCount: v.etfs.length }))
+      .filter(h => h.etfCount >= 2)
+      .sort((a, b) => b.etfCount - a.etfCount || b.totalWeight - a.totalWeight)
+      .slice(0, 20);
+
     const sectorMoves: SectorMove[] = [];
     for (const [key, v] of sectorUp) {
       const sector = key.split(":").slice(1).join(":");
@@ -789,6 +825,7 @@ router.get("/etf/rebalancing", async (_req, res) => {
       bigBuys:        toList(buyMap),
       bigSells:       toList(sellMap),
       sectorMoves:    sectorMoves.slice(0, 10),
+      topHoldings,
       etfsAnalyzed,
       etfsWithChanges,
       hasChanges:     etfsWithChanges > 0,
