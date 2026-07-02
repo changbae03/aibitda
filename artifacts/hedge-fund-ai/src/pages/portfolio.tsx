@@ -2064,8 +2064,14 @@ function PerformanceChart({ perf, loading }: { perf: PerformanceData | null; loa
       valueKrw: Math.round(s.valueKrw),
     }));
 
-  const hasData = chartData.length >= 2;
-  const latestReturn = chartData.length > 0 ? chartData[chartData.length - 1].returnPct : null;
+  const hasChart = chartData.length >= 2;
+  // 차트가 없더라도 today 데이터가 있으면 수익률 카드를 보여줌
+  const todayReturn = perf?.today?.returnPct ?? null;
+  const todayValueKrw = perf?.today?.valueKrw ?? 0;
+  const todayInvestedKrw = perf?.today?.investedKrw ?? 0;
+  const todayPlKrw = todayValueKrw - todayInvestedKrw;
+
+  const latestReturn = chartData.length > 0 ? chartData[chartData.length - 1].returnPct : todayReturn;
   const isPositive = latestReturn != null && latestReturn >= 0;
   const areaColor = isPositive ? "#ef4444" : "#3b82f6";
 
@@ -2097,20 +2103,42 @@ function PerformanceChart({ perf, loading }: { perf: PerformanceData | null; loa
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-[12px]">{isEn ? "Loading..." : "로딩 중…"}</span>
           </div>
-        ) : !hasData ? (
+        ) : !hasChart && todayReturn != null ? (
+          /* 스냅샷 1개 — 오늘 수익률 카드 */
+          <div className="h-[130px] flex flex-col items-center justify-center gap-3">
+            <div className="flex items-end gap-3">
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-1">
+                  {isEn ? "Today's Return" : "현재 수익률"}
+                </p>
+                <p className={cn(
+                  "text-[36px] font-black tabular-nums leading-none",
+                  isPositive ? "text-red-500" : "text-blue-500"
+                )}>
+                  {todayReturn >= 0 ? "+" : ""}{todayReturn.toFixed(2)}%
+                </p>
+                {todayInvestedKrw > 0 && (
+                  <p className={cn("text-[12px] font-semibold tabular-nums mt-1", isPositive ? "text-red-500/70" : "text-blue-500/70")}>
+                    {todayPlKrw >= 0 ? "+" : ""}{Math.round(todayPlKrw).toLocaleString("ko-KR")}원
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground/30 text-center">
+              {isEn ? "Chart builds from tomorrow · 1 day tracked" : "내일부터 추이 그래프가 그려져요 · 1일 기록 중"}
+            </p>
+          </div>
+        ) : !hasChart ? (
           <div className="flex flex-col items-center justify-center h-[130px] text-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-muted-foreground/30" />
             </div>
-            <div>
-              <p className="text-[12px] font-medium text-muted-foreground/50">
-                {isEn ? "Chart builds day by day" : "매일 스냅샷을 쌓아 차트를 만들어요"}
-              </p>
-              <p className="text-[11px] text-muted-foreground/30 mt-0.5">
-                {isEn ? "Come back tomorrow!" : "내일 다시 확인해보세요!"}
-                {chartData.length === 1 && " ✓"}
-              </p>
-            </div>
+            <p className="text-[12px] font-medium text-muted-foreground/50">
+              {isEn ? "Chart builds day by day" : "매일 스냅샷을 쌓아 차트를 만들어요"}
+            </p>
+            <p className="text-[11px] text-muted-foreground/30">
+              {isEn ? "Come back tomorrow!" : "내일 다시 확인해보세요!"}
+            </p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={140}>
