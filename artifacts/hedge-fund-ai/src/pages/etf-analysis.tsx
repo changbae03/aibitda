@@ -28,6 +28,7 @@ interface ETFHolding {
   rank: number; stockCode: string; stockName: string; weight: number;
   ownershipPct?: number; valueBillion?: number;
   reportDate?: string; shares?: number; sharesChange?: number;
+  valueUsd?: number;
 }
 interface HoldingChangeItem {
   stockCode: string; stockName: string; weight: number;
@@ -552,7 +553,7 @@ function SearchTab() {
                 label: "기관투자자",
                 items: [
                   { code: "NPS",    name: "국민연금 국내주식" },
-                  { code: "NPSINT", name: "국민연금 해외주식" },
+                  { code: "NPSINT", name: "국민연금 미국주식" },
                 ],
               },
             ];
@@ -773,6 +774,7 @@ function SearchTab() {
                     {etfResult.source === "nps"       && "* 국민연금공단 공시 (fund.nps.or.kr) — 연도 말 기준 다음 해 3분기 공시"}
                     {etfResult.source === "nps-dart"     && "* DART 대량보유 공시 — 국민연금 5% 이상 보유 종목 (최근 신고 기준)"}
                     {etfResult.source === "nps-overseas" && "* 국민연금공단 공시 (fund.nps.or.kr) — 해외주식 포트폴리오"}
+                    {etfResult.source === "nps-13f"      && "* SEC 13F 공시 (EDGAR) — 미국 상장주식 전용, 분기별 갱신"}
                   </p>
                   {etfResult.dataDate && (
                     <p className="text-[10px] text-muted-foreground/60 shrink-0 font-medium">
