@@ -7,6 +7,26 @@ import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+// Python 바이너리 경로 확정 — PATH의 Go 래퍼(python-wrapper)가 배포 환경에서 패닉하는 문제를 방지
+const PYTHON_BIN = (() => {
+  const candidates = [
+    process.env.PYTHON_BIN,                                     // 명시적 env override
+    "/home/runner/workspace/.pythonlibs/bin/python3",           // Replit 개발/배포 공통
+    "/home/runner/.local/share/uv/python/cpython-3.11.14/bin/python3",
+    "/nix/var/nix/profiles/default/bin/python3",
+    "/usr/bin/python3",
+    "/usr/local/bin/python3",
+  ].filter(Boolean) as string[];
+  for (const p of candidates) {
+    if (existsSync(p)) {
+      console.log(`[pykrx] Python 바이너리 확정: ${p}`);
+      return p;
+    }
+  }
+  console.warn("[pykrx] 절대 경로 Python 없음 — PATH 'python3' 폴백 사용");
+  return "python3";
+})();
+
 // esbuild CJS 번들에서는 import.meta.url이 undefined → fileURLToPath가 throw됨
 // 여러 후보 경로를 순서대로 시도하여 실제 존재하는 경로를 사용
 const SCRIPT = (() => {
@@ -55,7 +75,7 @@ async function callPykrx(
   timeoutMs = 45000,
 ): Promise<any[]> {
   return new Promise((resolve) => {
-    const proc = spawn("python3", [SCRIPT, type, fromDate, toDate, market], {
+    const proc = spawn(PYTHON_BIN, [SCRIPT, type, fromDate, toDate, market], {
       env: { ...process.env },
       timeout: timeoutMs,
     });
