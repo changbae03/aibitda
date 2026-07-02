@@ -6295,7 +6295,8 @@ async function executeStep(
         const guideLines: string[] = [];
         const ind = (analysis.industry ?? "").toLowerCase();
         const isBio = /바이오|제약|헬스케어|세포치료|줄기세포|biotech|pharma|healthcare/i.test(ind);
-        const isFinancial = /금융|은행|보험|증권|financ|bank|insur/i.test(ind);
+        const isFinancial = /금융|은행|보험|증권|financ|bank|insur/i.test(ind) ||
+          /금융지주|은행지주|금융그룹|생명보험|손해보험|저축은행|신용금고/.test(analysis.companyName ?? "");
         const isNewSpace = /우주|항공|aerospace|space|defense|방위/i.test(ind);
         const isBattery = /2차전지|배터리|battery|lges|lg에너지|삼성sdi|sk이노베이션|sk온|catl|파나소닉 에너지|에코프로비엠|포스코퓨처엠/i.test(ind) ||
           /2차전지|배터리|battery|lges|lg에너지|삼성sdi|sk이노베이션|sk온|catl|파나소닉 에너지|에코프로비엠|포스코퓨처엠/i.test(analysis.companyName ?? "");
@@ -6314,7 +6315,13 @@ async function executeStep(
           guideLines.push(`· ⛔ 단위 오류 경고: 발행주식수 단위(주/천주)·기업가치 단위(원/억원/조원) 혼동 시 목표가가 1/10~1/1000 수준으로 오산됨. 주당가치 = 총기업가치(원) ÷ 발행주식수(주).`);
           guideLines.push(`· 피어 비교 의무: 삼성SDI, SK이노베이션을 기준 피어로 항상 포함하고, 반도체 기업(삼성전자·SK하이닉스)은 피어 대상에서 완전 제외.`);
         } else if (isFinancial) {
-          guideLines.push(`· 업종(${analysis.industry}): 금융 → PBR·ROE 기반 모델 우선. DCF 시 배당 포함 여부 확인.`);
+          guideLines.push(`· 업종(${analysis.industry}): 금융/은행/보험/증권/금융지주 → P/B-ROE 모델 필수. DCF·EV/EBITDA 사용 금지.`);
+          guideLines.push(`· P/B-ROE 공식: Justified P/B = (ROE − g) / (CoE − g), 목표주가 = 적정 P/B × BPS`);
+          guideLines.push(`· CoE = 국고채10년(Rf) + β × ERP(한국 5~6%). ROE > CoE이면 P/B > 1x 정당화.`);
+          guideLines.push(`· 한국 금융지주·은행 P/B 벤치마크: 0.35~0.75x (KB·신한·하나·우리 평균 기준). 1.0x 초과 시 근거 필수.`);
+          guideLines.push(`· ⛔ 단위 오류 경고: BPS 계산 시 자본총계(원) ÷ 발행주식수(주) = BPS(원/주). 자본총계 단위가 백만원이면 × 1,000,000 변환 필수.`);
+          guideLines.push(`· ⛔ BPS 앵커: 서버 계산 BPS를 반드시 확인하고, AI 계산 BPS가 서버계산 BPS 대비 50% 이상 차이나면 단위 오류 의심 후 재계산.`);
+          guideLines.push(`· 목표주가가 현재가의 10% 미만이면 BPS 단위 오류(억원↔원 혼용) 가능성 — 즉시 재검토.`);
         } else if (isNewSpace) {
           guideLines.push(`· 업종(${analysis.industry}): 우주/항공/방위 → EV/Sales 우선. 발사체·플랫폼 옵션가치 별도 반영.`);
           guideLines.push(`· 뉴스페이스 섹터 EV/Sales: 시장 컨센서스 20~60x 범위 (SpaceX 비교군). 15x 미만 적용 시 근거 필수.`);

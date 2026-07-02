@@ -5689,22 +5689,22 @@ const MD_BODY_COMPONENTS = {
     <h2 className="text-[18px] font-bold text-foreground mt-7 mb-3 first:mt-0">{children}</h2>
   ),
   h3: ({ children }: any) => (
-    <h3 className="text-[17px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
+    <h3 className="text-[16px] font-semibold text-foreground mt-5 mb-2">{children}</h3>
   ),
   h4: ({ children }: any) => (
-    <h4 className="text-[16px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
+    <h4 className="text-[15px] font-medium text-foreground/85 mt-3 mb-1.5">{children}</h4>
   ),
   p: ({ children }: any) => {
     const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
     if (text.startsWith("출처:") || text.startsWith("출처 :")) {
       return <p className="mt-5 pt-3 border-t border-border/40 text-[12px] text-muted-foreground">{children}</p>;
     }
-    return <p className="mb-4 last:mb-0 text-foreground/90 leading-[1.95] text-[16px]">{children}</p>;
+    return <p className="mb-4 last:mb-0 text-foreground/90 leading-[1.95] text-[15px]">{children}</p>;
   },
   ul: ({ children }: any) => <ul className="my-3 pl-0 space-y-2 list-none">{children}</ul>,
   ol: ({ children }: any) => <ol className="my-3 pl-4 space-y-1.5 list-decimal">{children}</ol>,
   li: ({ children }: any) => (
-    <li className="flex items-start gap-2.5 text-[16px] leading-[1.9] text-foreground/90">
+    <li className="flex items-start gap-2.5 text-[15px] leading-[1.9] text-foreground/90">
       <span className="shrink-0 w-1 h-1 rounded-full bg-muted-foreground/50 mt-[0.75em]" />
       <span className="flex-1 min-w-0">{children}</span>
     </li>
@@ -5719,7 +5719,7 @@ const MD_BODY_COMPONENTS = {
 function MdBlock({ src, isEn }: { src: string; isEn: boolean }) {
   if (!src.trim()) return null;
   return (
-    <div className="markdown-body" style={{ fontSize: "17px", lineHeight: "1.95" }}>
+    <div className="markdown-body" style={{ fontSize: "16px", lineHeight: "1.95" }}>
       <RoadmapEnContext.Provider value={isEn}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_BODY_COMPONENTS}>{prepareMarkdown(src, isEn)}</ReactMarkdown>
       </RoadmapEnContext.Provider>
