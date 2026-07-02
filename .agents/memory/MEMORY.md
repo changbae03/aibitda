@@ -1,2 +1,4 @@
 - [Financial stock valuation guardrails](financial-valuation-guardrails.md) — 금융주 적정주가 오산출 방지: 3중 레이어, needsFinancialSector() exported
 - [pykrx script path resolution](pykrx-path-resolution.md) — 배포 환경에서 pykrx_fetcher.py 경로 실패 원인 및 다중 폴백 패턴
+- [Neon DB vs local DB split](neon-db-split.md) — API 서버는 NEON_DATABASE_URL, executeSql은 로컬 PG → 캐시 조작 시 반드시 Node에서 NEON_DATABASE_URL 직접 사용
+- [FRED daily series limit trap](fred-daily-limit.md) — DFEDTARU 같은 일별 시계열을 asc+limit=300으로 가져오면 최신값 아닌 초기값 → desc+limit=5 사용
