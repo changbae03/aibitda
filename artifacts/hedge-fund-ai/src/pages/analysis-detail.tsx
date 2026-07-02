@@ -2485,16 +2485,29 @@ export default function AnalysisDetail() {
   // 분석 시작 시 면책 팝업
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const disclaimerShown = useRef(false);
+  // 파이프라인 브리핑 팝업
+  const [showPipelineIntro, setShowPipelineIntro] = useState(false);
+  const pipelineIntroShown = useRef(false);
+  const openPipelineIntro = useCallback(() => {
+    if (pipelineIntroShown.current) return;
+    pipelineIntroShown.current = true;
+    setShowPipelineIntro(true);
+    setTimeout(() => setShowPipelineIntro(false), 6000);
+  }, []);
+  const closeDisclaimer = useCallback(() => {
+    setShowDisclaimer(false);
+    openPipelineIntro();
+  }, [openPipelineIntro]);
   useEffect(() => {
     if (!analysis) return;
     const isActive = analysis.status === "in_progress" || analysis.status === "queued";
     if (isActive && !disclaimerShown.current) {
       disclaimerShown.current = true;
       setShowDisclaimer(true);
-      const t = setTimeout(() => setShowDisclaimer(false), 9000);
+      const t = setTimeout(() => closeDisclaimer(), 9000);
       return () => clearTimeout(t);
     }
-  }, [analysis?.status]);
+  }, [analysis?.status, closeDisclaimer]);
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -2921,7 +2934,7 @@ export default function AnalysisDetail() {
           >
             <div
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => setShowDisclaimer(false)}
+              onClick={closeDisclaimer}
             />
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.95 }}
@@ -2942,7 +2955,7 @@ export default function AnalysisDetail() {
                       : "참고용 리포트입니다"}
                   </h3>
                   <button
-                    onClick={() => setShowDisclaimer(false)}
+                    onClick={closeDisclaimer}
                     className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -2961,7 +2974,7 @@ export default function AnalysisDetail() {
 
                 {/* 확인 버튼 */}
                 <button
-                  onClick={() => setShowDisclaimer(false)}
+                  onClick={closeDisclaimer}
                   className="w-full rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 active:opacity-70"
                 >
                   {isEn ? "Understood" : "확인했습니다"}
@@ -2979,6 +2992,155 @@ export default function AnalysisDetail() {
                   />
                 </motion.div>
                 <p className="mt-1.5 text-center text-[10px] text-muted-foreground/50">
+                  {isEn ? "Closes automatically" : "잠시 후 자동으로 닫힙니다"}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 파이프라인 브리핑 팝업 ── */}
+      <AnimatePresence>
+        {showPipelineIntro && (
+          <motion.div
+            key="pipeline-intro"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 print:hidden"
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowPipelineIntro(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.97 }}
+              transition={{ type: "spring", damping: 26, stiffness: 280, delay: 0.05 }}
+              className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+            >
+              <div className="h-0.5 w-full bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
+              <div className="p-5">
+                {/* 헤더 */}
+                <div className="flex items-start justify-between gap-2 mb-4">
+                  <div>
+                    <p className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-widest mb-0.5">
+                      {isEn ? "AI 7-Step Pipeline" : "AI 7단계 파이프라인"}
+                    </p>
+                    <h3 className="text-[15px] font-bold text-foreground leading-snug">
+                      {isEn
+                        ? "Analysts are collaborating…"
+                        : "에이전트들이 협업해 분석합니다"}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowPipelineIntro(false)}
+                    className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* 에이전트 플로우 */}
+                <div className="space-y-1">
+                  {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
+                    const agent = AGENTS[stepKey];
+                    if (!agent) return null;
+                    const isDone = analysis ? idx < analysis.steps.length : false;
+                    const isActive = analysis ? idx === analysis.steps.length : false;
+                    const isLast = idx === ANALYSIS_STEPS_ORDER.length - 1;
+                    return (
+                      <div key={stepKey}>
+                        <motion.div
+                          initial={{ opacity: 0, x: -12 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.1, duration: 0.25, ease: "easeOut" }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-xl px-3 py-2 transition-colors",
+                            isDone ? "bg-primary/6" : isActive ? "bg-primary/8" : "bg-muted/30"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                            isDone ? "bg-primary text-primary-foreground" : isActive ? "bg-primary/15 border border-primary/40" : "bg-card border border-border"
+                          )}>
+                            {isDone
+                              ? <CheckCircle2 className="w-3.5 h-3.5" />
+                              : <agent.icon className={cn("w-3.5 h-3.5", isActive ? "text-primary" : "text-muted-foreground/40")} />
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              "text-[12px] font-semibold leading-tight",
+                              isDone ? "text-primary" : isActive ? "text-foreground" : "text-muted-foreground/60"
+                            )}>
+                              {isEn ? (agent.nameEn ?? agent.name) : agent.name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground/40 truncate">
+                              {isEn ? (agent.descriptionEn ?? agent.description) : agent.description}
+                            </p>
+                          </div>
+                          {isActive && (
+                            <motion.div
+                              animate={{ opacity: [0.4, 1, 0.4] }}
+                              transition={{ duration: 1.1, repeat: Infinity }}
+                              className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
+                            />
+                          )}
+                          {isDone && (
+                            <span className="text-[9px] font-mono text-primary/50 shrink-0">완료</span>
+                          )}
+                        </motion.div>
+                        {/* 연결선 (마지막 단계 제외) */}
+                        {!isLast && (
+                          <div className="ml-[22px] w-px h-1.5 bg-border/60" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 목표주가 도출 결과 */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                  className="mt-3 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <TrendingUp className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-bold text-primary leading-tight">
+                      {isEn ? "12M Target Price" : "12개월 목표주가"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/50">
+                      {isEn ? "Derived from 7-agent consensus" : "7개 에이전트 합의로 도출"}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {(analysis as any)?.targetPrice
+                      ? <span className="text-[13px] font-bold text-primary tabular-nums">
+                          {formatCurrency((analysis as any).targetPrice, isUSTicker(analysis.ticker) ? "USD" : "KRW", isEn)}
+                        </span>
+                      : <span className="text-[11px] text-muted-foreground/40 flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          {isEn ? "calculating" : "산출 중"}
+                        </span>
+                    }
+                  </div>
+                </motion.div>
+
+                {/* 자동 닫힘 bar */}
+                <motion.div className="mt-4 h-0.5 w-full rounded-full bg-border overflow-hidden">
+                  <motion.div
+                    initial={{ width: "100%" }}
+                    animate={{ width: "0%" }}
+                    transition={{ duration: 6, ease: "linear" }}
+                    className="h-full rounded-full bg-primary/30"
+                  />
+                </motion.div>
+                <p className="mt-1.5 text-center text-[10px] text-muted-foreground/40">
                   {isEn ? "Closes automatically" : "잠시 후 자동으로 닫힙니다"}
                 </p>
               </div>
