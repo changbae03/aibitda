@@ -3,17 +3,31 @@
  * KRX_ID / KRX_PW 환경변수가 설정돼 있어야 작동
  */
 import { spawn } from "child_process";
+import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 // esbuild CJS 번들에서는 import.meta.url이 undefined → fileURLToPath가 throw됨
-// try/catch로 안전하게 처리: dev(ESM)에서는 실제 경로, prod(CJS 번들)에서는 cwd 기준 경로 사용
+// 여러 후보 경로를 순서대로 시도하여 실제 존재하는 경로를 사용
 const SCRIPT = (() => {
-  try {
-    return path.join(path.dirname(fileURLToPath(import.meta.url)), "pykrx_fetcher.py");
-  } catch {
-    return path.resolve(process.cwd(), "artifacts/api-server/src/lib/pykrx_fetcher.py");
+  const candidates: string[] = [];
+  // 1) ESM 개발 모드: __filename 기준
+  try { candidates.push(path.join(path.dirname(fileURLToPath(import.meta.url)), "pykrx_fetcher.py")); } catch {}
+  // 2) CJS 번들 모드: __dirname = dist/, 스크립트는 ../src/lib/ 에 있음
+  try { candidates.push(path.join(__dirname, "../src/lib/pykrx_fetcher.py")); } catch {}
+  // 3) 프로덕션 CWD = artifacts/api-server/
+  candidates.push(path.resolve(process.cwd(), "src/lib/pykrx_fetcher.py"));
+  // 4) 개발 CWD = 워크스페이스 루트
+  candidates.push(path.resolve(process.cwd(), "artifacts/api-server/src/lib/pykrx_fetcher.py"));
+
+  for (const p of candidates) {
+    if (existsSync(p)) {
+      console.log(`[pykrx] 스크립트 경로 확정: ${p}`);
+      return p;
+    }
   }
+  console.warn("[pykrx] pykrx_fetcher.py를 찾지 못함 — 후보:", candidates);
+  return candidates[candidates.length - 1];
 })();
 
 export interface InvestorRow {

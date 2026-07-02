@@ -97,6 +97,11 @@ async function buildFlowData(): Promise<FlowData> {
 
   console.log(`[flow] 종목 수급 완료 (${latestDate}): ${stocks.length}/${WATCH_STOCKS.length}개`);
 
+  // 시장 수급과 종목 수급 모두 비어있으면 pykrx 실패 — 캐시하지 않음
+  if (!kospi.length && !kosdaq.length && !stocks.length) {
+    throw new Error("pykrx 데이터 없음 (0건) — 캐시 불가, 재시도 예정");
+  }
+
   return {
     marketFlow: { kospi, kosdaq },
     stocks,
@@ -113,7 +118,7 @@ router.get("/market/flow", async (_req, res) => {
       return res.json(flowCache.data);
     }
 
-    // DB 캐시
+    // DB 캐시 (빈 결과는 건너뜀 — pykrx 실패 시 저장된 stale 빈 데이터 방지)
     try {
       const dbRow = await pool.query<{ data: FlowData }>(
         `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
@@ -123,8 +128,15 @@ router.get("/market/flow", async (_req, res) => {
         const d = typeof dbRow.rows[0].data === "string"
           ? JSON.parse(dbRow.rows[0].data as any)
           : dbRow.rows[0].data;
-        flowCache = { data: d, cachedAt: now };
-        return res.json(d);
+        const hasData = (d.marketFlow?.kospi?.length ?? 0) > 0
+          || (d.marketFlow?.kosdaq?.length ?? 0) > 0
+          || (d.stocks?.length ?? 0) > 0;
+        if (hasData) {
+          flowCache = { data: d, cachedAt: now };
+          return res.json(d);
+        }
+        // 빈 캐시 제거
+        pool.query(`DELETE FROM system_cache WHERE key = $1`, [FLOW_CACHE_KEY]).catch(() => {});
       }
     } catch {}
 
