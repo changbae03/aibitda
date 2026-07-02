@@ -134,7 +134,7 @@ router.get("/etf/:code/holdings", async (req, res) => {
 
     // 국민연금 해외주식 — SEC 13F (분기별 최신)
     if (code === "NPSINT") {
-      const { holdings, periodDate, filedDate, totalUsd, totalHoldings } = await getNPS13FHoldings();
+      const { holdings, periodDate, prevPeriodDate, filedDate, totalUsd, totalHoldings } = await getNPS13FHoldings();
       const totalKrwTril = (totalUsd * 1544 / 1e12).toFixed(0);
       const npsIntEtf = {
         code: "NPSINT",
@@ -152,6 +152,8 @@ router.get("/etf/:code/holdings", async (req, res) => {
         stockCode: h.cusip,
         stockName: h.stockName,
         weight: h.weight,
+        weightChange: h.weightChange,
+        prevWeight: h.prevWeight,
         ownershipPct: undefined,
         valueBillion: h.valueKrw100M / 100,
         valueUsd: h.valueUsd,
@@ -161,6 +163,7 @@ router.get("/etf/:code/holdings", async (req, res) => {
         holdings: etfHoldings,
         source: "nps-13f",
         dataDate: periodDate,
+        prevPeriodDate,
         filedDate,
         changes: null,
       });

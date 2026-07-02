@@ -29,6 +29,8 @@ interface ETFHolding {
   ownershipPct?: number; valueBillion?: number;
   reportDate?: string; shares?: number; sharesChange?: number;
   valueUsd?: number;
+  weightChange?: number;
+  prevWeight?: number;
 }
 interface HoldingChangeItem {
   stockCode: string; stockName: string; weight: number;
@@ -332,7 +334,7 @@ function SearchTab() {
   const [mode, setMode]           = useState<"etf" | "stock">("etf");
   const [query, setQuery]         = useState("");
   const [loading, setLoading]     = useState(false);
-  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string; dataDate?: string; changes?: HoldingsChanges | null } | null>(null);
+  const [etfResult, setEtfResult] = useState<{ etf: ETFInfo | null; holdings: ETFHolding[]; source?: string; dataDate?: string; prevPeriodDate?: string; changes?: HoldingsChanges | null } | null>(null);
   const [stockResult, setStockResult] = useState<{ etf: ETFInfo; holding: ETFHolding }[] | null>(null);
   const [searchList, setSearchList]   = useState<ETFInfo[]>([]);
   const [showList, setShowList]       = useState(false);
@@ -712,6 +714,7 @@ function SearchTab() {
                 <div className="divide-y divide-border/50">
                   {etfResult.holdings.map(h => {
                     const isNpsDart = etfResult.source === "nps-dart";
+                    const isNps13f  = etfResult.source === "nps-13f";
                     return (
                     <div key={h.rank} className="flex items-center justify-between px-4 py-2.5">
                       <div className="flex items-center gap-3">
@@ -719,7 +722,15 @@ function SearchTab() {
                         <div>
                           <p className="text-sm font-medium text-foreground">{h.stockName}</p>
                           <div className="flex items-center gap-1.5">
-                            {h.stockCode && <p className="text-[11px] text-muted-foreground/50">{h.stockCode}</p>}
+                            {isNps13f ? (
+                              h.valueUsd != null && (
+                                <p className="text-[11px] text-muted-foreground/50">
+                                  ${(h.valueUsd / 1e9).toFixed(2)}B
+                                </p>
+                              )
+                            ) : (
+                              h.stockCode && <p className="text-[11px] text-muted-foreground/50">{h.stockCode}</p>
+                            )}
                             {isNpsDart && h.reportDate && (
                               <>
                                 <span className="text-muted-foreground/20">·</span>
@@ -728,7 +739,7 @@ function SearchTab() {
                                 </p>
                               </>
                             )}
-                            {!isNpsDart && h.ownershipPct != null && h.ownershipPct > 0 && (
+                            {!isNpsDart && !isNps13f && h.ownershipPct != null && h.ownershipPct > 0 && (
                               <>
                                 {h.stockCode && <span className="text-muted-foreground/20">·</span>}
                                 <p className="text-[11px] text-violet-500/70">지분 {h.ownershipPct.toFixed(2)}%</p>
@@ -746,6 +757,21 @@ function SearchTab() {
                               </span>
                             )}
                             <span className="text-sm font-bold text-violet-400 w-14 text-right">{h.ownershipPct?.toFixed(2)}%</span>
+                          </div>
+                        ) : isNps13f ? (
+                          <div className="flex items-center gap-2">
+                            {h.weightChange !== undefined ? (
+                              <span className={`text-[10px] font-semibold ${h.weightChange > 0.005 ? "text-red-500" : h.weightChange < -0.005 ? "text-blue-400" : "text-muted-foreground/40"}`}>
+                                {h.weightChange > 0.005 ? "▲" : h.weightChange < -0.005 ? "▼" : ""}
+                                {Math.abs(h.weightChange) >= 0.005 ? Math.abs(h.weightChange).toFixed(2) + "%p" : "—"}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-amber-400">신규</span>
+                            )}
+                            <div className="w-20 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, h.weight * 3)}%` }} />
+                            </div>
+                            <span className="text-sm font-bold text-foreground w-12 text-right">{h.weight.toFixed(2)}%</span>
                           </div>
                         ) : (
                           <>
@@ -774,7 +800,7 @@ function SearchTab() {
                     {etfResult.source === "nps"       && "* 국민연금공단 공시 (fund.nps.or.kr) — 연도 말 기준 다음 해 3분기 공시"}
                     {etfResult.source === "nps-dart"     && "* DART 대량보유 공시 — 국민연금 5% 이상 보유 종목 (최근 신고 기준)"}
                     {etfResult.source === "nps-overseas" && "* 국민연금공단 공시 (fund.nps.or.kr) — 해외주식 포트폴리오"}
-                    {etfResult.source === "nps-13f"      && "* SEC 13F 공시 (EDGAR) — 미국 상장주식 전용, 분기별 갱신"}
+                    {etfResult.source === "nps-13f"      && `* SEC 13F 공시 (EDGAR) — 미국 상장주식 포트폴리오 내 비중${etfResult.prevPeriodDate ? ` · 전분기(${etfResult.prevPeriodDate.replace(/-/g, ".")}) 대비 증감 표시` : ""}`}
                   </p>
                   {etfResult.dataDate && (
                     <p className="text-[10px] text-muted-foreground/60 shrink-0 font-medium">

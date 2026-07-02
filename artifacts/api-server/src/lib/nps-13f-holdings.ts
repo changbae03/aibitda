@@ -4,7 +4,7 @@
  *
  * - CIK: 0001608046 (National Pension Service)
  * - SEC EDGAR API로 최신 13F-HR 자동 탐지
- * - 분기별 갱신 (Q1 2026 기준 = 2026-03-31)
+ * - 직전 분기와 비중 비교(weightChange) 제공
  * - 값 단위: USD (달러, not thousands)
  * - 24시간 캐시
  */
@@ -16,21 +16,24 @@ const EDGAR_HEADERS = {
 };
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const TOP_N = 100;
-const USD_KRW = 1544; // approximate — could be fetched live
+const USD_KRW = 1544;
 
 export interface NPS13FHolding {
   rank: number;
   stockName: string;
   cusip: string;
-  valueUsd: number;         // USD
-  valueKrw100M: number;     // 억원
-  weight: number;           // 포트폴리오 비중 %
+  valueUsd: number;
+  valueKrw100M: number;
+  weight: number;
+  weightChange?: number;   // 전분기 대비 비중 변화 (%p), undefined = 신규 편입
+  prevWeight?: number;     // 전분기 비중
   shares: number;
 }
 
 interface CacheEntry {
   holdings: NPS13FHolding[];
   periodDate: string;
+  prevPeriodDate: string;
   filedDate: string;
   totalUsd: number;
   ts: number;
@@ -39,7 +42,7 @@ interface CacheEntry {
 let cache13F: CacheEntry | null = null;
 let loadingPromise: Promise<CacheEntry> | null = null;
 
-// ── SEC EDGAR: 최신 13F-HR 조회 ────────────────────────────────────────────────
+// ── SEC EDGAR: 최신 2분기 13F-HR 목록 ──────────────────────────────────────────
 
 interface FilingInfo {
   accessionNo: string;
@@ -47,158 +50,163 @@ interface FilingInfo {
   filedDate: string;
 }
 
-async function fetchLatest13F(): Promise<FilingInfo> {
+async function fetchFilings(): Promise<[FilingInfo, FilingInfo | null]> {
   const url = `https://data.sec.gov/submissions/CIK${NPS_CIK.padStart(10, "0")}.json`;
   const res = await fetch(url, { headers: EDGAR_HEADERS, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`SEC submissions 조회 실패: ${res.status}`);
   const d = await res.json() as {
-    filings: {
-      recent: {
-        form: string[];
-        accessionNumber: string[];
-        filingDate: string[];
-        reportDate: string[];
-      };
-    };
+    filings: { recent: { form: string[]; accessionNumber: string[]; filingDate: string[]; reportDate: string[] } };
   };
 
   const { form, accessionNumber, filingDate, reportDate } = d.filings.recent;
-  let best: FilingInfo | null = null;
+  const list: FilingInfo[] = [];
   for (let i = 0; i < form.length; i++) {
     if (form[i] === "13F-HR") {
-      const info: FilingInfo = {
-        accessionNo: accessionNumber[i],
-        periodOfReport: reportDate[i],
-        filedDate: filingDate[i],
-      };
-      if (!best || info.periodOfReport > best.periodOfReport) best = info;
+      list.push({ accessionNo: accessionNumber[i], periodOfReport: reportDate[i], filedDate: filingDate[i] });
     }
   }
-  if (!best) throw new Error("NPS 13F-HR 보고서를 찾을 수 없음");
-  console.log(`[NPS-13F] 최신 보고서: period=${best.periodOfReport} filed=${best.filedDate} accession=${best.accessionNo}`);
-  return best;
+  list.sort((a, b) => (a.periodOfReport > b.periodOfReport ? -1 : 1));
+  const current = list[0];
+  const prev    = list[1] ?? null;
+  if (!current) throw new Error("NPS 13F-HR 보고서를 찾을 수 없음");
+  console.log(`[NPS-13F] 최신: ${current.periodOfReport} | 전분기: ${prev?.periodOfReport ?? "없음"}`);
+  return [current, prev];
 }
 
-// ── 13F 파일 목록에서 infoTable XML URL 탐색 ───────────────────────────────────
+// ── 디렉토리 HTML에서 infoTable XML 파일명 탐색 ────────────────────────────────
 
 async function findInfoTableUrl(accessionNo: string): Promise<string> {
   const noDashes = accessionNo.replace(/-/g, "");
-  const indexUrl = `https://www.sec.gov/Archives/edgar/data/${NPS_CIK}/${noDashes}/${accessionNo}-index.json`;
-  const res = await fetch(indexUrl, { headers: EDGAR_HEADERS, signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) {
-    // fallback: known pattern
-    return `https://www.sec.gov/Archives/edgar/data/${NPS_CIK}/${noDashes}/53310.xml`;
+  const dirUrl = `https://www.sec.gov/Archives/edgar/data/${NPS_CIK}/${noDashes}/`;
+  try {
+    const res = await fetch(dirUrl, { headers: EDGAR_HEADERS, signal: AbortSignal.timeout(10_000) });
+    if (res.ok) {
+      const html = await res.text();
+      // Find all .xml hrefs, exclude primary_doc
+      const matches = [...html.matchAll(/href="([^"]+\.xml)"/gi)]
+        .map(m => m[1].split("/").pop()!)
+        .filter(n => n && !n.startsWith("primary_doc"));
+      if (matches.length > 0) {
+        return `${dirUrl}${matches[0]}`;
+      }
+    }
+  } catch {
+    // fall through to hardcoded fallbacks
   }
-  const idx = await res.json() as { directory: { item: { name: string; type: string }[] } };
-  const items = idx.directory?.item ?? [];
-  const xml = items.find(
-    it => it.name.endsWith(".xml") && !it.name.startsWith("primary_doc")
-  );
-  if (xml) {
-    return `https://www.sec.gov/Archives/edgar/data/${NPS_CIK}/${noDashes}/${xml.name}`;
-  }
-  return `https://www.sec.gov/Archives/edgar/data/${NPS_CIK}/${noDashes}/53310.xml`;
+  // Hardcoded fallback by known accession
+  const KNOWN: Record<string, string> = {
+    "000119312526217663": "53310.xml",
+    "000160804626000001": "4q25v2.xml",
+  };
+  const fallback = KNOWN[noDashes] ?? "infotable.xml";
+  return `${dirUrl}${fallback}`;
 }
 
 // ── infoTable XML 파싱 ─────────────────────────────────────────────────────────
 
-interface RawEntry {
-  name: string;
-  cusip: string;
-  value: number;
-  shares: number;
-}
+interface RawEntry { name: string; cusip: string; value: number; shares: number; }
 
 function parseInfoTable(xml: string): RawEntry[] {
-  // Namespace-agnostic regex-based parse for speed/robustness
   const entries: RawEntry[] = [];
-  const blockRe = /<infoTable[^>]*>([\s\S]*?)<\/infoTable>/gi;
+  // Handle both plain <infoTable> and namespaced <ns1:infoTable> formats
+  const blockRe = /<(?:[\w]+:)?infoTable[^>]*>([\s\S]*?)<\/(?:[\w]+:)?infoTable>/gi;
   let m: RegExpExecArray | null;
 
   const tag = (src: string, t: string) => {
-    const r = new RegExp(`<${t}[^>]*>([^<]*)</${t}>`, "i");
+    // Match <tag> or <ns:tag>
+    const r = new RegExp(`<(?:[\\w]+:)?${t}[^>]*>([^<]*)</(?:[\\w]+:)?${t}>`, "i");
     return src.match(r)?.[1]?.trim() ?? "";
   };
-
-  const decodeHtml = (s: string) =>
+  const decode = (s: string) =>
     s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
      .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
 
   while ((m = blockRe.exec(xml)) !== null) {
     const blk = m[1];
-    const name  = decodeHtml(tag(blk, "nameOfIssuer"));
+    const name  = decode(tag(blk, "nameOfIssuer"));
     const cusip = tag(blk, "cusip");
-    const valStr = tag(blk, "value");
-    const shrStr = tag(blk, "sshPrnamt");
-
-    const value  = parseInt(valStr.replace(/,/g, ""), 10) || 0;
-    const shares = parseInt(shrStr.replace(/,/g, ""), 10) || 0;
-    if (name && value > 0) {
-      entries.push({ name, cusip, value, shares });
-    }
+    const value  = parseInt(tag(blk, "value").replace(/,/g, ""), 10) || 0;
+    const shares = parseInt(tag(blk, "sshPrnamt").replace(/,/g, ""), 10) || 0;
+    if (name && value > 0) entries.push({ name, cusip, value, shares });
   }
   return entries;
 }
 
-// ── 메인 로드 함수 ─────────────────────────────────────────────────────────────
+async function fetchAndParse(filing: FilingInfo): Promise<{ raw: RawEntry[]; total: number }> {
+  const xmlUrl = await findInfoTableUrl(filing.accessionNo);
+  console.log(`[NPS-13F] 다운로드: ${filing.periodOfReport} → ${xmlUrl}`);
+  const res = await fetch(xmlUrl, { headers: EDGAR_HEADERS, signal: AbortSignal.timeout(25_000) });
+  if (!res.ok) throw new Error(`13F XML 다운로드 실패 (${filing.periodOfReport}): ${res.status}`);
+  const raw = parseInfoTable(await res.text());
+  const total = raw.reduce((s, x) => s + x.value, 0);
+  console.log(`[NPS-13F] 파싱 완료 ${filing.periodOfReport}: ${raw.length}개, $${(total / 1e9).toFixed(1)}B`);
+  return { raw, total };
+}
+
+// ── 메인 로드 ──────────────────────────────────────────────────────────────────
 
 async function load13FData(): Promise<CacheEntry> {
-  const filing = await fetchLatest13F();
-  const xmlUrl = await findInfoTableUrl(filing.accessionNo);
+  const [current, prev] = await fetchFilings();
 
-  console.log(`[NPS-13F] infoTable URL: ${xmlUrl}`);
-  const xmlRes = await fetch(xmlUrl, { headers: EDGAR_HEADERS, signal: AbortSignal.timeout(20_000) });
-  if (!xmlRes.ok) throw new Error(`13F XML 다운로드 실패: ${xmlRes.status}`);
-  const xmlText = await xmlRes.text();
+  // 병렬 다운로드
+  const [curData, prevData] = await Promise.all([
+    fetchAndParse(current),
+    prev ? fetchAndParse(prev).catch(e => { console.warn("[NPS-13F] 전분기 로드 실패:", e); return null; }) : null,
+  ]);
 
-  const raw = parseInfoTable(xmlText);
-  console.log(`[NPS-13F] 파싱 완료: ${raw.length}개 종목`);
+  curData.raw.sort((a, b) => b.value - a.value);
+  const totalUsd = curData.total;
 
-  raw.sort((a, b) => b.value - a.value);
-  const totalUsd = raw.reduce((s, x) => s + x.value, 0);
+  // 전분기 CUSIP → 비중 맵
+  const prevMap = new Map<string, number>();
+  if (prevData) {
+    const prevTotal = prevData.total;
+    for (const h of prevData.raw) {
+      prevMap.set(h.cusip, prevTotal > 0 ? (h.value / prevTotal) * 100 : 0);
+    }
+  }
 
-  const holdings: NPS13FHolding[] = raw.slice(0, TOP_N).map((h, i) => ({
-    rank: i + 1,
-    stockName: h.name.replace(/\s+/g, " "),
-    cusip: h.cusip,
-    valueUsd: h.value,
-    valueKrw100M: Math.round(h.value * USD_KRW / 1e8),
-    weight: totalUsd > 0 ? parseFloat(((h.value / totalUsd) * 100).toFixed(4)) : 0,
-    shares: h.shares,
-  }));
+  const holdings: NPS13FHolding[] = curData.raw.slice(0, TOP_N).map((h, i) => {
+    const weight = totalUsd > 0 ? (h.value / totalUsd) * 100 : 0;
+    const prevW  = prevMap.size > 0 ? prevMap.get(h.cusip) : undefined;
+    return {
+      rank: i + 1,
+      stockName: h.name.replace(/\s+/g, " "),
+      cusip: h.cusip,
+      valueUsd: h.value,
+      valueKrw100M: Math.round(h.value * USD_KRW / 1e8),
+      weight: parseFloat(weight.toFixed(4)),
+      weightChange: prevW !== undefined ? parseFloat((weight - prevW).toFixed(4)) : undefined,
+      prevWeight:   prevW !== undefined ? parseFloat(prevW.toFixed(4)) : undefined,
+      shares: h.shares,
+    };
+  });
 
   const result: CacheEntry = {
     holdings,
-    periodDate: filing.periodOfReport,
-    filedDate: filing.filedDate,
+    periodDate: current.periodOfReport,
+    prevPeriodDate: prev?.periodOfReport ?? "",
+    filedDate: current.filedDate,
     totalUsd,
     ts: Date.now(),
   };
   cache13F = result;
   loadingPromise = null;
-  console.log(`[NPS-13F] 캐시 저장 완료 — 기준: ${filing.periodOfReport}, 총 ${raw.length}개, $${(totalUsd / 1e9).toFixed(1)}B`);
   return result;
 }
 
 export async function getNPS13FHoldings(): Promise<{
   holdings: NPS13FHolding[];
   periodDate: string;
+  prevPeriodDate: string;
   filedDate: string;
   totalUsd: number;
   totalKrw100M: number;
   totalHoldings: number;
 }> {
   if (cache13F && Date.now() - cache13F.ts < CACHE_TTL) {
-    return {
-      holdings: cache13F.holdings,
-      periodDate: cache13F.periodDate,
-      filedDate: cache13F.filedDate,
-      totalUsd: cache13F.totalUsd,
-      totalKrw100M: Math.round(cache13F.totalUsd * USD_KRW / 1e8),
-      totalHoldings: cache13F.holdings.length,
-    };
+    return toResult(cache13F);
   }
-
   if (!loadingPromise) {
     loadingPromise = load13FData().catch(err => {
       console.error("[NPS-13F] 로드 실패:", err);
@@ -206,15 +214,18 @@ export async function getNPS13FHoldings(): Promise<{
       throw err;
     });
   }
+  return toResult(await loadingPromise);
+}
 
-  const result = await loadingPromise;
+function toResult(c: CacheEntry) {
   return {
-    holdings: result.holdings,
-    periodDate: result.periodDate,
-    filedDate: result.filedDate,
-    totalUsd: result.totalUsd,
-    totalKrw100M: Math.round(result.totalUsd * USD_KRW / 1e8),
-    totalHoldings: result.holdings.length,
+    holdings: c.holdings,
+    periodDate: c.periodDate,
+    prevPeriodDate: c.prevPeriodDate,
+    filedDate: c.filedDate,
+    totalUsd: c.totalUsd,
+    totalKrw100M: Math.round(c.totalUsd * USD_KRW / 1e8),
+    totalHoldings: c.holdings.length,
   };
 }
 
