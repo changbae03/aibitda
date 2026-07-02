@@ -1,7 +1,7 @@
 /**
  * /api/market/flow  — 수급 레이더
  * · KOSPI / KOSDAQ 시장 전체 투자자별 순매수 (pykrx, 최근 5 영업일)
- * · 주요 KR 종목별 투자자 순매수 (KIS FHKST01010900)
+ * · 주요 KR 종목별 투자자 순매수 (pykrx FHKST01010900 대체)
  */
 import { Router } from "express";
 import { fetchInvestorData, fetchInvestorByStocks } from "../lib/pykrx-client.js";
@@ -10,7 +10,8 @@ import { pool } from "@workspace/db";
 const router = Router();
 
 const FLOW_CACHE_KEY = "market_flow_v2";
-const FLOW_TTL_MS   = 30 * 60 * 1000; // 30분
+const FLOW_TTL_MS   = 6 * 60 * 60 * 1000;  // 6시간 (30분→6h: 재시작 후 빠른 서빙)
+const STALE_MAX_MS  = 24 * 60 * 60 * 1000; // stale-while-revalidate 최대 24시간
 
 interface StockMeta { code: string; name: string; sector: string }
 
@@ -54,34 +55,31 @@ interface FlowData {
 }
 
 let flowCache: { data: FlowData; cachedAt: number } | null = null;
+let _refreshing = false; // 백그라운드 갱신 중복 방지
 
 /** ISO date "YYYY-MM-DD" → KRX format "YYYYMMDD" */
 function toKRXDate(iso: string) { return iso.replace(/-/g, ""); }
 
 async function buildFlowData(): Promise<FlowData> {
-  // 최근 거래일을 찾기 위해 오늘~10일 전 범위 조회
   const today    = new Date().toISOString().slice(0, 10);
   const fromDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const todayKRX = toKRXDate(today);
+  const stockCodes = WATCH_STOCKS.map(s => s.code);
 
-  // ── 1. 시장 전체 수급 (pykrx) ──────────────────────────────────────────
-  const [kospiRows, kosdaqRows] = await Promise.allSettled([
+  // ── 시장 수급 + 종목 수급 병렬 실행 ──────────────────────────────────────
+  // 이전: 시장수급 완료 후 → 종목수급 (순차, ~30s)
+  // 개선: 동시 실행 (today 날짜 사용) → 절반 이상 단축
+  const [kospiR, kosdaqR, stockR] = await Promise.allSettled([
     fetchInvestorData("KOSPI",  fromDate, today),
     fetchInvestorData("KOSDAQ", fromDate, today),
+    fetchInvestorByStocks(todayKRX, stockCodes),
   ]);
 
-  const kospi  = kospiRows.status  === "fulfilled" ? kospiRows.value.slice(-5)  : [];
-  const kosdaq = kosdaqRows.status === "fulfilled" ? kosdaqRows.value.slice(-5) : [];
+  const kospi  = kospiR.status  === "fulfilled" ? kospiR.value.slice(-5)  : [];
+  const kosdaq = kosdaqR.status === "fulfilled" ? kosdaqR.value.slice(-5) : [];
+  const stockFlows = stockR.status === "fulfilled" ? stockR.value : [];
 
-  // 최신 거래일 확인 — pykrx 결과에서 가장 최근 날짜 사용
-  const latestDate = kospi.at(-1)?.date
-    ? toKRXDate(kospi.at(-1)!.date)
-    : todayKRX;
-
-  // ── 2. 종목별 수급 (pykrx — KIS 실시간 API는 장외 시간 0 반환) ─────────
-  const stockCodes  = WATCH_STOCKS.map(s => s.code);
-  const stockFlows  = await fetchInvestorByStocks(latestDate, stockCodes).catch(() => []);
-  const flowMap     = new Map(stockFlows.map(f => [f.ticker, f]));
+  const flowMap = new Map(stockFlows.map(f => [f.ticker, f]));
 
   const stocks = WATCH_STOCKS.map(s => {
     const f = flowMap.get(s.code);
@@ -95,9 +93,9 @@ async function buildFlowData(): Promise<FlowData> {
     };
   }).filter(s => s.individual !== 0 || s.institution !== 0 || s.foreign !== 0);
 
-  console.log(`[flow] 종목 수급 완료 (${latestDate}): ${stocks.length}/${WATCH_STOCKS.length}개`);
+  const latestDate = kospi.at(-1)?.date ? toKRXDate(kospi.at(-1)!.date) : todayKRX;
+  console.log(`[flow] 완료 (${latestDate}): 종목 ${stocks.length}/${WATCH_STOCKS.length}개`);
 
-  // 시장 수급과 종목 수급 모두 비어있으면 pykrx 실패 — 캐시하지 않음
   if (!kospi.length && !kosdaq.length && !stocks.length) {
     throw new Error("pykrx 데이터 없음 (0건) — 캐시 불가, 재시도 예정");
   }
@@ -109,50 +107,94 @@ async function buildFlowData(): Promise<FlowData> {
   };
 }
 
+/** DB 캐시에서 유효한 데이터 로드 */
+async function loadFromDB(): Promise<FlowData | null> {
+  try {
+    const dbRow = await pool.query<{ data: FlowData }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [FLOW_CACHE_KEY]
+    );
+    const raw = dbRow.rows[0]?.data;
+    if (!raw) return null;
+    const d: FlowData = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const hasNonZeroMarket = [...(d.marketFlow?.kospi ?? []), ...(d.marketFlow?.kosdaq ?? [])]
+      .some(r => r.individual !== 0 || r.institution !== 0 || r.foreign !== 0);
+    const hasData = hasNonZeroMarket || (d.stocks?.length ?? 0) > 0;
+    if (!hasData) {
+      pool.query(`DELETE FROM system_cache WHERE key = $1`, [FLOW_CACHE_KEY]).catch(() => {});
+      return null;
+    }
+    return d;
+  } catch { return null; }
+}
+
+/** 캐시 저장 */
+function saveCache(data: FlowData) {
+  const now = Date.now();
+  flowCache = { data, cachedAt: now };
+  const expiresAt = new Date(now + FLOW_TTL_MS);
+  pool.query(
+    `INSERT INTO system_cache (key, data, expires_at)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+    [FLOW_CACHE_KEY, JSON.stringify(data), expiresAt]
+  ).catch(() => {});
+}
+
+/** 백그라운드 갱신 (stale-while-revalidate용) */
+function refreshInBackground() {
+  if (_refreshing) return;
+  _refreshing = true;
+  buildFlowData()
+    .then(data => { saveCache(data); })
+    .catch(e => console.warn("[flow] 백그라운드 갱신 실패:", e?.message))
+    .finally(() => { _refreshing = false; });
+}
+
+/** 서버 기동 시 캐시 예열 — 첫 번째 사용자 요청이 즉시 응답 */
+export async function warmupFlowCache(): Promise<void> {
+  try {
+    const dbData = await loadFromDB();
+    if (dbData) {
+      flowCache = { data: dbData, cachedAt: Date.now() };
+      console.log("[flow] DB 캐시 복원 완료 (즉시 서빙 가능)");
+      return;
+    }
+    console.log("[flow] DB 캐시 없음 — 백그라운드 예열 시작");
+    refreshInBackground();
+  } catch (e: any) {
+    console.warn("[flow] 예열 실패:", e?.message);
+  }
+}
+
 router.get("/market/flow", async (_req, res) => {
   try {
     const now = Date.now();
 
-    // 인메모리 캐시
+    // 1. 인메모리 캐시 — fresh (TTL 이내)
     if (flowCache && now - flowCache.cachedAt < FLOW_TTL_MS) {
       return res.json(flowCache.data);
     }
 
-    // DB 캐시 (빈 결과는 건너뜀 — pykrx 실패 시 저장된 stale 빈 데이터 방지)
-    try {
-      const dbRow = await pool.query<{ data: FlowData }>(
-        `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
-        [FLOW_CACHE_KEY]
-      );
-      if (dbRow.rows[0]?.data) {
-        const d = typeof dbRow.rows[0].data === "string"
-          ? JSON.parse(dbRow.rows[0].data as any)
-          : dbRow.rows[0].data;
-        // 배열 길이뿐 아니라 실제 값도 비어있지 않은지 확인 (all-zero 캐시 방지)
-        const hasNonZeroMarket = [...(d.marketFlow?.kospi ?? []), ...(d.marketFlow?.kosdaq ?? [])]
-          .some(r => r.individual !== 0 || r.institution !== 0 || r.foreign !== 0);
-        const hasData = hasNonZeroMarket || (d.stocks?.length ?? 0) > 0;
-        if (hasData) {
-          flowCache = { data: d, cachedAt: now };
-          return res.json(d);
-        }
-        // 빈 캐시(all-zero 포함) 제거
-        pool.query(`DELETE FROM system_cache WHERE key = $1`, [FLOW_CACHE_KEY]).catch(() => {});
-      }
-    } catch {}
+    // 2. 인메모리 캐시 — stale-while-revalidate (TTL 초과 but 24h 이내)
+    //    → 즉시 반환하고 백그라운드에서 갱신 (사용자 대기 없음)
+    if (flowCache && now - flowCache.cachedAt < STALE_MAX_MS) {
+      res.json(flowCache.data);
+      refreshInBackground();
+      return;
+    }
 
+    // 3. DB 캐시 (유효)
+    const dbData = await loadFromDB();
+    if (dbData) {
+      flowCache = { data: dbData, cachedAt: now };
+      return res.json(dbData);
+    }
+
+    // 4. 캐시 없음 — 동기 fetch (첫 요청 or 오래된 서버)
+    console.log("[flow] 캐시 없음 — 동기 fetch 시작");
     const data = await buildFlowData();
-
-    // 저장
-    flowCache = { data, cachedAt: now };
-    const expiresAt = new Date(now + FLOW_TTL_MS);
-    pool.query(
-      `INSERT INTO system_cache (key, data, expires_at)
-       VALUES ($1, $2::jsonb, $3)
-       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
-      [FLOW_CACHE_KEY, JSON.stringify(data), expiresAt]
-    ).catch(() => {});
-
+    saveCache(data);
     return res.json(data);
   } catch (e: any) {
     console.error("[market/flow]", e?.message ?? e);
@@ -166,7 +208,7 @@ router.post("/market/flow/refresh", async (_req, res) => {
     flowCache = null;
     await pool.query(`DELETE FROM system_cache WHERE key = $1`, [FLOW_CACHE_KEY]);
     const data = await buildFlowData();
-    flowCache = { data, cachedAt: Date.now() };
+    saveCache(data);
     return res.json(data);
   } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "새로고침 실패" });

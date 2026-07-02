@@ -4,6 +4,7 @@ import { triggerModelReview } from "./routes/model-insights.js";
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "./routes/performance.js";
 import { runDueSchedules } from "./lib/schedule-runner.js";
 import { warmupEarningsCache, initCalendarCache } from "./routes/market-data.js";
+import { warmupFlowCache } from "./routes/flow.js";
 import { initMacroDashboard, refreshMacroDashboard } from "./routes/macro.js";
 import { resumeInProgressAnalyses } from "./routes/analysis.js";
 import { harvestMarketData } from "./lib/market-harvester.js";
@@ -154,6 +155,7 @@ const server = app.listen(port, () => {
     .then(() => Promise.all([
       warmupNpsDart().catch(e => console.warn("[NPS-DART] 예열 실패:", e?.message)),
       warmupNps13F().catch(e => console.warn("[NPS-13F] 예열 실패:", e?.message)),
+      warmupFlowCache().catch(e => console.warn("[flow] 예열 실패:", e?.message)),
     ]))
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
