@@ -2960,18 +2960,6 @@ export default function AnalysisDetail() {
                     : "매크로·재무·밸류에이션·기술적 분석·투자 촉매 전문 AI 에이전트 7명이 협업해 작성한 결과물입니다. 본 서비스는 투자 자문이 아니며, 모든 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
                 </p>
 
-                {/* 데이터 소스 칩 */}
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(isEn
-                    ? ["DART Filings", "KRX", "News · RSS", "Yahoo Finance", "KIS"]
-                    : ["DART 공시", "KRX", "뉴스 · RSS", "야후 파이낸스", "KIS"]
-                  ).map(src => (
-                    <span key={src} className="inline-flex items-center rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/60">
-                      {src}
-                    </span>
-                  ))}
-                </div>
-
                 {/* 구분선 */}
                 <div className="my-4 border-t border-border" />
 
