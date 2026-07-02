@@ -2928,22 +2928,19 @@ export default function AnalysisDetail() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
               transition={{ type: "spring", damping: 28, stiffness: 300, delay: 0.05 }}
-              className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+              className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
             >
-              {/* 상단 그라디언트 라인 */}
-              <div className="h-0.5 w-full bg-gradient-to-r from-primary/60 via-primary to-primary/40" />
+              {/* 상단 컬러 라인 */}
+              <div className="h-0.5 w-full bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400" />
 
-              <div className="p-5">
+              <div className="p-6">
                 {/* 타이틀 행 */}
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <div>
-                    <p className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-widest mb-0.5">
-                      {isEn ? "AiBITDA · AI Research" : "애빛다 · AI 분석"}
-                    </p>
-                    <h3 className="text-[15px] font-bold text-foreground leading-snug">
-                      {isEn ? "Assembling analyst team…" : "AI 애널리스트 팀 어셈블 중…"}
-                    </h3>
-                  </div>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <h3 className="text-[15px] font-bold text-foreground leading-snug">
+                    {isEn
+                      ? "For reference only."
+                      : "참고용 리포트입니다"}
+                  </h3>
                   <button
                     onClick={() => setShowDisclaimer(false)}
                     className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -2952,76 +2949,28 @@ export default function AnalysisDetail() {
                   </button>
                 </div>
 
-                {/* 에이전트 그리드 */}
-                <div className="mt-3 grid grid-cols-2 gap-1.5">
-                  {ANALYSIS_STEPS_ORDER.map((stepKey, idx) => {
-                    const agent = AGENTS[stepKey];
-                    if (!agent) return null;
-                    const stepDone = analysis ? idx < analysis.steps.length : false;
-                    const stepActive = analysis ? idx === analysis.steps.length : false;
-                    return (
-                      <motion.div
-                        key={stepKey}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.18, duration: 0.28, ease: "easeOut" }}
-                        className={cn(
-                          "flex items-center gap-2 rounded-lg px-2.5 py-2 border transition-colors",
-                          stepDone
-                            ? "border-primary/30 bg-primary/5"
-                            : stepActive
-                            ? "border-primary/40 bg-primary/8 animate-pulse"
-                            : "border-border/50 bg-muted/20"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
-                          stepDone ? "bg-primary/15" : "bg-card border border-border/60"
-                        )}>
-                          {stepDone
-                            ? <CheckCircle2 className="w-3 h-3 text-primary" />
-                            : <agent.icon className={cn("w-3 h-3", stepActive ? "text-primary" : "text-muted-foreground/50")} />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            "text-[11px] font-semibold truncate leading-tight",
-                            stepDone ? "text-primary" : stepActive ? "text-foreground" : "text-muted-foreground"
-                          )}>
-                            {isEn ? (agent.nameEn ?? agent.name) : agent.name}
-                          </p>
-                        </div>
-                        {stepActive && (
-                          <motion.div
-                            animate={{ opacity: [0.4, 1, 0.4] }}
-                            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                            className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
-                          />
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
+                {/* 본문 */}
+                <p className="text-[13px] leading-relaxed text-muted-foreground">
+                  {isEn
+                    ? "AI agents collaborated using filings, news, and market data to generate this report. This is not investment advice — all investment decisions and their outcomes are solely your responsibility."
+                    : "다수의 데이터 소스를 바탕으로 애빛다 AI 에이전트들이 팀을 이루어 분석한 결과물입니다. 본 서비스는 투자 자문이 아니며, 모든 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
+                </p>
 
-                {/* 구분선 + 면책 */}
-                <div className="mt-4 pt-3 border-t border-border">
-                  <p className="text-[12px] leading-relaxed text-muted-foreground">
-                    {isEn
-                      ? "This report is for reference only. All investment decisions and their outcomes are solely your responsibility."
-                      : "본 리포트는 참고용이며, 모든 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
-                  </p>
-                </div>
+                {/* 구분선 */}
+                <div className="my-4 border-t border-border" />
 
                 {/* 확인 버튼 */}
                 <button
                   onClick={() => setShowDisclaimer(false)}
-                  className="mt-3 w-full rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 active:opacity-70"
+                  className="w-full rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 active:opacity-70"
                 >
                   {isEn ? "Understood" : "확인했습니다"}
                 </button>
 
                 {/* 자동 닫힘 progress bar */}
-                <motion.div className="mt-3 h-0.5 w-full rounded-full bg-border overflow-hidden">
+                <motion.div
+                  className="mt-3 h-0.5 w-full rounded-full bg-border overflow-hidden"
+                >
                   <motion.div
                     initial={{ width: "100%" }}
                     animate={{ width: "0%" }}
