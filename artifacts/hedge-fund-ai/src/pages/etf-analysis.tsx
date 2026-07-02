@@ -306,6 +306,9 @@ function etfDescription(etf: ETFInfo): string {
     "리츠":        "부동산 임대 수익을 배분하는 리츠(REITs) ETF입니다. 금리 방향에 가장 민감하며, 데이터센터·물류창고 리츠는 AI 수요와 연동됩니다.",
   "기관투자자":  "한국 최대 기관투자자 국민연금공단의 국내주식 포트폴리오입니다. 국민연금이 5% 이상 지분을 보유한 기업의 주가에 큰 영향력을 행사하며, 포트폴리오 변화는 시장의 중요한 수급 신호로 해석됩니다.",
   };
+  if (etf.code === "NPSINT") {
+    return "국민연금공단이 SEC에 신고한 미국 상장주식 포트폴리오입니다(13F 공시 기준). NVIDIA·Apple·Microsoft 등 빅테크 중심이며, 분기별 공시로 NPS의 미국 주식 운용 전략 변화를 확인할 수 있습니다." + leverageNote;
+  }
   return (base[etf.sector] ?? "다양한 자산에 분산 투자하는 ETF입니다.") + leverageNote;
 }
 
