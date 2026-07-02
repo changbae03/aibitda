@@ -128,14 +128,15 @@ router.get("/market/flow", async (_req, res) => {
         const d = typeof dbRow.rows[0].data === "string"
           ? JSON.parse(dbRow.rows[0].data as any)
           : dbRow.rows[0].data;
-        const hasData = (d.marketFlow?.kospi?.length ?? 0) > 0
-          || (d.marketFlow?.kosdaq?.length ?? 0) > 0
-          || (d.stocks?.length ?? 0) > 0;
+        // 배열 길이뿐 아니라 실제 값도 비어있지 않은지 확인 (all-zero 캐시 방지)
+        const hasNonZeroMarket = [...(d.marketFlow?.kospi ?? []), ...(d.marketFlow?.kosdaq ?? [])]
+          .some(r => r.individual !== 0 || r.institution !== 0 || r.foreign !== 0);
+        const hasData = hasNonZeroMarket || (d.stocks?.length ?? 0) > 0;
         if (hasData) {
           flowCache = { data: d, cachedAt: now };
           return res.json(d);
         }
-        // 빈 캐시 제거
+        // 빈 캐시(all-zero 포함) 제거
         pool.query(`DELETE FROM system_cache WHERE key = $1`, [FLOW_CACHE_KEY]).catch(() => {});
       }
     } catch {}
