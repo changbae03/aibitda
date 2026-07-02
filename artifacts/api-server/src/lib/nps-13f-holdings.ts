@@ -9,6 +9,8 @@
  * - 24시간 캐시
  */
 
+import { pool } from "@workspace/db";
+
 const NPS_CIK = "1608046";
 const EDGAR_HEADERS = {
   "User-Agent": "aibvida-research/1.0 contact@aibvida.com",
@@ -17,6 +19,7 @@ const EDGAR_HEADERS = {
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const TOP_N = 100;
 const USD_KRW = 1544;
+const DB_CACHE_KEY = "nps_13f_v1";
 
 export interface NPS13FHolding {
   rank: number;
@@ -192,7 +195,37 @@ async function load13FData(): Promise<CacheEntry> {
   };
   cache13F = result;
   loadingPromise = null;
+  saveToDb(result).catch(e => console.warn("[NPS-13F] DB 저장 실패:", e?.message));
   return result;
+}
+
+// ── DB 퍼시스턴스 ──────────────────────────────────────────────────────────────
+
+async function saveToDb(data: CacheEntry): Promise<void> {
+  await pool.query(
+    `INSERT INTO system_cache (key, data, expires_at)
+     VALUES ($1, $2::jsonb, NOW() + INTERVAL '25 hours')
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+    [DB_CACHE_KEY, JSON.stringify(data)],
+  );
+  console.log("[NPS-13F] DB 캐시 저장 완료");
+}
+
+async function restoreFromDb(): Promise<boolean> {
+  try {
+    const r = await pool.query<{ data: CacheEntry }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [DB_CACHE_KEY],
+    );
+    const row = r.rows[0]?.data;
+    if (!row?.holdings?.length) return false;
+    cache13F = { ...row, ts: Date.now() };
+    console.log(`[NPS-13F] DB 캐시 복원 완료: ${row.holdings.length}개 (기준: ${row.periodDate})`);
+    return true;
+  } catch (e: any) {
+    console.warn("[NPS-13F] DB 복원 실패:", e?.message);
+    return false;
+  }
 }
 
 export async function getNPS13FHoldings(): Promise<{
@@ -204,9 +237,22 @@ export async function getNPS13FHoldings(): Promise<{
   totalKrw100M: number;
   totalHoldings: number;
 }> {
+  // 1순위: 메모리 캐시
   if (cache13F && Date.now() - cache13F.ts < CACHE_TTL) {
     return toResult(cache13F);
   }
+  // 2순위: DB 캐시 (서버 재시작 후 즉시 서빙)
+  if (!cache13F) {
+    const restored = await restoreFromDb();
+    if (restored && cache13F) {
+      // 백그라운드에서 갱신 (사용자는 기존 데이터 즉시 받음)
+      if (!loadingPromise) {
+        loadingPromise = load13FData().catch(e => { console.warn("[NPS-13F] 백그라운드 갱신 실패:", e?.message); loadingPromise = null; return cache13F as CacheEntry; });
+      }
+      return toResult(cache13F);
+    }
+  }
+  // 3순위: 새로 빌드
   if (!loadingPromise) {
     loadingPromise = load13FData().catch(err => {
       console.error("[NPS-13F] 로드 실패:", err);
@@ -215,6 +261,15 @@ export async function getNPS13FHoldings(): Promise<{
     });
   }
   return toResult(await loadingPromise);
+}
+
+/** 서버 시작 시 백그라운드 예열 — DB 캐시에서 즉시 복원 */
+export async function warmupNps13F(): Promise<void> {
+  if (cache13F) return;
+  const ok = await restoreFromDb();
+  if (!ok) {
+    console.log("[NPS-13F] DB 캐시 없음 — 첫 요청 시 빌드 예정");
+  }
 }
 
 function toResult(c: CacheEntry) {

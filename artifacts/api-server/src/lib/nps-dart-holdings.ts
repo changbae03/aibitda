@@ -12,12 +12,14 @@
 import AdmZip from "adm-zip";
 import { loadKRXList, lookupCodeByName, getKRXCache } from "./krx-cache.js";
 import { getCorpCodeFromCache } from "./dart-corp-cache.js";
+import { pool } from "@workspace/db";
 
 const NPS_FILE_URL = "https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002092&atchFileSn=1";
 const DART_API_KEY = process.env["DART_API_KEY"] ?? "";
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const OWNERSHIP_THRESHOLD = 4.5;
 const CONCURRENCY = 15;
+const DB_CACHE_KEY = "nps_dart_v2";
 
 export interface NPSDartHolding {
   rank: number;
@@ -190,7 +192,37 @@ async function buildDartHoldings(): Promise<typeof dartCache> {
   const result = { holdings, ts: Date.now(), latestDate };
   dartCache = result;
   loadingPromise = null;
+  saveToDb(result).catch(e => console.warn("[NPS-DART] DB 저장 실패:", e?.message));
   return result;
+}
+
+// ── DB 퍼시스턴스 ──────────────────────────────────────────────────────────────
+
+async function saveToDb(data: typeof dartCache): Promise<void> {
+  await pool.query(
+    `INSERT INTO system_cache (key, data, expires_at)
+     VALUES ($1, $2::jsonb, NOW() + INTERVAL '25 hours')
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+    [DB_CACHE_KEY, JSON.stringify(data)],
+  );
+  console.log("[NPS-DART] DB 캐시 저장 완료");
+}
+
+async function restoreFromDb(): Promise<boolean> {
+  try {
+    const r = await pool.query<{ data: typeof dartCache }>(
+      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW()`,
+      [DB_CACHE_KEY],
+    );
+    const row = r.rows[0]?.data;
+    if (!row?.holdings?.length) return false;
+    dartCache = { ...row, ts: Date.now() };
+    console.log(`[NPS-DART] DB 캐시 복원 완료: ${row.holdings.length}개 (기준: ${row.latestDate})`);
+    return true;
+  } catch (e: any) {
+    console.warn("[NPS-DART] DB 복원 실패:", e?.message);
+    return false;
+  }
 }
 
 export async function getNPSDartHoldings(): Promise<{
@@ -199,24 +231,40 @@ export async function getNPSDartHoldings(): Promise<{
   totalHoldings: number;
   loading?: boolean;
 }> {
+  // 1순위: 메모리 캐시
   if (dartCache && Date.now() - dartCache.ts < CACHE_TTL) {
-    return {
-      holdings: dartCache.holdings,
-      latestDate: dartCache.latestDate,
-      totalHoldings: dartCache.holdings.length,
-    };
+    return { holdings: dartCache.holdings, latestDate: dartCache.latestDate, totalHoldings: dartCache.holdings.length };
   }
-
+  // 2순위: DB 캐시 (서버 재시작 후 즉시 서빙)
+  if (!dartCache) {
+    const restored = await restoreFromDb();
+    if (restored && dartCache) {
+      // 백그라운드에서 신선도 확인 후 필요 시 갱신
+      if (!loadingPromise) {
+        loadingPromise = buildDartHoldings().catch(e => { console.warn("[NPS-DART] 백그라운드 갱신 실패:", e?.message); loadingPromise = null; return dartCache; });
+      }
+      return { holdings: dartCache.holdings, latestDate: dartCache.latestDate, totalHoldings: dartCache.holdings.length };
+    }
+  }
+  // 3순위: 새로 빌드
   if (!loadingPromise) {
     loadingPromise = buildDartHoldings();
   }
-
   const result = await loadingPromise;
   return {
     holdings: result?.holdings ?? [],
     latestDate: result?.latestDate ?? "",
     totalHoldings: result?.holdings.length ?? 0,
   };
+}
+
+/** 서버 시작 시 백그라운드 예열 — DB 캐시에서 즉시 복원 */
+export async function warmupNpsDart(): Promise<void> {
+  if (dartCache) return;
+  const ok = await restoreFromDb();
+  if (!ok) {
+    console.log("[NPS-DART] DB 캐시 없음 — 첫 요청 시 빌드 예정");
+  }
 }
 
 export function invalidateDartNPSCache(): void {

@@ -15,6 +15,8 @@ import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
 import { ensureTigerEtfs } from "./lib/tiger-etf-scraper.js";
+import { warmupNpsDart } from "./lib/nps-dart-holdings.js";
+import { warmupNps13F } from "./lib/nps-13f-holdings.js";
 import { fetchECOSMacro } from "./lib/ecos-client.js";
 import { fetchFREDMacro } from "./lib/fred-client.js";
 import { spawn, type ChildProcess } from "child_process";
@@ -149,6 +151,10 @@ const server = app.listen(port, () => {
     .then(() => initCalendarCache())
     .then(() => initMacroDashboard().catch(e => console.error("[macro-dashboard] 초기 캐시 로드 실패:", e?.message)))
     .then(() => ensureTigerEtfs().catch(e => console.error("[tiger-etf] 초기 로드 실패:", e?.message)))
+    .then(() => Promise.all([
+      warmupNpsDart().catch(e => console.warn("[NPS-DART] 예열 실패:", e?.message)),
+      warmupNps13F().catch(e => console.warn("[NPS-13F] 예열 실패:", e?.message)),
+    ]))
     .then(() => {
       console.log("[CACHE] system_cache 테이블 준비 완료");
       // 서버 재시작 시 미완료 분석 자동 복구 (30초 후 — 다른 초기화 완료 이후)
