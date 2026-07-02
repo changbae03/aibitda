@@ -38,23 +38,23 @@ function SummaryCard({ label, icon, value, sub }: { label: string; icon: React.R
   return (
     <div className={cn(
       "flex-1 rounded-2xl p-4 border transition-colors",
-      pos ? "bg-rose-50/60 border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/40"
-        : neg ? "bg-sky-50/60 border-sky-100 dark:bg-sky-950/20 dark:border-sky-900/40"
-        : "bg-muted/20 border-border/30",
+      pos ? "bg-rose-50/80 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800/60"
+        : neg ? "bg-sky-50/80 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800/60"
+        : "bg-muted/30 border-border/50",
     )}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
-          <span className={cn("opacity-60", pos ? "text-rose-500" : neg ? "text-sky-500" : "text-muted-foreground")}>{icon}</span>
-          <span className="text-[11px] font-medium text-muted-foreground/70">{label}</span>
+          <span className={cn("opacity-80", pos ? "text-rose-500" : neg ? "text-sky-500" : "text-muted-foreground")}>{icon}</span>
+          <span className="text-[11px] font-semibold text-foreground/60">{label}</span>
         </div>
-        <span className={cn("opacity-70", pos ? "text-rose-500" : neg ? "text-sky-500" : "text-muted-foreground/30")}>
+        <span className={cn(pos ? "text-rose-500" : neg ? "text-sky-500" : "text-muted-foreground/40")}>
           {pos ? <ArrowUpRight className="w-3.5 h-3.5" /> : neg ? <ArrowDownRight className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
         </span>
       </div>
       <div className={cn("text-[22px] font-black tabular-nums leading-none tracking-tight", flowColor(value))}>
         {value > 0 ? "+" : ""}{fmt억(value)}
       </div>
-      <div className="text-[10px] text-muted-foreground/40 mt-1.5">{sub}</div>
+      <div className="text-[10px] text-foreground/40 mt-1.5">{sub}</div>
     </div>
   );
 }
@@ -64,12 +64,11 @@ function CenterBar({ value, maxAbs }: { value: number; maxAbs: number }) {
   const pct = maxAbs > 0 ? Math.max(Math.min((Math.abs(value) / maxAbs) * 46, 46), 1.5) : 0;
   const pos = value > 0;
   const zero = value === 0;
-  // 양수: left=50% → right방향, 음수: left=(50-pct)% → center방향
   const barLeft = pos ? 50 : 50 - pct;
   return (
     <div className="flex-1 flex items-center h-5 relative">
-      <div className="absolute inset-y-1.5 inset-x-0 rounded-full bg-muted/20" />
-      <div className="absolute left-1/2 top-1/2 w-px h-4 -translate-x-1/2 -translate-y-1/2 bg-border/50 z-10" />
+      <div className="absolute inset-y-1.5 inset-x-0 rounded-full bg-muted/40 dark:bg-muted/25" />
+      <div className="absolute left-1/2 top-1/2 w-px h-4 -translate-x-1/2 -translate-y-1/2 bg-border dark:bg-border/80 z-10" />
       {!zero && (
         <div
           className="absolute top-1/2 h-3 -translate-y-1/2 rounded-full z-[5]"
@@ -98,14 +97,14 @@ function MarketFlowChart({ rows }: { rows: MarketRow[] }) {
   return (
     <div className="space-y-0">
       {rows.map((r, ri) => (
-        <div key={r.date} className={cn("py-3", ri > 0 && "border-t border-border/20")}>
-          <div className="text-[11px] font-semibold text-muted-foreground/50 tabular-nums mb-2 px-1">
+        <div key={r.date} className={cn("py-3", ri > 0 && "border-t border-border/40")}>
+          <div className="text-[11px] font-semibold text-foreground/55 tabular-nums mb-2 px-1">
             {shortDate(r.date)}
           </div>
           <div className="space-y-1.5">
             {INV.map(inv => (
               <div key={inv.key} className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground/40 w-7 shrink-0 text-right">{inv.label}</span>
+                <span className="text-[10px] text-foreground/50 w-7 shrink-0 text-right">{inv.label}</span>
                 <CenterBar value={r[inv.key]} maxAbs={maxAbs} />
                 <span className={cn("text-[11px] tabular-nums font-semibold w-14 text-right shrink-0", flowColor(r[inv.key]))}>
                   {r[inv.key] > 0 ? "+" : ""}{fmt억(r[inv.key])}
@@ -317,8 +316,8 @@ export default function FlowPage() {
             {/* 요약 카드 */}
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="text-[12px] font-bold text-foreground/60">오늘의 시장 수급</span>
-                <span className="text-[10px] text-muted-foreground/40">코스피+코스닥 합산, 억원</span>
+                <span className="text-[12px] font-bold text-foreground/70">오늘의 시장 수급</span>
+                <span className="text-[10px] text-foreground/40">코스피+코스닥 합산, 억원</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <SummaryCard label="개인(개미)" icon={<Users className="w-3.5 h-3.5" />}
@@ -347,7 +346,7 @@ export default function FlowPage() {
                     {m === "kospi" ? "코스피" : "코스닥"}
                   </button>
                 ))}
-                <div className="ml-auto pb-3 text-[10px] text-muted-foreground/30">최근 5거래일</div>
+                <div className="ml-auto pb-3 text-[10px] text-foreground/40">최근 5거래일</div>
               </div>
 
               <div className="px-5 py-3">
@@ -364,9 +363,9 @@ export default function FlowPage() {
                 </AnimatePresence>
               </div>
 
-              <div className="px-5 py-2.5 border-t border-border/20 bg-muted/10 flex items-center gap-1.5">
-                <Info className="w-3 h-3 text-muted-foreground/30" />
-                <p className="text-[10px] text-muted-foreground/40">
+              <div className="px-5 py-2.5 border-t border-border/40 bg-muted/20 dark:bg-muted/10 flex items-center gap-1.5">
+                <Info className="w-3 h-3 text-foreground/30" />
+                <p className="text-[10px] text-foreground/45">
                   pykrx(KRX) · 빨강=순매수, 파랑=순매도
                 </p>
               </div>
@@ -375,8 +374,8 @@ export default function FlowPage() {
             {/* 종목별 수급 */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-[12px] font-bold text-foreground/60">종목별 수급 TOP</span>
-                <span className="text-[10px] text-muted-foreground/40">KIS API · 오늘 기준</span>
+                <span className="text-[12px] font-bold text-foreground/70">종목별 수급 TOP</span>
+                <span className="text-[10px] text-foreground/40">KIS API · 오늘 기준</span>
               </div>
 
               {/* 정렬 탭 */}
