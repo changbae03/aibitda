@@ -714,6 +714,19 @@ function SearchTab() {
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30 font-semibold">참고용 데이터</span>
                   ) : null}
                 </div>
+                {/* 컬럼 헤더 */}
+                <div className="px-4 py-1.5 border-b border-border/50 bg-muted/10 flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground/40 font-medium">
+                    {etfResult.source === "nps-dart" ? "종목 · 최근신고일" : etfResult.source === "nps-13f" ? "종목 · 보유액(USD)" : "종목"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/40 font-medium">
+                    {etfResult.source === "nps-dart"
+                      ? "전분기대비주수 · 국민연금 지분율"
+                      : etfResult.source === "nps-13f"
+                      ? "전분기대비 · 포트폴리오 비중"
+                      : "비중"}
+                  </span>
+                </div>
                 <div className="divide-y divide-border/50">
                   {etfResult.holdings.map(h => {
                     const isNpsDart = etfResult.source === "nps-dart";
