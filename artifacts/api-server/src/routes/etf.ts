@@ -12,6 +12,7 @@ import {
   trackHoldingsChanges,
 } from "../lib/etf-analyzer.js";
 import { getNPSDartHoldings } from "../lib/nps-dart-holdings.js";
+import { getNPSOverseasHoldings } from "../lib/nps-holdings.js";
 import { getCachedTigerEtfs } from "../lib/tiger-etf-scraper.js";
 import { getStatus } from "../lib/lstm-predictor.js";
 import { GoogleGenAI } from "@google/genai";
@@ -127,6 +128,37 @@ router.get("/etf/:code/holdings", async (req, res) => {
         holdings: etfHoldings,
         source: "nps-dart",
         dataDate: latestDate,
+        changes: null,
+      });
+    }
+
+    // 국민연금 해외주식 특수 처리
+    if (code === "NPSINT") {
+      const { holdings, dataDate, totalHoldings, totalBillion } = await getNPSOverseasHoldings();
+      const npsIntEtf = {
+        code: "NPSINT",
+        isuCd: "",
+        name: "국민연금기금 해외주식",
+        sector: "기관투자자",
+        issuer: "국민연금공단",
+        yahooCode: "",
+        leverage: 1,
+        benchmark: `해외주식 ${totalHoldings}개 종목 · ${(totalBillion / 10000).toFixed(0)}조원`,
+        ter: undefined as unknown as number,
+      };
+      const etfHoldings = holdings.map(h => ({
+        rank: h.rank,
+        stockCode: "",
+        stockName: h.stockName,
+        weight: h.weight,
+        ownershipPct: h.ownershipPct,
+        valueBillion: h.valueBillion,
+      }));
+      return res.json({
+        etf: npsIntEtf,
+        holdings: etfHoldings,
+        source: "nps-overseas",
+        dataDate,
         changes: null,
       });
     }

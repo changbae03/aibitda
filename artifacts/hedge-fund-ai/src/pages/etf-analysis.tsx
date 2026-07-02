@@ -551,7 +551,8 @@ function SearchTab() {
               {
                 label: "기관투자자",
                 items: [
-                  { code: "NPS", name: "국민연금기금" },
+                  { code: "NPS",    name: "국민연금 국내주식" },
+                  { code: "NPSINT", name: "국민연금 해외주식" },
                 ],
               },
             ];
@@ -770,7 +771,8 @@ function SearchTab() {
                     {etfResult.source === "yahoo"     && "* Yahoo Finance — 분기별 비중 기준"}
                     {etfResult.source === "reference" && "* 참고용 — 실제 비중과 차이가 있을 수 있습니다"}
                     {etfResult.source === "nps"       && "* 국민연금공단 공시 (fund.nps.or.kr) — 연도 말 기준 다음 해 3분기 공시"}
-                    {etfResult.source === "nps-dart"  && "* DART 대량보유 공시 — 국민연금 5% 이상 보유 종목 (최근 신고 기준)"}
+                    {etfResult.source === "nps-dart"     && "* DART 대량보유 공시 — 국민연금 5% 이상 보유 종목 (최근 신고 기준)"}
+                    {etfResult.source === "nps-overseas" && "* 국민연금공단 공시 (fund.nps.or.kr) — 해외주식 포트폴리오"}
                   </p>
                   {etfResult.dataDate && (
                     <p className="text-[10px] text-muted-foreground/60 shrink-0 font-medium">

@@ -151,3 +151,98 @@ export async function getNPSHoldings(): Promise<{
 export function invalidateNPSCache() {
   npsCache = null;
 }
+
+// ── NPS 해외주식 ────────────────────────────────────────────────────────────────
+
+const NPS_OVERSEAS_FILE_URL = "https://fund.nps.or.kr/fileDown.do?atchFileId=FL25002103&atchFileSn=1";
+const NPS_OVERSEAS_DATE = "2024년 12월 31일";
+const OVERSEAS_TOP_N = 100;
+
+export interface NPSOverseasHolding {
+  rank: number;
+  stockName: string;
+  valueBillion: number;
+  weight: number;
+  ownershipPct: number;
+}
+
+let npsOverseasCache: {
+  holdings: NPSOverseasHolding[];
+  ts: number;
+  totalBillion: number;
+} | null = null;
+
+export async function getNPSOverseasHoldings(): Promise<{
+  holdings: NPSOverseasHolding[];
+  dataDate: string;
+  totalHoldings: number;
+  totalBillion: number;
+}> {
+  if (npsOverseasCache && Date.now() - npsOverseasCache.ts < CACHE_TTL) {
+    return {
+      holdings: npsOverseasCache.holdings,
+      dataDate: NPS_OVERSEAS_DATE,
+      totalHoldings: npsOverseasCache.holdings.length,
+      totalBillion: npsOverseasCache.totalBillion,
+    };
+  }
+
+  const res = await fetch(NPS_OVERSEAS_FILE_URL, {
+    headers: {
+      Referer: "https://fund.nps.or.kr/oprtprcn/ivsmprcn/getOHED0005M0.do",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`NPS 해외주식 파일 다운로드 실패: ${res.status}`);
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  const zip = new AdmZip(buf);
+
+  const ssEntry = zip.getEntry("xl/sharedStrings.xml");
+  const wsEntry = zip.getEntry("xl/worksheets/sheet1.xml");
+  if (!ssEntry || !wsEntry) throw new Error("Excel 구조 오류");
+
+  const strings = parseSharedStrings(ssEntry.getData().toString("utf-8"));
+  const rows = parseRows(wsEntry.getData().toString("utf-8"), strings);
+
+  const allHoldings: NPSOverseasHolding[] = [];
+  let totalBillion = 0;
+
+  for (const row of rows.slice(3)) {
+    if (!row[1] || !row[2]) continue;
+    const rank = parseInt(row[0]);
+    if (!rank || isNaN(rank)) continue;
+
+    const name = row[1].trim();
+    const value = parseFloat(row[2]);
+    if (isNaN(value) || value <= 0) continue;
+
+    const weight = parseFloat(row[3]) * 100;
+    const ownership = parseFloat(row[4]) * 100;
+
+    allHoldings.push({
+      rank,
+      stockName: name,
+      valueBillion: parseFloat(value.toFixed(2)),
+      weight: parseFloat(weight.toFixed(4)),
+      ownershipPct: parseFloat(ownership.toFixed(4)),
+    });
+    totalBillion += value;
+  }
+
+  allHoldings.sort((a, b) => a.rank - b.rank);
+  const top = allHoldings.slice(0, OVERSEAS_TOP_N);
+
+  npsOverseasCache = { holdings: top, ts: Date.now(), totalBillion };
+  return {
+    holdings: top,
+    dataDate: NPS_OVERSEAS_DATE,
+    totalHoldings: allHoldings.length,
+    totalBillion,
+  };
+}
+
+export function invalidateNPSOverseasCache() {
+  npsOverseasCache = null;
+}
