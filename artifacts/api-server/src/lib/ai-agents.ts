@@ -1934,13 +1934,15 @@ function needsUtility(industry: string, companyName: string, ticker?: string): b
   return false;
 }
 
-function needsFinancialSector(industry: string, companyName: string, ticker?: string): boolean {
+export function needsFinancialSector(industry: string, companyName: string, ticker?: string): boolean {
   const ind  = (industry ?? "").toLowerCase();
   const name = (companyName ?? "").toLowerCase();
   const bare = (ticker ?? "").replace(/\.(KS|KQ)$/, "");
 
-  if (/은행|보험|증권|금융지주|금융그룹|카드|캐피탈|저축|신용금고|생명보험|손해보험/.test(ind)) return true;
-  if (/금융지주|은행지주|생명보험|손해보험|증권사|자산운용|bank|insurance|brokerage/.test(name)) return true;
+  // 업종명으로 감지 (더 넓은 패턴)
+  if (/은행|보험|증권|금융지주|금융그룹|카드|캐피탈|저축|신용금고|생명보험|손해보험|투자자문|금융서비스|금융투자|기타금융|자산운용|리츠/.test(ind)) return true;
+  // 회사명으로 감지: 증권사? → "증권" OR "증권사" 모두 매치
+  if (/금융지주|은행지주|생명보험|손해보험|증권사?|자산운용|금융그룹|금융투자|금융서비스|bank|insurance|brokerage/.test(name)) return true;
 
   const FINANCIAL_TICKERS = new Set([
     "105560", // KB금융
@@ -1950,8 +1952,7 @@ function needsFinancialSector(industry: string, companyName: string, ticker?: st
     "138040", // 메리츠금융지주
     "175330", // JB금융지주
     "138930", // BNK금융지주
-    "000270", // 기아 (틀림, 제거용)
-    "024110", // 기업은행
+    "024110", // IBK기업은행
     "039490", // 키움증권
     "071050", // 한국금융지주
     "006800", // 대신증권
@@ -1959,7 +1960,16 @@ function needsFinancialSector(industry: string, companyName: string, ticker?: st
     "000810", // 삼성화재
     "001450", // 현대해상
     "082640", // DB손해보험
-    "005830", // DB금융투자
+    "005830", // DB금융투자(구 DB투자증권)
+    "088350", // 한화생명
+    "000545", // 흥국화재
+    "003460", // 유화증권
+    "003530", // 대한화재 → 현 한화손해보험
+    "005940", // NH투자증권
+    "008560", // 메리츠증권
+    "016360", // 삼성증권
+    "030610", // 교보증권
+    "078930", // GS (지주, 보험계열사) — 의심스러우면 name 체크가 덮어씀
   ]);
   if (bare && FINANCIAL_TICKERS.has(bare)) return true;
 

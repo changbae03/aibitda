@@ -65,10 +65,15 @@ export function runQACheck(analysis: {
   // ── 밸류에이션 품질 (25pts) ───────────────────────────────────────────────
   const valContent = stepMap.get("relative_valuation") ?? "";
 
+  // 금융주(은행·보험·증권·금융지주)는 DCF 대신 P/B-ROE 모델이 맞음 → P/B·BPS 테이블도 합격
+  const isFinancialReport = /P\/B.ROE|P\/B-ROE|BVPS|자기자본이익률.*CoE|Justified.P\/B|NIM|NPL비율|예금.*대출|금융지주|은행.*보험|증권.*BPS/i.test(valContent);
   const hasDCF = /DCF|할인현금|잉여현금|FCFF|FCFE|rNPV/i.test(valContent)
     && /\|.+\|.+\|/.test(valContent);
-  add("has_dcf_table", "DCF/rNPV 밸류에이션 테이블", 15, hasDCF,
-    !hasDCF ? "DCF 또는 rNPV 테이블 없음" : undefined);
+  const hasPBROE = isFinancialReport
+    && /BPS|BVPS|P\/B/i.test(valContent)
+    && /\|.+\|.+\|/.test(valContent);
+  add("has_dcf_table", "DCF/rNPV 또는 P/B-ROE 밸류에이션 테이블", 15, hasDCF || hasPBROE,
+    !(hasDCF || hasPBROE) ? "DCF/rNPV 또는 P/B-ROE(금융주) 테이블 없음" : undefined);
 
   const tableDataRows = (valContent.match(/^\|[^-|][^|]*\|/gm) ?? []).length;
   const hasPeer = /피어|동종|Peer|비교|comparable/i.test(valContent) && tableDataRows >= 5;

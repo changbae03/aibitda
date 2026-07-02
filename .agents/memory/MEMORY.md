@@ -1,2 +1,2 @@
-- [NPS 국민연금 코드 매핑](nps-code-mapping.md) — KRX corpList 이름과 NPS 약식명 불일치 → 직접 사전 필수
-- [NPS-DART 대량보유 구현](nps-dart-strategy.md) — Excel seed(4.5%+, ~250개) → DART majorstock 배치로 최신 분기 데이터 확보
+- [Financial stock valuation guardrails](financial-valuation-guardrails.md) — 금융주 적정주가 오산출 방지: 3중 레이어, needsFinancialSector() exported
+- [pykrx script path resolution](pykrx-path-resolution.md) — 배포 환경에서 pykrx_fetcher.py 경로 실패 원인 및 다중 폴백 패턴

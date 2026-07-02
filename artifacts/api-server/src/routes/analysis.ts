@@ -19,6 +19,7 @@ import {
   AGENTS,
   STEP_ORDER,
   buildPrompt,
+  needsFinancialSector,
   type AgentKey,
 } from "../lib/ai-agents.js";
 import { getCalibrationContext, classifySector } from "./performance.js";
@@ -5912,10 +5913,13 @@ async function executeStep(
             // (AI가 {target: X, base: Y} 형태로 출력 시 investment_strategy는 base=Y를 쓰는데
             // tp-inject가 target=X를 읽으면 불일치 발생 → base 우선으로 통일)
             let rawTp = parseFloat(String(fvd.base ?? fvd.target ?? fvd.target_price ?? "0").replace(/[^0-9.]/g, ""));
-            const spRow = await rawQuery(`SELECT start_price, ticker FROM analyses WHERE id=$1`, [id]);
+            const spRow = await rawQuery(`SELECT start_price, ticker, company_name, industry FROM analyses WHERE id=$1`, [id]);
             const sp: number = spRow[0]?.start_price ?? 0;
             const tkr: string = spRow[0]?.ticker ?? "";
             const isKRtk = /^\d{6}$/.test(tkr);
+            const spCompany: string = spRow[0]?.company_name ?? "";
+            const spIndustry: string = spRow[0]?.industry ?? "";
+            const isFinancialTk = isKRtk && needsFinancialSector(spIndustry, spCompany, tkr);
 
             // 중앙값 클램핑 제거: AI 결론 본문과 DB 저장값 불일치 원인
             // 상한 캡도 제거(DB 저장 로직과 일치): 하한 플로어만 유지
@@ -5923,9 +5927,11 @@ async function executeStep(
             const medianCorrected = false;
 
             if (rawTp > 0 && sp > 0) {
-              const MIN_R = isKRtk ? 0.45 : 0.25;
-              // 상한 캡: 한국 3.0x / 미국 5.0x — LLM 오산출 방지 (소형·바이오도 3.0x면 충분)
-              const MAX_R = isKRtk ? 3.0 : 5.0;
+              // 금융주(은행·보험·증권·금융지주)는 P/B-ROE 모델 → PBR 0.55x~1.8x 범위로 제한
+              // 일반 한국주: 0.45x~3.0x / 미국주: 0.25x~5.0x
+              const MIN_R = isFinancialTk ? 0.55 : (isKRtk ? 0.45 : 0.25);
+              const MAX_R = isFinancialTk ? 1.8  : (isKRtk ? 3.0  : 5.0);
+              if (isFinancialTk) console.log(`[tp-inject] 금융주 감지(${tkr} ${spCompany}) — 클램핑 ${MIN_R}x~${MAX_R}x 적용`);
               const ratio = rawTp / sp;
               const validated = ratio < MIN_R ? Math.round(sp * MIN_R)
                              : ratio > MAX_R ? Math.round(sp * MAX_R)
@@ -6850,12 +6856,15 @@ async function executeStep(
 
         // ── 목표가·진입가·손절가 이상값 가드 ─────────────────────────────────
         const startPriceRow = await rawQuery(
-          `SELECT start_price, ticker FROM analyses WHERE id=$1`,
+          `SELECT start_price, ticker, company_name, industry FROM analyses WHERE id=$1`,
           [id]
         );
         savedStartPrice = startPriceRow[0]?.start_price ?? null;
         savedTicker = startPriceRow[0]?.ticker ?? "";
+        const savedCompanyName: string = startPriceRow[0]?.company_name ?? "";
+        const savedIndustry: string = startPriceRow[0]?.industry ?? "";
         const isKR = /^\d{6}$/.test(savedTicker);
+        const isFinancialStock = isKR && needsFinancialSector(savedIndustry, savedCompanyName, savedTicker);
 
         // ── 1순위: relative_valuation FINAL_VALUATION_DATA.base 우선 사용 ──────
         // investment_strategy AI가 지시를 무시하고 다른 값을 쓰는 경우를 서버에서 강제 보정
@@ -6910,8 +6919,11 @@ async function executeStep(
           // 하한: DART 재무 데이터 부재 시 AI 오산출 방지
           // 상한: LLM이 대형주에 황당한 목표가를 산출하는 사례 방지
           //   (삼성전자 +370% 같은 케이스는 소형주·바이오 고배수 시나리오가 아님)
-          const TARGET_MIN_RATIO = isKR ? 0.45 : 0.25;
-          const TARGET_MAX_RATIO = isKR ? 3.0 : 5.0;
+          // 금융주(은행·보험·증권·금융지주): P/B-ROE 모델 기준으로 0.55x~1.8x 제한
+          // 일반 한국주: 0.45x~3.0x / 미국주: 0.25x~5.0x
+          const TARGET_MIN_RATIO = isFinancialStock ? 0.55 : (isKR ? 0.45 : 0.25);
+          const TARGET_MAX_RATIO = isFinancialStock ? 1.8  : (isKR ? 3.0  : 5.0);
+          if (isFinancialStock) console.log(`[tp-save] 금융주 감지(${savedTicker} ${savedCompanyName}) — 클램핑 ${TARGET_MIN_RATIO}x~${TARGET_MAX_RATIO}x 적용`);
           if (targetPrice) {
             const tRatio = targetPrice / savedStartPrice;
             if (tRatio < TARGET_MIN_RATIO) {
