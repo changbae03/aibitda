@@ -5910,6 +5910,7 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
   const [showKeyAssumptions, setShowKeyAssumptions] = useState(false);
   const [showModelAssumptions, setShowModelAssumptions] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [showDetailTable, setShowDetailTable] = useState(false);
 
   // investment_strategy는 모든 hook 선언 후에 분기 (Rules of Hooks 준수)
   if (step.stepKey === "investment_strategy") {
@@ -6265,177 +6266,170 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
           </div>
         )}
 
-        {/* Valuation Analyst — 최종 조율 적정주가 시각화 */}
+        {/* Valuation Analyst — 최종 조율 적정주가 (redesigned: clean & modern) */}
         {isRelativeVal && finalValuationData && (() => {
           const fv = finalValuationData;
           const absModel = fv.abs_model ?? detectAbsModelFromContent(step.content ?? "");
-          const gMin = Math.min(fv.abs_bear, fv.rel_bear, fv.bear, fv.current) * 0.96;
-          const gMax = Math.max(fv.abs_bull, fv.rel_bull, fv.bull) * 1.04;
           const isUp = fv.base >= fv.current;
           const upside = fv.current > 0 ? ((fv.base - fv.current) / fv.current * 100) : 0;
           const absUp = fv.current > 0 ? ((fv.abs_base - fv.current) / fv.current * 100) : 0;
           const relUp = fv.current > 0 ? ((fv.rel_base - fv.current) / fv.current * 100) : 0;
-          const absModelDescMap: Record<string, string> = {
-            "DCF":       isEn ? "Discounted Cash Flow" : "미래 현금흐름 할인",
-            "rNPV":      isEn ? "Risk-adjusted NPV"    : "위험조정 순현가",
-            "SOTP":      isEn ? "Sum-of-the-Parts"     : "사업부별 합산",
-            "rNPV+SOTP": isEn ? "rNPV + SOTP"          : "rNPV + 사업부 합산",
-            "DDM":       isEn ? "Dividend Discount"    : "배당할인 모델",
-            "P/B-ROE":   isEn ? "Book Value × ROE"     : "자기자본 기반",
-            "NAV":       isEn ? "Net Asset Value"      : "순자산가치",
-            "EV/Sales":  isEn ? "EV / Revenue"         : "매출 기준 EV",
-            "AFFO":      isEn ? "Adj. Funds From Ops"  : "조정 영업현금흐름",
-          };
-          const absModelDesc = absModelDescMap[absModel] ?? (isEn ? "Intrinsic Value Model" : "절대가치 모델");
 
-          const stepCards = [
-            {
-              n: 1,
-              title: isEn ? "Model" : "모델 선택",
-              sub: absModelDesc,
-              value: absModel,
-              badge: null,
-              highlight: false,
-            },
-            {
-              n: 2,
-              title: isEn ? "Absolute" : "절대가치",
-              sub: isEn ? `${absModel} intrinsic` : `${absModel} 내재가치`,
-              value: formatPrice(fv.abs_base, priceCurrency, isEn),
-              badge: `${absUp >= 0 ? "+" : ""}${absUp.toFixed(1)}%`,
-              badgeUp: absUp >= 0,
-              highlight: false,
-            },
-            {
-              n: 3,
-              title: isEn ? "Relative" : "상대가치",
-              sub: isEn ? "Peer multiples" : "피어 멀티플 비교",
-              value: formatPrice(fv.rel_base, priceCurrency, isEn),
-              badge: `${relUp >= 0 ? "+" : ""}${relUp.toFixed(1)}%`,
-              badgeUp: relUp >= 0,
-              highlight: false,
-            },
-            {
-              n: 4,
-              title: isEn ? "Blended" : "최종 조율",
-              sub: isEn ? "Abs. × Rel. blend" : "절대 + 상대 조율",
-              value: formatPrice(fv.base, priceCurrency, isEn),
-              badge: `${isUp ? "+" : ""}${upside.toFixed(1)}%`,
-              badgeUp: isUp,
-              highlight: true,
-            },
-          ];
+          // 범위 바 계산
+          const allVals = [fv.bear, fv.bull, fv.current, fv.base].filter(v => v > 0);
+          const gMin = Math.min(...allVals) * 0.95;
+          const gMax = Math.max(...allVals) * 1.05;
+          const span = gMax - gMin || 1;
+          const toP = (v: number) => Math.max(2, Math.min(98, ((v - gMin) / span) * 100));
+          const bearP = toP(fv.bear);
+          const baseP = toP(fv.base);
+          const bullP = toP(fv.bull);
+          const curP  = toP(fv.current);
+
+          const targetColor = isUp ? "#10b981" : "#ef4444";
 
           return (
-            <div className="mt-5 pt-4 border-t border-border">
-              {/* 섹션 헤더 */}
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isEn ? "Final Blended Target" : "최종 조율 적정주가"}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>{isEn ? "Absolute × Relative Blend" : "절대가치 × 상대가치 조율"}</span>
-              </div>
+            <div className="mt-5 pt-5 border-t border-border space-y-4">
 
-              {/* 밸류에이션 4단계 프로세스 */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
-                {stepCards.map((s) => (
-                  <div
-                    key={s.n}
-                    className="relative rounded-xl border p-3 flex flex-col gap-1"
-                    style={s.highlight
-                      ? { borderColor: `${color}50`, background: `${color}0a` }
-                      : { borderColor: "hsl(var(--border) / 0.5)", background: "hsl(var(--muted) / 0.12)" }
-                    }
-                  >
-                    {/* 단계 번호 + 제목 */}
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="flex items-center justify-center w-[18px] h-[18px] rounded-full text-[9px] font-bold shrink-0"
-                        style={{ background: s.highlight ? color : `${color}30`, color: s.highlight ? "white" : color }}
-                      >
-                        {s.n}
-                      </span>
-                      <span className={cn("text-[10px] font-semibold uppercase tracking-wide truncate", s.highlight ? "" : "text-muted-foreground")}
-                        style={s.highlight ? { color } : {}}
-                      >
-                        {s.title}
-                      </span>
-                    </div>
-                    {/* 산출 값 */}
-                    <span className="text-[14px] font-bold font-mono text-foreground leading-tight">{s.value}</span>
-                    {/* 업사이드 뱃지 */}
-                    {s.badge && (
-                      <span className={cn("text-[11px] font-bold leading-none", (s as any).badgeUp ? "text-emerald-500" : "text-rose-500")}>
-                        {s.badge}
-                      </span>
-                    )}
-                    {/* 설명 */}
-                    <span className="text-[10px] text-muted-foreground/70 leading-tight">{s.sub}</span>
-                    {/* 연결 화살표 (마지막 카드 제외, sm 이상) */}
-                    {s.n < 4 && (
-                      <span className="hidden sm:flex absolute -right-[9px] top-1/2 -translate-y-1/2 z-10 w-[18px] h-[18px] items-center justify-center text-muted-foreground/30 text-xs">
-                        →
-                      </span>
-                    )}
+              {/* ── Hero: 적정주가 + 업사이드 ── */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                    {isEn ? "Target Price" : "적정주가"}
+                  </p>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-[28px] font-bold font-mono leading-none text-foreground">
+                      {formatPrice(fv.base, priceCurrency, isEn)}
+                    </span>
+                    <span className="text-[17px] font-bold font-mono leading-none" style={{ color: targetColor }}>
+                      {isUp ? "+" : ""}{upside.toFixed(1)}%
+                    </span>
                   </div>
-                ))}
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    {isEn ? "vs. current " : "현재가 "}<span className="font-mono font-medium text-foreground/75">{formatPrice(fv.current, priceCurrency, isEn)}</span>
+                  </p>
+                </div>
+
+                {/* Blend 구성 — 우측 compact */}
+                <div className="shrink-0 flex flex-col items-end gap-1.5 pt-0.5">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">{isEn ? "Blend" : "구성"}</p>
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <span className="text-muted-foreground/70">{absModel}</span>
+                    <span className="font-mono font-semibold text-foreground/80">{formatPrice(fv.abs_base, priceCurrency, isEn)}</span>
+                    <span className={cn("font-bold text-[10px]", absUp >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                      {absUp >= 0 ? "+" : ""}{absUp.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <span className="text-muted-foreground/70">{isEn ? "Peers" : "피어"}</span>
+                    <span className="font-mono font-semibold text-foreground/80">{formatPrice(fv.rel_base, priceCurrency, isEn)}</span>
+                    <span className={cn("font-bold text-[10px]", relUp >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                      {relUp >= 0 ? "+" : ""}{relUp.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              {/* 현재가 + 조율 업사이드 칩 */}
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[13px] text-muted-foreground">{isEn ? "Current" : "현재가"}</span>
-                  <span className="text-[13px] font-mono font-bold text-foreground">{formatPrice(fv.current, priceCurrency, isEn)}</span>
+              {/* ── Range bar: Bear ─ Current | Base ─ Bull ── */}
+              <div className="px-1">
+                {/* Track */}
+                <div className="relative h-2 bg-muted/50 rounded-full">
+                  {/* Bear→Bull fill */}
+                  <div className="absolute inset-y-0 rounded-full opacity-20"
+                    style={{ left: `${bearP}%`, right: `${100 - bullP}%`, background: targetColor }} />
+                  {/* Bear dot */}
+                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-400 ring-2 ring-background"
+                    style={{ left: `${bearP}%` }} />
+                  {/* Current tick */}
+                  <div className="absolute -top-1 -bottom-1 w-[2px] -translate-x-1/2 bg-foreground/40 rounded-full"
+                    style={{ left: `${curP}%` }} />
+                  {/* Base dot — prominent */}
+                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full ring-2 ring-background shadow-md z-10"
+                    style={{ left: `${baseP}%`, background: targetColor }} />
+                  {/* Bull dot */}
+                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-blue-400 ring-2 ring-background"
+                    style={{ left: `${bullP}%` }} />
                 </div>
-                <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5", isUp ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-rose-50 dark:bg-rose-900/20")}>
-                  <TrendingUp className={cn("w-3.5 h-3.5", isUp ? "text-emerald-600" : "text-rose-600 rotate-180")} />
-                  <span className={cn("text-[11px]", isUp ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>{isEn ? "Blended Target" : "조율 적정주가"}</span>
-                  <span className={cn("text-[13px] font-mono font-bold", isUp ? "text-emerald-600" : "text-rose-600")}>
-                    {isUp ? "+" : ""}{upside.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 bg-muted rounded-lg px-3 py-1.5">
-                  <span className="text-[13px] text-muted-foreground">{isEn ? "Band" : "밴드"}</span>
-                  <span className="text-[11px] font-mono text-rose-500">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
-                  <span className="text-[10px] text-muted-foreground/60">~</span>
-                  <span className="text-[11px] font-mono text-blue-500">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
+
+                {/* Price labels row */}
+                <div className="flex items-start justify-between mt-2.5 text-[10px] font-mono">
+                  <div className="flex flex-col items-start">
+                    <span className="text-rose-400 font-semibold">{formatPrice(fv.bear, priceCurrency, isEn)}</span>
+                    <span className="text-muted-foreground/50 text-[9px]">Bear</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="font-semibold text-foreground/70">{formatPrice(fv.current, priceCurrency, isEn)}</span>
+                    <span className="text-muted-foreground/50 text-[9px]">{isEn ? "Now" : "현재"}</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold" style={{ color: targetColor }}>{formatPrice(fv.base, priceCurrency, isEn)}</span>
+                    <span className="font-semibold text-[9px]" style={{ color: targetColor }}>{isEn ? "Target" : "적정"}</span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-blue-400 font-semibold">{formatPrice(fv.bull, priceCurrency, isEn)}</span>
+                    <span className="text-muted-foreground/50 text-[9px]">Bull</span>
+                  </div>
                 </div>
               </div>
 
-              {/* 상세 수치 테이블 */}
-              <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
-                <table className="w-full min-w-[300px] text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="px-3 py-2 text-left font-semibold text-foreground/80 border-b border-border">{isEn ? "Method" : "구분"}</th>
-                      <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
-                      <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
-                      <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {[
-                      { label: isEn ? `Absolute (${absModel})` : `절대가치 (${absModel})`, bear: fv.abs_bear, base: fv.abs_base, bull: fv.abs_bull, bold: false },
-                      { label: isEn ? "Relative (Peers)" : "상대가치 (피어)", bear: fv.rel_bear, base: fv.rel_base, bull: fv.rel_bull, bold: false },
-                      { label: isEn ? "Blended Target" : "조율 적정주가", bear: fv.bear, base: fv.base, bull: fv.bull, bold: true },
-                    ].map(({ label, bear, base, bull, bold }) => {
-                      const up = fv.current > 0 ? ((base - fv.current) / fv.current * 100) : 0;
-                      return (
-                        <tr key={label} className={cn("transition-colors", bold ? "bg-muted/20 hover:bg-muted/30" : "hover:bg-muted/10")}>
-                          <td className={cn("px-3 py-2 text-foreground/80", bold && "font-bold text-foreground")}>{label}</td>
-                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            <span className={cn("text-foreground", bold && "font-bold")}>{formatPrice(base, priceCurrency, isEn)}</span>
-                            <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                              {up >= 0 ? "+" : ""}{up.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {/* ── 상세 보기 (collapsed by default) ── */}
+              <button
+                onClick={() => setShowDetailTable(v => !v)}
+                className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              >
+                <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", showDetailTable && "rotate-180")} />
+                {showDetailTable
+                  ? (isEn ? "Hide breakdown" : "상세 숨기기")
+                  : (isEn ? "Show breakdown" : "절대·상대가치 상세")}
+              </button>
+
+              <AnimatePresence initial={false}>
+                {showDetailTable && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    style={{ overflow: "hidden" }}
+                  >
+                    <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+                      <table className="w-full min-w-[300px] text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-muted/60">
+                            <th className="px-3 py-2 text-left font-semibold text-foreground/70 border-b border-border">{isEn ? "Method" : "구분"}</th>
+                            <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
+                            <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
+                            <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/50">
+                          {[
+                            { label: isEn ? `Absolute (${absModel})` : `절대가치 (${absModel})`, bear: fv.abs_bear, base: fv.abs_base, bull: fv.abs_bull, bold: false },
+                            { label: isEn ? "Relative (Peers)" : "상대가치 (피어)", bear: fv.rel_bear, base: fv.rel_base, bull: fv.rel_bull, bold: false },
+                            { label: isEn ? "Blended" : "최종 조율", bear: fv.bear, base: fv.base, bull: fv.bull, bold: true },
+                          ].map(({ label, bear, base, bull, bold }) => {
+                            const up = fv.current > 0 ? ((base - fv.current) / fv.current * 100) : 0;
+                            return (
+                              <tr key={label} className={cn("transition-colors", bold ? "bg-muted/25" : "hover:bg-muted/10")}>
+                                <td className={cn("px-3 py-2 text-foreground/75", bold && "font-bold text-foreground")}>{label}</td>
+                                <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
+                                <td className="px-3 py-2 text-right font-mono">
+                                  <span className={cn(bold && "font-bold")}>{formatPrice(base, priceCurrency, isEn)}</span>
+                                  <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                                    {up >= 0 ? "+" : ""}{up.toFixed(1)}%
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
             </div>
           );
         })()}
@@ -6498,55 +6492,6 @@ function StepCard({ step, agent: agentProp, delay, ticker, companyName, companyN
                 <ValuationScaleBar label="EV/EBITDA" bear={valuationData.ev_bear} base={valuationData.ev_base} bull={valuationData.ev_bull} current={valuationData.current} globalMin={gMin} globalMax={gMax} currency={priceCurrency} isEn={isEn} />
               </div>
 
-              {/* 상세 수치 테이블 (접힌 형태) */}
-              <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
-                <table className="w-full min-w-[300px] text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="px-3 py-2 text-left font-semibold text-foreground/80 border-b border-border">{isEn ? "Method" : "방법론"}</th>
-                      <th className="px-3 py-2 text-right font-semibold text-rose-500 border-b border-border">Bear</th>
-                      <th className="px-3 py-2 text-right font-semibold text-emerald-600 border-b border-border">Base</th>
-                      <th className="px-3 py-2 text-right font-semibold text-blue-500 border-b border-border">Bull</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {[
-                      { label: "DCF", bear: valuationData.dcf_bear, base: valuationData.dcf_base, bull: valuationData.dcf_bull },
-                      { label: "Fwd P/E", bear: valuationData.pe_bear, base: valuationData.pe_base, bull: valuationData.pe_bull },
-                      { label: "EV/EBITDA", bear: valuationData.ev_bear, base: valuationData.ev_base, bull: valuationData.ev_bull },
-                    ].map(({ label, bear, base, bull }) => {
-                      const up = valuationData.current > 0 ? ((base - valuationData.current) / valuationData.current * 100) : 0;
-                      return (
-                        <tr key={label} className="hover:bg-muted/20 transition-colors">
-                          <td className="px-3 py-2 font-medium text-foreground/80">{label}</td>
-                          <td className="px-3 py-2 text-right text-rose-500 font-mono">{formatPrice(bear, priceCurrency, isEn)}</td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            <span className="font-semibold text-foreground">{formatPrice(base, priceCurrency, isEn)}</span>
-                            <span className={cn("ml-1.5 text-[10px] font-bold", up >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                              {up >= 0 ? "+" : ""}{up.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right text-blue-500 font-mono">{formatPrice(bull, priceCurrency, isEn)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 인터랙티브 DCF 슬라이더 — 준비 중 */}
-              {/* {(() => {
-                const dcfDefaults = parseDCFDefaults(content, valuationData.dcf_base);
-                return (
-                  <InteractiveDCFPanel
-                    defaults={dcfDefaults}
-                    currentPrice={valuationData.current}
-                    currency={priceCurrency}
-                    isEn={isEn}
-                    color={color}
-                  />
-                );
-              })()} */}
             </div>
           );
         })()}
