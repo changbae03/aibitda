@@ -44,17 +44,35 @@ function SummaryCard({ label, icon, value, sub }: { label: string; icon: React.R
     )}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
-          <span className={cn("opacity-80", pos ? "text-rose-500" : neg ? "text-sky-500" : "text-muted-foreground")}>{icon}</span>
-          <span className="text-[11px] font-semibold text-foreground/70 dark:text-foreground/80">{label}</span>
+          <span className={cn(
+            pos ? "text-rose-500 dark:text-rose-300"
+              : neg ? "text-sky-500 dark:text-sky-300"
+              : "text-muted-foreground",
+          )}>{icon}</span>
+          <span className={cn(
+            "text-[11px] font-semibold",
+            pos ? "text-rose-900 dark:text-rose-100"
+              : neg ? "text-sky-900 dark:text-sky-100"
+              : "text-foreground/70",
+          )}>{label}</span>
         </div>
-        <span className={cn(pos ? "text-rose-500" : neg ? "text-sky-500" : "text-muted-foreground/40")}>
+        <span className={cn(
+          pos ? "text-rose-500 dark:text-rose-300"
+            : neg ? "text-sky-500 dark:text-sky-300"
+            : "text-muted-foreground/40",
+        )}>
           {pos ? <ArrowUpRight className="w-3.5 h-3.5" /> : neg ? <ArrowDownRight className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
         </span>
       </div>
       <div className={cn("text-[22px] font-black tabular-nums leading-none tracking-tight", flowColor(value))}>
         {value > 0 ? "+" : ""}{fmt억(value)}
       </div>
-      <div className="text-[10px] text-foreground/50 dark:text-foreground/60 mt-1.5">{sub}</div>
+      <div className={cn(
+        "text-[10px] mt-1.5",
+        pos ? "text-rose-800/70 dark:text-rose-200/70"
+          : neg ? "text-sky-800/70 dark:text-sky-200/70"
+          : "text-foreground/50 dark:text-foreground/60",
+      )}>{sub}</div>
     </div>
   );
 }
@@ -125,39 +143,39 @@ function StockFlowRow({ stock, sortKey, rank }: { stock: StockFlow; sortKey: Sor
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: rank * 0.025, duration: 0.2 }}
-      className="flex items-center gap-3 px-4 py-3.5 border-b border-border/25 last:border-0 hover:bg-muted/10 transition-colors group"
+      className="px-4 py-3 border-b border-border/25 last:border-0 hover:bg-muted/10 transition-colors"
     >
-      {/* 순위 */}
-      <div className={cn(
-        "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-        rank === 1 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
-          : rank === 2 ? "bg-zinc-100 text-zinc-600 dark:bg-zinc-700/60 dark:text-zinc-300"
-          : rank === 3 ? "bg-orange-100 text-orange-600 dark:bg-orange-900/50 dark:text-orange-300"
-          : "text-muted-foreground/50 dark:text-muted-foreground/60",
-      )}>
-        {rank <= 3 ? rank : <span className="text-[10px]">{rank}</span>}
+      {/* 1행: 순위 + 로고 + 이름/섹터 */}
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className={cn(
+          "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+          rank === 1 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+            : rank === 2 ? "bg-zinc-100 text-zinc-600 dark:bg-zinc-700/60 dark:text-zinc-300"
+            : rank === 3 ? "bg-orange-100 text-orange-600 dark:bg-orange-900/50 dark:text-orange-300"
+            : "text-muted-foreground/50 dark:text-muted-foreground/60",
+        )}>
+          {rank <= 3 ? rank : <span className="text-[10px]">{rank}</span>}
+        </div>
+        <StockLogo ticker={`${stock.code}.KS`} companyName={stock.name} size="sm" className="shrink-0" />
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-foreground leading-tight">{stock.name}</div>
+          {stock.sector && (
+            <div className="text-[10px] text-muted-foreground/55 dark:text-muted-foreground/65 mt-0.5">{stock.sector}</div>
+          )}
+        </div>
       </div>
 
-      {/* 로고 + 이름 */}
-      <StockLogo ticker={`${stock.code}.KS`} companyName={stock.name} size="sm" className="shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-foreground truncate leading-tight">{stock.name}</div>
-        {stock.sector && (
-          <div className="text-[10px] text-muted-foreground/55 dark:text-muted-foreground/65 truncate mt-0.5">{stock.sector}</div>
-        )}
-      </div>
-
-      {/* 수급 뱃지 */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      {/* 2행: 수급 뱃지 (왼쪽 정렬, 전체 너비 활용) */}
+      <div className="flex gap-2 ml-7">
         {(["individual", "institution", "foreign"] as const).map(k => {
           const v = stock[k];
-          const label = k === "individual" ? "개" : k === "institution" ? "기" : "외";
+          const label = k === "individual" ? "개인" : k === "institution" ? "기관" : "외인";
           const active = sortKey === k || (sortKey === "total" && k !== "individual");
           return (
             <div
               key={k}
               className={cn(
-                "flex flex-col items-end rounded-lg px-2 py-1 min-w-[52px] transition-opacity",
+                "flex items-center gap-1 rounded-lg px-2.5 py-1.5 flex-1 transition-opacity",
                 active ? "opacity-100" : "opacity-55",
                 v > 0
                   ? "bg-rose-50 dark:bg-rose-900/50"
@@ -166,8 +184,8 @@ function StockFlowRow({ stock, sortKey, rank }: { stock: StockFlow; sortKey: Sor
                   : "bg-muted/25 dark:bg-muted/30",
               )}
             >
-              <span className="text-[9px] text-muted-foreground/60 dark:text-muted-foreground/70 leading-none mb-0.5">{label}</span>
-              <span className={cn("text-[11px] font-bold tabular-nums leading-none", flowColor(v))}>
+              <span className="text-[9px] text-muted-foreground/55 dark:text-muted-foreground/65 shrink-0">{label}</span>
+              <span className={cn("text-[11px] font-bold tabular-nums ml-auto", flowColor(v))}>
                 {v > 0 ? "+" : ""}{fmt억(v)}
               </span>
             </div>
