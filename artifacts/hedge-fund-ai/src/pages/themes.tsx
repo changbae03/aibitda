@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb, Search, Loader2, TrendingUp, ArrowRight,
   RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
+  Target, BarChart2, AlertCircle,
 } from "lucide-react";
 import { FlowContent } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
@@ -107,7 +108,7 @@ export default function ThemesPage() {
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
 
   // 섹션 탭
-  const [activeSection, setActiveSection] = useState<"themes" | "flow">("themes");
+  const [activeSection, setActiveSection] = useState<"themes" | "flow" | "picks">("themes");
 
   // 분석 모달
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
@@ -215,7 +216,7 @@ export default function ThemesPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
       {/* ── 페이지 탭 ──────────────────────────────────────────── */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setActiveSection("themes")}
           className={cn(
@@ -227,6 +228,18 @@ export default function ThemesPage() {
         >
           <Lightbulb className="w-3.5 h-3.5" />
           테마 분석
+        </button>
+        <button
+          onClick={() => setActiveSection("picks")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold transition-all",
+            activeSection === "picks"
+              ? "bg-emerald-500 text-white shadow-sm"
+              : "bg-muted/60 text-muted-foreground/70 hover:bg-muted hover:text-foreground/80",
+          )}
+        >
+          <Target className="w-3.5 h-3.5" />
+          내일 후보
         </button>
         <button
           onClick={() => setActiveSection("flow")}
@@ -241,6 +254,11 @@ export default function ThemesPage() {
           수급 레이더
         </button>
       </div>
+
+      {/* ── 내일 후보 탭 ────────────────────────────────────────── */}
+      {activeSection === "picks" && (
+        <TomorrowPicksContent onAnalyze={goAnalyze} />
+      )}
 
       {/* ── 수급 레이더 탭 ─────────────────────────────────────── */}
       {activeSection === "flow" && <FlowContent />}
@@ -625,6 +643,256 @@ export default function ThemesPage() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ── 내일 후보 컴포넌트 ──────────────────────────────────────────────────────
+
+interface TomorrowPick {
+  ticker: string;
+  name: string;
+  market: "KR" | "US";
+  sector?: string;
+  theme: string;
+  themeEmoji: string;
+  themeHeat: number;
+  priceChange: number;
+  volumeRatio: number;
+  laggardGap: number;
+  finalScore: number;
+  signals: string[];
+  rationale: string;
+}
+
+const SIGNAL_CONFIG: Record<string, { bg: string; text: string }> = {
+  "테마 강세":  { bg: "bg-red-50 dark:bg-red-900/20",     text: "text-red-600 dark:text-red-400" },
+  "테마 상승":  { bg: "bg-orange-50 dark:bg-orange-900/20", text: "text-orange-600 dark:text-orange-400" },
+  "미반영 구간":{ bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-400" },
+  "상대 지연":  { bg: "bg-teal-50 dark:bg-teal-900/20",   text: "text-teal-700 dark:text-teal-400" },
+  "거래량 급증":{ bg: "bg-violet-50 dark:bg-violet-900/20", text: "text-violet-700 dark:text-violet-400" },
+  "거래량 증가":{ bg: "bg-indigo-50 dark:bg-indigo-900/20", text: "text-indigo-600 dark:text-indigo-400" },
+  "수급 유입":  { bg: "bg-blue-50 dark:bg-blue-900/20",   text: "text-blue-600 dark:text-blue-400" },
+  "주도주":     { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-700 dark:text-amber-400" },
+};
+
+function ScoreBar({ score }: { score: number }) {
+  const pct = Math.round(score * 100);
+  const color =
+    pct >= 70 ? "bg-emerald-500" :
+    pct >= 45 ? "bg-teal-400" :
+    "bg-sky-400";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden">
+        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[10px] font-bold tabular-nums text-foreground/50 w-7 text-right">{pct}</span>
+    </div>
+  );
+}
+
+function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
+  const [picks, setPicks] = useState<TomorrowPick[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function load(forceRefresh = false) {
+    if (forceRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const url = getApiUrl(`/api/market/tomorrow-picks${forceRefresh ? "?refresh=1" : ""}`);
+      const r = await fetch(url);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "오류가 발생했습니다");
+      setPicks(data.picks ?? []);
+      setCachedAt(data.cachedAt ?? null);
+    } catch (e: any) {
+      setError(e.message ?? "데이터를 불러오지 못했습니다");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-20 rounded-2xl bg-muted/40 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
+        <AlertCircle className="w-6 h-6 text-muted-foreground/40 mx-auto" />
+        <p className="text-sm text-foreground/50">{error}</p>
+        <button
+          onClick={() => load()}
+          className="text-xs text-[#FF8A7A] hover:underline"
+        >다시 시도</button>
+      </div>
+    );
+  }
+
+  if (picks.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-8 text-center">
+        <BarChart2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+        <p className="text-sm text-foreground/40">현재 유효한 후보 종목이 없습니다.<br/>테마 피드가 로드된 후 다시 시도해 주세요.</p>
+      </div>
+    );
+  }
+
+  const cachedTime = cachedAt
+    ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {/* 헤더 */}
+      <div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-emerald-500" />
+            <h2 className="text-lg font-semibold text-foreground">내일 상승 후보</h2>
+          </div>
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1 text-xs text-foreground/40 hover:text-foreground/70 transition-colors"
+          >
+            <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
+            갱신
+          </button>
+        </div>
+        <p className="text-sm text-foreground/50 mt-0.5">
+          핫 테마 내 미반영 종목 · 거래량 급증 신호 · 중소형주 포함
+          {cachedTime && <span className="ml-2 text-foreground/30">· {cachedTime} 기준</span>}
+        </p>
+      </div>
+
+      {/* 안내 배너 */}
+      <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-700/30">
+        <Info className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+        <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
+          핫 테마에서 아직 충분히 오르지 않은 종목 + 거래량 급증 시그널 조합입니다.
+          투자 결정 전 반드시 기업 분석을 확인하세요.
+        </p>
+      </div>
+
+      {/* 후보 리스트 */}
+      <div className="space-y-2">
+        {picks.map((pick, i) => {
+          const rank = i + 1;
+          const changeUp = pick.priceChange >= 0;
+          return (
+            <motion.div
+              key={pick.ticker}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05, duration: 0.25 }}
+              className="rounded-2xl border border-border bg-card overflow-hidden hover:border-emerald-300/50 dark:hover:border-emerald-700/40 transition-colors"
+            >
+              <div className="px-4 py-3">
+                {/* 상단 행: 순위·종목·테마·분석버튼 */}
+                <div className="flex items-start gap-3">
+                  {/* 순위 */}
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5",
+                    rank === 1 ? "bg-amber-400 text-white" :
+                    rank === 2 ? "bg-slate-400 text-white" :
+                    rank === 3 ? "bg-orange-400 text-white" :
+                    "bg-muted text-foreground/40"
+                  )}>
+                    {rank}
+                  </div>
+                  <StockLogo ticker={pick.ticker} companyName={pick.name} size="sm" className="shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    {/* 종목명 + 오늘 등락 */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-foreground leading-tight">{pick.name}</span>
+                      <span className="font-mono text-[10px] text-foreground/30">{pick.ticker}</span>
+                      {/* 오늘 등락 */}
+                      <span className={cn(
+                        "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded",
+                        changeUp
+                          ? "text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400"
+                          : "text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400"
+                      )}>
+                        {changeUp ? "+" : ""}{pick.priceChange.toFixed(1)}%
+                      </span>
+                    </div>
+                    {/* 테마 배지 */}
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-base leading-none">{pick.themeEmoji}</span>
+                      <span className="text-[10px] text-foreground/50">{pick.theme}</span>
+                      <span className="text-foreground/20 text-[10px]">·</span>
+                      <span className="text-[10px] text-red-500 font-semibold">테마 +{pick.themeHeat.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onAnalyze(pick.ticker, pick.name)}
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-emerald-600 border border-emerald-400/30 bg-emerald-50/60 hover:bg-emerald-100/60 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 transition-colors whitespace-nowrap mt-0.5"
+                  >
+                    분석
+                  </button>
+                </div>
+
+                {/* 점수 바 */}
+                <div className="mt-2.5 mb-1.5">
+                  <ScoreBar score={pick.finalScore} />
+                </div>
+
+                {/* 신호 배지들 */}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {pick.signals.map(sig => {
+                    const cfg = SIGNAL_CONFIG[sig] ?? { bg: "bg-muted", text: "text-foreground/50" };
+                    return (
+                      <span key={sig} className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", cfg.bg, cfg.text)}>
+                        {sig}
+                      </span>
+                    );
+                  })}
+                  {pick.volumeRatio > 1 && (
+                    <span className="text-[10px] text-foreground/35 font-medium px-1 py-0.5">
+                      거래량 {pick.volumeRatio.toFixed(1)}배
+                    </span>
+                  )}
+                </div>
+
+                {/* 미반영 갭 + 근거 */}
+                {(pick.laggardGap > 0.5 || pick.rationale) && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {pick.laggardGap > 0.5 && (
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        테마 대비 미반영 갭 {pick.laggardGap.toFixed(1)}%p
+                      </p>
+                    )}
+                    {pick.rationale && (
+                      <p className="text-[11px] text-foreground/45 leading-snug line-clamp-2">{pick.rationale}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* 하단 면책 */}
+      <p className="text-[10px] text-foreground/30 text-center leading-relaxed px-2">
+        본 자료는 테마 데이터 분석 결과이며 투자 권유가 아닙니다.<br/>
+        모든 투자 결정에 대한 책임은 투자자 본인에게 있습니다.
+      </p>
     </div>
   );
 }

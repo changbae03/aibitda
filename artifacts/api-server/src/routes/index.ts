@@ -25,6 +25,7 @@ import etfRouter from "./etf.js";
 import newsScrapsRouter from "./news-scraps.js";
 import themesRouter from "./themes.js";
 import flowRouter from "./flow.js";
+import tomorrowPicksRouter from "./tomorrow-picks.js";
 const router: IRouter = Router();
 
 router.use(healthRouter);
@@ -53,6 +54,7 @@ router.use(etfRouter);
 router.use(newsScrapsRouter);
 router.use(themesRouter);
 router.use(flowRouter);
+router.use(tomorrowPicksRouter);
 // market-analysis 라우트는 market-server 프로세스에서 처리 (app.ts 프록시로 전달)
 
 export default router;
