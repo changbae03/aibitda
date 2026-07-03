@@ -866,6 +866,7 @@ function parseBrief(summary: string) {
 interface PortfolioNewsItem {
   ticker: string;
   companyName: string;
+  holdingType?: "portfolio" | "watchlist";
   title: string;
   source: string;
   pubDate: string;
@@ -948,7 +949,7 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
         >
           <Newspaper className="w-3.5 h-3.5 text-primary/60 shrink-0" />
           <span className="flex-1 text-[12px] font-semibold text-foreground/70 text-left">
-            {isEn ? "Holdings News Feed" : "보유종목 뉴스"}
+            {isEn ? "Holdings & Watchlist News" : "보유종목·관심종목 뉴스"}
           </span>
           {loading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/40 shrink-0" />}
           {!loading && items.length > 0 && (
@@ -1036,12 +1037,19 @@ function PortfolioNewsFeed({ tickers }: { tickers: string[] }) {
                     onClick={e => !item.url && e.preventDefault()}
                   >
                     {/* 종목 뱃지 */}
-                    <span className={cn(
-                      "shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border",
-                      getColor(item.ticker)
-                    )}>
-                      {/^\d+$/.test(item.ticker) ? (item.companyName || item.ticker) : item.ticker}
-                    </span>
+                    <div className="shrink-0 mt-0.5 flex flex-col items-start gap-0.5">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[9px] font-bold border",
+                        getColor(item.ticker)
+                      )}>
+                        {/^\d+$/.test(item.ticker) ? (item.companyName || item.ticker) : item.ticker}
+                      </span>
+                      {item.holdingType === "watchlist" && (
+                        <span className="px-1 py-0.5 rounded text-[8px] font-medium bg-muted/60 text-muted-foreground/50 border border-border/40">
+                          {isEn ? "Watch" : "관심"}
+                        </span>
+                      )}
+                    </div>
                     {/* 제목 + 메타 */}
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] text-foreground/80 leading-snug line-clamp-2 group-hover:text-foreground transition-colors">

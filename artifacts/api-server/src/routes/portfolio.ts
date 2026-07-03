@@ -397,8 +397,9 @@ router.get("/portfolio/performance", async (req, res) => {
   await ensureTable();
   await ensureSnapshotsTable();
 
+  // 관심종목 제외 — avg_price/quantity가 없으면 수익률 계산 불가
   const { rows: holdings } = await pool.query(
-    `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1`,
+    `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1 AND holding_type = 'portfolio'`,
     [userId]
   );
 
@@ -1307,14 +1308,14 @@ router.post("/portfolio/review", async (req, res) => {
   }
 
   try {
-    // 1) 보유 종목 전체 조회
+    // 1) 보유 종목만 조회 (관심종목 제외 — avg_price/quantity 없어 분석 부정확)
     const { rows: holdingRows } = await pool.query(
-      `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1`,
+      `SELECT ticker, company_name, avg_price, quantity, currency FROM portfolio_holdings WHERE user_id = $1 AND holding_type = 'portfolio'`,
       [userId]
     );
 
     if (holdingRows.length === 0) {
-      res.status(400).json({ error: "포트폴리오에 종목이 없습니다" });
+      res.status(400).json({ error: "보유 종목이 없습니다 (관심종목은 포트폴리오 리뷰 대상이 아닙니다)" });
       return;
     }
 
@@ -1377,7 +1378,7 @@ router.post("/portfolio/review", async (req, res) => {
       capitalWeightPct: totalMarketValue > 0 ? (h.marketValue / totalMarketValue) * 100 : null,
     }));
 
-    // 4) 프롬프트 컨텍스트 생성 — 종목별 뉴스 + 분석 thesis + 비중 포함
+    // 4) 프롬프트 컨텍스트 생성 — 종목별 뉴스 + (참고용) 과거 thesis + 현재 비중
     const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
 
     const holdingsSummary = withWeights.map(h => {
@@ -1386,32 +1387,38 @@ router.post("/portfolio/review", async (req, res) => {
         : "조회 불가";
       const returnStr = h.returnPct != null ? `${h.returnPct >= 0 ? "+" : ""}${h.returnPct.toFixed(1)}%` : "미기록";
       const upsideStr = h.upsidePct != null ? `${h.upsidePct >= 0 ? "+" : ""}${h.upsidePct.toFixed(1)}%` : "—";
-      const daysStr = h.daysSinceAnalysis != null ? `(분석 후 ${h.daysSinceAnalysis}일 경과)` : "";
+      const daysStr = h.daysSinceAnalysis != null ? `분석 후 ${h.daysSinceAnalysis}일 경과` : "분석 없음";
       const weightStr = h.capitalWeightPct != null ? `${h.capitalWeightPct.toFixed(1)}%` : "미집계";
+      const staleNote = (h.daysSinceAnalysis ?? 0) > 30 ? " ⚠️ 오래된 분석 — 현재 상황과 다를 수 있음" : "";
 
       return `### ${h.companyName} (${h.ticker})
-[현황]
+[현재 시장 데이터 — 지금 이 순간 기준]
 - 현재가: ${priceStr} | 매입 대비 수익률: ${returnStr} | 포트폴리오 자본 비중: ${weightStr}
-- AI 판정: ${h.verdict ?? "없음"} | 목표가 대비 업사이드: ${upsideStr}
-- 마지막 분석일: ${h.analysisDate ?? "없음"} ${daysStr}
+- 이전 AI 목표가 대비 업사이드: ${upsideStr} (${daysStr}${staleNote})
 
-[분석 당시 투자 thesis]
-- 핵심 촉매: ${h.catalysts ?? "없음"}
-- 주요 리스크: ${h.risks ?? "없음"}
-- 투자 전략: ${h.strategy ?? "없음"}
+[최신 뉴스 헤드라인 — 판단의 핵심 근거]
+${h.recentNews}
 
-[분석 이후 최신 뉴스 헤드라인]
-${h.recentNews}`;
+[참고: 과거 진입 당시 thesis — 현재 유효성 직접 판단 필요]
+- 핵심 촉매(당시): ${h.catalysts ?? "기록 없음"}
+- 주요 리스크(당시): ${h.risks ?? "기록 없음"}
+- 투자 전략(당시): ${h.strategy ?? "기록 없음"}`;
     }).join("\n\n---\n\n");
 
     const sectorList = withWeights.map(h => h.companyName).join(", ");
     const tickerList = withWeights.map(h => h.ticker);
 
-    // 5) Gemini 호출 — 헤지펀드 PM 스타일 포트폴리오 리뷰
+    // 5) Gemini 호출 — 현재 상황 기반 포트폴리오 유지보수 전략
     const prompt = `당신은 월스트리트 헤지펀드의 시니어 포트폴리오 매니저(PM)입니다. 오늘은 ${today}입니다.
 
-아래는 투자자의 포트폴리오 전체 보유 종목 상세 정보입니다.
-각 종목별로 ① 현재가·수익률·자본비중, ② 분석 당시 투자 thesis(촉매·리스크·전략), ③ 그 이후 실제 발생한 뉴스가 함께 제공됩니다.
+아래는 투자자의 **현재 보유 종목** 정보입니다.
+각 종목별로 ① 현재가·수익률·자본비중(실시간), ② 오늘 기준 최신 뉴스 헤드라인, ③ 참고용 과거 진입 thesis가 제공됩니다.
+
+**중요 지침:**
+- 과거 thesis는 "참고 자료"일 뿐입니다. 오래된 것이면 현재 상황과 맞지 않을 수 있습니다.
+- 판단의 핵심은 **최신 뉴스 + 현재 수익률·비중**입니다.
+- 지금 이 포트폴리오를 어떻게 유지·관리할지 구체적인 액션 플랜을 제시하세요.
+- "thesis가 유효한가"보다 "지금 뉴스 흐름에서 이 종목을 어떻게 다룰 것인가"에 집중하세요.
 
 ${holdingsSummary}
 
@@ -1666,10 +1673,11 @@ router.get("/portfolio/admin/all", async (req, res) => {
   }
 });
 
-// ── GET /api/portfolio/news — 보유종목 뉴스 피드 ─────────────────────────────
+// ── GET /api/portfolio/news — 보유종목·관심종목 뉴스 피드 ───────────────────
 interface NewsItem {
   ticker: string;
   companyName: string;
+  holdingType: "portfolio" | "watchlist";
   title: string;
   source: string;
   pubDate: string; // ISO string
@@ -1780,12 +1788,12 @@ async function fetchYahooNews(ticker: string, companyName: string): Promise<News
 }
 
 // 종목별 뉴스 fetch — 한국 종목은 네이버, 해외는 Yahoo Finance
-async function fetchNewsForTicker(ticker: string, companyName: string): Promise<NewsItem[]> {
+async function fetchNewsForTicker(ticker: string, companyName: string, holdingType: "portfolio" | "watchlist"): Promise<NewsItem[]> {
   const krCode = ticker.match(/^(\d{6})(\.KS|\.KQ)?$/i)?.[1];
-  if (krCode) {
-    return fetchNaverNews(krCode, ticker, companyName);
-  }
-  return fetchYahooNews(ticker, companyName);
+  const items = krCode
+    ? await fetchNaverNews(krCode, ticker, companyName)
+    : await fetchYahooNews(ticker, companyName);
+  return items.map(item => ({ ...item, holdingType }));
 }
 
 router.get("/portfolio/news", async (req, res) => {
@@ -1801,8 +1809,9 @@ router.get("/portfolio/news", async (req, res) => {
   }
 
   try {
-    const holdingsRes = await pool.query<{ ticker: string; company_name: string }>(
-      `SELECT ticker, company_name FROM portfolio_holdings WHERE user_id = $1 ORDER BY added_at DESC LIMIT 15`,
+    // 보유종목 + 관심종목 모두 포함 (최대 20개)
+    const holdingsRes = await pool.query<{ ticker: string; company_name: string; holding_type: string }>(
+      `SELECT ticker, company_name, holding_type FROM portfolio_holdings WHERE user_id = $1 ORDER BY holding_type ASC, added_at DESC LIMIT 20`,
       [userId]
     );
     const holdings = holdingsRes.rows;
@@ -1817,7 +1826,7 @@ router.get("/portfolio/news", async (req, res) => {
     for (let i = 0; i < holdings.length; i += CONCURRENCY) {
       const batch = holdings.slice(i, i + CONCURRENCY);
       const results = await Promise.all(
-        batch.map(h => fetchNewsForTicker(h.ticker, h.company_name))
+        batch.map(h => fetchNewsForTicker(h.ticker, h.company_name, (h.holding_type ?? "portfolio") as "portfolio" | "watchlist"))
       );
       for (const r of results) allItems.push(...r);
     }
