@@ -780,6 +780,40 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
         </button>
       </div>
 
+      {/* ── 카테고리 해설 ─────────────────────────────────── */}
+      <div className="rounded-xl bg-muted/30 border border-border/50 px-3.5 py-3 space-y-2.5">
+        <p className="text-[10.5px] font-semibold text-foreground/40 uppercase tracking-wide">선별 기준</p>
+        <div className="space-y-2">
+          <div className="flex gap-2.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+            <div>
+              <span className="text-[11.5px] font-semibold text-foreground/70">테마 미반영</span>
+              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
+                같은 테마 종목들이 이미 올랐는데 이 종목만 아직 오르지 않은 경우. 테마 평균 대비 갭이 2.5%p 이상 벌어진 종목을 선별합니다. 뒤늦게 수급이 몰릴 가능성이 높습니다.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0 mt-1.5" />
+            <div>
+              <span className="text-[11.5px] font-semibold text-foreground/70">거래량 집중</span>
+              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
+                평소 대비 거래량이 800만 주 이상 급증한 종목. 주가가 크게 오르지 않았는데도 거래가 몰리면 기관·세력의 매집 신호일 수 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-1.5" />
+            <div>
+              <span className="text-[11.5px] font-semibold text-foreground/70">상승 모멘텀</span>
+              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
+                당일 5~22% 구간 상승 종목. 급등 초반 추세가 다음날까지 이어지는 경향을 포착합니다. 하단의 컬러 바가 길수록 종합 점수가 높습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── 후보 리스트 ───────────────────────────────────── */}
       <div className="space-y-2">
         {picks.map((pick, i) => {
