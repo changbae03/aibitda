@@ -9,6 +9,7 @@
  */
 import { Router } from "express";
 import { pool } from "@workspace/db";
+import { getSignalsCache, fetchSignalsData } from "./themes";
 
 const router = Router();
 
@@ -54,7 +55,8 @@ interface SignalGroup {
   stocks: SignalStock[];
 }
 
-export type PickCategory = "laggard" | "volume" | "momentum";
+export type PickCategory = "laggard" | "volume" | "momentum" | "confluence";
+export type PickConfidence = "high" | "medium" | "low";
 
 export interface TomorrowPick {
   ticker: string;
@@ -71,11 +73,37 @@ export interface TomorrowPick {
   signals: string[];
   rationale: string;
   category: PickCategory;
+  confidence: PickConfidence;
+  confluenceGroups?: string[];  // 동시에 포착된 시그널 그룹 이름들
 }
+
+// ─── 시그널 교집합 맵 ────────────────────────────────────────────────────────
+
+/** ticker → 해당 종목이 포착된 시그널 그룹 ID 집합 */
+function buildTickerSignalMap(signals: SignalGroup[]): Map<string, { groups: Set<string>; stock: SignalStock }> {
+  const map = new Map<string, { groups: Set<string>; stock: SignalStock }>();
+  for (const g of signals) {
+    for (const s of g.stocks) {
+      if (s.market !== "KR") continue;
+      if (!map.has(s.ticker)) map.set(s.ticker, { groups: new Set(), stock: s });
+      map.get(s.ticker)!.groups.add(g.id);
+    }
+  }
+  return map;
+}
+
+const SIGNAL_LABEL: Record<string, string> = {
+  kr_volume:   "거래량 폭발",
+  kr_gainers:  "급등주",
+  kr_trending: "네이버 인기",
+};
 
 // ─── 테마 laggard 스코어링 ────────────────────────────────────────────────────
 
-function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
+function scoreThemePicks(
+  feed: ThemeFeedItem[],
+  signalMap: Map<string, { groups: Set<string>; stock: SignalStock }>,
+): TomorrowPick[] {
   const seen = new Map<string, TomorrowPick>();
 
   for (const theme of feed) {
@@ -89,7 +117,8 @@ function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
         ? positiveChanges.reduce((a, b) => a + b, 0) / positiveChanges.length
         : changes.reduce((a, b) => a + b, 0) / changes.length;
 
-    if (themeHeat < 0.3) continue;
+    // 테마 열기 낮으면 스킵 (최소 1% — 이전보다 강화)
+    if (themeHeat < 1.0) continue;
 
     for (const s of krStocks) {
       const change = s.priceChange ?? 0;
@@ -99,29 +128,46 @@ function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
       if (volRatio < 0.6) continue;
 
       const laggardGap = Math.max(0, themeHeat - change);
-      const normGap = Math.min(laggardGap / Math.max(themeHeat, 0.5), 1);
+
+      // 갭이 너무 작으면 스킵 (최소 1.5%p — 명확한 미반영만 선별)
+      if (laggardGap < 1.5) continue;
+
+      const normGap  = Math.min(laggardGap / Math.max(themeHeat, 0.5), 1);
       const normHeat = Math.min(themeHeat / 8, 1);
-      const normVol = Math.min(Math.max(0, volRatio - 0.8) / 2.2, 1);
-      const finalScore = normHeat * 0.25 + normGap * 0.45 + normVol * 0.30;
+      const normVol  = Math.min(Math.max(0, volRatio - 0.8) / 2.2, 1);
+      let finalScore = normHeat * 0.25 + normGap * 0.45 + normVol * 0.30;
+
+      // 교차 시그널 보너스: 네이버 인기 검색에도 등장하면 점수 업
+      const sigEntry = signalMap.get(s.ticker);
+      const isTrending = sigEntry?.groups.has("kr_trending") ?? false;
+      const isVolume   = sigEntry?.groups.has("kr_volume")   ?? false;
+      const confluenceGroups: string[] = ["테마 미반영"];
+      if (isTrending) { finalScore += 0.15; confluenceGroups.push("네이버 인기"); }
+      if (isVolume)   { finalScore += 0.08; confluenceGroups.push("거래량 폭발"); }
 
       const signals: string[] = [];
       if (themeHeat >= 4) signals.push("테마 강세");
       else if (themeHeat >= 2) signals.push("테마 상승");
       if (laggardGap >= 2.5) signals.push("미반영 구간");
-      else if (laggardGap >= 1) signals.push("상대 지연");
+      else signals.push("상대 지연");
       if (volRatio >= 2.5) signals.push("거래량 급증");
       else if (volRatio >= 1.5) signals.push("거래량 증가");
       else if (volRatio >= 1.1) signals.push("수급 유입");
+      if (isTrending) signals.push("네이버 인기");
       if (s.isLeader) signals.push("주도주");
 
-      // 내일 주목 이유: 구체적 수치 + 행동 포인트
+      const confidence: PickConfidence =
+        confluenceGroups.length >= 3 ? "high" :
+        confluenceGroups.length >= 2 ? "medium" : "low";
+
       const laggardRationale = (() => {
         const themePct = `+${themeHeat.toFixed(1)}%`;
         const stockPct = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
-        const gapStr = `${laggardGap.toFixed(1)}%p`;
+        const gapStr   = `${laggardGap.toFixed(1)}%p`;
         let base = `${theme.name} 테마 ${themePct} 상승 속 이 종목은 ${stockPct}에 그침 — 갭 ${gapStr}. 테마 수급이 뒤늦게 이 종목으로 이동할 가능성이 높음.`;
-        if (volRatio >= 1.5) base += ` 거래량도 평소 ${volRatio.toFixed(1)}배로 수급 유입 진행 중.`;
-        if (laggardGap >= 3) base += " 내일 갭업 출발 여부와 거래량 수반 확인 필요.";
+        if (isTrending) base += " 네이버 인기 검색에도 동시 포착 — 내일 개인 매수세 가세 기대.";
+        else if (volRatio >= 1.5) base += ` 거래량도 평소 ${volRatio.toFixed(1)}배로 수급 유입 진행 중.`;
+        if (laggardGap >= 3) base += " 내일 갭업 출발 + 거래량 수반 확인 필요.";
         else base += " 내일 테마 지속 시 추격 매수세 유입 기대.";
         return base;
       })();
@@ -133,14 +179,16 @@ function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
         sector: s.sector,
         theme: theme.name,
         themeEmoji: theme.emoji,
-        themeHeat: Math.round(themeHeat * 10) / 10,
-        priceChange: Math.round(change * 10) / 10,
-        volumeRatio: Math.round(volRatio * 10) / 10,
-        laggardGap: Math.round(laggardGap * 10) / 10,
-        finalScore: Math.round(finalScore * 1000) / 1000,
+        themeHeat:   Math.round(themeHeat   * 10) / 10,
+        priceChange: Math.round(change       * 10) / 10,
+        volumeRatio: Math.round(volRatio     * 10) / 10,
+        laggardGap:  Math.round(laggardGap   * 10) / 10,
+        finalScore:  Math.round(Math.min(finalScore, 1) * 1000) / 1000,
         signals,
         rationale: laggardRationale,
         category: "laggard",
+        confidence,
+        confluenceGroups,
       };
 
       const existing = seen.get(s.ticker);
@@ -151,6 +199,118 @@ function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
   }
 
   return Array.from(seen.values()).sort((a, b) => b.finalScore - a.finalScore);
+}
+
+// ─── 시그널 교집합 (confluence) 픽 ──────────────────────────────────────────
+
+/**
+ * 여러 시그널 그룹에 동시 포착된 종목 = 가장 높은 신뢰도
+ *
+ * HIGH:   kr_trending + kr_volume  → 개인 관심 + 거래량 폭발 = 최강 신호
+ *         kr_trending + kr_gainers → 개인 관심 + 모멘텀
+ *         kr_volume   + kr_gainers → 거래량 + 모멘텀 (상한가 포함)
+ * MEDIUM: kr_trending + 5%+ 단독  → 개인 관심 + 의미있는 상승
+ *
+ * 참고: signalPicks와 중복 허용 — confluencePicks가 더 높은 신뢰도로 대체됨
+ */
+function scoreConfluencePicks(
+  signals: SignalGroup[],
+  signalMap: Map<string, { groups: Set<string>; stock: SignalStock }>,
+  themeOnlyTickers: Set<string>, // 테마 laggard 픽만 제외 (signalPicks 중복 허용)
+): TomorrowPick[] {
+  const picks: TomorrowPick[] = [];
+
+  for (const [ticker, { groups, stock }] of signalMap) {
+    if (themeOnlyTickers.has(ticker)) continue; // 테마 laggard와 중복 방지
+
+    const change = stock.changePercent ?? 0;
+    if (change < -20) continue; // 급락 제외
+
+    const hasTrending = groups.has("kr_trending");
+    const hasVolume   = groups.has("kr_volume");
+    const hasGainers  = groups.has("kr_gainers");
+
+    let baseScore = 0;
+    let emoji = "🔀";
+    let themeLabel = "교차 시그널";
+    let confidence: PickConfidence = "medium";
+    const confluenceGroups: string[] = [];
+
+    // ① 최강: 네이버 인기 + 거래량 폭발 (같은 종목에 두 가지 독립 신호)
+    if (hasTrending && hasVolume) {
+      baseScore = Math.abs(change) < 3 ? 0.88 : 0.82; // 보합 매집이면 더 높은 점수
+      emoji = "🔥";
+      themeLabel = "네이버 인기 + 거래량 폭발";
+      confidence = "high";
+      confluenceGroups.push("네이버 인기", "거래량 폭발");
+
+    // ② 강함: 네이버 인기 + 급등 모멘텀
+    } else if (hasTrending && hasGainers) {
+      baseScore = 0.75;
+      emoji = "⚡";
+      themeLabel = "네이버 인기 + 급등 모멘텀";
+      confidence = "high";
+      confluenceGroups.push("네이버 인기", "급등주");
+
+    // ③ 강함: 거래량 폭발 + 급등 동반 (상한가 포함)
+    } else if (hasVolume && hasGainers && change >= 5) {
+      baseScore = change >= 20 ? 0.68 : 0.72; // 상한가 근처면 살짝 낮게
+      emoji = "📡";
+      themeLabel = "거래량 폭발 + 상승 모멘텀";
+      confidence = "high";
+      confluenceGroups.push("거래량 폭발", "급등주");
+
+    // ④ 보통: 네이버 트렌딩 + 5%+ 단독 (개인 관심 + 의미있는 상승)
+    } else if (hasTrending && change >= 5 && change <= 25) {
+      baseScore = 0.58;
+      emoji = "🔍";
+      themeLabel = "네이버 트렌딩 강세";
+      confidence = "medium";
+      confluenceGroups.push("네이버 인기", `+${change.toFixed(1)}%`);
+
+    } else {
+      continue;
+    }
+
+    const finalScore = Math.min(baseScore, 1.0);
+
+    const rationale = (() => {
+      if (hasTrending && hasVolume) {
+        const priceDesc = Math.abs(change) < 2
+          ? `주가 ${change >= 0 ? "+" : ""}${change.toFixed(1)}% 보합 속 거래량 폭발 — 조용한 기관 매집 가능성.`
+          : `주가 ${change >= 0 ? "+" : ""}${change.toFixed(1)}% 상승 + 거래량 급증 동반.`;
+        return `${priceDesc} 동시에 네이버 인기 검색 1위권 포착 — 내일 개인 추가 매수 유입 기대. 가장 강한 복합 신호.`;
+      }
+      if (hasTrending && hasGainers) {
+        return `오늘 +${change.toFixed(1)}% 급등 + 네이버 인기 검색 동시 포착. 모멘텀 + 개인 관심 결합 — 내일 추가 상승 기대. 시초가 갭업 + 거래량 수반 확인.`;
+      }
+      if (hasVolume && hasGainers) {
+        return `오늘 +${change.toFixed(1)}% 상승하며 거래량도 폭발적으로 증가. 수급 + 모멘텀 동반 — 내일 추가 상승 여력 확인. 상승폭이 크므로 시초가 갭업 여부 필수 확인.`;
+      }
+      // trending only
+      return `네이버 인기 검색 + 오늘 +${change.toFixed(1)}% 상승. 개인 투자자 관심 집중 중 — 내일 추가 매수 유입 가능성. 거래량 수반 여부 확인.`;
+    })();
+
+    picks.push({
+      ticker,
+      name: stock.name,
+      market: "KR",
+      theme: themeLabel,
+      themeEmoji: emoji,
+      themeHeat: 0,
+      priceChange: Math.round(change * 10) / 10,
+      volumeRatio: 0,
+      laggardGap: 0,
+      finalScore: Math.round(finalScore * 1000) / 1000,
+      signals: confluenceGroups,
+      rationale,
+      category: "confluence",
+      confidence,
+      confluenceGroups,
+    });
+  }
+
+  return picks.sort((a, b) => b.finalScore - a.finalScore).slice(0, 8);
 }
 
 // ─── 시그널 기반 중소형주 스코어링 ───────────────────────────────────────────
@@ -206,6 +366,8 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
         signals: sigs,
         rationale: volumeRationale,
         category: "volume",
+        confidence: vol >= 20_000_000 ? "high" : vol >= 12_000_000 ? "medium" : "low",
+        confluenceGroups: sigs,
       });
     }
   }
@@ -244,6 +406,8 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
         signals: ["모멘텀"],
         rationale: momentumRationale,
         category: "momentum",
+        confidence: change >= 12 ? "medium" : "low",
+        confluenceGroups: [`+${change.toFixed(1)}%`],
       });
     }
   }
@@ -300,14 +464,18 @@ async function loadThemesFeed(): Promise<ThemeFeedItem[] | null> {
 }
 
 async function loadSignals(): Promise<SignalGroup[]> {
+  // 1. 인메모리 캐시 우선 (HTTP 자기참조 없이 직접 읽기)
+  const cached = getSignalsCache();
+  if (cached.length > 0) return cached;
+
+  // 2. 캐시 미스 → 직접 fetch (서버 시작 직후 등)
   try {
-    const port = process.env.PORT ?? "8080";
-    const r = await fetch(`http://localhost:${port}/api/themes/signals`, {
-      signal: AbortSignal.timeout(6000),
-    });
-    if (!r.ok) return [];
-    return (await r.json()) as SignalGroup[];
-  } catch {
+    console.log("[tomorrow-picks] signals 캐시 미스 → 직접 fetch 시작...");
+    const fresh = await fetchSignalsData();
+    console.log(`[tomorrow-picks] signals 직접 fetch 완료: ${fresh.length}개 그룹`);
+    return fresh;
+  } catch (e) {
+    console.warn("[tomorrow-picks] signals fetch 실패:", e);
     return [];
   }
 }
@@ -331,13 +499,34 @@ router.get("/market/tomorrow-picks", async (req, res) => {
       return res.status(503).json({ error: "테마 피드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요." });
     }
 
-    const themePicks = scoreThemePicks(feed);
-    const themeTickerSet = new Set(themePicks.map(p => p.ticker));
-    const signalPicks = signals.length > 0 ? scoreSignalPicks(signals, themeTickerSet) : [];
+    // 시그널 교집합 맵 빌드 (kr_trending 포함)
+    const signalMap = buildTickerSignalMap(signals);
 
-    // 합산: 테마 laggard 15개 + 중소형 시그널 15개 혼합 후 점수순 정렬
-    const combined = [...themePicks.slice(0, 15), ...signalPicks]
-      .sort((a, b) => b.finalScore - a.finalScore)
+    const themePicks    = scoreThemePicks(feed, signalMap);
+    const themeTickerSet = new Set(themePicks.map(p => p.ticker));
+    const signalPicks   = signals.length > 0 ? scoreSignalPicks(signals, themeTickerSet) : [];
+
+    // 교차 시그널 픽 — themeTickerSet만 제외 (signalPicks와는 중복 허용하여 고신뢰로 대체)
+    const confluencePicks = signals.length > 0
+      ? scoreConfluencePicks(signals, signalMap, themeTickerSet)
+      : [];
+    const confluenceTickerSet = new Set(confluencePicks.map(p => p.ticker));
+
+    // signalPicks 중 confluencePicks와 중복된 것 제거 (confluence가 더 높은 신뢰도)
+    const filteredSignalPicks = signalPicks.filter(p => !confluenceTickerSet.has(p.ticker));
+
+    // 합산: confluence(고신뢰) 먼저 → 테마 laggard → 시그널 픽, 점수순 정렬
+    const combined = [
+      ...confluencePicks,
+      ...themePicks.slice(0, 15),
+      ...filteredSignalPicks,
+    ]
+      .sort((a, b) => {
+        const confOrder = { high: 2, medium: 1, low: 0 };
+        const cDiff = (confOrder[b.confidence] ?? 0) - (confOrder[a.confidence] ?? 0);
+        if (cDiff !== 0) return cDiff;
+        return b.finalScore - a.finalScore;
+      })
       .slice(0, 30);
 
     await saveToDB(combined);

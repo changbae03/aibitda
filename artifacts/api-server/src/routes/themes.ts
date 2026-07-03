@@ -2028,6 +2028,15 @@ interface SignalGroup {
 const SIGNALS_TTL = 20 * 60 * 1000; // 20분 캐시
 let signalsCache: { data: SignalGroup[]; cachedAt: number } | null = null;
 
+/** tomorrow-picks 등 다른 라우트가 인메모리 signals 캐시를 직접 읽을 수 있도록 export */
+export function getSignalsCache(): SignalGroup[] {
+  if (!signalsCache) return [];
+  if (Date.now() - signalsCache.cachedAt > SIGNALS_TTL) return [];
+  return signalsCache.data;
+}
+
+export { fetchSignalsData };
+
 /** KST 기준 오늘 날짜 (YYYYMMDD) */
 function todayKST(): string {
   const d = new Date(Date.now() + 9 * 3600_000);

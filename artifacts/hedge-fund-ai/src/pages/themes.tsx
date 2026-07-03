@@ -649,7 +649,9 @@ export default function ThemesPage() {
 
 // ── 내일 종목 컴포넌트 ──────────────────────────────────────────────────────
 
-type PickCategory = "laggard" | "volume" | "momentum";
+type PickCategory = "laggard" | "volume" | "momentum" | "confluence";
+
+type PickConfidence = "high" | "medium" | "low";
 
 interface TomorrowPick {
   ticker: string;
@@ -666,12 +668,21 @@ interface TomorrowPick {
   signals: string[];
   rationale: string;
   category?: PickCategory;
+  confidence?: PickConfidence;
+  confluenceGroups?: string[];
 }
 
 const CATEGORY_META: Record<string, { label: string; dot: string }> = {
-  laggard:  { label: "테마 미반영",    dot: "bg-emerald-500" },
-  volume:   { label: "거래량 집중",    dot: "bg-violet-500"  },
-  momentum: { label: "상승 모멘텀",   dot: "bg-orange-400"  },
+  laggard:    { label: "테마 미반영",    dot: "bg-emerald-500" },
+  volume:     { label: "거래량 집중",    dot: "bg-violet-500"  },
+  momentum:   { label: "상승 모멘텀",   dot: "bg-orange-400"  },
+  confluence: { label: "복합 신호",     dot: "bg-rose-500"    },
+};
+
+const CONFIDENCE_META: Record<PickConfidence, { label: string; cls: string }> = {
+  high:   { label: "고신뢰", cls: "text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20" },
+  medium: { label: "보통",   cls: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20" },
+  low:    { label: "참고",   cls: "text-foreground/35 bg-muted/60" },
 };
 
 const SIGNAL_STYLE: Record<string, string> = {
@@ -782,14 +793,26 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
 
       {/* ── 카테고리 해설 ─────────────────────────────────── */}
       <div className="rounded-xl bg-muted/30 border border-border/50 px-3.5 py-3 space-y-2.5">
-        <p className="text-[10.5px] font-semibold text-foreground/40 uppercase tracking-wide">선별 기준</p>
+        <p className="text-[10.5px] font-semibold text-foreground/40 uppercase tracking-wide">선별 기준 · 신뢰도</p>
         <div className="space-y-2">
+          <div className="flex gap-2.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11.5px] font-semibold text-foreground/70">복합 신호</span>
+                <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-900/20 text-rose-500">고신뢰</span>
+              </div>
+              <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
+                네이버 인기 검색 + 거래량 폭발 등 <strong className="text-foreground/55">2개 이상 독립 신호가 같은 종목을 동시에 가리키는 경우.</strong> 단일 신호보다 훨씬 높은 신뢰도. 리스트 최상단에 배치됩니다.
+              </p>
+            </div>
+          </div>
           <div className="flex gap-2.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
             <div>
               <span className="text-[11.5px] font-semibold text-foreground/70">테마 미반영</span>
               <p className="text-[10.5px] text-foreground/40 leading-snug mt-0.5">
-                같은 테마 종목들이 이미 올랐는데 이 종목만 아직 오르지 않은 경우. 테마 평균 대비 갭이 2.5%p 이상 벌어진 종목을 선별합니다. 뒤늦게 수급이 몰릴 가능성이 높습니다.
+                같은 테마 종목들이 이미 올랐는데 이 종목만 아직 오르지 않은 경우. 테마 평균 대비 갭이 1.5%p 이상 벌어진 종목만 선별합니다. 뒤늦게 수급이 몰릴 가능성이 높습니다.
               </p>
             </div>
           </div>
@@ -822,9 +845,12 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
           const cat = pick.category ?? "laggard";
           const catMeta = CATEGORY_META[cat] ?? CATEGORY_META.laggard;
           const barColor =
-            cat === "volume"   ? "from-violet-400 to-violet-500" :
-            cat === "momentum" ? "from-orange-400 to-orange-500" :
-                                 "from-emerald-400 to-emerald-500";
+            cat === "volume"     ? "from-violet-400 to-violet-500" :
+            cat === "momentum"   ? "from-orange-400 to-orange-500" :
+            cat === "confluence" ? "from-rose-400 to-rose-500"     :
+                                   "from-emerald-400 to-emerald-500";
+          const conf = pick.confidence ?? "low";
+          const confMeta = CONFIDENCE_META[conf];
 
           return (
             <motion.div
@@ -855,10 +881,15 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
                       <span className="text-[13.5px] font-semibold text-foreground truncate leading-tight">{pick.name}</span>
                       <span className="font-mono text-[10px] text-foreground/30 shrink-0">{pick.ticker}</span>
                     </div>
-                    {/* 카테고리 + 테마 */}
-                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                    {/* 카테고리 + 신뢰도 + 테마 */}
+                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0 flex-wrap">
                       <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", catMeta.dot)} />
                       <span className="text-[10px] text-foreground/40 font-medium shrink-0">{catMeta.label}</span>
+                      {conf !== "low" && (
+                        <span className={cn("text-[9.5px] font-bold px-1 py-0.5 rounded shrink-0", confMeta.cls)}>
+                          {confMeta.label}
+                        </span>
+                      )}
                       <span className="text-foreground/20 text-[10px] shrink-0">·</span>
                       <span className="text-[10px] leading-none shrink-0">{pick.themeEmoji}</span>
                       <span className="text-[10px] text-foreground/40 truncate">{pick.theme}</span>
