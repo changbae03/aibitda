@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb, Search, Loader2, TrendingUp, ArrowRight,
-  RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap,
+  RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
 } from "lucide-react";
+import { FlowContent } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
@@ -104,6 +105,9 @@ export default function ThemesPage() {
   const [signals, setSignals] = useState<SignalGroup[]>([]);
   const [signalsLoading, setSignalsLoading] = useState(true);
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
+
+  // 섹션 탭
+  const [activeSection, setActiveSection] = useState<"themes" | "flow">("themes");
 
   // 분석 모달
   const [confirmModal, setConfirmModal] = useState<{ ticker: string; companyName: string } | null>(null);
@@ -209,7 +213,41 @@ export default function ThemesPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      {/* ── 페이지 탭 ──────────────────────────────────────────── */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveSection("themes")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold transition-all",
+            activeSection === "themes"
+              ? "bg-[#FF8A7A] text-white shadow-sm"
+              : "bg-muted/60 text-muted-foreground/70 hover:bg-muted hover:text-foreground/80",
+          )}
+        >
+          <Lightbulb className="w-3.5 h-3.5" />
+          테마 분석
+        </button>
+        <button
+          onClick={() => setActiveSection("flow")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold transition-all",
+            activeSection === "flow"
+              ? "bg-foreground text-background shadow-sm"
+              : "bg-muted/60 text-muted-foreground/70 hover:bg-muted hover:text-foreground/80",
+          )}
+        >
+          <Activity className="w-3.5 h-3.5" />
+          수급 레이더
+        </button>
+      </div>
+
+      {/* ── 수급 레이더 탭 ─────────────────────────────────────── */}
+      {activeSection === "flow" && <FlowContent />}
+
+      {/* ── 테마 분석 탭 ───────────────────────────────────────── */}
+      {activeSection === "themes" && <>
+
       {/* 헤더 */}
       <div>
         <div className="flex items-center gap-2 mb-1">
@@ -543,6 +581,8 @@ export default function ThemesPage() {
           )}
         </AnimatePresence>
       </div>
+
+      </>}
 
       {/* 분석 확인 팝업 */}
       <AnimatePresence>

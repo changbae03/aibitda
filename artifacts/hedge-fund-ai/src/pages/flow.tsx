@@ -237,7 +237,7 @@ const TAB_DEFS: { key: SortTab; label: string; icon: React.ReactNode }[] = [
   { key: "total",       label: "기관+외인", icon: <TrendingUp className="w-3 h-3" /> },
 ];
 
-export default function FlowPage() {
+export function FlowContent() {
   const [data,       setData]       = useState<FlowData | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(false);
@@ -277,10 +277,9 @@ export default function FlowPage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto px-4 pt-8 pb-20">
+    <>
 
-        {/* 헤더 */}
+      {/* 헤더 */}
         <div className="flex items-start justify-between mb-7">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
@@ -448,6 +447,15 @@ export default function FlowPage() {
             </p>
           </motion.div>
         )}
+    </>
+  );
+}
+
+export default function FlowPage() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-2xl mx-auto px-4 pt-8 pb-20">
+        <FlowContent />
       </div>
     </div>
   );

@@ -100,7 +100,7 @@ const NAV_GROUPS = [
       { href: "/analysis/new", label: "AI 기업분석",   labelEn: "AI Analysis", Icon: Sparkles },
       { href: "/portfolio",    label: "내 포트폴리오",  labelEn: "Portfolio",   Icon: Briefcase },
       { href: "/history",      label: "최근 본 분석",   labelEn: "Recent Reports",  Icon: BookOpen },
-      { href: "/themes",       label: "테마종목발굴",   labelEn: "Theme Picks", Icon: Lightbulb },
+      { href: "/themes",       label: "테마 및 수급 분석", labelEn: "Theme & Flow", Icon: Lightbulb },
       { href: "/popular",      label: "애빛다 통계",    labelEn: "Statistics",  Icon: BarChart2 },
     ],
   },
@@ -112,7 +112,6 @@ const NAV_GROUPS = [
       { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
       { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
       { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
-      { href: "/flow",            label: "수급 레이더",   labelEn: "Flow Radar",      Icon: Activity },
     ],
   },
 ];

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, useCallback } from "react";
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, useClerk } from "@clerk/react";
 import { ThemeProvider } from "next-themes";
@@ -42,7 +42,6 @@ const DisclaimerPage   = lazy(() => import("@/pages/disclaimer"));
 const SupportPage      = lazy(() => import("@/pages/support"));
 const NoticesPage      = lazy(() => import("@/pages/notices"));
 const ThemesPage           = lazy(() => import("@/pages/themes"));
-const FlowPage             = lazy(() => import("@/pages/flow"));
 const UnlistedAnalysis     = lazy(() => import("@/pages/unlisted-analysis"));
 const NotFound             = lazy(() => import("@/pages/not-found"));
 
@@ -310,7 +309,7 @@ function Router() {
                 <Route path="/support" component={SupportPage} />
                 <Route path="/notices" component={NoticesPage} />
                 <Route path="/themes" component={ThemesPage} />
-                <Route path="/flow" component={FlowPage} />
+                <Route path="/flow"><Redirect to="/themes" /></Route>
                 <Route path="/unlisted" component={UnlistedAnalysis} />
                 <Route path="/unlisted/:corpCode" component={UnlistedAnalysis} />
                 <Route component={NotFound} />
