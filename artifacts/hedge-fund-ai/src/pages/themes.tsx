@@ -239,7 +239,7 @@ export default function ThemesPage() {
           )}
         >
           <Target className="w-3.5 h-3.5" />
-          내일 후보
+          내일 종목
         </button>
         <button
           onClick={() => setActiveSection("flow")}
@@ -255,7 +255,7 @@ export default function ThemesPage() {
         </button>
       </div>
 
-      {/* ── 내일 후보 탭 ────────────────────────────────────────── */}
+      {/* ── 내일 종목 탭 ────────────────────────────────────────── */}
       {activeSection === "picks" && (
         <TomorrowPicksContent onAnalyze={goAnalyze} />
       )}
@@ -647,7 +647,7 @@ export default function ThemesPage() {
   );
 }
 
-// ── 내일 후보 컴포넌트 ──────────────────────────────────────────────────────
+// ── 내일 종목 컴포넌트 ──────────────────────────────────────────────────────
 
 type PickCategory = "laggard" | "volume" | "momentum";
 
