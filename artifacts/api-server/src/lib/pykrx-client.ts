@@ -2,28 +2,61 @@
  * pykrx 브리지 — Python 스크립트를 child_process로 호출
  * KRX_ID / KRX_PW 환경변수가 설정돼 있어야 작동
  */
-import { spawn } from "child_process";
-import { existsSync } from "fs";
+import { spawn, spawnSync } from "child_process";
+import { existsSync, readdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Python 바이너리 경로 확정 — PATH의 Go 래퍼(python-wrapper)가 배포 환경에서 패닉하는 문제를 방지
+/** 실제로 Python X.Y.Z 를 출력하는지 확인 (Go 래퍼는 패닉하므로 제외) */
+function isRealPython(bin: string): boolean {
+  try {
+    const r = spawnSync(bin, ["--version"], { timeout: 4000, encoding: "utf8" });
+    const out = (r.stdout ?? "") + (r.stderr ?? "");
+    return r.status === 0 && /Python 3\.\d+/.test(out);
+  } catch {
+    return false;
+  }
+}
+
+/** uv CPython 설치 경로에서 python3 바이너리를 탐색 */
+function findUvPythons(): string[] {
+  const base = "/home/runner/.local/share/uv/python";
+  try {
+    return readdirSync(base)
+      .filter(d => d.startsWith("cpython-"))
+      .map(d => path.join(base, d, "bin", "python3"))
+      .filter(existsSync);
+  } catch {
+    return [];
+  }
+}
+
+// Python 바이너리 경로 확정 — existsSync + 실행 검증 (Go 래퍼 패닉 방지)
 const PYTHON_BIN = (() => {
   const candidates = [
-    process.env.PYTHON_BIN,                                     // 명시적 env override
-    "/home/runner/workspace/.pythonlibs/bin/python3",           // Replit 개발/배포 공통
-    "/home/runner/.local/share/uv/python/cpython-3.11.14/bin/python3",
+    process.env.PYTHON_BIN,                                      // 명시적 env override
+    // 버전 고정 경로 (Go 래퍼가 python3를 가로채도 python3.11은 안 가로채는 경우)
+    "/home/runner/workspace/.pythonlibs/bin/python3.12",
+    "/home/runner/workspace/.pythonlibs/bin/python3.11",
+    "/home/runner/workspace/.pythonlibs/bin/python3",
+    // uv 설치 CPython (배포 환경)
+    ...findUvPythons(),
+    "/nix/var/nix/profiles/default/bin/python3.12",
+    "/nix/var/nix/profiles/default/bin/python3.11",
     "/nix/var/nix/profiles/default/bin/python3",
+    "/usr/bin/python3.12",
+    "/usr/bin/python3.11",
     "/usr/bin/python3",
     "/usr/local/bin/python3",
   ].filter(Boolean) as string[];
+
   for (const p of candidates) {
-    if (existsSync(p)) {
-      console.log(`[pykrx] Python 바이너리 확정: ${p}`);
+    if (existsSync(p) && isRealPython(p)) {
+      console.log(`[pykrx] Python 바이너리 확정 (검증 완료): ${p}`);
       return p;
     }
   }
-  console.warn("[pykrx] 절대 경로 Python 없음 — PATH 'python3' 폴백 사용");
+  console.warn("[pykrx] 검증된 Python 바이너리 없음 — PATH 'python3' 폴백");
   return "python3";
 })();
 

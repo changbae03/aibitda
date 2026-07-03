@@ -1,28 +1,39 @@
 ---
 name: pykrx script path resolution
-description: Why pykrx_fetcher.py fails in production and the multi-fallback fix
+description: Why pykrx_fetcher.py + Python binary fail in production and the multi-fallback fix
 ---
 
 # pykrx Script Path Resolution
 
-**Why:** 배포 환경(CJS 번들 dist/index.cjs)에서 import.meta.url이 undefined → 기존 폴백 경로가 잘못된 CWD를 가정해 "panic: no such file or directory" 발생. 빈 결과가 DB에 캐시되어 30분간 "데이터 없음" 반복.
+**Why:** 배포 환경에서 두 가지 독립적인 실패 원인이 있음.
 
-## Root cause
+## 실패 원인 1 — 스크립트 경로
 - Dev(ESM): `import.meta.url` 기반 경로 정상 작동
-- Prod(CJS bundle at dist/index.cjs): `import.meta.url` throws → 기존 코드는 `process.cwd() + "artifacts/api-server/src/lib/..."` 사용
-- 배포 환경 CWD가 다르면(api-server/ vs workspace root) 경로 불일치
+- Prod(CJS bundle): `import.meta.url` throws → CWD 기반 경로 4개 폴백으로 해결
+
+## 실패 원인 2 — Python 바이너리 (Go 래퍼)
+- Replit 배포 환경의 `python3` (PATH)은 Go 래퍼(`python-wrapper`) 바이너리임
+- `/home/runner/workspace/.pythonlibs/bin/python3` 역시 `existsSync`는 통과하나 Go 래퍼일 수 있음
+- Go 래퍼는 내부에서 실제 Python을 찾지 못하면 `panic: no such file or directory` 발생
+- **핵심:** `existsSync`만으로는 충분하지 않음 — 실제 실행해서 `Python 3.x` 출력 확인 필요
 
 ## Fix (pykrx-client.ts)
-4개 후보 경로를 `existsSync`로 순서대로 확인:
-1. `import.meta.url` 기준 (ESM dev)
-2. `__dirname + "../src/lib/"` (CJS bundle: dist/ 상위로 이동)
-3. `process.cwd() + "src/lib/"` (CWD=api-server/)
-4. `process.cwd() + "artifacts/api-server/src/lib/"` (CWD=workspace/)
 
-스타트업 로그: `[pykrx] 스크립트 경로 확정: ...`
+### Python 바이너리 선택
+1. `spawnSync(bin, ["--version"])` 실행 → `Python 3.\d+` 패턴 확인 (`isRealPython()`)
+2. 버전 고정 경로 우선 시도: `python3.11`, `python3.12` (Go 래퍼가 비버전 `python3`만 가로채는 경우)
+3. `findUvPythons()`: `/home/runner/.local/share/uv/python/cpython-*/bin/python3` 동적 탐색
+4. 검증 실패 시 "python3" PATH 폴백 (로그: `[pykrx] 검증된 Python 바이너리 없음`)
 
-## Empty cache prevention (flow.ts)
-- `buildFlowData()`: kospi/kosdaq/stocks 모두 0건이면 throw → DB 저장 안 함
-- GET 핸들러 DB 조회: 빈 결과 감지 시 해당 캐시 즉시 DELETE 후 재빌드
+### 스크립트 경로 선택
+4개 후보를 `existsSync`로 순서대로 확인 (import.meta.url → __dirname → cwd/src → cwd/artifacts)
 
-**How to apply:** pykrx 관련 "panic" 에러 시 먼저 스타트업 로그에서 "스크립트 경로 확정" 확인. 없으면 경로 탐지 실패.
+### 빈 캐시 방지 (flow.ts)
+- 0건이면 DB 저장 안 함, 빈 캐시 감지 시 즉시 DELETE 후 재빌드
+
+## 진단
+- 스타트업 로그: `[pykrx] Python 바이너리 확정 (검증 완료): <path>`
+- "검증 완료" 없이 "폴백" 메시지 → Go 래퍼 패닉 원인
+- `panic: no such file or directory` + `python-wrapper/main.go` → Python 바이너리 문제
+
+**How to apply:** pykrx "panic" 에러 시 스타트업 로그의 "바이너리 확정" 경로 확인. "검증 완료" 없으면 `isRealPython` 검증 실패 → 새 Python 경로 추가 필요.
