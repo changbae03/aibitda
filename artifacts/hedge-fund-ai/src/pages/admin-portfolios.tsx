@@ -207,14 +207,14 @@ export default function AdminPortfolios() {
                               <span className="text-[11px] font-mono text-muted-foreground truncate">{h.ticker}</span>
                               <span className="text-[12px] tabular-nums text-foreground">
                                 {h.avgPrice != null
-                                  ? formatCurrency(Number(h.avgPrice), h.currency).replace("₩", "").replace("$", "")
+                                  ? formatCurrency(Number(h.avgPrice), h.currency).replaceAll("₩", "").replaceAll("$", "")
                                   : "—"}
                               </span>
                               <span className="text-[12px] tabular-nums text-foreground">
                                 {h.quantity != null ? Number(h.quantity).toLocaleString() : "—"}
                               </span>
                               <span className={cn("text-[12px] tabular-nums font-medium", value != null ? "text-foreground" : "text-muted-foreground/40")}>
-                                {value != null ? formatCurrency(value, h.currency).replace("₩", "").replace("$", "") : "—"}
+                                {value != null ? formatCurrency(value, h.currency).replaceAll("₩", "").replaceAll("$", "") : "—"}
                               </span>
                               <span className="text-[10px] text-muted-foreground/60 tabular-nums">{safeDate(h.addedAt)}</span>
                             </div>

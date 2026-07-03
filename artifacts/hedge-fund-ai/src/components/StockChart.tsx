@@ -378,7 +378,7 @@ export default function StockChart({ ticker, companyName, companyNameEn, chartLe
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-foreground font-mono tracking-tight">
                   {currency === "USD"
-                    ? <>${formatPrice(data.currentPrice, "USD").replace("$", "")}</>
+                    ? <>${formatPrice(data.currentPrice, "USD").replaceAll("$", "")}</>
                     : isEn
                       ? <>KRW {new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(data.currentPrice ?? 0)}</>
                       : <>{formatPrice(data.currentPrice)}<span className="text-sm font-normal text-muted-foreground ml-0.5">원</span></>

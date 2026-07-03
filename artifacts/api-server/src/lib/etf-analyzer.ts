@@ -1022,7 +1022,7 @@ function parseMiraeHoldingsHtml(html: string): ETFHolding[] {
       .map(td => td[1].replace(/<[^>]+>/g, "").trim().replace(/\s+/g, " "));
     if (tds.length < 3) continue;
     const stockName = tds[0];
-    const weightStr = tds[1].replace("%", "").trim();
+    const weightStr = tds[1].replaceAll("%", "").trim();
     const rawCode   = tds[2].trim();
     // "AMD US EQUITY" → "AMD"  |  "005930 KS EQUITY" → "005930"  |  "005930" → "005930"
     const usMatch   = rawCode.match(/^([A-Z]{1,6})\s+US\s+EQUITY/i);

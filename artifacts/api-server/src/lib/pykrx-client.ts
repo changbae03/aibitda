@@ -99,6 +99,23 @@ export interface ShortRow {
   ratio: number;
 }
 
+// ─── 파라미터 화이트리스트 (커맨드 인젝션 방어) ─────────────────────────────
+const ALLOWED_PYKRX_TYPES = new Set([
+  "investor", "short_market", "ohlcv", "ohlcv_both",
+  "naver_trending", "top_volume", "top_gainers",
+]);
+const KRX_DATE_RE = /^\d{8}$/;
+const ALLOWED_MARKETS = new Set(["KOSPI", "KOSDAQ", "ALL", "KOSPI200"]);
+
+function validatePykrxArgs(type: string, fromDate: string, toDate: string, market: string): void {
+  if (!ALLOWED_PYKRX_TYPES.has(type))
+    throw new Error(`[pykrx] 허용되지 않은 type: ${type}`);
+  if (!KRX_DATE_RE.test(fromDate) || !KRX_DATE_RE.test(toDate))
+    throw new Error(`[pykrx] 날짜 형식 오류: fromDate=${fromDate} toDate=${toDate}`);
+  if (!ALLOWED_MARKETS.has(market))
+    throw new Error(`[pykrx] 허용되지 않은 market: ${market}`);
+}
+
 /** pykrx Python 스크립트 호출 → JSON 파싱 */
 async function callPykrx(
   type: string,
@@ -107,6 +124,7 @@ async function callPykrx(
   market = "KOSPI",
   timeoutMs = 45000,
 ): Promise<any[]> {
+  validatePykrxArgs(type, fromDate, toDate, market);
   return new Promise((resolve) => {
     const proc = spawn(PYTHON_BIN, [SCRIPT, type, fromDate, toDate, market], {
       env: { ...process.env },

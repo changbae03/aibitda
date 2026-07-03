@@ -187,7 +187,7 @@ export async function runSelfReview(analysisId: number): Promise<void> {
     }
 
     // 오래된 AI검수 블록 제거 후 새 블록 앞에 추가 (최대 3개 유지)
-    const existingBlocks = existing.split(new RegExp(`(?=${REVIEW_TAG.replace("[", "\\[")})`));
+    const existingBlocks = existing.split(new RegExp(`(?=${REVIEW_TAG.replaceAll("[", "\\[")})`));
     const adminMemos = existingBlocks.filter(b => !b.startsWith(REVIEW_TAG));
     const aiReviews = existingBlocks.filter(b => b.startsWith(REVIEW_TAG)).slice(0, 2); // 최신 2개만 유지
 

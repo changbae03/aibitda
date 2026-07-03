@@ -30,25 +30,36 @@ app.use(
     },
   })
 );
-// API 라우트 전용 엄격한 CSP (프론트엔드 SPA에는 미적용)
+// API 라우트 전용 엄격한 CSP (프론트엔드 SPA에는 미적용, JSON 응답이므로 unsafe-inline 불필요)
 app.use(
   "/api",
   helmet({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        defaultSrc: ["'none'"],
+        scriptSrc: ["'none'"],
+        styleSrc: ["'none'"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https:"],
+        connectSrc: ["'self'"],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
       },
     },
     hsts: false,  // 전체 앱 HSTS에서 이미 적용
   })
 );
+
+// ─── Permissions-Policy 헤더 (불필요한 브라우저 기능 차단) ──────────────────
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+  );
+  next();
+});
 
 // ─── CORS ────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
