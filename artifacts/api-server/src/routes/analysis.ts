@@ -4290,6 +4290,56 @@ router.post("/", async (req, res) => {
       const userContext = additionalContext ?? null;
       const macroContext = isKoreanTicker ? buildECOSContext(ecosMacro) : buildFREDContext(fredMacro);
       const kosisContext = isKoreanTicker ? buildKOSISContext(kosisData, industry ?? "") : null;
+
+      // ── 시장 수급 컨텍스트 (한국 종목 전용) ─────────────────────────────────
+      // KOSPI/KOSDAQ 시장 전체 외국인·기관 순매수 방향을 AI에게 주입
+      // → STEP M-1 ⑥ 시장 수급 컨텍스트 & STEP 2-B 시장 수급 역방향 보정에 활용
+      let marketFlowContext: string | null = null;
+      if (isKoreanTicker) {
+        try {
+          const flowRow = await pool.query<{ data: Record<string, unknown> }>(
+            `SELECT data FROM system_cache WHERE key = 'market_flow_v2' AND expires_at > NOW() LIMIT 1`
+          );
+          const rawData = flowRow.rows[0]?.data;
+          if (rawData) {
+            const fd = (typeof rawData === "string" ? JSON.parse(rawData) : rawData) as {
+              marketFlow?: {
+                kospi:  { date: string; individual: number; institution: number; foreign: number }[];
+                kosdaq: { date: string; individual: number; institution: number; foreign: number }[];
+              };
+              updatedAt?: string;
+            };
+            const kospi5  = fd.marketFlow?.kospi  ?? [];
+            const kosdaq5 = fd.marketFlow?.kosdaq ?? [];
+
+            if (kospi5.length > 0 || kosdaq5.length > 0) {
+              const fmtAk = (n: number) =>
+                n >= 0 ? `+${n.toLocaleString()}억` : `${n.toLocaleString()}억`;
+
+              const kospiSum  = kospi5.reduce( (a, r) => ({ inst: a.inst + r.institution, for: a.for + r.foreign, ind: a.ind + r.individual }), { inst: 0, for: 0, ind: 0 });
+              const kosdaqSum = kosdaq5.reduce((a, r) => ({ inst: a.inst + r.institution, for: a.for + r.foreign, ind: a.ind + r.individual }), { inst: 0, for: 0, ind: 0 });
+
+              const kospiTrend  = kospi5.map(r  => `${r.date.slice(5)} 외${fmtAk(r.foreign)}`).join(" | ");
+              const kosdaqTrend = kosdaq5.map(r => `${r.date.slice(5)} 외${fmtAk(r.foreign)}`).join(" | ");
+
+              marketFlowContext = [
+                `[📊 시장 수급 컨텍스트 — 최근 5영업일 누적 (KRX pykrx, ${fd.updatedAt ? fd.updatedAt.slice(0, 10) : "최근"} 기준)]`,
+                `⚠️ 이 데이터는 STEP M-1 ⑥ 시장 전체 수급 및 STEP 2-B 시장 수급 역방향 보정의 1순위 근거입니다.`,
+                `⚠️ 분석 종목이 KOSPI 상장이면 KOSPI 수급을, KOSDAQ 상장이면 KOSDAQ 수급을 기준으로 판정하세요.`,
+                ``,
+                `KOSPI 5일 누적: 외국인 ${fmtAk(kospiSum.for)}, 기관 ${fmtAk(kospiSum.inst)}, 개인 ${fmtAk(kospiSum.ind)}`,
+                kospiTrend  ? `KOSPI 일별 외국인: ${kospiTrend}`  : null,
+                ``,
+                `KOSDAQ 5일 누적: 외국인 ${fmtAk(kosdaqSum.for)}, 기관 ${fmtAk(kosdaqSum.inst)}, 개인 ${fmtAk(kosdaqSum.ind)}`,
+                kosdaqTrend ? `KOSDAQ 일별 외국인: ${kosdaqTrend}` : null,
+              ].filter((l): l is string => l !== null).join("\n");
+            }
+          }
+        } catch (e) {
+          console.warn("[analysis] marketFlowContext 로드 실패 (캐시 없음, 무시):", e);
+        }
+      }
+
       const fullContext = [
         kisContext, sotpSubsidiaryContext, financialData, dartBalanceContext,
         dartHistorical,
@@ -4300,7 +4350,7 @@ router.post("/", async (req, res) => {
             dartBizContent
           : null,
         fmpContext,
-        secEdgarContent, kosisContext, macroContext, newsData,
+        secEdgarContent, kosisContext, macroContext, marketFlowContext, newsData,
         userContext ? `[사용자 추가 컨텍스트]\n${userContext}` : "",
       ].filter(Boolean).join("\n\n") || null;
 
