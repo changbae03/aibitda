@@ -649,6 +649,8 @@ export default function ThemesPage() {
 
 // ── 내일 후보 컴포넌트 ──────────────────────────────────────────────────────
 
+type PickCategory = "laggard" | "volume" | "momentum";
+
 interface TomorrowPick {
   ticker: string;
   name: string;
@@ -663,34 +665,30 @@ interface TomorrowPick {
   finalScore: number;
   signals: string[];
   rationale: string;
+  category?: PickCategory;
 }
 
-const SIGNAL_CONFIG: Record<string, { bg: string; text: string }> = {
-  "테마 강세":  { bg: "bg-red-50 dark:bg-red-900/20",     text: "text-red-600 dark:text-red-400" },
-  "테마 상승":  { bg: "bg-orange-50 dark:bg-orange-900/20", text: "text-orange-600 dark:text-orange-400" },
-  "미반영 구간":{ bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-400" },
-  "상대 지연":  { bg: "bg-teal-50 dark:bg-teal-900/20",   text: "text-teal-700 dark:text-teal-400" },
-  "거래량 급증":{ bg: "bg-violet-50 dark:bg-violet-900/20", text: "text-violet-700 dark:text-violet-400" },
-  "거래량 증가":{ bg: "bg-indigo-50 dark:bg-indigo-900/20", text: "text-indigo-600 dark:text-indigo-400" },
-  "수급 유입":  { bg: "bg-blue-50 dark:bg-blue-900/20",   text: "text-blue-600 dark:text-blue-400" },
-  "주도주":     { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-700 dark:text-amber-400" },
+const CATEGORY_META: Record<string, { label: string; dot: string }> = {
+  laggard:  { label: "테마 미반영",    dot: "bg-emerald-500" },
+  volume:   { label: "거래량 집중",    dot: "bg-violet-500"  },
+  momentum: { label: "상승 모멘텀",   dot: "bg-orange-400"  },
 };
 
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color =
-    pct >= 70 ? "bg-emerald-500" :
-    pct >= 45 ? "bg-teal-400" :
-    "bg-sky-400";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden">
-        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-[10px] font-bold tabular-nums text-foreground/50 w-7 text-right">{pct}</span>
-    </div>
-  );
-}
+const SIGNAL_STYLE: Record<string, string> = {
+  "테마 강세":   "text-red-500",
+  "테마 상승":   "text-orange-500",
+  "미반영 구간": "text-emerald-600 dark:text-emerald-400",
+  "상대 지연":   "text-teal-600 dark:text-teal-400",
+  "거래량 급증": "text-violet-600 dark:text-violet-400",
+  "거래량 증가": "text-indigo-500",
+  "거래량 집중": "text-violet-600 dark:text-violet-400",
+  "수급 유입":   "text-blue-500",
+  "보합 수급":   "text-sky-500",
+  "소폭 상승":   "text-rose-400",
+  "하락 후 매집":"text-blue-400",
+  "주도주":      "text-amber-500",
+  "모멘텀":      "text-orange-500",
+};
 
 function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name: string) => void }) {
   const [picks, setPicks] = useState<TomorrowPick[]>([]);
@@ -722,9 +720,9 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
 
   if (loading) {
     return (
-      <div className="space-y-3">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-20 rounded-2xl bg-muted/40 animate-pulse" />
+      <div className="space-y-2.5">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-[88px] rounded-2xl bg-muted/40 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
         ))}
       </div>
     );
@@ -732,21 +730,18 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
+      <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-2">
         <AlertCircle className="w-6 h-6 text-muted-foreground/40 mx-auto" />
         <p className="text-sm text-foreground/50">{error}</p>
-        <button
-          onClick={() => load()}
-          className="text-xs text-[#FF8A7A] hover:underline"
-        >다시 시도</button>
+        <button onClick={() => load()} className="text-xs text-[#FF8A7A] hover:underline mt-1">다시 시도</button>
       </div>
     );
   }
 
   if (picks.length === 0) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center">
-        <BarChart2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+      <div className="rounded-2xl border border-border bg-card p-10 text-center">
+        <BarChart2 className="w-8 h-8 text-muted-foreground/25 mx-auto mb-2.5" />
         <p className="text-sm text-foreground/40">현재 유효한 후보 종목이 없습니다.<br/>테마 피드가 로드된 후 다시 시도해 주세요.</p>
       </div>
     );
@@ -756,142 +751,152 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
     ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
     : null;
 
+  const laggardCount  = picks.filter(p => p.category === "laggard").length;
+  const volumeCount   = picks.filter(p => p.category === "volume").length;
+  const momentumCount = picks.filter(p => p.category === "momentum").length;
+
   return (
     <div className="space-y-4">
-      {/* 헤더 */}
-      <div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Target className="w-5 h-5 text-emerald-500" />
-            <h2 className="text-lg font-semibold text-foreground">내일 상승 후보</h2>
+      {/* ── 헤더 ─────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <Target className="w-4.5 h-4.5 text-emerald-500" />
+            <h2 className="text-[15px] font-semibold text-foreground">내일 상승 후보</h2>
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">{picks.length}종목</span>
           </div>
-          <button
-            onClick={() => load(true)}
-            disabled={refreshing}
-            className="flex items-center gap-1 text-xs text-foreground/40 hover:text-foreground/70 transition-colors"
-          >
-            <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
-            갱신
-          </button>
+          <p className="text-[12px] text-foreground/45 leading-relaxed">
+            테마 미반영 {laggardCount}  ·  거래량 집중 {volumeCount}  ·  모멘텀 {momentumCount}
+            {cachedTime && <span className="text-foreground/25 ml-2">· {cachedTime} 기준</span>}
+          </p>
         </div>
-        <p className="text-sm text-foreground/50 mt-0.5">
-          핫 테마 내 미반영 종목 · 거래량 급증 신호 · 중소형주 포함
-          {cachedTime && <span className="ml-2 text-foreground/30">· {cachedTime} 기준</span>}
-        </p>
+        <button
+          onClick={() => load(true)}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-foreground/45 bg-muted/50 hover:bg-muted hover:text-foreground/70 transition-all disabled:opacity-40 shrink-0"
+        >
+          <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
+          갱신
+        </button>
       </div>
 
-      {/* 안내 배너 */}
-      <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-700/30">
-        <Info className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
-        <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
-          핫 테마에서 아직 충분히 오르지 않은 종목 + 거래량 급증 시그널 조합입니다.
-          투자 결정 전 반드시 기업 분석을 확인하세요.
-        </p>
-      </div>
-
-      {/* 후보 리스트 */}
+      {/* ── 후보 리스트 ───────────────────────────────────── */}
       <div className="space-y-2">
         {picks.map((pick, i) => {
-          const rank = i + 1;
           const changeUp = pick.priceChange >= 0;
+          const pct = Math.round(pick.finalScore * 100);
+          const cat = pick.category ?? "laggard";
+          const catMeta = CATEGORY_META[cat] ?? CATEGORY_META.laggard;
+          const barColor =
+            cat === "volume"   ? "from-violet-400 to-violet-500" :
+            cat === "momentum" ? "from-orange-400 to-orange-500" :
+                                 "from-emerald-400 to-emerald-500";
+
           return (
             <motion.div
               key={pick.ticker}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05, duration: 0.25 }}
-              className="rounded-2xl border border-border bg-card overflow-hidden hover:border-emerald-300/50 dark:hover:border-emerald-700/40 transition-colors"
+              transition={{ delay: i * 0.04, duration: 0.22 }}
+              className="group rounded-2xl border border-border/70 bg-card hover:border-border hover:shadow-sm transition-all duration-150 overflow-hidden"
             >
-              <div className="px-4 py-3">
-                {/* 상단 행: 순위·종목·테마·분석버튼 */}
-                <div className="flex items-start gap-3">
+              {/* 본문 */}
+              <div className="px-4 pt-3 pb-2.5">
+                {/* 상단 행 */}
+                <div className="flex items-center gap-2.5">
                   {/* 순위 */}
-                  <div className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5",
-                    rank === 1 ? "bg-amber-400 text-white" :
-                    rank === 2 ? "bg-slate-400 text-white" :
-                    rank === 3 ? "bg-orange-400 text-white" :
-                    "bg-muted text-foreground/40"
+                  <span className={cn(
+                    "text-[11px] font-black tabular-nums shrink-0 w-4 text-right",
+                    i < 3 ? "text-foreground/60" : "text-foreground/25"
                   )}>
-                    {rank}
-                  </div>
-                  <StockLogo ticker={pick.ticker} companyName={pick.name} size="sm" className="shrink-0 mt-0.5" />
+                    {i + 1}
+                  </span>
+
+                  {/* 로고 */}
+                  <StockLogo ticker={pick.ticker} companyName={pick.name} size="sm" className="shrink-0" />
+
+                  {/* 이름·정보 */}
                   <div className="flex-1 min-w-0">
-                    {/* 종목명 + 오늘 등락 */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-semibold text-foreground leading-tight">{pick.name}</span>
-                      <span className="font-mono text-[10px] text-foreground/30">{pick.ticker}</span>
-                      {/* 오늘 등락 */}
-                      <span className={cn(
-                        "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded",
-                        changeUp
-                          ? "text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400"
-                          : "text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400"
-                      )}>
-                        {changeUp ? "+" : ""}{pick.priceChange.toFixed(1)}%
-                      </span>
+                    <div className="flex items-baseline gap-1.5 min-w-0">
+                      <span className="text-[13.5px] font-semibold text-foreground truncate leading-tight">{pick.name}</span>
+                      <span className="font-mono text-[10px] text-foreground/30 shrink-0">{pick.ticker}</span>
                     </div>
-                    {/* 테마 배지 */}
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className="text-base leading-none">{pick.themeEmoji}</span>
-                      <span className="text-[10px] text-foreground/50">{pick.theme}</span>
-                      <span className="text-foreground/20 text-[10px]">·</span>
-                      <span className="text-[10px] text-red-500 font-semibold">테마 +{pick.themeHeat.toFixed(1)}%</span>
+                    {/* 카테고리 + 테마 */}
+                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                      <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", catMeta.dot)} />
+                      <span className="text-[10px] text-foreground/40 font-medium shrink-0">{catMeta.label}</span>
+                      <span className="text-foreground/20 text-[10px] shrink-0">·</span>
+                      <span className="text-[10px] leading-none shrink-0">{pick.themeEmoji}</span>
+                      <span className="text-[10px] text-foreground/40 truncate">{pick.theme}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => onAnalyze(pick.ticker, pick.name)}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-emerald-600 border border-emerald-400/30 bg-emerald-50/60 hover:bg-emerald-100/60 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 transition-colors whitespace-nowrap mt-0.5"
-                  >
-                    분석
-                  </button>
-                </div>
 
-                {/* 점수 바 */}
-                <div className="mt-2.5 mb-1.5">
-                  <ScoreBar score={pick.finalScore} />
-                </div>
-
-                {/* 신호 배지들 */}
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {pick.signals.map(sig => {
-                    const cfg = SIGNAL_CONFIG[sig] ?? { bg: "bg-muted", text: "text-foreground/50" };
-                    return (
-                      <span key={sig} className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", cfg.bg, cfg.text)}>
-                        {sig}
-                      </span>
-                    );
-                  })}
-                  {pick.volumeRatio > 1 && (
-                    <span className="text-[10px] text-foreground/35 font-medium px-1 py-0.5">
-                      거래량 {pick.volumeRatio.toFixed(1)}배
+                  {/* 우측: 등락 + 분석 */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={cn(
+                      "text-[12px] font-bold tabular-nums",
+                      changeUp ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"
+                    )}>
+                      {changeUp ? "+" : ""}{pick.priceChange.toFixed(1)}%
                     </span>
+                    <button
+                      onClick={() => onAnalyze(pick.ticker, pick.name)}
+                      className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-muted/70 hover:bg-muted text-foreground/55 hover:text-foreground/80 transition-all whitespace-nowrap"
+                    >
+                      분석
+                    </button>
+                  </div>
+                </div>
+
+                {/* 신호 + 갭 정보 */}
+                <div className="flex items-center gap-0 mt-2 min-w-0 pl-[26px]">
+                  {pick.laggardGap > 0.5 && (
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mr-2 shrink-0">
+                      갭 {pick.laggardGap.toFixed(1)}%p
+                    </span>
+                  )}
+                  {pick.themeHeat > 0 && (
+                    <span className="text-[10px] text-foreground/35 mr-2 shrink-0">
+                      테마 +{pick.themeHeat.toFixed(1)}%
+                    </span>
+                  )}
+                  {pick.signals.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {pick.signals.map((sig, si) => (
+                        <span key={sig}>
+                          {si > 0 && <span className="text-foreground/15 text-[9px] mx-0.5">·</span>}
+                          <span className={cn("text-[10px] font-medium", SIGNAL_STYLE[sig] ?? "text-foreground/40")}>
+                            {sig}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
 
-                {/* 미반영 갭 + 근거 */}
-                {(pick.laggardGap > 0.5 || pick.rationale) && (
-                  <div className="mt-1.5 space-y-0.5">
-                    {pick.laggardGap > 0.5 && (
-                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                        테마 대비 미반영 갭 {pick.laggardGap.toFixed(1)}%p
-                      </p>
-                    )}
-                    {pick.rationale && (
-                      <p className="text-[11px] text-foreground/45 leading-snug line-clamp-2">{pick.rationale}</p>
-                    )}
-                  </div>
+                {/* 근거 */}
+                {pick.rationale && (
+                  <p className="text-[10.5px] text-foreground/35 leading-snug line-clamp-1 mt-1 pl-[26px]">
+                    {pick.rationale}
+                  </p>
                 )}
+              </div>
+
+              {/* 점수 바 — 카드 하단 얇은 선 */}
+              <div className="h-[3px] bg-muted/30">
+                <div
+                  className={cn("h-full bg-gradient-to-r transition-all duration-500", barColor)}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
             </motion.div>
           );
         })}
       </div>
 
-      {/* 하단 면책 */}
-      <p className="text-[10px] text-foreground/30 text-center leading-relaxed px-2">
-        본 자료는 테마 데이터 분석 결과이며 투자 권유가 아닙니다.<br/>
-        모든 투자 결정에 대한 책임은 투자자 본인에게 있습니다.
+      {/* ── 면책 ─────────────────────────────────────────── */}
+      <p className="text-[10px] text-foreground/25 text-center leading-relaxed px-4 pb-1">
+        본 자료는 테마·수급 데이터 분석 결과이며 투자 권유가 아닙니다. 모든 투자 결정의 책임은 투자자 본인에게 있습니다.
       </p>
     </div>
   );
