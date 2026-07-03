@@ -910,7 +910,7 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
 
                 {/* 근거 */}
                 {pick.rationale && (
-                  <p className="text-[10.5px] text-foreground/35 leading-snug line-clamp-1 mt-1 pl-[26px]">
+                  <p className="text-[10.5px] text-foreground/50 leading-snug line-clamp-2 mt-1.5 pl-[26px]">
                     {pick.rationale}
                   </p>
                 )}

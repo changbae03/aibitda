@@ -114,6 +114,18 @@ function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
       else if (volRatio >= 1.1) signals.push("수급 유입");
       if (s.isLeader) signals.push("주도주");
 
+      // 내일 주목 이유: 구체적 수치 + 행동 포인트
+      const laggardRationale = (() => {
+        const themePct = `+${themeHeat.toFixed(1)}%`;
+        const stockPct = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
+        const gapStr = `${laggardGap.toFixed(1)}%p`;
+        let base = `${theme.name} 테마 ${themePct} 상승 속 이 종목은 ${stockPct}에 그침 — 갭 ${gapStr}. 테마 수급이 뒤늦게 이 종목으로 이동할 가능성이 높음.`;
+        if (volRatio >= 1.5) base += ` 거래량도 평소 ${volRatio.toFixed(1)}배로 수급 유입 진행 중.`;
+        if (laggardGap >= 3) base += " 내일 갭업 출발 여부와 거래량 수반 확인 필요.";
+        else base += " 내일 테마 지속 시 추격 매수세 유입 기대.";
+        return base;
+      })();
+
       const pick: TomorrowPick = {
         ticker: s.ticker,
         name: s.name,
@@ -127,7 +139,7 @@ function scoreThemePicks(feed: ThemeFeedItem[]): TomorrowPick[] {
         laggardGap: Math.round(laggardGap * 10) / 10,
         finalScore: Math.round(finalScore * 1000) / 1000,
         signals,
-        rationale: s.rationale ?? "",
+        rationale: laggardRationale,
         category: "laggard",
       };
 
@@ -168,6 +180,18 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
       else if (change < -2) sigs.push("하락 후 매집");
       else sigs.push("보합 수급");
 
+      const volStr = vol >= 10_000_000
+        ? `${(vol / 10_000_000).toFixed(1)}천만주`
+        : `${(vol / 1_000_000).toFixed(0)}백만주`;
+      const changStr = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
+      const volumeRationale = (() => {
+        if (Math.abs(change) < 2)
+          return `오늘 ${volStr} 거래 집중, 주가는 ${changStr} 보합. 주가 안 오른 채 거래만 몰리면 기관·세력 매집 신호. 내일 시초가 강세 출발 + 거래량 지속 여부 확인.`;
+        if (change >= 2)
+          return `오늘 ${volStr} 거래 집중, 주가도 ${changStr} 동반 상승. 수급 본격 유입 신호 — 내일 추가 상승 여력 및 거래량 유지 여부 확인.`;
+        return `오늘 ${volStr} 거래 집중, 주가는 ${changStr} 하락 중 매집 패턴. 저점 매집 가능성 — 내일 낙폭 회복 + 반등 출발 여부 확인.`;
+      })();
+
       picks.push({
         ticker: s.ticker,
         name: s.name,
@@ -180,7 +204,7 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
         laggardGap: 0,
         finalScore: Math.round(finalScore * 1000) / 1000,
         signals: sigs,
-        rationale: `오늘 ${vol >= 10_000_000 ? `${(vol / 10_000_000).toFixed(0)}천만주` : `${(vol / 1_000_000).toFixed(0)}백만주`} 거래량 집중, 수급 유입 여부 주목`,
+        rationale: volumeRationale,
         category: "volume",
       });
     }
@@ -198,6 +222,14 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
       const momentumNorm = Math.min((change - 5) / 17, 1);
       const finalScore = 0.32 + momentumNorm * 0.25;
 
+      const momentumRationale = (() => {
+        if (change >= 15)
+          return `오늘 +${change.toFixed(1)}% 급등, 상한가 아닌 중간 구간 — 추가 상승 여력 남아있음. 내일 시초가 갭업 출발 + 거래량 수반 여부가 핵심 확인 포인트.`;
+        if (change >= 10)
+          return `오늘 +${change.toFixed(1)}% 강한 상승. 초반 급등 모멘텀 — 내일도 연장될 가능성. 시초가 전고점 돌파 시 추가 상승 기대.`;
+        return `오늘 +${change.toFixed(1)}% 상승 모멘텀. 당일 상승 추세가 내일까지 이어지는 경향 — 내일 거래량 수반 여부와 주가 지지 확인 필요.`;
+      })();
+
       picks.push({
         ticker: s.ticker,
         name: s.name,
@@ -210,7 +242,7 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
         laggardGap: 0,
         finalScore: Math.round(finalScore * 1000) / 1000,
         signals: ["모멘텀"],
-        rationale: `오늘 ${change.toFixed(1)}% 상승 — 내일 모멘텀 지속 여부 확인 필요`,
+        rationale: momentumRationale,
         category: "momentum",
       });
     }
