@@ -148,16 +148,16 @@ function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
           const barPct = Math.max(2, (Math.abs(item.force!.avg) / absMax) * 100);
           return (
             <div key={item.id} className="flex items-center gap-2">
-              <span className="text-[10px] text-foreground/25 w-3.5 text-right shrink-0">{i + 1}</span>
-              <span className="text-base shrink-0 leading-none">{item.emoji}</span>
-              <span className="text-[11.5px] font-medium text-foreground/75 w-[88px] truncate shrink-0">{item.name}</span>
-              <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden">
+              <span className="text-[10px] text-foreground/25 w-3 text-right shrink-0">{i + 1}</span>
+              <span className="text-sm shrink-0 leading-none">{item.emoji}</span>
+              <span className="text-[11.5px] font-medium text-foreground/75 flex-1 min-w-0 truncate">{item.name}</span>
+              <div className="w-20 shrink-0 h-2 bg-muted/50 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{ width: `${barPct}%`, backgroundColor: meta.barColor }}
                 />
               </div>
-              <span className={cn("text-[10px] font-semibold shrink-0 w-10 text-right", meta.color)}>
+              <span className={cn("text-[10px] font-semibold shrink-0 w-12 text-right", meta.color)}>
                 {meta.emoji} {meta.label}
               </span>
             </div>
