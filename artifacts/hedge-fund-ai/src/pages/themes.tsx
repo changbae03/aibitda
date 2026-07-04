@@ -82,6 +82,92 @@ function fmtVolume(v?: number) {
   return String(v);
 }
 
+// ── 돈의 힘 (수급 강도) 유틸 ─────────────────────────────────────────────────
+
+function stockForceScore(s: FeedStock): number {
+  const ch = s.priceChange ?? 0;
+  const vr = (s.volumeRatio ?? 1) - 1;
+  return ch * 0.6 + vr * 0.4;
+}
+
+interface ThemeForce {
+  avg: number;
+  max: number;
+  coverage: number; // 데이터 있는 종목 비율
+}
+
+function computeThemeForce(stocks: FeedStock[]): ThemeForce | null {
+  const withData = stocks.filter(s => s.priceChange != null);
+  if (withData.length === 0) return null;
+  const scores = withData.map(stockForceScore);
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const max = Math.max(...scores);
+  return { avg, max, coverage: withData.length / Math.max(stocks.length, 1) };
+}
+
+function forceMeta(avg: number): { label: string; emoji: string; color: string; barColor: string } {
+  if (avg >= 6)  return { label: "강세",   emoji: "🔥", color: "text-red-500",     barColor: "#EF4444" };
+  if (avg >= 2)  return { label: "상승",   emoji: "⚡", color: "text-orange-500",  barColor: "#F97316" };
+  if (avg >= 0)  return { label: "보합",   emoji: "〰", color: "text-foreground/40", barColor: "#94a3b8" };
+  return               { label: "약화",   emoji: "↘",  color: "text-blue-500",    barColor: "#3B82F6" };
+}
+
+// 종목 단위 힘 생존 여부
+function stockMomentumAlive(s: FeedStock): "alive" | "fading" | "pressure" | "unknown" {
+  if (s.priceChange == null) return "unknown";
+  const priceUp  = s.priceChange > 0.5;
+  const volUp    = (s.volumeRatio ?? 1) >= 1.3;
+  if (priceUp && volUp)  return "alive";
+  if (priceUp && !volUp) return "fading";
+  if (!priceUp && volUp) return "pressure";
+  return "unknown";
+}
+
+// ── 테마별 수급 강도 랭킹 ──────────────────────────────────────────────────
+
+function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
+  const ranked = feed
+    .map(item => ({ ...item, force: computeThemeForce(item.stocks) }))
+    .filter(item => item.force !== null)
+    .sort((a, b) => b.force!.avg - a.force!.avg);
+
+  if (ranked.length === 0) return null;
+
+  const absMax = Math.max(...ranked.map(r => Math.abs(r.force!.avg)), 1);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3.5 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <Activity className="w-4 h-4 text-[#FF8A7A] shrink-0" />
+        <span className="text-[13px] font-semibold text-foreground">테마별 수급 강도</span>
+        <span className="text-[11px] text-foreground/35 ml-auto">돈이 쏠리는 순서</span>
+      </div>
+      <div className="space-y-1.5">
+        {ranked.map((item, i) => {
+          const meta = forceMeta(item.force!.avg);
+          const barPct = Math.max(2, (Math.abs(item.force!.avg) / absMax) * 100);
+          return (
+            <div key={item.id} className="flex items-center gap-2">
+              <span className="text-[10px] text-foreground/25 w-3.5 text-right shrink-0">{i + 1}</span>
+              <span className="text-base shrink-0 leading-none">{item.emoji}</span>
+              <span className="text-[11.5px] font-medium text-foreground/75 w-[88px] truncate shrink-0">{item.name}</span>
+              <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${barPct}%`, backgroundColor: meta.barColor }}
+                />
+              </div>
+              <span className={cn("text-[10px] font-semibold shrink-0 w-10 text-right", meta.color)}>
+                {meta.emoji} {meta.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ThemesPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -317,6 +403,7 @@ export default function ThemesPage() {
         </div>
       ) : (
         <div className="space-y-3">
+          <ThemeForceRanking feed={feed} />
           {feed.map((item, idx) => (
             <FeedCard key={item.id} item={item} idx={idx} onAnalyze={goAnalyze} onDiscover={discover} />
           ))}
@@ -987,22 +1074,35 @@ function FeedCard({
       className="rounded-2xl border border-border bg-card overflow-hidden"
     >
       {/* 카드 헤더 */}
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
-      >
-        <span className="text-2xl shrink-0">{item.emoji}</span>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-foreground">{item.name}</p>
-          <p className="text-xs text-foreground/50 truncate mt-0.5">{item.summary}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {item.stocks.length > 0 && (
-            <span className="text-[11px] text-foreground/35 font-medium">{item.stocks.length}종목</span>
-          )}
-          <ChevronDown className={cn("w-4 h-4 text-foreground/30 transition-transform duration-200", expanded && "rotate-180")} />
-        </div>
-      </button>
+      {(() => {
+        const force = computeThemeForce(item.stocks);
+        const meta  = force ? forceMeta(force.avg) : null;
+        return (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
+          >
+            <span className="text-2xl shrink-0">{item.emoji}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <p className="font-semibold text-sm text-foreground truncate">{item.name}</p>
+                {meta && (
+                  <span className={cn("text-[10px] font-bold shrink-0", meta.color)}>
+                    {meta.emoji} {meta.label}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-foreground/50 truncate mt-0.5">{item.summary}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {item.stocks.length > 0 && (
+                <span className="text-[11px] text-foreground/35 font-medium">{item.stocks.length}종목</span>
+              )}
+              <ChevronDown className={cn("w-4 h-4 text-foreground/30 transition-transform duration-200", expanded && "rotate-180")} />
+            </div>
+          </button>
+        );
+      })()}
 
       {/* 종목 리스트 */}
       <AnimatePresence initial={false}>
@@ -1091,6 +1191,14 @@ function FeedCard({
                                 <Zap className="w-2.5 h-2.5" />거래량 {vr!.toFixed(1)}배
                               </span>
                             )}
+                            {/* 힘 생존 여부 */}
+                            {(() => {
+                              const alive = stockMomentumAlive(stock);
+                              if (alive === "alive")    return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">힘 살아있음 ✓</span>;
+                              if (alive === "fading")   return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">힘 약해지는 중</span>;
+                              if (alive === "pressure") return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">매도 압력</span>;
+                              return null;
+                            })()}
                           </div>
                         )}
                         {/* 근거 */}
