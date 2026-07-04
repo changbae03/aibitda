@@ -164,11 +164,11 @@ function scoreThemePicks(
         const themePct = `+${themeHeat.toFixed(1)}%`;
         const stockPct = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
         const gapStr   = `${laggardGap.toFixed(1)}%p`;
-        let base = `${theme.name} 테마 ${themePct} 상승 속 이 종목은 ${stockPct}에 그침 — 갭 ${gapStr}. 테마 수급이 뒤늦게 이 종목으로 이동할 가능성이 높음.`;
-        if (isTrending) base += " 네이버 인기 검색에도 동시 포착 — 내일 개인 매수세 가세 기대.";
-        else if (volRatio >= 1.5) base += ` 거래량도 평소 ${volRatio.toFixed(1)}배로 수급 유입 진행 중.`;
-        if (laggardGap >= 3) base += " 내일 갭업 출발 + 거래량 수반 확인 필요.";
-        else base += " 내일 테마 지속 시 추격 매수세 유입 기대.";
+        let base = `${theme.name} 테마가 오늘 ${themePct} 올랐는데, 이 종목은 ${stockPct}에 그쳤어요. 같은 테마에서 ${gapStr} 덜 오른 셈이라 내일 뒤늦게 따라 오를 가능성이 있어요.`;
+        if (isTrending) base += " 네이버 인기 검색에도 오르고 있어 개인 투자자 관심도 높아요.";
+        else if (volRatio >= 1.5) base += ` 거래량도 평소의 ${volRatio.toFixed(1)}배 수준으로 사는 사람이 늘고 있어요.`;
+        if (laggardGap >= 3) base += " 내일 시작부터 크게 오를 수 있으니 거래가 활발한지도 함께 확인하세요.";
+        else base += " 내일 테마가 계속되면 따라 올라올 수 있어요.";
         return base;
       })();
 
@@ -277,18 +277,18 @@ function scoreConfluencePicks(
     const rationale = (() => {
       if (hasTrending && hasVolume) {
         const priceDesc = Math.abs(change) < 2
-          ? `주가 ${change >= 0 ? "+" : ""}${change.toFixed(1)}% 보합 속 거래량 폭발 — 조용한 기관 매집 가능성.`
-          : `주가 ${change >= 0 ? "+" : ""}${change.toFixed(1)}% 상승 + 거래량 급증 동반.`;
-        return `${priceDesc} 동시에 네이버 인기 검색 1위권 포착 — 내일 개인 추가 매수 유입 기대. 가장 강한 복합 신호.`;
+          ? `주가는 거의 안 움직였는데 거래량이 크게 늘었어요. 주가가 안 오른 채 거래만 많으면 큰손이 조용히 사 모으는 신호일 수 있어요.`
+          : `오늘 ${change >= 0 ? "+" : ""}${change.toFixed(1)}% 오르면서 거래량도 함께 폭발했어요.`;
+        return `${priceDesc} 여기에 네이버 인기 검색까지 오르며 개인 투자자 관심도 높아요. 여러 신호가 동시에 나온 만큼 내일 추가 상승 가능성이 가장 높은 종목이에요.`;
       }
       if (hasTrending && hasGainers) {
-        return `오늘 +${change.toFixed(1)}% 급등 + 네이버 인기 검색 동시 포착. 모멘텀 + 개인 관심 결합 — 내일 추가 상승 기대. 시초가 갭업 + 거래량 수반 확인.`;
+        return `오늘 +${change.toFixed(1)}% 올랐고, 네이버 인기 검색에도 올라오고 있어요. 상승세와 개인 투자자 관심이 겹쳤어요. 내일도 추가로 오를 가능성이 있으니, 시작 시 거래량이 따라오는지 확인하세요.`;
       }
       if (hasVolume && hasGainers) {
-        return `오늘 +${change.toFixed(1)}% 상승하며 거래량도 폭발적으로 증가. 수급 + 모멘텀 동반 — 내일 추가 상승 여력 확인. 상승폭이 크므로 시초가 갭업 여부 필수 확인.`;
+        return `오늘 +${change.toFixed(1)}% 오르면서 거래량도 함께 폭발했어요. 오르는 힘과 거래량이 같이 왔다는 건 좋은 신호예요. 내일 추가 상승 여력이 있는지 시작 시 거래량을 봐주세요.`;
       }
       // trending only
-      return `네이버 인기 검색 + 오늘 +${change.toFixed(1)}% 상승. 개인 투자자 관심 집중 중 — 내일 추가 매수 유입 가능성. 거래량 수반 여부 확인.`;
+      return `네이버 인기 검색에 오르고 있고, 오늘 주가도 +${change.toFixed(1)}% 상승했어요. 개인 투자자 관심이 높아 내일 매수세가 추가로 들어올 수 있어요. 거래량이 따라오는지 확인하세요.`;
     })();
 
     picks.push({
@@ -346,10 +346,10 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
       const changStr = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
       const volumeRationale = (() => {
         if (Math.abs(change) < 2)
-          return `오늘 ${volStr} 거래 집중, 주가는 ${changStr} 보합. 주가 안 오른 채 거래만 몰리면 기관·세력 매집 신호. 내일 시초가 강세 출발 + 거래량 지속 여부 확인.`;
+          return `오늘 ${volStr}이 거래됐는데 주가는 ${changStr} 거의 안 움직였어요. 주가가 안 오른 채 거래만 많으면 큰손이 조용히 사 모으는 신호일 수 있어요. 내일 시작 시 강하게 오르고 거래량이 유지되는지 확인하세요.`;
         if (change >= 2)
-          return `오늘 ${volStr} 거래 집중, 주가도 ${changStr} 동반 상승. 수급 본격 유입 신호 — 내일 추가 상승 여력 및 거래량 유지 여부 확인.`;
-        return `오늘 ${volStr} 거래 집중, 주가는 ${changStr} 하락 중 매집 패턴. 저점 매집 가능성 — 내일 낙폭 회복 + 반등 출발 여부 확인.`;
+          return `오늘 ${volStr}이 거래되며 주가도 ${changStr} 같이 올랐어요. 거래량과 상승이 함께 나왔다는 건 본격적으로 사는 사람이 늘고 있다는 신호예요. 내일 추가 상승 가능성과 거래량이 유지되는지 보세요.`;
+        return `오늘 ${volStr}이 거래됐는데 주가는 ${changStr} 하락했어요. 내릴 때 사 모으는 패턴일 수 있어요. 내일 하락이 멈추고 반등하는지 확인해 보세요.`;
       })();
 
       picks.push({
@@ -386,10 +386,10 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
 
       const momentumRationale = (() => {
         if (change >= 15)
-          return `오늘 +${change.toFixed(1)}% 급등, 상한가 아닌 중간 구간 — 추가 상승 여력 남아있음. 내일 시초가 갭업 출발 + 거래량 수반 여부가 핵심 확인 포인트.`;
+          return `오늘 +${change.toFixed(1)}% 급등했어요. 상한가(30%)에는 못 미쳐서 추가로 오를 여지가 남아있어요. 내일 시작부터 강하게 오르는지, 거래량도 충분한지 함께 확인하세요.`;
         if (change >= 10)
-          return `오늘 +${change.toFixed(1)}% 강한 상승. 초반 급등 모멘텀 — 내일도 연장될 가능성. 시초가 전고점 돌파 시 추가 상승 기대.`;
-        return `오늘 +${change.toFixed(1)}% 상승 모멘텀. 당일 상승 추세가 내일까지 이어지는 경향 — 내일 거래량 수반 여부와 주가 지지 확인 필요.`;
+          return `오늘 +${change.toFixed(1)}% 강하게 올랐어요. 이런 상승세는 다음날까지 이어지는 경우가 많아요. 내일 이전 고점을 넘어서면 추가 상승을 기대할 수 있어요.`;
+        return `오늘 +${change.toFixed(1)}% 올랐어요. 오늘 오른 종목이 다음날도 이어서 오르는 경향이 있어요. 내일 거래가 활발하게 유지되는지, 주가가 버텨주는지 확인하세요.`;
       })();
 
       picks.push({
