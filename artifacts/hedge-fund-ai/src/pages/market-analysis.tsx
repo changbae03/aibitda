@@ -101,7 +101,8 @@ interface PipelineStatus {
 interface MarketBrief {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
-  sessionType?: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend";
+  sessionType?: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend"
+              | "us_premarket" | "us_open" | "us_afterhours" | "us_overnight" | "us_weekend";
   leadParagraph?: string;
   storyLine?: string;
   marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
@@ -223,14 +224,19 @@ function MarketBriefSection({
           {brief && !loading && brief.sessionType && (() => {
             const s = brief.sessionType!;
             const SESSION_META: Record<string, { label: string; cls: string }> = {
-              pre_open:  { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-              morning:   { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
-              midday:    { label: "☀️ 점심 브리핑",      cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-              afternoon: { label: "⛅ 오후장 브리핑",    cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
-              pre_close: { label: "🔔 마감 직전 브리핑", cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
-              closing:   { label: "🌆 장마감 브리핑",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-              evening:   { label: "🌙 야간 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-              weekend:   { label: "📅 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+              pre_open:      { label: "🌅 장전 브리핑",        cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+              morning:       { label: "🌤 개장 브리핑",         cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
+              midday:        { label: "☀️ 점심 브리핑",         cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+              afternoon:     { label: "⛅ 오후장 브리핑",       cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
+              pre_close:     { label: "🔔 마감 직전 브리핑",    cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
+              closing:       { label: "🌆 장마감 브리핑",       cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+              evening:       { label: "🌙 야간 브리핑",         cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+              weekend:       { label: "📅 주말 브리핑",         cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+              us_premarket:  { label: "🌅 US 프리마켓",         cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+              us_open:       { label: "🔔 US 정규장",           cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+              us_afterhours: { label: "🌆 US 애프터마켓",       cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+              us_overnight:  { label: "🌙 US 휴장 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+              us_weekend:    { label: "📅 US 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
             };
             const meta = SESSION_META[s] ?? SESSION_META.closing;
             return (
@@ -1175,8 +1181,11 @@ export default function MarketAnalysis() {
   const [isStarting, setIsStarting]   = useState(false);
   const [techOpen, setTechOpen]       = useState(false);
   const [guideOpen, setGuideOpen]     = useState(false);
+  const [marketTab, setMarketTab]     = useState<"kr" | "us">("kr");
   const [brief, setBrief]             = useState<MarketBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
+  const [usBrief, setUsBrief]         = useState<MarketBrief | null>(null);
+  const [usBriefLoading, setUsBriefLoading] = useState(false);
   const [liveAcc, setLiveAcc]         = useState<Record<string, LiveAccuracy> | null>(null);
   const [predHistory, setPredHistory] = useState<Record<string, PredictionRecord[]>>({});
   // 라이브 적중률 폴링
@@ -1211,11 +1220,14 @@ export default function MarketAnalysis() {
       .catch(() => setIsAdmin(false));
   }, []);
 
-  const briefPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const briefPollRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const usBriefPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchBrief = useCallback(async (force = false) => {
     if (!force) setBriefLoading(true);
     try {
-      const r = await fetch(getApiUrl(`/api/market-analysis/brief${force ? "?force=true" : ""}`), { credentials: "include" });
+      const qs = force ? "?force=true" : "";
+      const r = await fetch(getApiUrl(`/api/market-analysis/brief${qs}`), { credentials: "include" });
       if (r.ok) {
         const data = await r.json();
         setBrief(data);
@@ -1225,13 +1237,35 @@ export default function MarketAnalysis() {
           if (briefPollRef.current) clearTimeout(briefPollRef.current);
         }
       } else {
-        // 서버 시작 중(502 등) — 5초 후 재시도
         briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
       }
     } catch {
       briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
     } finally {
       setBriefLoading(false);
+    }
+  }, []);
+
+  const fetchUsBrief = useCallback(async (force = false) => {
+    if (!force) setUsBriefLoading(true);
+    try {
+      const qs = force ? "?market=us&force=true" : "?market=us";
+      const r = await fetch(getApiUrl(`/api/market-analysis/brief${qs}`), { credentials: "include" });
+      if (r.ok) {
+        const data = await r.json();
+        setUsBrief(data);
+        if (data.generating) {
+          usBriefPollRef.current = setTimeout(() => fetchUsBrief(), 5000);
+        } else {
+          if (usBriefPollRef.current) clearTimeout(usBriefPollRef.current);
+        }
+      } else {
+        usBriefPollRef.current = setTimeout(() => fetchUsBrief(), 5000);
+      }
+    } catch {
+      usBriefPollRef.current = setTimeout(() => fetchUsBrief(), 5000);
+    } finally {
+      setUsBriefLoading(false);
     }
   }, []);
 
@@ -1261,6 +1295,7 @@ export default function MarketAnalysis() {
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
   useEffect(() => { fetchBrief(); }, [fetchBrief]);
+  useEffect(() => { fetchUsBrief(); }, [fetchUsBrief]);
 
   useEffect(() => {
     if (!status) {
@@ -1318,11 +1353,36 @@ export default function MarketAnalysis() {
         )}
       </div>
 
-      {/* ── AI 브리핑 ───────────────────────────────────────────────────── */}
+      {/* ── 시장 탭 + AI 브리핑 ─────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/50 border border-border/60 w-fit">
+        <button
+          onClick={() => setMarketTab("kr")}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150",
+            marketTab === "kr"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          🇰🇷 한국 시장
+        </button>
+        <button
+          onClick={() => setMarketTab("us")}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150",
+            marketTab === "us"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          🇺🇸 미국 시장
+        </button>
+      </div>
+
       <MarketBriefSection
-        brief={brief}
-        loading={briefLoading}
-        onRefresh={() => fetchBrief(true)}
+        brief={marketTab === "us" ? usBrief : brief}
+        loading={marketTab === "us" ? usBriefLoading : briefLoading}
+        onRefresh={() => marketTab === "us" ? fetchUsBrief(true) : fetchBrief(true)}
         showRefresh={!!isAdmin}
       />
 

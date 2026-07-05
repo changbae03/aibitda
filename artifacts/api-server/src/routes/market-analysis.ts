@@ -140,7 +140,8 @@ export function invalidateBriefCache() {
 export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
-  sessionType: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend";
+  sessionType: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend"
+            | "us_premarket" | "us_open" | "us_afterhours" | "us_overnight" | "us_weekend";
   leadParagraph: string;
   storyLine: string;
   marketEvents: {
@@ -387,6 +388,26 @@ function detectSession(): "pre_open" | "morning" | "midday" | "afternoon" | "pre
   if (kstMin >= 15 * 60 && kstMin < 15 * 60 + 30) return "pre_close";
   if (kstMin >= 15 * 60 + 30 && kstMin < 18 * 60) return "closing";
   return "evening";
+}
+
+/**
+ * US 세션 감지 (KST 기준)
+ *   KST 17:00~22:30  → us_premarket  (ET 04:00-09:30)
+ *   KST 22:30~05:00  → us_open       (ET 09:30-16:00 정규장)
+ *   KST 05:00~09:00  → us_afterhours (ET 16:00-20:00)
+ *   KST 09:00~17:00  → us_overnight  (ET 20:00-04:00, US 휴장)
+ *   토/일             → us_weekend
+ */
+function detectUsSession(): "us_premarket" | "us_open" | "us_afterhours" | "us_overnight" | "us_weekend" {
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + 9 * 3600_000);
+  const kstDay = kstNow.getUTCDay();
+  if (kstDay === 0 || kstDay === 6) return "us_weekend";
+  const kstMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+  if (kstMin >= 17 * 60 && kstMin < 22 * 60 + 30) return "us_premarket";
+  if (kstMin >= 22 * 60 + 30 || kstMin < 5 * 60)  return "us_open";
+  if (kstMin >= 5 * 60 && kstMin < 9 * 60)         return "us_afterhours";
+  return "us_overnight";
 }
 
 function fmtIdx(d: { close: number; change: number | null } | null | undefined, unit = "pt") {
@@ -872,6 +893,248 @@ ${keyTopicsRule}
   };
 }
 
+// ─── 미국 시장 브리핑 캐시 ──────────────────────────────────────────────────────
+
+let _usBriefCache: BriefCache | null = null;
+let _usBriefRefreshing = false;
+
+async function saveUsBriefToDb(cache: BriefCache) {
+  try {
+    await pool.query(`
+      INSERT INTO kv_cache (key, value, cached_at)
+      VALUES ('market_brief_us', $1, $2)
+      ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
+    `, [JSON.stringify(cache.data), new Date(cache.cachedAt)]);
+  } catch (err: any) {
+    console.error("[us-brief] DB 저장 실패:", err?.message);
+  }
+}
+
+async function loadUsBriefFromDb(): Promise<void> {
+  try {
+    const r = await pool.query(
+      `SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief_us' LIMIT 1`
+    );
+    if (r.rows.length) {
+      const cachedAt = new Date(r.rows[0].cached_at).getTime();
+      _usBriefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
+      if (Date.now() - cachedAt >= BRIEF_TTL) {
+        setTimeout(() => refreshUsBriefInBackground("서버시작-만료캐시"), 12000);
+      }
+    } else {
+      setTimeout(() => refreshUsBriefInBackground("서버시작-최초생성"), 15000);
+    }
+  } catch (err: any) {
+    console.error("[us-brief] DB 복원 실패:", err?.message);
+  }
+}
+
+loadUsBriefFromDb().catch(() => {});
+
+export function refreshUsBriefInBackground(reason = "") {
+  if (_usBriefRefreshing) { console.log("[us-brief] 이미 갱신 중 — 스킵"); return; }
+  _usBriefRefreshing = true;
+  console.log(`[us-brief] 백그라운드 갱신 시작${reason ? ` (${reason})` : ""}`);
+  generateUsBrief()
+    .then(result => {
+      _usBriefCache = { data: result, cachedAt: Date.now() };
+      return saveUsBriefToDb(_usBriefCache);
+    })
+    .then(() => console.log("[us-brief] 갱신 완료"))
+    .catch(err => console.error("[us-brief] 갱신 실패:", err?.message))
+    .finally(() => { _usBriefRefreshing = false; });
+}
+
+async function generateUsBrief(): Promise<MarketBriefResult> {
+  const today = new Date().toLocaleDateString("ko-KR", {
+    year: "numeric", month: "long", day: "numeric", weekday: "short",
+  });
+  const session = detectUsSession();
+
+  const [indexData, fredData, ecosData, pipelineStatus, newsResult] = await Promise.allSettled([
+    fetchRecentIndexData(),
+    fetchFREDMacro(),
+    fetchECOSMacro(),
+    Promise.resolve(getStatus()),
+    fetchMarketNews(),
+  ]);
+
+  const idx      = indexData.status === "fulfilled"      ? indexData.value      : null;
+  const fred     = fredData.status  === "fulfilled"      ? fredData.value       : null;
+  const ecos     = ecosData.status  === "fulfilled"      ? ecosData.value       : null;
+  const pipeline = pipelineStatus.status === "fulfilled" ? pipelineStatus.value : null;
+  const newsBlock = newsResult.status === "fulfilled"    ? newsResult.value     : "";
+
+  const snpL    = idx?.snp500?.at(-1) ?? null;
+  const nasdaqL = idx?.nasdaq?.at(-1) ?? null;
+  const dowL    = idx?.dow?.at(-1)    ?? null;
+  const vixL    = idx?.vix?.at(-1)    ?? null;
+  const soxL    = idx?.sox?.at(-1)    ?? null;
+  const dxyL    = idx?.dxy?.at(-1)    ?? null;
+
+  const histLine = (arr: any[] | null | undefined) =>
+    arr?.map((d: any) => `${d.date} ${d.close.toLocaleString()}(${d.change != null ? (d.change >= 0 ? "+" : "") + d.change + "%" : "N/A"})`).join(", ") ?? "데이터 없음";
+
+  const snp500History  = histLine(idx?.snp500);
+  const nasdaqHistory  = histLine(idx?.nasdaq);
+
+  const snp500Pred = pipeline?.snp500 ? `${pipeline.snp500.predictedReturn3d >= 0 ? "+" : ""}${pipeline.snp500.predictedReturn3d}%` : null;
+
+  const fmtDir = (d: { close: number; change: number | null } | null) =>
+    d ? `${d.close.toLocaleString()}pt, ${d.change != null ? (d.change > 0 ? `▲+${d.change}% 상승` : d.change < 0 ? `▼${d.change}% 하락` : "보합") : "N/A"}` : "데이터 없음";
+
+  const usIndicesBlock = [
+    snpL    ? `S&P500 ${fmtIdx(snpL)}`               : null,
+    nasdaqL ? `나스닥 ${fmtIdx(nasdaqL)}`            : null,
+    dowL    ? `다우존스 ${fmtIdx(dowL)}`              : null,
+    soxL    ? `필라델피아반도체(SOX) ${fmtIdx(soxL)}` : null,
+    vixL    ? `VIX ${vixL.close} (${vixL.close >= 25 ? "공포" : vixL.close >= 18 ? "경계" : "안정"})` : null,
+    dxyL    ? `달러인덱스(DXY) ${dxyL.close}`         : null,
+  ].filter(Boolean).join("\n");
+
+  const macroBlock = [
+    fred?.t10y    != null ? `미국 10년 국채금리 ${fred.t10y.toFixed(2)}%` : null,
+    fred?.t2y     != null ? `미국 2년 국채금리 ${fred.t2y.toFixed(2)}%` : null,
+    fred?.yieldSpread != null ? `장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " ⚠️역전" : ""}` : null,
+    fred?.wtiOil  != null ? `WTI 유가 ${fred.wtiOil.toFixed(1)} USD/bbl` : null,
+    ecos?.usdKrw  != null ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원` : null,
+    fred != null
+      ? fred.fedTargetUpper != null && fred.fedTargetLower != null
+        ? `미국 기준금리 ${fred.fedTargetLower}~${fred.fedTargetUpper}%`
+        : fred.fedFundsRate != null ? `미국 기준금리 ${fred.fedFundsRate}%` : null
+      : null,
+  ].filter(Boolean).join(" | ");
+
+  const sessionDesc =
+    session === "us_premarket"  ? "미국 증시 개장 전 (프리마켓)" :
+    session === "us_open"       ? "미국 증시 정규 거래 시간" :
+    session === "us_afterhours" ? "미국 증시 장 마감 후 (애프터마켓)" :
+    session === "us_overnight"  ? "미국 증시 휴장 중 (한국 낮 시간)" :
+                                  "미국 증시 주말 휴장";
+
+  const prompt = `당신은 월가 전문 시장 해설가입니다. 오늘은 ${today}이고, 현재 ${sessionDesc}입니다.
+미국 증시 현황과 핵심 투자 포인트를 한국 투자자가 이해하기 쉽게 친근한 해요체로 설명해 주세요.
+첫 문장은 반드시 미국 지수 수치·등락률·핵심 이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
+"안녕하세요", "여러분", "오늘도", "반갑습니다", 날짜·요일로 시작하는 인삿말, 날씨·계절 언급, 감성적 서두.
+
+⚠️ 미국 지수 데이터 — 반드시 그대로 사용하세요 (임의 변경 절대 금지):
+S&P500: ${fmtDir(snpL)}
+나스닥:  ${fmtDir(nasdaqL)}
+다우존스: ${fmtDir(dowL)}
+VIX: ${vixL ? `${vixL.close} (${vixL.close >= 25 ? "공포 구간" : vixL.close >= 18 ? "경계 구간" : "안정 구간"})` : "데이터 없음"}
+SOX: ${soxL ? `${soxL.close.toLocaleString()}pt, ${soxL.change != null ? (soxL.change > 0 ? `▲+${soxL.change}%` : `▼${soxL.change}%`) : "N/A"}` : "데이터 없음"}
+DXY: ${dxyL ? `${dxyL.close}` : "데이터 없음"}
+
+[미국 주요 지수 최근 흐름]
+S&P500: ${snp500History}
+나스닥: ${nasdaqHistory}
+
+[거시경제 지표]
+${macroBlock || "데이터 없음"}
+
+[주요 뉴스/이슈]
+${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단하세요"}
+
+[AI 모델 S&P500 3일 예측]
+${snp500Pred ?? "N/A"}
+
+아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
+{
+  "summary": "미국 증시 한 줄 요약 (20자 내외, 명사형)",
+  "sentiment": "bullish 또는 bearish 또는 neutral",
+  "leadParagraph": "S&P500·나스닥이 어떻게 움직였는지, 주요 원인 2문장. 수치 포함. (80~120자)",
+  "storyLine": "미국 증시 스토리: 어떤 이슈가 시장을 움직였는지(금리·Fed·실적·경제지표·지정학), 섹터별 흐름(기술주·에너지·금융·헬스케어·소비재), VIX·DXY 해석, 향후 전망. AI 예측 포함. (350~500자) 반드시 2~3개 단락으로 나눠 작성하고 단락 사이에 \\n\\n을 삽입하세요.",
+  "marketEvents": [
+    { "title": "핵심 이슈 (15자)", "impact": "이 이슈가 왜 시장에 영향을 줬는지 (60~80자)", "direction": "positive/negative/neutral" },
+    { "title": "이슈2 (Fed·금리·통화정책)", "impact": "...", "direction": "..." },
+    { "title": "이슈3 (빅테크·AI 기업 실적)", "impact": "...", "direction": "..." },
+    { "title": "이슈4 (경제지표: CPI·고용·GDP)", "impact": "...", "direction": "..." },
+    { "title": "이슈5 (에너지·유가·원자재)", "impact": "...", "direction": "..." },
+    { "title": "이슈6 (지정학·관세·무역)", "impact": "...", "direction": "..." }
+  ],
+  "macroFactors": [
+    { "factor": "지표명", "status": "수치와 전일비", "implication": "미국 투자자에게 왜 중요한지 (40~60자)" },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." },
+    { "factor": "...", "status": "...", "implication": "..." }
+  ],
+  "forwardLook": [
+    { "point": "핵심 포인트 (15자)", "detail": "AI 예측 포함, 다음 세션 전망 (50~70자)", "watchFor": "지금 봐야 할 것 (25자)" },
+    { "point": "...", "detail": "...", "watchFor": "..." },
+    { "point": "...", "detail": "...", "watchFor": "..." }
+  ],
+  "upcomingMacroEvents": [
+    { "date": "구체적 날짜", "title": "이벤트명 (20자)", "description": "쉬운 설명 (60~80자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
+  ],
+  "keyTopics": [
+    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 미국 시장에 왜 중요한지 (50~70자)" },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "...", "category": "...", "description": "..." }
+  ],
+  "keyRisk": "다음 세션에서 가장 조심해야 할 것 한 줄 (40~60자)",
+  "recentIssues": ["핵심 이슈 요약1", "이슈2", "이슈3", "이슈4"],
+  "outlook": ["다음 세션 전망1", "전망2", "전망3"]
+}
+
+작성 원칙:
+- S&P500·나스닥 수치를 구체적으로 인용하세요
+- 섹터별 흐름(기술주·에너지·금융·헬스케어): 어느 섹터가 오르고 내렸는지 명시
+- Fed·금리 정책이 지금 시장에 어떤 영향을 주는지 반드시 포함
+- VIX 수준이 무엇을 의미하는지 구체적으로 설명
+- 빅테크(애플·엔비디아·MS·구글·아마존·메타·테슬라) 동향 반드시 포함
+- AI 예측(S&P500: ${snp500Pred ?? "N/A"})을 forwardLook에 포함
+- 문체: 친근한 해요체, 수치와 함께`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: {
+      maxOutputTokens: 5000,
+      temperature: 0.65,
+      topP: 0.92,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  const raw = response.text ?? "";
+  let parsed: any = null;
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+  } catch {}
+
+  const safeArr = (v: any) => Array.isArray(v) ? v : [];
+
+  return {
+    summary:             parsed?.summary             ?? "미국 증시 데이터 분석 중",
+    sentiment:           parsed?.sentiment           ?? "neutral",
+    sessionType:         session,
+    leadParagraph:       parsed?.leadParagraph       ?? "",
+    storyLine:           parsed?.storyLine           ?? "",
+    marketEvents:        safeArr(parsed?.marketEvents).slice(0, 8),
+    macroFactors:        safeArr(parsed?.macroFactors).slice(0, 6),
+    forwardLook:         safeArr(parsed?.forwardLook).slice(0, 3),
+    upcomingMacroEvents: safeArr(parsed?.upcomingMacroEvents).slice(0, 6),
+    keyTopics:           safeArr(parsed?.keyTopics).slice(0, 7),
+    keyRisk:             parsed?.keyRisk             ?? "",
+    recentIssues:        safeArr(parsed?.recentIssues).slice(0, 5),
+    outlook:             safeArr(parsed?.outlook).slice(0, 4),
+    generatedAt:         new Date().toISOString(),
+    kospiCurrent:        null,
+    kosdaqCurrent:       null,
+    snp500Current:       snpL?.close ?? null,
+    kospiChange:         null,
+    kosdaqChange:        null,
+    snp500Change:        snpL?.change ?? null,
+  };
+}
+
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
 router.get("/status", async (req, res) => {
@@ -937,15 +1200,32 @@ router.post("/update", async (req, res) => {
 });
 
 // GET /api/market-analysis/brief — Gemini 기반 시장 브리핑 (DB 영구 캐시)
+// ?market=us → 미국 시장 브리핑, 기본값 한국 시장
 router.get("/brief", async (req, res) => {
-  // 강제 갱신(force=true)은 관리자 또는 localhost 허용
   const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
   if (req.query.force === "true" && !isLocalhost && !(await requireAdmin(req, res))) return;
-  const force = req.query.force === "true";
+  const force  = req.query.force  === "true";
+  const market = req.query.market === "us" ? "us" : "kr";
 
+  // ── 미국 시장 브리핑 ────────────────────────────────────────────────────────
+  if (market === "us") {
+    if (!force && _usBriefCache && Date.now() - _usBriefCache.cachedAt < BRIEF_TTL) {
+      res.json({ ...(_usBriefCache.data), sessionType: detectUsSession(), cached: true });
+      return;
+    }
+    if (!force && _usBriefCache) {
+      res.json({ ...(_usBriefCache.data), sessionType: detectUsSession(), cached: true, stale: true });
+      if (!_usBriefRefreshing) refreshUsBriefInBackground("만료캐시-백그라운드");
+      return;
+    }
+    if (!_usBriefRefreshing) refreshUsBriefInBackground("첫요청-캐시없음");
+    res.json({ generating: true });
+    return;
+  }
+
+  // ── 한국 시장 브리핑 ─────────────────────────────────────────────────────────
   // ① 인메모리 캐시 유효 → 즉시 반환 (~1ms)
   // sessionType은 캐시 저장 시점이 아닌 현재 시각 기준으로 오버라이드
-  // (예: 장마감 캐시가 남아있어도 장전 시간대에 접근하면 "morning"으로 표시)
   if (!force && _briefCache && Date.now() - _briefCache.cachedAt < BRIEF_TTL) {
     res.json({ ...(_briefCache.data), sessionType: detectSession(), cached: true });
     return;
@@ -953,9 +1233,7 @@ router.get("/brief", async (req, res) => {
 
   // ② 캐시 만료 or force → 이미 캐시가 있으면 즉시 반환 후 백그라운드 갱신
   if (!force && _briefCache) {
-    // 만료된 캐시라도 즉시 반환 (사용자는 바로 볼 수 있음), sessionType은 현재 시각 기준
     res.json({ ...(_briefCache.data), sessionType: detectSession(), cached: true, stale: true });
-    // 이미 갱신 중이 아닐 때만 백그라운드 재생성
     if (!_briefRefreshing) {
       _briefRefreshing = true;
       generateBrief()
@@ -969,10 +1247,8 @@ router.get("/brief", async (req, res) => {
     return;
   }
 
-  // ③ 캐시 없음(첫 요청 or force) → 블로킹하지 않고 즉시 반환 후 백그라운드 생성
-  if (!_briefRefreshing) {
-    refreshBriefInBackground("첫요청-캐시없음");
-  }
+  // ③ 캐시 없음(첫 요청 or force)
+  if (!_briefRefreshing) refreshBriefInBackground("첫요청-캐시없음");
   res.json({ generating: true });
 });
 
