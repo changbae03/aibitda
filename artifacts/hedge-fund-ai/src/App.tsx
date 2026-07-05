@@ -301,7 +301,7 @@ function Router() {
                 <Route path="/admin/portfolios" component={AdminPortfolios} />
                 <Route path="/admin/calibration" component={AdminCalibration} />
                 <Route path="/admin/earnings" component={AdminEarnings} />
-                <Route path="/market-analysis" component={MarketAnalysis} />
+                <Route path="/market-analysis">{() => { window.location.replace("/"); return null; }}</Route>
                 <Route path="/etf-analysis" component={ETFAnalysis} />
                 <Route path="/portfolio" component={Portfolio} />
                 <Route path="/mypage" component={MyPage} />
