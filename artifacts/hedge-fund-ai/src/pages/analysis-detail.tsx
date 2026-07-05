@@ -2960,6 +2960,13 @@ export default function AnalysisDetail() {
                     : "매크로·재무·밸류에이션·기술적 분석·투자 촉매 전문 AI 에이전트 7명이 협업해 작성한 결과물입니다. 본 서비스는 투자 자문이 아니며, 모든 투자 판단과 그 결과에 대한 책임은 사용자 본인에게 있습니다."}
                 </p>
 
+                {/* AI 정확도 안내 */}
+                <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted-foreground/60">
+                  {isEn
+                    ? "⚠ AI-generated content may contain errors in figures or judgments. Always verify key data before relying on this report."
+                    : "⚠ AI 특성상 수치나 판단에 오류가 포함될 수 있습니다. 핵심 수치는 반드시 직접 확인 후 참고하세요."}
+                </p>
+
                 {/* 구분선 */}
                 <div className="my-4 border-t border-border" />
 
