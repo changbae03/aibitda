@@ -98,9 +98,9 @@ const NAV_GROUPS = [
     labelEn: "Macro",
     items: [
       { href: "/market-analysis", label: "시장 분석",     labelEn: "Market Analysis",  Icon: TrendingUp },
-      { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
       { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
       { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
+      { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
     ],
   },
   {
