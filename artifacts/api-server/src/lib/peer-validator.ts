@@ -136,7 +136,9 @@ export async function validatePeers(
   // ── 시총 규모 극단치 ──────────────────────────────────────────────────────
   if (validMarketCaps.length >= 3) {
     const med = median(validMarketCaps);
-    const RATIO_THRESHOLD = 30;
+    // 임계치 10x: 동종 업종 피어는 보통 시총 격차가 10배 이내여야 함
+    // (30x → 10x 강화 — 규모가 크게 다른 대형주/소형주 혼입 조기 감지)
+    const RATIO_THRESHOLD = 10;
     for (const [ticker, peer] of entries) {
       if (peer.marketCap == null) continue;
       const ratio = peer.marketCap / med;
@@ -144,14 +146,14 @@ export async function validatePeers(
         issues.push({
           type: "size_extreme",
           ticker,
-          detail: `${ticker}(${peer.name}): 시가총액이 피어 중앙값의 ${ratio.toFixed(0)}배 — 규모 불일치`,
+          detail: `${ticker}(${peer.name}): 시가총액이 피어 중앙값의 ${ratio.toFixed(0)}배 — 규모 불일치 (대형주 혼입 의심)`,
           severity: "warning",
         });
       } else if (ratio < 1 / RATIO_THRESHOLD) {
         issues.push({
           type: "size_extreme",
           ticker,
-          detail: `${ticker}(${peer.name}): 시가총액이 피어 중앙값의 1/${(1 / ratio).toFixed(0)}배 — 규모 불일치`,
+          detail: `${ticker}(${peer.name}): 시가총액이 피어 중앙값의 1/${(1 / ratio).toFixed(0)}배 — 규모 불일치 (소형주 혼입 의심)`,
           severity: "warning",
         });
       }

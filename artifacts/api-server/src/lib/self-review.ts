@@ -153,11 +153,6 @@ export async function runSelfReview(analysisId: number): Promise<void> {
       return;
     }
 
-    // 자동배치 분석만 검수 (user_id IS NULL)
-    if (analysis.user_id !== null) {
-      return;
-    }
-
     if (analysis.status !== "completed") {
       console.log(`[self-review] analysis#${analysisId} not completed (${analysis.status}) — skip`);
       return;
