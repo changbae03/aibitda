@@ -457,11 +457,18 @@ function MarketBriefSection({
           )}
 
           {/* 주목 이벤트 */}
-          {(brief.upcomingMacroEvents?.length ?? 0) > 0 && (
+          {(() => {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const futureEvents = (brief.upcomingMacroEvents ?? []).filter((ev) => {
+              const d = new Date(ev.date);
+              return isNaN(d.getTime()) || d >= today;
+            });
+            if (futureEvents.length === 0) return null;
+            return (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="주목 이벤트" />
               <div className="divide-y divide-border/40 pt-1">
-                {brief.upcomingMacroEvents!.map((ev, i) => {
+                {futureEvents.map((ev, i) => {
                   const ic = impactCfg(ev.impact);
                   const dc = dirCfg(ev.direction);
                   return (
@@ -482,7 +489,8 @@ function MarketBriefSection({
                 })}
               </div>
             </div>
-          )}
+          );
+          })()}
 
           {/* 핵심 키워드 */}
           {(brief.keyTopics?.length ?? 0) > 0 && (
