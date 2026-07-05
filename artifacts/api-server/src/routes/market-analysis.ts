@@ -48,7 +48,7 @@ interface BriefCache {
   data: MarketBriefResult;
   cachedAt: number;
 }
-const BRIEF_TTL = 8 * 3600_000;   // 8시간 (장전·장마감 2회 갱신 주기에 맞춤)
+const BRIEF_TTL = 2 * 3600_000;   // 2시간 (장중 주요 시점마다 갱신)
 let _briefCache: BriefCache | null = null;
 let _briefRefreshing = false;      // 백그라운드 갱신 중복 방지
 
@@ -140,7 +140,7 @@ export function invalidateBriefCache() {
 export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
-  sessionType: "morning" | "midday" | "closing" | "weekend";
+  sessionType: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend";
   leadParagraph: string;
   storyLine: string;
   marketEvents: {
@@ -362,27 +362,31 @@ async function fetchRecentIndexData() {
 // ─── Gemini 브리핑 생성 ──────────────────────────────────────────────────────
 
 /**
- * KST 기준 세션 감지 (분 단위 정밀도)
- *   UTC 21:00~02:00  (KST 06:00~11:00) → 장전  : 간밤 미국 시장 브리핑
- *   UTC 02:00~06:30  (KST 11:00~15:30) → 장중  : 오전 흐름·오후 전망 브리핑
- *   UTC 06:30~21:00  (KST 15:30~06:00) → 장마감: 당일 한국 장 리뷰·내일 준비
+ * KST 기준 세션 감지 (분 단위 정밀도) — 하루 최대 6회 브리핑
  *
- * 한국 증시 종료: 15:30 KST = 06:30 UTC
+ *  "pre_open"   KST 06:00~08:59  → 장전 준비: 간밤 미국 시장 + 오늘 전략
+ *  "morning"    KST 09:00~10:59  → 개장 초반: 개장 수급·방향 점검
+ *  "midday"     KST 11:00~12:59  → 점심 브리핑: 오전장 정리·오후 전망
+ *  "afternoon"  KST 13:00~14:59  → 오후장 중반: 수급 동향·막판 전략
+ *  "pre_close"  KST 15:00~15:29  → 장마감 직전: 막판 30분 대응
+ *  "closing"    KST 15:30~17:59  → 당일 결산: 종가 분석·내일 준비
+ *  "evening"    KST 18:00~05:59  → 야간: 미국 시장 흐름 + 내일 전략
+ *  "weekend"    토/일
  */
-function detectSession(): "morning" | "midday" | "closing" | "weekend" {
+function detectSession(): "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend" {
   const now = new Date();
-  // KST 기준 요일 (UTC+9)
-  const kstDay = new Date(now.getTime() + 9 * 3600_000).getUTCDay(); // 0=일, 6=토
+  const kstNow = new Date(now.getTime() + 9 * 3600_000);
+  const kstDay = kstNow.getUTCDay();
   if (kstDay === 0 || kstDay === 6) return "weekend";
 
-  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const MORNING_START = 21 * 60;      // 06:00 KST
-  const MIDDAY_START  =  2 * 60;      // 11:00 KST
-  const CLOSE_START   =  6 * 60 + 30; // 15:30 KST — 장 종료
-
-  if (utcMin >= MORNING_START || utcMin < MIDDAY_START) return "morning";
-  if (utcMin < CLOSE_START)  return "midday";
-  return "closing";
+  const kstMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+  if (kstMin >=  6 * 60 && kstMin <  9 * 60) return "pre_open";
+  if (kstMin >=  9 * 60 && kstMin < 11 * 60) return "morning";
+  if (kstMin >= 11 * 60 && kstMin < 13 * 60) return "midday";
+  if (kstMin >= 13 * 60 && kstMin < 15 * 60) return "afternoon";
+  if (kstMin >= 15 * 60 && kstMin < 15 * 60 + 30) return "pre_close";
+  if (kstMin >= 15 * 60 + 30 && kstMin < 18 * 60) return "closing";
+  return "evening";
 }
 
 function fmtIdx(d: { close: number; change: number | null } | null | undefined, unit = "pt") {
@@ -816,10 +820,13 @@ ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
-  const prompt = session === "morning"  ? morningPrompt
-               : session === "midday"   ? middayPrompt
-               : session === "weekend"  ? weekendPrompt
-               :                         closingPrompt;
+  const prompt = (session === "morning" || session === "pre_open")
+               ? morningPrompt
+               : (session === "midday" || session === "afternoon")
+               ? middayPrompt
+               : session === "weekend"
+               ? weekendPrompt
+               : closingPrompt;  // pre_close / closing / evening
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",

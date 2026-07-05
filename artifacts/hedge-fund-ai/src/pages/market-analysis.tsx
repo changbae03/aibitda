@@ -101,7 +101,7 @@ interface PipelineStatus {
 interface MarketBrief {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
-  sessionType?: "morning" | "midday" | "closing";
+  sessionType?: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend";
   leadParagraph?: string;
   storyLine?: string;
   marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
@@ -220,26 +220,25 @@ function MarketBriefSection({
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">AI 시장 브리핑</span>
           {/* 세션 뱃지 */}
-          {brief && !loading && brief.sessionType && (
-            <span className={cn(
-              "text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide",
-              brief.sessionType === "morning"
-                ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20"
-                : brief.sessionType === "midday"
-                ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20"
-                : brief.sessionType === "weekend"
-                ? "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20"
-                : "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20",
-            )}>
-              {brief.sessionType === "morning"
-                ? "🌅 장전 브리핑"
-                : brief.sessionType === "midday"
-                ? "☀️ 장중 브리핑"
-                : brief.sessionType === "weekend"
-                ? "📅 주말 브리핑"
-                : "🌆 장마감 브리핑"}
-            </span>
-          )}
+          {brief && !loading && brief.sessionType && (() => {
+            const s = brief.sessionType!;
+            const SESSION_META: Record<string, { label: string; cls: string }> = {
+              pre_open:  { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+              morning:   { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
+              midday:    { label: "☀️ 점심 브리핑",      cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+              afternoon: { label: "⛅ 오후장 브리핑",    cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
+              pre_close: { label: "🔔 마감 직전 브리핑", cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
+              closing:   { label: "🌆 장마감 브리핑",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+              evening:   { label: "🌙 야간 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+              weekend:   { label: "📅 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+            };
+            const meta = SESSION_META[s] ?? SESSION_META.closing;
+            return (
+              <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide", meta.cls)}>
+                {meta.label}
+              </span>
+            );
+          })()}
           {brief && !loading && (
             <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", sentimentConfig.color)}>
               {sentimentConfig.label}
@@ -1295,7 +1294,7 @@ export default function MarketAnalysis() {
             시장 분석
           </h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-            실시간 이슈 + AI 브리핑으로 장중 흐름을 파악하세요
+            장중 주요 시점마다 AI가 시장을 분석합니다
             {status?.running && status?.kospi && (
               <span className="inline-flex items-center gap-1 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -1319,9 +1318,6 @@ export default function MarketAnalysis() {
         )}
       </div>
 
-      {/* ── 장중 실시간 이슈 피드 ────────────────────────────────────────── */}
-      <LiveRadarFeed />
-
       {/* ── AI 브리핑 ───────────────────────────────────────────────────── */}
       <MarketBriefSection
         brief={brief}
@@ -1330,50 +1326,8 @@ export default function MarketAnalysis() {
         showRefresh={!!isAdmin}
       />
 
-      {/* ── 로딩 상태: 데이터가 전혀 없을 때만 전체 스피너 ───────────────── */}
-      {status?.running && !status?.kospi && !status?.kosdaq && (
-        <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <div className="text-center">
-            {status.initializing ? (
-              <>
-                <p className="text-sm font-medium text-foreground">저장된 AI 모델을 불러오는 중이에요</p>
-                <p className="text-xs text-muted-foreground mt-1">잠시만 기다려 주세요 (보통 10초 이내)</p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-medium text-foreground">AI가 시장 데이터를 분석하고 있어요 ☕</p>
-                <p className="text-xs text-muted-foreground mt-1">약 60~90초 정도 걸려요. 잠시 기다려 주세요!</p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 첫 API 호출 대기 중 */}
-      {statusLoading && !status && (
-        <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <div className="text-center">
-            <p className="text-sm font-medium text-foreground">예측 데이터를 불러오는 중이에요</p>
-            <p className="text-xs text-muted-foreground mt-1">잠시만 기다려 주세요</p>
-          </div>
-        </div>
-      )}
-
-      {/* API 응답 후 아직 준비 안 된 경우 */}
-      {!statusLoading && !status?.ready && !status?.running && !status?.error && !status?.kospi && (
-        <div className="rounded-2xl border border-border bg-card flex flex-col items-center justify-center gap-3 py-16">
-          <BrainCircuit className="w-8 h-8 text-muted-foreground/40" />
-          <div className="text-center">
-            <p className="text-sm font-medium text-foreground">AI를 준비하는 중이에요...</p>
-            <p className="text-xs text-muted-foreground mt-1">잠시 후 자동으로 시작됩니다</p>
-          </div>
-        </div>
-      )}
-
-      {/* ── 결과 영역: 데이터가 있으면 즉시 표시 (업데이트 중이어도) ────── */}
-      <AnimatePresence>
+      {/* 예측 섹션 비활성화 — 브리핑 전용 모드 */}
+      {false && <AnimatePresence>
         {(status?.kospi || status?.ready) && status?.kospi && status?.kosdaq && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -1780,49 +1734,7 @@ export default function MarketAnalysis() {
 
           </motion.div>
         )}
-      </AnimatePresence>
-
-      {/* 면책 고지 */}
-      <div className="max-w-2xl mx-auto px-4 pb-4">
-        <div className="flex items-start gap-2.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3">
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground/50" />
-          <p className="text-[11px] leading-relaxed text-muted-foreground/50">
-            본 페이지의 시장 예측 수치(3일 예상 수익률, 방향성 등)는 LSTM·GBDT 앙상블 모델이 산출한{" "}
-            <strong className="font-medium text-muted-foreground/60">참고용 예측치</strong>이며,
-            실제 시장 결과와 다를 수 있습니다. 투자 결정의 유일한 근거로 사용하지 마시고,
-            전문 금융 자문과 함께 활용하시기 바랍니다.
-            애빛다는 본 예측 정보에 기반한 투자 손실에 대해 책임을 지지 않습니다.
-          </p>
-        </div>
-      </div>
-
-      {/* 모델 버전 정보 */}
-      <div className="max-w-2xl mx-auto px-4 pb-10">
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          {status?.modelVersion && (
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
-              Model v{status.modelVersion}
-            </span>
-          )}
-          {status?.trainedAt && (
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
-              학습 완료 {new Date(status.trainedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-            </span>
-          )}
-          {status?.trainingMs && status.trainingMs > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
-              {(status.trainingMs / 1000).toFixed(0)}s
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/35 font-mono">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
-            LSTM + GBDT Ensemble
-          </span>
-        </div>
-      </div>
+      </AnimatePresence>}
     </div>
   );
 }

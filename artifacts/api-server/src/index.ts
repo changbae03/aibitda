@@ -12,6 +12,7 @@ import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
 import { runKrxFullHarvest } from "./lib/krx-full-harvester.js";
 import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
+import { refreshBriefInBackground } from "./routes/market-analysis.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
@@ -349,6 +350,21 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] US DB 갱신 실패:", e?.message ?? e)
     );
   }, 12 * 60 * 60 * 1000);
+
+  // ── 시장 브리핑 정기 갱신 — 장중 주요 시점마다 (평일 2시간 간격) ─────────────
+  // KST 기준 06:00, 09:00, 11:00, 13:00, 15:00, 15:30, 18:00에 갱신
+  // 단순 2시간 인터벌 + 시간대 체크로 구현
+  setInterval(() => {
+    const kstNow = new Date(Date.now() + 9 * 3600_000);
+    const kstDay = kstNow.getUTCDay();
+    if (kstDay === 0 || kstDay === 6) return; // 주말 스킵
+    const kstHour = kstNow.getUTCHours();
+    // 평일 06~20 KST 범위에서만 갱신
+    if (kstHour >= 6 && kstHour < 20) {
+      console.log(`[SCHEDULER] 시장 브리핑 정기 갱신 (KST ${kstHour}시)`);
+      refreshBriefInBackground(`정기갱신-${kstHour}시`);
+    }
+  }, 2 * 60 * 60 * 1000); // 2시간마다
 
   // ── 포트폴리오 종목 일일 AI 브리핑 ──────────────────────────────────────────
   // 매일 오전 8시(KST) 기준 재실행: 오늘 브리핑이 없는 종목만 생성, 중복 없음
