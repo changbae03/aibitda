@@ -244,6 +244,46 @@ export async function fetchMarketNews(): Promise<string> {
   return combined || "";
 }
 
+export async function fetchUsMarketNews(): Promise<string> {
+  const queries = [
+    "S&P500 stock market Wall Street",
+    "Federal Reserve interest rate inflation",
+    "Nvidia Apple Microsoft Google Meta Amazon Tesla earnings",
+    "US economy GDP employment CPI",
+    "oil price energy sector commodities",
+    "US China trade tariff geopolitics",
+  ];
+
+  function parseRssItems(xml: string, maxItems = 8): string[] {
+    const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
+    return items.slice(0, maxItems).flatMap(item => {
+      const cdataTitle = item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/)?.[1];
+      const plainTitle = item.match(/<title>([\s\S]*?)<\/title>/)?.[1];
+      const title = (cdataTitle ?? plainTitle ?? "").trim().replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+      const source = (item.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] ?? "").trim();
+      return title.length > 8 ? [`• ${title}${source ? ` [${source}]` : ""}`] : [];
+    });
+  }
+
+  const settled = await Promise.allSettled(
+    queries.map(async q => {
+      const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en&gl=US&ceid=US:en`;
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) return "";
+      const xml = await res.text();
+      return parseRssItems(xml, 8).join("\n");
+    })
+  );
+
+  const allLines = settled.filter(r => r.status === "fulfilled").map(r => (r as any).value as string).filter(Boolean);
+  const combined = allLines.join("\n");
+  console.log(`[us-brief] 뉴스 수집: ${combined.split("\n").filter(l => l.startsWith("•")).length}건`);
+  return combined || "";
+}
+
 // ─── 시장 데이터 수집 헬퍼 ──────────────────────────────────────────────────
 
 /** 네이버 증권 API로 KOSPI/KOSDAQ 당일 데이터 취득 (Yahoo Finance보다 하루 빠름) */
@@ -955,7 +995,7 @@ async function generateUsBrief(): Promise<MarketBriefResult> {
     fetchFREDMacro(),
     fetchECOSMacro(),
     Promise.resolve(getStatus()),
-    fetchMarketNews(),
+    fetchUsMarketNews(),
   ]);
 
   const idx      = indexData.status === "fulfilled"      ? indexData.value      : null;
@@ -992,16 +1032,17 @@ async function generateUsBrief(): Promise<MarketBriefResult> {
   ].filter(Boolean).join("\n");
 
   const macroBlock = [
-    fred?.t10y    != null ? `미국 10년 국채금리 ${fred.t10y.toFixed(2)}%` : null,
-    fred?.t2y     != null ? `미국 2년 국채금리 ${fred.t2y.toFixed(2)}%` : null,
-    fred?.yieldSpread != null ? `장단기 금리차(10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " ⚠️역전" : ""}` : null,
-    fred?.wtiOil  != null ? `WTI 유가 ${fred.wtiOil.toFixed(1)} USD/bbl` : null,
-    ecos?.usdKrw  != null ? `원달러환율 ${ecos.usdKrw.toLocaleString()}원` : null,
+    fred?.t10y    != null ? `US 10Y Treasury Yield ${fred.t10y.toFixed(2)}%` : null,
+    fred?.t2y     != null ? `US 2Y Treasury Yield ${fred.t2y.toFixed(2)}%` : null,
+    fred?.yieldSpread != null ? `Yield Curve (10Y-2Y) ${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " ⚠️Inverted" : ""}` : null,
+    fred?.wtiOil  != null ? `WTI Crude Oil ${fred.wtiOil.toFixed(1)} USD/bbl` : null,
     fred != null
       ? fred.fedTargetUpper != null && fred.fedTargetLower != null
-        ? `미국 기준금리 ${fred.fedTargetLower}~${fred.fedTargetUpper}%`
-        : fred.fedFundsRate != null ? `미국 기준금리 ${fred.fedFundsRate}%` : null
+        ? `Fed Funds Rate ${fred.fedTargetLower}~${fred.fedTargetUpper}%`
+        : fred.fedFundsRate != null ? `Fed Funds Rate ${fred.fedFundsRate}%` : null
       : null,
+    dxyL != null ? `DXY Dollar Index ${dxyL.close}` : null,
+    vixL != null ? `VIX Fear Index ${vixL.close} (${vixL.close >= 25 ? "Fear" : vixL.close >= 18 ? "Caution" : "Stable"})` : null,
   ].filter(Boolean).join(" | ");
 
   const sessionDesc =
@@ -1011,9 +1052,15 @@ async function generateUsBrief(): Promise<MarketBriefResult> {
     session === "us_overnight"  ? "미국 증시 휴장 중 (한국 낮 시간)" :
                                   "미국 증시 주말 휴장";
 
-  const prompt = `당신은 월가 전문 시장 해설가입니다. 오늘은 ${today}이고, 현재 ${sessionDesc}입니다.
-미국 증시 현황과 핵심 투자 포인트를 한국 투자자가 이해하기 쉽게 친근한 해요체로 설명해 주세요.
-첫 문장은 반드시 미국 지수 수치·등락률·핵심 이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
+  const prompt = `당신은 월가 최고 수준의 시장 전략가이자 해설가입니다. 오늘은 ${today}이고, 현재 ${sessionDesc}입니다.
+한국 투자자들이 "이 정도 분석은 어디서도 못 봤다"고 놀랄 만큼, 깊이 있고 구체적인 미국 증시 분석을 친근한 해요체로 작성하세요.
+
+🚨 절대 금지 (이를 어기면 이 브리핑은 완전히 실패입니다):
+- 코스피, 코스닥, 한국 주식시장, 한국 기업(삼성전자, SK하이닉스, 현대차 등)에 대한 내용 일체 금지
+- 이 브리핑은 순수 미국 S&P500·나스닥·다우 시장 분석이어야 합니다
+- leadParagraph, storyLine, marketEvents 모두 미국 시장 내용만 기재하세요
+
+첫 문장은 반드시 S&P500·나스닥 수치·등락률·핵심 US 이슈로 시작하세요. 아래 표현들도 절대 금지:
 "안녕하세요", "여러분", "오늘도", "반갑습니다", 날짜·요일로 시작하는 인삿말, 날씨·계절 언급, 감성적 서두.
 
 ⚠️ 미국 지수 데이터 — 반드시 그대로 사용하세요 (임의 변경 절대 금지):
@@ -1021,8 +1068,8 @@ S&P500: ${fmtDir(snpL)}
 나스닥:  ${fmtDir(nasdaqL)}
 다우존스: ${fmtDir(dowL)}
 VIX: ${vixL ? `${vixL.close} (${vixL.close >= 25 ? "공포 구간" : vixL.close >= 18 ? "경계 구간" : "안정 구간"})` : "데이터 없음"}
-SOX: ${soxL ? `${soxL.close.toLocaleString()}pt, ${soxL.change != null ? (soxL.change > 0 ? `▲+${soxL.change}%` : `▼${soxL.change}%`) : "N/A"}` : "데이터 없음"}
-DXY: ${dxyL ? `${dxyL.close}` : "데이터 없음"}
+SOX(필라델피아반도체): ${soxL ? `${soxL.close.toLocaleString()}pt, ${soxL.change != null ? (soxL.change > 0 ? `▲+${soxL.change}%` : `▼${soxL.change}%`) : "N/A"}` : "데이터 없음"}
+DXY(달러인덱스): ${dxyL ? `${dxyL.close}` : "데이터 없음"}
 
 [미국 주요 지수 최근 흐름]
 S&P500: ${snp500History}
@@ -1034,41 +1081,43 @@ ${macroBlock || "데이터 없음"}
 [주요 뉴스/이슈]
 ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단하세요"}
 
-[AI 모델 S&P500 3일 예측]
-${snp500Pred ?? "N/A"}
-
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
   "summary": "미국 증시 한 줄 요약 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
-  "leadParagraph": "S&P500·나스닥이 어떻게 움직였는지, 주요 원인 2문장. 수치 포함. (80~120자)",
-  "storyLine": "미국 증시 스토리: 어떤 이슈가 시장을 움직였는지(금리·Fed·실적·경제지표·지정학), 섹터별 흐름(기술주·에너지·금융·헬스케어·소비재), VIX·DXY 해석, 향후 전망. AI 예측 포함. (350~500자) 반드시 2~3개 단락으로 나눠 작성하고 단락 사이에 \\n\\n을 삽입하세요.",
+  "leadParagraph": "S&P500·나스닥이 어떻게 움직였는지, 왜 그랬는지 핵심 원인을 2문장으로. 반드시 구체적 수치 포함. (100~140자)",
+  "storyLine": "월가 전문가 수준의 심층 시장 분석. 아래 5가지를 모두 포함해 3~4개 단락으로 나눠 작성하세요 (단락 사이 \\n\\n 삽입, 전체 500~700자):\\n1. [Fed·금리] 현재 연준 스탠스·점도표 전망·채권시장 반응(2년물·10년물·장단기 스프레드)이 주식에 미치는 구체적 영향\\n2. [섹터 심층] 기술주(FAANGM+엔비디아)·반도체(SOX)·에너지·금융·헬스케어·소비재 각 섹터 등락 이유와 수급 흐름\\n3. [매크로 연결] CPI·고용지표·GDP·소비자심리 등 최신 경제지표가 증시 방향에 어떻게 연결되는지\\n4. [지정학·정책] 관세·무역·지정학 리스크가 특정 섹터/종목에 미치는 영향 구체적으로\\n반드시 수치와 종목명을 풍부하게 인용하고 '왜 그런지' 인과관계를 설명하세요.",
   "marketEvents": [
-    { "title": "핵심 이슈 (15자)", "impact": "이 이슈가 왜 시장에 영향을 줬는지 (60~80자)", "direction": "positive/negative/neutral" },
-    { "title": "이슈2 (Fed·금리·통화정책)", "impact": "...", "direction": "..." },
-    { "title": "이슈3 (빅테크·AI 기업 실적)", "impact": "...", "direction": "..." },
-    { "title": "이슈4 (경제지표: CPI·고용·GDP)", "impact": "...", "direction": "..." },
-    { "title": "이슈5 (에너지·유가·원자재)", "impact": "...", "direction": "..." },
-    { "title": "이슈6 (지정학·관세·무역)", "impact": "...", "direction": "..." }
+    { "title": "핵심 이슈1 (15자)", "impact": "이 이슈가 왜 시장에 영향을 줬는지 구체적 수치·종목명 포함 (70~90자)", "direction": "positive/negative/neutral" },
+    { "title": "Fed·통화정책 이슈 (15자)", "impact": "연준 발언·FOMC 결과·금리 경로가 시장에 미친 영향 (70~90자)", "direction": "..." },
+    { "title": "빅테크·반도체 이슈 (15자)", "impact": "애플·엔비디아·MS·구글·메타·아마존 등 구체적 종목 동향 (70~90자)", "direction": "..." },
+    { "title": "경제지표 이슈 (15자)", "impact": "CPI·고용·GDP·소비자심리 수치와 시장 반응 (70~90자)", "direction": "..." },
+    { "title": "에너지·원자재 이슈 (15자)", "impact": "WTI·천연가스·구리 등 원자재 동향과 에너지 섹터 영향 (70~90자)", "direction": "..." },
+    { "title": "지정학·관세·무역 이슈 (15자)", "impact": "미-중·중동·유럽 지정학 또는 관세 정책이 시장에 미친 파급 (70~90자)", "direction": "..." },
+    { "title": "금융·채권시장 이슈 (15자)", "impact": "국채금리·달러·은행주 동향과 신용시장 흐름 (70~90자)", "direction": "..." },
+    { "title": "섹터 로테이션 이슈 (15자)", "impact": "어느 섹터로 자금이 이동했고 왜 그런지 구체적으로 (70~90자)", "direction": "..." }
   ],
   "macroFactors": [
-    { "factor": "지표명", "status": "수치와 전일비", "implication": "미국 투자자에게 왜 중요한지 (40~60자)" },
-    { "factor": "...", "status": "...", "implication": "..." },
-    { "factor": "...", "status": "...", "implication": "..." },
-    { "factor": "...", "status": "...", "implication": "..." }
+    { "factor": "미국 10년 국채금리", "status": "수치와 전주대비 변화", "implication": "주식 밸류에이션·부동산·소비에 미치는 영향을 구체적으로 (50~70자)" },
+    { "factor": "장단기 금리차(10Y-2Y)", "status": "수치와 역전/정상 여부", "implication": "경기침체 신호로서 의미, 은행 수익성과의 관계 (50~70자)" },
+    { "factor": "VIX 공포지수", "status": "수치와 구간", "implication": "시장 참여자들의 실제 심리와 옵션 시장이 말하는 것 (50~70자)" },
+    { "factor": "달러인덱스(DXY)", "status": "수치와 방향", "implication": "신흥국·원자재·다국적기업 실적에 미치는 연쇄 영향 (50~70자)" },
+    { "factor": "WTI 유가", "status": "수치와 방향", "implication": "에너지주·항공·소비재 비용구조, 인플레이션 경로에 미치는 영향 (50~70자)" },
+    { "factor": "미국 기준금리", "status": "현재 수치와 다음 FOMC 전망", "implication": "기업 자금조달 비용·소비자 대출 부담·주식 할인율 영향 (50~70자)" }
   ],
   "forwardLook": [
-    { "point": "핵심 포인트 (15자)", "detail": "AI 예측 포함, 다음 세션 전망 (50~70자)", "watchFor": "지금 봐야 할 것 (25자)" },
-    { "point": "...", "detail": "...", "watchFor": "..." },
-    { "point": "...", "detail": "...", "watchFor": "..." }
+    { "point": "핵심 주목 포인트1 (15자)", "detail": "다음 세션에서 이 지표/이슈가 어떻게 전개될지 근거와 함께 구체적으로 (60~80자)", "watchFor": "반드시 체크해야 할 수치나 레벨 (25자)" },
+    { "point": "핵심 주목 포인트2 (15자)", "detail": "...", "watchFor": "..." },
+    { "point": "핵심 주목 포인트3 (15자)", "detail": "...", "watchFor": "..." }
   ],
   "upcomingMacroEvents": [
-    { "date": "구체적 날짜", "title": "이벤트명 (20자)", "description": "쉬운 설명 (60~80자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
+    { "date": "YYYY-MM-DD 형식의 구체적 날짜", "title": "이벤트명 (20자)", "description": "이 이벤트가 왜 중요한지, 어떤 결과가 나오면 시장에 어떤 영향인지 (70~90자)", "impact": "high/medium/low", "direction": "positive/negative/neutral" },
+    { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." },
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
   "keyTopics": [
-    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 미국 시장에 왜 중요한지 (50~70자)" },
+    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 미국 시장에 왜 중요한지 구체적으로 (50~70자)" },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
@@ -1076,21 +1125,24 @@ ${snp500Pred ?? "N/A"}
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." }
   ],
-  "keyRisk": "다음 세션에서 가장 조심해야 할 것 한 줄 (40~60자)",
-  "actionPoints": ["미국 시장 기준으로 투자자가 취할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
-  "recentIssues": ["핵심 이슈 요약1", "이슈2", "이슈3", "이슈4"],
-  "outlook": ["다음 세션 전망1", "전망2", "전망3"]
+  "keyRisk": "다음 세션에서 가장 조심해야 할 것 — 구체적 수치·레벨·종목 언급 (50~70자)",
+  "actionPoints": ["지금 미국 시장 흐름 기반 구체적 행동 지침1: 어떤 섹터/종목을 어떻게 (40~60자)", "행동 지침2: 리스크 관리 관점에서 (40~60자)", "행동 지침3: 다음 세션 대비 (40~60자)"],
+  "recentIssues": ["핵심 이슈 요약1 — 수치 포함", "이슈2", "이슈3", "이슈4"],
+  "outlook": ["다음 세션 전망1 — 구체적 조건과 근거 포함", "전망2", "전망3"]
 }
 
 작성 원칙:
-- S&P500·나스닥 수치를 구체적으로 인용하세요
-- 섹터별 흐름(기술주·에너지·금융·헬스케어): 어느 섹터가 오르고 내렸는지 명시
-- Fed·금리 정책이 지금 시장에 어떤 영향을 주는지 반드시 포함
-- VIX 수준이 무엇을 의미하는지 구체적으로 설명
-- 빅테크(애플·엔비디아·MS·구글·아마존·메타·테슬라) 동향 반드시 포함
-- AI 예측(S&P500: ${snp500Pred ?? "N/A"})을 forwardLook에 포함
-- actionPoints: 현재 미국 시장 흐름 기반으로 투자자가 취할 구체적 행동 지침 3가지 (각 30~50자)
-- 문체: 친근한 해요체, 수치와 함께`;
+- ⚠️ 최우선: 위에 제공된 S&P500·나스닥·VIX·SOX 수치를 반드시 그대로 사용하세요
+- S&P500·나스닥·다우·SOX 수치를 모두 구체적으로 인용하세요
+- 빅테크 7종목(애플·엔비디아·MS·구글·아마존·메타·테슬라) 동향을 반드시 포함하세요
+- 섹터별 등락 원인을 "왜 올랐는지/내렸는지"의 인과관계로 설명하세요
+- Fed 스탠스·채권시장·달러가 주식에 연결되는 메커니즘을 구체적으로 설명하세요
+- VIX 수준이 투자자 심리와 옵션 시장에서 무엇을 의미하는지 구체적으로 설명하세요
+- 경제지표(CPI·고용·소비자심리 등)와 증시 방향의 인과관계를 명확히 서술하세요
+- ⛔ upcomingMacroEvents 금지사항: 오늘(${today}) 이전에 이미 완료된 이벤트는 절대 포함 금지. 반드시 오늘 이후 예정된 이벤트만 기재하세요.
+- actionPoints: 현재 시장 상황에 맞는 실질적이고 구체적인 투자 행동 지침 3가지
+- 문체: 친근한 해요체, 전문성과 깊이를 갖추되 쉽게 읽히게
+- 절대 금지: 전문 용어 설명 없이 사용, AI 모델 예측 언급`;
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -1108,7 +1160,32 @@ ${snp500Pred ?? "N/A"}
   try {
     const match = raw.match(/\{[\s\S]*\}/);
     if (match) parsed = JSON.parse(match[0]);
-  } catch {}
+    else console.warn("[us-brief] JSON 블록 없음 — raw 응답:", raw.slice(0, 300));
+  } catch (e: any) {
+    console.warn("[us-brief] JSON 파싱 실패:", e?.message, "raw:", raw.slice(0, 300));
+  }
+
+  // 한국 시장 콘텐츠 오염 감지 — macroFactors를 데이터 기반으로 재구성
+  if (parsed) {
+    const krMacroKeywords = ["코스피", "코스닥", "한국 CPI", "원달러환율", "한국은행"];
+    const macroStr = JSON.stringify(parsed.macroFactors ?? []);
+    const hasMacroKr = krMacroKeywords.some(k => macroStr.includes(k));
+    if (hasMacroKr) {
+      console.warn("[us-brief] ⚠️ macroFactors 오염 감지 — 데이터 기반으로 재구성");
+      parsed.macroFactors = [
+        fred?.t10y    != null ? { factor: "미국 10년 국채금리", status: `${fred.t10y.toFixed(2)}%`, implication: "장기 국채금리 상승은 주식 할인율을 높여 성장주·기술주에 하방 압력" } : null,
+        fred?.yieldSpread != null ? { factor: "장단기 금리차(10Y-2Y)", status: `${fred.yieldSpread >= 0 ? "+" : ""}${fred.yieldSpread.toFixed(2)}%p${fred.yieldSpread < 0 ? " (역전)" : ""}`, implication: "역전 지속 시 경기침체 선행 신호, 은행 수익성에 구조적 압박" } : null,
+        vixL != null ? { factor: "VIX 공포지수", status: `${vixL.close} (${vixL.close >= 25 ? "공포" : vixL.close >= 18 ? "경계" : "안정"})`, implication: "옵션 시장이 반영하는 단기 변동성 기대치 — 25 이상 패닉, 18 이하 낙관" } : null,
+        dxyL != null ? { factor: "달러인덱스(DXY)", status: `${dxyL.close}`, implication: "달러 강세는 신흥국 자금 이탈·원자재 하락·미국 다국적기업 해외 실적에 부정적" } : null,
+        fred?.wtiOil != null ? { factor: "WTI 유가", status: `${fred.wtiOil.toFixed(1)} USD/bbl`, implication: "에너지 비용 상승은 기업 마진 압박·인플레이션 고착화로 Fed 긴축 장기화 우려" } : null,
+        fred != null ? {
+          factor: "미국 기준금리",
+          status: fred.fedTargetUpper != null ? `${fred.fedTargetLower}~${fred.fedTargetUpper}%` : fred.fedFundsRate != null ? `${fred.fedFundsRate}%` : "데이터 없음",
+          implication: "기업 자금조달 비용·소비자 모기지·주식 할인율에 복합적 영향"
+        } : null,
+      ].filter(Boolean);
+    }
+  }
 
   const safeArr = (v: any) => Array.isArray(v) ? v : [];
 

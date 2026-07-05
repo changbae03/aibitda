@@ -227,6 +227,12 @@ function MarketBriefSection({
       ? { label: "MED",  cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/25" }
       : { label: "LOW",  cls: "text-stone-500 bg-stone-100 border-stone-200 dark:text-muted-foreground/50 dark:bg-muted/50 dark:border-border" };
 
+  const _today = new Date(); _today.setHours(0,0,0,0);
+  const futureEvents = (brief?.upcomingMacroEvents ?? []).filter((ev) => {
+    const d = new Date(ev.date);
+    return isNaN(d.getTime()) || d >= _today;
+  });
+
   const SESSION_META: Record<string, { label: string; cls: string }> = {
     pre_open:      { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
     morning:       { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
@@ -457,14 +463,7 @@ function MarketBriefSection({
           )}
 
           {/* 주목 이벤트 */}
-          {(() => {
-            const today = new Date(); today.setHours(0,0,0,0);
-            const futureEvents = (brief.upcomingMacroEvents ?? []).filter((ev) => {
-              const d = new Date(ev.date);
-              return isNaN(d.getTime()) || d >= today;
-            });
-            if (futureEvents.length === 0) return null;
-            return (
+          {futureEvents.length > 0 && (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="주목 이벤트" />
               <div className="divide-y divide-border/40 pt-1">
@@ -489,8 +488,7 @@ function MarketBriefSection({
                 })}
               </div>
             </div>
-          );
-          })()}
+          )}
 
           {/* 핵심 키워드 */}
           {(brief.keyTopics?.length ?? 0) > 0 && (

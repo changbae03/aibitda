@@ -3,3 +3,4 @@
 - [Neon DB vs local DB split](neon-db-split.md) — API 서버는 NEON_DATABASE_URL, executeSql은 로컬 PG → 캐시 조작 시 반드시 Node에서 NEON_DATABASE_URL 직접 사용
 - [FRED daily series limit trap](fred-daily-limit.md) — DFEDTARU 같은 일별 시계열을 asc+limit=300으로 가져오면 최신값 아닌 초기값 → desc+limit=5 사용
 - [Signals self-HTTP trap](signals-self-http.md) — tomorrow-picks가 signals를 localhost HTTP로 자기 호출 시 서버 시작 직후 빈 배열 반환 → getSignalsCache()/fetchSignalsData() 직접 import로 해결
+- [US brief market param case sensitivity](us-brief-market-param.md) — brief 라우트는 market=us(소문자) 체크; curl 테스트 시 대문자 US 사용 시 KR 라우트 타서 잘못된 콘텐츠 반환
