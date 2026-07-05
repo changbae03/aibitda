@@ -113,13 +113,14 @@ function forceMeta(avg: number): { label: string; emoji: string; color: string; 
 }
 
 // 종목 단위 힘 생존 여부
-function stockMomentumAlive(s: FeedStock): "alive" | "fading" | "pressure" | "unknown" {
+function stockMomentumAlive(s: FeedStock): "alive" | "fading" | "pressure" | "easing" | "unknown" {
   if (s.priceChange == null) return "unknown";
   const priceUp  = s.priceChange > 0.5;
   const volUp    = (s.volumeRatio ?? 1) >= 1.3;
-  if (priceUp && volUp)  return "alive";
-  if (priceUp && !volUp) return "fading";
-  if (!priceUp && volUp) return "pressure";
+  if (priceUp && volUp)   return "alive";    // 주가↑ 거래량↑ — 상승 모멘텀 살아있음
+  if (priceUp && !volUp)  return "fading";   // 주가↑ 거래량↓ — 상승 힘 약해지는 중
+  if (!priceUp && volUp)  return "pressure"; // 주가↓ 거래량↑ — 매도 압력 강함
+  if (!priceUp && !volUp) return "easing";   // 주가↓ 거래량↓ — 낙폭 완화 중 (매도 압력 빠지는 중)
   return "unknown";
 }
 
@@ -1197,6 +1198,7 @@ function FeedCard({
                               if (alive === "alive")    return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">힘 살아있음 ✓</span>;
                               if (alive === "fading")   return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">힘 약해지는 중</span>;
                               if (alive === "pressure") return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">매도 압력</span>;
+                              if (alive === "easing")   return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400">낙폭 완화 중</span>;
                               return null;
                             })()}
                           </div>
