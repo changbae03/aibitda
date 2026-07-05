@@ -121,6 +121,7 @@ interface MarketBrief {
     description: string;
   }[];
   keyRisk?: string;
+  actionPoints?: string[];
   recentIssues: string[];
   outlook: string[];
   generatedAt: string;
@@ -178,6 +179,25 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
+/* ── 지수 미니 칩 ─────────────────────────────────────────────────────────── */
+function IndexChip({ name, value, change }: { name: string; value: number; change: number | null }) {
+  const up = change != null ? change >= 0 : null;
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/60">
+      <span className="text-[11px] font-semibold text-muted-foreground">{name}</span>
+      <span className="text-[13px] font-bold text-foreground tabular-nums">{value.toLocaleString()}</span>
+      {change != null && (
+        <span className={cn(
+          "text-[12px] font-bold tabular-nums",
+          up ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"
+        )}>
+          {up ? "▲" : "▼"}{Math.abs(change).toFixed(2)}%
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ── AI 브리핑 카드 ──────────────────────────────────────────────────────── */
 function MarketBriefSection({
   brief, loading, onRefresh, showRefresh = true,
@@ -187,74 +207,87 @@ function MarketBriefSection({
   onRefresh: () => void;
   showRefresh?: boolean;
 }) {
-  const sentimentConfig = brief?.sentiment === "bullish"
-    ? { color: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "상승 우세", bar: "bg-red-500 dark:bg-red-400" }
+  const sentimentCfg = brief?.sentiment === "bullish"
+    ? { label: "상승 우세", textCls: "text-red-500 dark:text-red-400", ringCls: "bg-red-500/8 border-red-500/20" }
     : brief?.sentiment === "bearish"
-    ? { color: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20", label: "하락 우세", bar: "bg-blue-500 dark:bg-blue-400" }
-    : { color: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20", label: "방향 불확실", bar: "bg-amber-500 dark:bg-amber-400" };
+    ? { label: "하락 우세", textCls: "text-blue-500 dark:text-blue-400", ringCls: "bg-blue-500/8 border-blue-500/20" }
+    : { label: "방향 불확실", textCls: "text-amber-500 dark:text-amber-400", ringCls: "bg-amber-500/8 border-amber-500/20" };
 
   const dirCfg = (d: "positive" | "negative" | "neutral") =>
     d === "positive"
-      ? { dot: "bg-red-500", badge: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "긍정" }
+      ? { border: "border-l-red-400 dark:border-l-red-500", badge: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "긍정" }
       : d === "negative"
-      ? { dot: "bg-blue-500", badge: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20", label: "부정" }
-      : { dot: "bg-stone-400 dark:bg-muted-foreground/30", badge: "text-stone-600 bg-stone-100 border-stone-300 dark:text-muted-foreground/50 dark:bg-muted/60 dark:border-border", label: "중립" };
-
-  const genTime = brief?.generatedAt
-    ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : null;
-
-  const hasRich = !!(brief?.marketEvents?.length || brief?.macroFactors?.length || brief?.forwardLook?.length || brief?.upcomingMacroEvents?.length);
+      ? { border: "border-l-blue-400 dark:border-l-blue-500", badge: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20", label: "부정" }
+      : { border: "border-l-stone-300 dark:border-l-border", badge: "text-stone-500 bg-stone-50 border-stone-200 dark:text-muted-foreground dark:bg-muted dark:border-border", label: "중립" };
 
   const impactCfg = (impact: "high" | "medium" | "low") =>
     impact === "high"
       ? { label: "HIGH", cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25" }
       : impact === "medium"
-      ? { label: "MED",  cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/25" }
+      ? { label: "MED",  cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/25" }
       : { label: "LOW",  cls: "text-stone-500 bg-stone-100 border-stone-200 dark:text-muted-foreground/50 dark:bg-muted/50 dark:border-border" };
+
+  const SESSION_META: Record<string, { label: string; cls: string }> = {
+    pre_open:      { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+    morning:       { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
+    midday:        { label: "☀️ 장중 브리핑",      cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+    afternoon:     { label: "⛅ 오후장 브리핑",    cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
+    pre_close:     { label: "🔔 마감 직전",        cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
+    closing:       { label: "🌆 장마감 브리핑",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+    evening:       { label: "🌙 야간 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+    weekend:       { label: "📅 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+    us_premarket:  { label: "🌅 US 프리마켓",      cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+    us_open:       { label: "🔔 US 정규장",        cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+    us_afterhours: { label: "🌆 US 애프터마켓",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+    us_overnight:  { label: "🌙 US 휴장 브리핑",   cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+    us_weekend:    { label: "📅 US 주말 브리핑",   cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+  };
+
+  const catColor: Record<string, string> = {
+    "정치": "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
+    "기업": "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+    "경제": "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
+    "글로벌": "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+    "산업": "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400",
+  };
+
+  const genTime = brief?.generatedAt
+    ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  const sessionMeta = brief?.sessionType ? SESSION_META[brief.sessionType] : null;
+
+  const cleanStory = (text: string) =>
+    text
+      .replace(/^(안녕하세요[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+      .replace(/^(개인\s*투자자\s*여러분[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+      .replace(/^(\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^。！!?]\s*)/i, "")
+      .replace(/^(오늘도[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+      .replace(/^(주말\s*잘\s*보내[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+      .replace(/^(반갑습니다[^。！!?\n]*[。！!?\n]?\s*)/i, "")
+      .trim();
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border flex-wrap">
+
+      {/* ── 헤더 ── */}
+      <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-border/60 bg-muted/20 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">AI 시장 브리핑</span>
-          {/* 세션 뱃지 */}
-          {brief && !loading && brief.sessionType && (() => {
-            const s = brief.sessionType!;
-            const SESSION_META: Record<string, { label: string; cls: string }> = {
-              pre_open:      { label: "🌅 장전 브리핑",        cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-              morning:       { label: "🌤 개장 브리핑",         cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
-              midday:        { label: "☀️ 점심 브리핑",         cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-              afternoon:     { label: "⛅ 오후장 브리핑",       cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
-              pre_close:     { label: "🔔 마감 직전 브리핑",    cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
-              closing:       { label: "🌆 장마감 브리핑",       cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-              evening:       { label: "🌙 야간 브리핑",         cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-              weekend:       { label: "📅 주말 브리핑",         cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
-              us_premarket:  { label: "🌅 US 프리마켓",         cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-              us_open:       { label: "🔔 US 정규장",           cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-              us_afterhours: { label: "🌆 US 애프터마켓",       cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-              us_overnight:  { label: "🌙 US 휴장 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-              us_weekend:    { label: "📅 US 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
-            };
-            const meta = SESSION_META[s] ?? SESSION_META.closing;
-            return (
-              <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide", meta.cls)}>
-                {meta.label}
-              </span>
-            );
-          })()}
-          {brief && !loading && (
-            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", sentimentConfig.color)}>
-              {sentimentConfig.label}
+          <span className="text-[13px] font-semibold text-foreground">AI 시장 브리핑</span>
+          {sessionMeta && (
+            <span className={cn("text-[10.5px] font-bold px-2.5 py-0.5 rounded-full border tracking-wide", sessionMeta.cls)}>
+              {sessionMeta.label}
+            </span>
+          )}
+          {brief && !loading && brief.sentiment && (
+            <span className={cn("text-[10.5px] font-semibold px-2.5 py-0.5 rounded-full border", sentimentCfg.ringCls, sentimentCfg.textCls)}>
+              {sentimentCfg.label}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {genTime && (
-            <span className="text-[10px] text-muted-foreground/40">{genTime} 분석</span>
-          )}
+          {genTime && <span className="text-[10px] text-muted-foreground/40">{genTime} 분석</span>}
           {showRefresh && (
             <button
               onClick={onRefresh}
@@ -268,239 +301,234 @@ function MarketBriefSection({
         </div>
       </div>
 
-      <div className="p-4 space-y-5">
-        {/* 로딩 — 컴팩트 스켈레톤 */}
-        {loading && !brief && (
-          <div className="space-y-2 py-3 animate-pulse">
-            <div className="h-4 bg-muted/60 rounded-md w-3/4" />
-            <div className="h-3 bg-muted/40 rounded-md w-full" />
-            <div className="h-3 bg-muted/40 rounded-md w-5/6" />
-          </div>
-        )}
+      {/* ── 로딩 스켈레톤 ── */}
+      {loading && !brief && (
+        <div className="px-5 py-6 space-y-3 animate-pulse">
+          <div className="h-5 bg-muted/60 rounded-lg w-2/3" />
+          <div className="h-3.5 bg-muted/40 rounded-lg w-full" />
+          <div className="h-3.5 bg-muted/40 rounded-lg w-5/6" />
+          <div className="h-3.5 bg-muted/40 rounded-lg w-4/5" />
+        </div>
+      )}
 
-        {/* 서버 브리핑 생성 중 (generating: true) */}
-        {!loading && brief?.generating && (
-          <div className="flex items-center gap-2.5 py-3 text-muted-foreground/60">
-            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-            <span className="text-xs">AI 분석 준비 중입니다. 잠시 후 자동으로 표시됩니다.</span>
-          </div>
-        )}
+      {/* ── 생성 중 ── */}
+      {!loading && brief?.generating && (
+        <div className="flex items-center gap-3 px-5 py-6 text-muted-foreground/60">
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+          <span className="text-sm">AI가 시장을 분석하고 있어요. 잠시 후 자동으로 표시됩니다.</span>
+        </div>
+      )}
 
-        {/* 에러 */}
-        {!loading && !brief && (
-          <div className="flex items-center gap-2 py-3 text-muted-foreground/40">
-            <Newspaper className="w-4 h-4" />
-            <span className="text-xs">브리핑을 불러올 수 없습니다</span>
-          </div>
-        )}
+      {/* ── 에러 ── */}
+      {!loading && !brief && (
+        <div className="flex items-center gap-2 px-5 py-6 text-muted-foreground/40">
+          <Newspaper className="w-4 h-4" />
+          <span className="text-sm">브리핑을 불러올 수 없습니다</span>
+        </div>
+      )}
 
-        {brief && !brief.generating && (
-          <>
-            {/* 헤드라인 + 리드 */}
-            <div className="space-y-2.5">
-              <h3 className="text-[16px] font-bold text-foreground leading-snug tracking-tight">
-                {brief.summary}
-              </h3>
-              {brief.leadParagraph && (
-                <p className="text-[13.5px] text-foreground/70 leading-[1.8] border-l-[2.5px] border-foreground/20 pl-3.5">
-                  {brief.leadParagraph}
-                </p>
-              )}
-            </div>
+      {/* ── 본문 ── */}
+      {brief && !brief.generating && (
+        <div className="divide-y divide-border/40">
 
-            {/* AI 해설 — 과거→현재→미래 내러티브 */}
-            {brief.storyLine && (() => {
-              const cleaned = brief.storyLine
-                .replace(/^(안녕하세요[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-                .replace(/^(개인\s*투자자\s*여러분[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-                .replace(/^(\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^。！!?]\s*)/i, "")
-                .replace(/^(오늘도[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-                .replace(/^(주말\s*잘\s*보내[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-                .replace(/^(반갑습니다[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-                .trim();
-              const paras = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
-              return (
-                <div className="space-y-1 pt-1">
-                  <SectionLabel label="시장 해설" />
-                  <div className="space-y-4 pt-2">
-                    {paras.map((para, i) => (
-                      <p
-                        key={i}
-                        className="text-[14px] text-foreground/75 font-medium leading-[1.95]"
-                      >
-                        {para}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* 풍부한 섹션이 있을 때만 표시 */}
-            {hasRich && (
-              <>
-                {/* 최근 시장 이슈 */}
-                {(brief.marketEvents?.length ?? 0) > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <SectionLabel label="이번 주 무슨 일이" />
-                    <div className="divide-y divide-border/50">
-                      {brief.marketEvents!.map((ev, i) => {
-                        const dc = dirCfg(ev.direction);
-                        return (
-                          <div key={i} className="flex gap-3 items-start py-3 first:pt-0">
-                            <span className={cn("mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full", dc.dot)} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <p className="text-[14px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
-                                  {dc.label}
-                                </span>
-                              </div>
-                              <p className="text-[13px] text-foreground/60 leading-relaxed">{ev.impact}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+          {/* 헤드라인 + 지수 칩 + 리드 */}
+          <div className="px-5 pt-5 pb-5 space-y-3.5">
+            <h3 className="text-[20px] font-bold text-foreground leading-snug tracking-tight">
+              {brief.summary}
+            </h3>
+            {(brief.kospiCurrent != null || brief.kosdaqCurrent != null) && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {brief.kospiCurrent != null && (
+                  <IndexChip name="KOSPI" value={brief.kospiCurrent} change={brief.kospiChange} />
                 )}
-
-
-                {/* 향후 전망 */}
-                {(brief.forwardLook?.length ?? 0) > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <SectionLabel label="앞으로 3거래일" />
-                    <div className="space-y-4">
-                      {brief.forwardLook!.map((fw, i) => (
-                        <div key={i} className="flex gap-4 items-start">
-                          <span className="shrink-0 text-[12px] font-black text-foreground/18 tabular-nums leading-none mt-[3px]">
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          <div className="flex-1 space-y-1">
-                            <p className="text-[14px] font-semibold text-foreground leading-snug">{fw.point}</p>
-                            <p className="text-[13px] text-foreground/65 leading-relaxed">{fw.detail}</p>
-                            <p className="text-[12px] text-foreground/40 flex items-center gap-1 pt-0.5 line-clamp-1">
-                              체크 <ChevronRight className="w-2.5 h-2.5 inline shrink-0" /> {fw.watchFor}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 향후 3~5거래일 주목 매크로 이벤트 */}
-                {(brief.upcomingMacroEvents?.length ?? 0) > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <SectionLabel label="글로벌 이벤트" />
-                    <div className="divide-y divide-border/50">
-                      {brief.upcomingMacroEvents!.map((ev, i) => {
-                        const dc = dirCfg(ev.direction);
-                        const ic = impactCfg(ev.impact);
-                        return (
-                          <div key={i} className="flex gap-3 items-start py-3 first:pt-0">
-                            <span className={cn("mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full", dc.dot)} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="text-[12px] font-semibold text-foreground/45 shrink-0">{ev.date}</span>
-                                <p className="text-[14px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                                <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>
-                                  {ic.label}
-                                </span>
-                              </div>
-                              <p className="text-[13px] text-foreground/60 leading-relaxed">{ev.description}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 오늘 시장 핵심 키워드 */}
-                {(brief.keyTopics?.length ?? 0) > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <SectionLabel label="핵심 키워드" />
-                    <div className="space-y-2.5">
-                      {brief.keyTopics!.map((topic, i) => {
-                        const catColor: Record<string, string> = {
-                          "정치": "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-500/10 dark:border-purple-500/25 dark:text-purple-400",
-                          "기업": "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-500/10 dark:border-blue-500/25 dark:text-blue-400",
-                          "경제": "bg-green-50 border-green-200 text-green-700 dark:bg-green-500/10 dark:border-green-500/25 dark:text-green-400",
-                          "글로벌": "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-500/10 dark:border-orange-500/25 dark:text-orange-400",
-                          "산업": "bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-500/10 dark:border-cyan-500/25 dark:text-cyan-400",
-                        };
-                        const cls = catColor[topic.category] ?? "bg-stone-100 border-stone-300 text-stone-600 dark:bg-muted/40 dark:border-border dark:text-muted-foreground";
-                        return (
-                          <div key={i} className="flex items-start gap-2.5 py-2 border-b border-border/40 last:border-0">
-                            <span className={cn("shrink-0 mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border leading-tight", cls)}>
-                              {topic.category}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[13px] font-semibold text-foreground leading-snug">{topic.keyword}</p>
-                              <p className="text-[11.5px] text-foreground/50 leading-relaxed line-clamp-1 mt-0.5">{topic.description}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 핵심 리스크 */}
-                {brief.keyRisk && (
-                  <div className="border-l-[2.5px] border-amber-400/60 dark:border-amber-500/40 pl-3.5 py-0.5">
-                    <p className="text-[10px] font-bold text-amber-600/70 dark:text-amber-400/50 mb-1.5 tracking-[0.12em] uppercase">주의</p>
-                    <p className="text-[12.5px] text-foreground/65 leading-relaxed">{brief.keyRisk}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* 풍부한 데이터 없을 때 폴백 */}
-            {!hasRich && (brief.recentIssues.length > 0 || brief.outlook.length > 0) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {brief.recentIssues.length > 0 && (
-                  <div className="space-y-2">
-                    <SectionLabel label="최근 이슈" />
-                    <ul className="space-y-2.5 pt-1">
-                      {brief.recentIssues.map((issue, i) => (
-                        <li key={i} className="flex items-start gap-3 text-[12.5px] text-foreground/70 leading-relaxed">
-                          <span className="shrink-0 text-[10px] font-black text-foreground/20 tabular-nums mt-[2px]">
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          {issue}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {brief.outlook.length > 0 && (
-                  <div className="space-y-2">
-                    <SectionLabel label="전망" />
-                    <ul className="space-y-2.5 pt-1">
-                      {brief.outlook.map((item, i) => (
-                        <li key={i} className="flex items-start gap-3 text-[12.5px] text-foreground/70 leading-relaxed">
-                          <span className="shrink-0 text-[10px] font-black text-foreground/20 tabular-nums mt-[2px]">
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                {brief.kosdaqCurrent != null && (
+                  <IndexChip name="KOSDAQ" value={brief.kosdaqCurrent} change={brief.kosdaqChange} />
                 )}
               </div>
             )}
-
-            {brief.stale && (
-              <p className="text-[10px] text-amber-500/60 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> 이전 분석입니다 (새로고침 실패)
+            {brief.leadParagraph && (
+              <p className="text-[14px] text-foreground/70 leading-[1.9] border-l-[3px] border-primary/25 pl-4">
+                {brief.leadParagraph}
               </p>
             )}
-          </>
-        )}
-      </div>
+          </div>
+
+          {/* 시장 해설 */}
+          {brief.storyLine && (() => {
+            const paras = cleanStory(brief.storyLine).split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+            if (!paras.length) return null;
+            return (
+              <div className="px-5 py-5 space-y-3">
+                <SectionLabel label="시장 해설" />
+                <div className="space-y-4 pt-1">
+                  {paras.map((para, i) => (
+                    <p key={i} className="text-[14px] text-foreground/75 leading-[2.0]">{para}</p>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 주요 이슈 */}
+          {(brief.marketEvents?.length ?? 0) > 0 && (
+            <div className="px-5 py-5 space-y-3">
+              <SectionLabel label="주요 이슈" />
+              <div className="space-y-2 pt-1">
+                {brief.marketEvents!.map((ev, i) => {
+                  const dc = dirCfg(ev.direction);
+                  return (
+                    <div key={i} className={cn(
+                      "flex gap-3.5 items-start px-4 py-3.5 rounded-xl bg-muted/30 border-l-[3px]",
+                      dc.border
+                    )}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
+                            {dc.label}
+                          </span>
+                          <p className="text-[13.5px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                        </div>
+                        <p className="text-[13px] text-foreground/60 leading-relaxed">{ev.impact}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 거시 지표 */}
+          {(brief.macroFactors?.length ?? 0) > 0 && (
+            <div className="px-5 py-5 space-y-3">
+              <SectionLabel label="거시 지표" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {brief.macroFactors!.map((mf, i) => (
+                  <div key={i} className="flex flex-col gap-1.5 px-4 py-3 rounded-xl bg-muted/40 border border-border/50">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[12.5px] font-semibold text-foreground">{mf.factor}</span>
+                      <span className="text-[12px] font-bold text-foreground/70 tabular-nums shrink-0 text-right">{mf.status}</span>
+                    </div>
+                    <p className="text-[11.5px] text-foreground/55 leading-relaxed">{mf.implication}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 앞으로 주목할 것 */}
+          {(brief.forwardLook?.length ?? 0) > 0 && (
+            <div className="px-5 py-5 space-y-3">
+              <SectionLabel label="앞으로 주목할 것" />
+              <div className="space-y-4 pt-1">
+                {brief.forwardLook!.map((fw, i) => (
+                  <div key={i} className="flex gap-3.5 items-start">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary flex items-center justify-center mt-0.5">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 space-y-1.5">
+                      <p className="text-[14px] font-semibold text-foreground leading-snug">{fw.point}</p>
+                      <p className="text-[13px] text-foreground/65 leading-relaxed">{fw.detail}</p>
+                      {fw.watchFor && (
+                        <p className="text-[12px] text-amber-600/70 dark:text-amber-400/60 flex items-center gap-1.5 pt-0.5">
+                          <ChevronRight className="w-3 h-3 shrink-0" />
+                          체크: {fw.watchFor}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 투자 대응 포인트 */}
+          {(brief.actionPoints?.length ?? 0) > 0 && (
+            <div className="px-5 py-5 space-y-3">
+              <SectionLabel label="투자 대응 포인트" />
+              <div className="space-y-2.5 pt-1">
+                {brief.actionPoints!.map((ap, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-primary/60 mt-2.5" />
+                    <p className="text-[13.5px] text-foreground/75 leading-relaxed">{ap}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 주목 이벤트 */}
+          {(brief.upcomingMacroEvents?.length ?? 0) > 0 && (
+            <div className="px-5 py-5 space-y-3">
+              <SectionLabel label="주목 이벤트" />
+              <div className="divide-y divide-border/40 pt-1">
+                {brief.upcomingMacroEvents!.map((ev, i) => {
+                  const ic = impactCfg(ev.impact);
+                  const dc = dirCfg(ev.direction);
+                  return (
+                    <div key={i} className="flex items-start gap-3.5 py-3.5 first:pt-0 last:pb-0">
+                      <div className="shrink-0 text-right min-w-[44px] pt-0.5">
+                        <span className="text-[11px] font-semibold text-foreground/40 leading-snug whitespace-nowrap">{ev.date}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                          <span className={cn("text-[9.5px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>{ic.label}</span>
+                          <span className={cn("text-[9.5px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>{dc.label}</span>
+                          <p className="text-[13.5px] font-semibold text-foreground leading-snug">{ev.title}</p>
+                        </div>
+                        <p className="text-[12.5px] text-foreground/55 leading-relaxed">{ev.description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 핵심 키워드 */}
+          {(brief.keyTopics?.length ?? 0) > 0 && (
+            <div className="px-5 py-4 space-y-3">
+              <SectionLabel label="핵심 키워드" />
+              <div className="flex flex-wrap gap-2 pt-1">
+                {brief.keyTopics!.map((topic, i) => {
+                  const cls = catColor[topic.category] ?? "bg-stone-100 text-stone-600 dark:bg-muted/40 dark:text-muted-foreground";
+                  return (
+                    <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/60 bg-muted/30">
+                      <span className={cn("text-[9.5px] font-bold px-1.5 py-0.5 rounded-full shrink-0", cls)}>
+                        {topic.category}
+                      </span>
+                      <span className="text-[12.5px] font-semibold text-foreground">{topic.keyword}</span>
+                      {topic.description && (
+                        <span className="text-[11.5px] text-foreground/40 max-w-[180px] truncate hidden sm:block">{topic.description}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 핵심 리스크 */}
+          {brief.keyRisk && (
+            <div className="px-5 py-4">
+              <div className="flex items-start gap-3 px-4 py-4 rounded-xl bg-amber-500/5 dark:bg-amber-500/8 border border-amber-400/25 dark:border-amber-500/20">
+                <AlertCircle className="w-4 h-4 text-amber-500/70 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-bold text-amber-600/70 dark:text-amber-400/50 mb-1.5 tracking-[0.12em] uppercase">핵심 리스크</p>
+                  <p className="text-[13px] text-foreground/70 leading-relaxed">{brief.keyRisk}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {brief.stale && (
+            <div className="px-5 pb-3">
+              <p className="text-[10px] text-amber-500/60 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3" /> 이전 분석 데이터입니다 (새 분석이 백그라운드에서 준비 중)
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -559,6 +559,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   ],
 ${keyTopicsSchema},
   "keyRisk": "오늘 한국 시장에서 가장 조심해야 할 것 한 줄 (40~60자)",
+  "actionPoints": ["투자자가 오늘 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["간밤 미국 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["오늘 전망1", "전망2", "전망3"]
 }
@@ -572,6 +573,7 @@ ${keyTopicsSchema},
 - 국내 기업 이슈(삼성전자·SK하이닉스·현대차·LG에너지솔루션 실적·파업·인수합병)와 정치 이슈(관세·규제)를 반드시 포함
 - 바이오·2차전지·방산·조선·게임 등 테마 섹터 이슈 최소 1개 포함
 - impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 (예: "SOX 2.3% 상승으로 삼성전자·SK하이닉스 동반 강세 예상")
+- actionPoints: 오늘 장세를 기준으로 투자자가 취할 수 있는 구체적 행동 지침 3가지 (매수·관망·리스크 헤지 등, 각 30~50자)
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지 ("수급", "밸류에이션" 등 → 쉬운 말로 풀어서)
 - 문체: 친근한 해요체`;
@@ -665,6 +667,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   ],
 ${keyTopicsSchema},
   "keyRisk": "지금 가장 조심해야 할 것 한 줄 (40~60자)",
+  "actionPoints": ["투자자가 내일·이번 주 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["오늘 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["내일 전망1", "전망2", "전망3"]
 }
@@ -677,6 +680,7 @@ ${keyTopicsSchema},
 - 바이오·2차전지·방산·조선 등 테마 섹터 이슈 최소 1개 포함
 - upcomingMacroEvents는 향후 3~5거래일 예정 이벤트 (FOMC, CPI, 관세, 정치 이슈 등)
 - impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 작성
+- actionPoints: 오늘 장 결과를 기반으로 내일·이번 주 투자자가 취할 구체적 행동 지침 3가지 (매수·매도·관망·섹터 전환 등, 각 30~50자)
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
@@ -739,6 +743,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   ],
 ${keyTopicsSchema},
   "keyRisk": "오후 장에서 가장 조심해야 할 것 한 줄 (40~60자)",
+  "actionPoints": ["지금 이 시점에 투자자가 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["오전 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["오후 전망1", "전망2", "전망3"]
 }
@@ -750,6 +755,7 @@ ${keyTopicsSchema},
 - 바이오·2차전지·방산·조선 등 테마 섹터 이슈 최소 1개 포함
 - '지금', '오후에', '마감 전' 등 시간감 있는 표현을 사용하세요
 - impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 작성
+- actionPoints: 오후 장세를 기준으로 투자자가 마감 전까지 취할 구체적 행동 지침 3가지 (각 30~50자)
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
@@ -811,6 +817,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
   ],
 ${keyTopicsSchema},
   "keyRisk": "다음 주 가장 조심해야 할 것 한 줄 (40~60자)",
+  "actionPoints": ["다음 주 개장 전 투자자가 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["이번 주 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["다음 주 전망1", "전망2", "전망3"]
 }
@@ -823,6 +830,7 @@ ${keyTopicsSchema},
 - upcomingMacroEvents는 다음 주 예정 이벤트 (FOMC, CPI, 관세, 기업 실적 등) 중심으로
 - '이번 주', '지난 주', '다음 주 월요일' 등 주말 맥락에 맞는 표현을 사용하세요
 - impact 문장은 구체적 수치나 종목명을 넣어 실질적으로 작성
+- actionPoints: 주말 리뷰 기반으로 다음 주 투자자가 취할 구체적 행동 지침 3가지 (각 30~50자)
 ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
@@ -867,6 +875,7 @@ ${keyTopicsRule}
     upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 6),
     keyTopics:            safeArr(parsed?.keyTopics).slice(0, 7),
     keyRisk:              parsed?.keyRisk              ?? "",
+    actionPoints:         safeArr(parsed?.actionPoints).slice(0, 3),
     recentIssues:         safeArr(parsed?.recentIssues).slice(0, 5),
     outlook:              safeArr(parsed?.outlook).slice(0, 4),
     generatedAt:          new Date().toISOString(),
@@ -1064,6 +1073,7 @@ ${snp500Pred ?? "N/A"}
     { "keyword": "...", "category": "...", "description": "..." }
   ],
   "keyRisk": "다음 세션에서 가장 조심해야 할 것 한 줄 (40~60자)",
+  "actionPoints": ["미국 시장 기준으로 투자자가 취할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["핵심 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["다음 세션 전망1", "전망2", "전망3"]
 }
@@ -1075,6 +1085,7 @@ ${snp500Pred ?? "N/A"}
 - VIX 수준이 무엇을 의미하는지 구체적으로 설명
 - 빅테크(애플·엔비디아·MS·구글·아마존·메타·테슬라) 동향 반드시 포함
 - AI 예측(S&P500: ${snp500Pred ?? "N/A"})을 forwardLook에 포함
+- actionPoints: 현재 미국 시장 흐름 기반으로 투자자가 취할 구체적 행동 지침 3가지 (각 30~50자)
 - 문체: 친근한 해요체, 수치와 함께`;
 
   const response = await ai.models.generateContent({
@@ -1109,6 +1120,7 @@ ${snp500Pred ?? "N/A"}
     upcomingMacroEvents: safeArr(parsed?.upcomingMacroEvents).slice(0, 6),
     keyTopics:           safeArr(parsed?.keyTopics).slice(0, 7),
     keyRisk:             parsed?.keyRisk             ?? "",
+    actionPoints:        safeArr(parsed?.actionPoints).slice(0, 3),
     recentIssues:        safeArr(parsed?.recentIssues).slice(0, 5),
     outlook:             safeArr(parsed?.outlook).slice(0, 4),
     generatedAt:         new Date().toISOString(),
