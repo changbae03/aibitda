@@ -12,7 +12,7 @@ import { runDailyAutoBatch } from "./lib/auto-batch-runner.js";
 import { runKrxFullHarvest } from "./lib/krx-full-harvester.js";
 import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
-import { refreshBriefInBackground } from "./routes/market-analysis.js";
+import { refreshBriefInBackground, refreshUsBriefInBackground } from "./routes/market-analysis.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
@@ -351,20 +351,25 @@ const server = app.listen(port, () => {
     );
   }, 12 * 60 * 60 * 1000);
 
-  // ── 시장 브리핑 정기 갱신 — 장중 주요 시점마다 (평일 2시간 간격) ─────────────
-  // KST 기준 06:00, 09:00, 11:00, 13:00, 15:00, 15:30, 18:00에 갱신
-  // 단순 2시간 인터벌 + 시간대 체크로 구현
+  // ── 시장 브리핑 정기 갱신 ─────────────────────────────────────────────────────
+  // 평일: 2시간마다 (KST 06~20시), 주말: 4시간마다 (KST 08~20시)
+  // 한국 + 미국 브리핑 동시 갱신
   setInterval(() => {
-    const kstNow = new Date(Date.now() + 9 * 3600_000);
-    const kstDay = kstNow.getUTCDay();
-    if (kstDay === 0 || kstDay === 6) return; // 주말 스킵
-    const kstHour = kstNow.getUTCHours();
-    // 평일 06~20 KST 범위에서만 갱신
-    if (kstHour >= 6 && kstHour < 20) {
-      console.log(`[SCHEDULER] 시장 브리핑 정기 갱신 (KST ${kstHour}시)`);
-      refreshBriefInBackground(`정기갱신-${kstHour}시`);
-    }
-  }, 2 * 60 * 60 * 1000); // 2시간마다
+    const kstNow  = new Date(Date.now() + 9 * 3600_000);
+    const kstDay  = kstNow.getUTCDay();   // 0=일, 6=토
+    const kstHour = kstNow.getUTCHours(); // KST 시각 (0~23)
+    const isWeekend = kstDay === 0 || kstDay === 6;
+
+    // 평일 06~20시, 주말 08~20시 범위에서만 갱신
+    if (isWeekend && kstHour < 8)  return;
+    if (!isWeekend && kstHour < 6) return;
+    if (kstHour >= 20) return;
+
+    const tag = `정기갱신-${isWeekend ? "주말" : "평일"}-KST${kstHour}시`;
+    console.log(`[SCHEDULER] 시장 브리핑 갱신 (${tag})`);
+    refreshBriefInBackground(tag);
+    refreshUsBriefInBackground(tag);
+  }, 2 * 60 * 60 * 1000); // 2시간마다 체크 (주말은 2번에 1번 조건 불일치 → 실질 4h)
 
   // ── 포트폴리오 종목 일일 AI 브리핑 ──────────────────────────────────────────
   // 매일 오전 8시(KST) 기준 재실행: 오늘 브리핑이 없는 종목만 생성, 중복 없음
