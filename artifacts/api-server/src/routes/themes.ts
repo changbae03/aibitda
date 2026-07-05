@@ -2029,6 +2029,12 @@ const SIGNALS_TTL = 20 * 60 * 1000; // 20분 캐시
 let signalsCache: { data: SignalGroup[]; cachedAt: number } | null = null;
 
 /** tomorrow-picks 등 다른 라우트가 인메모리 signals 캐시를 직접 읽을 수 있도록 export */
+/** 트렌딩 테마 이름 목록 (외부에서 실시간 키워드 추출용) */
+export function getTrendingThemeNames(): string[] {
+  if (!trendingCache) return [];
+  return trendingCache.themes.map((t) => t.name).filter(Boolean);
+}
+
 export function getSignalsCache(): SignalGroup[] {
   if (!signalsCache) return [];
   if (Date.now() - signalsCache.cachedAt > SIGNALS_TTL) return [];

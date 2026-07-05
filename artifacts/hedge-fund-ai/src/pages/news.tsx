@@ -504,6 +504,14 @@ export default function NewsPage() {
   const [tlError, setTlError]               = useState<string | null>(null);
   const [tlExpandedIdx, setTlExpandedIdx]   = useState<number | null>(null);
   const tlInputRef                          = useRef<HTMLInputElement>(null);
+  const [trendingKeywords, setTrendingKeywords] = useState<string[]>(PRESET_KEYWORDS);
+
+  useEffect(() => {
+    fetch(getApiUrl("/api/market-analysis/trending-keywords"))
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.keywords) && d.keywords.length >= 4) setTrendingKeywords(d.keywords); })
+      .catch(() => {});
+  }, []);
 
   const fetchTimeline = useCallback(async (kw: string, force = false) => {
     if (!kw.trim()) return;
@@ -1003,9 +1011,9 @@ export default function NewsPage() {
                 </button>
               </form>
 
-              {/* 프리셋 키워드 칩 */}
+              {/* 트렌딩 키워드 칩 */}
               <div className="flex flex-wrap gap-2">
-                {PRESET_KEYWORDS.map(kw => (
+                {trendingKeywords.map(kw => (
                   <button
                     key={kw}
                     onClick={() => { setTlInput(kw); fetchTimeline(kw); }}

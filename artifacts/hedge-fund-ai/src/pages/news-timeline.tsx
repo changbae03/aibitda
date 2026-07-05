@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Search, Sparkles, Clock, ExternalLink, RefreshCw,
   Globe, ChevronDown, ChevronUp,
@@ -53,7 +53,15 @@ export default function NewsTimeline() {
   const { isEn } = useLanguage();
   const [activeKeyword, setActiveKeyword] = useState("");
   const [inputVal, setInputVal] = useState("");
+  const [trendingKeywords, setTrendingKeywords] = useState<string[]>(PRESET_KEYWORDS);
   const [data, setData] = useState<TimelineData | null>(null);
+
+  useEffect(() => {
+    fetch(getApiUrl("/api/market-analysis/trending-keywords"))
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.keywords) && d.keywords.length >= 4) setTrendingKeywords(d.keywords); })
+      .catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -144,9 +152,9 @@ export default function NewsTimeline() {
         </button>
       </form>
 
-      {/* 프리셋 키워드 칩 */}
+      {/* 트렌딩 키워드 칩 */}
       <div className="flex flex-wrap gap-2">
-        {PRESET_KEYWORDS.map(kw => (
+        {trendingKeywords.map(kw => (
           <button
             key={kw}
             onClick={() => handlePreset(kw)}

@@ -7,6 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import YahooFinance from "yahoo-finance2";
 import { pool } from "@workspace/db";
 import { getUserId } from "../lib/credits.js";
+import { getTrendingThemeNames } from "./themes.js";
 
 const router = Router();
 
@@ -1441,6 +1442,42 @@ JSON만 출력하세요.`;
   } catch (e: any) {
     console.error("[intraday-comment] 오류:", e?.message);
     res.status(500).json({ error: e?.message });
+  }
+});
+
+// GET /api/market-analysis/trending-keywords
+// 현재 시장 브리프의 keyTopics + 트렌딩 테마명을 합쳐 실시간 추천 키워드 반환
+router.get("/trending-keywords", (_req, res) => {
+  try {
+    const keywords: string[] = [];
+
+    // 한국 브리프 keyTopics
+    if (_briefCache?.data?.keyTopics) {
+      for (const t of _briefCache.data.keyTopics) {
+        if (t.keyword && !keywords.includes(t.keyword)) keywords.push(t.keyword);
+      }
+    }
+
+    // 미국 브리프 keyTopics
+    if (_usBriefCache?.data?.keyTopics) {
+      for (const t of _usBriefCache.data.keyTopics) {
+        if (t.keyword && !keywords.includes(t.keyword)) keywords.push(t.keyword);
+      }
+    }
+
+    // 트렌딩 테마명 (최대 5개 추가)
+    const themeNames = getTrendingThemeNames().slice(0, 5);
+    for (const name of themeNames) {
+      if (!keywords.includes(name)) keywords.push(name);
+    }
+
+    // 최대 12개, 없으면 폴백
+    const FALLBACK = ["이란", "미중갈등", "연준 금리", "반도체", "트럼프 관세", "우크라이나", "엔비디아", "삼성전자", "원/달러", "OPEC"];
+    const result = keywords.length >= 4 ? keywords.slice(0, 12) : FALLBACK;
+
+    res.json({ keywords: result, fromCache: !!((_briefCache || _usBriefCache)) });
+  } catch (e) {
+    res.json({ keywords: ["이란", "미중갈등", "연준 금리", "반도체", "트럼프 관세", "우크라이나", "엔비디아", "삼성전자", "원/달러", "OPEC"], fromCache: false });
   }
 });
 
