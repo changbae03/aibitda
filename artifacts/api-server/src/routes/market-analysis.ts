@@ -501,6 +501,23 @@ async function generateBrief(): Promise<MarketBriefResult> {
   const soxL    = idx?.sox?.at(-1)    ?? null;
   const dxyL    = idx?.dxy?.at(-1)    ?? null;
 
+  // ── 미국 시장 데이터 신선도 판단 ────────────────────────────────────────────
+  // Yahoo Finance는 마지막 거래일 데이터를 반환 → 휴장일을 직접 감지해야 함
+  const usDataAgeDays = snpL?.date
+    ? Math.round((new Date(idx!.todayKST).getTime() - new Date(snpL.date).getTime()) / 86_400_000)
+    : 0;
+  // 1일: 어제 거래(화~토 KST 장전) | 2일: 금요일(월요일 장전 정상) | ≥3일: 공휴일 포함 휴장
+  const usHolidayPeriod = usDataAgeDays >= 3;
+  const usWeekendOnly   = usDataAgeDays === 2; // 주말만(월요일 장전)
+  const usSessionLabel  = usHolidayPeriod
+    ? `직전 거래일(${snpL!.date}) 미국 시장`
+    : usWeekendOnly
+    ? "지난 금요일 미국 시장"
+    : "간밤 미국 시장";
+  const usHolidayNote   = usHolidayPeriod
+    ? `\n⚠️ 미국 시장 공휴일·주말 휴장 안내: 직전 거래일(${snpL!.date}) 데이터입니다. 오늘 KST ${idx!.todayKST} 기준 ${usDataAgeDays}일 경과. "간밤"이라는 표현은 절대 사용하지 마세요. 대신 "지난 ${snpL!.date} 거래일" 또는 "직전 거래일" 등 정확한 표현을 사용하세요.`
+    : "";
+
   const usIndicesBlock = [
     snpL   ? `S&P500 ${fmtIdx(snpL)}`                                              : null,
     nasdaqL ? `나스닥 ${fmtIdx(nasdaqL)}`                                          : null,
@@ -540,17 +557,18 @@ async function generateBrief(): Promise<MarketBriefResult> {
 
   // ── 장전 프롬프트 ──────────────────────────────────────────────────────────
   const morningPrompt = `당신은 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장 개장 전입니다.
-간밤에 미국 시장에서 무슨 일이 있었는지, 그리고 오늘 우리 시장에 어떤 영향이 올지를 쉽게 설명해 주세요.
+${usSessionLabel}에서 무슨 일이 있었는지, 그리고 오늘 우리 시장에 어떤 영향이 올지를 쉽게 설명해 주세요.
 주식을 막 시작한 사람도 이해할 수 있게, 친근한 해요체로 써주세요.
 첫 문장은 반드시 시장 상황·수치·이슈로 시작하세요. 아래 표현들은 절대 금지입니다:
 "안녕하세요", "여러분", "개인 투자자 여러분", "오늘도", "반갑습니다", "잘 지내고 계신가요", "좋은 아침", "안녕들 하세요", 날짜·요일로 시작하는 인삿말, 날씨·계절 언급, 감성적 서두.
+${usHolidayNote}
 
-⚠️ 간밤 미국 시장 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
+⚠️ ${usSessionLabel} 방향 — 이 데이터를 반드시 그대로 사용하세요 (임의 변경 절대 금지):
 S&P500: ${snpL ? `${snpL.close.toLocaleString()}pt, ${snpL.change != null ? (snpL.change > 0 ? `▲+${snpL.change}% 상승` : snpL.change < 0 ? `▼${snpL.change}% 하락` : "보합") : "N/A"}` : "데이터 없음"}
 나스닥: ${nasdaqL ? `${nasdaqL.close.toLocaleString()}pt, ${nasdaqL.change != null ? (nasdaqL.change > 0 ? `▲+${nasdaqL.change}% 상승` : nasdaqL.change < 0 ? `▼${nasdaqL.change}% 하락` : "보합") : "N/A"}` : "데이터 없음"}
 → 미국 지수가 하락했으면 반드시 하락으로, 상승했으면 상승으로 서술하세요.
 
-[간밤 미국 주요 지수 (최신)]
+[${usSessionLabel} 주요 지수 (최신)]
 ${usIndicesBlock || "데이터 없음"}
 
 [거시경제 지표]
@@ -567,12 +585,12 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
 
 아래 JSON 형식으로만 응답하세요 (코드블록·설명 없이):
 {
-  "summary": "간밤 미국 시장 한 줄 요약 (20자 내외, 명사형)",
+  "summary": "${usSessionLabel} 한 줄 요약 (20자 내외, 명사형)",
   "sentiment": "bullish 또는 bearish 또는 neutral",
-  "leadParagraph": "간밤 미국 시장 전체 분위기를 2문장으로. 주요 지수 등락 수치 포함. (80~120자)",
+  "leadParagraph": "${usSessionLabel} 전체 분위기를 2문장으로. 주요 지수 등락 수치 포함. (80~120자)",
   "storyLine": "왜 미국 시장이 그렇게 움직였는지, 어떤 이슈가 있었는지(뉴스 헤드라인 참고), 그래서 오늘 한국 시장에 어떤 영향이 예상되는지 이야기처럼. SOX·달러 움직임, 주요 섹터(반도체·바이오·2차전지·방산) 영향, 기관·외국인 수급 동향도 포함. (350~500자) 반드시 2~3개 단락으로 나눠 작성하고 단락 사이에 \\n\\n을 삽입하세요.",
   "marketEvents": [
-    { "title": "간밤 핵심 이슈 (15자)", "impact": "오늘 우리 시장에 왜 중요한지 쉽게 (60~80자)", "direction": "positive 또는 negative 또는 neutral" },
+    { "title": "${usSessionLabel.replace(/\\(.*?\\)/, '').trim()} 핵심 이슈 (15자)", "impact": "오늘 우리 시장에 왜 중요한지 쉽게 (60~80자)", "direction": "positive 또는 negative 또는 neutral" },
     { "title": "이슈2 (미국·글로벌)", "impact": "...", "direction": "..." },
     { "title": "이슈3 (반도체·SOX)", "impact": "...", "direction": "..." },
     { "title": "이슈4 (국내 대형주 기업)", "impact": "...", "direction": "..." },
@@ -601,12 +619,12 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
 ${keyTopicsSchema},
   "keyRisk": "오늘 한국 시장에서 가장 조심해야 할 것 한 줄 (40~60자)",
   "actionPoints": ["투자자가 오늘 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
-  "recentIssues": ["간밤 미국 이슈 요약1", "이슈2", "이슈3", "이슈4"],
+  "recentIssues": ["${usSessionLabel} 이슈 요약1", "이슈2", "이슈3", "이슈4"],
   "outlook": ["오늘 전망1", "전망2", "전망3"]
 }
 
 작성 원칙:
-- ⚠️ 최우선 수칙: 프롬프트 상단 "간밤 미국 시장 방향" 블록의 S&P500·나스닥 등락을 반드시 그대로 사용하세요. 미국 지수가 하락했으면 하락으로 서술해야 합니다. 이를 어기면 심각한 사실 오보입니다.
+- ⚠️ 최우선 수칙: 프롬프트 상단 "${usSessionLabel} 방향" 블록의 S&P500·나스닥 등락을 반드시 그대로 사용하세요. 미국 지수가 하락했으면 하락으로 서술해야 합니다. 이를 어기면 심각한 사실 오보입니다.${usHolidayPeriod ? `\n- ⛔ 절대 금지: "간밤" 표현 사용. 직전 거래일(${snpL!.date})이 공휴일·주말 이전 거래일임을 명확히 표현하세요.` : ""}
 - 미국 지수 수치(S&P500, 나스닥, 다우, SOX)와 달러인덱스를 구체적으로 인용하세요
 - SOX(필라델피아 반도체)는 삼성전자·SK하이닉스와 직결되므로 반드시 포함하세요
 - 달러 강약이 원화·수출주에 미치는 영향을 설명하세요
