@@ -521,7 +521,7 @@ async function generateBrief(): Promise<MarketBriefResult> {
         : fred.fedFundsRate != null ? `미국 기준금리 ${fred.fedFundsRate}% (참고)` : null
       : null,
     ecos?.baseRate != null ? `한국 기준금리 ${ecos.baseRate}%` : null,
-    ecos?.cpiYoY   != null ? `한국 CPI ${ecos.cpiYoY}% YoY`   : null,
+    ecos?.cpiYoY   != null ? `한국 CPI ${Number(ecos.cpiYoY).toFixed(2)}% YoY`   : null,
   ].filter(Boolean).join(" | ");
 
   // ── 공통 JSON 스키마 (keyTopics 포함) ─────────────────────────────────────
