@@ -141,7 +141,7 @@ ${relStep.slice(0, 600) || "(없음)"}`;
 
     const accStr = directionAccuracy !== null ? `${Math.round(directionAccuracy)}%` : "N/A";
     const devStr = avgPriceDeviation !== null
-      ? `${avgPriceDeviation > 0 ? "+" : ""}${avgPriceDeviation.toFixed(1)}%p (${avgPriceDeviation > 0 ? "과대평가" : "과소평가"} 경향)`
+      ? `${avgPriceDeviation >= 0 ? "+" : ""}${avgPriceDeviation.toFixed(1)}% (업사이드 실현율 — 100%=목표달성, 0%=제자리, 음수=역행)`
       : "N/A";
 
     const prompt = `당신은 주식 리서치 모델의 체계적 오류를 진단하는 전문가입니다.
@@ -200,7 +200,7 @@ async function runSectorPriorUpdateAgent(
     const p = currentPrior ?? { waccRange: "", terminalG: "", peersNote: "", biasRisk: "", specificLevers: [] };
     const accStr = directionAccuracy !== null ? `${Math.round(directionAccuracy)}%` : "N/A";
     const devStr = avgDeviation !== null
-      ? `${avgDeviation > 0 ? "+" : ""}${avgDeviation.toFixed(1)}%p (${avgDeviation > 0 ? "과대평가" : "과소평가"} 경향)`
+      ? `${avgDeviation >= 0 ? "+" : ""}${avgDeviation.toFixed(1)}% (업사이드 실현율 — 100%=목표달성, 0%=제자리, 음수=역행)`
       : "N/A";
 
     const prompt = `당신은 AI 주식 분석 시스템의 섹터 밸류에이션 보정 전문가입니다.
@@ -411,7 +411,19 @@ export async function autoRecalibrate(): Promise<{
       stats.directionTotal++;
     }
 
-    const deviationPct = ((targetPrice - currentPrice) / startPrice) * 100;
+    // 업사이드/다운사이드 실현율: 100% = 목표주가 달성, 0% = 제자리, 음수 = 역행
+    // (기존 공식은 "남은 갭"을 측정했으나, 이는 예측 정확도가 아닌 목표가 크기를 반영함)
+    let deviationPct: number;
+    if (bullish === true && targetPrice > startPrice) {
+      // 매수 분석: 예측 업사이드 중 현재까지 실현된 비율
+      deviationPct = ((currentPrice - startPrice) / (targetPrice - startPrice)) * 100;
+    } else if (bullish === false && targetPrice < startPrice) {
+      // 매도 분석: 예측 다운사이드 중 현재까지 실현된 비율
+      deviationPct = ((startPrice - currentPrice) / (startPrice - targetPrice)) * 100;
+    } else {
+      // Hold 또는 방향 불일치: 시작가 대비 현재 수익률
+      deviationPct = ((currentPrice - startPrice) / startPrice) * 100;
+    }
     stats.deviationSum += deviationPct;
     stats.deviationCount++;
 
@@ -494,6 +506,91 @@ export async function autoRecalibrate(): Promise<{
   return { analysesProcessed: analyses.length, sectorsUpdated: updatedSectors, sectors };
 }
 
+// ─── 가설 결과 자동 업데이트 ────────────────────────────────────────────────
+// pending 상태인 가설의 현재가를 조회해서 목표주가 달성 여부를 업데이트합니다.
+export async function updateHypothesesOutcomes(): Promise<{ updated: number; errors: number }> {
+  const { rows } = await pool.query(
+    `SELECT id, ticker, target_price, entry_price, created_at
+     FROM hypotheses
+     WHERE outcome = 'pending'
+     ORDER BY created_at ASC
+     LIMIT 50`
+  );
+
+  let updated = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      const ticker = row.ticker as string;
+      const targetPrice = parseFloat(row.target_price);
+      const entryPrice = parseFloat(row.entry_price);
+      const createdAt = new Date(row.created_at);
+      const ageMs = Date.now() - createdAt.getTime();
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+
+      const currentPrice = await fetchCurrentPrice(ticker);
+      if (!currentPrice || isNaN(entryPrice) || isNaN(targetPrice)) continue;
+
+      // 방향 확인: 목표주가가 진입가보다 높으면 매수, 낮으면 매도
+      const isBullish = targetPrice > entryPrice;
+      const directionCorrect = isBullish
+        ? currentPrice > entryPrice
+        : currentPrice < entryPrice;
+
+      // 목표주가 달성 여부 (±5% 허용)
+      const targetAchieved = isBullish
+        ? currentPrice >= targetPrice * 0.95
+        : currentPrice <= targetPrice * 1.05;
+
+      // 정확도 점수: 업사이드 실현율 (0~100%, 역방향이면 음수)
+      let accuracyScore: number;
+      const range = Math.abs(targetPrice - entryPrice);
+      if (range === 0) {
+        accuracyScore = 0;
+      } else if (isBullish) {
+        accuracyScore = Math.max(-100, Math.min(200, ((currentPrice - entryPrice) / range) * 100));
+      } else {
+        accuracyScore = Math.max(-100, Math.min(200, ((entryPrice - currentPrice) / range) * 100));
+      }
+
+      // 결과 판정 (30일 이후부터만 확정, 그 전엔 progress만 기록)
+      let outcome: string;
+      if (targetAchieved) {
+        outcome = "target_achieved";
+      } else if (ageDays > 365) {
+        // 12개월 이상 → 미달성 확정
+        outcome = directionCorrect ? "partial_correct" : "incorrect";
+      } else if (ageDays > 30) {
+        // 30~365일: 중간 진척 상태 기록 (pending 유지, score만 갱신)
+        outcome = "pending";
+      } else {
+        // 30일 미만: 너무 이름 — 스킵
+        continue;
+      }
+
+      await pool.query(
+        `UPDATE hypotheses
+         SET actual_price = $1, accuracy_score = $2, outcome = $3, notes = $4, updated_at = NOW()
+         WHERE id = $5`,
+        [
+          currentPrice,
+          Math.round(accuracyScore * 10) / 10,
+          outcome,
+          `${ageDays.toFixed(0)}일 경과 | 현재가 ${currentPrice.toLocaleString()} | ${isBullish ? "매수" : "매도"} | 방향 ${directionCorrect ? "✓" : "✗"} | 목표달성 ${targetAchieved ? "✓" : "✗"}`,
+          row.id,
+        ]
+      );
+      updated++;
+    } catch {
+      errors++;
+    }
+  }
+
+  console.log(`[hypothesis-update] ${updated}건 갱신, ${errors}건 오류`);
+  return { updated, errors };
+}
+
 router.post("/performance/recalculate", async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -505,11 +602,14 @@ router.post("/performance/recalculate", async (req, res) => {
       return res.status(403).json({ error: "관리자 권한이 필요합니다" });
     }
 
-    const result = await autoRecalibrate();
+    const [result, hypoResult] = await Promise.all([
+      autoRecalibrate(),
+      updateHypothesesOutcomes().catch((e) => { console.error("[hypothesis-update] 실패:", e); return { updated: 0, errors: 0 }; }),
+    ]);
     if (result.analysesProcessed === 0) {
-      return res.json({ message: "보정 가능한 데이터가 없습니다. 30일 이상 된 분석이 필요합니다.", count: 0 });
+      return res.json({ message: "보정 가능한 데이터가 없습니다. 30일 이상 된 분석이 필요합니다.", count: 0, hypothesesUpdated: hypoResult.updated });
     }
-    return res.json({ message: "모델 보정 완료", ...result });
+    return res.json({ message: "모델 보정 완료", ...result, hypothesesUpdated: hypoResult.updated });
   } catch (err) {
     console.error("[performance/recalculate] error:", err);
     return res.status(500).json({ error: String(err) });

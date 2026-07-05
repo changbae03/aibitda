@@ -7226,6 +7226,26 @@ async function executeStep(
           console.error("[learning] Failed to save auto_learning:", e);
         }
       }
+
+      // ── 가설 자동 생성 (hypotheses 테이블 — 성과 추적을 위한 기준점 기록) ────
+      if (targetPrice && entryPrice && investmentVerdict && analysis.companyName) {
+        (async () => {
+          try {
+            const upsidePct = ((targetPrice - entryPrice) / entryPrice) * 100;
+            const hypothesisText = `${investmentVerdict} — 목표주가 ${targetPrice.toLocaleString()}원/달러, 진입가 ${entryPrice.toLocaleString()} 대비 ${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}% 업사이드. 12개월 내 목표가 달성 여부 추적.`;
+            await pool.query(
+              `INSERT INTO hypotheses
+                 (analysis_id, ticker, company_name, hypothesis_text, target_price, entry_price, time_horizon, outcome, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, '12months', 'pending', NOW(), NOW())
+               ON CONFLICT DO NOTHING`,
+              [id, analysis.ticker, analysis.companyName, hypothesisText, targetPrice, entryPrice]
+            );
+            console.log(`[hypothesis] #${id} ${analysis.ticker} 가설 생성 완료 (TP=${targetPrice}, EP=${entryPrice})`);
+          } catch (e) {
+            console.error(`[hypothesis] #${id} 가설 생성 실패:`, e);
+          }
+        })();
+      }
       // ────────────────────────────────────────────────────────────────────────
     } else if (nextStep) {
       await rawQuery(
@@ -7326,11 +7346,10 @@ async function runPipelineBackground(id: number): Promise<void> {
         refreshBriefForTicker(rows[0].ticker).catch(console.error);
         console.log(`[pipeline-bg] ${rows[0].ticker} 포트폴리오 브리핑 갱신 트리거`);
 
-        // 자동배치 분석(user_id IS NULL)이면 30초 후 AI 자체 검수 실행
-        if (rows[0].user_id === null) {
-          scheduleAnalysisSelfReview(id);
-          console.log(`[pipeline-bg] analysis#${id} 자체 검수 스케줄 등록 (30초 후)`);
-        }
+        // 모든 완료 분석에 30초 후 AI 자체 검수 실행
+        scheduleAnalysisSelfReview(id);
+        console.log(`[pipeline-bg] analysis#${id} 자체 검수 스케줄 등록 (30초 후)`);
+
       }
     } catch {}
   }
