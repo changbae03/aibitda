@@ -9,7 +9,7 @@ import {
   CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
   Cpu, Database, GitMerge, ChevronRight, Zap,
   ChevronDown, Newspaper, Sparkles, CalendarDays, Info,
-  Shield, Globe, Lock,
+  Shield, Globe, Lock, Radio, ChevronUp,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -934,6 +934,214 @@ function ReturnComparisonChart({
   );
 }
 
+/* ── 장중 실시간 이슈 피드 ──────────────────────────────────────────────── */
+interface RadarItem {
+  id: string;
+  text: string;
+  date: string;
+}
+interface IntradayComment {
+  id: string;
+  comment: string;
+  urgency: "high" | "medium" | "low";
+  watchFor: string;
+}
+
+function LiveRadarFeed() {
+  const [items, setItems] = useState<RadarItem[]>([]);
+  const [comments, setComments] = useState<Record<string, IntradayComment>>({});
+  const [loading, setLoading] = useState(true);
+  const [commenting, setCommenting] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+
+  const fetchComments = useCallback(async (newItems: RadarItem[]) => {
+    if (!newItems.length || commenting) return;
+    setCommenting(true);
+    try {
+      const r = await fetch(getApiUrl("/api/market-analysis/intraday-comment"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ items: newItems.slice(0, 8) }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const map: Record<string, IntradayComment> = {};
+        for (const c of (data.comments ?? [])) map[c.id] = c;
+        setComments(prev => ({ ...prev, ...map }));
+      }
+    } catch { /* 실패 시 무시 */ }
+    finally { setCommenting(false); }
+  }, [commenting]);
+
+  const fetchRadar = useCallback(async () => {
+    try {
+      const r = await fetch(getApiUrl("/api/news/radar"), { credentials: "include" });
+      if (!r.ok) return;
+      const data = await r.json();
+      const fetched: RadarItem[] = (data.items ?? []).slice(0, 10).map((it: any) => ({
+        id: it.id,
+        text: it.text ?? "",
+        date: it.date ?? "",
+      }));
+      setItems(fetched);
+      setLastRefresh(new Date());
+
+      const newItems = fetched.filter(it => !seenIdsRef.current.has(it.id));
+      if (newItems.length > 0) {
+        for (const it of newItems) seenIdsRef.current.add(it.id);
+        await fetchComments(newItems);
+      }
+    } catch { /* 네트워크 오류 무시 */ }
+    finally { setLoading(false); }
+  }, [fetchComments]);
+
+  useEffect(() => {
+    fetchRadar();
+    const t = setInterval(fetchRadar, 3 * 60_000); // 3분마다 갱신
+    return () => clearInterval(t);
+  }, [fetchRadar]);
+
+  const urgencyConfig = (u: "high" | "medium" | "low") =>
+    u === "high"
+      ? { cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "즉시 대응", dot: "bg-red-500 animate-pulse" }
+      : u === "medium"
+      ? { cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20", label: "주의 관찰", dot: "bg-amber-400" }
+      : { cls: "text-stone-500 bg-stone-100 border-stone-200 dark:text-muted-foreground/50 dark:bg-muted/60 dark:border-border", label: "참고", dot: "bg-stone-400" };
+
+  const isNew = (dateStr: string) => {
+    if (!dateStr) return false;
+    const t = new Date(dateStr).getTime();
+    return !isNaN(t) && (Date.now() - t < 10 * 60_000);
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <div className="relative flex items-center">
+            <Radio className="w-4 h-4 text-red-500 dark:text-red-400" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-ping opacity-75" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
+          </div>
+          <span className="text-sm font-semibold text-foreground">장중 실시간 이슈</span>
+          <span className="text-[10px] text-muted-foreground/40 font-medium">3분마다 자동 갱신</span>
+          {commenting && (
+            <span className="flex items-center gap-1 text-[10px] text-primary/60">
+              <Loader2 className="w-3 h-3 animate-spin" /> AI 분석 중
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {lastRefresh && (
+            <span className="text-[10px] text-muted-foreground/35">
+              {lastRefresh.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신
+            </span>
+          )}
+          <button
+            onClick={() => { setLoading(true); fetchRadar(); }}
+            className="p-1.5 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground/50 hover:text-foreground"
+            title="새로고침"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+          </button>
+          <button
+            onClick={() => setCollapsed(v => !v)}
+            className="p-1.5 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground/50 hover:text-foreground"
+          >
+            {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {!collapsed && (
+        <div className="divide-y divide-border/50">
+          {loading && !items.length && (
+            <div className="px-4 py-6 flex items-center justify-center gap-2 text-sm text-muted-foreground/50">
+              <Loader2 className="w-4 h-4 animate-spin" /> 실시간 이슈 불러오는 중...
+            </div>
+          )}
+          {!loading && !items.length && (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground/40">
+              현재 새로운 이슈가 없습니다
+            </div>
+          )}
+          <AnimatePresence>
+            {items.map((item) => {
+              const c = comments[item.id];
+              const cfg = urgencyConfig(c?.urgency ?? "low");
+              return (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="px-4 py-3.5 space-y-2"
+                >
+                  {/* 뉴스 헤드라인 */}
+                  <div className="flex items-start gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                      {c && <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        {isNew(item.date) && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500 text-white tracking-wide">NEW</span>
+                        )}
+                        {c?.urgency && (
+                          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full border", cfg.cls)}>
+                            {cfg.label}
+                          </span>
+                        )}
+                        {item.date && (
+                          <span className="text-[10px] text-muted-foreground/40">
+                            {(() => {
+                              try {
+                                return new Date(item.date).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+                              } catch { return item.date; }
+                            })()}
+                          </span>
+                        )}
+                        {c?.watchFor && (
+                          <span className="text-[10px] text-primary/70 font-medium bg-primary/8 px-1.5 py-0.5 rounded-full">
+                            👀 {c.watchFor}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] text-foreground/85 leading-relaxed line-clamp-2">
+                        {item.text}
+                      </p>
+                    </div>
+                  </div>
+                  {/* AI 코멘트 */}
+                  {c?.comment && (
+                    <div className="ml-3 bg-muted/40 rounded-xl px-3 py-2.5 border border-border/50">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Sparkles className="w-3 h-3 text-primary/60" />
+                        <span className="text-[10px] font-semibold text-primary/60">AI 장중 코멘트</span>
+                      </div>
+                      <p className="text-[12px] text-foreground/80 leading-relaxed">
+                        {c.comment}
+                      </p>
+                    </div>
+                  )}
+                  {!c && !commenting && (
+                    <div className="ml-3 h-5 flex items-center">
+                      <div className="h-2 bg-muted/50 rounded w-3/4 animate-pulse" />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── 수치 카드 ───────────────────────────────────────────────────────────── */
 function StatCard({
   emoji, label, value, desc, highlight,
@@ -1084,10 +1292,10 @@ export default function MarketAnalysis() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">
-            AI 시장 예측
+            시장 분석
           </h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-            코스피·코스닥의 3일 앞을 AI가 예측합니다
+            실시간 이슈 + AI 브리핑으로 장중 흐름을 파악하세요
             {status?.running && status?.kospi && (
               <span className="inline-flex items-center gap-1 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -1110,6 +1318,9 @@ export default function MarketAnalysis() {
           </button>
         )}
       </div>
+
+      {/* ── 장중 실시간 이슈 피드 ────────────────────────────────────────── */}
+      <LiveRadarFeed />
 
       {/* ── AI 브리핑 ───────────────────────────────────────────────────── */}
       <MarketBriefSection

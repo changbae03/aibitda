@@ -6,7 +6,7 @@ import {
   User, Search, ChevronRight, Download, Share, Briefcase, Lightbulb, Building2,
   LayoutDashboard, Activity, Bot, Users, Tag, FileText, LayoutGrid,
   StickyNote, Megaphone, MessageSquare, Headphones, SlidersHorizontal,
-  ShieldCheck, Shield, Newspaper, Globe, Zap, Target,
+  ShieldCheck, Shield, Newspaper, Globe, Zap, Target, TrendingUp,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
@@ -97,6 +97,7 @@ const NAV_GROUPS = [
     label: "매크로 분석",
     labelEn: "Macro",
     items: [
+      { href: "/market-analysis", label: "시장 분석",     labelEn: "Market Analysis",  Icon: TrendingUp },
       { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
       { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
       { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },

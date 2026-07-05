@@ -1002,4 +1002,84 @@ router.get("/accuracy-history", async (req, res) => {
   }
 });
 
+// ─── 장중 실시간 이슈 코멘트 ─────────────────────────────────────────────────
+interface IntradayCommentResult {
+  comments: {
+    id: string;
+    comment: string;
+    urgency: "high" | "medium" | "low";
+    watchFor: string;
+  }[];
+  generatedAt: string;
+}
+
+const _intradayCache = new Map<string, { data: IntradayCommentResult; cachedAt: number }>();
+const INTRADAY_TTL = 20 * 60_000; // 20분
+
+// POST /api/market-analysis/intraday-comment
+// Body: { items: { id: string; text: string; date: string }[] }
+router.post("/intraday-comment", async (req, res) => {
+  try {
+    const items: { id: string; text: string; date: string }[] = req.body?.items ?? [];
+    if (!items.length) { res.json({ comments: [], generatedAt: new Date().toISOString() }); return; }
+
+    const cacheKey = items.map(i => i.id).sort().join(",");
+    const cached = _intradayCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < INTRADAY_TTL) {
+      res.json(cached.data);
+      return;
+    }
+
+    const newsLines = items
+      .slice(0, 8)
+      .map((it, i) => `[${i + 1}] (${it.date}) ${it.text.slice(0, 300)}`)
+      .join("\n");
+
+    const prompt = `당신은 한국 주식 시장 전문 애널리스트입니다. 지금은 장중입니다.
+아래는 방금 들어온 실시간 시장 뉴스 헤드라인입니다. 각 뉴스에 대해 장중 투자자가 즉시 활용할 수 있는 짧고 명확한 코멘트를 작성하세요.
+
+뉴스 목록:
+${newsLines}
+
+각 뉴스에 대해 JSON 배열로 답하세요. urgency는 "high"(즉각 대응 필요), "medium"(주의 관찰), "low"(참고용) 중 하나.
+형식:
+[
+  {
+    "id": "뉴스 번호(1부터)",
+    "comment": "장중 대응 코멘트 (2-3문장, 한국어, 쉬운 표현)",
+    "urgency": "high|medium|low",
+    "watchFor": "주목할 종목/섹터/지표 (20자 이내)"
+  }
+]
+JSON만 출력하세요.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
+    });
+
+    const raw = response.text ?? "[]";
+    let parsed: any[] = [];
+    try { parsed = JSON.parse(raw.replace(/```json\n?|```/g, "").trim()); } catch { parsed = []; }
+
+    const comments = items.slice(0, 8).map((item, i) => {
+      const match = parsed.find((p: any) => String(p.id) === String(i + 1)) ?? parsed[i];
+      return {
+        id: item.id,
+        comment: match?.comment ?? "분석 중입니다.",
+        urgency: (match?.urgency ?? "low") as "high" | "medium" | "low",
+        watchFor: match?.watchFor ?? "",
+      };
+    });
+
+    const result: IntradayCommentResult = { comments, generatedAt: new Date().toISOString() };
+    _intradayCache.set(cacheKey, { data: result, cachedAt: Date.now() });
+    res.json(result);
+  } catch (e: any) {
+    console.error("[intraday-comment] 오류:", e?.message);
+    res.status(500).json({ error: e?.message });
+  }
+});
+
 export default router;
