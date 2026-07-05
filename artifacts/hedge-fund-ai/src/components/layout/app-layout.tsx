@@ -94,6 +94,16 @@ function NoticeBanner({ settings }: { settings: NoticeSettings }) {
 
 const NAV_GROUPS = [
   {
+    label: "매크로 분석",
+    labelEn: "Macro",
+    items: [
+      { href: "/market-analysis", label: "AI 시장예측",   labelEn: "AI Forecast",      Icon: LineChart },
+      { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
+      { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
+      { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
+    ],
+  },
+  {
     label: "기업분석",
     labelEn: "Company",
     items: [
@@ -102,16 +112,6 @@ const NAV_GROUPS = [
       { href: "/history",      label: "최근 본 분석",   labelEn: "Recent Reports",  Icon: BookOpen },
       { href: "/themes",       label: "테마 및 수급 분석", labelEn: "Theme & Flow", Icon: Lightbulb },
       { href: "/popular",      label: "애빛다 통계",    labelEn: "Statistics",  Icon: BarChart2 },
-    ],
-  },
-  {
-    label: "매크로 분석",
-    labelEn: "Macro",
-    items: [
-      { href: "/market-analysis", label: "AI 시장예측",   labelEn: "AI Forecast",      Icon: LineChart },
-      { href: "/etf-analysis",    label: "ETF 분석",     labelEn: "ETF Analysis",     Icon: BarChart2 },
-      { href: "/news",            label: "경제 뉴스피드", labelEn: "News Feed",        Icon: Newspaper },
-      { href: "/calendar",        label: "마켓 캘린더",   labelEn: "Market Calendar", Icon: CalendarDays },
     ],
   },
 ];
