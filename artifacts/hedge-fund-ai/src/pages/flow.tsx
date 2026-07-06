@@ -320,14 +320,15 @@ function SignalBadge({ label, active, icon }: { label: string; active: boolean; 
 }
 
 export function PreSurgeWidget() {
-  const [data,       setData]       = useState<PreSurgeCandidate[]>([]);
-  const [backtest,   setBacktest]   = useState<BacktestSummary | null>(null);
-  const [loading,    setLoading]    = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [open,       setOpen]       = useState(true);
-  const [cachedAt,   setCachedAt]   = useState<number | null>(null);
-  const [expanded,   setExpanded]   = useState<string | null>(null);
-  const [showBacktest, setShowBacktest] = useState(false);
+  const [data,          setData]          = useState<PreSurgeCandidate[]>([]);
+  const [backtest,      setBacktest]      = useState<BacktestSummary | null>(null);
+  const [loading,       setLoading]       = useState(true);   // 초기부터 로딩 표시
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [open,          setOpen]          = useState(true);
+  const [cachedAt,      setCachedAt]      = useState<number | null>(null);
+  const [expanded,      setExpanded]      = useState<string | null>(null);
+  const [showBacktest,  setShowBacktest]  = useState(false);
+  const [serverScanning, setServerScanning] = useState(false); // 서버 스캔 중 폴링용
 
   const load = useCallback(async (force = false) => {
     if (force) setRefreshing(true); else setLoading(true);
@@ -338,14 +339,24 @@ export function PreSurgeWidget() {
       const res = await fetch(url, { method: force ? "POST" : "GET", credentials: "include" });
       if (!res.ok) return;
       const j = await res.json();
-      setData(Array.isArray(j.data) ? j.data : []);
+      const candidates = Array.isArray(j.data) ? j.data : [];
+      setData(candidates);
       setBacktest(j.backtest ?? null);
       setCachedAt(j.cachedAt ?? null);
+      // 서버가 스캔 중이고 아직 결과 없으면 폴링 모드
+      setServerScanning(j.scanning === true && candidates.length === 0);
     } catch { /* silent */ }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // 서버 스캔 중일 때 20초마다 재조회
+  useEffect(() => {
+    if (!serverScanning) return;
+    const id = setInterval(() => load(), 20_000);
+    return () => clearInterval(id);
+  }, [serverScanning, load]);
 
   const timeStr = cachedAt
     ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
@@ -450,27 +461,30 @@ export function PreSurgeWidget() {
                 )}
               </AnimatePresence>
 
-              {/* 로딩 */}
-              {loading && (
+              {/* 로딩 / 서버 스캔 중 */}
+              {(loading || serverScanning) && data.length === 0 && (
                 <div className="space-y-2 pt-1">
                   {[0, 1, 2].map(i => (
                     <div key={i} className="h-16 rounded-xl bg-muted/30 animate-pulse" />
                   ))}
-                  <p className="text-[11px] text-muted-foreground/40 text-center pt-1">
-                    전 종목 15영업일 스캔 중… (2~4분 소요)
-                  </p>
+                  <div className="flex items-center justify-center gap-1.5 pt-1">
+                    <RefreshCw className="w-3 h-3 text-emerald-500/60 animate-spin" />
+                    <p className="text-[11px] text-muted-foreground/50">
+                      {serverScanning ? "서버에서 전 종목 스캔 중… 잠시 후 자동 업데이트" : "스캔 데이터 불러오는 중…"}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* 데이터 없음 */}
-              {!loading && data.length === 0 && (
+              {/* 데이터 없음 (스캔도 완료, 진짜 빈 결과) */}
+              {!loading && !serverScanning && data.length === 0 && (
                 <div className="py-8 text-center space-y-1.5">
                   <Telescope className="w-6 h-6 text-muted-foreground/20 mx-auto" />
                   <p className="text-[12px] text-muted-foreground/40">
-                    새로고침 버튼을 눌러 스캔을 시작하세요
+                    현재 전조 신호 종목 없음
                   </p>
                   <p className="text-[11px] text-muted-foreground/30">
-                    최초 스캔 2~4분 소요 · 이후 1시간 캐시
+                    새로고침으로 재스캔 · 이후 1시간 캐시
                   </p>
                 </div>
               )}

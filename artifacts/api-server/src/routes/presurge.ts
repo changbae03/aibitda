@@ -105,31 +105,68 @@ async function getCached(forceRefresh = false): Promise<CachedPresurge> {
   return runScan();
 }
 
-/* ── 서버 시작 시 DB 복원 (유효한 결과만 복원) ──────────────────────── */
+/* ── 서버 시작 시 DB 복원 → 없으면 자동 스캔 ───────────────────────── */
 loadFromDB().then(db => {
   if (db && isCacheValid(db)) {
     memCache = db;
-    console.log(`[presurge] DB 캐시 복원 (${db.result.candidates.length}개)`);
-  } else if (db) {
-    console.log(`[presurge] DB 캐시 무효 (${db.result.candidates.length}개) — 첫 요청 시 재스캔`);
+    console.log(`[presurge] DB 캐시 복원 (${db.result.candidates.length}개) — 즉시 서빙 가능`);
+  } else {
+    const reason = db ? `DB 캐시 무효 (${db.result.candidates.length}개)` : "캐시 없음";
+    console.log(`[presurge] ${reason} — 15초 후 자동 스캔 시작`);
+    setTimeout(() => {
+      runScan()
+        .then(c => console.log(`[presurge] 자동 스캔 완료: ${c.result.candidates.length}개`))
+        .catch(e => console.error("[presurge] 자동 스캔 실패:", e));
+    }, 15_000);
   }
 }).catch(() => {});
 
+/* ── 매일 17:30 KST 정기 스캔 스케줄 ───────────────────────────────── */
+(function scheduleDailyRefresh() {
+  const kstNow   = new Date(Date.now() + 9 * 3600_000);
+  const nextRun  = new Date(kstNow);
+  nextRun.setUTCHours(8, 30, 0, 0); // 17:30 KST = 08:30 UTC
+  if (nextRun <= kstNow) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+  const msUntil = nextRun.getTime() - kstNow.getTime();
+  setTimeout(() => {
+    console.log("[presurge] 정기 스캔 시작 (17:30 KST)");
+    runScan()
+      .then(c => console.log(`[presurge] 정기 스캔 완료: ${c.result.candidates.length}개`))
+      .catch(e => console.error("[presurge] 정기 스캔 실패:", e));
+    scheduleDailyRefresh();
+  }, msUntil);
+  console.log(`[presurge] 다음 정기 스캔: ${Math.round(msUntil / 60000)}분 후 (17:30 KST)`);
+})();
+
 /* ── GET /market/presurge ─────────────────────────────────────────── */
-router.get("/market/presurge", async (_req, res) => {
-  try {
-    const cached = await getCached();
+router.get("/market/presurge", (_req, res) => {
+  // 스캔 중이면 즉시 반환 (클라이언트가 폴링)
+  if (scanning) {
     return res.json({
-      data:       cached.result.candidates,
-      backtest:   cached.result.backtest,
-      tradingDays: cached.result.tradingDays,
-      cachedAt:   cached.cachedAt,
-      cached:     true,
+      data:        memCache?.result.candidates ?? [],
+      backtest:    memCache?.result.backtest    ?? null,
+      tradingDays: memCache?.result.tradingDays ?? 0,
+      cachedAt:    memCache?.cachedAt           ?? null,
+      scanning:    true,
     });
-  } catch (err) {
-    console.error("[presurge] GET 오류:", err);
-    return res.status(500).json({ error: "스캔 실패" });
   }
+  // 유효 캐시 있으면 즉시 반환
+  if (memCache && isCacheValid(memCache)) {
+    return res.json({
+      data:        memCache.result.candidates,
+      backtest:    memCache.result.backtest,
+      tradingDays: memCache.result.tradingDays,
+      cachedAt:    memCache.cachedAt,
+      scanning:    false,
+    });
+  }
+  // 캐시 없음 — 백그라운드 스캔 트리거 후 즉시 반환
+  if (!scanning) {
+    runScan()
+      .then(c => console.log(`[presurge] 온디맨드 스캔 완료: ${c.result.candidates.length}개`))
+      .catch(e => console.error("[presurge] 온디맨드 스캔 실패:", e));
+  }
+  return res.json({ data: [], backtest: null, tradingDays: 0, cachedAt: null, scanning: true });
 });
 
 /* ── POST /market/presurge/refresh ────────────────────────────────── */
@@ -137,11 +174,11 @@ router.post("/market/presurge/refresh", async (_req, res) => {
   try {
     const cached = await getCached(true);
     return res.json({
-      data:       cached.result.candidates,
-      backtest:   cached.result.backtest,
+      data:        cached.result.candidates,
+      backtest:    cached.result.backtest,
       tradingDays: cached.result.tradingDays,
-      cachedAt:   cached.cachedAt,
-      cached:     false,
+      cachedAt:    cached.cachedAt,
+      scanning:    false,
     });
   } catch (err) {
     console.error("[presurge] refresh 오류:", err);
