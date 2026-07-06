@@ -103,6 +103,8 @@ export interface ShortRow {
 const ALLOWED_PYKRX_TYPES = new Set([
   "investor", "short_market", "ohlcv", "ohlcv_both",
   "naver_trending", "top_volume", "top_gainers",
+  "cap", "ohlcv_market", "etf_search", "etf_holdings",
+  "short_balance", "investor_stocks", "presurge_scan",
 ]);
 const KRX_DATE_RE = /^\d{8}$/;
 const ALLOWED_MARKETS = new Set(["KOSPI", "KOSDAQ", "ALL", "KOSPI200"]);
@@ -137,7 +139,7 @@ async function callPykrx(
     proc.stdout.on("data", (d) => (stdout += d.toString()));
     proc.stderr.on("data", (d) => (stderr += d.toString()));
 
-    proc.on("close", (code) => {
+    proc.on("close", (_code) => {
       if (stderr) console.warn(`[pykrx][${type}] stderr:`, stderr.slice(0, 300));
       // pykrx가 stdout에 에러/경고 메시지를 섞어 출력할 수 있으므로
       // 마지막 유효한 JSON 줄(배열/객체로 시작)을 역순 탐색
@@ -150,7 +152,7 @@ async function callPykrx(
           if (Array.isArray(parsed)) {
             resolve(parsed);
           } else {
-            console.warn("[pykrx] non-array result:", parsed);
+            // 배열이 아닌 객체 — 빈 배열로 반환 (callPykrxAny 사용 필요)
             resolve([]);
           }
           return;
@@ -165,6 +167,45 @@ async function callPykrx(
     proc.on("error", (e) => {
       console.warn("[pykrx] spawn error:", e.message);
       resolve([]);
+    });
+  });
+}
+
+/** pykrx 호출 — 배열/객체 모두 허용 (presurge_scan 등 객체 반환 타입용) */
+async function callPykrxAny(
+  type: string,
+  fromDate: string,
+  toDate: string,
+  market = "ALL",
+  timeoutMs = 300_000,
+): Promise<any> {
+  validatePykrxArgs(type, fromDate, toDate, market);
+  return new Promise((resolve) => {
+    const proc = spawn(PYTHON_BIN, [SCRIPT, type, fromDate, toDate, market], {
+      env: { ...process.env },
+      timeout: timeoutMs,
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => (stdout += d.toString()));
+    proc.stderr.on("data", (d) => (stderr += d.toString()));
+    proc.on("close", (_code) => {
+      if (stderr) console.warn(`[pykrx][${type}] stderr:`, stderr.slice(0, 300));
+      const lines = stdout.split("\n").reverse();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || (!trimmed.startsWith("[") && !trimmed.startsWith("{"))) continue;
+        try {
+          resolve(JSON.parse(trimmed));
+          return;
+        } catch { /* 계속 탐색 */ }
+      }
+      console.warn(`[pykrx][${type}] JSON parse error, stdout:`, stdout.slice(0, 200));
+      resolve(null);
+    });
+    proc.on("error", (e) => {
+      console.warn(`[pykrx][${type}] spawn error:`, e.message);
+      resolve(null);
     });
   });
 }
@@ -377,6 +418,58 @@ export async function fetchBothMarketsOHLCV(
     (r): r is MarketOHLCVRow =>
       typeof r.ticker === "string" && typeof r.change === "number",
   );
+}
+
+// ── 급등 전조 스캔 ─────────────────────────────────────────────────────
+
+export interface PresurgeCandidate {
+  ticker:        string;
+  market:        "KOSPI" | "KOSDAQ";
+  name:          string;
+  close:         number;
+  change:        number;
+  score:         number;
+  volExpansion:  number;
+  volDryupDays:  number;
+  priceRangePct: number;
+  nearHighPct:   number;
+  maAligned:     boolean;
+  momentum3d:    number;
+  bbWidthPct:    number;
+}
+
+export interface PresurgeScanResult {
+  candidates:  PresurgeCandidate[];
+  backtest:    {
+    totalEvents: number;
+    avgSurgePct: number;
+    avgT1VolRatio: number;
+    avgT1DryupDays: number;
+    period: string;
+  } | null;
+  tradingDays: number;
+  scannedAt:   string;
+}
+
+/**
+ * 최근 N영업일치 KOSPI+KOSDAQ 전 종목 OHLCV를 스캔해
+ * 급등 전조(거래량 수축→팽창·박스권·이동평균 정배열) 종목을 점수화해 반환.
+ * @param fromDate 시작 영업일 YYYYMMDD (보통 15영업일 전)
+ * @param toDate   오늘 YYYYMMDD
+ */
+export async function fetchPresurgeScan(
+  fromDate: string,
+  toDate:   string,
+): Promise<PresurgeScanResult> {
+  // Python 스크립트가 최대 4분 소요 (15일×2시장 병렬)
+  // callPykrxAny 사용: presurge_scan은 배열이 아닌 객체를 반환
+  const obj = await callPykrxAny("presurge_scan", fromDate, toDate, "ALL", 300_000);
+  return {
+    candidates:  Array.isArray(obj?.candidates) ? obj.candidates : [],
+    backtest:    obj?.backtest ?? null,
+    tradingDays: obj?.tradingDays ?? 0,
+    scannedAt:   obj?.scannedAt ?? toDate,
+  };
 }
 
 // ── 종목별 투자자 순매수 (pykrx) ──────────────────────────────────────

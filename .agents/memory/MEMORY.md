@@ -4,3 +4,4 @@
 - [FRED daily series limit trap](fred-daily-limit.md) — DFEDTARU 같은 일별 시계열을 asc+limit=300으로 가져오면 최신값 아닌 초기값 → desc+limit=5 사용
 - [Signals self-HTTP trap](signals-self-http.md) — tomorrow-picks가 signals를 localhost HTTP로 자기 호출 시 서버 시작 직후 빈 배열 반환 → getSignalsCache()/fetchSignalsData() 직접 import로 해결
 - [US brief market param case sensitivity](us-brief-market-param.md) — brief 라우트는 market=us(소문자) 체크; curl 테스트 시 대문자 US 사용 시 KR 라우트 타서 잘못된 콘텐츠 반환
+- [callPykrx object vs array](pykrx-object-return.md) — callPykrx는 배열 전용; 객체 반환 타입엔 callPykrxAny 사용, 빈 캐시 오염 시 isCacheValid로 차단

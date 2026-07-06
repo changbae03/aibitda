@@ -418,6 +418,227 @@ def main():
                     print(f"[investor_stocks] {ticker} 실패: {e}", file=sys.stderr)
             emit(result)
 
+        # ── 급등 전조 스캔 (N일치 전 종목 OHLCV → 기술적 지표 → 점수화) ────────
+        elif data_type == "presurge_scan":
+            import math
+            import statistics as _stat
+            import concurrent.futures
+
+            def _safe_int(v, default=0):
+                try:
+                    f = float(v)
+                    return default if math.isnan(f) else int(f)
+                except Exception:
+                    return default
+
+            def _safe_float(v, default=0.0):
+                try:
+                    f = float(v)
+                    return default if math.isnan(f) else round(f, 4)
+                except Exception:
+                    return default
+
+            # 1. 기준 종목으로 영업일 목록 추출
+            with StdoutToStderr():
+                ref_df = krx.get_market_ohlcv_by_date(from_date, to_date, "000660")
+            if ref_df is None or ref_df.empty:
+                emit({"candidates": [], "backtest": None, "error": "no trading dates"})
+                return
+
+            trading_dates = [str(d)[:10].replace("-", "") for d in ref_df.index]
+            trading_dates = trading_dates[-15:]   # 최대 15 영업일
+
+            # 2. 날짜×시장 조합별 전 종목 OHLCV 병렬 수집
+            per_ticker: dict = {}   # ticker → {market, days:{date→{close,volume,change}}}
+
+            def _fetch_one(date: str, mkt: str):
+                df = krx.get_market_ohlcv_by_ticker(date, market=mkt)
+                rows = []
+                if df is not None and not df.empty:
+                    has_change = "등락률" in df.columns
+                    for ticker, row in df.iterrows():
+                        c  = _safe_int(row.get("종가",  0))
+                        v  = _safe_int(row.get("거래량", 0))
+                        ch = _safe_float(row.get("등락률", 0.0)) if has_change else 0.0
+                        if v > 0 and c >= 500:
+                            rows.append((str(ticker), mkt, c, v, ch))
+                return date, mkt, rows
+
+            _real_stdout = sys.stdout
+            sys.stdout   = sys.stderr   # pykrx 내부 출력 억제
+
+            tasks = [(d, mkt) for d in trading_dates for mkt in ["KOSPI", "KOSDAQ"]]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+                futs = [ex.submit(_fetch_one, d, mkt) for d, mkt in tasks]
+                for fut in concurrent.futures.as_completed(futs, timeout=240):
+                    try:
+                        date_, mkt_, rows_ = fut.result()
+                        for ticker, market, close, volume, change in rows_:
+                            if ticker not in per_ticker:
+                                per_ticker[ticker] = {"market": market, "days": {}}
+                            per_ticker[ticker]["days"][date_] = {
+                                "close": close, "volume": volume, "change": change
+                            }
+                    except Exception:
+                        pass
+
+            sys.stdout = _real_stdout
+
+            # 3. 지표 계산
+            today_date = trading_dates[-1]
+            candidates = []
+            surge_events = []   # 백테스팅용
+
+            for ticker, info in per_ticker.items():
+                days = info["days"]
+                if today_date not in days:
+                    continue
+
+                ordered = sorted(days.keys())
+                series  = [days[d] for d in ordered]
+                closes  = [s["close"]  for s in series]
+                volumes = [s["volume"] for s in series]
+
+                today_close  = series[-1]["close"]
+                today_volume = series[-1]["volume"]
+                today_change = series[-1]["change"]
+
+                # 급등 이벤트 수집 (백테스팅)
+                for i in range(1, len(series)):
+                    if series[i]["change"] >= 12 and i >= 1:
+                        t1v = [s["volume"] for s in series[max(0, i-6):i]]
+                        if len(t1v) >= 2 and _stat.mean(t1v[:-1]) > 0:
+                            ratio = t1v[-1] / _stat.mean(t1v[:-1])
+                            dryup = sum(1 for j in range(len(t1v)-1, 0, -1) if t1v[j] < t1v[j-1])
+                            surge_events.append({
+                                "ticker": ticker,
+                                "surge_pct": series[i]["change"],
+                                "t1_vol_ratio": ratio,
+                                "t1_dryup": dryup,
+                            })
+
+                if len(series) < 6:
+                    continue
+                if today_change >= 20:   # 이미 급등 중 → 제외
+                    continue
+
+                # 거래량 지표
+                vol5      = volumes[-6:-1]
+                vol_mean5 = _stat.mean(vol5) if vol5 else 1
+                vol_ratio = today_volume / vol_mean5 if vol_mean5 > 0 else 1
+
+                # 거래량 수축일수 (연속)
+                vol_dryup = 0
+                for i in range(len(volumes)-2, max(0, len(volumes)-6), -1):
+                    if volumes[i] < volumes[i-1]:
+                        vol_dryup += 1
+                    else:
+                        break
+
+                # 가격 압축률 (최근 5일 변동폭/평균)
+                close5 = closes[-6:-1]
+                if close5 and _stat.mean(close5) > 0:
+                    price_range_pct = (max(close5) - min(close5)) / _stat.mean(close5) * 100
+                else:
+                    price_range_pct = 99.9
+
+                # 20일 고점 근접도
+                high20        = max(closes[-20:]) if len(closes) >= 20 else max(closes)
+                near_high_pct = today_close / high20 * 100 if high20 > 0 else 50
+
+                # 이동평균 정배열
+                ma5  = _stat.mean(closes[-5:])  if len(closes) >= 5  else today_close
+                ma20 = _stat.mean(closes[-20:]) if len(closes) >= 20 else today_close
+                ma_aligned = ma5 > ma20 and today_close >= ma5 * 0.98
+
+                # 3일 모멘텀
+                mom3 = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else 0
+
+                # 볼린저 밴드 폭
+                if len(closes) >= 6:
+                    n      = min(20, len(closes))
+                    bb_avg = _stat.mean(closes[-n:])
+                    bb_std = _stat.stdev(closes[-n:]) if n > 1 else 0
+                    bb_pct = 4 * bb_std / bb_avg * 100 if bb_avg > 0 else 10.0
+                else:
+                    bb_pct = 10.0
+
+                # === 점수 계산 (0~100) ===
+                # 1. 거래량 수축 (핵심): 최대 30점
+                dryup_score = {4: 30, 3: 22, 2: 12}.get(min(vol_dryup, 4), 0)
+
+                # 2. 거래량 팽창 (첫 신호): 최대 25점
+                vol_score = min(25, max(0, (vol_ratio - 1) * 12.5))
+
+                # 3. 가격 압축 (박스권): 최대 20점
+                if price_range_pct < 2.0:   compression_score = 20
+                elif price_range_pct < 3.5: compression_score = 15
+                elif price_range_pct < 5.0: compression_score = 8
+                else:                        compression_score = 0
+
+                # 4. 20일 고점 근접 (박스권 직전): 최대 15점
+                if 85 <= near_high_pct < 97:   near_high_score = 15
+                elif 97 <= near_high_pct <= 100: near_high_score = 10
+                elif 70 <= near_high_pct < 85:   near_high_score = 5
+                else:                              near_high_score = 0
+
+                # 5. 이동평균 정배열: 5점
+                ma_score = 5 if ma_aligned else 0
+
+                # 6. 볼린저 수축: 최대 5점
+                if bb_pct < 3.0:   bb_score = 5
+                elif bb_pct < 5.0: bb_score = 3
+                else:               bb_score = 0
+
+                total = dryup_score + vol_score + compression_score + near_high_score + ma_score + bb_score
+
+                if total < 15:
+                    continue
+
+                candidates.append({
+                    "ticker":        ticker,
+                    "market":        info["market"],
+                    "close":         today_close,
+                    "change":        round(today_change, 1),
+                    "score":         round(total, 1),
+                    "volExpansion":  round(vol_ratio, 1),
+                    "volDryupDays":  vol_dryup,
+                    "priceRangePct": round(price_range_pct, 1),
+                    "nearHighPct":   round(near_high_pct, 1),
+                    "maAligned":     ma_aligned,
+                    "momentum3d":    round(mom3, 1),
+                    "bbWidthPct":    round(bb_pct, 1),
+                    "name":          "",
+                })
+
+            candidates.sort(key=lambda x: x["score"], reverse=True)
+            top50 = candidates[:50]
+
+            # 종목명 조회
+            _real_stdout = sys.stdout
+            sys.stdout   = sys.stderr
+            for c in top50:
+                try:
+                    n = krx.get_market_ticker_name(c["ticker"])
+                    c["name"] = n if n and n != c["ticker"] else c["ticker"]
+                except Exception:
+                    c["name"] = c["ticker"]
+            sys.stdout = _real_stdout
+
+            # 백테스팅 요약
+            backtest = None
+            if surge_events:
+                backtest = {
+                    "totalEvents":    len(surge_events),
+                    "avgSurgePct":    round(_stat.mean(e["surge_pct"]    for e in surge_events), 1),
+                    "avgT1VolRatio":  round(_stat.mean(e["t1_vol_ratio"] for e in surge_events), 2),
+                    "avgT1DryupDays": round(_stat.mean(e["t1_dryup"]     for e in surge_events), 1),
+                    "period":         f"{trading_dates[0]}~{trading_dates[-1]}",
+                }
+
+            emit({"candidates": top50[:30], "backtest": backtest,
+                  "tradingDays": len(trading_dates), "scannedAt": today_date})
+
         else:
             emit({"error": f"Unknown type: {data_type}"})
             sys.exit(1)

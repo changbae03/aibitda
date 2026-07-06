@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import {
   RefreshCw, Users, Building2, Globe, Activity, Info,
   TrendingUp, ArrowUpRight, ArrowDownRight, Minus, Zap, Radio,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Telescope, BarChart2, Target,
+  TrendingDown, AlertCircle,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +26,30 @@ interface SurgeCandidate {
   surgeScore: number;
   themes: string[];
   signal: "breakout" | "accumulation" | "volume_spike";
+}
+
+interface PreSurgeCandidate {
+  ticker:        string;
+  market:        "KOSPI" | "KOSDAQ";
+  name:          string;
+  close:         number;
+  change:        number;
+  score:         number;
+  volExpansion:  number;
+  volDryupDays:  number;
+  priceRangePct: number;
+  nearHighPct:   number;
+  maAligned:     boolean;
+  momentum3d:    number;
+  bbWidthPct:    number;
+}
+
+interface BacktestSummary {
+  totalEvents:    number;
+  avgSurgePct:    number;
+  avgT1VolRatio:  number;
+  avgT1DryupDays: number;
+  period:         string;
 }
 interface FlowData   { marketFlow: { kospi: MarketRow[]; kosdaq: MarketRow[] }; stocks: StockFlow[]; updatedAt: string }
 type SortTab = "individual" | "institution" | "foreign" | "total";
@@ -262,6 +287,321 @@ function SurgeWidget() {
                   </div>
                 );
               })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ── 급등 전조 위젯 (T-1/T-2 선행 신호 종목) ─────────────────────────── */
+function ScoreBar({ value, max = 100 }: { value: number; max?: number }) {
+  const pct = Math.min(100, (value / max) * 100);
+  const color = pct >= 70 ? "bg-emerald-500" : pct >= 50 ? "bg-teal-500" : "bg-sky-400";
+  return (
+    <div className="w-full h-1.5 rounded-full bg-muted/40 overflow-hidden">
+      <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function SignalBadge({ label, active, icon }: { label: string; active: boolean; icon: React.ReactNode }) {
+  return (
+    <span className={cn(
+      "flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border",
+      active
+        ? "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/25"
+        : "text-muted-foreground/30 bg-transparent border-border/20",
+    )}>
+      {icon}{label}
+    </span>
+  );
+}
+
+function PreSurgeWidget() {
+  const [data,       setData]       = useState<PreSurgeCandidate[]>([]);
+  const [backtest,   setBacktest]   = useState<BacktestSummary | null>(null);
+  const [loading,    setLoading]    = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [open,       setOpen]       = useState(true);
+  const [cachedAt,   setCachedAt]   = useState<number | null>(null);
+  const [expanded,   setExpanded]   = useState<string | null>(null);
+  const [showBacktest, setShowBacktest] = useState(false);
+
+  const load = useCallback(async (force = false) => {
+    if (force) setRefreshing(true); else setLoading(true);
+    try {
+      const url = force
+        ? getApiUrl("/api/market/presurge/refresh")
+        : getApiUrl("/api/market/presurge");
+      const res = await fetch(url, { method: force ? "POST" : "GET", credentials: "include" });
+      if (!res.ok) return;
+      const j = await res.json();
+      setData(Array.isArray(j.data) ? j.data : []);
+      setBacktest(j.backtest ?? null);
+      setCachedAt(j.cachedAt ?? null);
+    } catch { /* silent */ }
+    finally { setLoading(false); setRefreshing(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const timeStr = cachedAt
+    ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
+      {/* 헤더 */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Telescope className="w-4 h-4 text-emerald-500" />
+            <span className="text-[13px] font-bold text-foreground">내일 급등 전조 탐지</span>
+          </div>
+          {data.length > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              {data.length}개
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground/40">15영업일 전 종목 스캔</span>
+          {timeStr && (
+            <span className="text-[10px] text-muted-foreground/30">{timeStr} 기준</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={e => { e.stopPropagation(); load(true); }}
+            disabled={refreshing || loading}
+            className="p-1 rounded-md hover:bg-muted/50 text-muted-foreground/40 hover:text-foreground/70 transition-colors disabled:opacity-30"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+          </button>
+          {open ? <ChevronUp className="w-4 h-4 text-muted-foreground/40" /> : <ChevronDown className="w-4 h-4 text-muted-foreground/40" />}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-2">
+              {/* 설명 + 백테스팅 배너 */}
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] text-muted-foreground/55 leading-relaxed">
+                  거래량 수축→팽창·박스권·이동평균 정배열 등 T-1/T-2 선행 신호 탐지 · 최초 스캔 2~4분 소요
+                </p>
+                {backtest && (
+                  <button
+                    onClick={() => setShowBacktest(b => !b)}
+                    className="shrink-0 text-[10px] px-2 py-1 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground/60 border border-border/40 flex items-center gap-1"
+                  >
+                    <BarChart2 className="w-3 h-3" />
+                    백테스팅
+                  </button>
+                )}
+              </div>
+
+              {/* 백테스팅 패널 */}
+              <AnimatePresence>
+                {showBacktest && backtest && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="rounded-xl border border-emerald-200/50 dark:border-emerald-500/15 bg-emerald-50/40 dark:bg-emerald-500/5 p-3 space-y-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <BarChart2 className="w-3 h-3 text-emerald-500" />
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                          최근 {backtest.period.slice(0,8)} ~ {backtest.period.slice(-8)} 백테스팅 결과
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground/50">급등 이벤트</p>
+                          <p className="text-[14px] font-black text-emerald-600 dark:text-emerald-400">{backtest.totalEvents}건</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground/50">평균 상승폭</p>
+                          <p className="text-[14px] font-black text-red-500">+{backtest.avgSurgePct}%</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground/50">T-1 거래량비</p>
+                          <p className="text-[14px] font-black text-teal-600 dark:text-teal-400">{backtest.avgT1VolRatio}x</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/40 text-center">
+                        급등 전일 평균 거래량 {backtest.avgT1VolRatio}배 · 수축일 {backtest.avgT1DryupDays}일 관찰됨
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* 로딩 */}
+              {loading && (
+                <div className="space-y-2 pt-1">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="h-16 rounded-xl bg-muted/30 animate-pulse" />
+                  ))}
+                  <p className="text-[11px] text-muted-foreground/40 text-center pt-1">
+                    전 종목 15영업일 스캔 중… (2~4분 소요)
+                  </p>
+                </div>
+              )}
+
+              {/* 데이터 없음 */}
+              {!loading && data.length === 0 && (
+                <div className="py-8 text-center space-y-1.5">
+                  <Telescope className="w-6 h-6 text-muted-foreground/20 mx-auto" />
+                  <p className="text-[12px] text-muted-foreground/40">
+                    새로고침 버튼을 눌러 스캔을 시작하세요
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/30">
+                    최초 스캔 2~4분 소요 · 이후 1시간 캐시
+                  </p>
+                </div>
+              )}
+
+              {/* 종목 리스트 */}
+              {!loading && data.map((s, i) => {
+                const isExpanded = expanded === s.ticker;
+                const sigDryup  = s.volDryupDays >= 3;
+                const sigBox    = s.priceRangePct < 5;
+                const sigHigh   = s.nearHighPct >= 80 && s.nearHighPct < 97;
+                const sigVol    = s.volExpansion >= 1.5;
+                const signalCount = [sigDryup, sigBox, sigHigh, s.maAligned, sigVol].filter(Boolean).length;
+
+                return (
+                  <div key={s.ticker} className={cn(
+                    "rounded-xl border overflow-hidden transition-colors",
+                    s.score >= 70
+                      ? "border-emerald-200/70 dark:border-emerald-500/25"
+                      : "border-border/50",
+                  )}>
+                    <button
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors"
+                      onClick={() => setExpanded(isExpanded ? null : s.ticker)}
+                    >
+                      {/* 순위 */}
+                      <span className="text-[11px] font-black text-muted-foreground/30 w-4 text-right shrink-0">{i + 1}</span>
+
+                      {/* 로고 */}
+                      <StockLogo ticker={s.ticker} companyName={s.name} size="sm" />
+
+                      {/* 종목 정보 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[13px] font-bold text-foreground truncate">{s.name}</span>
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground/60 border border-border/40">
+                            신호 {signalCount}/5
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] text-muted-foreground/50">{s.ticker} · {s.market}</span>
+                          <span className={cn("text-[11px] font-medium", s.change > 0 ? "text-red-500" : s.change < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                            {s.change > 0 ? "+" : ""}{s.change.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 점수 */}
+                      <div className="text-right shrink-0 w-16">
+                        <div className="text-[15px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          {s.score.toFixed(0)}점
+                        </div>
+                        <ScoreBar value={s.score} />
+                      </div>
+
+                      <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/30 shrink-0 transition-transform", isExpanded && "rotate-180")} />
+                    </button>
+
+                    {/* 펼침 상세 */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-3 pt-2 border-t border-border/40 space-y-2.5">
+                            {/* 신호 배지 */}
+                            <div className="flex flex-wrap gap-1">
+                              <SignalBadge active={sigDryup} icon={<TrendingDown className="w-2.5 h-2.5 mr-0.5" />} label={`거래량 수축 ${s.volDryupDays}일`} />
+                              <SignalBadge active={sigVol}   icon={<Zap className="w-2.5 h-2.5 mr-0.5" />}           label={`거래량 ${s.volExpansion}x↑`} />
+                              <SignalBadge active={sigBox}   icon={<Target className="w-2.5 h-2.5 mr-0.5" />}         label={`박스권 (변동 ${s.priceRangePct}%)`} />
+                              <SignalBadge active={sigHigh}  icon={<TrendingUp className="w-2.5 h-2.5 mr-0.5" />}     label={`20일고점 ${s.nearHighPct.toFixed(0)}%`} />
+                              <SignalBadge active={s.maAligned} icon={<Activity className="w-2.5 h-2.5 mr-0.5" />}   label="이동평균 정배열" />
+                            </div>
+
+                            {/* 수치 */}
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground/50">볼린저 폭</p>
+                                <p className={cn("text-[12px] font-bold tabular-nums",
+                                  s.bbWidthPct < 3 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60")}>
+                                  {s.bbWidthPct.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground/50">3일 모멘텀</p>
+                                <p className={cn("text-[12px] font-bold tabular-nums",
+                                  s.momentum3d > 0 ? "text-red-500" : s.momentum3d < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                                  {s.momentum3d > 0 ? "+" : ""}{s.momentum3d.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground/50">현재가</p>
+                                <p className="text-[12px] font-bold text-foreground tabular-nums">
+                                  {s.close.toLocaleString()}원
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* 예상 시나리오 */}
+                            <div className="rounded-lg bg-muted/20 px-2.5 py-2">
+                              <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
+                                {sigDryup && sigVol
+                                  ? `📦 ${s.volDryupDays}일 연속 거래량 수축 후 오늘 ${s.volExpansion}배 팽창 — 전형적인 큰손 매집 후 시동 패턴`
+                                  : sigDryup
+                                  ? `🤫 ${s.volDryupDays}일 거래량 수축 중 — 거래량 팽창 신호 발생 시 급등 가능성↑`
+                                  : sigBox && sigHigh
+                                  ? `📊 ${s.priceRangePct.toFixed(1)}% 박스권 압축 + 20일 고점 ${s.nearHighPct.toFixed(0)}% 근접 — 돌파 직전 패턴`
+                                  : `🔍 복합 기술적 패턴 감지 — 종합 점수 ${s.score.toFixed(0)}점 (100점 만점)`
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+
+              {/* 면책 */}
+              {!loading && data.length > 0 && (
+                <div className="flex items-start gap-1.5 pt-1">
+                  <AlertCircle className="w-3 h-3 text-muted-foreground/20 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-muted-foreground/30 leading-relaxed">
+                    기술적 패턴 기반 탐지로 미래 수익을 보장하지 않습니다. 투자 판단은 본인 책임.
+                  </p>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -574,6 +914,9 @@ export function FlowContent() {
             animate={{ opacity: 1 }}
             className="space-y-5"
           >
+            {/* 내일 급등 전조 탐지 */}
+            <PreSurgeWidget />
+
             {/* 폭발 조짐 종목 */}
             <SurgeWidget />
 
