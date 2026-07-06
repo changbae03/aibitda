@@ -426,6 +426,8 @@ async function loadFromDB(): Promise<{ data: TomorrowPick[]; cachedAt: string } 
     if (r.rows.length > 0) {
       const raw = r.rows[0].data;
       const parsed: TomorrowPick[] = Array.isArray(raw) ? raw : (typeof raw === "string" ? JSON.parse(raw) : raw);
+      // 빈 캐시(0개)는 무시 — 테마 피드 미준비 상태의 잘못 저장된 결과
+      if (parsed.length === 0) return null;
       return { data: parsed, cachedAt: r.rows[0].expires_at };
     }
     return null;
@@ -433,6 +435,11 @@ async function loadFromDB(): Promise<{ data: TomorrowPick[]; cachedAt: string } 
 }
 
 async function saveToDB(picks: TomorrowPick[]): Promise<void> {
+  // 0개 결과는 저장하지 않음 — 테마 피드 미준비 상태의 빈 캐시가 장시간 서빙되는 것을 방지
+  if (picks.length === 0) {
+    console.warn("[tomorrow-picks] picks 0개 — DB 저장 스킵");
+    return;
+  }
   try {
     const expiresAt = new Date(Date.now() + TTL_MS);
     await pool.query(
