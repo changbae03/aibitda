@@ -114,18 +114,27 @@ async function loadBriefFromDb(): Promise<void> {
         cached_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    ensureHistoryTable().catch(() => {});
+    await ensureHistoryTable().catch(() => {});
+
+    // 히스토리가 비어 있으면 kv_cache 데이터로 즉시 백필 (한 번만)
+    const histCount = await pool.query(`SELECT COUNT(*) FROM market_brief_history WHERE market='kr'`).catch(() => ({ rows: [{ count: "1" }] }));
+    const isEmpty = parseInt(String(histCount.rows[0]?.count ?? "1"), 10) === 0;
+
     const r = await pool.query(
       `SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief' LIMIT 1`
     );
     if (r.rows.length) {
       const cachedAt = new Date(r.rows[0].cached_at).getTime();
+      const cacheData: BriefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
+      if (isEmpty) {
+        saveToHistory("kr", cacheData).catch(() => {});
+      }
       if (Date.now() - cachedAt < BRIEF_TTL) {
-        _briefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
+        _briefCache = cacheData;
         console.log("[market-brief] DB 캐시 복원 성공 (즉시 서빙 가능)");
       } else {
         // 만료된 캐시도 일단 복원해 두고 (유저가 즉시 볼 수 있도록) 백그라운드 갱신
-        _briefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
+        _briefCache = cacheData;
         console.log("[market-brief] DB 캐시 만료 — 복원 후 백그라운드 갱신 시작");
         setTimeout(() => refreshBriefInBackground("서버시작-만료캐시"), 5000);
       }
