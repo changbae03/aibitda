@@ -82,7 +82,7 @@ function fmt억(v: number) {
   return `${v > 0 ? "+" : ""}${v}억`;
 }
 
-function SurgeWidget() {
+export function SurgeWidget() {
   const [data,       setData]       = useState<SurgeCandidate[]>([]);
   const [loading,    setLoading]    = useState(false);
   const [open,       setOpen]       = useState(true);
@@ -121,7 +121,7 @@ function SurgeWidget() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
             <Radio className="w-4 h-4 text-red-500" />
-            <span className="text-[13px] font-bold text-foreground">폭발 조짐 종목</span>
+            <span className="text-[13px] font-bold text-foreground">오늘 수급 폭발 포착</span>
           </div>
           {data.length > 0 && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
@@ -319,7 +319,7 @@ function SignalBadge({ label, active, icon }: { label: string; active: boolean; 
   );
 }
 
-function PreSurgeWidget() {
+export function PreSurgeWidget() {
   const [data,       setData]       = useState<PreSurgeCandidate[]>([]);
   const [backtest,   setBacktest]   = useState<BacktestSummary | null>(null);
   const [loading,    setLoading]    = useState(false);
@@ -361,7 +361,7 @@ function PreSurgeWidget() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Telescope className="w-4 h-4 text-emerald-500" />
-            <span className="text-[13px] font-bold text-foreground">내일 급등 전조 탐지</span>
+            <span className="text-[13px] font-bold text-foreground">내일 급등 예비군</span>
           </div>
           {data.length > 0 && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -914,12 +914,6 @@ export function FlowContent() {
             animate={{ opacity: 1 }}
             className="space-y-5"
           >
-            {/* 내일 급등 전조 탐지 */}
-            <PreSurgeWidget />
-
-            {/* 폭발 조짐 종목 */}
-            <SurgeWidget />
-
             {/* 요약 카드 */}
             <div>
               <div className="flex items-center gap-2 mb-2.5">

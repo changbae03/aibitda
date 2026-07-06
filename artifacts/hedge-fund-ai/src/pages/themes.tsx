@@ -5,7 +5,7 @@ import {
   RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
   Target, BarChart2, AlertCircle,
 } from "lucide-react";
-import { FlowContent } from "@/pages/flow";
+import { FlowContent, SurgeWidget, PreSurgeWidget } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
@@ -344,7 +344,11 @@ export default function ThemesPage() {
 
       {/* ── 내일 종목 탭 ────────────────────────────────────────── */}
       {activeSection === "picks" && (
-        <TomorrowPicksContent onAnalyze={goAnalyze} />
+        <div className="space-y-4">
+          <PreSurgeWidget />
+          <SurgeWidget />
+          <TomorrowPicksContent onAnalyze={goAnalyze} />
+        </div>
       )}
 
       {/* ── 수급 레이더 탭 ─────────────────────────────────────── */}
