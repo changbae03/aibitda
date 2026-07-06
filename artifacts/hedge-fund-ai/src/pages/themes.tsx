@@ -127,6 +127,8 @@ function stockMomentumAlive(s: FeedStock): "alive" | "fading" | "pressure" | "ea
 // ── 테마별 수급 강도 랭킹 ──────────────────────────────────────────────────
 
 function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
+  const [showLegend, setShowLegend] = useState(false);
+
   const ranked = feed
     .map(item => ({ ...item, force: computeThemeForce(item.stocks) }))
     .filter(item => item.force !== null)
@@ -141,8 +143,37 @@ function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
       <div className="flex items-center gap-2">
         <Activity className="w-4 h-4 text-[#FF8A7A] shrink-0" />
         <span className="text-[13px] font-semibold text-foreground">테마별 수급 강도</span>
-        <span className="text-[11px] text-foreground/35 ml-auto">돈이 쏠리는 순서</span>
+        <span className="text-[11px] text-foreground/35">돈이 쏠리는 순서</span>
+        <button
+          onClick={() => setShowLegend(v => !v)}
+          className="ml-auto text-foreground/25 hover:text-foreground/60 transition-colors"
+          title="기준 설명 보기"
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
       </div>
+      {/* 범례 */}
+      <AnimatePresence>
+        {showLegend && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-xl bg-muted/40 px-3 py-2.5 space-y-1.5 text-[10.5px] text-foreground/60">
+              <p className="font-semibold text-foreground/80 mb-1">수급 강도 기준</p>
+              <p>해당 테마 종목들의 <span className="text-foreground/80 font-medium">주가변화율 × 거래량비율</span> 합산 점수예요.</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-0.5">
+                <span><span className="text-red-500 font-bold">🔥 강세</span> — 돈이 확실히 몰리는 중</span>
+                <span><span className="text-orange-500 font-bold">⚡ 상승</span> — 수급 유입 중</span>
+                <span><span className="text-foreground/40 font-bold">〰 보합</span> — 방향 없이 유지 중</span>
+                <span><span className="text-blue-500 font-bold">↘ 약화</span> — 수급이 빠지는 중</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="space-y-1.5">
         {ranked.map((item, i) => {
           const meta = forceMeta(item.force!.avg);
@@ -1199,10 +1230,10 @@ function FeedCard({
                             {/* 힘 생존 여부 */}
                             {(() => {
                               const alive = stockMomentumAlive(stock);
-                              if (alive === "alive")    return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">힘 살아있음 ✓</span>;
-                              if (alive === "fading")   return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">힘 약해지는 중</span>;
-                              if (alive === "pressure") return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">매도 압력</span>;
-                              if (alive === "easing")   return <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400">낙폭 완화 중</span>;
+                              if (alive === "alive")    return <span title="주가↑ + 거래량↑ — 상승 모멘텀 살아있음" className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 cursor-default">힘 살아있음 ✓</span>;
+                              if (alive === "fading")   return <span title="주가↑이지만 거래량↓ — 오르고 있지만 실어나르는 돈이 줄고 있어요. 모멘텀 소진 주의." className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 cursor-default">힘 약해지는 중</span>;
+                              if (alive === "pressure") return <span title="주가↓ + 거래량↑ — 하락 중에 거래가 터짐. 매도세 강함." className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 cursor-default">매도 압력</span>;
+                              if (alive === "easing")   return <span title="주가↓이지만 거래량도↓ — 내리고는 있지만 파는 사람이 줄어드는 중. 낙폭 진정 구간." className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 cursor-default">낙폭 완화 중</span>;
                               return null;
                             })()}
                           </div>
