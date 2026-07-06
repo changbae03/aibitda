@@ -23,7 +23,7 @@ async function getMl() {
   return _mlModule;
 }
 
-import { invalidateBriefCache, fetchMarketNews } from "../routes/market-analysis.js";
+import { invalidateBriefCache, fetchMarketNews, refreshUsBriefInBackground } from "../routes/market-analysis.js";
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
 import { pool } from "@workspace/db";
 
@@ -33,6 +33,10 @@ let middayBriefToday      = "";   // "YYYY-MM-DD" 형식
 let closingBriefToday     = "";   // "YYYY-MM-DD" 형식
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
+// 미국 브리핑 (KST 기준 날짜 사용 — 자정 넘어도 같은 날로 취급)
+let usOpenBriefToday      = "";   // 22:30 KST 개장 브리핑
+let usMidBriefToday       = "";   // 01:30 KST 장중 브리핑
+let usCloseBriefToday     = "";   // 07:00 KST 마감 브리핑
 
 function utcNow() { return new Date(); }
 
@@ -94,6 +98,27 @@ function checkAndRun() {
     middayBriefToday = dateStr;
     console.log("[scheduler] 장중 브리핑 갱신 (13:00 KST)");
     invalidateBriefCache();
+  }
+
+  // ── 미국 개장 브리핑: 평일 22:30 KST = 13:30 UTC ────────────────────────
+  if (utcH === 13 && utcM === 30 && dow >= 1 && dow <= 5 && usOpenBriefToday !== dateStr) {
+    usOpenBriefToday = dateStr;
+    console.log("[scheduler] 미국 개장 브리핑 갱신 (22:30 KST)");
+    refreshUsBriefInBackground("스케줄-개장");
+  }
+
+  // ── 미국 장중 브리핑: 평일 01:30 KST = 16:30 UTC ────────────────────────
+  if (utcH === 16 && utcM === 30 && dow >= 1 && dow <= 5 && usMidBriefToday !== dateStr) {
+    usMidBriefToday = dateStr;
+    console.log("[scheduler] 미국 장중 브리핑 갱신 (01:30 KST)");
+    refreshUsBriefInBackground("스케줄-장중");
+  }
+
+  // ── 미국 마감 브리핑: 평일 07:00 KST = 22:00 UTC ─────────────────────────
+  if (utcH === 22 && utcM === 0 && dow >= 1 && dow <= 5 && usCloseBriefToday !== dateStr) {
+    usCloseBriefToday = dateStr;
+    console.log("[scheduler] 미국 마감 브리핑 갱신 (07:00 KST)");
+    refreshUsBriefInBackground("스케줄-마감");
   }
 
   // ── 장마감 브리핑 갱신: 평일 16:30 KST = 07:30 UTC ──────────────────────
@@ -172,10 +197,13 @@ export function startMarketScheduler() {
   setInterval(checkAndRun, 60_000);
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
   console.log(`  - ML 학습:         ${ML_ENABLED ? "활성 (주간 일요일 10:00 KST)" : "비활성화"}`);
-  console.log("  - 장전 브리핑:      평일 06:00 KST");
-  console.log("  - 장중 브리핑:      평일 13:00 KST");
-  console.log("  - 장마감 브리핑:    평일 16:30 KST");
-  console.log("  - 섹터 재보정:      평일 16:30 KST (ML 무관)");
+  console.log("  [KR] 장전 브리핑:   평일 06:00 KST");
+  console.log("  [KR] 장중 브리핑:   평일 13:00 KST");
+  console.log("  [KR] 장마감 브리핑: 평일 16:30 KST");
+  console.log("  [US] 개장 브리핑:   평일 22:30 KST");
+  console.log("  [US] 장중 브리핑:   평일 01:30 KST");
+  console.log("  [US] 마감 브리핑:   평일 07:00 KST");
+  console.log("  - 섹터 재보정:      평일 16:30 KST");
   console.log("  - 딥 캘리브레이션:  매주 일요일 11:00 KST");
 }
 
