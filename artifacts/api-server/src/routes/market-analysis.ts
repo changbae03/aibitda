@@ -61,8 +61,46 @@ async function saveBriefToDb(cache: BriefCache) {
       VALUES ('market_brief', $1, $2)
       ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
     `, [JSON.stringify(cache.data), new Date(cache.cachedAt)]);
+    saveToHistory("kr", cache).catch(() => {});
   } catch (err: any) {
     console.error("[market-brief] DB 저장 실패:", err?.message);
+  }
+}
+
+// ─── 히스토리 테이블 ──────────────────────────────────────────────────────────
+
+async function ensureHistoryTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS market_brief_history (
+      id        SERIAL PRIMARY KEY,
+      market    TEXT NOT NULL DEFAULT 'kr',
+      session_type TEXT,
+      summary   TEXT,
+      sentiment TEXT,
+      data      JSONB NOT NULL,
+      generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  // 30일 이상 된 레코드 자동 삭제 (무한 누적 방지)
+  await pool.query(`DELETE FROM market_brief_history WHERE generated_at < now() - INTERVAL '30 days'`);
+}
+
+async function saveToHistory(market: "kr" | "us", cache: BriefCache) {
+  try {
+    await pool.query(
+      `INSERT INTO market_brief_history (market, session_type, summary, sentiment, data, generated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+      [
+        market,
+        cache.data.sessionType ?? null,
+        cache.data.summary ?? null,
+        cache.data.sentiment ?? null,
+        JSON.stringify(cache.data),
+        new Date(cache.cachedAt),
+      ],
+    );
+  } catch (err: any) {
+    console.error("[market-brief-history] 히스토리 저장 실패:", err?.message);
   }
 }
 
@@ -76,6 +114,7 @@ async function loadBriefFromDb(): Promise<void> {
         cached_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    ensureHistoryTable().catch(() => {});
     const r = await pool.query(
       `SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief' LIMIT 1`
     );
@@ -963,6 +1002,7 @@ async function saveUsBriefToDb(cache: BriefCache) {
       VALUES ('market_brief_us', $1, $2)
       ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
     `, [JSON.stringify(cache.data), new Date(cache.cachedAt)]);
+    saveToHistory("us", cache).catch(() => {});
   } catch (err: any) {
     console.error("[us-brief] DB 저장 실패:", err?.message);
   }
@@ -1367,6 +1407,33 @@ router.get("/prediction-history/:symbol", async (req, res) => {
     const limit  = Math.min(50, parseInt(String(req.query.limit ?? "20"), 10));
     const rows   = await getPredictionHistory(symbol, limit);
     res.json(rows);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
+  }
+});
+
+// GET /api/market-analysis/brief-history — 시장 브리핑 히스토리
+router.get("/brief-history", async (req, res) => {
+  try {
+    const market = String(req.query.market ?? "kr").toLowerCase() as "kr" | "us";
+    const limit  = Math.min(30, Math.max(1, parseInt(String(req.query.limit ?? "10"), 10)));
+    const rows   = await pool.query(
+      `SELECT id, market, session_type, summary, sentiment, data, generated_at
+       FROM market_brief_history
+       WHERE market = $1
+       ORDER BY generated_at DESC
+       LIMIT $2`,
+      [market, limit],
+    );
+    res.json(rows.rows.map(r => ({
+      id:           r.id,
+      market:       r.market,
+      sessionType:  r.session_type,
+      summary:      r.summary,
+      sentiment:    r.sentiment,
+      data:         r.data,
+      generatedAt:  r.generated_at,
+    })));
   } catch (e: any) {
     res.status(500).json({ error: e?.message });
   }

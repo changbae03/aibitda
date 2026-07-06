@@ -9,7 +9,7 @@ import {
   CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
   Cpu, Database, GitMerge, ChevronRight, Zap,
   ChevronDown, Newspaper, Sparkles, CalendarDays, Info,
-  Shield, Globe, Lock, Radio, ChevronUp,
+  Shield, Globe, Lock, Radio, ChevronUp, History,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -134,9 +134,37 @@ interface MarketBrief {
   generating?: boolean;
 }
 
+// ─── 브리핑 히스토리 타입 ─────────────────────────────────────────────────────
+interface BriefHistoryItem {
+  id: number;
+  market: "kr" | "us";
+  sessionType?: string;
+  summary?: string;
+  sentiment?: "bullish" | "bearish" | "neutral";
+  data: MarketBrief;
+  generatedAt: string;
+}
+
 /* ── 색상 상수 ───────────────────────────────────────────────────────────── */
 const RISE = "#ef4444";
 const FALL = "#3b82f6";
+
+/* ── 세션 메타 (모듈 레벨) ────────────────────────────────────────────────── */
+const SESSION_META: Record<string, { label: string; cls: string }> = {
+  pre_open:      { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+  morning:       { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
+  midday:        { label: "☀️ 장중 브리핑",      cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+  afternoon:     { label: "⛅ 오후장 브리핑",    cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
+  pre_close:     { label: "🔔 마감 직전",        cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
+  closing:       { label: "🌆 장마감 브리핑",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+  evening:       { label: "🌙 야간 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+  weekend:       { label: "📅 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+  us_premarket:  { label: "🌅 US 프리마켓",      cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
+  us_open:       { label: "🔔 US 정규장",        cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
+  us_afterhours: { label: "🌆 US 애프터마켓",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
+  us_overnight:  { label: "🌙 US 휴장 브리핑",   cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
+  us_weekend:    { label: "📅 US 주말 브리핑",   cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
+};
 
 /* ── 테마 감지 훅 (차트용) ───────────────────────────────────────────────── */
 function useChartColors() {
@@ -198,6 +226,147 @@ function IndexChip({ name, value, change }: { name: string; value: number; chang
   );
 }
 
+// ─── 히스토리 섹션 컴포넌트 ──────────────────────────────────────────────────
+function BriefHistorySection({ market }: { market: "kr" | "us" }) {
+  const [open, setOpen]             = useState(false);
+  const [items, setItems]           = useState<BriefHistoryItem[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fetch(getApiUrl(`/api/market-analysis/brief-history?market=${market}&limit=15`), { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then((d: BriefHistoryItem[]) => { setItems(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [open, market]);
+
+  const sentBadge = (s?: string) =>
+    s === "bullish" ? { label: "상승 우세", cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20" }
+    : s === "bearish" ? { label: "하락 우세", cls: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20" }
+    : { label: "중립", cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" };
+
+  return (
+    <div className="mt-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+      >
+        <History className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+        <span className="font-medium">지난 보고서 보기</span>
+        {open ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 space-y-2">
+              {loading && (
+                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>불러오는 중...</span>
+                </div>
+              )}
+              {!loading && items.length === 0 && (
+                <p className="text-sm text-muted-foreground/60 py-4 text-center">아직 저장된 보고서가 없습니다.</p>
+              )}
+              {!loading && items.map(item => {
+                const isExpanded = expandedId === item.id;
+                const sessMeta = item.sessionType ? SESSION_META[item.sessionType] : null;
+                const sb = sentBadge(item.sentiment);
+                const dt = new Date(item.generatedAt);
+                const dateStr = dt.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
+                const timeStr = dt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+                const events  = item.data?.marketEvents ?? [];
+                const issues  = item.data?.recentIssues ?? [];
+                return (
+                  <div key={item.id} className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+                    <button
+                      className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                          <span className="text-[11px] font-medium text-muted-foreground">{dateStr} {timeStr}</span>
+                          {sessMeta && (
+                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-md border", sessMeta.cls)}>
+                              {sessMeta.label}
+                            </span>
+                          )}
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-md border", sb.cls)}>
+                            {sb.label}
+                          </span>
+                        </div>
+                        {item.summary && (
+                          <p className="text-sm text-foreground/80 line-clamp-2 leading-snug">{item.summary}</p>
+                        )}
+                      </div>
+                      <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 mt-0.5 flex-shrink-0 transition-transform", isExpanded && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden border-t border-border/40"
+                        >
+                          <div className="px-4 py-3 space-y-3">
+                            {item.data?.leadParagraph && (
+                              <p className="text-sm text-foreground/70 leading-relaxed">{item.data.leadParagraph}</p>
+                            )}
+                            {events.length > 0 && (
+                              <div className="space-y-1.5">
+                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">주요 이슈</p>
+                                {events.slice(0, 3).map((ev, i) => (
+                                  <div key={i} className="flex items-start gap-2">
+                                    <span className={cn(
+                                      "mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0",
+                                      ev.direction === "positive" ? "bg-red-400" : ev.direction === "negative" ? "bg-blue-400" : "bg-stone-400"
+                                    )} />
+                                    <p className="text-xs text-foreground/70 leading-snug">{ev.title}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {issues.length > 0 && events.length === 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">주요 이슈</p>
+                                {issues.slice(0, 3).map((iss, i) => (
+                                  <p key={i} className="text-xs text-foreground/70 leading-snug">• {iss}</p>
+                                ))}
+                              </div>
+                            )}
+                            {item.data?.keyRisk && (
+                              <div className="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2">
+                                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-0.5">핵심 리스크</p>
+                                <p className="text-xs text-amber-800/80 dark:text-amber-300/80">{item.data.keyRisk}</p>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 /* ── AI 브리핑 카드 ──────────────────────────────────────────────────────── */
 function MarketBriefSection({
   brief, loading, onRefresh, showRefresh = true,
@@ -232,22 +401,6 @@ function MarketBriefSection({
     const d = new Date(ev.date);
     return isNaN(d.getTime()) || d >= _today;
   });
-
-  const SESSION_META: Record<string, { label: string; cls: string }> = {
-    pre_open:      { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-    morning:       { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
-    midday:        { label: "☀️ 장중 브리핑",      cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-    afternoon:     { label: "⛅ 오후장 브리핑",    cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
-    pre_close:     { label: "🔔 마감 직전",        cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
-    closing:       { label: "🌆 장마감 브리핑",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-    evening:       { label: "🌙 야간 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-    weekend:       { label: "📅 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
-    us_premarket:  { label: "🌅 US 프리마켓",      cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-    us_open:       { label: "🔔 US 정규장",        cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-    us_afterhours: { label: "🌆 US 애프터마켓",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-    us_overnight:  { label: "🌙 US 휴장 브리핑",   cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-    us_weekend:    { label: "📅 US 주말 브리핑",   cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
-  };
 
   const catColor: Record<string, string> = {
     "정치": "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
@@ -1419,6 +1572,8 @@ export default function MarketAnalysis() {
         onRefresh={() => marketTab === "us" ? fetchUsBrief(true) : fetchBrief(true)}
         showRefresh={!!isAdmin}
       />
+
+      <BriefHistorySection market={marketTab} />
 
       {/* 예측 섹션 비활성화 — 브리핑 전용 모드 */}
       {false && <AnimatePresence>
