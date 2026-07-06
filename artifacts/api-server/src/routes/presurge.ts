@@ -2,6 +2,12 @@
  * /api/market/presurge — 급등 전조 종목 스캔
  * 최근 15영업일 KOSPI+KOSDAQ 전 종목 OHLCV를 분석해
  * 거래량 수축→팽창·박스권·이동평균 정배열 등 기술적 전조 신호 종목을 반환.
+ *
+ * 캐시 전략:
+ * - "내일 종목"은 하루 종일 유효 → 메모리 TTL 24시간
+ * - DB에는 36시간 보관 (서버 재시작 시 즉시 복원)
+ * - 오래된 캐시도 항상 먼저 반환 → 백그라운드에서 갱신
+ * - 유저는 절대 빈 화면을 보지 않음
  */
 import { Router } from "express";
 import { fetchPresurgeScan, type PresurgeScanResult } from "../lib/pykrx-client.js";
@@ -9,8 +15,9 @@ import { pool } from "@workspace/db";
 
 const router = Router();
 
-const CACHE_KEY = "presurge_scan_v1";
-const TTL_MS    = 60 * 60 * 1000;   // 1시간 (장 중 충분)
+const CACHE_KEY   = "presurge_scan_v1";
+const FRESH_MS    = 24 * 3600_000;   // 24시간: 이 이내면 "신선"
+const STALE_MS    = 36 * 3600_000;   // 36시간: 이 이내면 stale-serve 가능
 
 interface CachedPresurge {
   result:    PresurgeScanResult;
@@ -38,10 +45,12 @@ function businessDaysAgo(n: number): string {
 }
 
 /* ── DB 캐시 ───────────────────────────────────────────────────────── */
+
+/** expires_at 무관하게 저장된 최신 데이터를 가져옴 (항상 복원) */
 async function loadFromDB(): Promise<CachedPresurge | null> {
   try {
     const r = await pool.query<{ data: CachedPresurge }>(
-      `SELECT data FROM system_cache WHERE key = $1 AND expires_at > NOW() LIMIT 1`,
+      `SELECT data FROM system_cache WHERE key = $1 LIMIT 1`,
       [CACHE_KEY],
     );
     return r.rows[0]?.data ?? null;
@@ -52,7 +61,7 @@ async function saveToDB(cached: CachedPresurge): Promise<void> {
   try {
     await pool.query(
       `INSERT INTO system_cache (key, data, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '2 hours')
+       VALUES ($1, $2, NOW() + INTERVAL '36 hours')
        ON CONFLICT (key) DO UPDATE
          SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
       [CACHE_KEY, JSON.stringify(cached)],
@@ -60,12 +69,24 @@ async function saveToDB(cached: CachedPresurge): Promise<void> {
   } catch { /* silent */ }
 }
 
+/* ── 캐시 신선도 ────────────────────────────────────────────────────── */
+
+/** 데이터가 있으면 (오래됐어도) 서빙 가능 */
+function hasData(c: CachedPresurge | null): c is CachedPresurge {
+  return !!c && c.result.candidates.length > 0;
+}
+
+/** 24시간 이내 = 신선 (갱신 불필요) */
+function isFresh(c: CachedPresurge): boolean {
+  return Date.now() - c.cachedAt < FRESH_MS;
+}
+
 /* ── 스캔 실행 ─────────────────────────────────────────────────────── */
 let scanning = false;
 
 async function runScan(): Promise<CachedPresurge> {
   if (scanning) {
-    // 이미 실행 중이면 현재 캐시 반환 (없으면 대기)
+    // 이미 실행 중이면 현재 캐시 반환
     await new Promise(r => setTimeout(r, 1000));
     return memCache ?? { result: { candidates: [], backtest: null, tradingDays: 0, scannedAt: "" }, cachedAt: Date.now() };
   }
@@ -85,38 +106,29 @@ async function runScan(): Promise<CachedPresurge> {
   }
 }
 
-/* ── 캐시 유효성 검사 ───────────────────────────────────────────────── */
-function isCacheValid(c: CachedPresurge): boolean {
-  return c.result.candidates.length > 0 && Date.now() - c.cachedAt < TTL_MS;
-}
-
-/* ── 캐시 조회 (메모리 → DB → 스캔) ───────────────────────────────── */
-async function getCached(forceRefresh = false): Promise<CachedPresurge> {
-  if (!forceRefresh && memCache && isCacheValid(memCache)) {
-    return memCache;
-  }
-  if (!forceRefresh) {
-    const db = await loadFromDB();
-    if (db && isCacheValid(db)) {
-      memCache = db;
-      return db;
-    }
-  }
-  return runScan();
-}
-
-/* ── 서버 시작 시 DB 복원 → 없으면 자동 스캔 ───────────────────────── */
+/* ── 서버 시작 시 DB 복원 ─────────────────────────────────────────── */
 loadFromDB().then(db => {
-  if (db && isCacheValid(db)) {
+  if (hasData(db)) {
     memCache = db;
-    console.log(`[presurge] DB 캐시 복원 (${db.result.candidates.length}개) — 즉시 서빙 가능`);
+    const ageMin = Math.round((Date.now() - db.cachedAt) / 60_000);
+    console.log(`[presurge] DB 캐시 복원 (${db.result.candidates.length}개, ${ageMin}분 전) — 즉시 서빙 가능`);
+    // 오래됐으면 백그라운드에서 조용히 갱신 (유저는 기존 데이터 봄)
+    if (!isFresh(db)) {
+      console.log(`[presurge] 캐시 ${ageMin}분 경과 — 백그라운드 갱신 시작`);
+      setTimeout(() => {
+        runScan()
+          .then(c => console.log(`[presurge] 백그라운드 갱신 완료: ${c.result.candidates.length}개`))
+          .catch(e => console.error("[presurge] 백그라운드 갱신 실패:", e));
+      }, 15_000);
+    }
   } else {
-    const reason = db ? `DB 캐시 무효 (${db.result.candidates.length}개)` : "캐시 없음";
-    console.log(`[presurge] ${reason} — 15초 후 자동 스캔 시작`);
+    // 데이터 자체가 없을 때만 스캔 대기 (첫 실행 등)
+    const reason = db ? `DB 후보 0개` : "캐시 없음";
+    console.log(`[presurge] ${reason} — 15초 후 초기 스캔 시작`);
     setTimeout(() => {
       runScan()
-        .then(c => console.log(`[presurge] 자동 스캔 완료: ${c.result.candidates.length}개`))
-        .catch(e => console.error("[presurge] 자동 스캔 실패:", e));
+        .then(c => console.log(`[presurge] 초기 스캔 완료: ${c.result.candidates.length}개`))
+        .catch(e => console.error("[presurge] 초기 스캔 실패:", e));
     }, 15_000);
   }
 }).catch(() => {});
@@ -140,27 +152,24 @@ loadFromDB().then(db => {
 
 /* ── GET /market/presurge ─────────────────────────────────────────── */
 router.get("/market/presurge", (_req, res) => {
-  // 스캔 중이면 즉시 반환 (클라이언트가 폴링)
-  if (scanning) {
-    return res.json({
-      data:        memCache?.result.candidates ?? [],
-      backtest:    memCache?.result.backtest    ?? null,
-      tradingDays: memCache?.result.tradingDays ?? 0,
-      cachedAt:    memCache?.cachedAt           ?? null,
-      scanning:    true,
-    });
-  }
-  // 유효 캐시 있으면 즉시 반환
-  if (memCache && isCacheValid(memCache)) {
+  // 데이터가 있으면 항상 즉시 반환 (스캔 중이어도, 오래됐어도)
+  if (hasData(memCache)) {
+    // 오래됐고 스캔 안 중이면 백그라운드 갱신 트리거
+    if (!isFresh(memCache) && !scanning) {
+      runScan()
+        .then(c => console.log(`[presurge] 스테일 갱신 완료: ${c.result.candidates.length}개`))
+        .catch(e => console.error("[presurge] 스테일 갱신 실패:", e));
+    }
     return res.json({
       data:        memCache.result.candidates,
       backtest:    memCache.result.backtest,
       tradingDays: memCache.result.tradingDays,
       cachedAt:    memCache.cachedAt,
-      scanning:    false,
+      scanning:    scanning,  // 갱신 중임을 알려주되 기존 데이터 제공
     });
   }
-  // 캐시 없음 — 백그라운드 스캔 트리거 후 즉시 반환
+
+  // 데이터가 전혀 없을 때만 "스캔 중" 반환
   if (!scanning) {
     runScan()
       .then(c => console.log(`[presurge] 온디맨드 스캔 완료: ${c.result.candidates.length}개`))
@@ -172,7 +181,7 @@ router.get("/market/presurge", (_req, res) => {
 /* ── POST /market/presurge/refresh ────────────────────────────────── */
 router.post("/market/presurge/refresh", async (_req, res) => {
   try {
-    const cached = await getCached(true);
+    const cached = await runScan();
     return res.json({
       data:        cached.result.candidates,
       backtest:    cached.result.backtest,
@@ -182,6 +191,16 @@ router.post("/market/presurge/refresh", async (_req, res) => {
     });
   } catch (err) {
     console.error("[presurge] refresh 오류:", err);
+    // 강제 새로고침 실패해도 기존 캐시라도 반환
+    if (hasData(memCache)) {
+      return res.json({
+        data:        memCache.result.candidates,
+        backtest:    memCache.result.backtest,
+        tradingDays: memCache.result.tradingDays,
+        cachedAt:    memCache.cachedAt,
+        scanning:    false,
+      });
+    }
     return res.status(500).json({ error: "스캔 실패" });
   }
 });
