@@ -109,13 +109,21 @@ const ALLOWED_PYKRX_TYPES = new Set([
 const KRX_DATE_RE = /^\d{8}$/;
 const ALLOWED_MARKETS = new Set(["KOSPI", "KOSDAQ", "ALL", "KOSPI200"]);
 
+const TICKER_LIST_TYPES = new Set(["investor_stocks"]); // market 자리에 종목코드 목록을 넘기는 타입
+const TICKER_LIST_RE = /^[\d,]+$/; // "005930,000660,..." 형식
+
 function validatePykrxArgs(type: string, fromDate: string, toDate: string, market: string): void {
   if (!ALLOWED_PYKRX_TYPES.has(type))
     throw new Error(`[pykrx] 허용되지 않은 type: ${type}`);
   if (!KRX_DATE_RE.test(fromDate) || !KRX_DATE_RE.test(toDate))
     throw new Error(`[pykrx] 날짜 형식 오류: fromDate=${fromDate} toDate=${toDate}`);
-  if (!ALLOWED_MARKETS.has(market))
+  // investor_stocks는 market 자리에 종목코드 목록을 넘김 → 별도 형식 검사
+  if (TICKER_LIST_TYPES.has(type)) {
+    if (!TICKER_LIST_RE.test(market))
+      throw new Error(`[pykrx] investor_stocks market 형식 오류: ${market}`);
+  } else if (!ALLOWED_MARKETS.has(market)) {
     throw new Error(`[pykrx] 허용되지 않은 market: ${market}`);
+  }
 }
 
 /** pykrx Python 스크립트 호출 → JSON 파싱 */

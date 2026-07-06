@@ -60,19 +60,31 @@ let _refreshing = false; // 백그라운드 갱신 중복 방지
 /** ISO date "YYYY-MM-DD" → KRX format "YYYYMMDD" */
 function toKRXDate(iso: string) { return iso.replace(/-/g, ""); }
 
+/**
+ * 가장 최근 영업일을 YYYYMMDD 형식으로 반환.
+ * 주말(토·일)이면 직전 금요일로 후퇴. 공휴일은 pykrx가 내부 처리.
+ */
+function getLastTradingDay(): string {
+  const d = new Date();
+  const day = d.getDay(); // 0=일, 6=토
+  if (day === 0) d.setDate(d.getDate() - 2); // 일 → 금
+  if (day === 6) d.setDate(d.getDate() - 1); // 토 → 금
+  return toKRXDate(d.toISOString().slice(0, 10));
+}
+
 async function buildFlowData(): Promise<FlowData> {
-  const today    = new Date().toISOString().slice(0, 10);
-  const fromDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const todayKRX = toKRXDate(today);
-  const stockCodes = WATCH_STOCKS.map(s => s.code);
+  const today       = new Date().toISOString().slice(0, 10);
+  const fromDate    = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const tradingDay  = getLastTradingDay(); // 영업일 기준 날짜 (주말 자동 보정)
+  const stockCodes  = WATCH_STOCKS.map(s => s.code);
+
+  console.log(`[flow] 시장수급: ${fromDate}~${today}, 종목수급 기준일: ${tradingDay}`);
 
   // ── 시장 수급 + 종목 수급 병렬 실행 ──────────────────────────────────────
-  // 이전: 시장수급 완료 후 → 종목수급 (순차, ~30s)
-  // 개선: 동시 실행 (today 날짜 사용) → 절반 이상 단축
   const [kospiR, kosdaqR, stockR] = await Promise.allSettled([
     fetchInvestorData("KOSPI",  fromDate, today),
     fetchInvestorData("KOSDAQ", fromDate, today),
-    fetchInvestorByStocks(todayKRX, stockCodes),
+    fetchInvestorByStocks(tradingDay, stockCodes),
   ]);
 
   const kospi  = kospiR.status  === "fulfilled" ? kospiR.value.slice(-5)  : [];
