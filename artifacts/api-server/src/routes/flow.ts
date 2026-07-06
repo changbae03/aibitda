@@ -4,7 +4,7 @@
  * · 주요 KR 종목별 투자자 순매수 (pykrx FHKST01010900 대체)
  */
 import { Router } from "express";
-import { fetchInvestorData, fetchInvestorByStocks } from "../lib/pykrx-client.js";
+import { fetchInvestorData, fetchInvestorByStocks, fetchBothMarketsOHLCV } from "../lib/pykrx-client.js";
 import { pool } from "@workspace/db";
 
 const router = Router();
@@ -212,6 +212,178 @@ router.post("/market/flow/refresh", async (_req, res) => {
     return res.json(data);
   } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "새로고침 실패" });
+  }
+});
+
+// ─── 급등 조짐 종목 탐지 ─────────────────────────────────────────────────────
+
+export interface SurgeCandidate {
+  ticker: string;
+  name: string;
+  market: "KOSPI" | "KOSDAQ";
+  change: number;          // 등락률 %
+  volume: number;          // 오늘 거래량
+  avgVolume: number;       // 시장 중앙값 거래량
+  volumeRatio: number;     // 거래량 급증률 (오늘/5일평균)
+  institution: number;     // 기관 순매수 (억)
+  foreign: number;         // 외인 순매수 (억)
+  smartMoney: number;      // 기관+외인
+  surgeScore: number;      // 종합 점수
+  themes: string[];        // 연관 핫테마 이름
+  signal: "breakout" | "accumulation" | "volume_spike"; // 주요 신호
+}
+
+interface SurgeCache {
+  data: SurgeCandidate[];
+  cachedAt: number;
+  tradingDate: string;
+}
+
+let surgeCache: SurgeCache | null = null;
+const SURGE_TTL = 30 * 60 * 1000; // 30분 (장중 자주 갱신)
+
+async function fetchHotThemeMap(): Promise<Map<string, string[]>> {
+  try {
+    const r = await pool.query<{ data: string }>(
+      `SELECT data FROM system_cache WHERE key LIKE 'themes_feed_cache%' ORDER BY expires_at DESC LIMIT 1`
+    );
+    if (!r.rows[0]) return new Map();
+    const feed: { stocks?: { ticker: string }[]; name?: string }[] =
+      typeof r.rows[0].data === "string" ? JSON.parse(r.rows[0].data) : r.rows[0].data;
+    const map = new Map<string, string[]>();
+    for (const theme of feed) {
+      if (!theme.name || !Array.isArray(theme.stocks)) continue;
+      for (const s of theme.stocks) {
+        if (!s.ticker) continue;
+        const existing = map.get(s.ticker) ?? [];
+        existing.push(theme.name);
+        map.set(s.ticker, existing);
+      }
+    }
+    return map;
+  } catch { return new Map(); }
+}
+
+async function buildSurgeData(): Promise<SurgeCandidate[]> {
+  const todayKST = new Date(Date.now() + 9 * 3600_000);
+  const todayStr = todayKST.toISOString().slice(0, 10).replace(/-/g, "");
+
+  console.log(`[surge] OHLCV 스캔 시작 (${todayStr})`);
+  const [rows, themeMap] = await Promise.all([
+    fetchBothMarketsOHLCV(todayStr),
+    fetchHotThemeMap(),
+  ]);
+
+  if (!rows.length) {
+    console.warn("[surge] OHLCV 데이터 없음 (휴장 또는 장 전)");
+    return [];
+  }
+
+  // 1단계: 기본 필터 — 등락률 +2% 이상, 거래량 존재
+  const candidates = rows.filter(r =>
+    r.change >= 2 &&
+    r.volume > 0 &&
+    r.close > 500, // 동전주 제외
+  );
+
+  // 전체 거래량 중앙값으로 볼륨 비율 추정
+  const allVols = rows.map(r => r.volume).filter(v => v > 0).sort((a, b) => a - b);
+  const medianVol = allVols[Math.floor(allVols.length / 2)] || 1;
+
+  // 2단계: 거래량 급증률 계산 (전체 중앙값 대비)
+  const withRatio = candidates.map(r => ({
+    ...r,
+    volumeRatio: r.volume / medianVol,
+  })).filter(r => r.volumeRatio >= 1.5); // 중앙값의 1.5배 이상
+
+  if (!withRatio.length) return [];
+
+  // 상위 60개만 투자자 순매수 조회 (API 부하 방지)
+  const top60 = withRatio
+    .sort((a, b) => b.volumeRatio - a.volumeRatio)
+    .slice(0, 60);
+
+  const tickers = top60.map(r => r.ticker);
+  console.log(`[surge] 투자자 순매수 조회: ${tickers.length}개 종목`);
+
+  const investorFlows = await fetchInvestorByStocks(todayStr, tickers).catch(() => []);
+  const flowMap = new Map(investorFlows.map(f => [f.ticker, f]));
+
+  // 3단계: 종합 점수 계산
+  const result: SurgeCandidate[] = top60.map(r => {
+    const flow = flowMap.get(r.ticker);
+    const inst = flow?.institution ?? 0;
+    const fore = flow?.foreign ?? 0;
+    const smart = inst + fore;
+
+    // 신호 분류
+    let signal: SurgeCandidate["signal"] = "volume_spike";
+    if (r.change >= 8 && smart > 0) signal = "breakout";
+    else if (r.change >= 3 && smart > 0) signal = "accumulation";
+
+    // 종합 점수: 거래량급증(40) + 등락률(30) + 스마트머니(30)
+    const volScore   = Math.min(40, (r.volumeRatio - 1) * 10);
+    const changeScore = Math.min(30, r.change * 2);
+    const smartScore  = smart > 0 ? Math.min(30, Math.log1p(Math.abs(smart)) * 5) : 0;
+    const surgeScore  = volScore + changeScore + smartScore;
+
+    return {
+      ticker:      r.ticker,
+      name:        r.name ?? r.ticker,
+      market:      r.market ?? "KOSDAQ",
+      change:      r.change,
+      volume:      r.volume,
+      avgVolume:   medianVol,
+      volumeRatio: Math.round(r.volumeRatio * 10) / 10,
+      institution: inst,
+      foreign:     fore,
+      smartMoney:  smart,
+      surgeScore:  Math.round(surgeScore * 10) / 10,
+      themes:      themeMap.get(r.ticker) ?? [],
+      signal,
+    };
+  });
+
+  // 4단계: 최종 정렬 (점수 + 스마트머니 동시 매수 우선)
+  const final = result
+    .sort((a, b) => b.surgeScore - a.surgeScore)
+    .slice(0, 20);
+
+  console.log(`[surge] 완료: ${final.length}개 폭발 조짐 종목 탐지`);
+  return final;
+}
+
+// GET /api/market/surge — 폭발 조짐 종목 (장중 30분 캐시)
+router.get("/market/surge", async (_req, res) => {
+  try {
+    const now = Date.now();
+
+    // 캐시 히트
+    if (surgeCache && now - surgeCache.cachedAt < SURGE_TTL) {
+      return res.json({ data: surgeCache.data, cachedAt: surgeCache.cachedAt, cached: true });
+    }
+
+    const data = await buildSurgeData();
+    const todayStr = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
+    surgeCache = { data, cachedAt: now, tradingDate: todayStr };
+    return res.json({ data, cachedAt: now, cached: false });
+  } catch (e: any) {
+    console.error("[surge]", e?.message);
+    if (surgeCache) return res.json({ data: surgeCache.data, cachedAt: surgeCache.cachedAt, cached: true, stale: true });
+    return res.status(500).json({ error: "급등 탐지 실패" });
+  }
+});
+
+// POST /api/market/surge/refresh — 강제 갱신
+router.post("/market/surge/refresh", async (_req, res) => {
+  try {
+    surgeCache = null;
+    const data = await buildSurgeData();
+    const todayStr = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
+    surgeCache = { data, cachedAt: Date.now(), tradingDate: todayStr };
+    return res.json({ data, cachedAt: surgeCache.cachedAt, cached: false });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message ?? "갱신 실패" });
   }
 });
 

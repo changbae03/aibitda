@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   RefreshCw, Users, Building2, Globe, Activity, Info,
-  TrendingUp, ArrowUpRight, ArrowDownRight, Minus,
+  TrendingUp, ArrowUpRight, ArrowDownRight, Minus, Zap, Radio,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,16 +11,25 @@ import StockLogo from "@/components/ui/stock-logo";
 /* ── 타입 ───────────────────────────────────────────────────────────── */
 interface MarketRow  { date: string; individual: number; institution: number; foreign: number }
 interface StockFlow  { code: string; name: string; sector: string; individual: number; institution: number; foreign: number }
+
+interface SurgeCandidate {
+  ticker: string;
+  name: string;
+  market: "KOSPI" | "KOSDAQ";
+  change: number;
+  volume: number;
+  volumeRatio: number;
+  institution: number;
+  foreign: number;
+  smartMoney: number;
+  surgeScore: number;
+  themes: string[];
+  signal: "breakout" | "accumulation" | "volume_spike";
+}
 interface FlowData   { marketFlow: { kospi: MarketRow[]; kosdaq: MarketRow[] }; stocks: StockFlow[]; updatedAt: string }
 type SortTab = "individual" | "institution" | "foreign" | "total";
 
 /* ── 유틸 ───────────────────────────────────────────────────────────── */
-function fmt억(v: number) {
-  const abs = Math.abs(v);
-  if (abs >= 10000) return `${(v / 10000).toFixed(1)}조`;
-  if (abs >= 1000)  return `${(v / 1000).toFixed(1)}천억`;
-  return `${v}억`;
-}
 function flowColor(v: number) {
   if (v > 0) return "text-rose-500 dark:text-rose-400";
   if (v < 0) return "text-sky-500 dark:text-sky-400";
@@ -30,6 +40,234 @@ function shortDate(raw: string) {
   if (raw.includes("-")) { const p = raw.split("-"); return `${Number(p[1])}/${Number(p[2])}`; }
   if (raw.length >= 8) return `${Number(raw.slice(4,6))}/${Number(raw.slice(6,8))}`;
   return raw;
+}
+
+/* ── 폭발 조짐 종목 위젯 ─────────────────────────────────────────────── */
+const SIGNAL_CFG = {
+  breakout:      { label: "🚀 돌파",      cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25" },
+  accumulation:  { label: "📡 집중 매집", cls: "text-violet-600 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/25" },
+  volume_spike:  { label: "⚡ 거래량 폭발", cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/25" },
+};
+
+function fmt억(v: number) {
+  const abs = Math.abs(v);
+  if (abs >= 10000) return `${(v / 10000).toFixed(1)}조`;
+  if (abs >= 1000)  return `${(v / 1000).toFixed(1)}천억`;
+  if (abs === 0) return "0";
+  return `${v > 0 ? "+" : ""}${v}억`;
+}
+
+function SurgeWidget() {
+  const [data,       setData]       = useState<SurgeCandidate[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [open,       setOpen]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [cachedAt,   setCachedAt]   = useState<number | null>(null);
+  const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+
+  const load = useCallback(async (force = false) => {
+    if (force) setRefreshing(true); else setLoading(true);
+    try {
+      const url = force
+        ? getApiUrl("/api/market/surge/refresh")
+        : getApiUrl("/api/market/surge");
+      const res = await fetch(url, { method: force ? "POST" : "GET", credentials: "include" });
+      if (!res.ok) return;
+      const j = await res.json();
+      setData(Array.isArray(j.data) ? j.data : []);
+      setCachedAt(j.cachedAt ?? null);
+    } catch { /* silent */ }
+    finally { setLoading(false); setRefreshing(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const timeStr = cachedAt
+    ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
+      {/* 헤더 */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Radio className="w-4 h-4 text-red-500" />
+            <span className="text-[13px] font-bold text-foreground">폭발 조짐 종목</span>
+          </div>
+          {data.length > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
+              {data.length}개
+            </span>
+          )}
+          {timeStr && (
+            <span className="text-[10px] text-muted-foreground/50">{timeStr} 기준</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={e => { e.stopPropagation(); load(true); }}
+            disabled={refreshing || loading}
+            className="p-1 rounded-md hover:bg-muted/50 text-muted-foreground/40 hover:text-foreground/70 transition-colors disabled:opacity-30"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+          </button>
+          {open ? <ChevronUp className="w-4 h-4 text-muted-foreground/40" /> : <ChevronDown className="w-4 h-4 text-muted-foreground/40" />}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-2">
+              {/* 설명 */}
+              <p className="text-[11px] text-muted-foreground/55 leading-relaxed">
+                오늘 거래량 급증 + 등락률 상승 + 기관·외인 매집 패턴 감지 · 장 중 30분마다 갱신
+              </p>
+
+              {/* 로딩 */}
+              {loading && (
+                <div className="space-y-2 pt-1">
+                  {[0,1,2].map(i => (
+                    <div key={i} className="h-14 rounded-xl bg-muted/30 animate-pulse" />
+                  ))}
+                  <p className="text-[11px] text-muted-foreground/40 text-center pt-1">
+                    전 종목 스캔 중… (30~90초 소요)
+                  </p>
+                </div>
+              )}
+
+              {/* 데이터 없음 */}
+              {!loading && data.length === 0 && (
+                <div className="py-8 text-center space-y-1.5">
+                  <Zap className="w-6 h-6 text-muted-foreground/20 mx-auto" />
+                  <p className="text-[12px] text-muted-foreground/40">
+                    장 중(09:00~15:30)에만 탐지됩니다
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/30">
+                    현재 조건 충족 종목 없음
+                  </p>
+                </div>
+              )}
+
+              {/* 종목 리스트 */}
+              {!loading && data.map((s, i) => {
+                const sig = SIGNAL_CFG[s.signal];
+                const isExpanded = expandedTicker === s.ticker;
+                const hasSmartBuy = s.smartMoney > 0;
+                return (
+                  <div key={s.ticker} className={cn(
+                    "rounded-xl border overflow-hidden transition-colors",
+                    s.signal === "breakout"
+                      ? "border-red-200/60 dark:border-red-500/20"
+                      : s.signal === "accumulation"
+                      ? "border-violet-200/60 dark:border-violet-500/20"
+                      : "border-border/50",
+                  )}>
+                    <button
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors"
+                      onClick={() => setExpandedTicker(isExpanded ? null : s.ticker)}
+                    >
+                      {/* 순위 */}
+                      <span className="text-[11px] font-black text-muted-foreground/30 w-4 text-right shrink-0">{i + 1}</span>
+
+                      {/* 로고 */}
+                      <StockLogo ticker={s.ticker} companyName={s.name} size="sm" />
+
+                      {/* 종목 정보 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[13px] font-bold text-foreground truncate">{s.name}</span>
+                          <span className={cn("text-[9px] font-semibold px-1 py-0.5 rounded border", sig.cls)}>
+                            {sig.label}
+                          </span>
+                          {s.themes.slice(0, 1).map(t => (
+                            <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium truncate max-w-[80px]">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] font-medium text-muted-foreground/50">{s.ticker} · {s.market}</span>
+                          <span className={cn("text-[11px] font-bold", hasSmartBuy ? "text-red-500" : "text-muted-foreground/40")}>
+                            {hasSmartBuy ? "🤝 스마트머니↑" : "개인 주도"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 등락률 + 거래량배율 */}
+                      <div className="text-right shrink-0">
+                        <div className="text-[15px] font-black text-red-500 tabular-nums">
+                          +{s.change.toFixed(1)}%
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/50 tabular-nums">
+                          거래량 {s.volumeRatio}배
+                        </div>
+                      </div>
+
+                      <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/30 shrink-0 transition-transform", isExpanded && "rotate-180")} />
+                    </button>
+
+                    {/* 펼침 상세 */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-3 pt-1 border-t border-border/40 grid grid-cols-3 gap-2">
+                            <div className="text-center">
+                              <p className="text-[10px] text-muted-foreground/50 mb-0.5">기관</p>
+                              <p className={cn("text-[12px] font-bold tabular-nums", s.institution > 0 ? "text-red-500" : s.institution < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                                {s.institution > 0 ? "+" : ""}{fmt억(s.institution)}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[10px] text-muted-foreground/50 mb-0.5">외국인</p>
+                              <p className={cn("text-[12px] font-bold tabular-nums", s.foreign > 0 ? "text-red-500" : s.foreign < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                                {s.foreign > 0 ? "+" : ""}{fmt억(s.foreign)}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[10px] text-muted-foreground/50 mb-0.5">기관+외인</p>
+                              <p className={cn("text-[12px] font-bold tabular-nums", s.smartMoney > 0 ? "text-red-500" : s.smartMoney < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                                {s.smartMoney > 0 ? "+" : ""}{fmt억(s.smartMoney)}
+                              </p>
+                            </div>
+                            {s.themes.length > 1 && (
+                              <div className="col-span-3 flex flex-wrap gap-1 mt-1">
+                                {s.themes.map(t => (
+                                  <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/8 text-blue-500/80 border border-blue-500/15">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 /* ── 요약 카드 ──────────────────────────────────────────────────────── */
@@ -336,6 +574,9 @@ export function FlowContent() {
             animate={{ opacity: 1 }}
             className="space-y-5"
           >
+            {/* 폭발 조짐 종목 */}
+            <SurgeWidget />
+
             {/* 요약 카드 */}
             <div>
               <div className="flex items-center gap-2 mb-2.5">
