@@ -97,24 +97,7 @@ function checkAndRun() {
     invalidateBriefCache();
   }
 
-  // ── 장중 브리핑 갱신: 평일 13:00 KST = 04:00 UTC ────────────────────────
-  // 오전 장 흐름 반영, 오후 전망 제공
-  if (utcH === 4 && utcM === 0 && dow >= 1 && dow <= 5 && middayBriefToday !== dateStr) {
-    middayBriefToday = dateStr;
-    console.log("[scheduler] 장중 브리핑 갱신 시작 (13:00 KST)");
-    invalidateBriefCache();
-  }
-
-  // ── 장마감 브리핑 갱신: 평일 16:00 KST = 07:00 UTC ─────────────────────────
-  // ⚠️ 15:30 KST(장 종료 직후)가 아닌 16:00으로 지연:
-  //   Naver API는 KRX 결제 완료 후 ~15~30분 후 데이터 반영 → 15:30 호출 시 전일 데이터 반환 위험
-  if (utcH === 7 && utcM === 0 && dow >= 1 && dow <= 5 && closingBriefToday !== dateStr) {
-    closingBriefToday = dateStr;
-    console.log("[scheduler] 장마감 브리핑 갱신 (16:00 KST — Naver API 안정화 후)");
-    invalidateBriefCache();
-  }
-
-  // ── 장마감 증분 업데이트: 평일 16:30 KST = 07:30 UTC ────────────────────
+  // ── 장마감 증분 업데이트 + 브리핑: 평일 16:30 KST = 07:30 UTC ──────────
   if (utcH === 7 && utcM === 30 && dow >= 1 && dow <= 5 && dailyRunToday !== dateStr) {
     dailyRunToday = dateStr;
     console.log("[scheduler] 장마감 증분 업데이트 시작 (16:30 KST)");
@@ -226,9 +209,7 @@ export function startMarketScheduler() {
   setInterval(checkAndRun, 60_000);
   console.log("[scheduler] 시장분석 스케줄러 등록 완료");
   console.log("  - 장전 브리핑:      평일 06:00 KST (21:00 UTC 전날)");
-  console.log("  - 장중 브리핑:      평일 13:00 KST (04:00 UTC)");
-  console.log("  - 장마감 브리핑:    평일 16:00 KST (07:00 UTC) ← Naver 데이터 안정화 후");
-  console.log("  - 장마감 업데이트:  평일 16:30 KST (07:30 UTC) → 일별 섹터 보정 포함");
+  console.log("  - 장마감 업데이트:  평일 16:30 KST (07:30 UTC) → ML 학습 + 브리핑 갱신");
   console.log("  - 주간 재학습:      매주 일요일 10:00 KST (01:00 UTC) → LSTM+GBDT 재훈련");
   console.log("  - 주간 딥 캘리브레이션: 매주 일요일 11:00 KST (02:00 UTC) → AI 진단 + sector_priors 갱신");
   console.log("  - 월간 재학습:      매월 1일 00:00 KST (전달 15:00 UTC)");

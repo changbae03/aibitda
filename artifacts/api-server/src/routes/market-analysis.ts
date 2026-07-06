@@ -49,7 +49,7 @@ interface BriefCache {
   data: MarketBriefResult;
   cachedAt: number;
 }
-const BRIEF_TTL = 2 * 3600_000;   // 2시간 (장중 주요 시점마다 갱신)
+const BRIEF_TTL = 4 * 3600_000;   // 4시간 (하루 2회 스케줄 기준)
 let _briefCache: BriefCache | null = null;
 let _briefRefreshing = false;      // 백그라운드 갱신 중복 방지
 
@@ -87,6 +87,15 @@ async function ensureHistoryTable() {
 
 async function saveToHistory(market: "kr" | "us", cache: BriefCache) {
   try {
+    // 3시간 이내에 같은 market 브리핑이 이미 저장돼 있으면 스킵 (중복 방지)
+    const recent = await pool.query(
+      `SELECT 1 FROM market_brief_history WHERE market = $1 AND generated_at > NOW() - INTERVAL '3 hours' LIMIT 1`,
+      [market],
+    );
+    if ((recent.rowCount ?? 0) > 0) {
+      console.log(`[market-brief-history] ${market} 히스토리 저장 스킵 (3시간 쿨다운)`);
+      return;
+    }
     await pool.query(
       `INSERT INTO market_brief_history (market, session_type, summary, sentiment, data, generated_at)
        VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
@@ -99,6 +108,7 @@ async function saveToHistory(market: "kr" | "us", cache: BriefCache) {
         new Date(cache.cachedAt),
       ],
     );
+    console.log(`[market-brief-history] ${market} 브리핑 저장 완료`);
   } catch (err: any) {
     console.error("[market-brief-history] 히스토리 저장 실패:", err?.message);
   }
@@ -592,16 +602,14 @@ async function generateBrief(): Promise<MarketBriefResult> {
 
   // ── 공통 JSON 스키마 (keyTopics 포함) ─────────────────────────────────────
   const keyTopicsSchema = `  "keyTopics": [
-    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 시장에 왜 중요한지 구체적으로 (50~70자)" },
-    { "keyword": "...", "category": "...", "description": "..." },
-    { "keyword": "...", "category": "...", "description": "..." },
+    { "keyword": "핵심 키워드 (10자)", "category": "정치 또는 기업 또는 경제 또는 글로벌 또는 산업", "description": "이 이슈가 지금 시장에 왜 중요한지 구체적으로 (40~60자)" },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." },
     { "keyword": "...", "category": "...", "description": "..." }
   ]`;
 
-  const keyTopicsRule = `- keyTopics: 뉴스 헤드라인과 현재 시황을 바탕으로 시장을 움직이는 핵심 키워드 7개 선정. 반드시 글로벌(미국·중국)·국내 기업(삼성전자·SK하이닉스·현대차)·정치(관세·규제)·섹터(반도체·바이오·2차전지·방산·조선) 중 다양하게 커버. 각 description은 "왜 지금 주가에 영향 주는지" 구체적으로.`;
+  const keyTopicsRule = `- keyTopics: 시장을 움직이는 핵심 키워드 5개 엄선 (많으면 안 됨). 글로벌·국내 기업·정치·섹터 중 가장 임팩트 큰 것만. description은 "왜 지금 주가에 영향 주는지" 40~60자로 간결하게.`;
 
   // ── 장전 프롬프트 ──────────────────────────────────────────────────────────
   const morningPrompt = `당신은 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장 개장 전입니다.
@@ -958,7 +966,7 @@ ${keyTopicsRule}
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 5000,
+      maxOutputTokens: 2500,
       temperature: 0.65,
       topP: 0.92,
       thinkingConfig: { thinkingBudget: 0 },
@@ -980,15 +988,15 @@ ${keyTopicsRule}
     sessionType:          session,
     leadParagraph:        parsed?.leadParagraph        ?? "",
     storyLine:            parsed?.storyLine            ?? "",
-    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 8),
-    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 6),
-    forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),
-    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 6),
-    keyTopics:            safeArr(parsed?.keyTopics).slice(0, 7),
+    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 5),
+    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 4),
+    forwardLook:          safeArr(parsed?.forwardLook).slice(0, 2),
+    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 3),
+    keyTopics:            safeArr(parsed?.keyTopics).slice(0, 5),
     keyRisk:              parsed?.keyRisk              ?? "",
-    actionPoints:         safeArr(parsed?.actionPoints).slice(0, 3),
-    recentIssues:         safeArr(parsed?.recentIssues).slice(0, 5),
-    outlook:              safeArr(parsed?.outlook).slice(0, 4),
+    actionPoints:         safeArr(parsed?.actionPoints).slice(0, 2),
+    recentIssues:         safeArr(parsed?.recentIssues).slice(0, 4),
+    outlook:              safeArr(parsed?.outlook).slice(0, 3),
     generatedAt:          new Date().toISOString(),
     kospiCurrent:         kospiLatest?.close  ?? null,
     kosdaqCurrent:        kosdaqLatest?.close ?? null,
@@ -1216,7 +1224,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 5000,
+      maxOutputTokens: 2500,
       temperature: 0.65,
       topP: 0.92,
       thinkingConfig: { thinkingBudget: 0 },
@@ -1263,15 +1271,15 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단
     sessionType:         session,
     leadParagraph:       parsed?.leadParagraph       ?? "",
     storyLine:           parsed?.storyLine           ?? "",
-    marketEvents:        safeArr(parsed?.marketEvents).slice(0, 8),
-    macroFactors:        safeArr(parsed?.macroFactors).slice(0, 6),
-    forwardLook:         safeArr(parsed?.forwardLook).slice(0, 3),
-    upcomingMacroEvents: safeArr(parsed?.upcomingMacroEvents).slice(0, 6),
-    keyTopics:           safeArr(parsed?.keyTopics).slice(0, 7),
+    marketEvents:        safeArr(parsed?.marketEvents).slice(0, 5),
+    macroFactors:        safeArr(parsed?.macroFactors).slice(0, 4),
+    forwardLook:         safeArr(parsed?.forwardLook).slice(0, 2),
+    upcomingMacroEvents: safeArr(parsed?.upcomingMacroEvents).slice(0, 3),
+    keyTopics:           safeArr(parsed?.keyTopics).slice(0, 5),
     keyRisk:             parsed?.keyRisk             ?? "",
-    actionPoints:        safeArr(parsed?.actionPoints).slice(0, 3),
-    recentIssues:        safeArr(parsed?.recentIssues).slice(0, 5),
-    outlook:             safeArr(parsed?.outlook).slice(0, 4),
+    actionPoints:        safeArr(parsed?.actionPoints).slice(0, 2),
+    recentIssues:        safeArr(parsed?.recentIssues).slice(0, 4),
+    outlook:             safeArr(parsed?.outlook).slice(0, 3),
     generatedAt:         new Date().toISOString(),
     kospiCurrent:        null,
     kosdaqCurrent:       null,
