@@ -1376,6 +1376,11 @@ router.get("/brief", async (req, res) => {
       return;
     }
     if (!_usBriefRefreshing) refreshUsBriefInBackground("첫요청-캐시없음");
+    // force여도 기존 캐시 있으면 generating 플래그 포함해서 즉시 반환
+    if (_usBriefCache) {
+      res.json({ ...(_usBriefCache.data), sessionType: detectUsSession(), cached: true, stale: true, generating: true });
+      return;
+    }
     // 메모리 캐시 없을 때 DB 직접 조회 폴백 (3초 타임아웃)
     try {
       const timeout = new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), 3000));
@@ -1385,7 +1390,7 @@ router.get("/brief", async (req, res) => {
       ]) as any;
       if (dbRow?.rows?.length) {
         const data = dbRow.rows[0].value as any;
-        res.json({ ...data, sessionType: detectUsSession(), cached: true, stale: true, fromDb: true });
+        res.json({ ...data, sessionType: detectUsSession(), cached: true, stale: true, generating: true, fromDb: true });
         return;
       }
     } catch { /* DB 조회 실패/타임아웃 → 즉시 generating 반환 */ }
@@ -1417,8 +1422,13 @@ router.get("/brief", async (req, res) => {
     return;
   }
 
-  // ③ 캐시 없음(첫 요청 or force) — DB 직접 조회 폴백 (3초 타임아웃)
+  // ③ force 또는 캐시 없음 — force여도 기존 캐시 있으면 generating 플래그 포함 즉시 반환
   if (!_briefRefreshing) refreshBriefInBackground("첫요청-캐시없음");
+  if (_briefCache) {
+    res.json({ ...(_briefCache.data), sessionType: detectSession(), cached: true, stale: true, generating: true });
+    return;
+  }
+  // 메모리 캐시 없음 → DB 직접 조회 폴백 (3초 타임아웃)
   try {
     const timeout = new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), 3000));
     const dbRow = await Promise.race([
@@ -1427,7 +1437,7 @@ router.get("/brief", async (req, res) => {
     ]) as any;
     if (dbRow?.rows?.length) {
       const data = dbRow.rows[0].value as any;
-      res.json({ ...data, sessionType: detectSession(), cached: true, stale: true, fromDb: true });
+      res.json({ ...data, sessionType: detectSession(), cached: true, stale: true, generating: true, fromDb: true });
       return;
     }
   } catch { /* DB 조회 실패/타임아웃 → 즉시 generating 반환 */ }

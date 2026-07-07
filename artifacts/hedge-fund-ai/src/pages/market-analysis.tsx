@@ -470,8 +470,8 @@ function MarketBriefSection({
         </div>
       )}
 
-      {/* ── 생성 중 ── */}
-      {!loading && brief?.generating && (
+      {/* ── 생성 중 (내용 없을 때만 빈 스피너) ── */}
+      {!loading && brief?.generating && !brief.summary && (
         <div className="flex items-center gap-3 px-5 py-6 text-muted-foreground/60">
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
           <span className="text-sm">AI가 시장을 분석하고 있어요. 잠시 후 자동으로 표시됩니다.</span>
@@ -486,9 +486,17 @@ function MarketBriefSection({
         </div>
       )}
 
-      {/* ── 본문 ── */}
-      {brief && !brief.generating && (
+      {/* ── 본문 (generating이어도 이전 내용 있으면 표시) ── */}
+      {brief?.summary && (
         <div className="divide-y divide-border/40">
+
+          {/* 새 분석 생성 중 배너 */}
+          {brief.generating && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 border-b border-border/30">
+              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60 shrink-0" />
+              <span className="text-[11px] text-muted-foreground/60">최신 분석으로 업데이트 중…</span>
+            </div>
+          )}
 
           {/* 헤드라인 + 지수 칩 + 리드 */}
           <div className="px-5 pt-5 pb-5 space-y-3.5">
