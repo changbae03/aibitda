@@ -976,7 +976,8 @@ ${keyTopicsRule}
   const raw = response.text ?? "";
   let parsed: any = null;
   try {
-    const match = raw.match(/\{[\s\S]*\}/);
+    const cleaned = raw.replace(/```json\n?|```/g, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
     if (match) parsed = JSON.parse(match[0]);
   } catch {}
 
@@ -1234,7 +1235,8 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단
   const raw = response.text ?? "";
   let parsed: any = null;
   try {
-    const match = raw.match(/\{[\s\S]*\}/);
+    const cleaned = raw.replace(/```json\n?|```/g, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
     if (match) parsed = JSON.parse(match[0]);
     else console.warn("[us-brief] JSON 블록 없음 — raw 응답:", raw.slice(0, 300));
   } catch (e: any) {
@@ -1374,15 +1376,19 @@ router.get("/brief", async (req, res) => {
       return;
     }
     if (!_usBriefRefreshing) refreshUsBriefInBackground("첫요청-캐시없음");
-    // 메모리 캐시 없을 때 DB 직접 조회 폴백
+    // 메모리 캐시 없을 때 DB 직접 조회 폴백 (3초 타임아웃)
     try {
-      const dbRow = await pool.query(`SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief_us' LIMIT 1`);
-      if (dbRow.rows.length) {
+      const timeout = new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), 3000));
+      const dbRow = await Promise.race([
+        pool.query(`SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief_us' LIMIT 1`),
+        timeout,
+      ]) as any;
+      if (dbRow?.rows?.length) {
         const data = dbRow.rows[0].value as any;
         res.json({ ...data, sessionType: detectUsSession(), cached: true, stale: true, fromDb: true });
         return;
       }
-    } catch { /* DB 조회 실패 시 generating 반환 */ }
+    } catch { /* DB 조회 실패/타임아웃 → 즉시 generating 반환 */ }
     res.json({ generating: true });
     return;
   }
@@ -1411,16 +1417,20 @@ router.get("/brief", async (req, res) => {
     return;
   }
 
-  // ③ 캐시 없음(첫 요청 or force) — DB 직접 조회 폴백
+  // ③ 캐시 없음(첫 요청 or force) — DB 직접 조회 폴백 (3초 타임아웃)
   if (!_briefRefreshing) refreshBriefInBackground("첫요청-캐시없음");
   try {
-    const dbRow = await pool.query(`SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief' LIMIT 1`);
-    if (dbRow.rows.length) {
+    const timeout = new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), 3000));
+    const dbRow = await Promise.race([
+      pool.query(`SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief' LIMIT 1`),
+      timeout,
+    ]) as any;
+    if (dbRow?.rows?.length) {
       const data = dbRow.rows[0].value as any;
       res.json({ ...data, sessionType: detectSession(), cached: true, stale: true, fromDb: true });
       return;
     }
-  } catch { /* DB 조회 실패 시 generating 반환 */ }
+  } catch { /* DB 조회 실패/타임아웃 → 즉시 generating 반환 */ }
   res.json({ generating: true });
 });
 
