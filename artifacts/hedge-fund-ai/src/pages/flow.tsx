@@ -83,12 +83,13 @@ function fmt억(v: number) {
 }
 
 export function SurgeWidget() {
-  const [data,       setData]       = useState<SurgeCandidate[]>([]);
-  const [loading,    setLoading]    = useState(false);
-  const [open,       setOpen]       = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [cachedAt,   setCachedAt]   = useState<number | null>(null);
+  const [data,          setData]          = useState<SurgeCandidate[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [open,          setOpen]          = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [cachedAt,      setCachedAt]      = useState<number | null>(null);
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+  const [serverScanning, setServerScanning] = useState(false);
 
   const load = useCallback(async (force = false) => {
     if (force) setRefreshing(true); else setLoading(true);
@@ -99,13 +100,22 @@ export function SurgeWidget() {
       const res = await fetch(url, { method: force ? "POST" : "GET", credentials: "include" });
       if (!res.ok) return;
       const j = await res.json();
-      setData(Array.isArray(j.data) ? j.data : []);
+      const candidates = Array.isArray(j.data) ? j.data : [];
+      setData(candidates);
       setCachedAt(j.cachedAt ?? null);
+      setServerScanning(j.scanning === true && candidates.length === 0);
     } catch { /* silent */ }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // 서버 스캔 중일 때 20초마다 재조회
+  useEffect(() => {
+    if (!serverScanning) return;
+    const id = setInterval(() => load(), 20_000);
+    return () => clearInterval(id);
+  }, [serverScanning, load]);
 
   const timeStr = cachedAt
     ? new Date(cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
@@ -171,16 +181,21 @@ export function SurgeWidget() {
                 </div>
               )}
 
-              {/* 데이터 없음 */}
+              {/* 데이터 없음 / 스캔 중 */}
               {!loading && data.length === 0 && (
                 <div className="py-8 text-center space-y-1.5">
-                  <Zap className="w-6 h-6 text-muted-foreground/20 mx-auto" />
-                  <p className="text-[12px] text-muted-foreground/40">
-                    장 중(09:00~15:30)에만 탐지됩니다
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/30">
-                    현재 조건 충족 종목 없음
-                  </p>
+                  <Zap className={cn("w-6 h-6 mx-auto", serverScanning ? "text-amber-400 animate-pulse" : "text-muted-foreground/20")} />
+                  {serverScanning ? (
+                    <>
+                      <p className="text-[12px] text-amber-500/80">전 종목 스캔 중…</p>
+                      <p className="text-[11px] text-muted-foreground/40">잠시 후 자동으로 업데이트됩니다</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[12px] text-muted-foreground/40">장 중(09:00~15:30)에만 탐지됩니다</p>
+                      <p className="text-[11px] text-muted-foreground/30">현재 조건 충족 종목 없음</p>
+                    </>
+                  )}
                 </div>
               )}
 

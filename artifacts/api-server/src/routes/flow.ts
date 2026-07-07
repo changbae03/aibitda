@@ -252,7 +252,69 @@ interface SurgeCache {
 }
 
 let surgeCache: SurgeCache | null = null;
-const SURGE_TTL = 30 * 60 * 1000; // 30분 (장중 자주 갱신)
+const SURGE_TTL     = 30 * 60 * 1000;         // 30분 (장중 자주 갱신)
+const SURGE_STALE   = 24 * 60 * 60 * 1000;    // 24시간 stale 허용 (재시작 후 이전 데이터 서빙)
+const SURGE_CACHE_KEY = "surge_cache_v1";
+let   surgeScanning = false;
+
+async function loadSurgeFromDB(): Promise<SurgeCache | null> {
+  try {
+    const r = await pool.query<{ data: string; expires_at: Date }>(
+      `SELECT data, expires_at FROM system_cache WHERE key = $1 LIMIT 1`,
+      [SURGE_CACHE_KEY]
+    );
+    if (!r.rows[0]) return null;
+    const raw = r.rows[0].data;
+    const parsed: SurgeCache = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed?.data) || parsed.data.length === 0) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function saveSurgeToDB(cache: SurgeCache) {
+  const expiresAt = new Date(Date.now() + SURGE_STALE);
+  pool.query(
+    `INSERT INTO system_cache (key, data, expires_at)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at`,
+    [SURGE_CACHE_KEY, JSON.stringify(cache), expiresAt]
+  ).catch(() => {});
+}
+
+async function runSurgeScan(): Promise<void> {
+  if (surgeScanning) return;
+  surgeScanning = true;
+  try {
+    const data = await buildSurgeData();
+    if (data.length === 0) {
+      console.log("[surge] 스캔 0건 — 기존 캐시 유지");
+      return;
+    }
+    const todayStr = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
+    surgeCache = { data, cachedAt: Date.now(), tradingDate: todayStr };
+    saveSurgeToDB(surgeCache);
+    console.log(`[surge] 스캔 완료: ${data.length}개 저장`);
+  } catch (e: any) {
+    console.error("[surge] 스캔 실패:", e?.message);
+  } finally {
+    surgeScanning = false;
+  }
+}
+
+// 서버 기동 시 DB 복원 + 필요시 백그라운드 갱신
+loadSurgeFromDB().then(db => {
+  if (db) {
+    surgeCache = db;
+    const ageMin = Math.round((Date.now() - db.cachedAt) / 60_000);
+    console.log(`[surge] DB 캐시 복원 (${db.data.length}개, ${ageMin}분 전) — 즉시 서빙 가능`);
+    if (Date.now() - db.cachedAt > SURGE_TTL) {
+      setTimeout(() => runSurgeScan(), 20_000);
+    }
+  } else {
+    console.log("[surge] DB 캐시 없음 — 20초 후 초기 스캔 시작");
+    setTimeout(() => runSurgeScan(), 20_000);
+  }
+}).catch(() => {});
 
 async function fetchHotThemeMap(): Promise<Map<string, string[]>> {
   try {
@@ -365,38 +427,31 @@ async function buildSurgeData(): Promise<SurgeCandidate[]> {
   return final;
 }
 
-// GET /api/market/surge — 폭발 조짐 종목 (장중 30분 캐시)
-router.get("/market/surge", async (_req, res) => {
-  try {
-    const now = Date.now();
-
-    // 캐시 히트
-    if (surgeCache && now - surgeCache.cachedAt < SURGE_TTL) {
-      return res.json({ data: surgeCache.data, cachedAt: surgeCache.cachedAt, cached: true });
-    }
-
-    const data = await buildSurgeData();
-    const todayStr = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
-    surgeCache = { data, cachedAt: now, tradingDate: todayStr };
-    return res.json({ data, cachedAt: now, cached: false });
-  } catch (e: any) {
-    console.error("[surge]", e?.message);
-    if (surgeCache) return res.json({ data: surgeCache.data, cachedAt: surgeCache.cachedAt, cached: true, stale: true });
-    return res.status(500).json({ error: "급등 탐지 실패" });
+// GET /api/market/surge — 폭발 조짐 종목 (항상 즉시 응답)
+router.get("/market/surge", (_req, res) => {
+  // 데이터 있으면 즉시 반환 (stale이어도)
+  if (surgeCache && surgeCache.data.length > 0) {
+    const stale = Date.now() - surgeCache.cachedAt > SURGE_TTL;
+    if (stale && !surgeScanning) runSurgeScan();
+    return res.json({
+      data:     surgeCache.data,
+      cachedAt: surgeCache.cachedAt,
+      scanning: surgeScanning,
+      cached:   true,
+    });
   }
+  // 데이터 없으면 백그라운드 스캔 트리거 + scanning:true 반환
+  if (!surgeScanning) runSurgeScan();
+  return res.json({ data: [], cachedAt: null, scanning: true });
 });
 
 // POST /api/market/surge/refresh — 강제 갱신
 router.post("/market/surge/refresh", async (_req, res) => {
-  try {
-    surgeCache = null;
-    const data = await buildSurgeData();
-    const todayStr = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
-    surgeCache = { data, cachedAt: Date.now(), tradingDate: todayStr };
-    return res.json({ data, cachedAt: surgeCache.cachedAt, cached: false });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message ?? "갱신 실패" });
+  await runSurgeScan();
+  if (surgeCache) {
+    return res.json({ data: surgeCache.data, cachedAt: surgeCache.cachedAt, scanning: false });
   }
+  return res.status(500).json({ error: "스캔 실패" });
 });
 
 export default router;
