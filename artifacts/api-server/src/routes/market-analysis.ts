@@ -1374,6 +1374,15 @@ router.get("/brief", async (req, res) => {
       return;
     }
     if (!_usBriefRefreshing) refreshUsBriefInBackground("첫요청-캐시없음");
+    // 메모리 캐시 없을 때 DB 직접 조회 폴백
+    try {
+      const dbRow = await pool.query(`SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief_us' LIMIT 1`);
+      if (dbRow.rows.length) {
+        const data = dbRow.rows[0].value as any;
+        res.json({ ...data, sessionType: detectUsSession(), cached: true, stale: true, fromDb: true });
+        return;
+      }
+    } catch { /* DB 조회 실패 시 generating 반환 */ }
     res.json({ generating: true });
     return;
   }
@@ -1402,8 +1411,16 @@ router.get("/brief", async (req, res) => {
     return;
   }
 
-  // ③ 캐시 없음(첫 요청 or force)
+  // ③ 캐시 없음(첫 요청 or force) — DB 직접 조회 폴백
   if (!_briefRefreshing) refreshBriefInBackground("첫요청-캐시없음");
+  try {
+    const dbRow = await pool.query(`SELECT value, cached_at FROM kv_cache WHERE key = 'market_brief' LIMIT 1`);
+    if (dbRow.rows.length) {
+      const data = dbRow.rows[0].value as any;
+      res.json({ ...data, sessionType: detectSession(), cached: true, stale: true, fromDb: true });
+      return;
+    }
+  } catch { /* DB 조회 실패 시 generating 반환 */ }
   res.json({ generating: true });
 });
 

@@ -97,6 +97,11 @@ async function runScan(): Promise<CachedPresurge> {
     console.log(`[presurge] 스캔 시작: ${from} ~ ${today}`);
     const result = await fetchPresurgeScan(from, today);
     console.log(`[presurge] 완료: ${result.candidates.length}개 전조 종목`);
+    // pykrx 실패 등으로 0건이면 기존 캐시 보존 (빈 결과로 덮어쓰지 않음)
+    if (result.candidates.length === 0) {
+      console.log("[presurge] 스캔 0건 — 기존 캐시 유지 (덮어쓰기 생략)");
+      return memCache ?? { result, cachedAt: Date.now() };
+    }
     const cached: CachedPresurge = { result, cachedAt: Date.now() };
     memCache = cached;
     await saveToDB(cached);
