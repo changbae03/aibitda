@@ -966,7 +966,7 @@ ${keyTopicsRule}
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 2500,
+      maxOutputTokens: 4096,
       temperature: 0.65,
       topP: 0.92,
       thinkingConfig: { thinkingBudget: 0 },
@@ -979,12 +979,19 @@ ${keyTopicsRule}
     const cleaned = raw.replace(/```json\n?|```/g, "").trim();
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (match) parsed = JSON.parse(match[0]);
-  } catch {}
+  } catch (e: any) {
+    console.error("[market-brief] JSON 파싱 실패:", e?.message, "raw 앞 100자:", raw.slice(0, 100));
+  }
+
+  // 파싱 실패 시 잘못된 기본값을 DB에 저장하지 않도록 에러 throw → 재시도 유도
+  if (!parsed || !parsed.summary) {
+    throw new Error(`[market-brief] Gemini 응답 파싱 실패 — raw 길이: ${raw.length}`);
+  }
 
   const safeArr = (v: any) => Array.isArray(v) ? v : [];
 
   return {
-    summary:              parsed?.summary              ?? "한국 증시 데이터 분석 중",
+    summary:              parsed.summary,
     sentiment:            parsed?.sentiment            ?? "neutral",
     sessionType:          session,
     leadParagraph:        parsed?.leadParagraph        ?? "",
@@ -1225,7 +1232,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      maxOutputTokens: 2500,
+      maxOutputTokens: 4096,
       temperature: 0.65,
       topP: 0.92,
       thinkingConfig: { thinkingBudget: 0 },
@@ -1240,7 +1247,12 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단
     if (match) parsed = JSON.parse(match[0]);
     else console.warn("[us-brief] JSON 블록 없음 — raw 응답:", raw.slice(0, 300));
   } catch (e: any) {
-    console.warn("[us-brief] JSON 파싱 실패:", e?.message, "raw:", raw.slice(0, 300));
+    console.error("[us-brief] JSON 파싱 실패:", e?.message, "raw 앞 100자:", raw.slice(0, 100));
+  }
+
+  // 파싱 실패 시 잘못된 기본값을 DB에 저장하지 않도록 에러 throw → 재시도 유도
+  if (!parsed || !parsed.summary) {
+    throw new Error(`[us-brief] Gemini 응답 파싱 실패 — raw 길이: ${raw.length}`);
   }
 
   // 한국 시장 콘텐츠 오염 감지 — macroFactors를 데이터 기반으로 재구성
@@ -1268,7 +1280,7 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 판단
   const safeArr = (v: any) => Array.isArray(v) ? v : [];
 
   return {
-    summary:             parsed?.summary             ?? "미국 증시 데이터 분석 중",
+    summary:             parsed.summary,
     sentiment:           parsed?.sentiment           ?? "neutral",
     sessionType:         session,
     leadParagraph:       parsed?.leadParagraph       ?? "",
