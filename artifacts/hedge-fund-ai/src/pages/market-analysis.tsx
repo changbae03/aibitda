@@ -1484,6 +1484,19 @@ export default function MarketAnalysis() {
   useEffect(() => { fetchBrief(); }, [fetchBrief]);
   useEffect(() => { fetchUsBrief(); }, [fetchUsBrief]);
 
+  // 모바일에서 백그라운드 전환 시 setTimeout이 멈추는 문제 대응
+  // — 탭/앱이 다시 포그라운드로 오면 "분석 중" 상태인 경우 즉시 재시도
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setBrief(prev => { if (prev?.generating) { fetchBrief(); } return prev; });
+        setUsBrief(prev => { if (prev?.generating) { fetchUsBrief(); } return prev; });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchBrief, fetchUsBrief]);
+
   useEffect(() => {
     if (!status) {
       const t = setTimeout(fetchStatus, 3000);
