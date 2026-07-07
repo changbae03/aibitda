@@ -440,9 +440,15 @@ export default function ThemesPage() {
       ) : (
         <div className="space-y-3">
           <ThemeForceRanking feed={feed} />
-          {feed.map((item, idx) => (
-            <FeedCard key={item.id} item={item} idx={idx} onAnalyze={goAnalyze} onDiscover={discover} />
-          ))}
+          {[...feed]
+            .sort((a, b) => {
+              const fa = computeThemeForce(a.stocks)?.avg ?? -Infinity;
+              const fb = computeThemeForce(b.stocks)?.avg ?? -Infinity;
+              return fb - fa;
+            })
+            .map((item, idx) => (
+              <FeedCard key={item.id} item={item} idx={idx} onAnalyze={goAnalyze} onDiscover={discover} />
+            ))}
         </div>
       )}
 
