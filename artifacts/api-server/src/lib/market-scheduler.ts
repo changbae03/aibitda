@@ -30,6 +30,7 @@ import { pool } from "@workspace/db";
 // 실행 중복 방지용 플래그
 let morningBriefToday     = "";   // "YYYY-MM-DD" 형식
 let middayBriefToday      = "";   // "YYYY-MM-DD" 형식
+let eveningBriefToday     = "";   // "YYYY-MM-DD" 형식
 let closingBriefToday     = "";   // "YYYY-MM-DD" 형식
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
@@ -97,6 +98,13 @@ function checkAndRun() {
   if (utcH === 4 && utcM === 0 && dow >= 1 && dow <= 5 && middayBriefToday !== dateStr) {
     middayBriefToday = dateStr;
     console.log("[scheduler] 장중 브리핑 갱신 (13:00 KST)");
+    invalidateBriefCache();
+  }
+
+  // ── 야간 KR 브리핑: 평일 22:00 KST = 13:00 UTC (야간 장세·미국 개장 전 정리) ──
+  if (utcH === 13 && utcM === 0 && dow >= 1 && dow <= 5 && eveningBriefToday !== dateStr) {
+    eveningBriefToday = dateStr;
+    console.log("[scheduler] KR 야간 브리핑 갱신 (22:00 KST)");
     invalidateBriefCache();
   }
 
@@ -200,6 +208,7 @@ export function startMarketScheduler() {
   console.log("  [KR] 장전 브리핑:   평일 06:00 KST");
   console.log("  [KR] 장중 브리핑:   평일 13:00 KST");
   console.log("  [KR] 장마감 브리핑: 평일 16:30 KST");
+  console.log("  [KR] 야간 브리핑:   평일 22:00 KST");
   console.log("  [US] 개장 브리핑:   평일 22:30 KST");
   console.log("  [US] 장중 브리핑:   평일 01:30 KST");
   console.log("  [US] 마감 브리핑:   평일 07:00 KST");

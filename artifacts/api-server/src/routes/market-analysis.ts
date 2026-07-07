@@ -49,7 +49,7 @@ interface BriefCache {
   data: MarketBriefResult;
   cachedAt: number;
 }
-const BRIEF_TTL = 4 * 3600_000;   // 4시간 (하루 2회 스케줄 기준)
+const BRIEF_TTL = 8 * 3600_000;   // 8시간 (야간 커버 — 16:30 → 00:30 KST)
 let _briefCache: BriefCache | null = null;
 let _briefRefreshing = false;      // 백그라운드 갱신 중복 방지
 
