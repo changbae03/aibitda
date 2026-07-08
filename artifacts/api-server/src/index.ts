@@ -21,10 +21,6 @@ import { warmupNpsDart } from "./lib/nps-dart-holdings.js";
 import { warmupNps13F } from "./lib/nps-13f-holdings.js";
 import { fetchECOSMacro } from "./lib/ecos-client.js";
 import { fetchFREDMacro } from "./lib/fred-client.js";
-import { spawn, type ChildProcess } from "child_process";
-import { existsSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
 
 // ── 프로세스 레벨 크래시 방지 ─────────────────────────────────────────────
 // Neon 서버리스 환경에서 DB 연결이 갑자기 끊길 때 Node.js EventEmitter가
@@ -58,68 +54,11 @@ const ONE_DAY_MS    = 24 * 60 * 60 * 1000;
 const ONE_WEEK_MS   = 7 * 24 * 60 * 60 * 1000;
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
-// ── 시장분석 서버 (TF.js 분리 — 이벤트 루프 블로킹 방지) ────────────────────
-const MARKET_INTERNAL_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
-
-// esbuild CJS 번들에서 import.meta.url === undefined → fileURLToPath가 throw됨
-// try/catch로 안전하게 처리: dev(ESM)에서는 실제 경로, prod(CJS)에서는 cwd 기준 경로 사용
-function getServerDir(): string {
-  try {
-    return dirname(fileURLToPath(import.meta.url));
-  } catch {
-    // 프로덕션 CJS 번들: 실행 파일은 artifacts/api-server/dist/index.cjs
-    return resolve(process.cwd(), "artifacts/api-server/dist");
-  }
-}
-
-function findTsxBin(): string {
-  const __dir = getServerDir();
-  const candidates = [
-    resolve(__dir, "../../node_modules/.bin/tsx"),
-    resolve(__dir, "../../../node_modules/.bin/tsx"),
-    resolve(__dir, "../../../../node_modules/.bin/tsx"),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  return "tsx";
-}
-
-let _marketChild: ChildProcess | null = null;
-
-function spawnMarketServer() {
-  const isDev = process.env.NODE_ENV !== "production";
-  const __dir = getServerDir();
-
-  const child = isDev
-    ? spawn(findTsxBin(), [resolve(__dir, "market-index.ts")], {
-        env: { ...process.env, PORT: MARKET_INTERNAL_PORT },
-        stdio: "inherit",
-      })
-    : spawn(process.execPath, [resolve(__dir, "market-index.cjs")], {
-        env: { ...process.env, PORT: MARKET_INTERNAL_PORT },
-        stdio: "inherit",
-      });
-
-  child.on("error", (err) =>
-    console.error(`[MARKET] 프로세스 오류:`, err.message)
-  );
-  child.on("exit", (code, signal) => {
-    if (signal === "SIGTERM" || signal === "SIGKILL") return;
-    console.error(`[MARKET] 비정상 종료 (code=${code}) — 5초 후 재시작`);
-    _marketChild = null;
-    setTimeout(spawnMarketServer, 5_000);
-  });
-  _marketChild = child;
-  console.log(`[MARKET] 시장분석 서버 시작 (내부포트 ${MARKET_INTERNAL_PORT})`);
-}
-
-spawnMarketServer();
 
 const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 
-  // 시장분석 스케줄러는 market-server 자식 프로세스에서 실행됨 (TF.js 분리)
+  // 시장분석 라우터는 메인 서버에 직접 마운트됨 (market-analysis.ts)
 
   // 매크로 캐시 예열 — 분석 생성 시 ECOS/FRED 대기 없이 즉시 사용 가능
   setTimeout(() => {
@@ -390,10 +329,6 @@ const server = app.listen(port, () => {
 
 function gracefulShutdown(signal: string) {
   console.log(`[SHUTDOWN] ${signal} 수신 — graceful shutdown 시작`);
-  if (_marketChild) {
-    _marketChild.kill("SIGTERM");
-    _marketChild = null;
-  }
   server.close((err) => {
     if (err) {
       console.error("[SHUTDOWN] 서버 종료 중 오류:", err.message);

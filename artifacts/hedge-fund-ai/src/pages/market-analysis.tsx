@@ -1,838 +1,192 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, Legend,
-  Bar, Cell,
-} from "recharts";
-import {
-  TrendingUp, TrendingDown, RefreshCw, BrainCircuit,
-  CheckCircle2, Circle, Loader2, AlertCircle, BarChart3,
-  Cpu, Database, GitMerge, ChevronRight, Zap,
-  ChevronDown, Newspaper, Sparkles, CalendarDays, Info,
-  Shield, Globe, Lock, Radio, ChevronUp, History,
-} from "lucide-react";
-import { cn, getApiUrl } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
-import { useLanguage } from "@/lib/language-context";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { getApiUrl } from "@/lib/utils";
 
-interface PredPoint { date: string; value: number; lower: number; upper: number }
-interface RecentPerfPoint { date: string; predicted: number; actual: number }
-interface IndexResult {
-  symbol: string; name: string;
-  historical: { date: string; value: number }[];
-  predictions: PredPoint[];
-  currentValue: number;
-  predictedReturn3d: number;
-  predictedReturn1d?: number;
-  predictedReturn2d?: number;
-  trend: "up" | "down";
-  testMae: number;
-  testDirAcc: number;
-  wfDirAcc: number;
-  rolling30dDirAcc: number;
-  predErrStd: number;
-  recentPerf: RecentPerfPoint[];
-  lstmDirAcc: number;
-  gbdtDirAcc: number;
-  ensembleAlpha: number;
-  gbdtForecastRet?: number;
-  lstmForecastRet?: number;
-  /** [v22] 두 AI 모델(GBDT·LSTM) 방향 합의 신호 */
-  agreementSignal?: "up" | "down" | "neutral";
-  /** [v22] 합의 강도: 클수록 두 모델이 강하게 동일 방향 예측 */
-  agreementStrength?: number;
-  /** [Gemini-led] Gemini의 방향 판단 */
-  geminiSignal?: "up" | "down" | "neutral";
-  geminiConfidence?: "high" | "medium" | "low";
-  /** Gemini가 ML neutral을 중재하여 방향을 결정했는가 */
-  geminiResolved?: boolean;
-  /** 최종 합성 신호 (ML합의 or Gemini중재) */
-  finalSignal?: "up" | "down" | "neutral";
-  /** 삼중 합의 여부 (ML두모델 + Gemini 모두 동의, confidence=high) */
-  tripleConsensus?: boolean;
-  /** Gemini 반영 후 조정된 3일 예측 수익률 */
-  adjustedReturn3d?: number;
-  /** [Gemini-Sentiment] Gemini가 판단한 상승 확률 0~100 */
-  geminiUpProb?: number;
-  /** [Gemini-Sentiment] Gemini가 판단한 하락 확률 0~100 */
-  geminiDownProb?: number;
-  /** [Gemini-Sentiment] 시장 분위기: fear / neutral / greed */
-  marketSentiment?: "fear" | "neutral" | "greed";
-  /** [Gemini-Sentiment] 핵심 리스크 요인 */
-  keyRisk?: string;
-  /** [AI Overlay] Gemini 종합 코멘터리 */
-  aiOverlay?: {
-    direction: "up" | "down" | "neutral";
-    confidence: "high" | "medium" | "low";
-    comment: string;
-    reasoning: string;
-    generatedAt: string;
-  };
-}
-interface LiveAccuracy {
-  symbol:   string;
-  correct:  number;
-  total:    number;
-  pending:  number;
-  accuracy: number | null;
-  byHorizon?: Record<string, { correct: number; total: number; accuracy: number | null }>;
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface MarketIndex {
+  close?: number;
+  change?: number;
+  changePercent?: number;
+  label?: string;
 }
 
-
-interface PipelineStep {
-  key: string; label: string;
-  status: "pending" | "running" | "done" | "error";
-  durationMs?: number;
+interface MarketEvent {
+  title: string;
+  impact: "positive" | "negative" | "neutral";
+  description?: string;
 }
-interface PipelineStatus {
-  running: boolean; ready: boolean;
-  initializing?: boolean;
-  steps: PipelineStep[];
-  error?: string;
-  trainedAt?: string;
-  trainingMs?: number;
-  modelVersion?: number;
-  kospi?: IndexResult;
-  kosdaq?: IndexResult;
-  snp500?: IndexResult;
-  nasdaq?: IndexResult;
+
+interface SectorTrend {
+  sector: string;
+  trend: string;
+  change?: number;
+}
+
+interface FundFlows {
+  foreign?: number;
+  institution?: number;
+  retail?: number;
+  foreignLabel?: string;
 }
 
 interface MarketBrief {
   summary: string;
-  sentiment: "bullish" | "bearish" | "neutral";
-  sessionType?: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend"
-              | "us_premarket" | "us_open" | "us_afterhours" | "us_overnight" | "us_weekend";
-  leadParagraph?: string;
-  storyLine?: string;
-  marketEvents?: { title: string; impact: string; direction: "positive" | "negative" | "neutral" }[];
-  macroFactors?: { factor: string; status: string; implication: string }[];
-  forwardLook?: { point: string; detail: string; watchFor: string }[];
-  upcomingMacroEvents?: {
-    date: string;
-    title: string;
-    description: string;
-    impact: "high" | "medium" | "low";
-    direction: "positive" | "negative" | "neutral";
-  }[];
-  keyTopics?: {
-    keyword: string;
-    category: "정치" | "기업" | "경제" | "글로벌" | "산업";
-    description: string;
-  }[];
-  sectorTrends?: {
-    sector: string;
-    trend: "up" | "down" | "neutral";
-    reason: string;
-  }[];
-  fundFlows?: {
-    foreign: string;
-    institution: string;
-    retail: string;
-  };
-  keyRisk?: string;
+  sentiment: "bullish" | "bearish" | "neutral" | "mixed";
+  keyTopics?: string[];
+  marketEvents?: MarketEvent[];
+  indices?: Record<string, MarketIndex>;
+  sectorTrends?: SectorTrend[];
+  fundFlows?: FundFlows;
+  macroFactors?: string[];
+  forwardLook?: string[];
   actionPoints?: string[];
-  recentIssues: string[];
-  outlook: string[];
-  generatedAt: string;
-  kospiCurrent: number | null;
-  kosdaqCurrent: number | null;
-  kospiChange: number | null;
-  kosdaqChange: number | null;
-  cached?: boolean;
-  stale?: boolean;
-  generating?: boolean;
-}
-
-// ─── 브리핑 히스토리 타입 ─────────────────────────────────────────────────────
-interface BriefHistoryItem {
-  id: number;
-  market: "kr" | "us";
   sessionType?: string;
-  summary?: string;
-  sentiment?: "bullish" | "bearish" | "neutral";
-  data: MarketBrief;
-  generatedAt: string;
+  upcomingMacroEvents?: Array<{ date: string; event: string }>;
 }
 
-/* ── 색상 상수 ───────────────────────────────────────────────────────────── */
-const RISE = "#ef4444";
-const FALL = "#3b82f6";
-
-/* ── 세션 메타 (모듈 레벨) ────────────────────────────────────────────────── */
-const SESSION_META: Record<string, { label: string; cls: string }> = {
-  pre_open:      { label: "🌅 장전 브리핑",     cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-  morning:       { label: "🌤 개장 브리핑",      cls: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20" },
-  midday:        { label: "☀️ 장중 브리핑",      cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-  afternoon:     { label: "⛅ 오후장 브리핑",    cls: "text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20" },
-  pre_close:     { label: "🔔 마감 직전",        cls: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-500/10 dark:border-rose-500/20" },
-  closing:       { label: "🌆 장마감 브리핑",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-  evening:       { label: "🌙 야간 브리핑",      cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-  weekend:       { label: "📅 주말 브리핑",      cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
-  us_premarket:  { label: "🌅 US 프리마켓",      cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" },
-  us_open:       { label: "🔔 US 정규장",        cls: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20" },
-  us_afterhours: { label: "🌆 US 애프터마켓",    cls: "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20" },
-  us_overnight:  { label: "🌙 US 휴장 브리핑",   cls: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-500/10 dark:border-indigo-500/20" },
-  us_weekend:    { label: "📅 US 주말 브리핑",   cls: "text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20" },
-};
-
-/* ── 테마 감지 훅 (차트용) ───────────────────────────────────────────────── */
-function useChartColors() {
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-  );
-  useEffect(() => {
-    const obs = new MutationObserver(() =>
-      setIsDark(document.documentElement.classList.contains("dark"))
-    );
-    obs.observe(document.documentElement, { attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return {
-    tickFill:        isDark ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.45)",
-    gridStroke:      isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.07)",
-    refLineStroke:   isDark ? "rgba(255,255,255,0.2)"  : "rgba(0,0,0,0.18)",
-    histLineStroke:  isDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.60)",
-    legendColor:     isDark ? "rgba(255,255,255,0.5)"  : "rgba(0,0,0,0.45)",
-    barCursor:       isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)",
-  };
-}
-
-/* ── 날짜 포매터 ─────────────────────────────────────────────────────────── */
-function formatDate(dateStr: string, short = false): string {
-  const d = new Date(dateStr + "T00:00:00");
-  if (short) return `${d.getMonth() + 1}/${d.getDate()}`;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/* ── 섹션 레이블 (에디토리얼 구분선) ────────────────────────────────────── */
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-[11.5px] font-bold text-foreground/55 tracking-[0.10em] shrink-0">
-        {label}
-      </span>
-      <div className="flex-1 h-px bg-border/60" />
-    </div>
-  );
-}
-
-/* ── 지수 미니 칩 ─────────────────────────────────────────────────────────── */
-function IndexChip({ name, value, change }: { name: string; value: number; change: number | null }) {
-  const up   = change != null && change > 0;
-  const down = change != null && change < 0;
-  return (
-    <div className={cn(
-      "flex items-center justify-between px-4 py-3 rounded-xl border flex-1 min-w-0",
-      up   && "bg-red-50/40 border-red-200/50 dark:bg-red-500/6 dark:border-red-500/20",
-      down && "bg-blue-50/40 border-blue-200/50 dark:bg-blue-500/6 dark:border-blue-500/20",
-      !up && !down && "bg-muted/30 border-border/50",
-    )}>
-      <span className="text-[12px] font-semibold text-muted-foreground/70">{name}</span>
-      <div className="text-right">
-        <p className="text-[15px] font-bold tabular-nums text-foreground leading-none">
-          {value.toLocaleString()}
-        </p>
-        {change != null && (
-          <p className={cn(
-            "text-[12px] font-semibold tabular-nums mt-0.5",
-            up   && "text-red-500 dark:text-red-400",
-            down && "text-blue-500 dark:text-blue-400",
-            !up && !down && "text-muted-foreground/60",
-          )}>
-            {up ? "▲+" : down ? "▼" : ""}
-            {Math.abs(change).toFixed(2)}%
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── 히스토리 섹션 컴포넌트 ──────────────────────────────────────────────────
-function BriefHistorySection({ market }: { market: "kr" | "us" }) {
-  const [open, setOpen]             = useState(false);
-  const [items, setItems]           = useState<BriefHistoryItem[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetch(getApiUrl(`/api/market-analysis/brief-history?market=${market}&limit=15`), { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then((d: BriefHistoryItem[]) => { setItems(Array.isArray(d) ? d : []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [open, market]);
-
-  const sentBadge = (s?: string) =>
-    s === "bullish" ? { label: "상승 우세", cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20" }
-    : s === "bearish" ? { label: "하락 우세", cls: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20" }
-    : { label: "중립", cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20" };
-
-  return (
-    <div className="mt-3">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-      >
-        <History className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-        <span className="font-medium">지난 보고서 보기</span>
-        {open ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 space-y-2">
-              {loading && (
-                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>불러오는 중...</span>
-                </div>
-              )}
-              {!loading && items.length === 0 && (
-                <p className="text-sm text-muted-foreground/60 py-4 text-center">아직 저장된 보고서가 없습니다.</p>
-              )}
-              {!loading && items.map(item => {
-                const isExpanded = expandedId === item.id;
-                const sessMeta = item.sessionType ? SESSION_META[item.sessionType] : null;
-                const sb = sentBadge(item.sentiment);
-                const dt = new Date(item.generatedAt);
-                const dateStr = dt.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
-                const timeStr = dt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-                const events  = item.data?.marketEvents ?? [];
-                const issues  = item.data?.recentIssues ?? [];
-                return (
-                  <div key={item.id} className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
-                    <button
-                      className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                          <span className="text-[11px] font-medium text-muted-foreground">{dateStr} {timeStr}</span>
-                          {sessMeta && (
-                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-md border", sessMeta.cls)}>
-                              {sessMeta.label}
-                            </span>
-                          )}
-                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-md border", sb.cls)}>
-                            {sb.label}
-                          </span>
-                        </div>
-                        {item.summary && (
-                          <p className="text-sm text-foreground/80 line-clamp-2 leading-snug">{item.summary}</p>
-                        )}
-                      </div>
-                      <ChevronDown className={cn("w-4 h-4 text-muted-foreground/50 mt-0.5 flex-shrink-0 transition-transform", isExpanded && "rotate-180")} />
-                    </button>
-
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden border-t border-border/40"
-                        >
-                          <div className="px-4 py-3 space-y-3">
-                            {item.data?.leadParagraph && (
-                              <p className="text-sm text-foreground/70 leading-relaxed">{item.data.leadParagraph}</p>
-                            )}
-                            {events.length > 0 && (
-                              <div className="space-y-1.5">
-                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">주요 이슈</p>
-                                {events.slice(0, 3).map((ev, i) => (
-                                  <div key={i} className="flex items-start gap-2">
-                                    <span className={cn(
-                                      "mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0",
-                                      ev.direction === "positive" ? "bg-red-400" : ev.direction === "negative" ? "bg-blue-400" : "bg-stone-400"
-                                    )} />
-                                    <p className="text-xs text-foreground/70 leading-snug">{ev.title}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {issues.length > 0 && events.length === 0 && (
-                              <div className="space-y-1">
-                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">주요 이슈</p>
-                                {issues.slice(0, 3).map((iss, i) => (
-                                  <p key={i} className="text-xs text-foreground/70 leading-snug">• {iss}</p>
-                                ))}
-                              </div>
-                            )}
-                            {item.data?.keyRisk && (
-                              <div className="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2">
-                                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-0.5">핵심 리스크</p>
-                                <p className="text-xs text-amber-800/80 dark:text-amber-300/80">{item.data.keyRisk}</p>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-/* ── AI 브리핑 카드 ──────────────────────────────────────────────────────── */
-function MarketBriefSection({
-  brief, loading, onRefresh, showRefresh = true,
-}: {
+interface SessionSlot {
+  slot: string;
+  label: string;
+  icon: string;
+  time: string;
+  sessionTypes: string[];
   brief: MarketBrief | null;
-  loading: boolean;
-  onRefresh: () => void;
-  showRefresh?: boolean;
+  generatedAt: number | null;
+  status: "available" | "generating" | "upcoming";
+  isActive: boolean;
+}
+
+interface SessionsResponse {
+  date: string;
+  sessions: SessionSlot[];
+  currentSession: string;
+  currentSlot: string;
+  generating: boolean;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function sentimentConfig(s?: string) {
+  switch (s) {
+    case "bullish":
+      return { label: "상승", bg: "bg-red-500/10 border-red-500/30 text-red-400", dot: "bg-red-400" };
+    case "bearish":
+      return { label: "하락", bg: "bg-blue-500/10 border-blue-500/30 text-blue-400", dot: "bg-blue-400" };
+    case "mixed":
+      return { label: "혼조", bg: "bg-amber-500/10 border-amber-500/30 text-amber-400", dot: "bg-amber-400" };
+    default:
+      return { label: "보합", bg: "bg-zinc-700/50 border-zinc-600 text-zinc-400", dot: "bg-zinc-500" };
+  }
+}
+
+function changeColor(v?: number) {
+  if (v == null) return "text-zinc-500";
+  return v > 0 ? "text-red-400" : v < 0 ? "text-blue-400" : "text-zinc-500";
+}
+
+function fmtPct(v?: number) {
+  if (v == null) return "--";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+}
+
+function fmtAmt(v?: number) {
+  if (v == null) return "--";
+  const abs = Math.abs(v);
+  const billions = Math.round(abs / 100_000_000);
+  return `${v >= 0 ? "+" : "-"}${billions.toLocaleString("ko-KR")}억`;
+}
+
+const SESSION_ICON: Record<string, string> = {
+  sunrise: "🌅",
+  chart: "📊",
+  sunset: "🔔",
+  moon: "🌙",
+};
+
+const SESSION_TYPE_LABEL: Record<string, string> = {
+  pre_open: "장전", morning: "개장", midday: "장중 1차",
+  afternoon: "장중 2차", pre_close: "마감 전", closing: "장마감",
+  evening: "야간", weekend: "주말",
+  us_premarket: "개장 전", us_open: "개장", us_midday: "장중",
+  us_afterhours: "마감 후", us_overnight: "야간",
+};
+
+// ─── Session Card ─────────────────────────────────────────────────────────────
+
+function SessionCard({ session, selected, onClick }: {
+  session: SessionSlot;
+  selected: boolean;
+  onClick: () => void;
 }) {
-  const sentimentCfg = brief?.sentiment === "bullish"
-    ? { label: "상승 우세", textCls: "text-red-500 dark:text-red-400", ringCls: "bg-red-500/8 border-red-500/20" }
-    : brief?.sentiment === "bearish"
-    ? { label: "하락 우세", textCls: "text-blue-500 dark:text-blue-400", ringCls: "bg-blue-500/8 border-blue-500/20" }
-    : { label: "방향 불확실", textCls: "text-amber-500 dark:text-amber-400", ringCls: "bg-amber-500/8 border-amber-500/20" };
-
-  const dirCfg = (d: "positive" | "negative" | "neutral") =>
-    d === "positive"
-      ? { border: "border-l-red-400 dark:border-l-red-500", badge: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "긍정" }
-      : d === "negative"
-      ? { border: "border-l-blue-400 dark:border-l-blue-500", badge: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/20", label: "부정" }
-      : { border: "border-l-stone-300 dark:border-l-border", badge: "text-stone-500 bg-stone-50 border-stone-200 dark:text-muted-foreground dark:bg-muted dark:border-border", label: "중립" };
-
-  const impactCfg = (impact: "high" | "medium" | "low") =>
-    impact === "high"
-      ? { label: "HIGH", cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25" }
-      : impact === "medium"
-      ? { label: "MED",  cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/25" }
-      : { label: "LOW",  cls: "text-stone-500 bg-stone-100 border-stone-200 dark:text-muted-foreground/50 dark:bg-muted/50 dark:border-border" };
-
-  const _today = new Date(); _today.setHours(0,0,0,0);
-  const futureEvents = (brief?.upcomingMacroEvents ?? []).filter((ev) => {
-    const d = new Date(ev.date);
-    return isNaN(d.getTime()) || d >= _today;
-  });
-
-  const catColor: Record<string, string> = {
-    "정치": "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
-    "기업": "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-    "경제": "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
-    "글로벌": "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
-    "산업": "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400",
-  };
-
-  const genTime = brief?.generatedAt
-    ? new Date(brief.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : null;
-
-  const sessionMeta = brief?.sessionType ? SESSION_META[brief.sessionType] : null;
-
-  const cleanStory = (text: string) =>
-    text
-      .replace(/^(안녕하세요[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-      .replace(/^(개인\s*투자자\s*여러분[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-      .replace(/^(\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^。！!?]\s*)/i, "")
-      .replace(/^(오늘도[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-      .replace(/^(주말\s*잘\s*보내[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-      .replace(/^(반갑습니다[^。！!?\n]*[。！!?\n]?\s*)/i, "")
-      .trim();
+  const sc = sentimentConfig(session.brief?.sentiment);
+  const available = session.status === "available" && session.brief;
 
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+    <button
+      onClick={onClick}
+      className={`relative text-left w-full rounded-xl border p-4 transition-all duration-150 ${
+        selected
+          ? "bg-zinc-800 border-zinc-500 shadow-lg shadow-black/40"
+          : session.isActive
+          ? "bg-zinc-900 border-zinc-700 hover:border-zinc-600"
+          : available
+          ? "bg-zinc-900/70 border-zinc-800 hover:border-zinc-700"
+          : "bg-zinc-900/30 border-zinc-800/50 opacity-60 hover:opacity-80"
+      }`}
+    >
+      {session.isActive && (
+        <span className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+      )}
 
-      {/* ── 헤더 ── */}
-      <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-border/60 bg-muted/20 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-[13px] font-semibold text-foreground">AI 시장 브리핑</span>
-          {sessionMeta && (
-            <span className={cn("text-[10.5px] font-bold px-2.5 py-0.5 rounded-full border tracking-wide", sessionMeta.cls)}>
-              {sessionMeta.label}
-            </span>
-          )}
-          {brief && !loading && brief.sentiment && (
-            <span className={cn("text-[10.5px] font-semibold px-2.5 py-0.5 rounded-full border", sentimentCfg.ringCls, sentimentCfg.textCls)}>
-              {sentimentCfg.label}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {genTime && <span className="text-[10px] text-muted-foreground/40">{genTime} 분석</span>}
-          {showRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/50 border border-border text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-all disabled:opacity-40"
-            >
-              <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
-              {loading ? "분석 중..." : "다시 분석"}
-            </button>
-          )}
-        </div>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="text-sm leading-none">{SESSION_ICON[session.icon] ?? "📋"}</span>
+        <span className="text-xs font-semibold text-zinc-200">{session.label}</span>
       </div>
+      <div className="text-[10px] font-mono text-zinc-600 mb-3">{session.time} KST</div>
 
-      {/* ── 로딩 스켈레톤 ── */}
-      {loading && !brief && (
-        <div className="px-5 py-6 space-y-4 animate-pulse">
-          <div className="h-6 bg-muted/60 rounded-lg w-3/4" />
-          <div className="flex gap-2">
-            <div className="h-14 bg-muted/40 rounded-xl flex-1" />
-            <div className="h-14 bg-muted/40 rounded-xl flex-1" />
-          </div>
-          <div className="h-3.5 bg-muted/30 rounded-lg w-full" />
-          <div className="h-3.5 bg-muted/30 rounded-lg w-5/6" />
+      {available ? (
+        <>
+          <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border mb-2 ${sc.bg}`}>
+            <span className={`w-1 h-1 rounded-full ${sc.dot}`} />
+            {sc.label}
+          </span>
+          <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">
+            {session.brief!.summary}
+          </p>
+        </>
+      ) : session.status === "generating" ? (
+        <div className="space-y-1.5 mt-1">
+          <div className="h-1.5 rounded bg-zinc-700 animate-pulse" />
+          <div className="h-1.5 rounded bg-zinc-700/70 animate-pulse w-4/5" />
+          <div className="h-1.5 rounded bg-zinc-700/50 animate-pulse w-3/5" />
+          <p className="text-[10px] text-amber-400 mt-2">생성 중…</p>
         </div>
+      ) : (
+        <p className="text-[11px] text-zinc-600 mt-1">예정됨</p>
       )}
-
-      {/* ── 생성 중 (이전 내용 없을 때) ── */}
-      {!loading && brief?.generating && !brief.summary && (
-        <div className="flex items-center gap-3 px-5 py-6 text-muted-foreground/60">
-          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-          <span className="text-sm">AI가 시장을 분석하고 있어요. 잠시 후 자동으로 표시됩니다.</span>
-        </div>
-      )}
-
-      {/* ── 에러 ── */}
-      {!loading && !brief && (
-        <div className="flex items-center gap-2 px-5 py-6 text-muted-foreground/40">
-          <Newspaper className="w-4 h-4" />
-          <span className="text-sm">브리핑을 불러올 수 없습니다</span>
-        </div>
-      )}
-
-      {/* ── 본문 ── */}
-      {brief?.summary && (
-        <div className="divide-y divide-border/40">
-
-          {/* 갱신 중 배너 */}
-          {brief.generating && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 border-b border-border/30">
-              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60 shrink-0" />
-              <span className="text-[11px] text-muted-foreground/60">최신 분석으로 업데이트 중…</span>
-            </div>
-          )}
-
-          {/* ── 헤로: 헤드라인 + 지수 타일 + 리드 ── */}
-          <div className="px-5 pt-5 pb-5 space-y-4">
-            <h3 className="text-[21px] font-bold text-foreground leading-snug tracking-tight">
-              {brief.summary}
-            </h3>
-
-            {(brief.kospiCurrent != null || brief.kosdaqCurrent != null) && (
-              <div className="flex gap-2.5">
-                {brief.kospiCurrent != null && (
-                  <IndexChip name="KOSPI" value={brief.kospiCurrent} change={brief.kospiChange} />
-                )}
-                {brief.kosdaqCurrent != null && (
-                  <IndexChip name="KOSDAQ" value={brief.kosdaqCurrent} change={brief.kosdaqChange} />
-                )}
-              </div>
-            )}
-
-            {brief.leadParagraph && (
-              <p className="text-[14px] text-foreground/70 leading-[1.9] border-l-[3px] border-primary/25 pl-4">
-                {brief.leadParagraph}
-              </p>
-            )}
-          </div>
-
-          {/* ── 섹터 동향 (NEW) ── */}
-          {(brief.sectorTrends?.length ?? 0) > 0 && (
-            <div className="px-5 py-4 space-y-2.5">
-              <SectionLabel label="섹터 동향" />
-              <div className="flex flex-wrap gap-2 pt-1">
-                {brief.sectorTrends!.map((st, i) => {
-                  const isUp   = st.trend === "up";
-                  const isDown = st.trend === "down";
-                  return (
-                    <div key={i} title={st.reason} className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12px] font-semibold cursor-default transition-all",
-                      isUp   && "bg-red-50 border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/25 dark:text-red-400",
-                      isDown && "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500/25 dark:text-blue-400",
-                      !isUp && !isDown && "bg-muted/50 border-border text-muted-foreground",
-                    )}>
-                      <span className="shrink-0">{isUp ? "▲" : isDown ? "▼" : "–"}</span>
-                      <span>{st.sector}</span>
-                      {st.reason && (
-                        <span className="text-[10.5px] opacity-55 font-normal hidden lg:block">{st.reason}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── 수급 동향 (NEW) ── */}
-          {brief.fundFlows && (
-            <div className="px-5 py-4 space-y-2.5">
-              <SectionLabel label="수급 동향" />
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {([
-                  { label: "외국인", value: brief.fundFlows.foreign },
-                  { label: "기관",   value: brief.fundFlows.institution },
-                  { label: "개인",   value: brief.fundFlows.retail },
-                ] as { label: string; value: string }[]).map((ff, i) => {
-                  const isBuy  = ff.value?.includes("순매수");
-                  const isSell = ff.value?.includes("순매도");
-                  const detail = ff.value?.replace(/순매수|순매도/g, "").replace(/[+-]\s*\d[\d,]*억?원?\s*/g, "").trim();
-                  return (
-                    <div key={i} className={cn(
-                      "px-3 py-3 rounded-xl border text-center space-y-1",
-                      isBuy  && "bg-red-50/60 border-red-200/60 dark:bg-red-500/8 dark:border-red-500/20",
-                      isSell && "bg-blue-50/60 border-blue-200/60 dark:bg-blue-500/8 dark:border-blue-500/20",
-                      !isBuy && !isSell && "bg-muted/30 border-border/50",
-                    )}>
-                      <p className="text-[11px] text-muted-foreground/60 font-medium">{ff.label}</p>
-                      <p className={cn(
-                        "text-[13px] font-bold",
-                        isBuy  && "text-red-600 dark:text-red-400",
-                        isSell && "text-blue-600 dark:text-blue-400",
-                        !isBuy && !isSell && "text-foreground/60",
-                      )}>
-                        {isBuy ? "순매수" : isSell ? "순매도" : "보합"}
-                      </p>
-                      {detail && (
-                        <p className="text-[10px] text-muted-foreground/50 leading-snug">{detail}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── 시장 해설 ── */}
-          {brief.storyLine && (() => {
-            const paras = cleanStory(brief.storyLine).split(/\n\n+/).map(p => p.trim()).filter(Boolean);
-            if (!paras.length) return null;
-            return (
-              <div className="px-5 py-5 space-y-3">
-                <SectionLabel label="시장 해설" />
-                <div className="space-y-4 pt-1">
-                  {paras.map((para, i) => (
-                    <p key={i} className="text-[14px] text-foreground/75 leading-[2.0]">{para}</p>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* ── 주요 이슈 ── */}
-          {(brief.marketEvents?.length ?? 0) > 0 && (
-            <div className="px-5 py-5 space-y-3">
-              <SectionLabel label="주요 이슈" />
-              <div className="space-y-2 pt-1">
-                {brief.marketEvents!.map((ev, i) => {
-                  const dc = dirCfg(ev.direction);
-                  return (
-                    <div key={i} className={cn(
-                      "flex gap-3.5 items-start px-4 py-3.5 rounded-xl bg-muted/30 border-l-[3px]",
-                      dc.border
-                    )}>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className={cn("shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>
-                            {dc.label}
-                          </span>
-                          <p className="text-[13.5px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                        </div>
-                        <p className="text-[13px] text-foreground/60 leading-relaxed">{ev.impact}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── 거시 지표 ── */}
-          {(brief.macroFactors?.length ?? 0) > 0 && (
-            <div className="px-5 py-5 space-y-3">
-              <SectionLabel label="거시 지표" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                {brief.macroFactors!.map((mf, i) => (
-                  <div key={i} className="flex flex-col gap-1.5 px-4 py-3 rounded-xl bg-muted/40 border border-border/50">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-[12.5px] font-semibold text-foreground">{mf.factor}</span>
-                      <span className="text-[12px] font-bold text-foreground/70 tabular-nums shrink-0 text-right">{mf.status}</span>
-                    </div>
-                    <p className="text-[11.5px] text-foreground/55 leading-relaxed">{mf.implication}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── 앞으로 주목할 것 ── */}
-          {(brief.forwardLook?.length ?? 0) > 0 && (
-            <div className="px-5 py-5 space-y-3">
-              <SectionLabel label="앞으로 주목할 것" />
-              <div className="space-y-4 pt-1">
-                {brief.forwardLook!.map((fw, i) => (
-                  <div key={i} className="flex gap-3.5 items-start">
-                    <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary flex items-center justify-center mt-0.5">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 space-y-1.5">
-                      <p className="text-[14px] font-semibold text-foreground leading-snug">{fw.point}</p>
-                      <p className="text-[13px] text-foreground/65 leading-relaxed">{fw.detail}</p>
-                      {fw.watchFor && (
-                        <p className="text-[12px] text-amber-600/70 dark:text-amber-400/60 flex items-center gap-1.5 pt-0.5">
-                          <ChevronRight className="w-3 h-3 shrink-0" />
-                          체크: {fw.watchFor}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── 투자 대응 포인트 ── */}
-          {(brief.actionPoints?.length ?? 0) > 0 && (
-            <div className="px-5 py-5 space-y-3">
-              <SectionLabel label="투자 대응 포인트" />
-              <div className="space-y-2.5 pt-1">
-                {brief.actionPoints!.map((ap, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-primary/60 mt-2.5" />
-                    <p className="text-[13.5px] text-foreground/75 leading-relaxed">{ap}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── 주목 이벤트 ── */}
-          {futureEvents.length > 0 && (
-            <div className="px-5 py-5 space-y-3">
-              <SectionLabel label="주목 이벤트" />
-              <div className="divide-y divide-border/40 pt-1">
-                {futureEvents.map((ev, i) => {
-                  const ic = impactCfg(ev.impact);
-                  const dc = dirCfg(ev.direction);
-                  return (
-                    <div key={i} className="flex items-start gap-3.5 py-3.5 first:pt-0 last:pb-0">
-                      <div className="shrink-0 text-right min-w-[44px] pt-0.5">
-                        <span className="text-[11px] font-semibold text-foreground/40 leading-snug whitespace-nowrap">{ev.date}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                          <span className={cn("text-[9.5px] font-bold px-1.5 py-0.5 rounded border", ic.cls)}>{ic.label}</span>
-                          <span className={cn("text-[9.5px] font-bold px-1.5 py-0.5 rounded border", dc.badge)}>{dc.label}</span>
-                          <p className="text-[13.5px] font-semibold text-foreground leading-snug">{ev.title}</p>
-                        </div>
-                        <p className="text-[12.5px] text-foreground/55 leading-relaxed">{ev.description}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── 핵심 키워드 ── */}
-          {(brief.keyTopics?.length ?? 0) > 0 && (
-            <div className="px-5 py-4 space-y-3">
-              <SectionLabel label="핵심 키워드" />
-              <div className="flex flex-wrap gap-2 pt-1">
-                {brief.keyTopics!.map((topic, i) => {
-                  const cls = catColor[topic.category] ?? "bg-stone-100 text-stone-600 dark:bg-muted/40 dark:text-muted-foreground";
-                  return (
-                    <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/60 bg-muted/30">
-                      <span className={cn("text-[9.5px] font-bold px-1.5 py-0.5 rounded-full shrink-0", cls)}>
-                        {topic.category}
-                      </span>
-                      <span className="text-[12.5px] font-semibold text-foreground">{topic.keyword}</span>
-                      {topic.description && (
-                        <span className="text-[11.5px] text-foreground/40 max-w-[180px] truncate hidden sm:block">{topic.description}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── 핵심 리스크 ── */}
-          {brief.keyRisk && (
-            <div className="px-5 py-4">
-              <div className="flex items-start gap-3 px-4 py-4 rounded-xl bg-amber-500/5 dark:bg-amber-500/8 border border-amber-400/25 dark:border-amber-500/20">
-                <AlertCircle className="w-4 h-4 text-amber-500/70 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[10px] font-bold text-amber-600/70 dark:text-amber-400/50 mb-1.5 tracking-[0.12em] uppercase">핵심 리스크</p>
-                  <p className="text-[13px] text-foreground/70 leading-relaxed">{brief.keyRisk}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── stale 알림 ── */}
-          {brief.stale && !brief.generating && (
-            <div className="px-5 pb-3">
-              <p className="text-[10px] text-amber-500/55 flex items-center gap-1.5">
-                <AlertCircle className="w-3 h-3 shrink-0" />
-                이전 분석 데이터입니다 (백그라운드에서 새 분석 준비 중)
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    </button>
   );
 }
 
-/* ── 파이프라인 단계 아이콘 (내부 전용) ──────────────────────────────────── */
-const STEP_ICONS: Record<string, React.ElementType> = {
-  data:     Database,
-  feature:  Zap,
-  sequence: GitMerge,
-  lstm:     BrainCircuit,
-  gbdt:     Cpu,
-  train:    BrainCircuit,
-  ensemble: GitMerge,
-  output:   BarChart3,
-};
+// ─── Index Grid ───────────────────────────────────────────────────────────────
 
-function StepIcon({ stepKey, status }: { stepKey: string; status: PipelineStep["status"] }) {
-  const Icon = STEP_ICONS[stepKey] ?? Circle;
-  if (status === "done")    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />;
-  if (status === "running") return <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />;
-  if (status === "error")   return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
-  return <Icon className="w-3.5 h-3.5 text-muted-foreground/30" />;
-}
-
-function PipelineTracker({ steps }: { steps: PipelineStep[] }) {
+function IndexGrid({ indices }: { indices: Record<string, MarketIndex> }) {
+  const entries = Object.entries(indices).filter(([, v]) => v.changePercent != null || v.close != null);
+  if (!entries.length) return null;
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {steps.map((step, i) => (
-        <div key={step.key} className="flex items-center gap-1">
-          <div className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-medium transition-all",
-            step.status === "done"    && "border-emerald-500/30 bg-emerald-500/5 text-emerald-400",
-            step.status === "running" && "border-primary/40 bg-primary/5 text-primary",
-            step.status === "error"   && "border-red-500/30 bg-red-500/5 text-red-400",
-            step.status === "pending" && "border-border bg-transparent text-muted-foreground/40",
-          )}>
-            <StepIcon stepKey={step.key} status={step.status} />
-            <span>{step.label}</span>
-          </div>
-          {i < steps.length - 1 && (
-            <ChevronRight className="w-3 h-3 text-muted-foreground/20 shrink-0" />
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      {entries.map(([name, v]) => (
+        <div key={name} className="bg-zinc-800/80 rounded-lg px-3 py-2.5">
+          <p className="text-[10px] text-zinc-500 mb-0.5 truncate">{v.label ?? name}</p>
+          {v.close != null && (
+            <p className="text-sm font-semibold text-zinc-200 tabular-nums">
+              {v.close.toLocaleString("ko-KR")}
+            </p>
+          )}
+          {v.changePercent != null && (
+            <p className={`text-xs font-medium tabular-nums ${changeColor(v.changePercent)}`}>
+              {fmtPct(v.changePercent)}
+            </p>
           )}
         </div>
       ))}
@@ -840,1267 +194,453 @@ function PipelineTracker({ steps }: { steps: PipelineStep[] }) {
   );
 }
 
-/* ── 지수 뱃지 ───────────────────────────────────────────────────────────── */
-function TrendBadge({ value }: { value: number }) {
-  const up = value >= 0;
+// ─── Section label ────────────────────────────────────────────────────────────
+
+function SL({ children }: { children: React.ReactNode }) {
   return (
-    <span className={cn(
-      "inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full",
-      up ? "bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/25"
-         : "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/25",
-    )}>
-      {up ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-      {up ? "상승" : "하락"} 전망 {Math.abs(value)}%
-    </span>
+    <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{children}</h3>
   );
 }
 
-/* ── 메인 차트 ───────────────────────────────────────────────────────────── */
-function IndexChart({ result, predHistory = [] }: { result: IndexResult; predHistory?: PredictionRecord[] }) {
-  const cc = useChartColors();
+// ─── Brief detail ─────────────────────────────────────────────────────────────
 
-  // 과거 예측 이력을 target_date → {price, correct} 맵으로 변환
-  const predMap = new Map<string, { price: number; correct: boolean | null }>();
-  for (const rec of predHistory) {
-    const price = rec.price_at_pred * (1 + rec.predicted_return / 100);
-    predMap.set(rec.target_date, { price: Math.round(price), correct: rec.correct });
-  }
+function BriefDetail({ session }: { session: SessionSlot }) {
+  const brief = session.brief;
 
-  const chartData = [
-    ...result.historical.map(h => ({
-      date: h.date,
-      label: formatDate(h.date, true),
-      historical: h.value,
-      predicted: undefined as number | undefined,
-      lower: undefined as number | undefined,
-      upper: undefined as number | undefined,
-      isPrediction: false,
-      pastPred: predMap.get(h.date)?.price,
-      pastPredCorrect: predMap.get(h.date)?.correct ?? null,
-    })),
-    ...result.predictions.map(p => ({
-      date: p.date,
-      label: formatDate(p.date, true),
-      historical: undefined as number | undefined,
-      predicted: p.value,
-      lower: p.lower,
-      upper: p.upper,
-      isPrediction: true,
-      pastPred: predMap.get(p.date)?.price,
-      pastPredCorrect: predMap.get(p.date)?.correct ?? null,
-    })),
-  ];
-
-  const allValues = [
-    ...result.historical.map(h => h.value),
-    ...result.predictions.flatMap(p => [p.lower, p.upper]),
-    ...Array.from(predMap.values()).map(v => v.price),
-  ].filter(v => v != null) as number[];
-  const minVal = Math.min(...allValues) * 0.997;
-  const maxVal = Math.max(...allValues) * 1.003;
-
-  const lastHistDate = result.historical[result.historical.length - 1]?.date;
-  const predColor = result.trend === "up" ? RISE : FALL;
-
-  // 과거 예측 점 커스텀 렌더러
-  const PastPredDot = (props: any) => {
-    const { cx, cy, payload } = props;
-    if (payload?.pastPred == null || cx == null || cy == null) return null;
-    const c = payload.pastPredCorrect === true ? "#22c55e"
-            : payload.pastPredCorrect === false ? "#ef4444"
-            : "#94a3b8";
+  if (session.status === "generating") {
     return (
-      <g key={`ppd-${payload.date}`}>
-        <circle cx={cx} cy={cy} r={5} fill={c} stroke="white" strokeWidth={1.5} opacity={0.9} />
-      </g>
-    );
-  };
-
-  const customTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload;
-    const val = d?.historical ?? d?.predicted;
-    if (val == null && d?.pastPred == null) return null;
-    return (
-      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
-        <p className="text-muted-foreground">{d.date}</p>
-        {val != null && <p className="font-bold text-foreground">{val.toLocaleString()}</p>}
-        {d.isPrediction && d.lower != null && (
-          <p className="text-muted-foreground">범위: {d.lower.toLocaleString()} ~ {d.upper.toLocaleString()}</p>
-        )}
-        {d.isPrediction && <p className="text-primary text-[10px]">AI 예측값 (오차 범위 포함)</p>}
-        {d.pastPred != null && (
-          <div className="border-t border-border/50 pt-1 mt-1">
-            <p className="text-[10px] text-muted-foreground">
-              과거 예측 {d.pastPred.toLocaleString()}
-              {d.pastPredCorrect === true && " ✅ 방향 적중"}
-              {d.pastPredCorrect === false && " ❌ 방향 불일치"}
-              {d.pastPredCorrect === null && " ⏳ 검증 대기"}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-2">
-      <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id={`confGrad-${result.symbol}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={predColor} stopOpacity={0.18} />
-              <stop offset="100%" stopColor={predColor} stopOpacity={0.03} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 10, fill: cc.tickFill }}
-            tickLine={false} axisLine={false}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            domain={[minVal, maxVal]}
-            tickFormatter={v => v.toLocaleString()}
-            tick={{ fontSize: 10, fill: cc.tickFill }}
-            tickLine={false} axisLine={false} width={58}
-          />
-          <Tooltip content={customTooltip} />
-          {lastHistDate && (
-            <ReferenceLine
-              x={formatDate(lastHistDate, true)}
-              stroke={cc.refLineStroke}
-              strokeDasharray="4 4"
-              label={{ value: "오늘", fill: cc.tickFill, fontSize: 10, position: "insideTopLeft" }}
-            />
-          )}
-          <Area dataKey="upper" stroke="none" fill={`url(#confGrad-${result.symbol})`}
-            isAnimationActive={false} legendType="none" activeDot={false} />
-          <Area dataKey="lower" stroke="none" fill="transparent"
-            isAnimationActive={false} legendType="none" activeDot={false} />
-          <Line
-            dataKey="historical"
-            stroke={cc.histLineStroke}
-            strokeWidth={1.5} dot={false} name="실제 흐름"
-            connectNulls={false} isAnimationActive animationDuration={800}
-          />
-          <Line
-            dataKey="predicted"
-            stroke={predColor} strokeWidth={2} strokeDasharray="5 3"
-            dot={{ r: 3, fill: predColor, stroke: predColor }}
-            name="AI 예측 (D+3)" connectNulls={false}
-            isAnimationActive animationDuration={800} animationBegin={400}
-          />
-          {/* 연속 예측 리본 — 과거 예측 점 (선 없이 점만 표시) */}
-          <Line
-            dataKey="pastPred"
-            stroke="transparent" strokeWidth={0}
-            dot={<PastPredDot />}
-            activeDot={false}
-            name="연속 예측"
-            connectNulls={false}
-            isAnimationActive={false}
-            legendType="none"
-          />
-          <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 8, color: cc.legendColor }} />
-        </ComposedChart>
-      </ResponsiveContainer>
-      {/* 예측 리본 범례 */}
-      {predHistory.length > 0 && (
-        <div className="flex items-center gap-3 px-1 text-[10px] text-muted-foreground/60">
-          <span className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 예측 적중
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" /> 방향 불일치
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" /> 검증 대기
-          </span>
+      <div className="py-12 text-center space-y-3">
+        <div className="inline-flex items-center gap-2 text-amber-400">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <span className="text-sm font-medium">브리핑 생성 중</span>
         </div>
-      )}
-    </div>
-  );
-}
-
-/* ── 예측 vs 실제 비교 차트 ──────────────────────────────────────────────── */
-const KRX_H_FE = new Set(["2025-01-01","2025-01-28","2025-01-29","2025-01-30","2025-05-05","2025-05-06","2025-06-06","2025-08-15","2025-10-03","2025-10-06","2025-10-07","2025-10-09","2025-12-25","2025-12-31","2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-03-02","2026-05-05","2026-05-25","2026-06-03","2026-10-09","2026-12-25","2026-12-31","2027-01-01","2027-02-06","2027-02-07","2027-02-08","2027-03-01","2027-05-05","2027-06-06","2027-08-16","2027-10-04","2027-10-05","2027-10-06","2027-10-11","2027-12-24","2027-12-31"]);
-const NYSE_H_FE = new Set(["2025-01-01","2025-01-20","2025-02-17","2025-04-18","2025-05-26","2025-06-19","2025-07-04","2025-09-01","2025-11-27","2025-12-25","2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25","2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24"]);
-
-function todayKST(): string {
-  return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-}
-
-function formatMD(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00Z");
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-}
-
-function nextTradingDays(fromDateStr: string, count: number, symbol = ""): string[] {
-  const isUS = symbol && !symbol.endsWith(".KS") && !symbol.endsWith(".KQ") && !/^\d{6}$/.test(symbol);
-  const holidays = isUS ? NYSE_H_FE : KRX_H_FE;
-  const result: string[] = [];
-  const d = new Date(fromDateStr);
-  while (result.length < count) {
-    d.setDate(d.getDate() + 1);
-    const ds = d.toISOString().slice(0, 10);
-    if (d.getDay() !== 0 && d.getDay() !== 6 && !holidays.has(ds)) {
-      result.push(ds);
-    }
-  }
-  return result;
-}
-
-function ReturnComparisonChart({
-  data,
-  future,
-  symbol = "",
-  predDates,
-}: {
-  data: RecentPerfPoint[];
-  future?: { d1: number; d2: number; d3: number };
-  symbol?: string;
-  predDates?: string[];
-}) {
-  const cc = useChartColors();
-
-  // predDates(서버 predictions 날짜) 우선 사용 → 카드와 동일 기준
-  const lastDate = data[data.length - 1]?.date ?? "";
-  const futureDates = (predDates && predDates.length === 3)
-    ? predDates
-    : (future && lastDate ? nextTradingDays(lastDate, 3, symbol) : []);
-
-  // 차트 데이터: 과거 + 오늘 브릿지 + 미래 3포인트
-  type ChartRow = {
-    date: string; label: string;
-    actual: number | null;
-    predicted: number | null;    // 실선 (과거 + 브릿지)
-    futurePredict: number | null; // 점선 (브릿지 + 미래)
-    isFuture: boolean;
-    futureLabel?: string;
-  };
-
-  const allRows: ChartRow[] = data.map((d, i) => ({
-    date: d.date,
-    label: i % 5 === 0 ? formatDate(d.date, true) : "",
-    actual: d.actual,
-    predicted: d.predicted,
-    futurePredict: null,
-    isFuture: false,
-  }));
-
-  // 마지막 역사 포인트에 브릿지값 설정
-  if (future && allRows.length > 0) {
-    const last = allRows[allRows.length - 1];
-    last.futurePredict = last.predicted; // 연결점
-    // 미래 3포인트 추가
-    const labels = ["D+1", "D+2", "D+3"];
-    const vals = [future.d1, future.d2, future.d3];
-    futureDates.forEach((date, i) => {
-      allRows.push({
-        date,
-        label: labels[i],
-        actual: null,
-        predicted: null,
-        futurePredict: vals[i],
-        isFuture: true,
-        futureLabel: labels[i],
-      });
-    });
-  }
-
-  const allVals = data.flatMap(d => [d.actual, d.predicted]);
-  if (future) allVals.push(future.d1, future.d2, future.d3);
-  const dataMin = Math.min(...allVals);
-  const dataMax = Math.max(...allVals);
-  const pad     = Math.max(Math.abs(dataMin), Math.abs(dataMax)) * 0.15;
-  const yDomain: [number, number] = [
-    Math.floor((dataMin - pad) * 10) / 10,
-    Math.ceil ((dataMax + pad) * 10) / 10,
-  ];
-
-  const customTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload as ChartRow;
-    const predVal = d.predicted ?? d.futurePredict;
-    return (
-      <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
-        <p className="text-muted-foreground font-medium">
-          {d.isFuture ? `${d.futureLabel} 예측 (${d.date})` : d.date}
-        </p>
-        {predVal != null && (
-          <p style={{ color: "#a78bfa" }}>
-            {d.isFuture ? "AI D+3 예측" : "AI 예측"}: {predVal >= 0 ? "+" : ""}{predVal}%
-          </p>
-        )}
-        {d.actual != null && (
-          <p style={{ color: d.actual >= 0 ? RISE : FALL }}>
-            실제 결과: {d.actual >= 0 ? "+" : ""}{d.actual}%
-          </p>
-        )}
-        {d.actual != null && predVal != null && (
-          <p className="text-muted-foreground/50 text-[10px]">
-            {(predVal >= 0) === (d.actual >= 0) ? "✅ 방향 맞힘" : "❌ 방향 틀림"}
-          </p>
-        )}
-        {d.isFuture && (
-          <p className="text-muted-foreground/50 text-[10px]">⏳ 예측 (결과 미확정)</p>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <ResponsiveContainer width="100%" height={210}>
-      <ComposedChart data={allRows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap="30%">
-        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 9, fill: cc.tickFill }}
-          tickLine={false} axisLine={false}
-          interval={0}
-        />
-        <YAxis
-          domain={yDomain}
-          tickFormatter={v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
-          tick={{ fontSize: 9, fill: cc.tickFill }}
-          tickLine={false} axisLine={false} width={48}
-        />
-        <Tooltip content={customTooltip} cursor={{ fill: cc.barCursor }} />
-        <ReferenceLine y={0} stroke={cc.refLineStroke} strokeDasharray="4 2" />
-        {future && lastDate && (
-          <ReferenceLine
-            x="D+1"
-            stroke={cc.refLineStroke}
-            strokeDasharray="3 3"
-            label={{ value: "예측", fill: cc.tickFill, fontSize: 9, position: "insideTopLeft" }}
-          />
-        )}
-
-        <Bar dataKey="actual" name="실제 등락" radius={[2, 2, 0, 0]}>
-          {allRows.map((d, i) => (
-            <Cell
-              key={`act-${i}`}
-              fill={d.actual != null ? (d.actual >= 0 ? RISE : FALL) : "transparent"}
-              fillOpacity={d.actual != null ? 0.7 : 0}
-            />
+        <p className="text-xs text-zinc-500">AI가 현재 시장 데이터를 분석하고 있습니다</p>
+        <div className="max-w-sm mx-auto space-y-2 mt-6">
+          {[1, 0.7, 0.5].map((op, i) => (
+            <div key={i} className="h-2.5 rounded bg-zinc-800 animate-pulse" style={{ opacity: op }} />
           ))}
-        </Bar>
-
-        {/* 과거 실선 */}
-        <Line
-          dataKey="predicted"
-          name="AI 예측 방향"
-          type="monotone"
-          stroke="#a78bfa"
-          strokeWidth={1.5}
-          dot={{ r: 3, fill: "#a78bfa", strokeWidth: 0 }}
-          activeDot={{ r: 5 }}
-          connectNulls={false}
-        />
-
-        {/* 미래 점선 (D+1~D+3) */}
-        {future && (
-          <Line
-            dataKey="futurePredict"
-            name="D+3 예측 (미래)"
-            type="monotone"
-            stroke="#a78bfa"
-            strokeWidth={1.5}
-            strokeDasharray="5 3"
-            dot={(props: any) => {
-              const { cx, cy, payload } = props;
-              if (!payload?.isFuture) return <g key={`fp-${payload.date}`} />;
-              const c = (payload.futurePredict ?? 0) >= 0 ? "#a78bfa" : "#f87171";
-              return <circle key={`fp-${payload.date}`} cx={cx} cy={cy} r={4} fill={c} stroke="white" strokeWidth={1.5} />;
-            }}
-            activeDot={{ r: 5 }}
-            connectNulls={false}
-            legendType="none"
-          />
-        )}
-
-        <Legend
-          iconSize={10}
-          wrapperStyle={{ fontSize: 10, paddingTop: 8, color: cc.legendColor }}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── 장중 실시간 이슈 피드 ──────────────────────────────────────────────── */
-interface RadarItem {
-  id: string;
-  text: string;
-  date: string;
-}
-interface IntradayComment {
-  id: string;
-  comment: string;
-  urgency: "high" | "medium" | "low";
-  watchFor: string;
-}
-
-function LiveRadarFeed() {
-  const [items, setItems] = useState<RadarItem[]>([]);
-  const [comments, setComments] = useState<Record<string, IntradayComment>>({});
-  const [loading, setLoading] = useState(true);
-  const [commenting, setCommenting] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const seenIdsRef = useRef<Set<string>>(new Set());
-
-  const fetchComments = useCallback(async (newItems: RadarItem[]) => {
-    if (!newItems.length || commenting) return;
-    setCommenting(true);
-    try {
-      const r = await fetch(getApiUrl("/api/market-analysis/intraday-comment"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ items: newItems.slice(0, 8) }),
-      });
-      if (r.ok) {
-        const data = await r.json();
-        const map: Record<string, IntradayComment> = {};
-        for (const c of (data.comments ?? [])) map[c.id] = c;
-        setComments(prev => ({ ...prev, ...map }));
-      }
-    } catch { /* 실패 시 무시 */ }
-    finally { setCommenting(false); }
-  }, [commenting]);
-
-  const fetchRadar = useCallback(async () => {
-    try {
-      const r = await fetch(getApiUrl("/api/news/radar"), { credentials: "include" });
-      if (!r.ok) return;
-      const data = await r.json();
-      const fetched: RadarItem[] = (data.items ?? []).slice(0, 10).map((it: any) => ({
-        id: it.id,
-        text: it.text ?? "",
-        date: it.date ?? "",
-      }));
-      setItems(fetched);
-      setLastRefresh(new Date());
-
-      const newItems = fetched.filter(it => !seenIdsRef.current.has(it.id));
-      if (newItems.length > 0) {
-        for (const it of newItems) seenIdsRef.current.add(it.id);
-        await fetchComments(newItems);
-      }
-    } catch { /* 네트워크 오류 무시 */ }
-    finally { setLoading(false); }
-  }, [fetchComments]);
-
-  useEffect(() => {
-    fetchRadar();
-    const t = setInterval(fetchRadar, 3 * 60_000); // 3분마다 갱신
-    return () => clearInterval(t);
-  }, [fetchRadar]);
-
-  const urgencyConfig = (u: "high" | "medium" | "low") =>
-    u === "high"
-      ? { cls: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", label: "즉시 대응", dot: "bg-red-500 animate-pulse" }
-      : u === "medium"
-      ? { cls: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20", label: "주의 관찰", dot: "bg-amber-400" }
-      : { cls: "text-stone-500 bg-stone-100 border-stone-200 dark:text-muted-foreground/50 dark:bg-muted/60 dark:border-border", label: "참고", dot: "bg-stone-400" };
-
-  const isNew = (dateStr: string) => {
-    if (!dateStr) return false;
-    const t = new Date(dateStr).getTime();
-    return !isNaN(t) && (Date.now() - t < 10 * 60_000);
-  };
-
-  return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="relative flex items-center">
-            <Radio className="w-4 h-4 text-red-500 dark:text-red-400" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-ping opacity-75" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
-          </div>
-          <span className="text-sm font-semibold text-foreground">장중 실시간 이슈</span>
-          <span className="text-[10px] text-muted-foreground/40 font-medium">3분마다 자동 갱신</span>
-          {commenting && (
-            <span className="flex items-center gap-1 text-[10px] text-primary/60">
-              <Loader2 className="w-3 h-3 animate-spin" /> AI 분석 중
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {lastRefresh && (
-            <span className="text-[10px] text-muted-foreground/35">
-              {lastRefresh.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신
-            </span>
-          )}
-          <button
-            onClick={() => { setLoading(true); fetchRadar(); }}
-            className="p-1.5 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground/50 hover:text-foreground"
-            title="새로고침"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-          </button>
-          <button
-            onClick={() => setCollapsed(v => !v)}
-            className="p-1.5 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground/50 hover:text-foreground"
-          >
-            {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-          </button>
         </div>
       </div>
+    );
+  }
 
-      {!collapsed && (
-        <div className="divide-y divide-border/50">
-          {loading && !items.length && (
-            <div className="px-4 py-6 flex items-center justify-center gap-2 text-sm text-muted-foreground/50">
-              <Loader2 className="w-4 h-4 animate-spin" /> 실시간 이슈 불러오는 중...
-            </div>
-          )}
-          {!loading && !items.length && (
-            <div className="px-4 py-6 text-center text-sm text-muted-foreground/40">
-              현재 새로운 이슈가 없습니다
-            </div>
-          )}
-          <AnimatePresence>
-            {items.map((item) => {
-              const c = comments[item.id];
-              const cfg = urgencyConfig(c?.urgency ?? "low");
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="px-4 py-3.5 space-y-2"
-                >
-                  {/* 뉴스 헤드라인 */}
-                  <div className="flex items-start gap-2">
-                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                      {c && <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                        {isNew(item.date) && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500 text-white tracking-wide">NEW</span>
-                        )}
-                        {c?.urgency && (
-                          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full border", cfg.cls)}>
-                            {cfg.label}
-                          </span>
-                        )}
-                        {item.date && (
-                          <span className="text-[10px] text-muted-foreground/40">
-                            {(() => {
-                              try {
-                                return new Date(item.date).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-                              } catch { return item.date; }
-                            })()}
-                          </span>
-                        )}
-                        {c?.watchFor && (
-                          <span className="text-[10px] text-primary/70 font-medium bg-primary/8 px-1.5 py-0.5 rounded-full">
-                            👀 {c.watchFor}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[12px] text-foreground/85 leading-relaxed line-clamp-2">
-                        {item.text}
-                      </p>
-                    </div>
-                  </div>
-                  {/* AI 코멘트 */}
-                  {c?.comment && (
-                    <div className="ml-3 bg-muted/40 rounded-xl px-3 py-2.5 border border-border/50">
-                      <div className="flex items-center gap-1 mb-1">
-                        <Sparkles className="w-3 h-3 text-primary/60" />
-                        <span className="text-[10px] font-semibold text-primary/60">AI 장중 코멘트</span>
-                      </div>
-                      <p className="text-[12px] text-foreground/80 leading-relaxed">
-                        {c.comment}
-                      </p>
-                    </div>
+  if (!brief) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-sm text-zinc-500">
+          {session.label} 브리핑은{" "}
+          <span className="text-zinc-300 font-medium">{session.time} KST</span> 이후 자동 생성됩니다
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-zinc-200 leading-relaxed">{brief.summary}</p>
+
+      {brief.indices && <IndexGrid indices={brief.indices} />}
+
+      {brief.keyTopics && brief.keyTopics.length > 0 && (
+        <div>
+          <SL>주요 테마</SL>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {brief.keyTopics.map((t) => (
+              <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {brief.marketEvents && brief.marketEvents.length > 0 && (
+        <div>
+          <SL>시장 이슈</SL>
+          <div className="mt-2 space-y-3">
+            {brief.marketEvents.map((e, i) => (
+              <div key={i} className="flex gap-3">
+                <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${
+                  e.impact === "positive" ? "text-red-500" :
+                  e.impact === "negative" ? "text-blue-500" : "text-zinc-600"
+                }`}>
+                  {e.impact === "positive" ? "▲" : e.impact === "negative" ? "▼" : "●"}
+                </span>
+                <div>
+                  <p className="text-sm text-zinc-100 font-medium leading-snug">{e.title}</p>
+                  {e.description && (
+                    <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{e.description}</p>
                   )}
-                  {!c && !commenting && (
-                    <div className="ml-3 h-5 flex items-center">
-                      <div className="h-2 bg-muted/50 rounded w-3/4 animate-pulse" />
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {brief.fundFlows && (
+        <div>
+          <SL>수급 동향</SL>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {[
+              { label: brief.fundFlows.foreignLabel ?? "외국인", val: brief.fundFlows.foreign },
+              { label: "기관", val: brief.fundFlows.institution },
+              { label: "개인", val: brief.fundFlows.retail },
+            ].map(({ label, val }) => (
+              <div key={label} className="bg-zinc-800/80 rounded-lg px-3 py-2.5 text-center">
+                <p className="text-[10px] text-zinc-500 mb-1">{label}</p>
+                <p className={`text-sm font-semibold tabular-nums ${changeColor(val)}`}>
+                  {fmtAmt(val)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {brief.sectorTrends && brief.sectorTrends.length > 0 && (
+        <div>
+          <SL>섹터 동향</SL>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {brief.sectorTrends.map((s) => (
+              <div key={s.sector} className="flex items-center justify-between bg-zinc-800/60 rounded-lg px-3 py-2">
+                <span className="text-xs text-zinc-300 truncate">{s.sector}</span>
+                <span className={`text-xs font-medium ml-2 flex-shrink-0 ${
+                  (s.change ?? 0) > 0 || s.trend === "상승" || s.trend === "강세" ? "text-red-400" :
+                  (s.change ?? 0) < 0 || s.trend === "하락" || s.trend === "약세" ? "text-blue-400" : "text-zinc-500"
+                }`}>
+                  {s.change != null ? fmtPct(s.change) : s.trend}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {brief.macroFactors && brief.macroFactors.length > 0 && (
+        <div>
+          <SL>거시 환경</SL>
+          <ul className="mt-2 space-y-1.5">
+            {brief.macroFactors.map((f, i) => (
+              <li key={i} className="flex gap-2 text-xs text-zinc-400">
+                <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {brief.forwardLook && brief.forwardLook.length > 0 && (
+        <div>
+          <SL>향후 전망</SL>
+          <ul className="mt-2 space-y-1.5">
+            {brief.forwardLook.map((f, i) => (
+              <li key={i} className="flex gap-2 text-xs text-zinc-400">
+                <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {brief.actionPoints && brief.actionPoints.length > 0 && (
+        <div>
+          <SL>투자 포인트</SL>
+          <ul className="mt-2 space-y-1.5">
+            {brief.actionPoints.map((a, i) => (
+              <li key={i} className="flex gap-2 text-xs text-zinc-300">
+                <span className="text-amber-500 flex-shrink-0 mt-0.5 font-bold">→</span>
+                <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {brief.upcomingMacroEvents && brief.upcomingMacroEvents.length > 0 && (
+        <div>
+          <SL>주요 일정</SL>
+          <div className="mt-2 space-y-1.5">
+            {brief.upcomingMacroEvents.map((ev, i) => (
+              <div key={i} className="flex gap-3 text-xs">
+                <span className="text-zinc-500 font-mono flex-shrink-0 w-20">{ev.date}</span>
+                <span className="text-zinc-300">{ev.event}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/* ── 수치 카드 ───────────────────────────────────────────────────────────── */
-function StatCard({
-  emoji, label, value, desc, highlight,
-}: {
-  emoji: string; label: string; value: string; desc: string; highlight?: boolean;
-}) {
+// ─── History Item ─────────────────────────────────────────────────────────────
+
+function HistoryItem({ item }: { item: any }) {
+  const [open, setOpen] = useState(false);
+  const timeStr = new Date(item.generatedAt).toLocaleString("ko-KR", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+  const sc = sentimentConfig(item.sentiment);
+  const sessionLabel = SESSION_TYPE_LABEL[item.sessionType] ?? item.sessionType ?? "브리핑";
+
   return (
-    <div className={cn(
-      "flex flex-col gap-1 px-4 py-3.5 rounded-2xl border",
-      highlight
-        ? "border-primary/25 bg-primary/5"
-        : "border-border bg-muted/20",
-    )}>
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-        <span>{emoji}</span>
-        <span className="font-medium">{label}</span>
-      </div>
-      <span className={cn("text-2xl font-bold", highlight ? "text-primary" : "text-foreground")}>
-        {value}
-      </span>
-      <span className="text-[11px] text-muted-foreground/55 leading-snug">{desc}</span>
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
+          <span className="text-xs text-zinc-300 flex-shrink-0">{sessionLabel}</span>
+          {item.summary && (
+            <span className="text-xs text-zinc-600 hidden sm:inline truncate">
+              — {item.summary.slice(0, 60)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+          <span className="text-[10px] text-zinc-600">{timeStr}</span>
+          <span className={`text-zinc-600 text-xs transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▾</span>
+        </div>
+      </button>
+
+      {open && item.data && (
+        <div className="px-4 pb-4 border-t border-zinc-800 pt-4">
+          <BriefDetail
+            session={{
+              slot: item.sessionType,
+              label: sessionLabel,
+              icon: "chart",
+              time: "--",
+              sessionTypes: [item.sessionType],
+              brief: item.data,
+              generatedAt: new Date(item.generatedAt).getTime(),
+              status: "available",
+              isActive: false,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-/* ── 메인 페이지 ─────────────────────────────────────────────────────────── */
-export default function MarketAnalysis() {
-  const { isEn } = useLanguage();
-  const [status, setStatus]           = useState<PipelineStatus | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
-  const [activeIdx, setActiveIdx]     = useState<"kospi" | "kosdaq" | "snp500" | "nasdaq">("kospi");
-  const [isStarting, setIsStarting]   = useState(false);
-  const [techOpen, setTechOpen]       = useState(false);
-  const [guideOpen, setGuideOpen]     = useState(false);
-  const [marketTab, setMarketTab]     = useState<"kr" | "us">("kr");
-  const [brief, setBrief]             = useState<MarketBrief | null>(null);
-  const [briefLoading, setBriefLoading] = useState(false);
-  const [usBrief, setUsBrief]         = useState<MarketBrief | null>(null);
-  const [usBriefLoading, setUsBriefLoading] = useState(false);
-  const [liveAcc, setLiveAcc]         = useState<Record<string, LiveAccuracy> | null>(null);
-  const [predHistory, setPredHistory] = useState<Record<string, PredictionRecord[]>>({});
-  // 라이브 적중률 폴링
-  useEffect(() => {
-    const load = () =>
-      fetch(getApiUrl("/api/market-analysis/live-accuracy"), { credentials: "include" })
-        .then(r => r.ok ? r.json() : null)
-        .then(d => d && setLiveAcc(d))
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, []);
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-  // 예측 이력 fetch (지수 전환 시마다)
-  useEffect(() => {
-    const symMap: Record<string, string> = { kospi:"^KS11", kosdaq:"^KQ11", snp500:"^GSPC", nasdaq:"^IXIC" };
-    const sym = symMap[activeIdx];
-    if (!sym) return;
-    fetch(getApiUrl(`/api/market-analysis/prediction-history/${encodeURIComponent(sym)}?limit=20`), { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then((d: PredictionRecord[]) => setPredHistory(prev => ({ ...prev, [sym]: Array.isArray(d) ? d : [] })))
-      .catch(() => {});
-  }, [activeIdx]);
+export default function MarketAnalysisPage() {
+  const [market, setMarket] = useState<"kr" | "us">("kr");
+  const [sessionsData, setSessionsData] = useState<SessionsResponse | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const prevMarket = useRef(market);
 
-  // 관리자 권한 확인
-  const [isAdmin, setIsAdmin]         = useState<boolean | null>(null);
-  useEffect(() => {
-    fetch(getApiUrl("/api/admin/me"), { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setIsAdmin(d?.isAdmin === true))
-      .catch(() => setIsAdmin(false));
-  }, []);
-
-  const briefPollRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const usBriefPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const fetchBrief = useCallback(async (force = false) => {
-    if (!force) setBriefLoading(true);
+  const fetchSessions = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const qs = force ? "?force=true" : "";
-      const r = await fetch(getApiUrl(`/api/market-analysis/brief${qs}`), { credentials: "include" });
-      if (r.ok) {
-        const data = await r.json();
-        setBrief(data);
-        if (data.generating) {
-          briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
-        } else {
-          if (briefPollRef.current) clearTimeout(briefPollRef.current);
-        }
-      } else {
-        briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
-      }
-    } catch {
-      briefPollRef.current = setTimeout(() => fetchBrief(), 5000);
-    } finally {
-      setBriefLoading(false);
-    }
-  }, []);
-
-  const fetchUsBrief = useCallback(async (force = false) => {
-    if (!force) setUsBriefLoading(true);
-    try {
-      const qs = force ? "?market=us&force=true" : "?market=us";
-      const r = await fetch(getApiUrl(`/api/market-analysis/brief${qs}`), { credentials: "include" });
-      if (r.ok) {
-        const data = await r.json();
-        setUsBrief(data);
-        if (data.generating) {
-          usBriefPollRef.current = setTimeout(() => fetchUsBrief(), 5000);
-        } else {
-          if (usBriefPollRef.current) clearTimeout(usBriefPollRef.current);
-        }
-      } else {
-        usBriefPollRef.current = setTimeout(() => fetchUsBrief(), 5000);
-      }
-    } catch {
-      usBriefPollRef.current = setTimeout(() => fetchUsBrief(), 5000);
-    } finally {
-      setUsBriefLoading(false);
-    }
-  }, []);
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      const r = await fetch(getApiUrl("/api/market-analysis/status"), { credentials: "include" });
-      if (r.ok) setStatus(await r.json());
-    } catch {
-      // 실패 시 3초 후 재시도
-      setTimeout(() => fetchStatus(), 3000);
-    } finally {
-      setStatusLoading(false);
-    }
-  }, []);
-
-  const triggerRun = useCallback(async (force = false) => {
-    setIsStarting(true);
-    try {
-      await fetch(getApiUrl(`/api/market-analysis/run${force ? "?force=true" : ""}`), {
-        method: "POST", credentials: "include",
+      const res = await fetch(getApiUrl(`/api/market-analysis/sessions?market=${market}`), {
+        credentials: "include",
       });
-      setTimeout(fetchStatus, 500);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: SessionsResponse = await res.json();
+      setSessionsData(data);
+      setError(null);
+
+      setSelectedSlot((prev) => {
+        if (prev && data.sessions.find((s) => s.slot === prev)?.brief) return prev;
+        const latest = [...data.sessions].reverse().find((s) => s.brief);
+        return latest?.slot ?? data.currentSlot ?? data.sessions[0]?.slot ?? null;
+      });
+    } catch {
+      setError("시장 브리핑을 불러오지 못했습니다.");
     } finally {
-      setIsStarting(false);
+      if (!silent) setLoading(false);
     }
-  }, [fetchStatus]);
+  }, [market]);
 
-  useEffect(() => { fetchStatus(); }, [fetchStatus]);
-  useEffect(() => { fetchBrief(); }, [fetchBrief]);
-  useEffect(() => { fetchUsBrief(); }, [fetchUsBrief]);
-
-  // 모바일에서 백그라운드 전환 시 setTimeout이 멈추는 문제 대응
-  // — 탭/앱이 다시 포그라운드로 오면 "분석 중" 상태인 경우 즉시 재시도
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        setBrief(prev => { if (prev?.generating) { fetchBrief(); } return prev; });
-        setUsBrief(prev => { if (prev?.generating) { fetchUsBrief(); } return prev; });
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [fetchBrief, fetchUsBrief]);
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(
+        getApiUrl(`/api/market-analysis/brief-history?market=${market}&limit=8`),
+        { credentials: "include" },
+      );
+      if (!res.ok) return;
+      setHistory(await res.json());
+    } catch { /* ignore */ } finally {
+      setHistoryLoading(false);
+    }
+  }, [market]);
 
   useEffect(() => {
-    if (!status) {
-      const t = setTimeout(fetchStatus, 3000);
-      return () => clearTimeout(t);
+    if (prevMarket.current !== market) {
+      setSessionsData(null);
+      setSelectedSlot(null);
+      setHistory([]);
+      setHistoryOpen(false);
+      prevMarket.current = market;
     }
-    if (status.running) {
-      const t = setInterval(fetchStatus, 2000);
-      return () => clearInterval(t);
-    }
-    if (!status.ready && !status.running && !status.error) {
-      const t = setTimeout(fetchStatus, 4000);
-      triggerRun(false);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [status, fetchStatus, triggerRun]);
+    fetchSessions();
+    fetchHistory();
+  }, [market]);
 
-  const current = activeIdx === "kospi" ? status?.kospi
-    : activeIdx === "snp500" ? status?.snp500
-    : activeIdx === "nasdaq" ? status?.nasdaq
-    : status?.kosdaq;
+  // Silent refresh every 3 minutes
+  useEffect(() => {
+    const id = setInterval(() => fetchSessions(true), 3 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [fetchSessions]);
+
+  const sessions = sessionsData?.sessions ?? [];
+  const selectedSession = sessions.find((s) => s.slot === selectedSlot);
+  const sc = sentimentConfig(selectedSession?.brief?.sentiment);
+
+  const dateLabel = sessionsData?.date
+    ? new Date(sessionsData.date + "T00:00:00+09:00").toLocaleDateString("ko-KR", {
+        year: "numeric", month: "long", day: "numeric", weekday: "short",
+      })
+    : "";
 
   return (
-    <div className="space-y-5 pb-20">
-
-      {/* ── 헤더 ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">
-            시장 분석
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-            장중 주요 시점마다 AI가 시장을 분석합니다
-            {status?.running && status?.kospi && (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                업데이트 중
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Top bar */}
+      <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-sm font-bold text-zinc-100 flex-shrink-0">시장 분석</h1>
+            {dateLabel && (
+              <span className="text-xs text-zinc-500 hidden sm:inline truncate">{dateLabel}</span>
+            )}
+            {sessionsData?.generating && (
+              <span className="hidden sm:flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 flex-shrink-0">
+                <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+                생성 중
               </span>
             )}
-          </p>
+          </div>
+
+          <div className="flex items-center bg-zinc-900 rounded-lg border border-zinc-800 p-0.5 flex-shrink-0">
+            {(["kr", "us"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMarket(m)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  market === m
+                    ? "bg-zinc-700 text-zinc-100 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {m === "kr" ? "🇰🇷 한국" : "🇺🇸 미국"}
+              </button>
+            ))}
+          </div>
         </div>
-        {isAdmin && (
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+        {/* Session Timeline */}
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-3">
+            오늘의 시장 흐름
+          </p>
+
+          {loading ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-36 rounded-xl bg-zinc-800/50 animate-pulse" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-zinc-800 p-8 text-center space-y-3">
+              <p className="text-sm text-zinc-500">{error}</p>
+              <button
+                onClick={() => fetchSessions()}
+                className="text-xs text-zinc-400 hover:text-zinc-200 underline"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {sessions.map((session) => (
+                <SessionCard
+                  key={session.slot}
+                  session={session}
+                  selected={selectedSlot === session.slot}
+                  onClick={() => setSelectedSlot(session.slot)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Selected Brief Detail */}
+        {selectedSession && !loading && (
+          <section className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-base flex-shrink-0">{SESSION_ICON[selectedSession.icon] ?? "📋"}</span>
+                <span className="font-semibold text-sm text-zinc-100 flex-shrink-0">{selectedSession.label}</span>
+                <span className="text-xs text-zinc-600 font-mono flex-shrink-0">{selectedSession.time}</span>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {selectedSession.generatedAt && (
+                  <span className="text-[10px] text-zinc-600 hidden sm:inline">
+                    {new Date(selectedSession.generatedAt).toLocaleTimeString("ko-KR", {
+                      hour: "2-digit", minute: "2-digit",
+                    })} 생성
+                  </span>
+                )}
+                {selectedSession.brief?.sentiment && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${sc.bg}`}>
+                    {sc.label}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-5">
+              <BriefDetail session={selectedSession} />
+            </div>
+          </section>
+        )}
+
+        {/* History */}
+        <section>
           <button
-            onClick={() => triggerRun(true)}
-            disabled={status?.running || isStarting}
-            className="self-start flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-all disabled:opacity-40 shrink-0 min-h-[44px]"
+            onClick={() => {
+              if (!historyOpen && history.length === 0) fetchHistory();
+              setHistoryOpen((o) => !o);
+            }}
+            className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-1"
           >
-            {status?.running || isStarting ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중...</>
-            ) : (
-              <><RefreshCw className="w-4 h-4" /> AI 다시 분석</>
-            )}
+            <span className={`transition-transform duration-200 text-[10px] ${historyOpen ? "rotate-90" : ""}`}>▶</span>
+            지난 브리핑
           </button>
-        )}
-      </div>
 
-      {/* ── 시장 탭 + AI 브리핑 ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/50 border border-border/60 w-fit">
-        <button
-          onClick={() => setMarketTab("kr")}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150",
-            marketTab === "kr"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          🇰🇷 한국 시장
-        </button>
-        <button
-          onClick={() => setMarketTab("us")}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150",
-            marketTab === "us"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          🇺🇸 미국 시장
-        </button>
-      </div>
-
-      <MarketBriefSection
-        brief={marketTab === "us" ? usBrief : brief}
-        loading={marketTab === "us" ? usBriefLoading : briefLoading}
-        onRefresh={() => marketTab === "us" ? fetchUsBrief(true) : fetchBrief(true)}
-        showRefresh={!!isAdmin}
-      />
-
-      <BriefHistorySection market={marketTab} />
-
-      {/* 예측 섹션 비활성화 — 브리핑 전용 모드 */}
-      {false && <AnimatePresence>
-        {(status?.kospi || status?.ready) && status?.kospi && status?.kosdaq && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="space-y-5"
-          >
-
-            {/* ── 지수 선택 ────────────────────────────────────────────── */}
-            <div>
-              <p className="text-xs text-muted-foreground/60 mb-2 font-medium">어떤 지수를 볼까요?</p>
-              <div className="flex items-stretch gap-3 flex-wrap">
-                {([
-                  { id: "kospi",  data: status.kospi!  },
-                  { id: "kosdaq", data: status.kosdaq! },
-                  ...(status.snp500  ? [{ id: "snp500",  data: status.snp500  }] : []),
-                  ...(status.nasdaq  ? [{ id: "nasdaq",  data: status.nasdaq  }] : []),
-                ] as { id: "kospi" | "kosdaq" | "snp500" | "nasdaq"; data: IndexResult }[]).map(({ id, data }) => {
-                  const isActive = activeIdx === id;
-                  const d1 = data.predictedReturn1d ?? +(data.predictedReturn3d / 3).toFixed(2);
-                  const d2 = data.predictedReturn2d ?? +(data.predictedReturn3d * 2 / 3).toFixed(2);
-                  const d3 = data.predictedReturn3d;
-                  const up3 = d3 >= 0;
-                  const tradingDates = data.predictions.slice(0, 3).map(p => p.date);
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => setActiveIdx(id)}
-                      className={cn(
-                        "flex-1 min-w-[130px] flex flex-col gap-2 px-4 py-4 rounded-2xl border transition-all text-left min-h-[100px]",
-                        isActive
-                          ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
-                          : "border-border bg-card hover:bg-muted/30",
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground">{data.name}</span>
-                        {isActive && <span className="text-[10px] text-primary font-medium">선택됨</span>}
-                      </div>
-                      <div className="text-xl font-bold text-foreground">
-                        {data.currentValue.toLocaleString()}
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px]">
-                        {([["D+1", d1, 0], ["D+2", d2, 1], ["D+3", d3, 2]] as [string, number, number][]).map(([label, val, i]) => (
-                          <span key={label} className={cn("font-semibold", val >= 0 ? "text-red-400" : "text-blue-400")}>
-                            <span className="text-muted-foreground/50 font-normal">{formatMD(tradingDates[i])} </span>{val >= 0 ? "+" : ""}{val}%
-                          </span>
-                        ))}
-                      </div>
-                      <div className={cn("flex items-center gap-1 text-[11px] font-medium text-muted-foreground/70")}>
-                        {up3 ? <TrendingUp className="w-3 h-3 text-red-400" /> : <TrendingDown className="w-3 h-3 text-blue-400" />}
-                        3일 후 {up3 ? "상승" : "하락"} 전망
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ── 메인 차트 ────────────────────────────────────────────── */}
-            {current && (
-              <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-bold text-foreground">
-                      {current.name} — 최근 흐름과 AI 예측
-                    </h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      실선 = 실제 흐름 · 점선 = D+3 예측 · 점(●) = 연속 예측 기록
-                    </p>
-                  </div>
-                  <TrendBadge value={current.predictedReturn3d} />
-                </div>
-                <IndexChart
-                  result={current}
-                  predHistory={predHistory[{ kospi:"^KS11", kosdaq:"^KQ11", snp500:"^GSPC", nasdaq:"^IXIC" }[activeIdx] ?? "^KS11"] ?? []}
-                />
-              </div>
-            )}
-
-            {/* ── AI 적중률 카드 ────────────────────────────────────────── */}
-            {current && (
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground/60 mb-1 font-medium flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5" /> AI 예측 성능 — 이 정도로 믿을 수 있어요
-                </p>
-                {/* D+1 / D+2 / D+3 예측 */}
-                <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3.5 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 font-medium">
-                    <span>🔮</span>
-                    <span>AI 단기 예측 (D+1 · D+2 · D+3)</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(() => {
-                      const predDates = current.predictions.slice(0, 3).map(p => p.date);
-                      return ([
-                        { label: "D+1", date: predDates[0] ?? "", val: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2) },
-                        { label: "D+2", date: predDates[1] ?? "", val: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2) },
-                        { label: "D+3", date: predDates[2] ?? "", val: current.predictedReturn3d },
-                      ]).map(({ label, date, val }) => (
-                        <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-xl bg-background/60 border border-border/60">
-                          <span className="text-[10px] text-muted-foreground/60 font-medium">{label}</span>
-                          <span className="text-[10px] text-muted-foreground/40 font-medium -mt-0.5">{formatMD(date)}</span>
-                        <span className={cn(
-                          "text-xl font-bold",
-                          val >= 0 ? "text-red-400" : "text-blue-400",
-                        )}>
-                          {val >= 0 ? "+" : ""}{val}%
-                        </span>
-                        <span className={cn("text-[10px] font-semibold", val >= 0 ? "text-red-400/70" : "text-blue-400/70")}>
-                          {val >= 0 ? "▲ 상승" : "▼ 하락"}
-                        </span>
-                      </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <StatCard
-                    emoji="✅"
-                    label="최근 6주 적중률"
-                    value={`${current.rolling30dDirAcc}%`}
-                    desc="오르면 오른다 / 내리면 내린다고 맞힌 비율"
-                  />
-                  <StatCard
-                    emoji="📊"
-                    label="전체 검증 적중률"
-                    value={`${current.wfDirAcc}%`}
-                    desc="50%면 동전 던지기 · 60%↑ 의미 있음"
-                  />
-                  <StatCard
-                    emoji="📏"
-                    label="평균 예측 오차"
-                    value={`±${current.testMae}%`}
-                    desc="정확한 숫자는 이만큼 차이날 수 있어요"
-                  />
-                </div>
-              </div>
-            )}
-
-
-
-            {/* ── 예측 vs 실제 비교 ─────────────────────────────────────── */}
-            {current && current.recentPerf && current.recentPerf.length > 0 && (
-              <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                <div>
-                  <h2 className="text-base font-bold text-foreground">
-                    AI가 실제로 얼마나 맞혔나요?
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    막대 = 실제 등락 (빨강=오름·파랑=내림) · 보라 선 = AI가 예측한 방향 · 터치하면 상세 정보가 나와요
-                  </p>
-                </div>
-                <ReturnComparisonChart
-                  data={current.recentPerf}
-                  symbol={current.symbol}
-                  predDates={current.predictions.slice(0, 3).map(p => p.date)}
-                  future={{
-                    d1: current.predictedReturn1d ?? +(current.predictedReturn3d / 3).toFixed(2),
-                    d2: current.predictedReturn2d ?? +(current.predictedReturn3d * 2 / 3).toFixed(2),
-                    d3: current.predictedReturn3d,
-                  }}
-                />
-              </div>
-            )}
-
-            {/* ── 이 화면 보는 법 (토글) ───────────────────────────────────── */}
-            <div className="rounded-2xl border border-border bg-transparent overflow-hidden">
-              <button
-                onClick={() => setGuideOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/30 transition-colors min-h-[48px]"
-              >
-                <div className="flex items-center gap-2">
-                  <Info className="w-4 h-4 text-primary/50" />
-                  <span className="text-sm font-semibold text-muted-foreground/60">이 화면 보는 법</span>
-                </div>
-                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/30 transition-transform", guideOpen && "rotate-180")} />
-              </button>
-
-              {guideOpen && (
-              <div className="px-4 pb-5 pt-2 space-y-6 border-t border-border">
-
-                {/* 1. AI 예측 숫자 */}
+          {historyOpen && (
+            <div className="mt-3 space-y-2">
+              {historyLoading ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">🔮</span> "D+1 +0.3% / D+2 +0.5% / D+3 +0.8%" 이게 무슨 말이에요?
-                  </p>
-                  <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    AI가 <span className="font-medium text-foreground">내일(D+1)·모레(D+2)·3거래일 후(D+3)</span>로 나눠 지수가 지금보다 몇 % 움직일지 예측한 값입니다.
-                    <span className="text-red-400 font-medium"> 빨간색 숫자</span>는 오를 것 같다, <span className="text-blue-400 font-medium">파란색은 내릴 것 같다</span>는 뜻이에요.
-                    정확한 숫자보다 <span className="font-medium text-foreground">방향(오를지 내릴지)</span>을 참고하는 데 쓰세요.
-                    D+3 예측이 기준 예측이며, D+1·D+2는 그 선행 신호입니다.
-                  </p>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-12 rounded-xl bg-zinc-800/50 animate-pulse" />
+                  ))}
                 </div>
-
-                {/* 4. 적중률 */}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">🎯</span> 적중률이 몇 %면 좋은 건가요?
-                  </p>
-                  <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    <span className="font-medium text-foreground">50%</span>는 동전 던지기와 똑같습니다. AI라도 딱 50%면 의미가 없어요.
-                    <span className="font-medium text-foreground"> 60% 이상</span>이면 "통계적으로 의미 있다"고 보고,
-                    <span className="font-medium text-foreground"> 70% 이상</span>이면 꽤 잘 맞히는 편입니다.
-                    현재 AI는 <span className="font-medium text-primary">최근 6주 기준 {current?.rolling30dDirAcc}%</span>를 기록하고 있어요.
-                  </p>
-                </div>
-
-                {/* 5. 비교 차트 */}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">📋</span> "AI가 실제로 얼마나 맞혔나요?" 차트
-                  </p>
-                  <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    최근 30거래일(약 6주)의 기록입니다.
-                    <span className="text-red-400 font-medium"> 빨간 막대</span>는 실제로 오른 날,
-                    <span className="text-blue-400 font-medium"> 파란 막대</span>는 실제로 내린 날이에요.
-                    <span className="text-purple-400 font-medium"> 보라색 선</span>이 AI의 예측인데, 이 선이 막대와 같은 방향(위·아래)을 가리키고 있으면 AI가 맞힌 것입니다.
-                    <br /><br />
-                    한 가지 주의할 점: AI는 정확한 숫자보다는 <span className="font-medium text-foreground">방향(오를지 내릴지)</span>에 집중합니다.
-                    그래서 실제 막대는 크게 움직여도 AI 선은 작게 움직이는 게 정상이에요.
-                  </p>
-                </div>
-
-                {/* 6. 방법론 */}
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="text-base">🤖</span> 어떤 모델을 쓰고, 어떻게 작동하나요?
-                  </p>
-
-                  {/* LSTM */}
-                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
-                    <p className="text-xs font-bold text-primary tracking-wide">① LSTM — 시계열 패턴 학습</p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      <span className="font-semibold text-foreground">Long Short-Term Memory</span>는 순환신경망(RNN)의 한 종류로,
-                      데이터의 <span className="font-semibold text-foreground">순서와 흐름</span>을 이해하도록 설계된 딥러닝 모델입니다.
-                      일반 신경망과 달리 "이전에 어떤 일이 있었는지"를 내부 메모리에 누적하면서 학습하기 때문에
-                      주가처럼 시간 순서가 중요한 데이터에 강점이 있습니다.
-                    </p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      여기서는 <span className="font-semibold text-foreground">직전 20거래일(약 한 달)의 지수 흐름</span>을
-                      입력으로 받아 3일 후의 수익률 방향을 예측합니다.
-                      LSTM 내부의 forget gate·input gate·output gate가 어떤 과거 정보를 기억하고 버릴지를 스스로 결정합니다.
-                    </p>
-                    {current && (
-                      <p className="text-[11px] text-primary/80 font-medium">
-                        현재 방향 적중률: {current.lstmDirAcc}%
-                      </p>
-                    )}
-                  </div>
-
-                  {/* GBDT */}
-                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
-                    <p className="text-xs font-bold text-purple-400 tracking-wide">② GBDT — 15개 피처 기반 규칙 학습</p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      <span className="font-semibold text-foreground">Gradient Boosted Decision Trees</span>는
-                      수백 개의 결정 트리를 순차적으로 쌓아올리는 앙상블 모델입니다.
-                      앞 트리가 틀린 오차를 다음 트리가 보정하는 방식으로 점진적으로 정확도를 높입니다.
-                      XGBoost·LightGBM 계열과 같은 원리입니다.
-                    </p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      입력 피처는 총 <span className="font-semibold text-foreground">15개</span>입니다:
-                    </p>
-                    <div className="grid grid-cols-1 gap-1 text-[11px]">
-                      {[
-                        { label: "기술적 지표 9개", desc: "수익률·변동성·RSI·MACD·볼린저밴드·거래량 변화율 등" },
-                        { label: "글로벌 거시 3개", desc: "S&P 500 수익률 · 달러/원 환율(USD/KRW) · 미국 기준금리(Fed Funds Rate)" },
-                        { label: "수급 3개", desc: "외국인 순매수 · 기관 순매수 · 공매도 비율 (데이터 공백 시 전일값 forward-fill)" },
-                      ].map(f => (
-                        <div key={f.label} className="flex gap-2 items-start">
-                          <span className="text-purple-400/80 font-semibold shrink-0">·</span>
-                          <p className="text-muted-foreground/70 leading-relaxed">
-                            <span className="font-semibold text-foreground">{f.label}</span> — {f.desc}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    {current && (
-                      <p className="text-[11px] text-purple-400/80 font-medium">
-                        현재 방향 적중률: {current.gbdtDirAcc}%
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 앙상블 */}
-                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
-                    <p className="text-xs font-bold text-emerald-400 tracking-wide">③ 동적 앙상블 — 성능 기반 가중치 합산</p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      두 모델의 예측값을 단순 평균하지 않고,
-                      <span className="font-semibold text-foreground"> 최근 30거래일의 방향 적중률</span>을 실시간으로 계산해
-                      더 잘 맞힌 모델에 더 높은 가중치(α)를 부여합니다.
-                    </p>
-                    <div className="bg-black/10 dark:bg-black/20 rounded-lg px-3 py-2 font-mono text-[11px] text-emerald-700 dark:text-emerald-400/80">
-                      최종 예측 = α × LSTM + (1 − α) × GBDT
-                    </div>
-                    {current ? (
-                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
-                        현재 α = <span className="font-semibold text-foreground">{current.ensembleAlpha.toFixed(3)}</span>으로,
-                        LSTM {(current.ensembleAlpha * 100).toFixed(0)}% + GBDT {((1 - current.ensembleAlpha) * 100).toFixed(0)}% 비율로 합산되고 있습니다.
-                        이 값은 매번 분석 실행 시 자동으로 재계산됩니다.
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
-                        α 값은 매번 분석 실행 시 최근 성능을 기반으로 자동 재계산됩니다.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Walk-Forward */}
-                  <div className="bg-muted/30 rounded-xl px-4 py-4 space-y-2">
-                    <p className="text-xs font-bold text-amber-400 tracking-wide">④ Walk-Forward 검증 — 미래 데이터 없이 테스트</p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      일반적인 백테스트는 미래 데이터를 훈련에 포함할 위험이 있어 실제보다 성능이 과대평가됩니다.
-                      이를 막기 위해 <span className="font-semibold text-foreground">Walk-Forward Validation</span>을 사용합니다.
-                    </p>
-                    <p className="text-[11px] text-muted-foreground/75 leading-relaxed">
-                      과거 데이터를 시간 순서대로 슬라이딩 윈도우로 분할해,
-                      훈련 구간 이후의 데이터만을 테스트에 씁니다.
-                      이 과정을 여러 구간에 걸쳐 반복해 얻은 평균 정확도가
-                      화면에 표시되는 <span className="font-semibold text-foreground">전체 검증 적중률(wfDirAcc)</span>입니다.
-                      실전과 가장 가까운 방식으로 평가한 수치입니다.
-                    </p>
-                    {current && (
-                      <p className="text-[11px] text-amber-400/80 font-medium">
-                        Walk-Forward 적중률: {current.wfDirAcc}% · 테스트셋 적중률: {current.testDirAcc}%
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 종합 성능 */}
-                  {current && (
-                    <div className="pt-1 grid grid-cols-4 gap-2 text-center text-[11px]">
-                      {[
-                        { label: "LSTM", val: `${current.lstmDirAcc}%`, color: "text-primary" },
-                        { label: "GBDT", val: `${current.gbdtDirAcc}%`, color: "text-purple-500 dark:text-purple-400" },
-                        { label: "앙상블", val: `${current.rolling30dDirAcc}%`, color: "text-emerald-600 dark:text-emerald-400" },
-                        { label: "MAE", val: `${current.testMae}%`, color: "text-amber-600 dark:text-amber-400" },
-                      ].map(s => (
-                        <div key={s.label} className="bg-muted/30 rounded-lg py-2">
-                          <p className="text-muted-foreground/50 mb-0.5">{s.label}</p>
-                          <p className={cn("font-bold", s.color)}>{s.val}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 면책 */}
-                <p className="text-[10px] text-muted-foreground/40 border-t border-border pt-4 leading-relaxed">
-                  ※ 이 예측은 AI의 통계적 분석이며, 투자를 권유하는 것이 아닙니다.
-                  실제 시장은 AI가 반영하지 못하는 갑작스러운 뉴스·정책·글로벌 이슈에 크게 영향받을 수 있습니다.
-                  투자 결정은 반드시 전문가와 상담하시거나 본인이 직접 판단하세요.
-                </p>
-              </div>
+              ) : history.length === 0 ? (
+                <p className="text-xs text-zinc-600 py-3">저장된 브리핑이 없습니다</p>
+              ) : (
+                history.map((item, i) => <HistoryItem key={i} item={item} />)
               )}
             </div>
-
-            {/* ── 기술 정보 (개발자용, 접어두기) ──────────────────────── */}
-            <div className="rounded-2xl border border-border bg-transparent overflow-hidden">
-              <button
-                onClick={() => setTechOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/30 transition-colors min-h-[48px]"
-              >
-                <div className="flex items-center gap-2 text-xs text-muted-foreground/40 font-medium">
-                  <BrainCircuit className="w-3.5 h-3.5" />
-                  기술 정보 (분석 파이프라인)
-                  {status?.trainingMs && (
-                    <span className="text-muted-foreground/25">총 {(status.trainingMs / 1000).toFixed(1)}s</span>
-                  )}
-                  {status?.trainedAt && (
-                    <span className="text-muted-foreground/25">
-                      · 학습 완료 {new Date(status.trainedAt).toLocaleString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  )}
-                </div>
-                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/30 transition-transform", techOpen && "rotate-180")} />
-              </button>
-
-              {techOpen && (
-                <div className="px-4 pb-4 border-t border-border pt-3 space-y-2">
-                  <PipelineTracker steps={status?.steps ?? [
-                    { key: "data",     label: "데이터 수집",    status: "pending" },
-                    { key: "feature",  label: "피처 엔지니어링", status: "pending" },
-                    { key: "lstm",     label: "LSTM 학습",       status: "pending" },
-                    { key: "gbdt",     label: "GBDT 학습",       status: "pending" },
-                    { key: "ensemble", label: "앙상블 합성",     status: "pending" },
-                    { key: "output",   label: "출력",            status: "pending" },
-                  ]} />
-                  {status?.error && (
-                    <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2 mt-2">
-                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span>{status.error}</span>
-                    </div>
-                  )}
-                  {current && (
-                    <div className="text-[11px] text-muted-foreground/40 space-y-0.5 mt-2">
-                      <p>LSTM dirAcc: {current.lstmDirAcc}% · GBDT dirAcc: {current.gbdtDirAcc}% · α={current.ensembleAlpha.toFixed(3)}</p>
-                      <p>testDirAcc: {current.testDirAcc}% · wfDirAcc: {current.wfDirAcc}% · MAE: {current.testMae}% · predErrStd: {current.predErrStd}%</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-          </motion.div>
-        )}
-      </AnimatePresence>}
+          )}
+        </section>
+      </div>
     </div>
   );
 }

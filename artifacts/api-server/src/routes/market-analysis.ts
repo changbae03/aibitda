@@ -53,14 +53,38 @@ const BRIEF_TTL = 8 * 3600_000;   // 8시간 (야간 커버 — 16:30 → 00:30 
 let _briefCache: BriefCache | null = null;
 let _briefRefreshing = false;      // 백그라운드 갱신 중복 방지
 
-/** DB에 brief 저장 */
+/** 세션 타입 → 일별 슬롯 매핑 */
+function sessionToSlot(sessionType: string): string {
+  if (sessionType === "pre_open" || sessionType === "morning") return "morning";
+  if (sessionType === "midday") return "midday";
+  if (sessionType === "afternoon" || sessionType === "pre_close") return "afternoon";
+  if (sessionType === "closing") return "closing";
+  if (sessionType === "us_premarket") return "premarket";
+  if (sessionType === "us_open" || sessionType === "us_midday") return "open";
+  if (sessionType === "us_afterhours" || sessionType === "us_overnight") return "close";
+  return "evening";
+}
+
+/** kv_cache 세션별 키 */
+function sessionDbKey(market: string, slot: string): string {
+  return `market_brief_${market}_${slot}`;
+}
+
+/** DB에 brief 저장 (세션별 키에도 함께 저장) */
 async function saveBriefToDb(cache: BriefCache) {
+  const sessionType = cache.data.sessionType ?? detectSession();
+  const slotKey = sessionDbKey("kr", sessionToSlot(sessionType));
   try {
     await pool.query(`
       INSERT INTO kv_cache (key, value, cached_at)
       VALUES ('market_brief', $1, $2)
       ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
     `, [JSON.stringify(cache.data), new Date(cache.cachedAt)]);
+    await pool.query(`
+      INSERT INTO kv_cache (key, value, cached_at)
+      VALUES ($3, $1, $2)
+      ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
+    `, [JSON.stringify(cache.data), new Date(cache.cachedAt), slotKey]);
     saveToHistory("kr", cache).catch(() => {});
   } catch (err: any) {
     console.error("[market-brief] DB 저장 실패:", err?.message);
@@ -87,13 +111,14 @@ async function ensureHistoryTable() {
 
 async function saveToHistory(market: "kr" | "us", cache: BriefCache) {
   try {
-    // 3시간 이내에 같은 market 브리핑이 이미 저장돼 있으면 스킵 (중복 방지)
+    // 같은 세션 타입이 3시간 이내에 이미 저장됐으면 스킵 (세션별 중복 방지)
+    const sessionType = cache.data.sessionType ?? "";
     const recent = await pool.query(
-      `SELECT 1 FROM market_brief_history WHERE market = $1 AND generated_at > NOW() - INTERVAL '3 hours' LIMIT 1`,
-      [market],
+      `SELECT 1 FROM market_brief_history WHERE market = $1 AND session_type = $2 AND generated_at > NOW() - INTERVAL '3 hours' LIMIT 1`,
+      [market, sessionType],
     );
     if ((recent.rowCount ?? 0) > 0) {
-      console.log(`[market-brief-history] ${market} 히스토리 저장 스킵 (3시간 쿨다운)`);
+      console.log(`[market-brief-history] ${market}/${sessionType} 히스토리 저장 스킵 (3시간 쿨다운)`);
       return;
     }
     await pool.query(
@@ -1489,6 +1514,114 @@ router.get("/brief", async (req, res) => {
     }
   } catch { /* DB 조회 실패/타임아웃 → 즉시 generating 반환 */ }
   res.json({ generating: true });
+});
+
+// GET /api/market-analysis/sessions — 오늘의 세션별 브리핑 목록
+router.get("/sessions", async (req, res) => {
+  const market = req.query.market === "us" ? "us" : "kr";
+
+  const KR_SLOTS = [
+    { slot: "morning",   label: "장전",     icon: "sunrise", time: "06:00", sessionTypes: ["pre_open", "morning"] },
+    { slot: "midday",    label: "장중 1차",  icon: "chart",   time: "11:00", sessionTypes: ["midday"] },
+    { slot: "afternoon", label: "장중 2차",  icon: "chart",   time: "14:00", sessionTypes: ["afternoon", "pre_close"] },
+    { slot: "closing",   label: "장마감",    icon: "sunset",  time: "16:30", sessionTypes: ["closing"] },
+  ];
+
+  const US_SLOTS = [
+    { slot: "premarket", label: "개장 전",   icon: "moon",    time: "22:30", sessionTypes: ["us_premarket"] },
+    { slot: "open",      label: "개장",      icon: "sunrise", time: "22:30", sessionTypes: ["us_open"] },
+    { slot: "close",     label: "마감",      icon: "sunset",  time: "07:00", sessionTypes: ["us_afterhours", "us_overnight"] },
+  ];
+
+  const slots = market === "kr" ? KR_SLOTS : US_SLOTS;
+
+  // KST 오늘 자정 UTC 타임스탬프 계산
+  const kstNow = Date.now() + 9 * 3600_000;
+  const kstMidnightUTC = new Date(Math.floor(kstNow / 86400_000) * 86400_000 - 9 * 3600_000);
+  const kstDateStr = new Date(kstNow).toISOString().slice(0, 10);
+
+  const dbTimeout = <T>(p: Promise<T>, ms = 4000): Promise<T | null> =>
+    Promise.race([p, new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), ms))]) as Promise<T | null>;
+
+  try {
+    // 오늘 KST 이후 히스토리 로드 (4초 타임아웃)
+    const histRows = await dbTimeout(pool.query(
+      `SELECT session_type, summary, sentiment, data, generated_at
+       FROM market_brief_history
+       WHERE market = $1 AND generated_at >= $2
+       ORDER BY generated_at ASC`,
+      [market, kstMidnightUTC],
+    )).catch(() => null);
+
+    // kv_cache 세션별 키 로드 (4초 타임아웃)
+    const slotKeys = slots.map((s) => sessionDbKey(market, s.slot));
+    const cacheRows = await dbTimeout(pool.query(
+      `SELECT key, value, cached_at FROM kv_cache WHERE key = ANY($1)`,
+      [slotKeys],
+    )).catch(() => null);
+
+    const cacheByKey: Record<string, any> = Object.fromEntries(
+      (cacheRows?.rows ?? []).map((r: any) => [r.key, r]),
+    );
+
+    const currentSession = market === "kr" ? detectSession() : detectUsSession();
+    const currentSlot = sessionToSlot(currentSession);
+    const generating = market === "kr" ? _briefRefreshing : _usBriefRefreshing;
+    const memCache = market === "kr" ? _briefCache : _usBriefCache;
+
+    const sessions = slots.map((slotDef) => {
+      const dbKey = sessionDbKey(market, slotDef.slot);
+      const cached = cacheByKey[dbKey];
+
+      // 히스토리에서 이 슬롯에 해당하는 가장 최신 브리핑 찾기
+      const histEntry = (histRows?.rows ?? []).filter((r: any) =>
+        slotDef.sessionTypes.includes(r.session_type)
+      ).pop();
+
+      let brief: any = null;
+      let generatedAt: number | null = null;
+
+      if (cached) {
+        brief = cached.value;
+        generatedAt = new Date(cached.cached_at).getTime();
+      } else if (histEntry) {
+        brief = histEntry.data;
+        generatedAt = new Date(histEntry.generated_at).getTime();
+      }
+
+      // 현재 세션이고 인메모리 캐시에 더 최신 데이터가 있으면 사용
+      const isCurrentSlot = slotDef.slot === currentSlot;
+      if (isCurrentSlot && memCache && (!generatedAt || memCache.cachedAt > generatedAt)) {
+        brief = memCache.data;
+        generatedAt = memCache.cachedAt;
+      }
+
+      const status = isCurrentSlot && generating
+        ? "generating"
+        : brief
+        ? "available"
+        : "upcoming";
+
+      return {
+        ...slotDef,
+        brief,
+        generatedAt,
+        status,
+        isActive: isCurrentSlot,
+      };
+    });
+
+    res.json({
+      date: kstDateStr,
+      sessions,
+      currentSession,
+      currentSlot,
+      generating,
+    });
+  } catch (err: any) {
+    console.error("[market-analysis/sessions]", err?.message);
+    res.status(500).json({ error: "세션 데이터 로드 실패" });
+  }
 });
 
 // GET /api/market-analysis/live-accuracy — 심볼별 실제 라이브 적중률

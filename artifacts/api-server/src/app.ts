@@ -6,11 +6,11 @@ import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import { clerkMiddleware } from "@clerk/express";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import marketAnalysisRouter from "./routes/market-analysis.js";
 import fs from "fs";
 import path from "path";
 import { pool } from "@workspace/db";
 import { generateOgPng, type OgImageData } from "./lib/og-image";
-import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app: Express = express();
 
@@ -150,20 +150,8 @@ app.use("/api/auth", authLimiter);
 app.use("/api/analysis", analysisLimiter);
 app.use("/api/admin", adminLimiter);
 
-// ── 시장분석 요청 → 분리된 market-server 프로세스로 프록시 (TF.js 블로킹 방지) ─
-const MARKET_INTERNAL_PORT = process.env.MARKET_INTERNAL_PORT ?? "8082";
-app.use(createProxyMiddleware({
-  pathFilter: "/api/market-analysis",
-  target: `http://localhost:${MARKET_INTERNAL_PORT}`,
-  changeOrigin: false,
-  on: {
-    error: (_err: any, _req: any, res: any) => {
-      if (!res.headersSent) {
-        res.status(502).json({ error: "시장 분석 서버가 시작 중입니다. 잠시 후 다시 시도하세요." });
-      }
-    },
-  },
-}));
+// ── 시장분석 라우터 직접 마운트 (별도 프로세스 없이 메인 서버에 통합) ─────────
+app.use("/api/market-analysis", marketAnalysisRouter);
 
 app.use("/api", router);
 
