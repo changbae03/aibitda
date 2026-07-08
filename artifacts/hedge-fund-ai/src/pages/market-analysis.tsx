@@ -298,7 +298,7 @@ function BriefDetail({ session }: { session: SessionSlot }) {
       {brief.storyLine && (
         <div>
           <SL>심층 분석</SL>
-          <div className="mt-2 text-xs text-zinc-400 leading-relaxed whitespace-pre-line">
+          <div className="mt-2 text-sm text-zinc-400 leading-relaxed whitespace-pre-line">
             {brief.storyLine}
           </div>
         </div>
