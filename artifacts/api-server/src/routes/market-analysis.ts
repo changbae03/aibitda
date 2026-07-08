@@ -1609,11 +1609,19 @@ router.get("/sessions", async (req, res) => {
         generatedAt = new Date(histEntry.generated_at).getTime();
       }
 
-      // 현재 세션이고 인메모리 캐시에 더 최신 데이터가 있으면 사용
+      // 1) 현재 세션이고 인메모리 캐시에 더 최신 데이터가 있으면 사용
       const isCurrentSlot = slotDef.slot === currentSlot;
       if (isCurrentSlot && memCache && (!generatedAt || memCache.cachedAt > generatedAt)) {
         brief = memCache.data;
         generatedAt = memCache.cachedAt;
+      }
+      // 2) 슬롯별 brief가 없을 때 — 전역 메모리 캐시의 sessionType이 이 슬롯에 해당하면 폴백
+      if (!brief && memCache) {
+        const cacheSlot = sessionToSlot(memCache.data.sessionType ?? "");
+        if (cacheSlot === slotDef.slot && (!generatedAt || memCache.cachedAt > (generatedAt ?? 0))) {
+          brief = memCache.data;
+          generatedAt = memCache.cachedAt;
+        }
       }
 
       const slotIdx = slotOrder.indexOf(slotDef.slot);

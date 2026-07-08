@@ -232,12 +232,22 @@ function BriefDetail({ session }: { session: SessionSlot }) {
   }
 
   if (!brief) {
+    const timeDisplay = session.time.includes("+1")
+      ? `익일 ${session.time.replace("+1", "")} KST`
+      : `${session.time} KST`;
     return (
-      <div className="py-12 text-center">
-        <p className="text-sm text-zinc-500">
-          {session.label} 브리핑은{" "}
-          <span className="text-zinc-300 font-medium">{session.time} KST</span> 이후 자동 생성됩니다
-        </p>
+      <div className="py-12 text-center space-y-1">
+        {session.isPast ? (
+          <>
+            <p className="text-sm text-zinc-500">이 시간대에 브리핑이 생성되지 않았습니다</p>
+            <p className="text-xs text-zinc-700">장 운영 중 자동 생성이 누락된 경우입니다</p>
+          </>
+        ) : (
+          <p className="text-sm text-zinc-500">
+            {session.label} 브리핑은{" "}
+            <span className="text-zinc-300 font-medium">{timeDisplay}</span> 이후 자동 생성됩니다
+          </p>
+        )}
       </div>
     );
   }
@@ -463,9 +473,16 @@ export default function MarketAnalysisPage() {
       setError(null);
 
       setSelectedSlot((prev) => {
+        // 현재 선택된 슬롯에 브리핑이 있으면 유지
         if (prev && data.sessions.find((s) => s.slot === prev)?.brief) return prev;
+        // 활성(isActive) 슬롯 우선 — 브리핑 있으면 선택
+        const active = data.sessions.find((s) => s.isActive && s.brief);
+        if (active) return active.slot;
+        // 없으면 오늘 중 가장 최근 브리핑이 있는 슬롯
         const latest = [...data.sessions].reverse().find((s) => s.brief);
-        return latest?.slot ?? data.currentSlot ?? data.sessions[0]?.slot ?? null;
+        if (latest) return latest.slot;
+        // 그것도 없으면 현재 슬롯 또는 첫 번째 슬롯
+        return data.currentSlot ?? data.sessions[0]?.slot ?? null;
       });
     } catch {
       setError("시장 브리핑을 불러오지 못했습니다.");
