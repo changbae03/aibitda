@@ -187,19 +187,10 @@ export function startMarketScheduler() {
     })();
   }
 
-  // model_calibration 초기 보정 (ML 여부 무관)
-  setTimeout(async () => {
-    try {
-      const { rowCount } = await pool.query(`SELECT 1 FROM model_calibration LIMIT 1`);
-      if ((rowCount ?? 0) === 0) {
-        console.log("[scheduler] model_calibration 비어있음 — 즉시 섹터 재보정");
-        const r = await autoRecalibrate();
-        if (r.sectorsUpdated > 0) await autoUpdateAllSectorPriors();
-      }
-    } catch (e) {
-      console.error("[scheduler] 초기 섹터 재보정 실패:", (e as Error)?.message ?? e);
-    }
-  }, 8_000);
+  // model_calibration 초기 보정은 main-server 스케줄러(16:30 KST)가 담당.
+  // market-server 시작 직후 autoRecalibrate()를 실행하면 수백 개의 Yahoo Finance
+  // 동시 호출이 발생해 Node.js event loop를 점유, brief 엔드포인트가 응답 불가해짐.
+  // → 시작 직후 재보정은 비활성화.
 
   // 1분마다 스케줄 조건 확인
   setInterval(checkAndRun, 60_000);

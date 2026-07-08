@@ -120,6 +120,16 @@ interface MarketBrief {
     category: "정치" | "기업" | "경제" | "글로벌" | "산업";
     description: string;
   }[];
+  sectorTrends?: {
+    sector: string;
+    trend: "up" | "down" | "neutral";
+    reason: string;
+  }[];
+  fundFlows?: {
+    foreign: string;
+    institution: string;
+    retail: string;
+  };
   keyRisk?: string;
   actionPoints?: string[];
   recentIssues: string[];
@@ -209,19 +219,32 @@ function SectionLabel({ label }: { label: string }) {
 
 /* ── 지수 미니 칩 ─────────────────────────────────────────────────────────── */
 function IndexChip({ name, value, change }: { name: string; value: number; change: number | null }) {
-  const up = change != null ? change >= 0 : null;
+  const up   = change != null && change > 0;
+  const down = change != null && change < 0;
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/60">
-      <span className="text-[11px] font-semibold text-muted-foreground">{name}</span>
-      <span className="text-[13px] font-bold text-foreground tabular-nums">{value.toLocaleString()}</span>
-      {change != null && (
-        <span className={cn(
-          "text-[12px] font-bold tabular-nums",
-          up ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"
-        )}>
-          {up ? "▲" : "▼"}{Math.abs(change).toFixed(2)}%
-        </span>
-      )}
+    <div className={cn(
+      "flex items-center justify-between px-4 py-3 rounded-xl border flex-1 min-w-0",
+      up   && "bg-red-50/40 border-red-200/50 dark:bg-red-500/6 dark:border-red-500/20",
+      down && "bg-blue-50/40 border-blue-200/50 dark:bg-blue-500/6 dark:border-blue-500/20",
+      !up && !down && "bg-muted/30 border-border/50",
+    )}>
+      <span className="text-[12px] font-semibold text-muted-foreground/70">{name}</span>
+      <div className="text-right">
+        <p className="text-[15px] font-bold tabular-nums text-foreground leading-none">
+          {value.toLocaleString()}
+        </p>
+        {change != null && (
+          <p className={cn(
+            "text-[12px] font-semibold tabular-nums mt-0.5",
+            up   && "text-red-500 dark:text-red-400",
+            down && "text-blue-500 dark:text-blue-400",
+            !up && !down && "text-muted-foreground/60",
+          )}>
+            {up ? "▲+" : down ? "▼" : ""}
+            {Math.abs(change).toFixed(2)}%
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -462,15 +485,18 @@ function MarketBriefSection({
 
       {/* ── 로딩 스켈레톤 ── */}
       {loading && !brief && (
-        <div className="px-5 py-6 space-y-3 animate-pulse">
-          <div className="h-5 bg-muted/60 rounded-lg w-2/3" />
-          <div className="h-3.5 bg-muted/40 rounded-lg w-full" />
-          <div className="h-3.5 bg-muted/40 rounded-lg w-5/6" />
-          <div className="h-3.5 bg-muted/40 rounded-lg w-4/5" />
+        <div className="px-5 py-6 space-y-4 animate-pulse">
+          <div className="h-6 bg-muted/60 rounded-lg w-3/4" />
+          <div className="flex gap-2">
+            <div className="h-14 bg-muted/40 rounded-xl flex-1" />
+            <div className="h-14 bg-muted/40 rounded-xl flex-1" />
+          </div>
+          <div className="h-3.5 bg-muted/30 rounded-lg w-full" />
+          <div className="h-3.5 bg-muted/30 rounded-lg w-5/6" />
         </div>
       )}
 
-      {/* ── 생성 중 (내용 없을 때만 빈 스피너) ── */}
+      {/* ── 생성 중 (이전 내용 없을 때) ── */}
       {!loading && brief?.generating && !brief.summary && (
         <div className="flex items-center gap-3 px-5 py-6 text-muted-foreground/60">
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -486,11 +512,11 @@ function MarketBriefSection({
         </div>
       )}
 
-      {/* ── 본문 (generating이어도 이전 내용 있으면 표시) ── */}
+      {/* ── 본문 ── */}
       {brief?.summary && (
         <div className="divide-y divide-border/40">
 
-          {/* 새 분석 생성 중 배너 */}
+          {/* 갱신 중 배너 */}
           {brief.generating && (
             <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 border-b border-border/30">
               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60 shrink-0" />
@@ -498,13 +524,14 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 헤드라인 + 지수 칩 + 리드 */}
-          <div className="px-5 pt-5 pb-5 space-y-3.5">
-            <h3 className="text-[20px] font-bold text-foreground leading-snug tracking-tight">
+          {/* ── 헤로: 헤드라인 + 지수 타일 + 리드 ── */}
+          <div className="px-5 pt-5 pb-5 space-y-4">
+            <h3 className="text-[21px] font-bold text-foreground leading-snug tracking-tight">
               {brief.summary}
             </h3>
+
             {(brief.kospiCurrent != null || brief.kosdaqCurrent != null) && (
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex gap-2.5">
                 {brief.kospiCurrent != null && (
                   <IndexChip name="KOSPI" value={brief.kospiCurrent} change={brief.kospiChange} />
                 )}
@@ -513,6 +540,7 @@ function MarketBriefSection({
                 )}
               </div>
             )}
+
             {brief.leadParagraph && (
               <p className="text-[14px] text-foreground/70 leading-[1.9] border-l-[3px] border-primary/25 pl-4">
                 {brief.leadParagraph}
@@ -520,7 +548,73 @@ function MarketBriefSection({
             )}
           </div>
 
-          {/* 시장 해설 */}
+          {/* ── 섹터 동향 (NEW) ── */}
+          {(brief.sectorTrends?.length ?? 0) > 0 && (
+            <div className="px-5 py-4 space-y-2.5">
+              <SectionLabel label="섹터 동향" />
+              <div className="flex flex-wrap gap-2 pt-1">
+                {brief.sectorTrends!.map((st, i) => {
+                  const isUp   = st.trend === "up";
+                  const isDown = st.trend === "down";
+                  return (
+                    <div key={i} title={st.reason} className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12px] font-semibold cursor-default transition-all",
+                      isUp   && "bg-red-50 border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/25 dark:text-red-400",
+                      isDown && "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500/25 dark:text-blue-400",
+                      !isUp && !isDown && "bg-muted/50 border-border text-muted-foreground",
+                    )}>
+                      <span className="shrink-0">{isUp ? "▲" : isDown ? "▼" : "–"}</span>
+                      <span>{st.sector}</span>
+                      {st.reason && (
+                        <span className="text-[10.5px] opacity-55 font-normal hidden lg:block">{st.reason}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── 수급 동향 (NEW) ── */}
+          {brief.fundFlows && (
+            <div className="px-5 py-4 space-y-2.5">
+              <SectionLabel label="수급 동향" />
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {([
+                  { label: "외국인", value: brief.fundFlows.foreign },
+                  { label: "기관",   value: brief.fundFlows.institution },
+                  { label: "개인",   value: brief.fundFlows.retail },
+                ] as { label: string; value: string }[]).map((ff, i) => {
+                  const isBuy  = ff.value?.includes("순매수");
+                  const isSell = ff.value?.includes("순매도");
+                  const detail = ff.value?.replace(/순매수|순매도/g, "").replace(/[+-]\s*\d[\d,]*억?원?\s*/g, "").trim();
+                  return (
+                    <div key={i} className={cn(
+                      "px-3 py-3 rounded-xl border text-center space-y-1",
+                      isBuy  && "bg-red-50/60 border-red-200/60 dark:bg-red-500/8 dark:border-red-500/20",
+                      isSell && "bg-blue-50/60 border-blue-200/60 dark:bg-blue-500/8 dark:border-blue-500/20",
+                      !isBuy && !isSell && "bg-muted/30 border-border/50",
+                    )}>
+                      <p className="text-[11px] text-muted-foreground/60 font-medium">{ff.label}</p>
+                      <p className={cn(
+                        "text-[13px] font-bold",
+                        isBuy  && "text-red-600 dark:text-red-400",
+                        isSell && "text-blue-600 dark:text-blue-400",
+                        !isBuy && !isSell && "text-foreground/60",
+                      )}>
+                        {isBuy ? "순매수" : isSell ? "순매도" : "보합"}
+                      </p>
+                      {detail && (
+                        <p className="text-[10px] text-muted-foreground/50 leading-snug">{detail}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── 시장 해설 ── */}
           {brief.storyLine && (() => {
             const paras = cleanStory(brief.storyLine).split(/\n\n+/).map(p => p.trim()).filter(Boolean);
             if (!paras.length) return null;
@@ -536,7 +630,7 @@ function MarketBriefSection({
             );
           })()}
 
-          {/* 주요 이슈 */}
+          {/* ── 주요 이슈 ── */}
           {(brief.marketEvents?.length ?? 0) > 0 && (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="주요 이슈" />
@@ -564,7 +658,7 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 거시 지표 */}
+          {/* ── 거시 지표 ── */}
           {(brief.macroFactors?.length ?? 0) > 0 && (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="거시 지표" />
@@ -582,7 +676,7 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 앞으로 주목할 것 */}
+          {/* ── 앞으로 주목할 것 ── */}
           {(brief.forwardLook?.length ?? 0) > 0 && (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="앞으로 주목할 것" />
@@ -608,7 +702,7 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 투자 대응 포인트 */}
+          {/* ── 투자 대응 포인트 ── */}
           {(brief.actionPoints?.length ?? 0) > 0 && (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="투자 대응 포인트" />
@@ -623,7 +717,7 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 주목 이벤트 */}
+          {/* ── 주목 이벤트 ── */}
           {futureEvents.length > 0 && (
             <div className="px-5 py-5 space-y-3">
               <SectionLabel label="주목 이벤트" />
@@ -651,7 +745,7 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 핵심 키워드 */}
+          {/* ── 핵심 키워드 ── */}
           {(brief.keyTopics?.length ?? 0) > 0 && (
             <div className="px-5 py-4 space-y-3">
               <SectionLabel label="핵심 키워드" />
@@ -674,7 +768,7 @@ function MarketBriefSection({
             </div>
           )}
 
-          {/* 핵심 리스크 */}
+          {/* ── 핵심 리스크 ── */}
           {brief.keyRisk && (
             <div className="px-5 py-4">
               <div className="flex items-start gap-3 px-4 py-4 rounded-xl bg-amber-500/5 dark:bg-amber-500/8 border border-amber-400/25 dark:border-amber-500/20">
@@ -687,10 +781,12 @@ function MarketBriefSection({
             </div>
           )}
 
-          {brief.stale && (
+          {/* ── stale 알림 ── */}
+          {brief.stale && !brief.generating && (
             <div className="px-5 pb-3">
-              <p className="text-[10px] text-amber-500/60 flex items-center gap-1.5">
-                <AlertCircle className="w-3 h-3" /> 이전 분석 데이터입니다 (새 분석이 백그라운드에서 준비 중)
+              <p className="text-[10px] text-amber-500/55 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                이전 분석 데이터입니다 (백그라운드에서 새 분석 준비 중)
               </p>
             </div>
           )}

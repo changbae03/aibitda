@@ -230,6 +230,16 @@ export interface MarketBriefResult {
     category: "정치" | "기업" | "경제" | "글로벌" | "산업";
     description: string;
   }[];
+  sectorTrends?: {
+    sector: string;
+    trend: "up" | "down" | "neutral";
+    reason: string;
+  }[];
+  fundFlows?: {
+    foreign: string;
+    institution: string;
+    retail: string;
+  };
   keyRisk: string;
   recentIssues: string[];
   outlook: string[];
@@ -611,6 +621,20 @@ async function generateBrief(): Promise<MarketBriefResult> {
 
   const keyTopicsRule = `- keyTopics: 시장을 움직이는 핵심 키워드 5개 엄선 (많으면 안 됨). 글로벌·국내 기업·정치·섹터 중 가장 임팩트 큰 것만. description은 "왜 지금 주가에 영향 주는지" 40~60자로 간결하게.`;
 
+  const sectorTrendsSchema = `  "sectorTrends": [
+    { "sector": "반도체", "trend": "up 또는 down 또는 neutral", "reason": "20자 이내 이유" },
+    { "sector": "바이오", "trend": "...", "reason": "..." },
+    { "sector": "2차전지", "trend": "...", "reason": "..." },
+    { "sector": "방산·조선", "trend": "...", "reason": "..." },
+    { "sector": "금융·은행", "trend": "...", "reason": "..." }
+  ]`;
+
+  const fundFlowsSchema = `  "fundFlows": {
+    "foreign": "외국인 순매수 또는 순매도 + 규모·이유 (30자 이내)",
+    "institution": "기관 순매수 또는 순매도 + 이유 (30자 이내)",
+    "retail": "개인 순매수 또는 순매도 + 이유 (30자 이내)"
+  }`;
+
   // ── 장전 프롬프트 ──────────────────────────────────────────────────────────
   const morningPrompt = `당신은 시장 해설가입니다. 오늘은 ${today}이고, 한국 주식시장 개장 전입니다.
 ${usSessionLabel}에서 무슨 일이 있었는지, 그리고 오늘 우리 시장에 어떤 영향이 올지를 쉽게 설명해 주세요.
@@ -673,6 +697,8 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
 ${keyTopicsSchema},
+${sectorTrendsSchema},
+${fundFlowsSchema},
   "keyRisk": "오늘 한국 시장에서 가장 조심해야 할 것 한 줄 (40~60자)",
   "actionPoints": ["투자자가 오늘 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["${usSessionLabel} 이슈 요약1", "이슈2", "이슈3", "이슈4"],
@@ -782,6 +808,8 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
 ${keyTopicsSchema},
+${sectorTrendsSchema},
+${fundFlowsSchema},
   "keyRisk": "지금 가장 조심해야 할 것 한 줄 (40~60자)",
   "actionPoints": ["투자자가 내일·이번 주 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["오늘 이슈 요약1", "이슈2", "이슈3", "이슈4"],
@@ -859,6 +887,8 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
 ${keyTopicsSchema},
+${sectorTrendsSchema},
+${fundFlowsSchema},
   "keyRisk": "오후 장에서 가장 조심해야 할 것 한 줄 (40~60자)",
   "actionPoints": ["지금 이 시점에 투자자가 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["오전 이슈 요약1", "이슈2", "이슈3", "이슈4"],
@@ -934,6 +964,8 @@ ${newsBlock || "뉴스 데이터 없음 — 당신의 최신 지식으로 주요
     { "date": "...", "title": "...", "description": "...", "impact": "...", "direction": "..." }
   ],
 ${keyTopicsSchema},
+${sectorTrendsSchema},
+${fundFlowsSchema},
   "keyRisk": "다음 주 가장 조심해야 할 것 한 줄 (40~60자)",
   "actionPoints": ["다음 주 개장 전 투자자가 취해야 할 구체적 행동 지침1 (30~50자)", "행동 지침2", "행동 지침3"],
   "recentIssues": ["이번 주 이슈 요약1", "이슈2", "이슈3", "이슈4"],
@@ -983,9 +1015,10 @@ ${keyTopicsRule}
     console.error("[market-brief] JSON 파싱 실패:", e?.message, "raw 앞 100자:", raw.slice(0, 100));
   }
 
-  // 파싱 실패 시 잘못된 기본값을 DB에 저장하지 않도록 에러 throw → 재시도 유도
-  if (!parsed || !parsed.summary) {
-    throw new Error(`[market-brief] Gemini 응답 파싱 실패 — raw 길이: ${raw.length}`);
+  // 파싱 실패 또는 플레이스홀더 summary → 재시도 유도
+  const BAD_SUMMARIES = ["분석 중", "한국 증시 데이터", "Loading", "데이터 없음", "N/A"];
+  if (!parsed || !parsed.summary || BAD_SUMMARIES.some(b => parsed.summary.includes(b))) {
+    throw new Error(`[market-brief] 잘못된 summary 감지 — "${parsed?.summary ?? "null"}" / raw 길이: ${raw.length}`);
   }
 
   const safeArr = (v: any) => Array.isArray(v) ? v : [];
@@ -996,15 +1029,17 @@ ${keyTopicsRule}
     sessionType:          session,
     leadParagraph:        parsed?.leadParagraph        ?? "",
     storyLine:            parsed?.storyLine            ?? "",
-    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 5),
-    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 4),
-    forwardLook:          safeArr(parsed?.forwardLook).slice(0, 2),
-    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 3),
+    marketEvents:         safeArr(parsed?.marketEvents).slice(0, 7),
+    macroFactors:         safeArr(parsed?.macroFactors).slice(0, 5),
+    forwardLook:          safeArr(parsed?.forwardLook).slice(0, 3),
+    upcomingMacroEvents:  safeArr(parsed?.upcomingMacroEvents).slice(0, 5),
     keyTopics:            safeArr(parsed?.keyTopics).slice(0, 5),
     keyRisk:              parsed?.keyRisk              ?? "",
-    actionPoints:         safeArr(parsed?.actionPoints).slice(0, 2),
+    actionPoints:         safeArr(parsed?.actionPoints).slice(0, 3),
     recentIssues:         safeArr(parsed?.recentIssues).slice(0, 4),
     outlook:              safeArr(parsed?.outlook).slice(0, 3),
+    sectorTrends:         safeArr(parsed?.sectorTrends).slice(0, 5),
+    fundFlows:            (parsed?.fundFlows && typeof parsed.fundFlows === "object") ? parsed.fundFlows : null,
     generatedAt:          new Date().toISOString(),
     kospiCurrent:         kospiLatest?.close  ?? null,
     kosdaqCurrent:        kosdaqLatest?.close ?? null,
