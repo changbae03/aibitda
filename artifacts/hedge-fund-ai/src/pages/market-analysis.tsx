@@ -29,19 +29,51 @@ interface FundFlows {
   foreignLabel?: string;
 }
 
+interface MacroFactor {
+  factor?: string;
+  status?: string;
+  implication?: string;
+}
+
+interface KeyTopic {
+  keyword?: string;
+  category?: string;
+  description?: string;
+}
+
+interface ForwardLookItem {
+  point?: string;
+  detail?: string;
+  watchFor?: string;
+}
+
+interface UpcomingEvent {
+  date?: string;
+  event?: string;
+  title?: string;
+  description?: string;
+  impact?: string;
+  direction?: string;
+}
+
 interface MarketBrief {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral" | "mixed";
-  keyTopics?: string[];
+  leadParagraph?: string;
+  storyLine?: string;
+  keyTopics?: Array<string | KeyTopic>;
   marketEvents?: MarketEvent[];
   indices?: Record<string, MarketIndex>;
   sectorTrends?: SectorTrend[];
   fundFlows?: FundFlows;
-  macroFactors?: string[];
-  forwardLook?: string[];
+  macroFactors?: Array<string | MacroFactor>;
+  forwardLook?: Array<string | ForwardLookItem>;
   actionPoints?: string[];
+  keyRisk?: string;
+  recentIssues?: string[];
+  outlook?: string[];
   sessionType?: string;
-  upcomingMacroEvents?: Array<{ date: string; event: string }>;
+  upcomingMacroEvents?: UpcomingEvent[];
 }
 
 interface SessionSlot {
@@ -257,6 +289,21 @@ function BriefDetail({ session }: { session: SessionSlot }) {
     <div className="space-y-6">
       <p className="text-sm text-zinc-200 leading-relaxed">{brief.summary}</p>
 
+      {brief.leadParagraph && (
+        <p className="text-sm text-zinc-300 leading-relaxed border-l-2 border-zinc-700 pl-3">
+          {brief.leadParagraph}
+        </p>
+      )}
+
+      {brief.storyLine && (
+        <div>
+          <SL>심층 분석</SL>
+          <div className="mt-2 text-xs text-zinc-400 leading-relaxed whitespace-pre-line">
+            {brief.storyLine}
+          </div>
+        </div>
+      )}
+
       {brief.indices && <IndexGrid indices={brief.indices} />}
 
       {brief.keyTopics && brief.keyTopics.length > 0 && (
@@ -264,9 +311,12 @@ function BriefDetail({ session }: { session: SessionSlot }) {
           <SL>주요 테마</SL>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {brief.keyTopics.map((t, i) => {
-              const label = typeof t === "string" ? t : JSON.stringify(t);
+              const label = typeof t === "string" ? t : ((t as KeyTopic).keyword ?? "");
+              const desc  = typeof t === "string" ? null : (t as KeyTopic).description;
+              if (!label) return null;
               return (
-                <span key={`${label}-${i}`} className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300">
+                <span key={`${label}-${i}`} title={desc ?? undefined}
+                  className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 cursor-default">
                   {label}
                 </span>
               );
@@ -279,22 +329,26 @@ function BriefDetail({ session }: { session: SessionSlot }) {
         <div>
           <SL>시장 이슈</SL>
           <div className="mt-2 space-y-3">
-            {brief.marketEvents.map((e, i) => (
-              <div key={i} className="flex gap-3">
-                <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${
-                  e.impact === "positive" ? "text-red-500" :
-                  e.impact === "negative" ? "text-blue-500" : "text-zinc-600"
-                }`}>
-                  {e.impact === "positive" ? "▲" : e.impact === "negative" ? "▼" : "●"}
-                </span>
-                <div>
-                  <p className="text-sm text-zinc-100 font-medium leading-snug">{e.title}</p>
-                  {e.description && (
-                    <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{e.description}</p>
-                  )}
+            {brief.marketEvents.map((e, i) => {
+              const dir = (e as any).direction ?? e.impact;
+              const isPos = dir === "positive";
+              const isNeg = dir === "negative";
+              return (
+                <div key={i} className="flex gap-3">
+                  <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${isPos ? "text-red-500" : isNeg ? "text-blue-500" : "text-zinc-600"}`}>
+                    {isPos ? "▲" : isNeg ? "▼" : "●"}
+                  </span>
+                  <div>
+                    <p className="text-sm text-zinc-100 font-medium leading-snug">{e.title}</p>
+                    {((e as any).impact || e.description) && (
+                      <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                        {(e as any).impact ?? e.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -310,9 +364,7 @@ function BriefDetail({ session }: { session: SessionSlot }) {
             ].map(({ label, val }) => (
               <div key={label} className="bg-zinc-800/80 rounded-lg px-3 py-2.5 text-center">
                 <p className="text-[10px] text-zinc-500 mb-1">{label}</p>
-                <p className={`text-sm font-semibold tabular-nums ${changeColor(val)}`}>
-                  {fmtAmt(val)}
-                </p>
+                <p className={`text-sm font-semibold tabular-nums ${changeColor(val)}`}>{fmtAmt(val)}</p>
               </div>
             ))}
           </div>
@@ -341,28 +393,56 @@ function BriefDetail({ session }: { session: SessionSlot }) {
       {brief.macroFactors && brief.macroFactors.length > 0 && (
         <div>
           <SL>거시 환경</SL>
-          <ul className="mt-2 space-y-1.5">
-            {brief.macroFactors.map((f, i) => (
-              <li key={i} className="flex gap-2 text-xs text-zinc-400">
-                <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2 space-y-2">
+            {brief.macroFactors.map((f, i) => {
+              if (typeof f === "string") {
+                return (
+                  <div key={i} className="flex gap-2 text-xs text-zinc-400">
+                    <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
+                    <span>{f}</span>
+                  </div>
+                );
+              }
+              const mf = f as MacroFactor;
+              return (
+                <div key={i} className="bg-zinc-800/50 rounded-lg px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <span className="text-zinc-200 font-medium">{mf.factor}</span>
+                    <span className="text-zinc-500 shrink-0">{mf.status}</span>
+                  </div>
+                  {mf.implication && <p className="text-zinc-500 leading-relaxed">{mf.implication}</p>}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {brief.forwardLook && brief.forwardLook.length > 0 && (
         <div>
           <SL>향후 전망</SL>
-          <ul className="mt-2 space-y-1.5">
-            {brief.forwardLook.map((f, i) => (
-              <li key={i} className="flex gap-2 text-xs text-zinc-400">
-                <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2 space-y-2">
+            {brief.forwardLook.map((f, i) => {
+              if (typeof f === "string") {
+                return (
+                  <div key={i} className="flex gap-2 text-xs text-zinc-400">
+                    <span className="text-zinc-600 flex-shrink-0 mt-0.5">•</span>
+                    <span>{f}</span>
+                  </div>
+                );
+              }
+              const fl = f as ForwardLookItem;
+              return (
+                <div key={i} className="bg-zinc-800/50 rounded-lg px-3 py-2 text-xs">
+                  <p className="text-zinc-200 font-medium mb-0.5">{fl.point}</p>
+                  {fl.detail && <p className="text-zinc-500 leading-relaxed">{fl.detail}</p>}
+                  {fl.watchFor && (
+                    <p className="text-amber-500/70 mt-1">📌 {fl.watchFor}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -373,10 +453,17 @@ function BriefDetail({ session }: { session: SessionSlot }) {
             {brief.actionPoints.map((a, i) => (
               <li key={i} className="flex gap-2 text-xs text-zinc-300">
                 <span className="text-amber-500 flex-shrink-0 mt-0.5 font-bold">→</span>
-                <span>{a}</span>
+                <span>{typeof a === "string" ? a : JSON.stringify(a)}</span>
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {brief.keyRisk && (
+        <div className="bg-blue-950/30 border border-blue-900/40 rounded-lg px-3 py-2.5">
+          <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide mb-1">핵심 리스크</p>
+          <p className="text-xs text-zinc-300 leading-relaxed">{brief.keyRisk}</p>
         </div>
       )}
 
@@ -384,12 +471,19 @@ function BriefDetail({ session }: { session: SessionSlot }) {
         <div>
           <SL>주요 일정</SL>
           <div className="mt-2 space-y-1.5">
-            {brief.upcomingMacroEvents.map((ev, i) => (
-              <div key={i} className="flex gap-3 text-xs">
-                <span className="text-zinc-500 font-mono flex-shrink-0 w-20">{ev.date}</span>
-                <span className="text-zinc-300">{ev.event}</span>
-              </div>
-            ))}
+            {brief.upcomingMacroEvents.map((ev, i) => {
+              const evTitle = ev.title ?? ev.event ?? "";
+              const evDesc  = ev.description ?? null;
+              return (
+                <div key={i} className="flex gap-3 text-xs">
+                  <span className="text-zinc-500 font-mono flex-shrink-0 w-20">{ev.date}</span>
+                  <div>
+                    <span className="text-zinc-300">{evTitle}</span>
+                    {evDesc && <p className="text-zinc-600 mt-0.5 leading-relaxed">{evDesc}</p>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
