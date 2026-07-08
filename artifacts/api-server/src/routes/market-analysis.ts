@@ -1081,12 +1081,19 @@ let _usBriefCache: BriefCache | null = null;
 let _usBriefRefreshing = false;
 
 async function saveUsBriefToDb(cache: BriefCache) {
+  const sessionType = cache.data.sessionType ?? detectUsSession();
+  const slotKey = sessionDbKey("us", sessionToSlot(sessionType));
   try {
     await pool.query(`
       INSERT INTO kv_cache (key, value, cached_at)
       VALUES ('market_brief_us', $1, $2)
       ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
     `, [JSON.stringify(cache.data), new Date(cache.cachedAt)]);
+    await pool.query(`
+      INSERT INTO kv_cache (key, value, cached_at)
+      VALUES ($3, $1, $2)
+      ON CONFLICT (key) DO UPDATE SET value = $1, cached_at = $2
+    `, [JSON.stringify(cache.data), new Date(cache.cachedAt), slotKey]);
     saveToHistory("us", cache).catch(() => {});
   } catch (err: any) {
     console.error("[us-brief] DB 저장 실패:", err?.message);
@@ -1528,9 +1535,9 @@ router.get("/sessions", async (req, res) => {
   ];
 
   const US_SLOTS = [
-    { slot: "premarket", label: "개장 전",   icon: "moon",    time: "22:30", sessionTypes: ["us_premarket"] },
-    { slot: "open",      label: "개장",      icon: "sunrise", time: "22:30", sessionTypes: ["us_open"] },
-    { slot: "close",     label: "마감",      icon: "sunset",  time: "07:00", sessionTypes: ["us_afterhours", "us_overnight"] },
+    { slot: "premarket", label: "개장 전",   icon: "moon",    time: "17:00", sessionTypes: ["us_premarket"] },
+    { slot: "open",      label: "개장",      icon: "sunrise", time: "22:30", sessionTypes: ["us_open", "us_midday"] },
+    { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:00+1", sessionTypes: ["us_afterhours", "us_overnight"] },
   ];
 
   const slots = market === "kr" ? KR_SLOTS : US_SLOTS;
@@ -1569,6 +1576,19 @@ router.get("/sessions", async (req, res) => {
     const generating = market === "kr" ? _briefRefreshing : _usBriefRefreshing;
     const memCache = market === "kr" ? _briefCache : _usBriefCache;
 
+    // 슬롯 순서 인덱스 — 과거/현재/미래 판별용
+    const KR_ORDER = ["morning", "midday", "afternoon", "closing"];
+    const US_ORDER = ["premarket", "open", "close"];
+    const slotOrder = market === "kr" ? KR_ORDER : US_ORDER;
+    const pastAllSentinel = slotOrder.length; // 모든 슬롯이 지난 시간대(evening/weekend 등)
+    const isPastAllSession =
+      market === "kr"
+        ? currentSession === "evening" || currentSession === "weekend"
+        : !["us_premarket", "us_open", "us_afterhours", "us_overnight"].includes(currentSession);
+    const currentSlotIdx = isPastAllSession
+      ? pastAllSentinel
+      : slotOrder.indexOf(currentSlot);
+
     const sessions = slots.map((slotDef) => {
       const dbKey = sessionDbKey(market, slotDef.slot);
       const cached = cacheByKey[dbKey];
@@ -1596,10 +1616,15 @@ router.get("/sessions", async (req, res) => {
         generatedAt = memCache.cachedAt;
       }
 
+      const slotIdx = slotOrder.indexOf(slotDef.slot);
+      const isPast = slotIdx < currentSlotIdx;
+
       const status = isCurrentSlot && generating
         ? "generating"
         : brief
         ? "available"
+        : isPast
+        ? "past"
         : "upcoming";
 
       return {
@@ -1608,6 +1633,7 @@ router.get("/sessions", async (req, res) => {
         generatedAt,
         status,
         isActive: isCurrentSlot,
+        isPast,
       };
     });
 

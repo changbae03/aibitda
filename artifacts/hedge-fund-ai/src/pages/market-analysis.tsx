@@ -52,8 +52,9 @@ interface SessionSlot {
   sessionTypes: string[];
   brief: MarketBrief | null;
   generatedAt: number | null;
-  status: "available" | "generating" | "upcoming";
+  status: "available" | "generating" | "upcoming" | "past";
   isActive: boolean;
+  isPast?: boolean;
 }
 
 interface SessionsResponse {
@@ -142,7 +143,11 @@ function SessionCard({ session, selected, onClick }: {
         <span className="text-sm leading-none">{SESSION_ICON[session.icon] ?? "📋"}</span>
         <span className="text-xs font-semibold text-zinc-200">{session.label}</span>
       </div>
-      <div className="text-[10px] font-mono text-zinc-600 mb-3">{session.time} KST</div>
+      <div className="text-[10px] font-mono text-zinc-600 mb-3">
+        {session.time.includes("+1")
+          ? `익일 ${session.time.replace("+1", "")} KST`
+          : `${session.time} KST`}
+      </div>
 
       {available ? (
         <>
@@ -161,6 +166,8 @@ function SessionCard({ session, selected, onClick }: {
           <div className="h-1.5 rounded bg-zinc-700/50 animate-pulse w-3/5" />
           <p className="text-[10px] text-amber-400 mt-2">생성 중…</p>
         </div>
+      ) : session.status === "past" ? (
+        <p className="text-[11px] text-zinc-700 mt-1">브리핑 없음</p>
       ) : (
         <p className="text-[11px] text-zinc-600 mt-1">예정됨</p>
       )}
@@ -245,11 +252,14 @@ function BriefDetail({ session }: { session: SessionSlot }) {
         <div>
           <SL>주요 테마</SL>
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {brief.keyTopics.map((t) => (
-              <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300">
-                {t}
-              </span>
-            ))}
+            {brief.keyTopics.map((t, i) => {
+              const label = typeof t === "string" ? t : JSON.stringify(t);
+              return (
+                <span key={`${label}-${i}`} className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300">
+                  {label}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
