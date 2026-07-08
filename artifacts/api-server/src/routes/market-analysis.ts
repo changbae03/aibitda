@@ -60,7 +60,8 @@ function sessionToSlot(sessionType: string): string {
   if (sessionType === "afternoon" || sessionType === "pre_close") return "afternoon";
   if (sessionType === "closing") return "closing";
   if (sessionType === "us_premarket") return "premarket";
-  if (sessionType === "us_open" || sessionType === "us_midday") return "open";
+  if (sessionType === "us_open")    return "open";
+  if (sessionType === "us_midday")  return "open2";
   if (sessionType === "us_afterhours" || sessionType === "us_overnight") return "close";
   return "evening";
 }
@@ -225,7 +226,7 @@ export interface MarketBriefResult {
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
   sessionType: "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend"
-            | "us_premarket" | "us_open" | "us_afterhours" | "us_overnight" | "us_weekend";
+            | "us_premarket" | "us_open" | "us_midday" | "us_afterhours" | "us_overnight" | "us_weekend";
   leadParagraph: string;
   storyLine: string;
   marketEvents: {
@@ -532,15 +533,20 @@ function detectSession(): "pre_open" | "morning" | "midday" | "afternoon" | "pre
  *   KST 09:00~17:00  → us_overnight  (ET 20:00-04:00, US 휴장)
  *   토/일             → us_weekend
  */
-function detectUsSession(): "us_premarket" | "us_open" | "us_afterhours" | "us_overnight" | "us_weekend" {
+function detectUsSession(): "us_premarket" | "us_open" | "us_midday" | "us_afterhours" | "us_overnight" | "us_weekend" {
   const now = new Date();
   const kstNow = new Date(now.getTime() + 9 * 3600_000);
   const kstDay = kstNow.getUTCDay();
   if (kstDay === 0 || kstDay === 6) return "us_weekend";
   const kstMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+  // KST 17:00~22:30 = ET 04:00~09:30 프리마켓
   if (kstMin >= 17 * 60 && kstMin < 22 * 60 + 30) return "us_premarket";
-  if (kstMin >= 22 * 60 + 30 || kstMin < 5 * 60)  return "us_open";
-  if (kstMin >= 5 * 60 && kstMin < 9 * 60)         return "us_afterhours";
+  // KST 22:30~01:30+1 = ET 09:30~12:30 장중 1차
+  if (kstMin >= 22 * 60 + 30 || kstMin < 1 * 60 + 30) return "us_open";
+  // KST 01:30~05:00 = ET 12:30~16:00 장중 2차
+  if (kstMin >= 1 * 60 + 30 && kstMin < 5 * 60) return "us_midday";
+  // KST 05:00~09:00 = ET 16:00~20:00 애프터마켓
+  if (kstMin >= 5 * 60 && kstMin < 9 * 60) return "us_afterhours";
   return "us_overnight";
 }
 
@@ -1107,9 +1113,15 @@ async function loadUsBriefFromDb(): Promise<void> {
     );
     if (r.rows.length) {
       const cachedAt = new Date(r.rows[0].cached_at).getTime();
-      _usBriefCache = { data: r.rows[0].value as MarketBriefResult, cachedAt };
-      if (Date.now() - cachedAt >= BRIEF_TTL) {
-        setTimeout(() => refreshUsBriefInBackground("서버시작-만료캐시"), 12000);
+      const data = r.rows[0].value as MarketBriefResult;
+      _usBriefCache = { data, cachedAt };
+      const isIncomplete = !data.leadParagraph && !data.storyLine;
+      if (Date.now() - cachedAt >= BRIEF_TTL || isIncomplete) {
+        const reason = isIncomplete ? "서버시작-불완전캐시" : "서버시작-만료캐시";
+        console.log(`[us-brief] DB 복원 성공 — ${isIncomplete ? "내용 없음, 재생성 예약" : "만료, 갱신 예약"}`);
+        setTimeout(() => refreshUsBriefInBackground(reason), 12000);
+      } else {
+        console.log("[us-brief] DB 캐시 복원 성공 (즉시 서빙 가능)");
       }
     } else {
       setTimeout(() => refreshUsBriefInBackground("서버시작-최초생성"), 15000);
@@ -1535,9 +1547,10 @@ router.get("/sessions", async (req, res) => {
   ];
 
   const US_SLOTS = [
-    { slot: "premarket", label: "개장 전",   icon: "moon",    time: "17:00", sessionTypes: ["us_premarket"] },
-    { slot: "open",      label: "개장",      icon: "sunrise", time: "22:30", sessionTypes: ["us_open", "us_midday"] },
-    { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:00+1", sessionTypes: ["us_afterhours", "us_overnight"] },
+    { slot: "premarket", label: "개장 전",   icon: "moon",    time: "17:00",    sessionTypes: ["us_premarket"] },
+    { slot: "open",      label: "장중 1차",  icon: "sunrise", time: "22:30",    sessionTypes: ["us_open"] },
+    { slot: "open2",     label: "장중 2차",  icon: "chart",   time: "01:30+1",  sessionTypes: ["us_midday"] },
+    { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:00+1",  sessionTypes: ["us_afterhours", "us_overnight"] },
   ];
 
   const slots = market === "kr" ? KR_SLOTS : US_SLOTS;
@@ -1578,13 +1591,13 @@ router.get("/sessions", async (req, res) => {
 
     // 슬롯 순서 인덱스 — 과거/현재/미래 판별용
     const KR_ORDER = ["morning", "midday", "afternoon", "closing"];
-    const US_ORDER = ["premarket", "open", "close"];
+    const US_ORDER = ["premarket", "open", "open2", "close"];
     const slotOrder = market === "kr" ? KR_ORDER : US_ORDER;
     const pastAllSentinel = slotOrder.length; // 모든 슬롯이 지난 시간대(evening/weekend 등)
     const isPastAllSession =
       market === "kr"
         ? currentSession === "evening" || currentSession === "weekend"
-        : !["us_premarket", "us_open", "us_afterhours", "us_overnight"].includes(currentSession);
+        : !["us_premarket", "us_open", "us_midday", "us_afterhours", "us_overnight"].includes(currentSession);
     const currentSlotIdx = isPastAllSession
       ? pastAllSentinel
       : slotOrder.indexOf(currentSlot);

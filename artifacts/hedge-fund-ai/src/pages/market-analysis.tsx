@@ -108,8 +108,9 @@ const SESSION_TYPE_LABEL: Record<string, string> = {
   pre_open: "장전", morning: "개장", midday: "장중 1차",
   afternoon: "장중 2차", pre_close: "마감 전", closing: "장마감",
   evening: "야간", weekend: "주말",
-  us_premarket: "개장 전", us_open: "개장", us_midday: "장중",
+  us_premarket: "개장 전", us_open: "장중 1차", us_midday: "장중 2차",
   us_afterhours: "마감 후", us_overnight: "야간",
+  premarket: "개장 전", open: "장중 1차", open2: "장중 2차", close: "마감 후",
 };
 
 // ─── Session Card ─────────────────────────────────────────────────────────────
