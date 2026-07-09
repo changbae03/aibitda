@@ -35,8 +35,8 @@ let closingBriefToday     = "";   // "YYYY-MM-DD" 형식
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
 // 미국 브리핑 (KST 기준 날짜 사용 — 자정 넘어도 같은 날로 취급)
-let usOpenBriefToday      = "";   // 22:30 KST 개장 브리핑
-let usMidBriefToday       = "";   // 01:30 KST 장중 브리핑
+let usOpenBriefToday      = "";   // 23:30 KST 장중 1차 브리핑 (개장 1시간 후)
+let usMidBriefToday       = "";   // 02:00 KST 장중 2차 브리핑
 let usCloseBriefToday     = "";   // 07:00 KST 마감 브리핑
 
 function utcNow() { return new Date(); }
@@ -108,18 +108,18 @@ function checkAndRun() {
     invalidateBriefCache();
   }
 
-  // ── 미국 개장 브리핑: 평일 22:30 KST = 13:30 UTC ────────────────────────
-  if (utcH === 13 && utcM === 30 && dow >= 1 && dow <= 5 && usOpenBriefToday !== dateStr) {
+  // ── 미국 장중 1차 브리핑: 평일 23:30 KST = 14:30 UTC (개장 1시간 후) ────────
+  if (utcH === 14 && utcM === 30 && dow >= 1 && dow <= 5 && usOpenBriefToday !== dateStr) {
     usOpenBriefToday = dateStr;
-    console.log("[scheduler] 미국 개장 브리핑 갱신 (22:30 KST)");
-    refreshUsBriefInBackground("스케줄-개장");
+    console.log("[scheduler] 미국 장중 1차 브리핑 갱신 (23:30 KST)");
+    refreshUsBriefInBackground("스케줄-장중1차");
   }
 
-  // ── 미국 장중 브리핑: 평일 01:30 KST = 16:30 UTC ────────────────────────
-  if (utcH === 16 && utcM === 30 && dow >= 1 && dow <= 5 && usMidBriefToday !== dateStr) {
+  // ── 미국 장중 2차 브리핑: 평일 02:00 KST = 17:00 UTC ────────────────────
+  if (utcH === 17 && utcM === 0 && dow >= 1 && dow <= 5 && usMidBriefToday !== dateStr) {
     usMidBriefToday = dateStr;
-    console.log("[scheduler] 미국 장중 브리핑 갱신 (01:30 KST)");
-    refreshUsBriefInBackground("스케줄-장중");
+    console.log("[scheduler] 미국 장중 2차 브리핑 갱신 (02:00 KST)");
+    refreshUsBriefInBackground("스케줄-장중2차");
   }
 
   // ── 미국 마감 브리핑: 평일 07:00 KST = 22:00 UTC ─────────────────────────

@@ -527,8 +527,9 @@ function detectSession(): "pre_open" | "morning" | "midday" | "afternoon" | "pre
 
 /**
  * US 세션 감지 (KST 기준)
- *   KST 17:00~22:30  → us_premarket  (ET 04:00-09:30)
- *   KST 22:30~05:00  → us_open       (ET 09:30-16:00 정규장)
+ *   KST 17:00~23:30  → us_premarket  (ET 04:00-10:30)
+ *   KST 23:30~02:00  → us_open       (ET 10:30-13:00, 장중 1차 — 개장 1시간 후부터 초반 흐름 반영)
+ *   KST 02:00~05:00  → us_midday     (ET 13:00-16:00, 장중 2차 — 마감까지 3시간 구간)
  *   KST 05:00~09:00  → us_afterhours (ET 16:00-20:00)
  *   KST 09:00~17:00  → us_overnight  (ET 20:00-04:00, US 휴장)
  *   토/일             → us_weekend
@@ -539,12 +540,12 @@ function detectUsSession(): "us_premarket" | "us_open" | "us_midday" | "us_after
   const kstDay = kstNow.getUTCDay();
   if (kstDay === 0 || kstDay === 6) return "us_weekend";
   const kstMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
-  // KST 17:00~22:30 = ET 04:00~09:30 프리마켓
-  if (kstMin >= 17 * 60 && kstMin < 22 * 60 + 30) return "us_premarket";
-  // KST 22:30~01:30+1 = ET 09:30~12:30 장중 1차
-  if (kstMin >= 22 * 60 + 30 || kstMin < 1 * 60 + 30) return "us_open";
-  // KST 01:30~05:00 = ET 12:30~16:00 장중 2차
-  if (kstMin >= 1 * 60 + 30 && kstMin < 5 * 60) return "us_midday";
+  // KST 17:00~23:30 = ET 04:00~10:30 프리마켓
+  if (kstMin >= 17 * 60 && kstMin < 23 * 60 + 30) return "us_premarket";
+  // KST 23:30~02:00+1 = ET 10:30~13:00 장중 1차 (개장 1시간 후부터)
+  if (kstMin >= 23 * 60 + 30 || kstMin < 2 * 60) return "us_open";
+  // KST 02:00~05:00 = ET 13:00~16:00 장중 2차 (마감까지 3시간)
+  if (kstMin >= 2 * 60 && kstMin < 5 * 60) return "us_midday";
   // KST 05:00~09:00 = ET 16:00~20:00 애프터마켓
   if (kstMin >= 5 * 60 && kstMin < 9 * 60) return "us_afterhours";
   return "us_overnight";
@@ -1569,8 +1570,8 @@ router.get("/sessions", async (req, res) => {
 
   const US_SLOTS = [
     { slot: "premarket", label: "개장 전",   icon: "moon",    time: "17:00",    sessionTypes: ["us_premarket"] },
-    { slot: "open",      label: "장중 1차",  icon: "sunrise", time: "22:30",    sessionTypes: ["us_open"] },
-    { slot: "open2",     label: "장중 2차",  icon: "chart",   time: "01:30+1",  sessionTypes: ["us_midday"] },
+    { slot: "open",      label: "장중 1차",  icon: "sunrise", time: "23:30",    sessionTypes: ["us_open"] },
+    { slot: "open2",     label: "장중 2차",  icon: "chart",   time: "02:00+1",  sessionTypes: ["us_midday"] },
     { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:00+1",  sessionTypes: ["us_afterhours", "us_overnight"] },
   ];
 
