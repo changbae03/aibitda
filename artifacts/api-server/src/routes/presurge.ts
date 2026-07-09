@@ -12,6 +12,7 @@
 import { Router } from "express";
 import { fetchPresurgeScan, type PresurgeScanResult } from "../lib/pykrx-client.js";
 import { pool } from "@workspace/db";
+import { saveDailyPicks, getPresurgePickAccuracy } from "../lib/presurge-tracker.js";
 
 const router = Router();
 
@@ -105,6 +106,9 @@ async function runScan(): Promise<CachedPresurge> {
     const cached: CachedPresurge = { result, cachedAt: Date.now() };
     memCache = cached;
     await saveToDB(cached);
+    saveDailyPicks(result.candidates, result.scannedAt).catch(e =>
+      console.error("[presurge] 픽 스냅샷 저장 실패:", e?.message ?? e)
+    );
     return cached;
   } finally {
     scanning = false;
@@ -207,6 +211,19 @@ router.post("/market/presurge/refresh", async (_req, res) => {
       });
     }
     return res.status(500).json({ error: "스캔 실패" });
+  }
+});
+
+/* ── GET /market/presurge/accuracy ────────────────────────────────── */
+// 실제 픽 적중률 추적: 매 스캔의 후보 스냅샷 → 다음 거래일 종가 확인 → 익일 등락률 집계.
+// 오늘부터 순방향으로 데이터가 쌓이므로, 서비스 시작 초기에는 표본이 적을 수 있음.
+router.get("/market/presurge/accuracy", async (_req, res) => {
+  try {
+    const accuracy = await getPresurgePickAccuracy();
+    return res.json(accuracy);
+  } catch (err) {
+    console.error("[presurge] accuracy 조회 오류:", err);
+    return res.status(500).json({ error: "적중률 조회 실패" });
   }
 });
 

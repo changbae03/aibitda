@@ -16,6 +16,7 @@ import { refreshBriefInBackground, refreshUsBriefInBackground } from "./routes/m
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
+import { initPresurgeTrackerTable, resolvePendingPresurgePicks } from "./lib/presurge-tracker.js";
 import { ensureTigerEtfs } from "./lib/tiger-etf-scraper.js";
 import { warmupNpsDart } from "./lib/nps-dart-holdings.js";
 import { warmupNps13F } from "./lib/nps-13f-holdings.js";
@@ -87,6 +88,7 @@ const server = app.listen(port, () => {
         // 관리자 유저 검색 최적화
         pool.query(`CREATE INDEX IF NOT EXISTS idx_user_credits_email  ON user_credits(email)`),
         initPredictionTable(),
+        initPresurgeTrackerTable(),
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
     .then(() => initCalendarCache())
@@ -325,6 +327,23 @@ const server = app.listen(port, () => {
       console.error("[SCHEDULER] 포트폴리오 브리핑 실패:", e?.message ?? e)
     );
   }, ONE_DAY_MS);
+
+  // ── 급등 예비군(presurge) 픽 적중률 결과 확인 ───────────────────────────────
+  // 서버 시작 5분 후 첫 실행(밀린 결과 있으면 바로 확인) → 이후 6시간마다 재확인
+  // (KRX 종가 확정 후 언제 실행돼도 안전 — 이미 확정된 종가만 조회)
+  setTimeout(() => {
+    console.log("[SCHEDULER] 급등 예비군 픽 결과 확인 첫 실행");
+    resolvePendingPresurgePicks().catch((e) =>
+      console.error("[SCHEDULER] 급등 예비군 픽 결과 확인 실패:", e?.message ?? e)
+    );
+  }, 5 * 60 * 1000);
+
+  setInterval(() => {
+    console.log("[SCHEDULER] 급등 예비군 픽 결과 확인 시작");
+    resolvePendingPresurgePicks().catch((e) =>
+      console.error("[SCHEDULER] 급등 예비군 픽 결과 확인 실패:", e?.message ?? e)
+    );
+  }, SIX_HOURS_MS);
 });
 
 function gracefulShutdown(signal: string) {

@@ -51,6 +51,19 @@ interface BacktestSummary {
   avgT1DryupDays: number;
   period:         string;
 }
+interface PresurgeBandStat { band: string; n: number; hitRate5: number | null; avgChange: number | null }
+interface PresurgePickAccuracy {
+  totalTracked: number;
+  resolved: number;
+  pending: number;
+  hitRate5: number | null;
+  hitRate10: number | null;
+  avgNextDayChange: number | null;
+  byScoreBand: PresurgeBandStat[];
+  byDryupDays: PresurgeBandStat[];
+  byNearHighBand: PresurgeBandStat[];
+  since: string | null;
+}
 interface FlowData   { marketFlow: { kospi: MarketRow[]; kosdaq: MarketRow[] }; stocks: StockFlow[]; updatedAt: string }
 type SortTab = "individual" | "institution" | "foreign" | "total";
 
@@ -337,6 +350,7 @@ function SignalBadge({ label, active, icon }: { label: string; active: boolean; 
 export function PreSurgeWidget() {
   const [data,          setData]          = useState<PreSurgeCandidate[]>([]);
   const [backtest,      setBacktest]      = useState<BacktestSummary | null>(null);
+  const [pickAccuracy,  setPickAccuracy]  = useState<PresurgePickAccuracy | null>(null);
   const [loading,       setLoading]       = useState(true);   // 초기부터 로딩 표시
   const [refreshing,    setRefreshing]    = useState(false);
   const [open,          setOpen]          = useState(true);
@@ -364,7 +378,15 @@ export function PreSurgeWidget() {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadAccuracy = useCallback(async () => {
+    try {
+      const res = await fetch(getApiUrl("/api/market/presurge/accuracy"), { credentials: "include" });
+      if (!res.ok) return;
+      setPickAccuracy(await res.json());
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { load(); loadAccuracy(); }, [load, loadAccuracy]);
 
   // 서버 스캔 중일 때 20초마다 재조회
   useEffect(() => {
@@ -426,7 +448,7 @@ export function PreSurgeWidget() {
                 <p className="text-[11px] text-muted-foreground/55 leading-relaxed">
                   거래량 수축→팽창·박스권·이동평균 정배열 등 T-1/T-2 선행 신호 탐지 · 최초 스캔 2~4분 소요
                 </p>
-                {backtest && (
+                {(backtest || pickAccuracy) && (
                   <button
                     onClick={() => setShowBacktest(b => !b)}
                     className="shrink-0 text-[10px] px-2 py-1 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground/60 border border-border/40 flex items-center gap-1"
@@ -439,7 +461,7 @@ export function PreSurgeWidget() {
 
               {/* 백테스팅 패널 */}
               <AnimatePresence>
-                {showBacktest && backtest && (
+                {showBacktest && (backtest || pickAccuracy) && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
@@ -447,30 +469,82 @@ export function PreSurgeWidget() {
                     transition={{ duration: 0.15 }}
                     className="overflow-hidden"
                   >
-                    <div className="rounded-xl border border-emerald-200/50 dark:border-emerald-500/15 bg-emerald-50/40 dark:bg-emerald-500/5 p-3 space-y-2">
+                    {backtest && (
+                      <div className="rounded-xl border border-emerald-200/50 dark:border-emerald-500/15 bg-emerald-50/40 dark:bg-emerald-500/5 p-3 space-y-2">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <BarChart2 className="w-3 h-3 text-emerald-500" />
+                          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                            최근 {backtest.period.slice(0,8)} ~ {backtest.period.slice(-8)} 백테스팅 결과
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground/50">급등 이벤트</p>
+                            <p className="text-[14px] font-black text-emerald-600 dark:text-emerald-400">{backtest.totalEvents}건</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground/50">평균 상승폭</p>
+                            <p className="text-[14px] font-black text-red-500">+{backtest.avgSurgePct}%</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground/50">T-1 거래량비</p>
+                            <p className="text-[14px] font-black text-teal-600 dark:text-teal-400">{backtest.avgT1VolRatio}x</p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground/40 text-center">
+                          급등 전일 평균 거래량 {backtest.avgT1VolRatio}배 · 수축일 {backtest.avgT1DryupDays}일 관찰됨
+                        </p>
+                      </div>
+                    )}
+
+                    {/* 실제 픽 적중률 (오늘부터 순방향 추적) */}
+                    <div className="rounded-xl border border-teal-200/50 dark:border-teal-500/15 bg-teal-50/40 dark:bg-teal-500/5 p-3 space-y-2 mt-2">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <BarChart2 className="w-3 h-3 text-emerald-500" />
-                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                          최근 {backtest.period.slice(0,8)} ~ {backtest.period.slice(-8)} 백테스팅 결과
+                        <Telescope className="w-3 h-3 text-teal-500" />
+                        <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400">
+                          실제 픽 적중률 (오늘부터 누적 추적)
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground/50">급등 이벤트</p>
-                          <p className="text-[14px] font-black text-emerald-600 dark:text-emerald-400">{backtest.totalEvents}건</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground/50">평균 상승폭</p>
-                          <p className="text-[14px] font-black text-red-500">+{backtest.avgSurgePct}%</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground/50">T-1 거래량비</p>
-                          <p className="text-[14px] font-black text-teal-600 dark:text-teal-400">{backtest.avgT1VolRatio}x</p>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground/40 text-center">
-                        급등 전일 평균 거래량 {backtest.avgT1VolRatio}배 · 수축일 {backtest.avgT1DryupDays}일 관찰됨
-                      </p>
+                      {pickAccuracy && pickAccuracy.resolved > 0 ? (
+                        <>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground/50">익일 +5% 이상</p>
+                              <p className="text-[14px] font-black text-teal-600 dark:text-teal-400">{pickAccuracy.hitRate5}%</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground/50">익일 +10% 이상</p>
+                              <p className="text-[14px] font-black text-teal-600 dark:text-teal-400">{pickAccuracy.hitRate10}%</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground/50">평균 익일 등락률</p>
+                              <p className={cn("text-[14px] font-black", (pickAccuracy.avgNextDayChange ?? 0) >= 0 ? "text-red-500" : "text-blue-500")}>
+                                {(pickAccuracy.avgNextDayChange ?? 0) >= 0 ? "+" : ""}{pickAccuracy.avgNextDayChange}%
+                              </p>
+                            </div>
+                          </div>
+                          <div className="pt-1 space-y-1">
+                            <p className="text-[9px] text-muted-foreground/40">점수 구간별 적중률</p>
+                            <div className="flex gap-1 flex-wrap">
+                              {pickAccuracy.byScoreBand.filter(b => b.n > 0).map(b => (
+                                <span key={b.band} className="text-[9px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground/60">
+                                  {b.band}: {b.hitRate5}%({b.n}건)
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground/35 text-center pt-1">
+                            추적 {pickAccuracy.totalTracked}건 · 결과확인 {pickAccuracy.resolved}건 · 대기중 {pickAccuracy.pending}건
+                            {pickAccuracy.since && ` · ${pickAccuracy.since} 부터`}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground/45 leading-relaxed">
+                          매일 스캔 결과를 저장해 다음 거래일 실제 등락률과 비교합니다. 아직 결과가 확정된 픽이 없어
+                          (추적 {pickAccuracy?.totalTracked ?? 0}건 · 대기중 {pickAccuracy?.pending ?? 0}건) 오늘부터 데이터가
+                          쌓이는 대로 표시됩니다.
+                        </p>
+                      )}
                     </div>
                   </motion.div>
                 )}
