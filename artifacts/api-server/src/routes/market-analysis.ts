@@ -1040,11 +1040,11 @@ ${keyTopicsRule}
                ? morningPrompt
                : session === "midday"
                ? middayPrompt
-               : session === "afternoon"
-               ? afternoonPrompt
+               : (session === "afternoon" || session === "pre_close")
+               ? afternoonPrompt  // pre_close(15:00~15:29)도 "장중 2차" 슬롯이므로 동일 프롬프트 사용
                : session === "weekend"
                ? weekendPrompt
-               : closingPrompt;  // pre_close / closing / evening
+               : closingPrompt;  // closing / evening
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
