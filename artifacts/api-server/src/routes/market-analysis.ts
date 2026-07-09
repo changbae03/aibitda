@@ -1017,10 +1017,31 @@ ${keyTopicsRule}
 - 절대 금지: 전문 용어 설명 없이 사용 금지
 - 문체: 친근한 해요체`;
 
+  // afternoon은 midday와 시간 맥락만 다른 별도 프롬프트 (오후 2시, 마감 1.5시간 전)
+  const afternoonPrompt = middayPrompt
+    .replace(
+      "한국 주식시장이 한창 열려 있는 시간입니다.\n지금 장 중반 흐름이 어떤지, 오후에 어떻게 될지, 마감까지 꼭 챙겨봐야 할 것은 무엇인지 쉽게 설명해 주세요.",
+      "오후 2시경으로 마감까지 약 1시간 30분 남았습니다.\n지금 오후 장 수급 흐름이 어떤지, 마감 전 기관·외국인 움직임, 마감 직전 투자자가 반드시 챙겨야 할 것은 무엇인지 쉽게 설명해 주세요."
+    )
+    .replace(
+      "오전 코스피·코스닥 흐름을 2문장으로. 수치 포함. (80~120자)",
+      "오후 현재까지의 코스피·코스닥 흐름을 2문장으로. 수치 포함. 오전 대비 변화 강조. (80~120자)"
+    )
+    .replace(
+      "왜 오전에 이렇게 움직였는지(뉴스 헤드라인 참고), 국내외 어떤 이슈가 있었는지, 주요 섹터(반도체·바이오·2차전지·방산) 흐름, 기관·외국인 수급 동향, 오후에는 어떻게 될 것 같은지, 마감까지 무엇을 지켜봐야 하는지 이야기처럼. (350~500자) 반드시 2~3개 단락으로 나눠 작성하고 단락 사이에 \\n\\n을 삽입하세요.",
+      "오전부터 오후까지 전체 흐름 요약, 오후 들어 달라진 점, 수급 동향(기관·외국인·프로그램 매매), 섹터별 마감 흐름, 마감 전 주의해야 할 리스크 이야기처럼. (350~500자) 반드시 2~3개 단락으로 나눠 작성하고 단락 사이에 \\n\\n을 삽입하세요."
+    )
+    .replace(
+      "actionPoints: 오후 장세를 기준으로 투자자가 마감 전까지 취할 구체적 행동 지침 3가지 (각 30~50자)",
+      "actionPoints: 마감 1시간 30분 전 지금 당장 투자자가 취해야 할 구체적 행동 지침 3가지 (각 30~50자)"
+    );
+
   const prompt = (session === "morning" || session === "pre_open")
                ? morningPrompt
-               : (session === "midday" || session === "afternoon")
+               : session === "midday"
                ? middayPrompt
+               : session === "afternoon"
+               ? afternoonPrompt
                : session === "weekend"
                ? weekendPrompt
                : closingPrompt;  // pre_close / closing / evening
@@ -1615,16 +1636,26 @@ router.get("/sessions", async (req, res) => {
       let generatedAt: number | null = null;
 
       if (cached) {
-        brief = cached.value;
-        generatedAt = new Date(cached.cached_at).getTime();
-      } else if (histEntry) {
+        // sessionType이 이 슬롯에 맞는지 확인 (오염된 캐시 방지)
+        const cachedSessionType = cached.value?.sessionType ?? "";
+        const cachedSlot = cachedSessionType ? sessionToSlot(cachedSessionType) : slotDef.slot;
+        if (cachedSlot === slotDef.slot) {
+          brief = cached.value;
+          generatedAt = new Date(cached.cached_at).getTime();
+        }
+      }
+      if (!brief && histEntry) {
         brief = histEntry.data;
         generatedAt = new Date(histEntry.generated_at).getTime();
       }
 
       // 1) 현재 세션이고 인메모리 캐시에 더 최신 데이터가 있으면 사용
+      //    단, memCache의 sessionType이 이 슬롯과 일치해야 함 (다른 슬롯 데이터 오염 방지)
       const isCurrentSlot = slotDef.slot === currentSlot;
-      if (isCurrentSlot && memCache && (!generatedAt || memCache.cachedAt > generatedAt)) {
+      const memCacheMatchesSlot = memCache
+        ? sessionToSlot(memCache.data?.sessionType ?? "") === slotDef.slot
+        : false;
+      if (isCurrentSlot && memCache && memCacheMatchesSlot && (!generatedAt || memCache.cachedAt > generatedAt)) {
         brief = memCache.data;
         generatedAt = memCache.cachedAt;
       }
