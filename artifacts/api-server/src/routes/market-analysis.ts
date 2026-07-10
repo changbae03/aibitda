@@ -512,10 +512,14 @@ async function fetchRecentIndexData() {
 function detectSession(): "pre_open" | "morning" | "midday" | "afternoon" | "pre_close" | "closing" | "evening" | "weekend" {
   const now = new Date();
   const kstNow = new Date(now.getTime() + 9 * 3600_000);
-  const kstDay = kstNow.getUTCDay();
+  const kstMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+
+  // 시장일(market day)은 06:00 KST에 시작 — 00:00~05:59는 전날 저녁(evening)의 연장이므로
+  // 요일(주말) 판정도 전날 기준으로 계산해야 함 (그렇지 않으면 자정 넘자마자 "weekend"로 잘못 판정됨)
+  const dayAnchor = kstMin < 6 * 60 ? new Date(kstNow.getTime() - 24 * 3600_000) : kstNow;
+  const kstDay = dayAnchor.getUTCDay();
   if (kstDay === 0 || kstDay === 6) return "weekend";
 
-  const kstMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
   if (kstMin >=  6 * 60 && kstMin <  9 * 60) return "pre_open";
   if (kstMin >=  9 * 60 && kstMin < 11 * 60) return "morning";
   if (kstMin >= 11 * 60 && kstMin < 13 * 60) return "midday";
@@ -1577,10 +1581,16 @@ router.get("/sessions", async (req, res) => {
 
   const slots = market === "kr" ? KR_SLOTS : US_SLOTS;
 
-  // KST 오늘 자정 UTC 타임스탬프 계산
+  // 시장일(market day) 경계 계산 — KR 장전은 06:00 KST에 시작하므로
+  // 00:00~05:59는 전날 장 사이클의 연장으로 취급 (자정 기준이면 새벽에 전날 브리핑이 사라짐)
   const kstNow = Date.now() + 9 * 3600_000;
-  const kstMidnightUTC = new Date(Math.floor(kstNow / 86400_000) * 86400_000 - 9 * 3600_000);
-  const kstDateStr = new Date(kstNow).toISOString().slice(0, 10);
+  const kstMinNow = new Date(kstNow).getUTCHours() * 60 + new Date(kstNow).getUTCMinutes();
+  const dayShiftMs = market === "kr" && kstMinNow < 6 * 60 ? -86400_000 : 0;
+  const kstCalendarMidnight = Math.floor((kstNow + dayShiftMs) / 86400_000) * 86400_000;
+  const kstMidnightUTC = market === "kr"
+    ? new Date(kstCalendarMidnight + 6 * 3600_000 - 9 * 3600_000) // 그 시장일의 06:00 KST
+    : new Date(Math.floor(kstNow / 86400_000) * 86400_000 - 9 * 3600_000);
+  const kstDateStr = new Date(market === "kr" ? kstCalendarMidnight : kstNow).toISOString().slice(0, 10);
 
   const dbTimeout = <T>(p: Promise<T>, ms = 4000): Promise<T | null> =>
     Promise.race([p, new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), ms))]) as Promise<T | null>;
