@@ -1636,7 +1636,10 @@ router.get("/sessions", async (req, res) => {
       let brief: any = null;
       let generatedAt: number | null = null;
 
-      if (cached) {
+      // kv_cache는 수동 갱신 전까지 어제 데이터가 그대로 남아있을 수 있음 →
+      // 오늘(KST) 갱신된 것만 사용 (어제 브리핑을 오늘 것처럼 보여주는 것 방지)
+      const cachedIsToday = cached ? new Date(cached.cached_at).getTime() >= kstMidnightUTC.getTime() : false;
+      if (cached && cachedIsToday) {
         // sessionType이 이 슬롯에 맞는지 확인 (오염된 캐시 방지)
         const cachedSessionType = cached.value?.sessionType ?? "";
         const cachedSlot = cachedSessionType ? sessionToSlot(cachedSessionType) : slotDef.slot;

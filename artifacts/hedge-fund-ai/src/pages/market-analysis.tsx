@@ -202,7 +202,7 @@ function SessionCard({ session, selected, onClick }: {
       ) : session.status === "past" ? (
         <p className="text-[11px] text-zinc-700 mt-1">브리핑 없음</p>
       ) : (
-        <p className="text-[11px] text-zinc-600 mt-1">예정됨</p>
+        <p className="text-[11px] text-zinc-600 mt-1">준비중</p>
       )}
     </button>
   );
