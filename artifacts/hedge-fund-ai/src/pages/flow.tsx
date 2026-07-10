@@ -151,6 +151,7 @@ export function SurgeWidget() {
               {data.length}개
             </span>
           )}
+          <span className="text-[10px] text-muted-foreground/40">실시간 수급 기반</span>
           {timeStr && (
             <span className="text-[10px] text-muted-foreground/50">{timeStr} 기준</span>
           )}

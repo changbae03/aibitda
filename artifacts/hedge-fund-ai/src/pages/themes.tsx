@@ -124,6 +124,29 @@ function stockMomentumAlive(s: FeedStock): "alive" | "fading" | "pressure" | "ea
   return "unknown";
 }
 
+// ── 내일 종목 탭 상단 컨셉 안내 카드 ─────────────────────────────────────────
+
+const LEGEND_STEP_COLORS: Record<string, { badge: string; title: string }> = {
+  rose:    { badge: "bg-rose-500 text-white",    title: "text-rose-600 dark:text-rose-400" },
+  emerald: { badge: "bg-emerald-500 text-white", title: "text-emerald-600 dark:text-emerald-400" },
+  indigo:  { badge: "bg-indigo-500 text-white",  title: "text-indigo-600 dark:text-indigo-400" },
+};
+
+function LegendStep({ n, color, title, desc }: { n: number; color: "rose" | "emerald" | "indigo"; title: string; desc: string }) {
+  const c = LEGEND_STEP_COLORS[color];
+  return (
+    <div className="rounded-xl bg-background/60 border border-border/40 px-3 py-2.5 flex gap-2.5">
+      <span className={cn("shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black", c.badge)}>
+        {n}
+      </span>
+      <div className="min-w-0">
+        <p className={cn("text-[11.5px] font-bold leading-tight", c.title)}>{title}</p>
+        <p className="text-[10px] text-foreground/45 leading-snug mt-0.5">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── 테마별 수급 강도 랭킹 ──────────────────────────────────────────────────
 
 function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
@@ -376,8 +399,25 @@ export default function ThemesPage() {
       {/* ── 내일 종목 탭 ────────────────────────────────────────── */}
       {activeSection === "picks" && (
         <div className="space-y-4">
-          <PreSurgeWidget />
+          {/* 컨셉 안내: 서로 다른 3가지 렌즈로 내일 상승 종목을 교차 검증 */}
+          <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-muted/40 to-muted/10 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h2 className="text-[14px] font-bold text-foreground">3가지 렌즈로 내일 상승 종목을 찾습니다</h2>
+            </div>
+            <p className="text-[11.5px] text-foreground/50 leading-relaxed">
+              시간축과 데이터 성격이 서로 다른 지표를 함께 보면 한 지표만으론 놓치는 신호를 줄일 수 있습니다.
+              여러 리스트에 동시에 등장하는 종목일수록 신뢰도가 높습니다.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <LegendStep n={1} color="rose"    title="오늘 수급 폭발 포착" desc="실시간 · 거래량 급증 + 기관·외인 매집 · 장중 30분마다 갱신" />
+              <LegendStep n={2} color="emerald" title="내일 급등 예비군"   desc="기술적 패턴 · 최근 15일 눌림목·거래량 수축→팽창 스캔" />
+              <LegendStep n={3} color="indigo"  title="내일 상승 후보"     desc="테마·검색 트렌드 · 순환매 지연·화제성 포착" />
+            </div>
+          </div>
+
           <SurgeWidget />
+          <PreSurgeWidget />
           <TomorrowPicksContent onAnalyze={goAnalyze} />
         </div>
       )}
@@ -900,10 +940,11 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
       {/* ── 헤더 ─────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <Target className="w-4.5 h-4.5 text-emerald-500" />
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+            <Target className="w-4.5 h-4.5 text-indigo-500" />
             <h2 className="text-[15px] font-semibold text-foreground">내일 상승 후보</h2>
-            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">{picks.length}종목</span>
+            <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-full">{picks.length}종목</span>
+            <span className="text-[10px] text-muted-foreground/40">테마·검색 트렌드 기반</span>
           </div>
           <p className="text-[12px] text-foreground/45 leading-relaxed">
             테마 미반영 {laggardCount}  ·  거래량 집중 {volumeCount}  ·  모멘텀 {momentumCount}
