@@ -522,6 +522,15 @@ def main():
                 if today_change >= 20:   # 이미 급등 중 → 제외
                     continue
 
+                # 유동성 필터: 오늘 거래대금 5억원 미만은 제외 (얇은 거래로 인한 우연 패턴 방지)
+                today_turnover = today_close * today_volume
+                if today_turnover < 500_000_000:
+                    continue
+
+                # 우선주 제외 (일반주는 티커 마지막 자리가 '0', 우선주는 그 외 숫자)
+                if len(ticker) == 6 and ticker[-1] != "0":
+                    continue
+
                 # 거래량 지표
                 vol5      = volumes[-6:-1]
                 vol_mean5 = _stat.mean(vol5) if vol5 else 1
@@ -592,7 +601,14 @@ def main():
 
                 total = dryup_score + vol_score + compression_score + near_high_score + ma_score + bb_score
 
-                if total < 15:
+                # 핵심 신호(거래량 수축 또는 거래량 팽창) 없이 다른 보조 지표만으로
+                # 점수를 채운 케이스는 우연한 패턴일 가능성이 높아 제외 (정밀도 강화)
+                if dryup_score == 0 and vol_score < 5:
+                    continue
+
+                # 최소 점수 기준 상향 (15 → 35): 애매한 후보를 걸러내고 확신도 높은
+                # 종목만 남긴다
+                if total < 35:
                     continue
 
                 candidates.append({
@@ -612,17 +628,22 @@ def main():
                 })
 
             candidates.sort(key=lambda x: x["score"], reverse=True)
-            top50 = candidates[:50]
+            top60 = candidates[:60]
 
-            # 종목명 조회
+            # 종목명 조회 + 스팩(SPAC) 제외 (스팩은 NAV 근접 거래 특성상 기술적
+            # 패턴이 무의미해 정밀도를 떨어뜨림)
             _real_stdout = sys.stdout
             sys.stdout   = sys.stderr
-            for c in top50:
+            filtered = []
+            for c in top60:
                 try:
                     n = krx.get_market_ticker_name(c["ticker"])
                     c["name"] = n if n and n != c["ticker"] else c["ticker"]
                 except Exception:
                     c["name"] = c["ticker"]
+                if "스팩" in c["name"]:
+                    continue
+                filtered.append(c)
             sys.stdout = _real_stdout
 
             # 백테스팅 요약
@@ -636,7 +657,8 @@ def main():
                     "period":         f"{trading_dates[0]}~{trading_dates[-1]}",
                 }
 
-            emit({"candidates": top50[:30], "backtest": backtest,
+            # 최종 노출 개수도 30 → 15로 축소해 확신도 높은 상위 후보만 보여준다
+            emit({"candidates": filtered[:15], "backtest": backtest,
                   "tradingDays": len(trading_dates), "scannedAt": today_date})
 
         else:
