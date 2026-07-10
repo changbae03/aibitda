@@ -122,13 +122,6 @@ function fmtPct(v?: number) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
-function fmtAmt(v?: number) {
-  if (v == null) return "--";
-  const abs = Math.abs(v);
-  const billions = Math.round(abs / 100_000_000);
-  return `${v >= 0 ? "+" : "-"}${billions.toLocaleString("ko-KR")}억`;
-}
-
 const SESSION_ICON: Record<string, string> = {
   sunrise: "🌅",
   chart: "📊",
@@ -349,24 +342,6 @@ function BriefDetail({ session }: { session: SessionSlot }) {
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {brief.fundFlows && (
-        <div>
-          <SL>수급 동향</SL>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {[
-              { label: brief.fundFlows.foreignLabel ?? "외국인", val: brief.fundFlows.foreign },
-              { label: "기관", val: brief.fundFlows.institution },
-              { label: "개인", val: brief.fundFlows.retail },
-            ].map(({ label, val }) => (
-              <div key={label} className="bg-zinc-800/80 rounded-lg px-3 py-2.5 text-center">
-                <p className="text-[10px] text-zinc-500 mb-1">{label}</p>
-                <p className={`text-sm font-semibold tabular-nums ${changeColor(val)}`}>{fmtAmt(val)}</p>
-              </div>
-            ))}
           </div>
         </div>
       )}
