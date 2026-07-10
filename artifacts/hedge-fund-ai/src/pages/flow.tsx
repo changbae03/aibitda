@@ -3,7 +3,7 @@ import {
   RefreshCw, Users, Building2, Globe, Activity, Info,
   TrendingUp, ArrowUpRight, ArrowDownRight, Minus, Zap, Radio,
   ChevronDown, ChevronUp, Telescope, BarChart2, Target,
-  TrendingDown, AlertCircle,
+  TrendingDown, AlertCircle, Sparkles,
 } from "lucide-react";
 import { cn, getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -320,6 +320,122 @@ export function SurgeWidget() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ── 교차 시그널 배너: 3개 지표에 동시에 포착된 종목 ──────────────────── */
+type CrossSource = "surge" | "presurge" | "tomorrow";
+
+const CROSS_SOURCE_META: Record<CrossSource, { label: string; dot: string; text: string }> = {
+  surge:    { label: "오늘 수급",  dot: "bg-rose-500",    text: "text-rose-600 dark:text-rose-400" },
+  presurge: { label: "급등 예비군", dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
+  tomorrow: { label: "상승 후보",  dot: "bg-indigo-500",  text: "text-indigo-600 dark:text-indigo-400" },
+};
+
+interface CrossSignalEntry {
+  ticker: string;
+  name: string;
+  market: string;
+  sources: CrossSource[];
+}
+
+export function CrossSignalBanner() {
+  const [entries, setEntries] = useState<CrossSignalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [surgeRes, presurgeRes, tomorrowRes] = await Promise.allSettled([
+          fetch(getApiUrl("/api/market/surge"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+          fetch(getApiUrl("/api/market/presurge"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+          fetch(getApiUrl("/api/market/tomorrow-picks"), { credentials: "include" }).then(r => r.ok ? r.json() : null),
+        ]);
+        if (cancelled) return;
+
+        const map = new Map<string, CrossSignalEntry>();
+        const add = (ticker: string, name: string, market: string, source: CrossSource) => {
+          if (!ticker) return;
+          const existing = map.get(ticker);
+          if (existing) {
+            if (!existing.sources.includes(source)) existing.sources.push(source);
+          } else {
+            map.set(ticker, { ticker, name, market, sources: [source] });
+          }
+        };
+
+        if (surgeRes.status === "fulfilled" && Array.isArray(surgeRes.value?.data)) {
+          for (const s of surgeRes.value.data as SurgeCandidate[]) add(s.ticker, s.name, s.market, "surge");
+        }
+        if (presurgeRes.status === "fulfilled" && Array.isArray(presurgeRes.value?.data)) {
+          for (const s of presurgeRes.value.data as PreSurgeCandidate[]) add(s.ticker, s.name, s.market, "presurge");
+        }
+        if (tomorrowRes.status === "fulfilled" && Array.isArray(tomorrowRes.value?.picks)) {
+          for (const p of tomorrowRes.value.picks as { ticker: string; name: string; market: string }[]) {
+            add(p.ticker, p.name, p.market, "tomorrow");
+          }
+        }
+
+        const overlaps = Array.from(map.values())
+          .filter(e => e.sources.length >= 2)
+          .sort((a, b) => b.sources.length - a.sources.length);
+
+        setEntries(overlaps);
+      } catch { /* silent */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return <div className="h-16 rounded-2xl bg-muted/30 animate-pulse" />;
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border/50 bg-muted/10 px-4 py-3 flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-muted-foreground/30 shrink-0" />
+        <p className="text-[11px] text-muted-foreground/45 leading-relaxed">
+          아직 2개 이상 지표에 동시에 포착된 종목이 없습니다. 세 리스트가 겹치면 여기에 표시됩니다.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-300/50 dark:border-amber-500/25 bg-amber-50/40 dark:bg-amber-500/5 p-3.5 space-y-2.5">
+      <div className="flex items-center gap-1.5">
+        <Sparkles className="w-4 h-4 text-amber-500" />
+        <span className="text-[12.5px] font-bold text-amber-700 dark:text-amber-400">
+          교차 포착 — 2개 이상 지표가 동시에 가리키는 종목
+        </span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+          {entries.length}개
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {entries.map(e => (
+          <div key={e.ticker} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2 flex items-center gap-2">
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-bold text-foreground truncate">{e.name}</p>
+              <p className="text-[10px] text-muted-foreground/45">{e.ticker} · {e.market}</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {e.sources.map(src => {
+                const m = CROSS_SOURCE_META[src];
+                return (
+                  <span key={src} className={cn("flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border border-border/30 bg-muted/40", m.text)}>
+                    <span className={cn("w-1.5 h-1.5 rounded-full", m.dot)} />
+                    {m.label}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

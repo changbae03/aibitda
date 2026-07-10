@@ -5,7 +5,7 @@ import {
   RefreshCw, Building2, ChevronDown, Info, Sparkles, Flame, Radio, Crown, Zap, Activity,
   Target, BarChart2, AlertCircle,
 } from "lucide-react";
-import { FlowContent, SurgeWidget, PreSurgeWidget } from "@/pages/flow";
+import { FlowContent, SurgeWidget, PreSurgeWidget, CrossSignalBanner } from "@/pages/flow";
 import { cn, getApiUrl } from "@/lib/utils";
 import { useLocation } from "wouter";
 import StockLogo from "@/components/ui/stock-logo";
@@ -415,6 +415,8 @@ export default function ThemesPage() {
               <LegendStep n={3} color="indigo"  title="내일 상승 후보"     desc="테마·검색 트렌드 · 순환매 지연·화제성 포착" />
             </div>
           </div>
+
+          <CrossSignalBanner />
 
           <SurgeWidget />
           <PreSurgeWidget />
