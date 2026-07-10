@@ -35,9 +35,10 @@ let closingBriefToday     = "";   // "YYYY-MM-DD" 형식
 let weeklyRunWeek         = "";   // "YYYY-WNN" 형식
 let weeklyCalibrationWeek = "";   // "YYYY-WNN" 형식
 // 미국 브리핑 (KST 기준 날짜 사용 — 자정 넘어도 같은 날로 취급)
+let usPremarketBriefToday = "";   // 17:00 KST 개장 전 브리핑 (프리마켓 시작)
 let usOpenBriefToday      = "";   // 23:30 KST 장중 1차 브리핑 (개장 1시간 후)
 let usMidBriefToday       = "";   // 02:00 KST 장중 2차 브리핑
-let usCloseBriefToday     = "";   // 07:00 KST 마감 브리핑
+let usCloseBriefToday     = "";   // 05:30 KST 마감 브리핑 (정규장 마감 직후)
 
 function utcNow() { return new Date(); }
 
@@ -108,6 +109,13 @@ function checkAndRun() {
     invalidateBriefCache();
   }
 
+  // ── 미국 개장 전 브리핑: 평일 17:00 KST = 08:00 UTC (프리마켓 시작) ─────────
+  if (utcH === 8 && utcM === 0 && dow >= 1 && dow <= 5 && usPremarketBriefToday !== dateStr) {
+    usPremarketBriefToday = dateStr;
+    console.log("[scheduler] 미국 개장 전 브리핑 갱신 (17:00 KST)");
+    refreshUsBriefInBackground("스케줄-개장전");
+  }
+
   // ── 미국 장중 1차 브리핑: 평일 23:30 KST = 14:30 UTC (개장 1시간 후) ────────
   if (utcH === 14 && utcM === 30 && dow >= 1 && dow <= 5 && usOpenBriefToday !== dateStr) {
     usOpenBriefToday = dateStr;
@@ -122,10 +130,10 @@ function checkAndRun() {
     refreshUsBriefInBackground("스케줄-장중2차");
   }
 
-  // ── 미국 마감 브리핑: 평일 07:00 KST = 22:00 UTC ─────────────────────────
-  if (utcH === 22 && utcM === 0 && dow >= 1 && dow <= 5 && usCloseBriefToday !== dateStr) {
+  // ── 미국 마감 브리핑: 평일 05:30 KST = 20:30 UTC (정규장 마감 직후) ─────────
+  if (utcH === 20 && utcM === 30 && dow >= 1 && dow <= 5 && usCloseBriefToday !== dateStr) {
     usCloseBriefToday = dateStr;
-    console.log("[scheduler] 미국 마감 브리핑 갱신 (07:00 KST)");
+    console.log("[scheduler] 미국 마감 브리핑 갱신 (05:30 KST)");
     refreshUsBriefInBackground("스케줄-마감");
   }
 
@@ -200,9 +208,10 @@ export function startMarketScheduler() {
   console.log("  [KR] 장중 브리핑:   평일 13:00 KST");
   console.log("  [KR] 장마감 브리핑: 평일 16:30 KST");
   console.log("  [KR] 야간 브리핑:   평일 22:00 KST");
-  console.log("  [US] 개장 브리핑:   평일 22:30 KST");
-  console.log("  [US] 장중 브리핑:   평일 01:30 KST");
-  console.log("  [US] 마감 브리핑:   평일 07:00 KST");
+  console.log("  [US] 개장 전 브리핑: 평일 17:00 KST");
+  console.log("  [US] 장중 1차 브리핑: 평일 23:30 KST");
+  console.log("  [US] 장중 2차 브리핑: 평일 02:00 KST");
+  console.log("  [US] 마감 브리핑:   평일 05:30 KST");
   console.log("  - 섹터 재보정:      평일 16:30 KST");
   console.log("  - 딥 캘리브레이션:  매주 일요일 11:00 KST");
 }

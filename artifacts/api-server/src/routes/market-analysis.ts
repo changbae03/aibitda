@@ -1572,7 +1572,7 @@ router.get("/sessions", async (req, res) => {
     { slot: "premarket", label: "개장 전",   icon: "moon",    time: "17:00",    sessionTypes: ["us_premarket"] },
     { slot: "open",      label: "장중 1차",  icon: "sunrise", time: "23:30",    sessionTypes: ["us_open"] },
     { slot: "open2",     label: "장중 2차",  icon: "chart",   time: "02:00+1",  sessionTypes: ["us_midday"] },
-    { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:00+1",  sessionTypes: ["us_afterhours", "us_overnight"] },
+    { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:30+1",  sessionTypes: ["us_afterhours", "us_overnight"] },
   ];
 
   const slots = market === "kr" ? KR_SLOTS : US_SLOTS;
