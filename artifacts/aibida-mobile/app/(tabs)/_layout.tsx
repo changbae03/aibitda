@@ -29,8 +29,8 @@ function NativeTabLayout() {
         <Label>테마</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="portfolio">
-        <Icon sf={{ default: "star.circle", selected: "star.circle.fill" }} />
-        <Label>관심</Label>
+        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Label>MY</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -119,12 +119,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="portfolio"
         options={{
-          title: "관심",
+          title: "MY",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="star.circle.fill" tintColor={color} size={22} />
+              <SymbolView name="person.circle.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="star" size={21} color={color} />
+              <Feather name="user" size={21} color={color} />
             ),
         }}
       />
