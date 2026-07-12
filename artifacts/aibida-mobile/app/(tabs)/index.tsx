@@ -1191,7 +1191,7 @@ export default function MarketScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>시장 분석</Text>
+        <Text style={[styles.headerTitle, { color: colors.primary }]}>애빛다</Text>
         {subTab === "overview" && (
           <View style={[styles.toggle, { backgroundColor: colors.muted }]}>
             {(["kr", "us"] as const).map(m => (
