@@ -11,6 +11,31 @@ import { useNewsResearch, useNewsRadar, useNewsScraps } from "@/hooks/useApi";
 const SEG = ["피드", "레이더", "큐레이션"] as const;
 type Seg = typeof SEG[number];
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
+function isUrlOnly(text: string): boolean {
+  return /^https?:\/\/\S+$/.test(text.trim());
+}
+
+function cleanTitle(raw?: string | null): string | null {
+  if (!raw) return null;
+  if (isUrlOnly(raw)) return null;
+  const decoded = decodeHtmlEntities(raw);
+  if (!decoded || decoded.length < 5) return null;
+  return decoded;
+}
+
 function timeAgo(dateStr?: string | null): string {
   if (!dateStr) return "";
   try {
@@ -50,8 +75,12 @@ export default function NewsTab() {
     : seg === "레이더" ? radar.data?.items ?? []
     : scraps.data?.items ?? [];
 
-  // Get latest item for breaking news ticker
-  const latestItem = rawItems[0];
+  const items = rawItems.filter((item) => {
+    const title = cleanTitle(item.title) ?? cleanTitle(item.text);
+    return title !== null;
+  });
+
+  const latestItem = items[0];
 
   function refresh() {
     research.refetch();
@@ -69,9 +98,9 @@ export default function NewsTab() {
           <Text style={[styles.breakingBadge, { backgroundColor: colors.foreground, color: colors.card }]}>속보</Text>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>⚡ 주요뉴스</Text>
         </View>
-        {rawItems.length > 0 && (
+        {items.length > 0 && (
           <Text style={[styles.headerCount, { color: colors.mutedForeground }]}>
-            {rawItems.length}건
+            {items.length}건
           </Text>
         )}
       </View>
@@ -101,7 +130,7 @@ export default function NewsTab() {
           <View style={[styles.tickerDot, { backgroundColor: colors.up }]} />
           <Text style={[styles.tickerLabel, { color: colors.up }]}>속보</Text>
           <Text style={[styles.tickerText, { color: colors.foreground }]} numberOfLines={1}>
-            {latestItem.title ?? latestItem.text ?? ""}
+            {cleanTitle(latestItem.title) ?? cleanTitle(latestItem.text) ?? ""}
           </Text>
           <Text style={[styles.tickerTime, { color: colors.mutedForeground }]}>
             {timeAgo(latestItem.pubDate ?? latestItem.date)}
@@ -122,56 +151,59 @@ export default function NewsTab() {
             <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} />
           }
         >
-          {rawItems.length === 0 ? (
+          {items.length === 0 ? (
             <View style={styles.center}>
               <Feather name="inbox" size={36} color={colors.border} />
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>뉴스가 없습니다</Text>
             </View>
           ) : (
-            rawItems.map((item, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.newsRow, { borderBottomColor: colors.border }]}
-                onPress={() => item.url && Linking.openURL(item.url).catch(() => null)}
-                activeOpacity={0.7}
-              >
-                {/* Left: dot indicator */}
-                <View style={[styles.dotCol]}>
-                  <View style={[styles.newsDot, { backgroundColor: i === 0 ? colors.up : colors.border }]} />
-                  {i < rawItems.length - 1 && (
-                    <View style={[styles.dotLine, { backgroundColor: colors.border }]} />
-                  )}
-                </View>
-
-                {/* Right: content */}
-                <View style={styles.newsContent}>
-                  <View style={styles.newsMetaRow}>
-                    <Text style={[styles.newsTime, { color: colors.mutedForeground }]}>
-                      {timeAgo(item.pubDate ?? item.date)}
-                    </Text>
-                    {item.category ? (
-                      <View style={[styles.catBadge, { backgroundColor: (CAT_COLOR[item.category] ?? colors.primary) + "18" }]}>
-                        <Text style={[styles.catText, { color: CAT_COLOR[item.category] ?? colors.primary }]}>{item.category}</Text>
-                      </View>
-                    ) : item.source ? (
-                      <Text style={[styles.sourceText, { color: colors.mutedForeground }]}>{item.source}</Text>
-                    ) : null}
+            items.map((item, i) => {
+              const title = cleanTitle(item.title) ?? cleanTitle(item.text) ?? "";
+              return (
+                <TouchableOpacity
+                  key={`${item.url ?? item.title ?? ""}-${i}`}
+                  style={[styles.newsRow, { borderBottomColor: colors.border }]}
+                  onPress={() => item.url && Linking.openURL(item.url).catch(() => null)}
+                  activeOpacity={0.7}
+                >
+                  {/* Left: dot indicator */}
+                  <View style={styles.dotCol}>
+                    <View style={[styles.newsDot, { backgroundColor: i === 0 ? colors.up : colors.border }]} />
+                    {i < items.length - 1 && (
+                      <View style={[styles.dotLine, { backgroundColor: colors.border }]} />
+                    )}
                   </View>
 
-                  <Text style={[styles.newsTitle, { color: colors.foreground }]} numberOfLines={3}>
-                    {item.title ?? item.text ?? ""}
-                  </Text>
-
-                  {item.tags && item.tags.length > 0 && (
-                    <View style={styles.tagsRow}>
-                      {item.tags.slice(0, 3).map((tag, j) => (
-                        <Text key={j} style={[styles.tagText, { color: colors.mutedForeground }]}>#{tag}</Text>
-                      ))}
+                  {/* Right: content */}
+                  <View style={styles.newsContent}>
+                    <View style={styles.newsMetaRow}>
+                      <Text style={[styles.newsTime, { color: colors.mutedForeground }]}>
+                        {timeAgo(item.pubDate ?? item.date)}
+                      </Text>
+                      {item.category ? (
+                        <View style={[styles.catBadge, { backgroundColor: (CAT_COLOR[item.category] ?? colors.primary) + "18" }]}>
+                          <Text style={[styles.catText, { color: CAT_COLOR[item.category] ?? colors.primary }]}>{item.category}</Text>
+                        </View>
+                      ) : item.source ? (
+                        <Text style={[styles.sourceText, { color: colors.mutedForeground }]}>{item.source}</Text>
+                      ) : null}
                     </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))
+
+                    <Text style={[styles.newsTitle, { color: colors.foreground }]} numberOfLines={3}>
+                      {title}
+                    </Text>
+
+                    {item.tags && item.tags.length > 0 && (
+                      <View style={styles.tagsRow}>
+                        {item.tags.slice(0, 3).map((tag, j) => (
+                          <Text key={`tag-${j}`} style={[styles.tagText, { color: colors.mutedForeground }]}>#{tag}</Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
         </ScrollView>
       )}

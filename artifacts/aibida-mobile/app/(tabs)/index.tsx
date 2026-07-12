@@ -119,7 +119,7 @@ function BriefContent({ content }: { content: string }) {
         const cleaned = line.replace(/^#+\s*/, "").replace(/\*\*/g, "");
         return (
           <Text
-            key={i}
+            key={`brief-${i}`}
             style={[
               styles.briefLine,
               {
@@ -243,7 +243,7 @@ export default function MarketScreen() {
           <View style={styles.sessionGrid}>
             {[0, 1, 2, 3].map((i) => (
               <SkeletonCard
-                key={i}
+                key={`skel-${i}`}
                 height={88}
                 width="48%"
                 style={{ marginBottom: 8 }}

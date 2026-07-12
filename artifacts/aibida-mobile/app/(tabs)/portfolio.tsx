@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -60,10 +61,72 @@ function AnalysisBadge({ ticker, analyses }: { ticker: string; analyses: any[] }
   );
 }
 
+function SignInCTA({ colors, insets, router }: { colors: any; insets: any; router: any }) {
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>관심 종목</Text>
+        <TouchableOpacity onPress={() => router.push("/mypage")} style={{ padding: 6 }}>
+          <Feather name="user" size={18} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Sign-in CTA content */}
+      <View style={styles.ctaContainer}>
+        <View style={[styles.ctaIconBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Feather name="star" size={32} color={colors.primary} />
+        </View>
+
+        <Text style={[styles.ctaTitle, { color: colors.foreground }]}>
+          관심 종목을 저장하세요
+        </Text>
+        <Text style={[styles.ctaSub, { color: colors.mutedForeground }]}>
+          로그인하면 관심 종목과 AI 분석 이력이{"\n"}클라우드에 동기화되어 어디서나 확인할 수 있어요
+        </Text>
+
+        {/* Feature highlights */}
+        <View style={[styles.featuresBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {[
+            { icon: "star", text: "관심 종목 저장 및 실시간 시세" },
+            { icon: "cpu", text: "AI 분석 이력 보관" },
+            { icon: "bell", text: "중요 이슈 알림 (예정)" },
+          ].map(({ icon, text }) => (
+            <View key={text} style={[styles.featureRow, { borderBottomColor: colors.border }]}>
+              <View style={[styles.featureIcon, { backgroundColor: colors.primary + "15" }]}>
+                <Feather name={icon as any} size={14} color={colors.primary} />
+              </View>
+              <Text style={[styles.featureText, { color: colors.foreground }]}>{text}</Text>
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.loginBtn, { backgroundColor: colors.primary }]}
+          onPress={() => router.push("/(auth)/sign-in")}
+          activeOpacity={0.85}
+        >
+          <Feather name="log-in" size={16} color="#fff" />
+          <Text style={styles.loginBtnText}>로그인하기</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
+          <Text style={[styles.signupLink, { color: colors.mutedForeground }]}>
+            계정이 없으신가요? <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>회원가입</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function PortfolioTab() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { isSignedIn, isLoaded } = useAuth();
 
   const [items, setItems] = useState<WatchItem[]>([]);
   const [query, setQuery] = useState("");
@@ -118,7 +181,7 @@ export default function PortfolioTab() {
 
   const analyses = recentAnalyses.data ?? [];
 
-  if (loading) {
+  if (!isLoaded || loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator color={colors.primary} />
@@ -126,14 +189,23 @@ export default function PortfolioTab() {
     );
   }
 
+  if (!isSignedIn) {
+    return <SignInCTA colors={colors} insets={insets} router={router} />;
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>관심 종목</Text>
-        <TouchableOpacity onPress={() => quotes.refetch()} style={{ padding: 6 }}>
-          <Feather name="refresh-cw" size={15} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          <TouchableOpacity onPress={() => quotes.refetch()} style={{ padding: 6 }}>
+            <Feather name="refresh-cw" size={15} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/mypage")} style={{ padding: 6 }}>
+            <Feather name="user" size={15} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search bar */}
@@ -181,7 +253,6 @@ export default function PortfolioTab() {
           )}
         </View>
       ) : items.length === 0 ? (
-        /* Empty state matching web design */
         <View style={styles.emptyState}>
           <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
             <Feather name="briefcase" size={32} color={colors.mutedForeground} />
@@ -355,4 +426,39 @@ const styles = StyleSheet.create({
   },
   stockTicker: { fontSize: 15, fontFamily: "Inter_700Bold" },
   stockName: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  ctaContainer: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 32, gap: 16,
+  },
+  ctaIconBox: {
+    width: 80, height: 80, borderRadius: 24,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
+  ctaTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
+  ctaSub: {
+    fontSize: 14, fontFamily: "Inter_400Regular",
+    textAlign: "center", lineHeight: 22,
+  },
+  featuresBox: {
+    width: "100%", borderRadius: 14, borderWidth: 1, overflow: "hidden",
+    marginTop: 4,
+  },
+  featureRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 16, paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  featureIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  featureText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  loginBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 32, paddingVertical: 14,
+    borderRadius: 14, marginTop: 4, width: "100%", justifyContent: "center",
+  },
+  loginBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
+  signupLink: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
