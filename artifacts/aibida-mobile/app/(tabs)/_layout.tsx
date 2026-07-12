@@ -17,8 +17,8 @@ function NativeTabLayout() {
         <Label>시장</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="stocks">
-        <Icon sf={{ default: "arrow.up.right.circle", selected: "arrow.up.right.circle.fill" }} />
-        <Label>종목</Label>
+        <Icon sf={{ default: "newspaper", selected: "newspaper.fill" }} />
+        <Label>뉴스</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="analysis">
         <Icon sf={{ default: "brain.head.profile", selected: "brain.head.profile" }} />
@@ -83,12 +83,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="stocks"
         options={{
-          title: "종목",
+          title: "뉴스",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="arrow.up.right.circle.fill" tintColor={color} size={22} />
+              <SymbolView name="newspaper.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="trending-up" size={21} color={color} />
+              <Feather name="rss" size={21} color={color} />
             ),
         }}
       />
