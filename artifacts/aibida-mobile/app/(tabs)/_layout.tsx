@@ -25,8 +25,8 @@ function NativeTabLayout() {
         <Label>AI 분석</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="themes">
-        <Icon sf={{ default: "newspaper", selected: "newspaper.fill" }} />
-        <Label>뉴스</Label>
+        <Icon sf={{ default: "flame", selected: "flame.fill" }} />
+        <Label>테마</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="portfolio">
         <Icon sf={{ default: "star.circle", selected: "star.circle.fill" }} />
@@ -107,12 +107,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="themes"
         options={{
-          title: "뉴스",
+          title: "테마",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="newspaper.fill" tintColor={color} size={22} />
+              <SymbolView name="flame.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="rss" size={21} color={color} />
+              <Feather name="zap" size={21} color={color} />
             ),
         }}
       />
