@@ -1,16 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const getBase = () =>
   process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
     : "";
 
-async function apiFetch<T>(path: string): Promise<T> {
+export async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const url = `${getBase()}${path}`;
-  const res = await fetch(url);
+  const res = await fetch(url, opts);
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface Session {
   session: string;
@@ -93,16 +95,106 @@ export interface StockSearchResult {
   exchange?: string;
 }
 
-export interface PortfolioItem {
+// Tracker
+export interface TrackerItem {
+  id: number;
+  ticker: string;
+  companyName: string;
+  industry: string;
+  investmentVerdict: string | null;
+  targetPrice: number | null;
+  entryPrice: number | null;
+  createdAt: string;
+}
+
+export interface QuoteResult {
+  price: number | null;
+  currency: string;
+  change: number | null;
+}
+
+// Scanner
+export interface ScannerItem {
+  id: number;
+  ticker: string;
+  companyName: string;
+  englishName: string | null;
+  industry: string | null;
+  investmentVerdict: string;
+  targetPrice: number;
+  startPrice: number | null;
+  currentPrice: number | null;
+  upside: number | null;
+  todayChangePct: number | null;
+  analysisDate: string;
+}
+
+// News
+export interface NewsItem {
+  id?: number;
+  title: string;
+  source?: string;
+  pubDate?: string;
+  url?: string;
+  category?: string;
+  tags?: string[];
+  text?: string;
+  date?: string;
+}
+
+export interface NewsResponse {
+  items: NewsItem[];
+  cached?: boolean;
+}
+
+// Popular
+export interface PopularItem {
+  id: number;
+  ticker: string;
+  companyName: string;
+  englishName: string | null;
+  industry: string;
+  investmentVerdict: string | null;
+  targetPrice: number | null;
+  entryPrice: number | null;
+  stopLoss: number | null;
+  createdAt: string;
+  currentPrice?: number | null;
+  priceReturn?: number | null;
+  outcome?: string | null;
+  daysElapsed?: number | null;
+}
+
+// Analysis
+export interface AnalysisListItem {
+  id: number;
+  ticker: string;
+  companyName: string | null;
+  englishName: string | null;
+  investmentVerdict: string | null;
+  targetPrice: number | null;
+  startPrice: number | null;
+  createdAt: string;
+  status: string;
+}
+
+export interface AnalysisCreateResult {
+  id: number;
+  ticker: string;
+  status: string;
+}
+
+// Portfolio watchlist item (local + remote prices)
+export interface WatchItem {
   ticker: string;
   name: string;
-  market: string;
   addedAt: string;
-  targetPrice?: number;
-  memo?: string;
-  currentPrice?: number;
-  changePercent?: number;
+  currentPrice?: number | null;
+  currency?: string;
+  change?: number | null;
 }
+
+// ── Hooks ──────────────────────────────────────────────────────────────────
 
 export function useMarketSessions(market: "kr" | "us") {
   return useQuery({
@@ -181,11 +273,107 @@ export function useStockSearch(query: string) {
   });
 }
 
-export function usePortfolio() {
+export function useTracker() {
   return useQuery({
-    queryKey: ["portfolio"],
-    queryFn: () => apiFetch<{ items: PortfolioItem[] }>(`/api/portfolio`),
+    queryKey: ["tracker"],
+    queryFn: () => apiFetch<TrackerItem[]>(`/api/analysis/tracker`),
     staleTime: 2 * 60 * 1000,
     retry: 1,
+  });
+}
+
+export function useScanner(market: "ALL" | "KR" | "US", minUpside: number) {
+  return useQuery({
+    queryKey: ["scanner", market, minUpside],
+    queryFn: () =>
+      apiFetch<ScannerItem[]>(
+        `/api/analysis/scanner?market=${market}&minUpside=${minUpside}`
+      ),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useNewsResearch() {
+  return useQuery({
+    queryKey: ["news-research"],
+    queryFn: () => apiFetch<NewsResponse>(`/api/news`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useNewsRadar() {
+  return useQuery({
+    queryKey: ["news-radar"],
+    queryFn: () => apiFetch<NewsResponse>(`/api/news/radar`),
+    staleTime: 3 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useNewsScraps() {
+  return useQuery({
+    queryKey: ["news-scraps"],
+    queryFn: () => apiFetch<{ items: NewsItem[] }>(`/api/news/scraps`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function usePopular() {
+  return useQuery({
+    queryKey: ["popular"],
+    queryFn: () => apiFetch<PopularItem[]>(`/api/analysis/popular`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useRecentAnalyses() {
+  return useQuery({
+    queryKey: ["recent-analyses"],
+    queryFn: () =>
+      apiFetch<AnalysisListItem[]>(`/api/analysis?limit=20`),
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useBatchQuotes(tickers: string[]) {
+  return useQuery({
+    queryKey: ["batch-quotes", tickers.sort().join(",")],
+    queryFn: () =>
+      apiFetch<Record<string, QuoteResult>>(`/api/market-data/batch-quotes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers }),
+      }),
+    enabled: tickers.length > 0,
+    staleTime: 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useCreateAnalysis() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { ticker: string; companyName?: string; additionalContext?: string }) =>
+      apiFetch<AnalysisCreateResult>(`/api/analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-analyses"] }),
+  });
+}
+
+export function useRunPipeline() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiFetch<{ ok: boolean }>(`/api/analysis/${id}/run-pipeline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }),
   });
 }

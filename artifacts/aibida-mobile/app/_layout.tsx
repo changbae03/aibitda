@@ -32,18 +32,46 @@ const queryClient = new QueryClient({
   },
 });
 
+const HEADER_OPTS = {
+  headerStyle: { backgroundColor: "#141821" },
+  headerTintColor: "#e2e8f4",
+  headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: "#e2e8f4" } as any,
+  headerBackTitle: "뒤로",
+  contentStyle: { backgroundColor: "#0d1119" },
+};
+
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "뒤로", contentStyle: { backgroundColor: "#0d1119" } }}>
+    <Stack screenOptions={{ ...HEADER_OPTS }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="analysis/[id]"
         options={{
           title: "AI 분석",
           presentation: "modal",
-          headerStyle: { backgroundColor: "#141821" },
-          headerTintColor: "#e2e8f4",
-          headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: "#e2e8f4" },
+          ...HEADER_OPTS,
+        }}
+      />
+      <Stack.Screen
+        name="new-analysis"
+        options={{
+          title: "새 AI 분석",
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="tracker"
+        options={{
+          title: "트래커",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="popular"
+        options={{
+          title: "인기 분석",
+          headerShown: false,
         }}
       />
     </Stack>

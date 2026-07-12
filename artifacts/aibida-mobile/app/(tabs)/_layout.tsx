@@ -20,13 +20,13 @@ function NativeTabLayout() {
         <Icon sf={{ default: "arrow.up.right.circle", selected: "arrow.up.right.circle.fill" }} />
         <Label>종목</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="themes">
-        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
-        <Label>테마</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="analysis">
-        <Icon sf={{ default: "magnifyingglass.circle", selected: "magnifyingglass.circle.fill" }} />
-        <Label>분석</Label>
+        <Icon sf={{ default: "brain.head.profile", selected: "brain.head.profile" }} />
+        <Label>AI 분석</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="themes">
+        <Icon sf={{ default: "newspaper", selected: "newspaper.fill" }} />
+        <Label>뉴스</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="portfolio">
         <Icon sf={{ default: "star.circle", selected: "star.circle.fill" }} />
@@ -57,18 +57,9 @@ function ClassicTabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView
-              intensity={80}
-              tint="dark"
-              style={StyleSheet.absoluteFill}
-            />
+            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
         tabBarLabelStyle: {
           fontSize: 10,
@@ -102,26 +93,26 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="themes"
+        name="analysis"
         options={{
-          title: "테마",
+          title: "AI 분석",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="sparkles" tintColor={color} size={22} />
+              <SymbolView name="cpu.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="layers" size={21} color={color} />
+              <Feather name="cpu" size={21} color={color} />
             ),
         }}
       />
       <Tabs.Screen
-        name="analysis"
+        name="themes"
         options={{
-          title: "분석",
+          title: "뉴스",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="magnifyingglass.circle.fill" tintColor={color} size={22} />
+              <SymbolView name="newspaper.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="search" size={21} color={color} />
+              <Feather name="rss" size={21} color={color} />
             ),
         }}
       />

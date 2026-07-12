@@ -1,292 +1,166 @@
-import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  RefreshControl, Linking, ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SkeletonList } from "@/components/SkeletonCard";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-import { useThemeSignals, useThemesFeed, type ThemeSignal } from "@/hooks/useApi";
+import { useNewsResearch, useNewsRadar, useNewsScraps } from "@/hooks/useApi";
 
-function StrengthBar({ strength }: { strength?: string }) {
-  const colors = useColors();
-  const levels = { strong: 3, moderate: 2, weak: 1 };
-  const level = levels[strength as keyof typeof levels] ?? 1;
-  const barColor =
-    level === 3 ? colors.up : level === 2 ? colors.warning : colors.mutedForeground;
+const SEG = ["리서치", "레이더", "큐레이션"] as const;
+type Seg = typeof SEG[number];
 
-  return (
-    <View style={styles.strengthRow}>
-      {[1, 2, 3].map((i) => (
-        <View
-          key={i}
-          style={[
-            styles.strengthSegment,
-            {
-              backgroundColor: i <= level ? barColor : colors.border,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
+function timeAgo(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return "방금";
+    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+    return `${Math.floor(diff / 86400)}일 전`;
+  } catch {
+    return "";
+  }
 }
 
-function ThemeCard({ item }: { item: ThemeSignal }) {
+const CAT_COLOR: Record<string, string> = {
+  외교: "#60a5fa", 경제: "#34d399", 군사: "#f87171", 시장: "#a78bfa",
+  정치: "#fb923c", 에너지: "#fbbf24", 기술: "#38bdf8", 산업: "#4ade80",
+};
+
+export default function NewsTab() {
   const colors = useColors();
-  const [expanded, setExpanded] = useState(false);
-  const tickers = item.tickers ?? item.stocks ?? [];
+  const [seg, setSeg] = useState<Seg>("리서치");
+
+  const research = useNewsResearch();
+  const radar = useNewsRadar();
+  const scraps = useNewsScraps();
+
+  const isLoading =
+    seg === "리서치" ? research.isLoading
+    : seg === "레이더" ? radar.isLoading
+    : scraps.isLoading;
+
+  const items =
+    seg === "리서치" ? research.data?.items ?? []
+    : seg === "레이더" ? radar.data?.items ?? []
+    : scraps.data?.items ?? [];
+
+  function refresh() {
+    research.refetch();
+    radar.refetch();
+    scraps.refetch();
+  }
+
+  const s = makeStyles(colors);
 
   return (
-    <Pressable
-      onPress={() => {
-        setExpanded((v) => !v);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.8 : 1,
-        },
-      ]}
-    >
-      <View style={styles.cardTop}>
-        <View style={styles.cardMain}>
-          <Text style={[styles.themeName, { color: colors.foreground }]}>
-            {item.theme}
-          </Text>
-          {item.signal && (
-            <Text style={[styles.signalText, { color: colors.primary }]}>
-              {item.signal}
-            </Text>
-          )}
-          {item.momentum && !item.signal && (
-            <Text style={[styles.signalText, { color: colors.primary }]}>
-              {item.momentum}
-            </Text>
-          )}
-        </View>
-        <View style={styles.cardMeta}>
-          <StrengthBar strength={item.strength} />
-          <Feather
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={14}
-            color={colors.mutedForeground}
-          />
-        </View>
+    <SafeAreaView style={s.root} edges={["top"]}>
+      <View style={s.header}>
+        <Feather name="rss" size={18} color={colors.primary} />
+        <Text style={s.headerTitle}>뉴스</Text>
       </View>
 
-      {tickers.length > 0 && (
-        <View style={styles.tickerRow}>
-          {tickers.slice(0, 5).map((t, i) => (
-            <View
-              key={i}
-              style={[styles.tickerTag, { backgroundColor: colors.accent }]}
-            >
-              <Text style={[styles.tickerTagText, { color: colors.mutedForeground }]}>
-                {t}
-              </Text>
-            </View>
-          ))}
-          {tickers.length > 5 && (
-            <Text style={[styles.moreText, { color: colors.mutedForeground }]}>
-              +{tickers.length - 5}
-            </Text>
-          )}
-        </View>
-      )}
-
-      {expanded && (item.reason || item.description) && (
-        <View
-          style={[styles.expandedBox, { borderTopColor: colors.border }]}
-        >
-          <Text style={[styles.reasonText, { color: colors.mutedForeground }]}>
-            {item.reason ?? item.description}
-          </Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
-export default function ThemesScreen() {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<"signals" | "feed">("signals");
-
-  const signalsQ = useThemeSignals();
-  const feedQ = useThemesFeed();
-
-  const current = tab === "signals" ? signalsQ : feedQ;
-  const rawItems =
-    tab === "signals"
-      ? (signalsQ.data?.signals ?? signalsQ.data?.feed ?? [])
-      : (feedQ.data?.feed ?? feedQ.data?.signals ?? []);
-
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: topPad + 12,
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          테마
-        </Text>
-      </View>
-
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-        {([["signals", "시그널"], ["feed", "트렌딩"]] as const).map(([k, l]) => (
-          <Pressable
-            key={k}
-            onPress={() => setTab(k)}
-            style={[
-              styles.tab,
-              {
-                borderBottomColor: tab === k ? colors.primary : "transparent",
-              },
-            ]}
+      <View style={s.segRow}>
+        {SEG.map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[s.segBtn, seg === t && s.segActive]}
+            onPress={() => setSeg(t)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color: tab === k ? colors.primary : colors.mutedForeground,
-                  fontWeight: tab === k ? "600" : "400",
-                },
-              ]}
-            >
-              {l}
-            </Text>
-          </Pressable>
+            <Text style={[s.segLabel, seg === t && s.segLabelActive]}>{t}</Text>
+          </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.listContent,
-          {
-            paddingBottom: Platform.OS === "web" ? 34 + 84 : insets.bottom + 100,
-          },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={!!current.isRefetching}
-            onRefresh={() => current.refetch()}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {current.isLoading ? (
-          <View style={{ marginTop: 16 }}>
-            <SkeletonList count={5} />
-          </View>
-        ) : current.error ? (
-          <View style={styles.emptyState}>
-            <Feather name="alert-circle" size={32} color={colors.destructive} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              데이터를 불러오지 못했어요
-            </Text>
-            <Pressable
-              onPress={() => current.refetch()}
-              style={[styles.retryBtn, { backgroundColor: colors.accent }]}
-            >
-              <Text style={[styles.retryText, { color: colors.foreground }]}>
-                다시 시도
-              </Text>
-            </Pressable>
-          </View>
-        ) : rawItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="layers" size={32} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              테마 신호가 없어요
-            </Text>
-          </View>
-        ) : (
-          rawItems.map((item, i) => (
-            <ThemeCard key={`${item.theme}-${i}`} item={item} />
-          ))
-        )}
-      </ScrollView>
-    </View>
+      {isLoading ? (
+        <View style={s.center}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={s.list}
+          refreshControl={
+            <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} />
+          }
+        >
+          {items.length === 0 ? (
+            <Text style={[s.errText, { textAlign: "center", marginTop: 60 }]}>뉴스가 없습니다</Text>
+          ) : (
+            items.map((item, i) => (
+              <TouchableOpacity
+                key={i}
+                style={s.card}
+                onPress={() => {
+                  if (item.url) Linking.openURL(item.url).catch(() => null);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={s.metaRow}>
+                  {item.category ? (
+                    <View style={[s.catBadge, { backgroundColor: (CAT_COLOR[item.category] ?? colors.primary) + "22" }]}>
+                      <Text style={[s.catText, { color: CAT_COLOR[item.category] ?? colors.primary }]}>{item.category}</Text>
+                    </View>
+                  ) : item.source ? (
+                    <Text style={s.sourceText}>{item.source}</Text>
+                  ) : <View />}
+                  <Text style={s.timeText}>{timeAgo(item.pubDate ?? item.date)}</Text>
+                </View>
+
+                <Text style={s.title} numberOfLines={3}>{item.title ?? item.text ?? ""}</Text>
+
+                {item.tags && item.tags.length > 0 && (
+                  <View style={s.tagsRow}>
+                    {item.tags.slice(0, 4).map((tag, j) => (
+                      <View key={j} style={s.tag}>
+                        <Text style={s.tagText}>#{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {item.url && (
+                  <View style={s.linkRow}>
+                    <Feather name="external-link" size={11} color={colors.mutedForeground} />
+                    <Text style={s.linkText}>원문 보기</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: { fontSize: 22, fontWeight: "700", fontFamily: "Inter_700Bold" },
-  tabBar: {
-    flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-  },
-  tabText: { fontSize: 14 },
-  scroll: { flex: 1 },
-  listContent: { gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  card: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 8,
-  },
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  cardMain: { flex: 1, gap: 4 },
-  themeName: { fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
-  signalText: { fontSize: 12, fontWeight: "500" },
-  cardMeta: { alignItems: "flex-end", gap: 6 },
-  strengthRow: { flexDirection: "row", gap: 3 },
-  strengthSegment: { width: 16, height: 4, borderRadius: 2 },
-  tickerRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  tickerTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  tickerTagText: { fontSize: 11 },
-  moreText: { fontSize: 11, alignSelf: "center" },
-  expandedBox: {
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  reasonText: { fontSize: 13, lineHeight: 20 },
-  emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 14 },
-  retryBtn: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  retryText: { fontSize: 14, fontWeight: "600" },
-});
+function makeStyles(c: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: c.background },
+    header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
+    headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: c.foreground },
+    segRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+    segBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.border },
+    segActive: { backgroundColor: c.primary + "22", borderColor: c.primary },
+    segLabel: { fontSize: 13, fontFamily: "Inter_500Medium", color: c.mutedForeground },
+    segLabelActive: { color: c.primary },
+    list: { padding: 16, gap: 10, paddingBottom: 100 },
+    card: { backgroundColor: c.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: c.border, gap: 8 },
+    metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    catBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    catText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+    sourceText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_500Medium" },
+    timeText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    title: { fontSize: 14, color: c.foreground, fontFamily: "Inter_500Medium", lineHeight: 20 },
+    tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+    tag: { backgroundColor: c.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    tagText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    linkRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    linkText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
+    errText: { color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 },
+  });
+}

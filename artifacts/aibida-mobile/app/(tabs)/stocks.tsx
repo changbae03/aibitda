@@ -1,117 +1,109 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+  Platform, Pressable, RefreshControl, ScrollView,
+  StyleSheet, Text, TouchableOpacity, View, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SkeletonList } from "@/components/SkeletonCard";
 import { useColors } from "@/hooks/useColors";
 import {
-  usePresurge,
-  useTomorrowPicks,
-  type PresurgePick,
-  type TomorrowPick,
+  usePresurge, useTomorrowPicks, useScanner,
+  type PresurgePick, type TomorrowPick, type ScannerItem,
 } from "@/hooks/useApi";
 
-const TABS = [
-  { key: "picks", label: "내일 픽" },
-  { key: "presurge", label: "급등 예비군" },
-] as const;
-type TabKey = (typeof TABS)[number]["key"];
+const SEGS = ["내일픽", "급등예비군", "스캐너"] as const;
+type Seg = typeof SEGS[number];
 
-function ConfidenceBadge({ confidence }: { confidence: "high" | "medium" | "low" }) {
+const MARKETS = ["ALL", "KR", "US"] as const;
+type Market = typeof MARKETS[number];
+const MARKET_LABELS: Record<Market, string> = { ALL: "전체", KR: "한국", US: "미국" };
+
+const UPSIDE_OPTIONS = [10, 20, 30, 50];
+
+function ConfidenceBadge({ confidence }: { confidence: string }) {
   const colors = useColors();
-  const map = {
-    high: { label: "고신뢰", bg: colors.success + "22", color: colors.success },
-    medium: { label: "중", bg: colors.warning + "22", color: colors.warning },
-    low: { label: "저", bg: colors.mutedForeground + "22", color: colors.mutedForeground },
+  const cfg: Record<string, { bg: string; fg: string; label: string }> = {
+    high:   { bg: colors.upBg,   fg: colors.up,   label: "높음" },
+    medium: { bg: "#f59e0b22",   fg: "#f59e0b",   label: "보통" },
+    low:    { bg: colors.downBg, fg: colors.down,  label: "낮음" },
   };
-  const c = map[confidence] ?? map.low;
+  const c = cfg[confidence] ?? cfg.medium;
   return (
-    <View style={[styles.badge, { backgroundColor: c.bg }]}>
-      <Text style={[styles.badgeText, { color: c.color }]}>{c.label}</Text>
+    <View style={{ backgroundColor: c.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: c.fg }}>{c.label}</Text>
     </View>
   );
 }
 
-function CategoryBadge({ category }: { category: string }) {
+function VerdictBadge({ verdict }: { verdict: string }) {
   const colors = useColors();
-  const map: Record<string, { label: string; color: string }> = {
-    confluence: { label: "교차", color: colors.primary },
-    theme: { label: "테마", color: "#a78bfa" },
-    signal: { label: "시그널", color: "#38bdf8" },
-  };
-  const c = map[category] ?? { label: category, color: colors.mutedForeground };
+  const isStrong = verdict.toLowerCase().includes("strong buy");
   return (
-    <View style={[styles.badge, { backgroundColor: c.color + "22" }]}>
-      <Text style={[styles.badgeText, { color: c.color }]}>{c.label}</Text>
+    <View style={{ backgroundColor: isStrong ? colors.upBg : "#22c55e22", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: isStrong ? colors.up : "#22c55e" }}>
+        {isStrong ? "높은 상승여력" : "상승여력"}
+      </Text>
     </View>
   );
 }
 
-function PickRow({ item, rank }: { item: TomorrowPick; rank: number }) {
+function UpsidePill({ pct }: { pct: number }) {
+  const color = pct >= 50 ? "#34d399" : pct >= 30 ? "#22c55e" : "#60a5fa";
+  return (
+    <View style={{ backgroundColor: color + "22", borderWidth: 1, borderColor: color + "44", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+      <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color }}>+{pct.toFixed(1)}%</Text>
+    </View>
+  );
+}
+
+function TodayChange({ pct }: { pct: number | null }) {
+  const colors = useColors();
+  if (pct === null) return <Text style={{ fontSize: 12, color: colors.mutedForeground }}>-</Text>;
+  const isUp = pct >= 0;
+  return (
+    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: isUp ? colors.up : colors.down }}>
+      {isUp ? "▲" : "▼"} {Math.abs(pct).toFixed(2)}%
+    </Text>
+  );
+}
+
+// ── Pick card ──────────────────────────────────────────────────────────────
+function PickCard({ item, type }: { item: TomorrowPick | PresurgePick; type: "tomorrow" | "presurge" }) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
-
+  const s = makeStyles(colors);
   return (
     <Pressable
+      style={s.card}
       onPress={() => {
+        if (Platform.OS !== "web") Haptics.selectionAsync();
         setExpanded((v) => !v);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }}
-      style={({ pressed }) => [
-        styles.row,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.8 : 1,
-        },
-      ]}
     >
-      <View style={styles.rowLeft}>
-        <View style={[styles.rankBadge, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.rankText, { color: colors.mutedForeground }]}>
-            {rank}
-          </Text>
+      <View style={s.cardHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.ticker}>{item.ticker}</Text>
+          <Text style={s.name} numberOfLines={1}>{item.name}</Text>
         </View>
-        <View style={styles.rowInfo}>
-          <Text style={[styles.stockName, { color: colors.foreground }]}>
-            {item.name}
-          </Text>
-          <Text style={[styles.ticker, { color: colors.mutedForeground }]}>
-            {item.ticker}
-          </Text>
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          {type === "tomorrow"
+            ? <ConfidenceBadge confidence={(item as TomorrowPick).confidence} />
+            : <View style={s.scoreBadge}>
+                <Text style={s.scoreText}>{(item as PresurgePick).score?.toFixed(1) ?? "-"}</Text>
+              </View>
+          }
         </View>
-      </View>
-      <View style={styles.rowRight}>
-        <CategoryBadge category={item.category} />
-        <ConfidenceBadge confidence={item.confidence} />
-        <Feather
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={14}
-          color={colors.mutedForeground}
-        />
       </View>
       {expanded && (
-        <View style={[styles.expandedContent, { borderTopColor: colors.border }]}>
-          <Text style={[styles.reasonText, { color: colors.mutedForeground }]}>
-            {item.reason}
-          </Text>
+        <View style={s.expand}>
+          <Text style={s.reason}>{item.reason}</Text>
           {item.themes && item.themes.length > 0 && (
-            <View style={styles.tags}>
-              {item.themes.slice(0, 4).map((t, i) => (
-                <View key={i} style={[styles.tag, { backgroundColor: colors.accent }]}>
-                  <Text style={[styles.tagText, { color: colors.mutedForeground }]}>
-                    {t}
-                  </Text>
-                </View>
+            <View style={s.tags}>
+              {item.themes.map((t, i) => (
+                <View key={i} style={s.tag}><Text style={s.tagText}>{t}</Text></View>
               ))}
             </View>
           )}
@@ -121,313 +113,186 @@ function PickRow({ item, rank }: { item: TomorrowPick; rank: number }) {
   );
 }
 
-function PresurgeRow({ item, rank }: { item: PresurgePick; rank: number }) {
+// ── Scanner card ──────────────────────────────────────────────────────────
+function ScannerCard({ item }: { item: ScannerItem }) {
   const colors = useColors();
-  const [expanded, setExpanded] = useState(false);
-  const score = Math.round((item.score ?? 0) * 10) / 10;
-
+  const router = useRouter();
+  const s = makeStyles(colors);
   return (
     <Pressable
-      onPress={() => {
-        setExpanded((v) => !v);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }}
-      style={({ pressed }) => [
-        styles.row,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.8 : 1,
-        },
-      ]}
+      style={s.card}
+      onPress={() => router.push(`/analysis/${item.id}`)}
     >
-      <View style={styles.rowLeft}>
-        <View style={[styles.rankBadge, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.rankText, { color: colors.mutedForeground }]}>
-            {rank}
-          </Text>
+      <View style={s.cardHeader}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={s.ticker}>{item.ticker}</Text>
+          <Text style={s.name} numberOfLines={1}>{item.companyName}</Text>
+          {item.industry && <Text style={s.industry}>{item.industry}</Text>}
         </View>
-        <View style={styles.rowInfo}>
-          <Text style={[styles.stockName, { color: colors.foreground }]}>
-            {item.name}
-          </Text>
-          <Text style={[styles.ticker, { color: colors.mutedForeground }]}>
-            {item.ticker}
-          </Text>
+        <View style={{ alignItems: "flex-end", gap: 6 }}>
+          {item.upside != null && <UpsidePill pct={item.upside} />}
+          <VerdictBadge verdict={item.investmentVerdict} />
         </View>
       </View>
-      <View style={styles.rowRight}>
-        <View style={[styles.scorePill, { backgroundColor: colors.primary + "22" }]}>
-          <Text style={[styles.scoreText, { color: colors.primary }]}>
-            {score}점
-          </Text>
-        </View>
-        <Feather
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={14}
-          color={colors.mutedForeground}
-        />
-      </View>
-      {expanded && (
-        <View style={[styles.expandedContent, { borderTopColor: colors.border }]}>
-          <Text style={[styles.reasonText, { color: colors.mutedForeground }]}>
-            {item.reason}
-          </Text>
-          {item.signals && item.signals.length > 0 && (
-            <View style={styles.tags}>
-              {item.signals.slice(0, 4).map((s, i) => (
-                <View key={i} style={[styles.tag, { backgroundColor: colors.accent }]}>
-                  <Text style={[styles.tagText, { color: colors.mutedForeground }]}>
-                    {s}
-                  </Text>
-                </View>
-              ))}
-            </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          {item.currentPrice != null && (
+            <Text style={s.price}>
+              {item.currentPrice >= 1000
+                ? item.currentPrice.toLocaleString("ko-KR") + "원"
+                : "$" + item.currentPrice.toLocaleString("en-US")}
+            </Text>
           )}
+          <TodayChange pct={item.todayChangePct} />
         </View>
-      )}
+        <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+      </View>
     </Pressable>
   );
 }
 
-export default function StocksScreen() {
+// ── Main ──────────────────────────────────────────────────────────────────
+export default function StocksTab() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<TabKey>("picks");
+  const [seg, setSeg] = useState<Seg>("내일픽");
+  const [market, setMarket] = useState<Market>("ALL");
+  const [minUpside, setMinUpside] = useState(10);
 
-  const picks = useTomorrowPicks();
+  const tomorrow = useTomorrowPicks();
   const presurge = usePresurge();
+  const scanner = useScanner(market, minUpside);
 
-  const isLoading =
-    activeTab === "picks" ? picks.isLoading : presurge.isLoading;
-  const isRefetching =
-    activeTab === "picks" ? picks.isRefetching : presurge.isRefetching;
+  const s = makeStyles(colors);
 
-  function handleRefresh() {
-    if (activeTab === "picks") picks.refetch();
-    else presurge.refetch();
+  function refresh() {
+    tomorrow.refetch();
+    presurge.refetch();
+    if (seg === "스캐너") scanner.refetch();
   }
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const isLoading =
+    seg === "내일픽" ? tomorrow.isLoading
+    : seg === "급등예비군" ? presurge.isLoading
+    : scanner.isLoading;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: topPad + 12,
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          종목 신호
-        </Text>
+    <View style={[s.root, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={s.header}>
+        <Feather name="trending-up" size={18} color={colors.primary} />
+        <Text style={s.headerTitle}>종목 신호</Text>
       </View>
 
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-        {TABS.map((t) => (
-          <Pressable
-            key={t.key}
-            onPress={() => setActiveTab(t.key)}
-            style={[
-              styles.tab,
-              {
-                borderBottomColor:
-                  activeTab === t.key ? colors.primary : "transparent",
-              },
-            ]}
+      {/* Segments */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.segRow}>
+        {SEGS.map((t) => (
+          <TouchableOpacity
+            key={t} style={[s.segBtn, seg === t && s.segActive]}
+            onPress={() => setSeg(t)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === t.key ? colors.primary : colors.mutedForeground,
-                  fontWeight: activeTab === t.key ? "600" : "400",
-                },
-              ]}
-            >
-              {t.label}
-            </Text>
-            {activeTab === "picks" && t.key === "picks" && picks.data && (
-              <View
-                style={[styles.countBadge, { backgroundColor: colors.primary }]}
-              >
-                <Text style={styles.countText}>
-                  {picks.data.picks.length}
-                </Text>
-              </View>
-            )}
-            {activeTab === "presurge" && t.key === "presurge" && presurge.data && (
-              <View
-                style={[styles.countBadge, { backgroundColor: colors.primary }]}
-              >
-                <Text style={styles.countText}>
-                  {presurge.data.picks?.length ?? 0}
-                </Text>
-              </View>
-            )}
-          </Pressable>
+            <Text style={[s.segLabel, seg === t && s.segLabelActive]}>{t}</Text>
+          </TouchableOpacity>
         ))}
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.listContent,
-          {
-            paddingBottom: Platform.OS === "web" ? 34 + 84 : insets.bottom + 100,
-          },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {isLoading ? (
-          <View style={{ marginTop: 16 }}>
-            <SkeletonList count={6} />
-          </View>
-        ) : activeTab === "picks" ? (
-          picks.error ? (
-            <ErrorState onRetry={() => picks.refetch()} />
-          ) : picks.data?.picks.length === 0 ? (
-            <EmptyState label="아직 내일 픽이 없어요" icon="trending-up" />
-          ) : (
-            picks.data?.picks.map((item, i) => (
-              <PickRow key={item.ticker} item={item} rank={i + 1} />
-            ))
-          )
-        ) : presurge.error ? (
-          <ErrorState onRetry={() => presurge.refetch()} />
-        ) : (presurge.data?.picks?.length ?? 0) === 0 ? (
-          <EmptyState label="급등 예비군이 없어요" icon="activity" />
-        ) : (
-          presurge.data?.picks?.map((item, i) => (
-            <PresurgeRow key={item.ticker} item={item} rank={i + 1} />
-          ))
-        )}
       </ScrollView>
+
+      {/* Scanner filters */}
+      {seg === "스캐너" && (
+        <View style={s.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
+            {MARKETS.map((m) => (
+              <TouchableOpacity
+                key={m} style={[s.filterChip, market === m && s.filterActive]}
+                onPress={() => setMarket(m)}
+              >
+                <Text style={[s.filterText, market === m && s.filterTextActive]}>{MARKET_LABELS[m]}</Text>
+              </TouchableOpacity>
+            ))}
+            <View style={s.divider} />
+            {UPSIDE_OPTIONS.map((v) => (
+              <TouchableOpacity
+                key={v} style={[s.filterChip, minUpside === v && s.filterActive]}
+                onPress={() => setMinUpside(v)}
+              >
+                <Text style={[s.filterText, minUpside === v && s.filterTextActive]}>{v}%+</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Content */}
+      {isLoading ? (
+        <SkeletonList count={6} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 80 }]}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} />}
+        >
+          {seg === "내일픽" && (
+            <>
+              {(tomorrow.data?.picks ?? []).length === 0
+                ? <Text style={s.empty}>내일 픽이 없습니다</Text>
+                : (tomorrow.data?.picks ?? []).map((p, i) => <PickCard key={i} item={p} type="tomorrow" />)
+              }
+            </>
+          )}
+          {seg === "급등예비군" && (
+            <>
+              {(presurge.data?.picks ?? []).length === 0
+                ? <Text style={s.empty}>급등 예비군이 없습니다</Text>
+                : (presurge.data?.picks ?? []).map((p, i) => <PickCard key={i} item={p} type="presurge" />)
+              }
+            </>
+          )}
+          {seg === "스캐너" && (
+            <>
+              {scanner.isLoading
+                ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+                : scanner.isError
+                ? <Text style={s.empty}>스캐너 데이터를 불러올 수 없습니다</Text>
+                : (scanner.data ?? []).length === 0
+                ? <Text style={s.empty}>조건에 맞는 종목이 없습니다</Text>
+                : (scanner.data ?? []).map((item) => <ScannerCard key={item.id} item={item} />)
+              }
+            </>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
-function EmptyState({ label, icon }: { label: string; icon: string }) {
-  const colors = useColors();
-  return (
-    <View style={styles.emptyState}>
-      <Feather name={icon as any} size={32} color={colors.mutedForeground} />
-      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-        {label}
-      </Text>
-    </View>
-  );
+function makeStyles(c: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: c.background },
+    header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
+    headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: c.foreground },
+    segRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
+    segBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.border },
+    segActive: { backgroundColor: c.primary + "22", borderColor: c.primary },
+    segLabel: { fontSize: 13, fontFamily: "Inter_500Medium", color: c.mutedForeground },
+    segLabelActive: { color: c.primary },
+    filterRow: { marginBottom: 8 },
+    filterChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, backgroundColor: c.card, borderWidth: 1, borderColor: c.border },
+    filterActive: { backgroundColor: c.primary + "22", borderColor: c.primary },
+    filterText: { fontSize: 12, fontFamily: "Inter_500Medium", color: c.mutedForeground },
+    filterTextActive: { color: c.primary },
+    divider: { width: 1, backgroundColor: c.border, marginHorizontal: 4 },
+    list: { padding: 16, gap: 10 },
+    card: { backgroundColor: c.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: c.border, gap: 10 },
+    cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+    ticker: { fontSize: 15, fontFamily: "Inter_700Bold", color: c.foreground },
+    name: { fontSize: 12, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    industry: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    price: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: c.foreground },
+    scoreBadge: { backgroundColor: c.primary + "22", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+    scoreText: { fontSize: 12, fontFamily: "Inter_700Bold", color: c.primary },
+    expand: { gap: 8, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10 },
+    reason: { fontSize: 13, color: c.foreground, fontFamily: "Inter_400Regular", lineHeight: 19 },
+    tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+    tag: { backgroundColor: c.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    tagText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    empty: { textAlign: "center", color: c.mutedForeground, marginTop: 60, fontFamily: "Inter_400Regular", fontSize: 14 },
+  });
 }
-
-function ErrorState({ onRetry }: { onRetry: () => void }) {
-  const colors = useColors();
-  return (
-    <View style={styles.emptyState}>
-      <Feather name="alert-circle" size={32} color={colors.destructive} />
-      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-        데이터를 불러오지 못했어요
-      </Text>
-      <Pressable
-        onPress={onRetry}
-        style={[styles.retryBtn, { backgroundColor: colors.accent }]}
-      >
-        <Text style={[styles.retryText, { color: colors.foreground }]}>
-          다시 시도
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    fontFamily: "Inter_700Bold",
-  },
-  tabBar: {
-    flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    gap: 6,
-    borderBottomWidth: 2,
-  },
-  tabText: { fontSize: 14 },
-  countBadge: {
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  countText: { color: "#fff", fontSize: 11, fontWeight: "600" },
-  scroll: { flex: 1 },
-  listContent: { gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  row: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  rowLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  rowRight: { flexDirection: "row", alignItems: "center", gap: 6 },
-  rankBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rankText: { fontSize: 12, fontWeight: "600" },
-  rowInfo: { gap: 2, flex: 1 },
-  stockName: { fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
-  ticker: { fontSize: 12 },
-  badge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  badgeText: { fontSize: 11, fontWeight: "600" },
-  scorePill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
-  scoreText: { fontSize: 12, fontWeight: "600" },
-  expandedContent: {
-    width: "100%",
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  reasonText: { fontSize: 13, lineHeight: 20 },
-  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  tagText: { fontSize: 11 },
-  emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 14 },
-  retryBtn: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  retryText: { fontSize: 14, fontWeight: "600" },
-});
