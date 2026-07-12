@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView,
-  StyleSheet, Text, TouchableOpacity, View, Platform,
+  StyleSheet, Text, TouchableOpacity, View, Platform, TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
@@ -634,6 +634,7 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
 
 // ─── ETF 탭 ──────────────────────────────────────────────────────────────────
 
+// 집중 종목
 interface FlowStock { code: string; name: string; etfCount: number; totalWeight: number; avgWeight: number; etfs: string[]; }
 interface ThemeBreakdown { key: string; label: string; emoji: string; etfCount: number; totalEtfs: number; score: number; }
 interface FundFlowData {
@@ -643,26 +644,28 @@ interface FundFlowData {
   updatedAt: string;
 }
 
-const SIGNAL_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  strong_buy:  { label: "강력 매수", color: "#16a34a", bg: "#dcfce7" },
-  buy:         { label: "매수",     color: "#16a34a", bg: "#dcfce7" },
-  hold:        { label: "관망",     color: "#94a3b8", bg: "#f1f5f9" },
-  sell:        { label: "매도",     color: "#ef4444", bg: "#fee2e2" },
-  strong_sell: { label: "강력 매도", color: "#dc2626", bg: "#fee2e2" },
-};
-const OUTLOOK_CFG: Record<string, { label: string; color: string }> = {
-  bullish:  { label: "강세", color: "#16a34a" },
-  neutral:  { label: "중립", color: "#94a3b8" },
-  cautious: { label: "주의", color: "#f59e0b" },
-};
-
-function fearGreedColor(score: number) {
-  if (score >= 75) return "#16a34a";
-  if (score >= 55) return "#22c55e";
-  if (score >= 45) return "#94a3b8";
-  if (score >= 25) return "#f59e0b";
-  return "#ef4444";
+// 리밸런싱
+interface RebalStock { ticker: string; name: string; region: string; etfs: string[]; delta?: number; }
+interface SectorMove { sector: string; direction: "up" | "down" | "neutral"; etfCount: number; prevCount: number; }
+interface TopHolding { ticker: string; name: string; region: string; etfCount: number; totalWeight: number; etfs: string[]; }
+interface RebalancingData {
+  etfsAnalyzed: number; etfsWithChanges: number; hasChanges: boolean; updatedAt: string;
+  newEntries: RebalStock[]; exits: RebalStock[]; bigBuys: RebalStock[]; bigSells: RebalStock[];
+  sectorMoves: SectorMove[]; topHoldings: TopHolding[];
 }
+
+// 검색
+interface ETFInfo { code: string; name: string; sector: string; issuer: string; leverage: number; }
+interface ETFHolding { rank: number; stockCode: string; stockName: string; weight: number; weightChange?: number; }
+interface ETFExposureItem { etf: ETFInfo; holding: ETFHolding; }
+
+const POPULAR_ETFS: { label: string; items: { code: string; name: string }[] }[] = [
+  { label: "국내 대표", items: [{ code: "069500", name: "KODEX 200" }, { code: "229200", name: "코스닥150" }, { code: "102110", name: "TIGER KOSPI" }] },
+  { label: "반도체·AI", items: [{ code: "091160", name: "KODEX 반도체" }, { code: "395160", name: "AI반도체TOP2+" }, { code: "SOXX", name: "SOXX" }, { code: "SMH", name: "SMH" }] },
+  { label: "2차전지·헬스케어", items: [{ code: "305720", name: "KODEX 2차전지" }, { code: "266420", name: "KODEX 헬스케어" }] },
+  { label: "미국 시장", items: [{ code: "SPY", name: "SPY S&P500" }, { code: "QQQ", name: "QQQ 나스닥100" }, { code: "IWM", name: "IWM 러셀2000" }, { code: "ITA", name: "ITA 방산" }] },
+  { label: "기관투자자", items: [{ code: "NPS", name: "국민연금 국내주식" }, { code: "NPSINT", name: "국민연금 미국주식" }] },
+];
 
 function ETFTab({ colors, insets }: { colors: any; insets: any }) {
   const [momentum, setMomentum] = useState<MomentumAnalysis | null>(null);
