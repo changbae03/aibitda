@@ -9,7 +9,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
-import { useStockSearch, useBatchQuotes, useRecentAnalyses, type StockSearchResult } from "@/hooks/useApi";
+import {
+  useStockSearch, useBatchQuotes, useRecentAnalyses,
+  type StockSearchResult,
+} from "@/hooks/useApi";
 
 const STORAGE_KEY = "watchlist_v2";
 
@@ -19,7 +22,11 @@ interface WatchItem {
   addedAt: string;
 }
 
-function PriceChange({ change, price, currency }: { change: number | null; price: number | null; currency: string }) {
+function PriceChange({ change, price, currency }: {
+  change: number | null;
+  price: number | null;
+  currency: string;
+}) {
   const colors = useColors();
   if (price == null) return <ActivityIndicator size="small" color={colors.mutedForeground} />;
   const isKR = currency === "KRW" || currency === "KRX";
@@ -43,10 +50,11 @@ function AnalysisBadge({ ticker, analyses }: { ticker: string; analyses: any[] }
   const match = analyses.find((a) => a.ticker === ticker && a.status === "completed");
   if (!match) return null;
   const v = match.investmentVerdict?.toLowerCase() ?? "";
-  const color = v.includes("strong buy") ? "#10b981" : v.includes("buy") ? colors.up : v.includes("sell") ? colors.down : "#f59e0b";
+  const color = v.includes("strong buy") ? "#16a34a" : v.includes("buy") ? colors.success : v.includes("sell") ? colors.destructive : "#d97706";
+  const bg = v.includes("strong buy") ? "#dcfce7" : v.includes("buy") ? "#dcfce7" : v.includes("sell") ? "#fee2e2" : "#fef9c3";
   const label = v.includes("strong buy") ? "강력매수" : v.includes("buy") ? "매수" : v.includes("sell") ? "매도" : "보유";
   return (
-    <View style={{ backgroundColor: color + "22", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+    <View style={{ backgroundColor: bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
       <Text style={{ fontSize: 10, color, fontFamily: "Inter_600SemiBold" }}>{label}</Text>
     </View>
   );
@@ -67,7 +75,7 @@ export default function PortfolioTab() {
   const tickers = items.map((i) => i.ticker);
   const quotes = useBatchQuotes(tickers);
 
-  const s = makeStyles(colors);
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const load = useCallback(async () => {
     try {
@@ -112,30 +120,28 @@ export default function PortfolioTab() {
 
   if (loading) {
     return (
-      <View style={[s.root, { justifyContent: "center", alignItems: "center" }]}>
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={s.header}>
-        <Feather name="star" size={18} color={colors.primary} />
-        <Text style={s.headerTitle}>관심 종목</Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => quotes.refetch()} style={s.refreshBtn}>
+      <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>관심 종목</Text>
+        <TouchableOpacity onPress={() => quotes.refetch()} style={{ padding: 6 }}>
           <Feather name="refresh-cw" size={15} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
       {/* Search bar */}
-      <View style={s.searchSection}>
-        <View style={s.searchBox}>
-          <Feather name="search" size={15} color={colors.mutedForeground} />
+      <View style={[styles.searchSection, { borderBottomColor: colors.border }]}>
+        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Feather name="plus" size={15} color={colors.mutedForeground} />
           <TextInput
-            style={s.searchInput}
+            style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="종목 추가..."
             placeholderTextColor={colors.mutedForeground}
             value={query}
@@ -145,186 +151,208 @@ export default function PortfolioTab() {
           />
           {query.length > 0 && (
             <Pressable onPress={() => { setQuery(""); setShowSearch(false); }}>
-              <Feather name="x" size={15} color={colors.mutedForeground} />
+              <Feather name="x" size={14} color={colors.mutedForeground} />
             </Pressable>
           )}
         </View>
       </View>
 
       {/* Search results */}
-      {showSearch && query.trim().length >= 1 && (
-        <View style={s.dropdown}>
+      {showSearch && query.trim().length >= 1 ? (
+        <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {search.isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ padding: 16 }} />
           ) : (search.data ?? []).length === 0 ? (
-            <Text style={s.emptySearch}>검색 결과 없음</Text>
+            <Text style={[styles.emptySearch, { color: colors.mutedForeground }]}>검색 결과 없음</Text>
           ) : (
             (search.data ?? []).slice(0, 8).map((item) => (
               <Pressable
                 key={item.ticker}
-                style={({ pressed }) => [s.searchRow, { backgroundColor: pressed ? colors.muted : "transparent" }]}
+                style={({ pressed }) => [styles.searchRow, { borderBottomColor: colors.border, backgroundColor: pressed ? colors.muted : "transparent" }]}
                 onPress={() => addItem(item)}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={s.srTicker}>{item.ticker}</Text>
-                  <Text style={s.srName}>{item.name}</Text>
+                  <Text style={[styles.srTicker, { color: colors.foreground }]}>{item.ticker}</Text>
+                  <Text style={[styles.srName, { color: colors.mutedForeground }]}>{item.name}</Text>
                 </View>
                 <Feather name="plus-circle" size={18} color={colors.primary} />
               </Pressable>
             ))
           )}
         </View>
-      )}
-
-      {/* Portfolio summary */}
-      {items.length > 0 && !showSearch && (
-        <View style={s.summaryBar}>
-          <View style={s.summaryItem}>
-            <Text style={s.summaryVal}>{items.length}개</Text>
-            <Text style={s.summaryLabel}>관심 종목</Text>
+      ) : items.length === 0 ? (
+        /* Empty state matching web design */
+        <View style={styles.emptyState}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
+            <Feather name="briefcase" size={32} color={colors.mutedForeground} />
+            <View style={[styles.emptyIconPlus, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="plus" size={10} color={colors.mutedForeground} />
+            </View>
           </View>
-          {quotes.data && (
-            <>
-              <View style={s.summarySep} />
-              <View style={s.summaryItem}>
-                {quotes.isFetching
-                  ? <ActivityIndicator size="small" color={colors.primary} />
-                  : <Text style={s.summaryVal}>{Object.keys(quotes.data).length}개</Text>
-                }
-                <Text style={s.summaryLabel}>가격 조회됨</Text>
-              </View>
-              <View style={s.summarySep} />
-              <View style={s.summaryItem}>
-                <Text style={[s.summaryVal, {
-                  color: Object.values(quotes.data).filter(q => (q.change ?? 0) >= 0).length > Object.values(quotes.data).length / 2
-                    ? colors.up : colors.down
-                }]}>
-                  {Object.values(quotes.data).filter(q => (q.change ?? 0) >= 0).length}↑ /&nbsp;
-                  {Object.values(quotes.data).filter(q => (q.change ?? 0) < 0).length}↓
-                </Text>
-                <Text style={s.summaryLabel}>상승/하락</Text>
-              </View>
-            </>
-          )}
-        </View>
-      )}
-
-      {/* List */}
-      {items.length === 0 && !showSearch ? (
-        <View style={s.emptyState}>
-          <Feather name="star" size={40} color={colors.mutedForeground} />
-          <Text style={s.emptyTitle}>관심 종목이 없습니다</Text>
-          <Text style={s.emptyDesc}>위 검색창에서 종목을 추가하세요</Text>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>종목이 없어요</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            보유 종목이나 관심종목을 추가하면{"\n"}AI가 분석과 이슈를 한눈에 보여드려요
+          </Text>
+          <TouchableOpacity
+            style={[styles.emptyBtn, { backgroundColor: colors.foreground }]}
+            onPress={() => {
+              setShowSearch(true);
+              setQuery(" ");
+              setTimeout(() => setQuery(""), 50);
+            }}
+          >
+            <Feather name="plus" size={14} color={colors.card} />
+            <Text style={[styles.emptyBtnText, { color: colors.card }]}>첫 종목 추가하기</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.ticker}
-          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 80 }]}
-          refreshControl={
-            <RefreshControl
-              refreshing={quotes.isFetching}
-              onRefresh={() => { quotes.refetch(); recentAnalyses.refetch(); }}
-              tintColor={colors.primary}
-            />
-          }
-          renderItem={({ item }) => {
-            const q = quotes.data?.[item.ticker];
-            return (
-              <Pressable
-                style={s.card}
-                onPress={() => {
-                  const a = analyses.find((an) => an.ticker === item.ticker && an.status === "completed");
-                  if (a) router.push(`/analysis/${a.id}`);
-                  else router.push({ pathname: "/new-analysis", params: { ticker: item.ticker, name: item.name } });
-                }}
-              >
-                <View style={s.cardRow}>
+        <>
+          {/* Portfolio summary bar */}
+          <View style={[styles.summaryBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryVal, { color: colors.foreground }]}>{items.length}개</Text>
+              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>관심 종목</Text>
+            </View>
+            {quotes.data && (
+              <>
+                <View style={[styles.summarySep, { backgroundColor: colors.border }]} />
+                <View style={styles.summaryItem}>
+                  {quotes.isFetching
+                    ? <ActivityIndicator size="small" color={colors.primary} />
+                    : <Text style={[styles.summaryVal, { color: colors.foreground }]}>
+                        {Object.keys(quotes.data).length}개
+                      </Text>
+                  }
+                  <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>시세 조회</Text>
+                </View>
+                <View style={[styles.summarySep, { backgroundColor: colors.border }]} />
+                <View style={styles.summaryItem}>
+                  {(() => {
+                    const ups = Object.values(quotes.data).filter(q => (q.change ?? 0) >= 0).length;
+                    const dns = Object.values(quotes.data).filter(q => (q.change ?? 0) < 0).length;
+                    return (
+                      <Text style={[styles.summaryVal, { color: ups >= dns ? colors.up : colors.down }]}>
+                        {ups}↑ / {dns}↓
+                      </Text>
+                    );
+                  })()}
+                  <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>상승/하락</Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* Stock list */}
+          <FlatList
+            data={items}
+            keyExtractor={(item) => item.ticker}
+            contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={quotes.isFetching}
+                onRefresh={() => { quotes.refetch(); recentAnalyses.refetch(); }}
+                tintColor={colors.primary}
+              />
+            }
+            renderItem={({ item }) => {
+              const q = quotes.data?.[item.ticker];
+              return (
+                <Pressable
+                  style={({ pressed }) => [styles.stockRow, { backgroundColor: pressed ? colors.muted : colors.card, borderBottomColor: colors.border }]}
+                  onPress={() => {
+                    const a = analyses.find((an) => an.ticker === item.ticker && an.status === "completed");
+                    if (a) router.push(`/analysis/${a.id}`);
+                    else router.push({ pathname: "/new-analysis", params: { ticker: item.ticker, name: item.name } });
+                  }}
+                >
                   <View style={{ flex: 1, gap: 3 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={s.ticker}>{item.ticker}</Text>
+                      <Text style={[styles.stockTicker, { color: colors.foreground }]}>{item.ticker}</Text>
                       <AnalysisBadge ticker={item.ticker} analyses={analyses} />
                     </View>
-                    <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-                    <Text style={s.date}>
-                      {new Date(item.addedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })} 추가
+                    <Text style={[styles.stockName, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {item.name}
                     </Text>
                   </View>
-                  <PriceChange
-                    price={q?.price ?? null}
-                    change={q?.change ?? null}
-                    currency={q?.currency ?? "KRW"}
-                  />
-                </View>
 
-                {/* Actions */}
-                <View style={s.actionRow}>
-                  <TouchableOpacity
-                    style={s.actionBtn}
-                    onPress={() => router.push({ pathname: "/new-analysis", params: { ticker: item.ticker, name: item.name } })}
-                  >
-                    <Feather name="cpu" size={13} color={colors.primary} />
-                    <Text style={s.actionText}>AI 분석</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[s.actionBtn, s.deleteBtn]} onPress={() => removeItem(item.ticker)}>
-                    <Feather name="trash-2" size={13} color={colors.down} />
-                    <Text style={[s.actionText, { color: colors.down }]}>삭제</Text>
-                  </TouchableOpacity>
-                </View>
-              </Pressable>
-            );
-          }}
-        />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <PriceChange
+                      price={q?.price ?? null}
+                      change={q?.change ?? null}
+                      currency={q?.currency ?? "KRW"}
+                    />
+                    <TouchableOpacity onPress={() => removeItem(item.ticker)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Feather name="x" size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
+                </Pressable>
+              );
+            }}
+          />
+        </>
       )}
     </View>
   );
 }
 
-function makeStyles(c: ReturnType<typeof useColors>) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: c.background },
-    header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
-    headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: c.foreground },
-    refreshBtn: { padding: 6 },
-    searchSection: { paddingHorizontal: 16, marginBottom: 10 },
-    searchBox: {
-      flexDirection: "row", alignItems: "center", gap: 10,
-      backgroundColor: c.card, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
-      borderWidth: 1, borderColor: c.border,
-    },
-    searchInput: { flex: 1, fontSize: 14, color: c.foreground, fontFamily: "Inter_400Regular", padding: 0 },
-    dropdown: {
-      marginHorizontal: 16, backgroundColor: c.card, borderRadius: 12,
-      borderWidth: 1, borderColor: c.border, overflow: "hidden", marginBottom: 10,
-    },
-    searchRow: { flexDirection: "row", alignItems: "center", padding: 12, borderBottomWidth: 1, borderBottomColor: c.border },
-    srTicker: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: c.foreground },
-    srName: { fontSize: 12, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    emptySearch: { padding: 16, color: c.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" },
-    summaryBar: {
-      flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginBottom: 12,
-      backgroundColor: c.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: c.border,
-    },
-    summaryItem: { flex: 1, alignItems: "center", gap: 2 },
-    summaryVal: { fontSize: 16, fontFamily: "Inter_700Bold", color: c.foreground },
-    summaryLabel: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    summarySep: { width: 1, height: 32, backgroundColor: c.border },
-    list: { padding: 16, gap: 10 },
-    card: { backgroundColor: c.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: c.border, gap: 12 },
-    cardRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-    ticker: { fontSize: 15, fontFamily: "Inter_700Bold", color: c.foreground },
-    name: { fontSize: 12, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    date: { fontSize: 11, color: c.mutedForeground + "99", fontFamily: "Inter_400Regular" },
-    actionRow: { flexDirection: "row", gap: 8 },
-    actionBtn: {
-      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
-      backgroundColor: c.primary + "18", borderRadius: 8, paddingVertical: 7,
-      borderWidth: 1, borderColor: c.primary + "33",
-    },
-    deleteBtn: { backgroundColor: c.down + "18", borderColor: c.down + "33" },
-    actionText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: c.primary },
-    emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
-    emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: c.foreground },
-    emptyDesc: { fontSize: 13, color: c.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" },
-  });
-}
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 16, paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  searchSection: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBox: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", padding: 0 },
+  dropdown: {
+    marginHorizontal: 16, marginTop: 4, borderRadius: 12, borderWidth: 1, overflow: "hidden",
+  },
+  searchRow: {
+    flexDirection: "row", alignItems: "center", padding: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  srTicker: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  srName: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  emptySearch: { padding: 16, textAlign: "center", fontFamily: "Inter_400Regular" },
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
+  emptyIcon: {
+    width: 80, height: 80, borderRadius: 20,
+    alignItems: "center", justifyContent: "center",
+    position: "relative",
+  },
+  emptyIconPlus: {
+    position: "absolute", bottom: -4, right: -4,
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  emptyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 6,
+  },
+  emptyBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  summaryBar: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  summaryItem: { flex: 1, alignItems: "center", gap: 2 },
+  summaryVal: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  summaryLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  summarySep: { width: 1, height: 32 },
+  stockRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  stockTicker: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  stockName: { fontSize: 12, fontFamily: "Inter_400Regular" },
+});

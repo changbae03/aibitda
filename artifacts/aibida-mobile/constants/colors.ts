@@ -14,38 +14,43 @@ const colors = {
     mutedForeground: "#64748b",
     accent: "#1e2a3d",
     accentForeground: "#e2e8f4",
-    destructive: "#ef4444",
-    destructiveForeground: "#ffffff",
     border: "#1e2a3d",
     input: "#1e2a3d",
     up: "#ef4444",
+    upBg: "#450a0a",
     down: "#3b82f6",
+    downBg: "#1e3a5f",
     warning: "#f59e0b",
     success: "#22c55e",
-  },
-  light: {
-    text: "#0d1119",
-    tint: "#f97316",
-    background: "#f8fafc",
-    foreground: "#0d1119",
-    card: "#ffffff",
-    cardForeground: "#0d1119",
-    primary: "#f97316",
-    primaryForeground: "#ffffff",
-    secondary: "#f1f5f9",
-    secondaryForeground: "#0d1119",
-    muted: "#f1f5f9",
-    mutedForeground: "#64748b",
-    accent: "#f1f5f9",
-    accentForeground: "#0d1119",
     destructive: "#ef4444",
     destructiveForeground: "#ffffff",
-    border: "#e2e8f0",
-    input: "#e2e8f0",
-    up: "#ef4444",
-    down: "#3b82f6",
-    warning: "#f59e0b",
-    success: "#22c55e",
+  },
+  // Light theme matching web app exactly (hsl values from index.css)
+  light: {
+    text: "#0d1421",
+    tint: "#f97316",
+    background: "#f0f1f6",   // hsl(220 20% 96%)
+    foreground: "#0d1421",   // hsl(220 25% 8%)
+    card: "#ffffff",
+    cardForeground: "#0d1421",
+    primary: "#f97316",      // brand orange
+    primaryForeground: "#ffffff",
+    secondary: "#eef0f5",    // hsl(220 16% 95%)
+    secondaryForeground: "#2a3040",
+    muted: "#eef0f5",        // hsl(220 14% 95%)
+    mutedForeground: "#5d6678",  // hsl(220 10% 38%)
+    accent: "#eef0f5",
+    accentForeground: "#0d1421",
+    border: "#dde0ea",       // hsl(220 12% 88%)
+    input: "#e4e7f0",
+    up: "#ef4444",           // Korean: red = up
+    upBg: "#fef2f2",
+    down: "#3b82f6",         // Korean: blue = down
+    downBg: "#eff6ff",
+    warning: "#d97706",
+    success: "#16a34a",
+    destructive: "#dc2626",
+    destructiveForeground: "#ffffff",
   },
   radius: 10,
 };

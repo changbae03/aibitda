@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Linking, ActivityIndicator,
+  RefreshControl, Linking, ActivityIndicator, Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useNewsResearch, useNewsRadar, useNewsScraps } from "@/hooks/useApi";
 
-const SEG = ["리서치", "레이더", "큐레이션"] as const;
+const SEG = ["피드", "레이더", "큐레이션"] as const;
 type Seg = typeof SEG[number];
 
 function timeAgo(dateStr?: string | null): string {
@@ -26,27 +26,32 @@ function timeAgo(dateStr?: string | null): string {
 }
 
 const CAT_COLOR: Record<string, string> = {
-  외교: "#60a5fa", 경제: "#34d399", 군사: "#f87171", 시장: "#a78bfa",
+  외교: "#60a5fa", 경제: "#10b981", 군사: "#f87171", 시장: "#a78bfa",
   정치: "#fb923c", 에너지: "#fbbf24", 기술: "#38bdf8", 산업: "#4ade80",
+  반도체: "#818cf8", 바이오: "#34d399",
 };
 
 export default function NewsTab() {
   const colors = useColors();
-  const [seg, setSeg] = useState<Seg>("리서치");
+  const insets = useSafeAreaInsets();
+  const [seg, setSeg] = useState<Seg>("피드");
 
   const research = useNewsResearch();
   const radar = useNewsRadar();
   const scraps = useNewsScraps();
 
   const isLoading =
-    seg === "리서치" ? research.isLoading
+    seg === "피드" ? research.isLoading
     : seg === "레이더" ? radar.isLoading
     : scraps.isLoading;
 
-  const items =
-    seg === "리서치" ? research.data?.items ?? []
+  const rawItems =
+    seg === "피드" ? research.data?.items ?? []
     : seg === "레이더" ? radar.data?.items ?? []
     : scraps.data?.items ?? [];
+
+  // Get latest item for breaking news ticker
+  const latestItem = rawItems[0];
 
   function refresh() {
     research.refetch();
@@ -54,113 +59,175 @@ export default function NewsTab() {
     scraps.refetch();
   }
 
-  const s = makeStyles(colors);
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
-      <View style={s.header}>
-        <Feather name="rss" size={18} color={colors.primary} />
-        <Text style={s.headerTitle}>뉴스</Text>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+          <Text style={[styles.breakingBadge, { backgroundColor: colors.foreground, color: colors.card }]}>속보</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>⚡ 주요뉴스</Text>
+        </View>
+        {rawItems.length > 0 && (
+          <Text style={[styles.headerCount, { color: colors.mutedForeground }]}>
+            {rawItems.length}건
+          </Text>
+        )}
       </View>
 
-      <View style={s.segRow}>
+      {/* Tab row */}
+      <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
         {SEG.map((t) => (
           <TouchableOpacity
             key={t}
-            style={[s.segBtn, seg === t && s.segActive]}
+            style={[styles.tabBtn, seg === t && { borderBottomColor: colors.foreground }]}
             onPress={() => setSeg(t)}
           >
-            <Text style={[s.segLabel, seg === t && s.segLabelActive]}>{t}</Text>
+            <Text style={[styles.tabLabel, { color: seg === t ? colors.foreground : colors.mutedForeground }]}>
+              {t === "피드" ? "📰 피드" : t === "레이더" ? "📡 레이더" : "🔖 큐레이션"}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      {/* Breaking news ticker */}
+      {latestItem && !isLoading && (
+        <TouchableOpacity
+          style={[styles.tickerRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
+          onPress={() => latestItem.url && Linking.openURL(latestItem.url).catch(() => null)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.tickerDot, { backgroundColor: colors.up }]} />
+          <Text style={[styles.tickerLabel, { color: colors.up }]}>속보</Text>
+          <Text style={[styles.tickerText, { color: colors.foreground }]} numberOfLines={1}>
+            {latestItem.title ?? latestItem.text ?? ""}
+          </Text>
+          <Text style={[styles.tickerTime, { color: colors.mutedForeground }]}>
+            {timeAgo(latestItem.pubDate ?? latestItem.date)}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Content */}
       {isLoading ? (
-        <View style={s.center}>
+        <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={s.list}
+          contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
           refreshControl={
             <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.primary} />
           }
         >
-          {items.length === 0 ? (
-            <Text style={[s.errText, { textAlign: "center", marginTop: 60 }]}>뉴스가 없습니다</Text>
+          {rawItems.length === 0 ? (
+            <View style={styles.center}>
+              <Feather name="inbox" size={36} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>뉴스가 없습니다</Text>
+            </View>
           ) : (
-            items.map((item, i) => (
+            rawItems.map((item, i) => (
               <TouchableOpacity
                 key={i}
-                style={s.card}
-                onPress={() => {
-                  if (item.url) Linking.openURL(item.url).catch(() => null);
-                }}
-                activeOpacity={0.75}
+                style={[styles.newsRow, { borderBottomColor: colors.border }]}
+                onPress={() => item.url && Linking.openURL(item.url).catch(() => null)}
+                activeOpacity={0.7}
               >
-                <View style={s.metaRow}>
-                  {item.category ? (
-                    <View style={[s.catBadge, { backgroundColor: (CAT_COLOR[item.category] ?? colors.primary) + "22" }]}>
-                      <Text style={[s.catText, { color: CAT_COLOR[item.category] ?? colors.primary }]}>{item.category}</Text>
-                    </View>
-                  ) : item.source ? (
-                    <Text style={s.sourceText}>{item.source}</Text>
-                  ) : <View />}
-                  <Text style={s.timeText}>{timeAgo(item.pubDate ?? item.date)}</Text>
+                {/* Left: dot indicator */}
+                <View style={[styles.dotCol]}>
+                  <View style={[styles.newsDot, { backgroundColor: i === 0 ? colors.up : colors.border }]} />
+                  {i < rawItems.length - 1 && (
+                    <View style={[styles.dotLine, { backgroundColor: colors.border }]} />
+                  )}
                 </View>
 
-                <Text style={s.title} numberOfLines={3}>{item.title ?? item.text ?? ""}</Text>
-
-                {item.tags && item.tags.length > 0 && (
-                  <View style={s.tagsRow}>
-                    {item.tags.slice(0, 4).map((tag, j) => (
-                      <View key={j} style={s.tag}>
-                        <Text style={s.tagText}>#{tag}</Text>
+                {/* Right: content */}
+                <View style={styles.newsContent}>
+                  <View style={styles.newsMetaRow}>
+                    <Text style={[styles.newsTime, { color: colors.mutedForeground }]}>
+                      {timeAgo(item.pubDate ?? item.date)}
+                    </Text>
+                    {item.category ? (
+                      <View style={[styles.catBadge, { backgroundColor: (CAT_COLOR[item.category] ?? colors.primary) + "18" }]}>
+                        <Text style={[styles.catText, { color: CAT_COLOR[item.category] ?? colors.primary }]}>{item.category}</Text>
                       </View>
-                    ))}
+                    ) : item.source ? (
+                      <Text style={[styles.sourceText, { color: colors.mutedForeground }]}>{item.source}</Text>
+                    ) : null}
                   </View>
-                )}
 
-                {item.url && (
-                  <View style={s.linkRow}>
-                    <Feather name="external-link" size={11} color={colors.mutedForeground} />
-                    <Text style={s.linkText}>원문 보기</Text>
-                  </View>
-                )}
+                  <Text style={[styles.newsTitle, { color: colors.foreground }]} numberOfLines={3}>
+                    {item.title ?? item.text ?? ""}
+                  </Text>
+
+                  {item.tags && item.tags.length > 0 && (
+                    <View style={styles.tagsRow}>
+                      {item.tags.slice(0, 3).map((tag, j) => (
+                        <Text key={j} style={[styles.tagText, { color: colors.mutedForeground }]}>#{tag}</Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
             ))
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
-function makeStyles(c: ReturnType<typeof useColors>) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: c.background },
-    header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-    headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: c.foreground },
-    segRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 8 },
-    segBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.border },
-    segActive: { backgroundColor: c.primary + "22", borderColor: c.primary },
-    segLabel: { fontSize: 13, fontFamily: "Inter_500Medium", color: c.mutedForeground },
-    segLabelActive: { color: c.primary },
-    list: { padding: 16, gap: 10, paddingBottom: 100 },
-    card: { backgroundColor: c.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: c.border, gap: 8 },
-    metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    catBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-    catText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-    sourceText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_500Medium" },
-    timeText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    title: { fontSize: 14, color: c.foreground, fontFamily: "Inter_500Medium", lineHeight: 20 },
-    tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-    tag: { backgroundColor: c.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    tagText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    linkRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-    linkText: { fontSize: 11, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
-    errText: { color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 },
-  });
-}
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  header: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  breakingBadge: {
+    fontSize: 11, fontFamily: "Inter_700Bold",
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+  },
+  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  headerCount: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  tabRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabBtn: {
+    flex: 1, paddingVertical: 12, alignItems: "center",
+    borderBottomWidth: 2, borderBottomColor: "transparent",
+  },
+  tabLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  tickerRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tickerDot: { width: 7, height: 7, borderRadius: 4 },
+  tickerLabel: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  tickerText: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium" },
+  tickerTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  newsRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 14,
+    paddingRight: 16,
+  },
+  dotCol: { width: 44, alignItems: "center", paddingTop: 4 },
+  newsDot: { width: 8, height: 8, borderRadius: 4 },
+  dotLine: { width: 1, flex: 1, marginTop: 4 },
+  newsContent: { flex: 1, gap: 5 },
+  newsMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  newsTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  catBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
+  catText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  sourceText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  newsTitle: { fontSize: 14, fontFamily: "Inter_500Medium", lineHeight: 21 },
+  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tagText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 12 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+});

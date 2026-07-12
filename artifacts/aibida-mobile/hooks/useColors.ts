@@ -2,8 +2,8 @@ import colors from "@/constants/colors";
 
 /**
  * Returns the design tokens for the app.
- * This app uses dark mode exclusively (finance/trading app).
+ * Light theme to match the web PWA design.
  */
 export function useColors() {
-  return { ...colors.dark, radius: colors.radius };
+  return { ...colors.light, radius: colors.radius };
 }
