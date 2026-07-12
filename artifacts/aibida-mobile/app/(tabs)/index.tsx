@@ -634,6 +634,15 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
 
 // ─── ETF 탭 ──────────────────────────────────────────────────────────────────
 
+interface FlowStock { code: string; name: string; etfCount: number; totalWeight: number; avgWeight: number; etfs: string[]; }
+interface ThemeBreakdown { key: string; label: string; emoji: string; etfCount: number; totalEtfs: number; score: number; }
+interface FundFlowData {
+  krTopStocks: FlowStock[]; usTopStocks: FlowStock[];
+  themeBreakdown: ThemeBreakdown[];
+  coverageStats: { krEtfCount: number; usEtfCount: number };
+  updatedAt: string;
+}
+
 const SIGNAL_CFG: Record<string, { label: string; color: string; bg: string }> = {
   strong_buy:  { label: "강력 매수", color: "#16a34a", bg: "#dcfce7" },
   buy:         { label: "매수",     color: "#16a34a", bg: "#dcfce7" },
@@ -658,14 +667,18 @@ function fearGreedColor(score: number) {
 function ETFTab({ colors, insets }: { colors: any; insets: any }) {
   const [momentum, setMomentum] = useState<MomentumAnalysis | null>(null);
   const [signals, setSignals] = useState<UnifiedSignal[]>([]);
+  const [fundFlow, setFundFlow] = useState<FundFlowData | null>(null);
+  const [fundFlowLoading, setFundFlowLoading] = useState(false);
+  const [fundFlowLoaded, setFundFlowLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [etfSubTab, setEtfSubTab] = useState<"pulse" | "sectors" | "signals">("pulse");
+  const [etfSubTab, setEtfSubTab] = useState<"momentum" | "fundflow" | "signals">("momentum");
+  const [flowPanel, setFlowPanel] = useState<"kr" | "us">("kr");
 
   const load = useCallback(() => {
     setLoading(true);
     Promise.allSettled([
       apiFetch<MomentumAnalysis>("/api/etf/momentum-analysis"),
-      apiFetch<{ signals?: UnifiedSignal[] } | UnifiedSignal[]>("/api/etf/unified-signals"),
+      apiFetch<any>("/api/etf/unified-signals"),
     ]).then(([r1, r2]) => {
       if (r1.status === "fulfilled") setMomentum(r1.value);
       if (r2.status === "fulfilled") {
@@ -675,13 +688,29 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
     }).finally(() => setLoading(false));
   }, []);
 
+  const loadFundFlow = useCallback(() => {
+    if (fundFlowLoading) return;
+    setFundFlowLoading(true);
+    apiFetch<FundFlowData>("/api/etf/fund-flow")
+      .then(d => { setFundFlow(d); setFundFlowLoaded(true); })
+      .catch(() => setFundFlowLoaded(true))
+      .finally(() => setFundFlowLoading(false));
+  }, [fundFlowLoading]);
+
   useEffect(() => { load(); }, [load]);
+
+  // 집중 종목 탭 진입 시 자동 로드
+  useEffect(() => {
+    if (etfSubTab === "fundflow" && !fundFlowLoaded && !fundFlowLoading) loadFundFlow();
+  }, [etfSubTab, fundFlowLoaded, fundFlowLoading, loadFundFlow]);
+
+  const pb = (Platform.OS === "web" ? 84 : insets.bottom) + 80;
 
   return (
     <View style={{ flex: 1 }}>
-      {/* ETF 서브탭 */}
+      {/* 서브탭 */}
       <View style={{ flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-        {([["pulse", "시장 분위기"], ["sectors", "섹터 모멘텀"], ["signals", "투자 신호"]] as const).map(([key, label]) => (
+        {([["momentum", "모멘텀"], ["fundflow", "집중 종목"], ["signals", "투자 신호"]] as const).map(([key, label]) => (
           <TouchableOpacity
             key={key}
             style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: etfSubTab === key ? colors.primary : "transparent" }}
@@ -694,55 +723,50 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
         ))}
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80, padding: 16, gap: 14 }}
-        refreshControl={<RefreshControl refreshing={loading && !!momentum} onRefresh={load} tintColor={colors.primary} />}
-      >
-        {loading && !momentum ? (
-          <View style={{ gap: 12 }}>
-            {[0, 1, 2, 3].map(i => <SkeletonCard key={i} height={72} />)}
-          </View>
-        ) : (
-
-          /* ── 시장 분위기 ── */
-          etfSubTab === "pulse" ? (
-            <View style={{ gap: 14 }}>
+      {/* ── 모멘텀 탭 ── */}
+      {etfSubTab === "momentum" && (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: pb, gap: 14 }}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {loading && !momentum ? (
+            <View style={{ gap: 12 }}>
+              {[0,1,2,3].map(i => <SkeletonCard key={i} height={80} />)}
+            </View>
+          ) : !momentum ? (
+            <View style={{ alignItems: "center", paddingVertical: 60, gap: 12 }}>
+              <Feather name="alert-circle" size={28} color={colors.border} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>모멘텀 데이터를 불러오지 못했습니다</Text>
+              <TouchableOpacity onPress={load}><Text style={{ fontSize: 12, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
+            </View>
+          ) : (
+            <>
               {/* 지수 AI 전망 */}
-              {momentum?.indexOutlook?.ready && (
+              {momentum.indexOutlook && (momentum.indexOutlook.kospi || momentum.indexOutlook.kosdaq) && (
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: 0.5 }}>📈 지수 AI 전망</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground }}>📈 지수 AI 전망</Text>
                   <View style={{ flexDirection: "row", gap: 10 }}>
-                    {[momentum.indexOutlook.kospi, momentum.indexOutlook.kosdaq].map(idx => {
+                    {[momentum.indexOutlook.kospi, momentum.indexOutlook.kosdaq].filter(Boolean).map(idx => {
                       const isUp = idx.agreementSignal === "up";
                       const isDn = idx.agreementSignal === "down";
                       const arrowColor = isUp ? colors.up : isDn ? colors.down : colors.mutedForeground;
-                      const arrow = isUp ? "▲" : isDn ? "▼" : "→";
                       return (
                         <View key={idx.symbol} style={[styles.indexCard, { backgroundColor: colors.card, borderColor: colors.border, flex: 1 }]}>
                           <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{idx.name}</Text>
                           {idx.latestPrice != null && (
-                            <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground, marginTop: 2 }}>
-                              {idx.latestPrice.toLocaleString("ko-KR")}
-                            </Text>
+                            <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground, marginTop: 2 }}>{idx.latestPrice.toLocaleString("ko-KR")}</Text>
                           )}
                           {idx.change1d != null && (
-                            <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: (idx.change1d ?? 0) >= 0 ? colors.up : colors.down }}>
-                              {fmtPct(idx.change1d)}
-                            </Text>
+                            <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: idx.change1d >= 0 ? colors.up : colors.down }}>{fmtPct(idx.change1d)}</Text>
                           )}
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-                            <Text style={{ fontSize: 14, color: arrowColor, fontFamily: "Inter_700Bold" }}>{arrow}</Text>
-                            <Text style={{ fontSize: 11, color: arrowColor, fontFamily: "Inter_600SemiBold" }}>
-                              {isUp ? "상승" : isDn ? "하락" : "중립"} 예측
-                            </Text>
-                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
-                              ({idx.agreementStrength.toFixed(0)}%)
-                            </Text>
+                            <Text style={{ fontSize: 13, color: arrowColor, fontFamily: "Inter_700Bold" }}>{isUp ? "▲" : isDn ? "▼" : "→"}</Text>
+                            <Text style={{ fontSize: 11, color: arrowColor, fontFamily: "Inter_600SemiBold" }}>{isUp ? "상승" : isDn ? "하락" : "중립"} 예측</Text>
+                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>({idx.agreementStrength?.toFixed(0) ?? "--"}%)</Text>
                           </View>
                           {idx.predictedReturn3d != null && (
-                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>
-                              3일 예측: {fmtPct(idx.predictedReturn3d)}
-                            </Text>
+                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>3일 예측: {fmtPct(idx.predictedReturn3d)}</Text>
                           )}
                         </View>
                       );
@@ -751,57 +775,46 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 </View>
               )}
 
-              {/* 공포탐욕 지수 */}
-              {momentum?.marketPulse && (
-                <View style={[styles.pulseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground }}>😱 공포·탐욕 지수</Text>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={{ fontSize: 22, fontFamily: "Inter_900Black", color: fearGreedColor(momentum.marketPulse.fearGreedScore) }}>
-                        {momentum.marketPulse.fearGreedScore}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: fearGreedColor(momentum.marketPulse.fearGreedScore), fontFamily: "Inter_600SemiBold" }}>
-                        {momentum.marketPulse.fearGreedLabel}
-                      </Text>
-                    </View>
+              {/* 공포·탐욕 지수 */}
+              <View style={[styles.pulseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground }}>😱 공포·탐욕 지수</Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ fontSize: 24, fontFamily: "Inter_900Black", color: fearGreedColor(momentum.marketPulse.fearGreedScore) }}>{momentum.marketPulse.fearGreedScore}</Text>
+                    <Text style={{ fontSize: 10, color: fearGreedColor(momentum.marketPulse.fearGreedScore), fontFamily: "Inter_600SemiBold" }}>{momentum.marketPulse.fearGreedLabel}</Text>
                   </View>
-                  {/* 게이지 */}
-                  <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: "hidden", marginBottom: 4 }}>
-                    <View style={{ height: "100%", width: `${momentum.marketPulse.fearGreedScore}%`, backgroundColor: fearGreedColor(momentum.marketPulse.fearGreedScore), borderRadius: 4 }} />
-                  </View>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-                    <Text style={{ fontSize: 9, color: "#3b82f6", fontFamily: "Inter_400Regular" }}>극도 공포</Text>
-                    <Text style={{ fontSize: 9, color: "#16a34a", fontFamily: "Inter_400Regular" }}>극도 탐욕</Text>
-                  </View>
-                  {momentum.marketPulse.marketNarrative && (
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 }}>
-                      {momentum.marketPulse.marketNarrative}
-                    </Text>
-                  )}
                 </View>
-              )}
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: "hidden", marginBottom: 4 }}>
+                  <View style={{ height: "100%", width: `${momentum.marketPulse.fearGreedScore}%`, backgroundColor: fearGreedColor(momentum.marketPulse.fearGreedScore), borderRadius: 4 }} />
+                </View>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+                  <Text style={{ fontSize: 9, color: "#3b82f6" }}>극도 공포</Text>
+                  <Text style={{ fontSize: 9, color: "#16a34a" }}>극도 탐욕</Text>
+                </View>
+                {momentum.marketPulse.marketNarrative ? (
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 }}>
+                    {momentum.marketPulse.marketNarrative}
+                  </Text>
+                ) : null}
+              </View>
 
               {/* 기관 수급 흐름 */}
-              {momentum?.marketPulse?.institutionalFlow && momentum.marketPulse.institutionalFlow.length > 0 && (
+              {momentum.marketPulse.institutionalFlow?.length > 0 && (
                 <View style={[styles.pulseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 12 }}>🏛 기관 수급 흐름</Text>
                   {momentum.marketPulse.institutionalFlow.map((item, i) => {
-                    const isIn = item.direction === "in";
-                    const isOut = item.direction === "out";
-                    const barColor = isIn ? "#16a34a" : isOut ? "#ef4444" : "#f59e0b";
-                    const dirColor = isIn ? "#16a34a" : isOut ? "#ef4444" : "#f59e0b";
-                    const dirLabel = isIn ? "유입" : isOut ? "유출" : "관망";
-                    const dirIcon = isIn ? "↑" : isOut ? "↓" : "→";
+                    const isIn = item.direction === "in"; const isOut = item.direction === "out";
+                    const dc = isIn ? "#16a34a" : isOut ? "#ef4444" : "#f59e0b";
                     return (
                       <View key={i} style={{ paddingVertical: 10, borderBottomWidth: i < momentum.marketPulse.institutionalFlow.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: dirColor, width: 14 }}>{dirIcon}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: dc, width: 14 }}>{isIn ? "↑" : isOut ? "↓" : "→"}</Text>
                           <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, flex: 1 }}>{item.sector}</Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: "hidden" }}>
-                              <View style={{ height: "100%", width: `${item.strength}%`, backgroundColor: barColor, borderRadius: 2 }} />
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                            <View style={{ width: 52, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: "hidden" }}>
+                              <View style={{ height: "100%", width: `${item.strength}%`, backgroundColor: dc, borderRadius: 2 }} />
                             </View>
-                            <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: dirColor }}>{dirLabel}</Text>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: dc }}>{isIn ? "유입" : isOut ? "유출" : "관망"}</Text>
                           </View>
                         </View>
                         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 16, paddingLeft: 22 }}>{item.reason}</Text>
@@ -811,43 +824,25 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 </View>
               )}
 
-              {/* 개인 투자자 주의 */}
-              {momentum?.marketPulse?.retailWarning && momentum.marketPulse.retailWarning.length > 0 && (
-                <View style={[styles.pulseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 10 }}>⚠️ 개인 투자자 주의</Text>
-                  {momentum.marketPulse.retailWarning.map((w, i) => (
-                    <View key={i} style={{ flexDirection: "row", gap: 8, paddingVertical: 6, borderBottomWidth: i < momentum.marketPulse.retailWarning.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                      <Text style={{ fontSize: 12, color: "#f59e0b", marginTop: 1 }}>⚠</Text>
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 }}>{w}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          )
-
-          /* ── 섹터 모멘텀 ── */
-          : etfSubTab === "sectors" ? (
-            <View style={{ gap: 12 }}>
-              {/* 지금 유망 */}
-              {momentum?.nowSectors && momentum.nowSectors.length > 0 && (
+              {/* 지금 유망 섹터 */}
+              {momentum.nowSectors?.length > 0 && (
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground }}>⚡ 지금 유망</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground }}>⚡ 지금 유망 섹터</Text>
                   {momentum.nowSectors.map(s => {
                     const cfg = OUTLOOK_CFG[s.outlook] ?? OUTLOOK_CFG.neutral;
-                    const sColor = s.score >= 75 ? "#16a34a" : s.score >= 60 ? "#f59e0b" : "#94a3b8";
+                    const sc = s.score >= 75 ? "#16a34a" : s.score >= 60 ? "#f59e0b" : "#94a3b8";
                     return (
                       <View key={s.id} style={[styles.sectorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <Text style={{ fontSize: 18 }}>{s.icon}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                          <Text style={{ fontSize: 17 }}>{s.icon}</Text>
                           <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, flex: 1 }}>{s.name}</Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <View style={{ width: 48, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: "hidden" }}>
-                              <View style={{ height: "100%", width: `${s.score}%`, backgroundColor: sColor, borderRadius: 2 }} />
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                            <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: "hidden" }}>
+                              <View style={{ height: "100%", width: `${s.score}%`, backgroundColor: sc, borderRadius: 2 }} />
                             </View>
-                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: sColor, width: 22, textAlign: "right" }}>{s.score}</Text>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: sc, width: 20, textAlign: "right" }}>{s.score}</Text>
                           </View>
-                          <View style={{ backgroundColor: cfg.color + "20", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 }}>
+                          <View style={{ backgroundColor: cfg.color + "22", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
                             <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: cfg.color }}>{cfg.label}</Text>
                           </View>
                         </View>
@@ -859,27 +854,27 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               )}
 
               {/* 앞으로 주목 */}
-              {momentum?.futureSectors && momentum.futureSectors.length > 0 && (
-                <View style={{ gap: 8, marginTop: 8 }}>
+              {momentum.futureSectors?.length > 0 && (
+                <View style={{ gap: 8 }}>
                   <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground }}>🔮 앞으로 주목</Text>
                   {momentum.futureSectors.map(s => {
                     const cfg = OUTLOOK_CFG[s.outlook] ?? OUTLOOK_CFG.neutral;
-                    const sColor = s.score >= 75 ? "#16a34a" : s.score >= 60 ? "#f59e0b" : "#94a3b8";
+                    const sc = s.score >= 75 ? "#16a34a" : s.score >= 60 ? "#f59e0b" : "#94a3b8";
                     return (
                       <View key={s.id} style={[styles.sectorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <Text style={{ fontSize: 18 }}>{s.icon}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                          <Text style={{ fontSize: 17 }}>{s.icon}</Text>
                           <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, flex: 1 }}>{s.name}</Text>
-                          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{s.horizon}</Text>
-                          <View style={{ backgroundColor: cfg.color + "20", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{s.horizon}</Text>
+                          <View style={{ backgroundColor: cfg.color + "22", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
                             <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: cfg.color }}>{cfg.label}</Text>
                           </View>
                         </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 }}>
                           <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: "hidden" }}>
-                            <View style={{ height: "100%", width: `${s.score}%`, backgroundColor: sColor, borderRadius: 2 }} />
+                            <View style={{ height: "100%", width: `${s.score}%`, backgroundColor: sc, borderRadius: 2 }} />
                           </View>
-                          <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: sColor }}>{s.score}</Text>
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: sc }}>{s.score}</Text>
                         </View>
                         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 17 }}>{s.reason}</Text>
                       </View>
@@ -888,75 +883,190 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 </View>
               )}
 
-              {(!momentum?.nowSectors?.length && !momentum?.futureSectors?.length) && (
-                <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
-                  <Feather name="layers" size={28} color={colors.border} />
-                  <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>섹터 데이터를 불러올 수 없습니다</Text>
+              {/* 개인 투자자 주의 */}
+              {momentum.marketPulse.retailWarning?.length > 0 && (
+                <View style={[styles.pulseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 10 }}>⚠️ 개인 투자자 주의</Text>
+                  {momentum.marketPulse.retailWarning.map((w, i) => (
+                    <View key={i} style={{ flexDirection: "row", gap: 8, paddingVertical: 6, borderBottomWidth: i < momentum.marketPulse.retailWarning.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
+                      <Text style={{ fontSize: 12, color: "#f59e0b" }}>⚠</Text>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 }}>{w}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
-            </View>
-          )
 
-          /* ── 통합 투자 신호 ── */
-          : (
-            <View style={{ gap: 0 }}>
-              {signals.length === 0 ? (
-                <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
-                  <Feather name="alert-circle" size={28} color={colors.border} />
-                  <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>투자 신호 데이터 없음</Text>
-                </View>
-              ) : signals.map(s => {
-                const sig = SIGNAL_CFG[s.signal?.toLowerCase()] ?? SIGNAL_CFG.hold;
-                return (
-                  <View key={s.code} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 12 }}>
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground }}>{s.code}</Text>
-                        <View style={{ backgroundColor: sig.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: sig.color }}>{sig.label}</Text>
+              <View style={{ flexDirection: "row", gap: 8, backgroundColor: colors.muted, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border }}>
+                <Feather name="info" size={12} color={colors.mutedForeground} style={{ marginTop: 1 }} />
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 17 }}>거시 지표 기반 참고용 보조 지표입니다. 실제 투자 손실에 대해 애빛다는 책임지지 않습니다.</Text>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── 집중 종목 탭 ── */}
+      {etfSubTab === "fundflow" && (
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: pb }}
+          refreshControl={<RefreshControl refreshing={fundFlowLoading} onRefresh={loadFundFlow} tintColor={colors.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {fundFlowLoading && !fundFlow ? (
+            <View style={{ padding: 16, gap: 12 }}>
+              <SkeletonCard height={120} />
+              {[0,1,2,3,4].map(i => <SkeletonCard key={i} height={72} />)}
+            </View>
+          ) : !fundFlow ? (
+            <View style={{ alignItems: "center", paddingVertical: 60, gap: 12 }}>
+              <Feather name="layers" size={28} color={colors.border} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>데이터를 불러오지 못했습니다</Text>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground + "99" }}>처음 로드 시 20~30초 소요될 수 있습니다</Text>
+              <TouchableOpacity onPress={loadFundFlow}><Text style={{ fontSize: 12, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* 헤더 */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10 }}>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                  {fundFlow.coverageStats.krEtfCount + fundFlow.coverageStats.usEtfCount}개 ETF 집계
+                  <Text style={{ color: colors.border + "99" }}>  ·  </Text>
+                  {(() => { try { return new Date(fundFlow.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return fundFlow.updatedAt; } })()}
+                </Text>
+                <TouchableOpacity onPress={loadFundFlow} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="refresh-cw" size={12} color={colors.mutedForeground} />
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>새로고침</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 섹터 온도 */}
+              {fundFlow.themeBreakdown?.length > 0 && (
+                <View style={{ marginHorizontal: 16, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14 }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>지금 어떤 섹터가 뜨거운가</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {fundFlow.themeBreakdown.map(t => {
+                      const heat = t.score >= 75 ? "🔥" : t.score >= 40 ? "📈" : "❄️";
+                      const isHot = t.score >= 75; const isWarm = t.score >= 40;
+                      const chipBg = isHot ? "#f9731615" : isWarm ? "#22c55e15" : colors.muted;
+                      const chipBorder = isHot ? "#f9731640" : isWarm ? "#22c55e40" : colors.border;
+                      const chipColor = isHot ? "#f97316" : isWarm ? "#16a34a" : colors.mutedForeground;
+                      return (
+                        <View key={t.key} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, backgroundColor: chipBg, borderColor: chipBorder }}>
+                          <Text style={{ fontSize: 12 }}>{heat}</Text>
+                          <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: chipColor }}>{t.label}</Text>
                         </View>
-                        {s.leverage > 1 && (
-                          <View style={{ backgroundColor: "#f9731620", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#f97316" }}>{s.leverage}×</Text>
-                          </View>
-                        )}
-                        {s.leverage < 0 && (
-                          <View style={{ backgroundColor: "#3b82f620", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#3b82f6" }}>인버스</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s.name}</Text>
-                      {s.reason && (
-                        <Text style={{ fontSize: 10, color: colors.mutedForeground + "99", fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s.reason}</Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: "flex-end", gap: 3 }}>
-                      <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>
-                        {s.price?.toLocaleString("ko-KR")}
-                      </Text>
-                      <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: (s.change1d ?? 0) >= 0 ? colors.up : colors.down }}>
-                        {(s.change1d ?? 0) >= 0 ? "▲" : "▼"} {Math.abs(s.change1d ?? 0).toFixed(2)}%
-                      </Text>
-                      <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
-                        RSI {s.rsi14?.toFixed(0) ?? "--"}
-                      </Text>
-                    </View>
+                      );
+                    })}
                   </View>
-                );
-              })}
-            </View>
-          )
-        )}
+                </View>
+              )}
 
-        {/* 면책 */}
-        <View style={{ flexDirection: "row", gap: 8, backgroundColor: colors.muted, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, marginTop: 8 }}>
-          <Feather name="info" size={13} color={colors.mutedForeground} style={{ marginTop: 1 }} />
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 17 }}>
-            ETF 분석은 거시 지표 기반 참고용 보조 지표입니다. 실제 투자 손실에 대해 애빛다는 책임지지 않습니다.
-          </Text>
-        </View>
-      </ScrollView>
+              {/* KR / US 패널 토글 */}
+              <View style={{ flexDirection: "row", marginHorizontal: 16, marginBottom: 12, gap: 6, backgroundColor: colors.muted, borderRadius: 12, padding: 3, borderWidth: 1, borderColor: colors.border }}>
+                {(["kr", "us"] as const).map(p => (
+                  <TouchableOpacity key={p} onPress={() => setFlowPanel(p)}
+                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 8, borderRadius: 10, backgroundColor: flowPanel === p ? colors.card : "transparent" }}>
+                    <Text style={{ fontSize: 12 }}>{p === "kr" ? "🏛" : "🌐"}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: flowPanel === p ? "Inter_600SemiBold" : "Inter_400Regular", color: flowPanel === p ? colors.foreground : colors.mutedForeground }}>
+                      {p === "kr" ? "국내 ETF 집중 종목" : "해외 ETF 집중 종목"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 종목 리스트 */}
+              <View style={{ marginHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
+                <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.muted }}>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                    {flowPanel === "kr"
+                      ? `국내 ${fundFlow.coverageStats.krEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`
+                      : `해외 ${fundFlow.coverageStats.usEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`}
+                  </Text>
+                </View>
+                {(flowPanel === "kr" ? fundFlow.krTopStocks : fundFlow.usTopStocks).map((stock, i) => {
+                  const rankColor = i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#b45309" : colors.border;
+                  return (
+                    <View key={stock.code} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: i < (flowPanel === "kr" ? fundFlow.krTopStocks : fundFlow.usTopStocks).length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
+                      <Text style={{ fontSize: 14, fontFamily: "Inter_900Black", color: rankColor, width: 20, textAlign: "center" }}>{i + 1}</Text>
+                      <View style={{ flex: 1, gap: 5 }}>
+                        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                          <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{stock.name || stock.code}</Text>
+                          <Text style={{ fontSize: 10, color: colors.border, fontFamily: "Inter_400Regular" }}>{stock.code}</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                          {stock.etfs.slice(0, 4).map(e => (
+                            <View key={e} style={{ backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
+                              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{e}</Text>
+                            </View>
+                          ))}
+                          {stock.etfs.length > 4 && (
+                            <View style={{ backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
+                              <Text style={{ fontSize: 10, color: colors.mutedForeground + "88", fontFamily: "Inter_400Regular" }}>+{stock.etfs.length - 4}개 ETF</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={{ fontSize: 20, fontFamily: "Inter_900Black", color: colors.foreground, lineHeight: 24 }}>{stock.etfCount}</Text>
+                        <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>개 ETF</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={{ height: 16 }} />
+            </>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── 투자 신호 탭 ── */}
+      {etfSubTab === "signals" && (
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: pb }}
+          refreshControl={<RefreshControl refreshing={loading && signals.length === 0} onRefresh={load} tintColor={colors.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {loading && signals.length === 0 ? (
+            <View style={{ padding: 16, gap: 10 }}>
+              {[0,1,2,3,4].map(i => <SkeletonCard key={i} height={68} />)}
+            </View>
+          ) : signals.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
+              <Feather name="alert-circle" size={28} color={colors.border} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>투자 신호 데이터 없음</Text>
+            </View>
+          ) : (
+            signals.map(s => {
+              const sig = SIGNAL_CFG[s.signal?.toLowerCase()] ?? SIGNAL_CFG.hold;
+              return (
+                <View key={s.code} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 12 }}>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground }}>{s.code}</Text>
+                      <View style={{ backgroundColor: sig.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: sig.color }}>{sig.label}</Text>
+                      </View>
+                      {s.leverage > 1 && <View style={{ backgroundColor: "#f9731618", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#f97316" }}>{s.leverage}×</Text></View>}
+                      {s.leverage < 0 && <View style={{ backgroundColor: "#3b82f618", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#3b82f6" }}>인버스</Text></View>}
+                    </View>
+                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s.name}</Text>
+                    {s.reason ? <Text style={{ fontSize: 10, color: colors.mutedForeground + "88", fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s.reason}</Text> : null}
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 3 }}>
+                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{s.price?.toLocaleString("ko-KR")}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: (s.change1d ?? 0) >= 0 ? colors.up : colors.down }}>
+                      {(s.change1d ?? 0) >= 0 ? "▲" : "▼"} {Math.abs(s.change1d ?? 0).toFixed(2)}%
+                    </Text>
+                    <Text style={{ fontSize: 10, color: colors.mutedForeground }}>RSI {s.rsi14?.toFixed(0) ?? "--"}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
