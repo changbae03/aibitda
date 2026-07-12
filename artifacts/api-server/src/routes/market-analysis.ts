@@ -59,6 +59,7 @@ function sessionToSlot(sessionType: string): string {
   if (sessionType === "midday") return "midday";
   if (sessionType === "afternoon" || sessionType === "pre_close") return "afternoon";
   if (sessionType === "closing") return "closing";
+  if (sessionType === "weekend") return "weekend";
   if (sessionType === "us_premarket") return "premarket";
   if (sessionType === "us_open")    return "open";
   if (sessionType === "us_midday")  return "open2";
@@ -1571,6 +1572,9 @@ router.get("/sessions", async (req, res) => {
     { slot: "afternoon", label: "장중 2차",  icon: "chart",   time: "14:00", sessionTypes: ["afternoon", "pre_close"] },
     { slot: "closing",   label: "장마감",    icon: "sunset",  time: "16:30", sessionTypes: ["closing"] },
   ];
+  const WEEKEND_SLOTS = [
+    { slot: "weekend",   label: "주말 브리핑", icon: "moon",   time: "주말",  sessionTypes: ["weekend"] },
+  ];
 
   const US_SLOTS = [
     { slot: "premarket", label: "개장 전",   icon: "moon",    time: "17:00",    sessionTypes: ["us_premarket"] },
@@ -1579,17 +1583,23 @@ router.get("/sessions", async (req, res) => {
     { slot: "close",     label: "마감 후",   icon: "sunset",  time: "05:30+1",  sessionTypes: ["us_afterhours", "us_overnight"] },
   ];
 
-  const slots = market === "kr" ? KR_SLOTS : US_SLOTS;
+  // 세션 감지 먼저 — 주말 여부에 따라 슬롯 배열을 결정해야 함
+  const currentSession = market === "kr" ? detectSession() : detectUsSession();
+  const isWeekend = market === "kr" && currentSession === "weekend";
+  const slots = isWeekend ? WEEKEND_SLOTS : (market === "kr" ? KR_SLOTS : US_SLOTS);
 
   // 시장일(market day) 경계 계산 — KR 장전은 06:00 KST에 시작하므로
   // 00:00~05:59는 전날 장 사이클의 연장으로 취급 (자정 기준이면 새벽에 전날 브리핑이 사라짐)
+  // 주말에는 최근 72시간을 조회해 토·일 브리핑을 모두 커버
   const kstNow = Date.now() + 9 * 3600_000;
   const kstMinNow = new Date(kstNow).getUTCHours() * 60 + new Date(kstNow).getUTCMinutes();
-  const dayShiftMs = market === "kr" && kstMinNow < 6 * 60 ? -86400_000 : 0;
+  const dayShiftMs = market === "kr" && !isWeekend && kstMinNow < 6 * 60 ? -86400_000 : 0;
   const kstCalendarMidnight = Math.floor((kstNow + dayShiftMs) / 86400_000) * 86400_000;
-  const kstMidnightUTC = market === "kr"
-    ? new Date(kstCalendarMidnight + 6 * 3600_000 - 9 * 3600_000) // 그 시장일의 06:00 KST
-    : new Date(Math.floor(kstNow / 86400_000) * 86400_000 - 9 * 3600_000);
+  const kstMidnightUTC = isWeekend
+    ? new Date(Date.now() - 72 * 3600_000)  // 주말: 72시간 전부터 조회
+    : market === "kr"
+      ? new Date(kstCalendarMidnight + 6 * 3600_000 - 9 * 3600_000) // 그 시장일의 06:00 KST
+      : new Date(Math.floor(kstNow / 86400_000) * 86400_000 - 9 * 3600_000);
   const kstDateStr = new Date(market === "kr" ? kstCalendarMidnight : kstNow).toISOString().slice(0, 10);
 
   const dbTimeout = <T>(p: Promise<T>, ms = 4000): Promise<T | null> =>
@@ -1616,7 +1626,7 @@ router.get("/sessions", async (req, res) => {
       (cacheRows?.rows ?? []).map((r: any) => [r.key, r]),
     );
 
-    const currentSession = market === "kr" ? detectSession() : detectUsSession();
+    // currentSession already computed above (before slot selection)
     const currentSlot = sessionToSlot(currentSession);
     const generating = market === "kr" ? _briefRefreshing : _usBriefRefreshing;
     const memCache = market === "kr" ? _briefCache : _usBriefCache;
@@ -1624,11 +1634,12 @@ router.get("/sessions", async (req, res) => {
     // 슬롯 순서 인덱스 — 과거/현재/미래 판별용
     const KR_ORDER = ["morning", "midday", "afternoon", "closing"];
     const US_ORDER = ["premarket", "open", "open2", "close"];
-    const slotOrder = market === "kr" ? KR_ORDER : US_ORDER;
-    const pastAllSentinel = slotOrder.length; // 모든 슬롯이 지난 시간대(evening/weekend 등)
+    const WEEKEND_ORDER = ["weekend"];
+    const slotOrder = isWeekend ? WEEKEND_ORDER : (market === "kr" ? KR_ORDER : US_ORDER);
+    const pastAllSentinel = slotOrder.length;
     const isPastAllSession =
       market === "kr"
-        ? currentSession === "evening" || currentSession === "weekend"
+        ? !isWeekend && currentSession === "evening"  // 주말은 weekend 슬롯이 현재 슬롯이므로 pastAll 아님
         : !["us_premarket", "us_open", "us_midday", "us_afterhours", "us_overnight"].includes(currentSession);
     const currentSlotIdx = isPastAllSession
       ? pastAllSentinel

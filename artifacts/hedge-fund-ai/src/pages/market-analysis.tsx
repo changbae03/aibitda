@@ -172,6 +172,8 @@ function SessionCard({ session, selected, onClick }: {
       <div className="text-[10px] font-mono text-zinc-600 mb-3">
         {session.time.includes("+1")
           ? `익일 ${session.time.replace("+1", "")} KST`
+          : session.time === "주말"
+          ? "토·일 수시 업데이트"
           : `${session.time} KST`}
       </div>
 
@@ -663,7 +665,7 @@ export default function MarketAnalysisPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className={`grid gap-3 ${sessions.length === 1 ? "grid-cols-1 max-w-sm" : "grid-cols-2 md:grid-cols-4"}`}>
               {sessions.map((session) => (
                 <SessionCard
                   key={session.slot}
