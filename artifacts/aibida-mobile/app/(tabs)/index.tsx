@@ -632,6 +632,30 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
   );
 }
 
+// ─── ETF 공통 유틸 ────────────────────────────────────────────────────────────
+
+function fearGreedColor(score: number) {
+  if (score <= 25) return "#3b82f6";
+  if (score <= 45) return "#f59e0b";
+  if (score <= 55) return "#94a3b8";
+  if (score <= 75) return "#22c55e";
+  return "#ef4444";
+}
+
+const SIGNAL_CFG: Record<string, { label: string; color: string; bg: string }> = {
+  strong_buy:  { label: "강력매수", color: "#16a34a", bg: "#16a34a20" },
+  buy:         { label: "매수",     color: "#22c55e", bg: "#22c55e20" },
+  hold:        { label: "보유",     color: "#94a3b8", bg: "#94a3b820" },
+  sell:        { label: "매도",     color: "#f59e0b", bg: "#f59e0b20" },
+  strong_sell: { label: "강력매도", color: "#ef4444", bg: "#ef444420" },
+};
+
+const OUTLOOK_CFG: Record<string, { label: string; color: string }> = {
+  bullish:  { label: "상승",  color: "#16a34a" },
+  neutral:  { label: "중립",  color: "#94a3b8" },
+  cautious: { label: "주의",  color: "#f59e0b" },
+};
+
 // ─── ETF 탭 ──────────────────────────────────────────────────────────────────
 
 // 집중 종목
@@ -668,29 +692,61 @@ const POPULAR_ETFS: { label: string; items: { code: string; name: string }[] }[]
 ];
 
 function ETFTab({ colors, insets }: { colors: any; insets: any }) {
-  const [momentum, setMomentum] = useState<MomentumAnalysis | null>(null);
-  const [signals, setSignals] = useState<UnifiedSignal[]>([]);
+  const [etfSubTab, setEtfSubTab] = useState<"search" | "rebalancing" | "fundflow">("search");
+
+  // ── 검색 탭 상태 ──
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<"etf" | "stock">("etf");
+  const [selectedEtf, setSelectedEtf] = useState<ETFInfo | null>(null);
+  const [holdings, setHoldings] = useState<ETFHolding[]>([]);
+  const [exposure, setExposure] = useState<ETFExposureItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<ETFInfo[]>([]);
+
+  // ── 리밸런싱 탭 상태 ──
+  const [rebalData, setRebalData] = useState<RebalancingData | null>(null);
+  const [rebalLoading, setRebalLoading] = useState(false);
+  const [rebalLoaded, setRebalLoaded] = useState(false);
+
+  // ── 집중 종목 탭 상태 ──
   const [fundFlow, setFundFlow] = useState<FundFlowData | null>(null);
   const [fundFlowLoading, setFundFlowLoading] = useState(false);
   const [fundFlowLoaded, setFundFlowLoaded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [etfSubTab, setEtfSubTab] = useState<"momentum" | "fundflow" | "signals">("momentum");
   const [flowPanel, setFlowPanel] = useState<"kr" | "us">("kr");
 
-  const load = useCallback(() => {
-    setLoading(true);
-    Promise.allSettled([
-      apiFetch<MomentumAnalysis>("/api/etf/momentum-analysis"),
-      apiFetch<any>("/api/etf/unified-signals"),
-    ]).then(([r1, r2]) => {
-      if (r1.status === "fulfilled") setMomentum(r1.value);
-      if (r2.status === "fulfilled") {
-        const d = r2.value as any;
-        setSignals(Array.isArray(d) ? d : (d.signals ?? []));
-      }
-    }).finally(() => setLoading(false));
+  // ── 검색: ETF 보유 종목 조회 ──
+  const loadEtfHoldings = useCallback((code: string, name: string) => {
+    setSelectedEtf({ code, name, sector: "", issuer: "", leverage: 1 });
+    setHoldings([]); setExposure([]);
+    setSearchLoading(true);
+    apiFetch<any>(`/api/etf/${encodeURIComponent(code)}/holdings`)
+      .then(d => setHoldings(Array.isArray(d) ? d : (d.holdings ?? [])))
+      .catch(() => {})
+      .finally(() => setSearchLoading(false));
   }, []);
 
+  // ── 검색: 종목이 담긴 ETF 조회 ──
+  const loadStockExposure = useCallback((query: string) => {
+    if (!query.trim()) return;
+    setSelectedEtf(null); setHoldings([]);
+    setSearchLoading(true);
+    apiFetch<any>(`/api/etf/stock/${encodeURIComponent(query.trim())}/exposure`)
+      .then(d => setExposure(Array.isArray(d) ? d : (d.items ?? [])))
+      .catch(() => {})
+      .finally(() => setSearchLoading(false));
+  }, []);
+
+  // ── 리밸런싱 로드 ──
+  const loadRebal = useCallback(() => {
+    if (rebalLoading) return;
+    setRebalLoading(true);
+    apiFetch<RebalancingData>("/api/etf/rebalancing")
+      .then(d => { setRebalData(d); setRebalLoaded(true); })
+      .catch(() => setRebalLoaded(true))
+      .finally(() => setRebalLoading(false));
+  }, [rebalLoading]);
+
+  // ── 집중 종목 로드 ──
   const loadFundFlow = useCallback(() => {
     if (fundFlowLoading) return;
     setFundFlowLoading(true);
@@ -700,12 +756,10 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
       .finally(() => setFundFlowLoading(false));
   }, [fundFlowLoading]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // 집중 종목 탭 진입 시 자동 로드
   useEffect(() => {
+    if (etfSubTab === "rebalancing" && !rebalLoaded && !rebalLoading) loadRebal();
     if (etfSubTab === "fundflow" && !fundFlowLoaded && !fundFlowLoading) loadFundFlow();
-  }, [etfSubTab, fundFlowLoaded, fundFlowLoading, loadFundFlow]);
+  }, [etfSubTab, rebalLoaded, rebalLoading, fundFlowLoaded, fundFlowLoading, loadRebal, loadFundFlow]);
 
   const pb = (Platform.OS === "web" ? 84 : insets.bottom) + 80;
 
@@ -713,7 +767,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
     <View style={{ flex: 1 }}>
       {/* 서브탭 */}
       <View style={{ flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-        {([["momentum", "모멘텀"], ["fundflow", "집중 종목"], ["signals", "투자 신호"]] as const).map(([key, label]) => (
+        {([["search", "검색"], ["rebalancing", "리밸런싱"], ["fundflow", "집중 종목"]] as const).map(([key, label]) => (
           <TouchableOpacity
             key={key}
             style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: etfSubTab === key ? colors.primary : "transparent" }}
@@ -726,7 +780,260 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
         ))}
       </View>
 
-      {/* ── 모멘텀 탭 ── */}
+      {/* ── 검색 탭 ── */}
+      {etfSubTab === "search" && (
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: pb }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* 모드 토글 */}
+          <View style={{ flexDirection: "row", margin: 14, borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+            {(["etf", "stock"] as const).map(m => (
+              <TouchableOpacity
+                key={m}
+                style={{ flex: 1, paddingVertical: 9, alignItems: "center", backgroundColor: searchMode === m ? colors.primary : "transparent" }}
+                onPress={() => { setSearchMode(m); setSearchQuery(""); setSelectedEtf(null); setHoldings([]); setExposure([]); }}
+              >
+                <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: searchMode === m ? "#fff" : colors.mutedForeground }}>
+                  {m === "etf" ? "ETF 보유 종목" : "종목 담은 ETF"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 검색 입력 */}
+          <View style={{ flexDirection: "row", marginHorizontal: 14, marginBottom: 14, gap: 8, alignItems: "center" }}>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 12 }}>
+              <Feather name="search" size={14} color={colors.mutedForeground} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={searchMode === "etf" ? "ETF 코드 또는 이름 (예: 069500)" : "종목 코드 또는 이름 (예: 삼성전자)"}
+                placeholderTextColor={colors.mutedForeground}
+                style={{ flex: 1, fontSize: 13, color: colors.foreground, paddingVertical: 9, paddingLeft: 8 }}
+                returnKeyType="search"
+                onSubmitEditing={() => {
+                  if (searchMode === "etf") loadEtfHoldings(searchQuery, searchQuery);
+                  else loadStockExposure(searchQuery);
+                }}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => { setSearchQuery(""); setSelectedEtf(null); setHoldings([]); setExposure([]); }}>
+                  <Feather name="x" size={14} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 }}
+              onPress={() => {
+                if (searchMode === "etf") loadEtfHoldings(searchQuery, searchQuery);
+                else loadStockExposure(searchQuery);
+              }}
+            >
+              <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" }}>검색</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 인기 ETF 칩 (ETF 모드이고 검색 결과 없을 때) */}
+          {searchMode === "etf" && !selectedEtf && exposure.length === 0 && (
+            <View style={{ paddingHorizontal: 14, gap: 14 }}>
+              {POPULAR_ETFS.map(group => (
+                <View key={group.label} style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 1, textTransform: "uppercase" }}>{group.label}</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {group.items.map(etf => (
+                      <TouchableOpacity
+                        key={etf.code}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
+                        onPress={() => { setSearchQuery(etf.code); loadEtfHoldings(etf.code, etf.name); }}
+                      >
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{etf.code}</Text>
+                        <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{etf.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* 로딩 */}
+          {searchLoading && (
+            <View style={{ padding: 16, gap: 10 }}>
+              {[0,1,2,3,4].map(i => <SkeletonCard key={i} height={60} />)}
+            </View>
+          )}
+
+          {/* ETF 보유 종목 결과 */}
+          {!searchLoading && selectedEtf && holdings.length > 0 && (
+            <View style={{ paddingHorizontal: 14 }}>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 10 }}>
+                {selectedEtf.code} 보유 종목 ({holdings.length}개)
+              </Text>
+              {holdings.map((h, idx) => (
+                <View key={h.stockCode} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary, width: 22 }}>{h.rank ?? idx + 1}</Text>
+                    <View>
+                      <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{h.stockName}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{h.stockCode}</Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{h.weight.toFixed(2)}%</Text>
+                    {h.weightChange != null && h.weightChange !== 0 && (
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: h.weightChange > 0 ? colors.up : colors.down }}>
+                        {h.weightChange > 0 ? "▲" : "▼"} {Math.abs(h.weightChange).toFixed(2)}%p
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* 종목이 담긴 ETF 결과 */}
+          {!searchLoading && searchMode === "stock" && exposure.length > 0 && (
+            <View style={{ paddingHorizontal: 14 }}>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 10 }}>
+                '{searchQuery}' 포함 ETF ({exposure.length}개)
+              </Text>
+              {exposure.map((item, idx) => (
+                <View key={item.etf.code + idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{item.etf.code}</Text>
+                    <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{item.etf.name}</Text>
+                    {item.etf.sector ? <Text style={{ fontSize: 10, color: colors.mutedForeground + "88" }}>{item.etf.sector}</Text> : null}
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{item.holding.weight.toFixed(2)}%</Text>
+                    <Text style={{ fontSize: 10, color: colors.mutedForeground }}>비중 {item.holding.rank}위</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* 빈 결과 */}
+          {!searchLoading && selectedEtf && holdings.length === 0 && (
+            <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
+              <Feather name="inbox" size={28} color={colors.border} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>보유 종목 정보 없음</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── 리밸런싱 탭 ── */}
+      {etfSubTab === "rebalancing" && (
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: pb }}
+          refreshControl={<RefreshControl refreshing={rebalLoading} onRefresh={loadRebal} tintColor={colors.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {rebalLoading && !rebalData ? (
+            <View style={{ padding: 16, gap: 12 }}>
+              {[0,1,2,3].map(i => <SkeletonCard key={i} height={90} />)}
+            </View>
+          ) : !rebalData ? (
+            <View style={{ alignItems: "center", paddingVertical: 60, gap: 12 }}>
+              <Feather name="refresh-cw" size={28} color={colors.border} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>리밸런싱 데이터를 불러오지 못했습니다</Text>
+              <TouchableOpacity onPress={loadRebal}><Text style={{ fontSize: 12, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* 요약 헤더 */}
+              <View style={{ margin: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground }}>ETF 리밸런싱 현황</Text>
+                  <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
+                    {(() => { try { return new Date(rebalData.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return rebalData.updatedAt; } })()}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  {[
+                    { label: "분석 ETF", value: rebalData.etfsAnalyzed },
+                    { label: "변화 있음", value: rebalData.etfsWithChanges },
+                    { label: "신규 편입", value: rebalData.newEntries.length },
+                    { label: "제외 종목", value: rebalData.exits.length },
+                  ].map(stat => (
+                    <View key={stat.label} style={{ flex: 1, alignItems: "center", backgroundColor: colors.muted, borderRadius: 10, paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground }}>{stat.value}</Text>
+                      <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2 }}>{stat.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* 리밸런싱 섹션 공통 렌더러 */}
+              {([
+                { key: "newEntries", label: "신규 편입", emoji: "🆕", data: rebalData.newEntries, color: colors.up },
+                { key: "exits", label: "제외 종목", emoji: "🚪", data: rebalData.exits, color: colors.down },
+                { key: "bigBuys", label: "비중 확대", emoji: "📈", data: rebalData.bigBuys, color: "#22c55e" },
+                { key: "bigSells", label: "비중 축소", emoji: "📉", data: rebalData.bigSells, color: "#ef4444" },
+              ] as const).filter(s => (s.data as RebalStock[]).length > 0).map(section => (
+                <View key={section.key} style={{ marginHorizontal: 14, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 8 }}>
+                    {section.emoji} {section.label} ({(section.data as RebalStock[]).length}개)
+                  </Text>
+                  <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
+                    {(section.data as RebalStock[]).slice(0, 8).map((stock, idx) => (
+                      <View key={stock.ticker + idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: idx < (section.data as RebalStock[]).slice(0,8).length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{stock.ticker}</Text>
+                            <View style={{ backgroundColor: stock.region === "KR" ? "#3b82f615" : "#f9731615", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: stock.region === "KR" ? "#3b82f6" : "#f97316" }}>{stock.region}</Text>
+                            </View>
+                          </View>
+                          {stock.name ? <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{stock.name}</Text> : null}
+                          <Text style={{ fontSize: 10, color: colors.mutedForeground + "88" }} numberOfLines={1}>{stock.etfs.join(" · ")}</Text>
+                        </View>
+                        {stock.delta != null && (
+                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: section.color }}>
+                            {stock.delta > 0 ? "+" : ""}{stock.delta.toFixed(1)}%p
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))}
+
+              {/* 섹터 변화 */}
+              {rebalData.sectorMoves.length > 0 && (
+                <View style={{ marginHorizontal: 14, marginBottom: 14 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 8 }}>🏭 섹터 변화</Text>
+                  <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
+                    {rebalData.sectorMoves.map((sm, idx) => (
+                      <View key={sm.sector} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: idx < rebalData.sectorMoves.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
+                        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{sm.sector}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{sm.prevCount} → {sm.etfCount}개 ETF</Text>
+                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: sm.direction === "up" ? colors.up : sm.direction === "down" ? colors.down : colors.mutedForeground }}>
+                            {sm.direction === "up" ? "▲" : sm.direction === "down" ? "▼" : "→"}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* 변화 없음 */}
+              {!rebalData.hasChanges && (
+                <View style={{ alignItems: "center", paddingVertical: 30, gap: 8 }}>
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground }}>최근 리밸런싱 변화 없음</Text>
+                </View>
+              )}
+            </>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── 집중 종목 탭 ── */}
       {etfSubTab === "momentum" && (
         <ScrollView
           contentContainerStyle={{ padding: 16, paddingBottom: pb, gap: 14 }}
