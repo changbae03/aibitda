@@ -13,6 +13,7 @@ import { runKrxFullHarvest } from "./lib/krx-full-harvester.js";
 import { runUsFullHarvest } from "./lib/us-full-harvester.js";
 import { runDailyPortfolioBriefs } from "./routes/portfolio.js";
 import { refreshBriefInBackground, refreshUsBriefInBackground } from "./routes/market-analysis.js";
+import { startMarketScheduler } from "./lib/market-scheduler.js";
 import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
@@ -58,6 +59,9 @@ const THIRTY_MIN_MS = 30 * 60 * 1000;
 
 const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
+
+  // 시장 분석 KR/US 브리핑 스케줄러 (06:00/11:00/14:00/16:30 KST 등)
+  startMarketScheduler();
 
   // 시장분석 라우터는 메인 서버에 직접 마운트됨 (market-analysis.ts)
 
