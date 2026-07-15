@@ -1160,17 +1160,29 @@ async function loadUsBriefFromDb(): Promise<void> {
 
 loadUsBriefFromDb().catch(() => {});
 
-export function refreshUsBriefInBackground(reason = "") {
+export function refreshUsBriefInBackground(reason = "", retryCount = 0) {
   if (_usBriefRefreshing) { console.log("[us-brief] 이미 갱신 중 — 스킵"); return; }
   _usBriefRefreshing = true;
-  console.log(`[us-brief] 백그라운드 갱신 시작${reason ? ` (${reason})` : ""}`);
+  const maxRetries = 3;
+  console.log(`[us-brief] 백그라운드 갱신 시작${reason ? ` (${reason})` : ""}${retryCount > 0 ? ` [재시도 ${retryCount}/${maxRetries}]` : ""}`);
   generateUsBrief()
     .then(result => {
       _usBriefCache = { data: result, cachedAt: Date.now() };
       return saveUsBriefToDb(_usBriefCache);
     })
     .then(() => console.log("[us-brief] 갱신 완료"))
-    .catch(err => console.error("[us-brief] 갱신 실패:", err?.message))
+    .catch(err => {
+      console.error("[us-brief] 갱신 실패:", err?.message);
+      if (retryCount < maxRetries) {
+        const delay = (retryCount + 1) * 5 * 60_000; // 5분, 10분, 15분 후 재시도
+        console.log(`[us-brief] ${delay / 60_000}분 후 재시도 예정`);
+        setTimeout(() => {
+          _usBriefRefreshing = false;
+          refreshUsBriefInBackground(reason + "-retry", retryCount + 1);
+        }, delay);
+        return;
+      }
+    })
     .finally(() => { _usBriefRefreshing = false; });
 }
 
@@ -1588,19 +1600,36 @@ router.get("/sessions", async (req, res) => {
   const isWeekend = market === "kr" && currentSession === "weekend";
   const slots = isWeekend ? WEEKEND_SLOTS : (market === "kr" ? KR_SLOTS : US_SLOTS);
 
-  // 시장일(market day) 경계 계산 — KR 장전은 06:00 KST에 시작하므로
-  // 00:00~05:59는 전날 장 사이클의 연장으로 취급 (자정 기준이면 새벽에 전날 브리핑이 사라짐)
-  // 주말에는 최근 72시간을 조회해 토·일 브리핑을 모두 커버
+  // 시장일(market day) 경계 계산
+  // KR: 장전은 06:00 KST에 시작 — 00:00~05:59는 전날 장 사이클 연장
+  // US: 거래일은 KST 17:00 (= UTC 08:00)에 시작 — KST 00:00~16:59는 전날 거래일 연장
+  // 주말: 최근 72시간 조회
   const kstNow = Date.now() + 9 * 3600_000;
   const kstMinNow = new Date(kstNow).getUTCHours() * 60 + new Date(kstNow).getUTCMinutes();
   const dayShiftMs = market === "kr" && !isWeekend && kstMinNow < 6 * 60 ? -86400_000 : 0;
   const kstCalendarMidnight = Math.floor((kstNow + dayShiftMs) / 86400_000) * 86400_000;
+
+  // US 거래일 경계: KST 17:00 = UTC 08:00
+  // kstMidnightMs(KST 오늘 자정) + 8h = 오늘 UTC 08:00 (= KST 17:00)
+  // KST 17:00 이전이면 전날 거래일 → -24h
+  const kstMidnightMs = Math.floor(kstNow / 86400_000) * 86400_000;
+  const usTradingDayStartUTC = new Date(
+    kstMidnightMs + 8 * 3600_000 + (kstMinNow >= 17 * 60 ? 0 : -86400_000)
+  );
+
   const kstMidnightUTC = isWeekend
     ? new Date(Date.now() - 72 * 3600_000)  // 주말: 72시간 전부터 조회
     : market === "kr"
       ? new Date(kstCalendarMidnight + 6 * 3600_000 - 9 * 3600_000) // 그 시장일의 06:00 KST
-      : new Date(Math.floor(kstNow / 86400_000) * 86400_000 - 9 * 3600_000);
-  const kstDateStr = new Date(market === "kr" ? kstCalendarMidnight : kstNow).toISOString().slice(0, 10);
+      : usTradingDayStartUTC;  // US: 거래일 시작 = KST 17:00 (UTC 08:00)
+
+  // kstDateStr: KR은 장전 기준 날짜, US는 거래일 시작(프리마켓) KST 날짜
+  const usKstTradingDate = new Date(kstNow + (kstMinNow >= 17 * 60 ? 0 : -86400_000));
+  const kstDateStr = isWeekend
+    ? new Date(kstNow).toISOString().slice(0, 10)
+    : market === "kr"
+      ? new Date(kstCalendarMidnight).toISOString().slice(0, 10)
+      : usKstTradingDate.toISOString().slice(0, 10);
 
   const dbTimeout = <T>(p: Promise<T>, ms = 4000): Promise<T | null> =>
     Promise.race([p, new Promise<null>((_, rej) => setTimeout(() => rej(new Error("db-timeout")), ms))]) as Promise<T | null>;
