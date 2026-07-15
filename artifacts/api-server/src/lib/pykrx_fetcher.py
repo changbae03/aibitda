@@ -519,12 +519,12 @@ def main():
 
                 if len(series) < 6:
                     continue
-                if today_change >= 20:   # 이미 급등 중 → 제외
+                if today_change >= 15:   # 이미 급등 중 → 제외 (20→15: 상한가 근처 위험 종목 조기 제거)
                     continue
 
-                # 유동성 필터: 오늘 거래대금 5억원 미만은 제외 (얇은 거래로 인한 우연 패턴 방지)
+                # 유동성 필터: 오늘 거래대금 10억원 미만은 제외 (5억→10억: 얇은 종목 추가 제거)
                 today_turnover = today_close * today_volume
-                if today_turnover < 500_000_000:
+                if today_turnover < 1_000_000_000:
                     continue
 
                 # 우선주 제외 (일반주는 티커 마지막 자리가 '0', 우선주는 그 외 숫자)
@@ -563,6 +563,25 @@ def main():
                 # 3일 모멘텀
                 mom3 = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else 0
 
+                # 강한 하락 추세 제외: MA5가 MA20보다 8% 이상 낮으면 추세 전환 가능성 낮음
+                if ma5 < ma20 * 0.92:
+                    continue
+
+                # 최근 3일 급락(-12% 이하) 제외: 낙하 중인 종목은 반등보다 추가 하락 가능성 높음
+                if mom3 < -12:
+                    continue
+
+                # RSI(14) 계산: 과매수 구간 종목 감점
+                if len(closes) >= 15:
+                    _deltas = [closes[i] - closes[i-1] for i in range(max(1, len(closes)-14), len(closes))]
+                    _gains  = [max(d, 0) for d in _deltas]
+                    _losses = [abs(min(d, 0)) for d in _deltas]
+                    _ag = sum(_gains) / len(_deltas) if _gains else 0
+                    _al = sum(_losses) / len(_deltas) if _losses else 0.001
+                    rsi14 = 100 - (100 / (1 + _ag / max(_al, 0.001)))
+                else:
+                    rsi14 = 50
+
                 # 볼린저 밴드 폭
                 if len(closes) >= 6:
                     n      = min(20, len(closes))
@@ -572,7 +591,7 @@ def main():
                 else:
                     bb_pct = 10.0
 
-                # === 점수 계산 (0~100) ===
+                # === 점수 계산 (0~110) ===
                 # 1. 거래량 수축 (핵심): 최대 30점
                 dryup_score = {4: 30, 3: 22, 2: 12}.get(min(vol_dryup, 4), 0)
 
@@ -599,15 +618,26 @@ def main():
                 elif bb_pct < 5.0: bb_score = 3
                 else:               bb_score = 0
 
-                total = dryup_score + vol_score + compression_score + near_high_score + ma_score + bb_score
+                # 7. 거래량 수축→팽창 조합 보너스 (핵심 패턴): 최대 10점
+                combo_bonus = 0
+                if vol_dryup >= 2 and vol_ratio >= 1.5:
+                    combo_bonus = 10  # 수축 후 팽창 = 가장 강한 매집 해제 신호
+                elif vol_dryup >= 3 and vol_ratio >= 1.2:
+                    combo_bonus = 5
+
+                # 8. RSI 과매수 페널티 (70+ = 단기 조정 위험)
+                rsi_penalty = 0
+                if rsi14 >= 75:   rsi_penalty = -15
+                elif rsi14 >= 70: rsi_penalty = -8
+
+                total = dryup_score + vol_score + compression_score + near_high_score + ma_score + bb_score + combo_bonus + rsi_penalty
 
                 # 핵심 신호(거래량 수축 또는 거래량 팽창) 없이 다른 보조 지표만으로
                 # 점수를 채운 케이스는 우연한 패턴일 가능성이 높아 제외 (정밀도 강화)
                 if dryup_score == 0 and vol_score < 5:
                     continue
 
-                # 최소 점수 기준 상향 (15 → 35): 애매한 후보를 걸러내고 확신도 높은
-                # 종목만 남긴다
+                # 최소 점수 기준 유지(35): 애매한 후보를 걸러내고 확신도 높은 종목만 남김
                 if total < 35:
                     continue
 

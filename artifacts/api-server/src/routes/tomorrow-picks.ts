@@ -110,6 +110,10 @@ function scoreThemePicks(
     const krStocks = theme.stocks.filter(s => s.market === "KR");
     if (krStocks.length === 0) continue;
 
+    // 테마 리더 수 (오늘 실제로 오른 종목) — 리더가 2개 이상인 테마만 유효
+    const leaders = krStocks.filter(s => (s.priceChange ?? 0) >= 2);
+    if (leaders.length < 2) continue;
+
     const changes = krStocks.map(s => s.priceChange ?? 0);
     const positiveChanges = changes.filter(c => c > 0);
     const themeHeat =
@@ -117,25 +121,32 @@ function scoreThemePicks(
         ? positiveChanges.reduce((a, b) => a + b, 0) / positiveChanges.length
         : changes.reduce((a, b) => a + b, 0) / changes.length;
 
-    // 테마 열기 낮으면 스킵 (최소 1% — 이전보다 강화)
-    if (themeHeat < 1.0) continue;
+    // 테마 열기: 2% 이상인 테마만 유효 (1% → 2%: 실질 순환매 기대 기준 강화)
+    if (themeHeat < 2.0) continue;
 
     for (const s of krStocks) {
       const change = s.priceChange ?? 0;
       const volRatio = s.volumeRatio ?? 1;
 
+      // 이미 테마보다 2배 이상 올랐거나 이미 충분히 반영됨 → 제외
       if (change > themeHeat * 2.0) continue;
-      if (volRatio < 0.6) continue;
+      // 거래량 너무 낮으면 제외 (0.6 → 0.7: 수급 유입 최소 확인)
+      if (volRatio < 0.7) continue;
+      // 낙하 중인 종목 제외: 테마가 오르는데 혼자 -8% 이하면 악재 있는 종목
+      if (change < -8) continue;
 
       const laggardGap = Math.max(0, themeHeat - change);
 
-      // 갭이 너무 작으면 스킵 (최소 1.5%p — 명확한 미반영만 선별)
-      if (laggardGap < 1.5) continue;
+      // 갭 최소 기준 강화 (1.5% → 2%): 더 명확한 미반영만 선별
+      if (laggardGap < 2.0) continue;
 
       const normGap  = Math.min(laggardGap / Math.max(themeHeat, 0.5), 1);
       const normHeat = Math.min(themeHeat / 8, 1);
       const normVol  = Math.min(Math.max(0, volRatio - 0.8) / 2.2, 1);
-      let finalScore = normHeat * 0.25 + normGap * 0.45 + normVol * 0.30;
+      let finalScore = normHeat * 0.25 + normGap * 0.40 + normVol * 0.35;
+
+      // 주가 방향 보너스: 종목이 소폭이라도 오르고 있으면 추세 동조 가능성 높음
+      if (change >= 0 && change < themeHeat) finalScore += 0.06;
 
       // 교차 시그널 보너스: 네이버 인기 검색에도 등장하면 점수 업
       const sigEntry = signalMap.get(s.ticker);
@@ -143,12 +154,12 @@ function scoreThemePicks(
       const isVolume   = sigEntry?.groups.has("kr_volume")   ?? false;
       const confluenceGroups: string[] = ["테마 미반영"];
       if (isTrending) { finalScore += 0.15; confluenceGroups.push("네이버 인기"); }
-      if (isVolume)   { finalScore += 0.08; confluenceGroups.push("거래량 폭발"); }
+      if (isVolume)   { finalScore += 0.10; confluenceGroups.push("거래량 폭발"); }
 
       const signals: string[] = [];
       if (themeHeat >= 4) signals.push("테마 강세");
       else if (themeHeat >= 2) signals.push("테마 상승");
-      if (laggardGap >= 2.5) signals.push("미반영 구간");
+      if (laggardGap >= 3.0) signals.push("미반영 구간");
       else signals.push("상대 지연");
       if (volRatio >= 2.5) signals.push("거래량 급증");
       else if (volRatio >= 1.5) signals.push("거래량 증가");
@@ -236,32 +247,36 @@ function scoreConfluencePicks(
     let confidence: PickConfidence = "medium";
     const confluenceGroups: string[] = [];
 
-    // ① 최강: 네이버 인기 + 거래량 폭발 (같은 종목에 두 가지 독립 신호)
+    // 상한가 근처(28%+) 종목은 D+1 추가 상승보다 차익실현 가능성 높아 제외
+    if (change >= 28) continue;
+
+    // ① 최강: 네이버 인기 + 거래량 폭발 (두 독립 신호 동시 포착)
     if (hasTrending && hasVolume) {
-      baseScore = Math.abs(change) < 3 ? 0.88 : 0.82; // 보합 매집이면 더 높은 점수
+      // 보합 매집(주가 안 오른 채 거래량만 폭발) = 더 강한 신호
+      baseScore = Math.abs(change) < 3 ? 0.90 : 0.82;
       emoji = "🔥";
       themeLabel = "네이버 인기 + 거래량 폭발";
       confidence = "high";
       confluenceGroups.push("네이버 인기", "거래량 폭발");
 
-    // ② 강함: 네이버 인기 + 급등 모멘텀
+    // ② 강함: 네이버 인기 + 급등 모멘텀 (단, 15% 이상 급등은 차익 위험으로 감점)
     } else if (hasTrending && hasGainers) {
-      baseScore = 0.75;
+      baseScore = change >= 15 ? 0.65 : 0.75;
       emoji = "⚡";
       themeLabel = "네이버 인기 + 급등 모멘텀";
-      confidence = "high";
+      confidence = change >= 15 ? "medium" : "high";
       confluenceGroups.push("네이버 인기", "급등주");
 
-    // ③ 강함: 거래량 폭발 + 급등 동반 (상한가 포함)
+    // ③ 강함: 거래량 폭발 + 급등 동반 (단, 20% 이상은 차익 위험으로 낮게)
     } else if (hasVolume && hasGainers && change >= 5) {
-      baseScore = change >= 20 ? 0.68 : 0.72; // 상한가 근처면 살짝 낮게
+      baseScore = change >= 20 ? 0.62 : change >= 15 ? 0.68 : 0.72;
       emoji = "📡";
       themeLabel = "거래량 폭발 + 상승 모멘텀";
-      confidence = "high";
+      confidence = change >= 15 ? "medium" : "high";
       confluenceGroups.push("거래량 폭발", "급등주");
 
-    // ④ 보통: 네이버 트렌딩 + 5%+ 단독 (개인 관심 + 의미있는 상승)
-    } else if (hasTrending && change >= 5 && change <= 25) {
+    // ④ 보통: 네이버 트렌딩 + 5~15% (16% 이상은 차익 위험 — 상한 축소)
+    } else if (hasTrending && change >= 5 && change <= 15) {
       baseScore = 0.58;
       emoji = "🔍";
       themeLabel = "네이버 트렌딩 강세";
@@ -319,20 +334,21 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
   const picks: TomorrowPick[] = [];
 
   // kr_volume: 거래량 집중 + 소폭 등락 = 조용한 수급 유입
+  // 거래량이 폭발하면서 주가가 크게 안 움직이는 종목 = 큰손 매집 패턴
   const krVolume = signals.find(g => g.id === "kr_volume");
   if (krVolume) {
     for (const s of krVolume.stocks) {
       if (s.market !== "KR") continue;
-      if (themeSet.has(s.ticker)) continue; // 이미 테마 laggard에 있으면 중복 제외
+      if (themeSet.has(s.ticker)) continue;
       const change = s.changePercent ?? 0;
       const vol = s.volume ?? 0;
-      if (Math.abs(change) > 10) continue;   // 너무 급등·급락 제외
-      if (vol < 8_000_000) continue;          // 800만주 미만 제외
+      if (Math.abs(change) > 8) continue;   // 너무 급등·급락 제외 (10→8: 좁은 범위)
+      if (vol < 10_000_000) continue;         // 1천만주 미만 제외 (800만→1000만 강화)
 
-      // 거래량 강도 정규화 (3천만주 = 1)
-      const volNorm = Math.min(vol / 30_000_000, 1);
-      // 가격 조용함 점수 (덜 움직인 게 더 좋음)
-      const quietNorm = Math.max(0, 1 - Math.abs(change) / 10);
+      // 거래량 강도 정규화 (5천만주 = 1)
+      const volNorm  = Math.min(vol / 50_000_000, 1);
+      // 가격 조용함 점수 (덜 움직인 게 더 좋음 — 매집 패턴 핵심)
+      const quietNorm = Math.max(0, 1 - Math.abs(change) / 8);
       const finalScore = volNorm * 0.55 + quietNorm * 0.45;
 
       const sigs: string[] = ["거래량 집중"];
@@ -366,53 +382,17 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
         signals: sigs,
         rationale: volumeRationale,
         category: "volume",
-        confidence: vol >= 20_000_000 ? "high" : vol >= 12_000_000 ? "medium" : "low",
+        confidence: vol >= 30_000_000 ? "high" : vol >= 15_000_000 ? "medium" : "low",
         confluenceGroups: sigs,
       });
     }
   }
 
-  // kr_gainers 중 5~22% (서킷브레이커 아닌 범위) 중소형 모멘텀
-  const krGainers = signals.find(g => g.id === "kr_gainers");
-  if (krGainers) {
-    for (const s of krGainers.stocks) {
-      if (s.market !== "KR") continue;
-      if (themeSet.has(s.ticker)) continue;
-      const change = s.changePercent ?? 0;
-      if (change < 5 || change > 22) continue;
+  // kr_gainers: 단독 모멘텀 픽은 D+1 평균 수익률이 매우 낮으므로 완전 제거.
+  // 단, confluence 픽(kr_trending + kr_gainers)으로 이미 scoreConfluencePicks에서 처리됨.
+  // → kr_gainers 단독 픽은 생성하지 않음 (정확도 개선)
 
-      const momentumNorm = Math.min((change - 5) / 17, 1);
-      const finalScore = 0.32 + momentumNorm * 0.25;
-
-      const momentumRationale = (() => {
-        if (change >= 15)
-          return `오늘 +${change.toFixed(1)}% 급등했어요. 상한가(30%)에는 못 미쳐서 추가로 오를 여지가 남아있어요. 내일 시작부터 강하게 오르는지, 거래량도 충분한지 함께 확인하세요.`;
-        if (change >= 10)
-          return `오늘 +${change.toFixed(1)}% 강하게 올랐어요. 이런 상승세는 다음날까지 이어지는 경우가 많아요. 내일 이전 고점을 넘어서면 추가 상승을 기대할 수 있어요.`;
-        return `오늘 +${change.toFixed(1)}% 올랐어요. 오늘 오른 종목이 다음날도 이어서 오르는 경향이 있어요. 내일 거래가 활발하게 유지되는지, 주가가 버텨주는지 확인하세요.`;
-      })();
-
-      picks.push({
-        ticker: s.ticker,
-        name: s.name,
-        market: "KR",
-        theme: "상승 모멘텀",
-        themeEmoji: "📈",
-        themeHeat: change,
-        priceChange: Math.round(change * 10) / 10,
-        volumeRatio: 1,
-        laggardGap: 0,
-        finalScore: Math.round(finalScore * 1000) / 1000,
-        signals: ["모멘텀"],
-        rationale: momentumRationale,
-        category: "momentum",
-        confidence: change >= 12 ? "medium" : "low",
-        confluenceGroups: [`+${change.toFixed(1)}%`],
-      });
-    }
-  }
-
-  return picks.sort((a, b) => b.finalScore - a.finalScore).slice(0, 15);
+  return picks.sort((a, b) => b.finalScore - a.finalScore).slice(0, 12);
 }
 
 // ─── DB 캐시 ─────────────────────────────────────────────────────────────────
