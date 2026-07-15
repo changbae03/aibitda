@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import AdmZip from "adm-zip";
 import { pool } from "@workspace/db";
 import { loadKRXList, getKRXCache } from "../lib/krx-cache";
-import { fetchInvestorData, fetchBothMarketsOHLCV } from "../lib/pykrx-client";
+import { fetchInvestorData, fetchBothMarketsOHLCV, fetchInvestorByStocks } from "../lib/pykrx-client";
 import { setCorpCodeMap, setCorpInfoList, type CorpInfo } from "../lib/dart-corp-cache.js";
 import YahooFinance from "yahoo-finance2";
 
@@ -363,16 +363,35 @@ interface FeedStock {
   volumeRatio?: number;
   /** 이 테마의 주도주 여부 (힘 스코어 1위) */
   isLeader?: boolean;
+  /** 기관 순매수 (억원, KR만) */
+  institutionAek?: number;
+  /** 외국인 순매수 (억원, KR만) */
+  foreignAek?: number;
+  /** 기관+외인 합산 (억원, KR만) */
+  smartMoneyAek?: number;
 }
+
+/**
+ * 테마 형성 단계
+ *  hot        : 가격 강세 5%+ — 이미 핫
+ *  momentum   : 가격 상승 2~5% — 올라가는 중
+ *  emerging   : 가격 보합/약세이지만 스마트머니 유입 — 수급 형성 중 (조기 포착)
+ *  quiet      : 특별 신호 없음
+ */
+type ThemePhase = "hot" | "momentum" | "emerging" | "quiet";
 
 interface ThemeFeedItem extends TrendingTheme {
   summary: string;
   stocks: FeedStock[];
+  /** 테마 형성 단계 */
+  phase?: ThemePhase;
+  /** 테마 내 KR 종목 스마트머니 합산 (억원) */
+  themeSmartMoney?: number;
 }
 
 let feedCache: { feed: ThemeFeedItem[]; cachedAt: number } | null = null;
 const FEED_TTL = 3 * 60 * 60 * 1000;
-const FEED_CACHE_DB_KEY = "themes_feed_cache_v19";
+const FEED_CACHE_DB_KEY = "themes_feed_cache_v21";
 let feedRebuildInProgress = false;
 
 async function saveFeedCacheToDB(feed: ThemeFeedItem[]): Promise<void> {
@@ -951,21 +970,21 @@ JSON만 출력:
 // 힘 스코어(=등락률×0.6 + (거래량배율-1)×0.4)로 정렬하여 주도주를 첫 번째로 배치
 
 async function enrichFeedWithMomentum(feed: ThemeFeedItem[]): Promise<ThemeFeedItem[]> {
-  // 모든 테마 종목 수집
+  // ── 종목 목록 수집 ────────────────────────────────────────────────────────
   const allStocks: Array<{ ti: number; si: number; ticker: string; market: "KR" | "US" }> = [];
   feed.forEach((theme, ti) =>
     theme.stocks.forEach((s, si) => allStocks.push({ ti, si, ticker: s.ticker, market: s.market }))
   );
   if (allStocks.length === 0) return feed;
 
-  // YF 심볼 리스트 구성: KR은 .KS / .KQ 모두 시도, US는 그대로
-  const yfSymbols: string[] = [];
   const krTickers = [...new Set(allStocks.filter(s => s.market === "KR").map(s => s.ticker))];
   const usTickers = [...new Set(allStocks.filter(s => s.market === "US").map(s => s.ticker))];
+
+  // ── YF 가격·거래량 quote ─────────────────────────────────────────────────
+  const yfSymbols: string[] = [];
   for (const t of krTickers) { yfSymbols.push(`${t}.KS`, `${t}.KQ`); }
   for (const t of usTickers) { yfSymbols.push(t); }
 
-  // 배치 quote — 실패해도 기존 피드 그대로 반환
   const momentumMap = new Map<string, { priceChange: number; volumeRatio: number }>();
   try {
     const quotes = await yf.quote(yfSymbols, {}, { validateResult: false });
@@ -980,45 +999,120 @@ async function enrichFeedWithMomentum(feed: ThemeFeedItem[]): Promise<ThemeFeedI
     console.log(`[themes][momentum] YF quote 완료: ${momentumMap.size}/${yfSymbols.length}개`);
   } catch (e: any) {
     console.warn("[themes][momentum] YF quote 실패:", e?.message ?? e);
-    return feed;
   }
 
-  // 원본 ticker → 데이터 매핑 (KR은 .KS 우선, 없으면 .KQ)
   function getMomentum(ticker: string, market: "KR" | "US") {
     if (market === "KR") return momentumMap.get(`${ticker}.KS`) ?? momentumMap.get(`${ticker}.KQ`);
     return momentumMap.get(ticker);
   }
 
-  // 힘 스코어 = 등락률×0.6 + (거래량배율-1)×0.4
+  // ── pykrx 기관·외인 순매수 (KR 종목만) ───────────────────────────────────
+  // 가격이 보합/약세여도 스마트머니가 유입되면 "수급 형성 중" 조기 포착
+  const flowMap = new Map<string, { institution: number; foreign: number }>();
+  if (krTickers.length > 0) {
+    try {
+      // 오늘 데이터 시도 → 모든 flow가 0이면(장 열리기 전/장중 미확정) 전 영업일 폴백
+      const prevBizDate = (d: string): string => {
+        const dt = new Date(`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T00:00:00+09:00`);
+        do { dt.setDate(dt.getDate() - 1); } while (dt.getDay() === 0 || dt.getDay() === 6);
+        return dt.toISOString().slice(0,10).replace(/-/g, "");
+      };
+      const kstDate = new Date(Date.now() + 9 * 3600_000);
+      let flowDate = kstDate.toISOString().slice(0, 10).replace(/-/g, "");
+      let flows = await fetchInvestorByStocks(flowDate, krTickers);
+      // 전체 flow 합산이 0이면 (장 전/장중 미확정) 전 영업일 데이터 사용
+      const totalAbs = flows.reduce((s, f) => s + Math.abs(f.institution ?? 0) + Math.abs(f.foreign ?? 0), 0);
+      if (totalAbs === 0) {
+        flowDate = prevBizDate(flowDate);
+        flows = await fetchInvestorByStocks(flowDate, krTickers);
+        console.log(`[themes][flow] 오늘 수급 없음 → 전 영업일(${flowDate}) 폴백`);
+      }
+      for (const f of flows) {
+        flowMap.set(f.ticker, { institution: f.institution ?? 0, foreign: f.foreign ?? 0 });
+      }
+      console.log(`[themes][flow] KR 수급 조회 완료: ${flowMap.size}/${krTickers.length}개 (날짜: ${flowDate})`);
+    } catch (e: any) {
+      console.warn("[themes][flow] 수급 조회 실패 (무시):", e?.message ?? e);
+    }
+  }
+
+  // ── 힘 스코어 & 수급 스코어 ───────────────────────────────────────────────
+  // 가격 모멘텀 (기존)
   function forceScore(s: { priceChange?: number; volumeRatio?: number }) {
     const ch  = s.priceChange  ?? 0;
     const vr  = (s.volumeRatio ?? 1) - 1;
     return ch * 0.6 + vr * 0.4;
   }
+  // 수급 스코어: 기관 2배 가중 (선형, 억원 기준)
+  function smartMoneyScore(inst: number, fore: number) {
+    return Math.min(20, inst / 1.5) + Math.min(10, fore / 3.0);
+  }
 
-  return feed.map(theme => {
-    // 모멘텀 데이터 부착
-    const enriched: FeedStock[] = theme.stocks.map(s => {
+  // ── 테마별 enrich ─────────────────────────────────────────────────────────
+  const enriched = feed.map(theme => {
+    // 종목별 데이터 부착
+    const stocks: FeedStock[] = theme.stocks.map(s => {
       const m = getMomentum(s.ticker, s.market);
-      if (!m) return s;
-      return { ...s, priceChange: m.priceChange, volumeRatio: m.volumeRatio };
+      const f = s.market === "KR" ? (flowMap.get(s.ticker) ?? null) : null;
+      return {
+        ...s,
+        ...(m ? { priceChange: m.priceChange, volumeRatio: m.volumeRatio } : {}),
+        ...(f != null ? {
+          institutionAek: f.institution,
+          foreignAek:     f.foreign,
+          smartMoneyAek:  f.institution + f.foreign,
+        } : {}),
+      };
     });
 
-    // 이미 AI가 주도주를 첫 번째로 배치했으므로, 실데이터가 있으면 힘 스코어로 재정렬
-    // (단, AI 순서와 실데이터가 없는 경우를 혼합할 때 기존 순서를 존중)
-    const hasAnyData = enriched.some(s => s.priceChange != null);
-    if (hasAnyData) {
-      enriched.sort((a, b) => forceScore(b) - forceScore(a));
-    }
+    // 테마 내 스마트머니 합산
+    const themeSmartMoney = stocks.reduce((sum, s) => sum + (s.smartMoneyAek ?? 0), 0);
+    // 가격 평균
+    const priceData = stocks.filter(s => s.priceChange != null);
+    const avgPrice  = priceData.length > 0
+      ? priceData.reduce((s, r) => s + (r.priceChange ?? 0), 0) / priceData.length
+      : null;
 
-    // 주도주 마킹: 힘 스코어 1위이고 데이터가 있는 종목
-    const finalStocks: FeedStock[] = enriched.map((s, i) => ({
+    // ── 테마 phase 분류 ────────────────────────────────────────────────────
+    // hot:      가격 평균 5%+
+    // momentum: 가격 평균 2%+
+    // emerging: 가격 -3%~3% 이지만 스마트머니 테마 합산 10억+ (조기 포착!)
+    // quiet:    그 외
+    let phase: ThemePhase = "quiet";
+    if (avgPrice != null && avgPrice >= 5)                          phase = "hot";
+    else if (avgPrice != null && avgPrice >= 2)                     phase = "momentum";
+    else if (Math.abs(avgPrice ?? 0) <= 3 && themeSmartMoney >= 10) phase = "emerging";
+
+    // ── 종목 정렬 ───────────────────────────────────────────────────────────
+    // 정렬 기준: 힘스코어 + 스마트머니 스코어 합산
+    // emerging 테마는 스마트머니 가중치를 2배로 → 조용히 쌓이는 종목이 상위로
+    const smWeight = phase === "emerging" ? 2.0 : 1.0;
+    stocks.sort((a, b) => {
+      const fa = forceScore(a) + smWeight * smartMoneyScore(a.institutionAek ?? 0, a.foreignAek ?? 0);
+      const fb = forceScore(b) + smWeight * smartMoneyScore(b.institutionAek ?? 0, b.foreignAek ?? 0);
+      return fb - fa;
+    });
+
+    // 주도주 마킹
+    const finalStocks = stocks.map((s, i) => ({
       ...s,
-      isLeader: i === 0 && s.priceChange != null,
+      isLeader: i === 0 && (s.priceChange != null || s.smartMoneyAek != null),
     }));
 
-    return { ...theme, stocks: finalStocks };
+    return { ...theme, stocks: finalStocks, phase, themeSmartMoney };
   });
+
+  // ── 테마 전체 순위 재정렬 ─────────────────────────────────────────────────
+  // emerging 테마를 quiet 위로 올림 (스마트머니 기반 조기 포착 우선)
+  const phaseRank: Record<ThemePhase, number> = { hot: 3, momentum: 2, emerging: 1, quiet: 0 };
+  enriched.sort((a, b) => {
+    const pr = phaseRank[b.phase ?? "quiet"] - phaseRank[a.phase ?? "quiet"];
+    if (pr !== 0) return pr;
+    // 같은 phase 내에서는 스마트머니 합산 기준
+    return (b.themeSmartMoney ?? 0) - (a.themeSmartMoney ?? 0);
+  });
+
+  return enriched;
 }
 
 router.get("/themes/trending-feed", async (req, res) => {

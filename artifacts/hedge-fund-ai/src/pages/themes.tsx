@@ -28,11 +28,18 @@ interface FeedStock {
   priceChange?: number;
   volumeRatio?: number;
   isLeader?: boolean;
+  institutionAek?: number;
+  foreignAek?: number;
+  smartMoneyAek?: number;
 }
+
+type ThemePhase = "hot" | "momentum" | "emerging" | "quiet";
 
 interface ThemeFeedItem extends TrendingTheme {
   summary: string;
   stocks: FeedStock[];
+  phase?: ThemePhase;
+  themeSmartMoney?: number;
 }
 
 interface DiscoveredStock {
@@ -105,23 +112,47 @@ function computeThemeForce(stocks: FeedStock[]): ThemeForce | null {
   return { avg, max, coverage: withData.length / Math.max(stocks.length, 1) };
 }
 
-function forceMeta(avg: number): { label: string; emoji: string; color: string; barColor: string } {
-  if (avg >= 6)  return { label: "강세",   emoji: "🔥", color: "text-red-500",     barColor: "#EF4444" };
-  if (avg >= 2)  return { label: "상승",   emoji: "⚡", color: "text-orange-500",  barColor: "#F97316" };
-  if (avg >= 0)  return { label: "보합",   emoji: "〰", color: "text-foreground/40", barColor: "#94a3b8" };
-  return               { label: "약화",   emoji: "↘",  color: "text-blue-500",    barColor: "#3B82F6" };
+/** 서버의 phase 또는 price avg 기반으로 테마 상태 반환 */
+function phaseMeta(phase?: ThemePhase, priceAvg?: number | null): { label: string; emoji: string; color: string; barColor: string } {
+  if (phase === "hot")      return { label: "강세",      emoji: "🔥", color: "text-red-500",     barColor: "#EF4444" };
+  if (phase === "momentum") return { label: "상승 중",   emoji: "⚡", color: "text-orange-500",  barColor: "#F97316" };
+  if (phase === "emerging") return { label: "수급 형성", emoji: "📡", color: "text-violet-600 dark:text-violet-400", barColor: "#8B5CF6" };
+  const avg = priceAvg ?? 0;
+  if (avg >= 2)  return { label: "상승 중",  emoji: "⚡", color: "text-orange-500",    barColor: "#F97316" };
+  if (avg >= 0)  return { label: "보합",     emoji: "〰", color: "text-foreground/40",  barColor: "#94a3b8" };
+  return               { label: "조정 중",  emoji: "↘",  color: "text-foreground/40",  barColor: "#94a3b8" };
 }
 
-// 종목 단위 힘 생존 여부
-function stockMomentumAlive(s: FeedStock): "alive" | "fading" | "pressure" | "easing" | "unknown" {
-  if (s.priceChange == null) return "unknown";
-  const priceUp  = s.priceChange > 0.5;
-  const volUp    = (s.volumeRatio ?? 1) >= 1.3;
-  if (priceUp && volUp)   return "alive";    // 주가↑ 거래량↑ — 상승 모멘텀 살아있음
-  if (priceUp && !volUp)  return "fading";   // 주가↑ 거래량↓ — 상승 힘 약해지는 중
-  if (!priceUp && volUp)  return "pressure"; // 주가↓ 거래량↑ — 매도 압력 강함
-  if (!priceUp && !volUp) return "easing";   // 주가↓ 거래량↓ — 낙폭 완화 중 (매도 압력 빠지는 중)
-  return "unknown";
+/** 종목별 수급 신호 — 스마트머니 우선 */
+function stockSignalBadge(s: FeedStock): { text: string; cls: string; title: string } | null {
+  const inst = s.institutionAek ?? 0;
+  const fore = s.foreignAek ?? 0;
+  const sm   = s.smartMoneyAek;
+  const priceWeak = Math.abs(s.priceChange ?? 0) < 3;
+
+  if (sm != null) {
+    if (inst > 0 && fore > 0 && priceWeak)
+      return { text: "기관+외인 동시 매수", cls: "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400", title: `기관 +${inst.toFixed(0)}억, 외인 +${fore.toFixed(0)}억 — 가격 반영 전 수급 선행` };
+    if (inst > 10)
+      return { text: `기관 +${inst.toFixed(0)}억`, cls: "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400", title: "기관 순매수 — 가격 선행 가능성" };
+    if (inst > 0 && priceWeak)
+      return { text: "기관 소량 매집", cls: "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400", title: "기관이 조용히 물량 쌓는 중" };
+    if (fore > 10)
+      return { text: `외인 +${fore.toFixed(0)}억`, cls: "bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400", title: "외국인 순매수 유입" };
+    if (fore > 0 && priceWeak)
+      return { text: "외인 유입 중", cls: "bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400", title: "외국인 소량 순매수" };
+    if (inst < -10)
+      return { text: "기관 매도", cls: "bg-red-50 dark:bg-red-900/20 text-red-500", title: "기관 순매도 중" };
+  }
+
+  // 가격+거래량 기반 기존 신호
+  if (s.priceChange == null) return null;
+  const priceUp = s.priceChange > 0.5;
+  const volUp   = (s.volumeRatio ?? 1) >= 1.3;
+  if (priceUp && volUp)   return { text: "거래량 동반 상승", cls: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400", title: "주가↑ + 거래량↑ — 상승 모멘텀 살아있음" };
+  if (priceUp && !volUp)  return { text: "힘 약해지는 중",  cls: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400",   title: "주가↑이지만 거래량↓ — 상승 힘 소진 주의" };
+  if (!priceUp && volUp)  return { text: "거래량 증가",     cls: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400", title: "주가↓ + 거래량↑ — 매도세 또는 저가 매수 경합" };
+  return null;
 }
 
 // ── 내일 종목 탭 상단 컨셉 안내 카드 ─────────────────────────────────────────
@@ -152,14 +183,18 @@ function LegendStep({ n, color, title, desc }: { n: number; color: "rose" | "eme
 function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
   const [showLegend, setShowLegend] = useState(false);
 
+  const phaseRank: Record<string, number> = { hot: 4, momentum: 3, emerging: 2, quiet: 1 };
   const ranked = feed
     .map(item => ({ ...item, force: computeThemeForce(item.stocks) }))
-    .filter(item => item.force !== null)
-    .sort((a, b) => b.force!.avg - a.force!.avg);
+    .sort((a, b) => {
+      const pr = (phaseRank[b.phase ?? "quiet"] ?? 1) - (phaseRank[a.phase ?? "quiet"] ?? 1);
+      if (pr !== 0) return pr;
+      return (b.themeSmartMoney ?? 0) - (a.themeSmartMoney ?? 0);
+    });
 
   if (ranked.length === 0) return null;
 
-  const absMax = Math.max(...ranked.map(r => Math.abs(r.force!.avg)), 1);
+  const absMax = Math.max(...ranked.map(r => Math.abs(r.force?.avg ?? 0)), 1);
 
   return (
     <div className="rounded-2xl border border-border bg-card px-4 py-3.5 space-y-2.5">
@@ -189,9 +224,9 @@ function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
               <p>해당 테마 종목들의 <span className="text-foreground/80 font-medium">주가변화율 × 거래량비율</span> 합산 점수예요.</p>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-0.5">
                 <span><span className="text-red-500 font-bold">🔥 강세</span> — 돈이 확실히 몰리는 중</span>
-                <span><span className="text-orange-500 font-bold">⚡ 상승</span> — 수급 유입 중</span>
+                <span><span className="text-orange-500 font-bold">⚡ 상승 중</span> — 수급 유입 중</span>
+                <span><span className="text-violet-600 font-bold">📡 수급 형성</span> — 가격 반영 전 스마트머니 유입</span>
                 <span><span className="text-foreground/40 font-bold">〰 보합</span> — 방향 없이 유지 중</span>
-                <span><span className="text-blue-500 font-bold">↘ 약화</span> — 수급이 빠지는 중</span>
               </div>
             </div>
           </motion.div>
@@ -199,20 +234,27 @@ function ThemeForceRanking({ feed }: { feed: ThemeFeedItem[] }) {
       </AnimatePresence>
       <div className="space-y-1.5">
         {ranked.map((item, i) => {
-          const meta = forceMeta(item.force!.avg);
-          const barPct = Math.max(2, (Math.abs(item.force!.avg) / absMax) * 100);
+          const force = item.force;
+          const meta = phaseMeta(item.phase, force?.avg);
+          const barPct = Math.max(2, (Math.abs(force?.avg ?? 0) / absMax) * 100);
+          const sm = item.themeSmartMoney;
           return (
             <div key={item.id} className="flex items-center gap-2">
               <span className="text-[10px] text-foreground/25 w-3 text-right shrink-0">{i + 1}</span>
               <span className="text-sm shrink-0 leading-none">{item.emoji}</span>
-              <span className="text-[11.5px] font-medium text-foreground/75 flex-1 min-w-0 truncate">{item.name}</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-[11.5px] font-medium text-foreground/75 truncate block">{item.name}</span>
+                {item.phase === "emerging" && sm != null && sm > 0 && (
+                  <span className="text-[9px] text-violet-500 font-medium">스마트머니 +{sm.toFixed(0)}억 유입</span>
+                )}
+              </div>
               <div className="w-20 shrink-0 h-2 bg-muted/50 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{ width: `${barPct}%`, backgroundColor: meta.barColor }}
                 />
               </div>
-              <span className={cn("text-[10px] font-semibold shrink-0 w-12 text-right", meta.color)}>
+              <span className={cn("text-[10px] font-semibold shrink-0 w-16 text-right", meta.color)}>
                 {meta.emoji} {meta.label}
               </span>
             </div>
@@ -1161,31 +1203,45 @@ function FeedCard({
       {/* 카드 헤더 */}
       {(() => {
         const force = computeThemeForce(item.stocks);
-        const meta  = force ? forceMeta(force.avg) : null;
+        const meta  = phaseMeta(item.phase, force?.avg);
+        const isEmerging = item.phase === "emerging";
+        const sm = item.themeSmartMoney;
         return (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
-          >
-            <span className="text-2xl shrink-0">{item.emoji}</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <p className="font-semibold text-sm text-foreground truncate">{item.name}</p>
-                {meta && (
-                  <span className={cn("text-[10px] font-bold shrink-0", meta.color)}>
-                    {meta.emoji} {meta.label}
+          <>
+            {/* 수급 형성 중 배너 */}
+            {isEmerging && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-violet-50 dark:bg-violet-900/20 border-b border-violet-100 dark:border-violet-800/30">
+                <Radio className="w-3 h-3 text-violet-500 shrink-0" />
+                <span className="text-[10.5px] font-bold text-violet-600 dark:text-violet-400">수급 형성 중</span>
+                {sm != null && sm > 0 && (
+                  <span className="text-[10px] text-violet-500/70 font-medium">
+                    스마트머니 +{sm.toFixed(0)}억 유입 — 가격 반영 전
                   </span>
                 )}
               </div>
-              <p className="text-xs text-foreground/50 truncate mt-0.5">{item.summary}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {item.stocks.length > 0 && (
-                <span className="text-[11px] text-foreground/35 font-medium">{item.stocks.length}종목</span>
-              )}
-              <ChevronDown className={cn("w-4 h-4 text-foreground/30 transition-transform duration-200", expanded && "rotate-180")} />
-            </div>
-          </button>
+            )}
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
+            >
+              <span className="text-2xl shrink-0">{item.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="font-semibold text-sm text-foreground truncate">{item.name}</p>
+                  <span className={cn("text-[10px] font-bold shrink-0", meta.color)}>
+                    {meta.emoji} {meta.label}
+                  </span>
+                </div>
+                <p className="text-xs text-foreground/50 truncate mt-0.5">{item.summary}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {item.stocks.length > 0 && (
+                  <span className="text-[11px] text-foreground/35 font-medium">{item.stocks.length}종목</span>
+                )}
+                <ChevronDown className={cn("w-4 h-4 text-foreground/30 transition-transform duration-200", expanded && "rotate-180")} />
+              </div>
+            </button>
+          </>
         );
       })()}
 
@@ -1259,7 +1315,7 @@ function FeedCard({
                           )}
                         </div>
                         {/* 수급 힘 지표 행 */}
-                        {(hasChg || volBurst) && (
+                        {(hasChg || volBurst || stock.smartMoneyAek != null) && (
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {hasChg && (
                               <span className={cn(
@@ -1276,14 +1332,15 @@ function FeedCard({
                                 <Zap className="w-2.5 h-2.5" />거래량 {vr!.toFixed(1)}배
                               </span>
                             )}
-                            {/* 힘 생존 여부 */}
+                            {/* 스마트머니 우선 → 없으면 가격/거래량 신호 */}
                             {(() => {
-                              const alive = stockMomentumAlive(stock);
-                              if (alive === "alive")    return <span title="주가↑ + 거래량↑ — 상승 모멘텀 살아있음" className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 cursor-default">힘 살아있음 ✓</span>;
-                              if (alive === "fading")   return <span title="주가↑이지만 거래량↓ — 오르고 있지만 실어나르는 돈이 줄고 있어요. 모멘텀 소진 주의." className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 cursor-default">힘 약해지는 중</span>;
-                              if (alive === "pressure") return <span title="주가↓ + 거래량↑ — 하락 중에 거래가 터짐. 매도세 강함." className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 cursor-default">매도 압력</span>;
-                              if (alive === "easing")   return <span title="주가↓이지만 거래량도↓ — 내리고는 있지만 파는 사람이 줄어드는 중. 낙폭 진정 구간." className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 cursor-default">낙폭 완화 중</span>;
-                              return null;
+                              const badge = stockSignalBadge(stock);
+                              if (!badge) return null;
+                              return (
+                                <span title={badge.title} className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded cursor-default", badge.cls)}>
+                                  {badge.text}
+                                </span>
+                              );
                             })()}
                           </div>
                         )}

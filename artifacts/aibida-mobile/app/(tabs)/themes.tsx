@@ -24,7 +24,12 @@ interface FeedStock {
   priceChange?: number;
   volumeRatio?: number;
   isLeader?: boolean;
+  institutionAek?: number;
+  foreignAek?: number;
+  smartMoneyAek?: number;
 }
+
+type ThemePhase = "hot" | "momentum" | "emerging" | "quiet";
 
 interface ThemeFeedItem {
   id: string;
@@ -33,6 +38,8 @@ interface ThemeFeedItem {
   emoji: string;
   summary: string;
   stocks: FeedStock[];
+  phase?: ThemePhase;
+  themeSmartMoney?: number;
 }
 
 // ── Force score helpers ───────────────────────────────────────────────────
@@ -51,21 +58,42 @@ function computeThemeForce(stocks: FeedStock[]) {
   return { avg, max: Math.max(...scores) };
 }
 
-function forceMeta(avg: number) {
-  if (avg >= 6)  return { label: "강세", emoji: "🔥", color: "#EF4444", barColor: "#EF4444" };
-  if (avg >= 2)  return { label: "상승", emoji: "⚡", color: "#F97316", barColor: "#F97316" };
-  if (avg >= 0)  return { label: "보합", emoji: "〰",  color: "#94a3b8", barColor: "#94a3b8" };
-  return               { label: "약화", emoji: "↘",  color: "#3B82F6", barColor: "#3B82F6" };
+/** phase(서버 계산값) 또는 가격 avg 기반 표시 메타 */
+function phaseMeta(phase?: ThemePhase, priceAvg?: number | null) {
+  if (phase === "hot")      return { label: "강세",      emoji: "🔥", color: "#EF4444", barColor: "#EF4444" };
+  if (phase === "momentum") return { label: "상승 중",   emoji: "⚡", color: "#F97316", barColor: "#F97316" };
+  if (phase === "emerging") return { label: "수급 형성", emoji: "📡", color: "#8B5CF6", barColor: "#8B5CF6" };
+  // quiet or fallback → price avg 기반
+  const avg = priceAvg ?? 0;
+  if (avg >= 2)  return { label: "상승 중",  emoji: "⚡", color: "#F97316", barColor: "#F97316" };
+  if (avg >= 0)  return { label: "보합",     emoji: "〰", color: "#94a3b8", barColor: "#94a3b8" };
+  return               { label: "조정 중",  emoji: "↘",  color: "#94a3b8", barColor: "#94a3b8" };
 }
 
+/** 종목별 상태 텍스트 — 스마트머니 우선 반영 */
 function momentumInfo(s: FeedStock): { text: string; color: string } {
-  if (s.priceChange == null) return { text: "데이터 없음", color: "#94a3b8" };
-  const up = s.priceChange > 0.5;
+  const sm = s.smartMoneyAek;
+  const inst = s.institutionAek ?? 0;
+  const fore = s.foreignAek ?? 0;
+  const up  = (s.priceChange ?? 0) > 0.5;
   const vol = (s.volumeRatio ?? 1) >= 1.3;
-  if (up && vol)   return { text: "함 매집 중", color: "#16a34a" };
-  if (up && !vol)  return { text: "상승 둔화", color: "#ca8a04" };
-  if (!up && vol)  return { text: "매도 압력", color: "#dc2626" };
-  return                  { text: "낙폭 완화", color: "#2563eb" };
+
+  // 스마트머니 신호 우선
+  if (sm != null) {
+    if (inst > 0 && fore > 0)    return { text: "기관+외인 동시 매수", color: "#7C3AED" };
+    if (inst > 10)                return { text: `기관 +${inst.toFixed(0)}억`, color: "#7C3AED" };
+    if (inst > 0)                 return { text: "기관 소량 매집",       color: "#8B5CF6" };
+    if (fore > 10)                return { text: `외인 +${fore.toFixed(0)}억`, color: "#0EA5E9" };
+    if (fore > 0)                 return { text: "외인 유입 중",         color: "#0EA5E9" };
+    if (inst < -10)               return { text: "기관 매도 중",         color: "#EF4444" };
+  }
+
+  // 가격/거래량 신호
+  if (s.priceChange == null) return { text: "조회 중", color: "#94a3b8" };
+  if (up && vol)   return { text: "거래량 동반 상승", color: "#16a34a" };
+  if (up && !vol)  return { text: "상승 (거래량 약)",  color: "#ca8a04" };
+  if (!up && vol)  return { text: "거래량 증가",       color: "#F97316" };
+  return                  { text: "관망",              color: "#94a3b8" };
 }
 
 const TABS = ["테마 분석", "내일 종목", "수급 레이더"] as const;
@@ -74,13 +102,18 @@ type Tab = typeof TABS[number];
 // ── 테마별 수급 강도 랭킹 ─────────────────────────────────────────────────
 
 function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: any }) {
+  // 서버 phase 기준으로 정렬 (hot > momentum > emerging > quiet)
+  const phaseRank: Record<string, number> = { hot: 4, momentum: 3, emerging: 2, quiet: 1 };
   const ranked = feed
     .map(item => ({ ...item, force: computeThemeForce(item.stocks) }))
-    .filter(item => item.force !== null)
-    .sort((a, b) => b.force!.avg - a.force!.avg);
+    .sort((a, b) => {
+      const pr = (phaseRank[b.phase ?? "quiet"] ?? 1) - (phaseRank[a.phase ?? "quiet"] ?? 1);
+      if (pr !== 0) return pr;
+      return (b.themeSmartMoney ?? 0) - (a.themeSmartMoney ?? 0);
+    });
 
   if (ranked.length === 0) return null;
-  const absMax = Math.max(...ranked.map(r => Math.abs(r.force!.avg)), 1);
+  const absMax = Math.max(...ranked.map(r => Math.abs(r.force?.avg ?? 0)), 1);
 
   return (
     <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -90,17 +123,26 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>돈이 쏠리는 순서</Text>
       </View>
       {ranked.map((item, i) => {
-        const meta = forceMeta(item.force!.avg);
-        const barPct = Math.max(2, (Math.abs(item.force!.avg) / absMax) * 100);
+        const force = item.force;
+        const meta = phaseMeta(item.phase, force?.avg);
+        const barPct = Math.max(2, (Math.abs(force?.avg ?? 0) / absMax) * 100);
+        const sm = item.themeSmartMoney;
         return (
           <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <Text style={{ fontSize: 10, color: colors.mutedForeground, width: 14, textAlign: "right", fontFamily: "Inter_400Regular" }}>{i + 1}</Text>
             <Text style={{ fontSize: 15 }}>{item.emoji}</Text>
-            <Text style={{ flex: 1, fontSize: 12, color: colors.foreground, fontFamily: "Inter_500Medium" }} numberOfLines={1}>{item.name}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_500Medium" }} numberOfLines={1}>{item.name}</Text>
+              {item.phase === "emerging" && sm != null && sm > 0 && (
+                <Text style={{ fontSize: 9, color: "#8B5CF6", fontFamily: "Inter_400Regular" }}>
+                  스마트머니 {sm > 0 ? "+" : ""}{sm.toFixed(0)}억 유입
+                </Text>
+              )}
+            </View>
             <View style={{ width: 80, height: 6, backgroundColor: colors.muted, borderRadius: 3, overflow: "hidden" }}>
               <View style={{ width: `${barPct}%` as any, height: "100%", backgroundColor: meta.barColor, borderRadius: 3 }} />
             </View>
-            <Text style={{ fontSize: 10, color: meta.color, width: 46, textAlign: "right", fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ fontSize: 10, color: meta.color, width: 52, textAlign: "right", fontFamily: "Inter_600SemiBold" }}>
               {meta.emoji} {meta.label}
             </Text>
           </View>
@@ -115,6 +157,10 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
 function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (t: string, n: string) => void; colors: any }) {
   const change = stock.priceChange;
   const momentum = momentumInfo(stock);
+  const hasSmartMoney = stock.smartMoneyAek != null;
+  const sm = stock.smartMoneyAek ?? 0;
+  const isAccumulating = hasSmartMoney && sm > 0 && Math.abs(change ?? 0) < 3;
+
   return (
     <View style={[s.stockRow, { borderBottomColor: colors.border }]}>
       <View style={{ flex: 1, gap: 3 }}>
@@ -122,6 +168,11 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
           {stock.isLeader && (
             <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
               <Text style={{ fontSize: 9, color: "#D97706", fontFamily: "Inter_700Bold" }}>주도주</Text>
+            </View>
+          )}
+          {isAccumulating && (
+            <View style={{ backgroundColor: "#EDE9FE", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+              <Text style={{ fontSize: 9, color: "#7C3AED", fontFamily: "Inter_700Bold" }}>📡 매집</Text>
             </View>
           )}
           <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{stock.name}</Text>
@@ -136,9 +187,7 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
               {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
             </Text>
           )}
-          {change != null && (
-            <Text style={{ fontSize: 10, color: momentum.color, fontFamily: "Inter_400Regular" }}>{momentum.text}</Text>
-          )}
+          <Text style={{ fontSize: 10, color: momentum.color, fontFamily: "Inter_400Regular" }}>{momentum.text}</Text>
         </View>
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 16 }} numberOfLines={2}>
           {stock.rationale}
@@ -162,10 +211,26 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
 }) {
   const [expanded, setExpanded] = useState(idx === 0);
   const force = computeThemeForce(item.stocks);
-  const meta = force ? forceMeta(force.avg) : null;
+  const meta = phaseMeta(item.phase, force?.avg);
+  const isEmerging = item.phase === "emerging";
+  const sm = item.themeSmartMoney;
 
   return (
-    <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[s.card, {
+      backgroundColor: colors.card, borderColor: isEmerging ? "#C4B5FD" : colors.border,
+      borderWidth: isEmerging ? 1.5 : StyleSheet.hairlineWidth,
+    }]}>
+      {/* 수급 형성 중 배너 */}
+      {isEmerging && (
+        <View style={{ backgroundColor: "#EDE9FE", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ fontSize: 11, color: "#7C3AED", fontFamily: "Inter_700Bold" }}>📡 수급 형성 중</Text>
+          {sm != null && sm > 0 && (
+            <Text style={{ fontSize: 10, color: "#8B5CF6", fontFamily: "Inter_400Regular" }}>
+              스마트머니 +{sm.toFixed(0)}억 유입 — 가격 반영 전
+            </Text>
+          )}
+        </View>
+      )}
       <TouchableOpacity
         style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
         onPress={() => setExpanded(v => !v)}
@@ -180,11 +245,9 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{item.name}</Text>
-            {meta && (
-              <Text style={{ fontSize: 11, color: meta.color, fontFamily: "Inter_600SemiBold" }}>
-                {meta.emoji} {meta.label}
-              </Text>
-            )}
+            <Text style={{ fontSize: 11, color: meta.color, fontFamily: "Inter_600SemiBold" }}>
+              {meta.emoji} {meta.label}
+            </Text>
           </View>
           <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
             {item.stocks.length}종목
