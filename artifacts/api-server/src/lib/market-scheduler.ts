@@ -27,9 +27,11 @@ async function getMl() {
 import { invalidateBriefCache, refreshBriefInBackground, fetchMarketNews, refreshUsBriefInBackground } from "../routes/market-analysis.js";
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
 import { pool } from "@workspace/db";
+import { collectTodayWinners, syncPresurgeHitResults } from "./daily-winners.js";
 
 // 실행 중복 방지용 플래그
 let morningBriefToday     = "";   // 06:00 KST 장전 브리핑
+let winnersCollectedToday = "";   // 16:40 KST 급등 종목 수집
 let middayBriefToday      = "";   // 11:00 KST 장중 1차 브리핑
 let afternoonBriefToday   = "";   // 14:00 KST 장중 2차 브리핑
 let eveningBriefToday     = "";   // 22:00 KST 야간 브리핑
@@ -174,6 +176,20 @@ function checkAndRun() {
         if (r.sectorsUpdated > 0) await autoUpdateAllSectorPriors();
       })
       .catch(e => console.error("[scheduler] 일별 재보정 실패:", e?.message));
+  }
+
+  // ── 오늘 급등 종목 수집 (피드백 루프): 평일 16:40 KST = 07:40 UTC ──────────
+  // 장 마감 10분 후 — OHLCV 확정 직후, 기관/외인 수급 집계 포함
+  if (utcH === 7 && utcM === 40 && dow >= 1 && dow <= 5 && winnersCollectedToday !== dateStr) {
+    winnersCollectedToday = dateStr;
+    console.log("[scheduler] 오늘 급등 종목 수집 시작 (16:40 KST)");
+    collectTodayWinners()
+      .then(result => {
+        console.log(`[scheduler] 급등 종목 수집 완료: ${result.winners}개 (${result.date})`);
+        return syncPresurgeHitResults();
+      })
+      .then(() => console.log("[scheduler] presurge 적중 결과 동기화 완료"))
+      .catch(e => console.error("[scheduler] 급등 종목 수집 실패:", e?.message));
   }
 }
 

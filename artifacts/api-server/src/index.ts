@@ -18,6 +18,7 @@ import { updateMarketRegime } from "./lib/market-regime-updater.js";
 import { updateAllSectorLearning } from "./lib/sector-learning.js";
 import { initPredictionTable } from "./lib/prediction-tracker.js";
 import { initPresurgeTrackerTable, resolvePendingPresurgePicks } from "./lib/presurge-tracker.js";
+import { initDailyWinnersTable } from "./lib/daily-winners.js";
 import { ensureTigerEtfs } from "./lib/tiger-etf-scraper.js";
 import { warmupNpsDart } from "./lib/nps-dart-holdings.js";
 import { warmupNps13F } from "./lib/nps-13f-holdings.js";
@@ -93,6 +94,7 @@ const server = app.listen(port, () => {
         pool.query(`CREATE INDEX IF NOT EXISTS idx_user_credits_email  ON user_credits(email)`),
         initPredictionTable(),
         initPresurgeTrackerTable(),
+        initDailyWinnersTable(),
       ]).then(() => console.log("[INDEXES] DB 인덱스 준비 완료"));
     })
     .then(() => initCalendarCache())
