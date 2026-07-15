@@ -272,8 +272,9 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
 
 // ── 내일 종목: 픽 카드 ────────────────────────────────────────────────────
 
-function PickCard({ item, type, colors }: {
+function PickCard({ item, type, colors, onAnalyze }: {
   item: TomorrowPick | PresurgePick; type: "tomorrow" | "presurge"; colors: any;
+  onAnalyze: (ticker: string, name: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const conf = type === "tomorrow" ? (item as TomorrowPick).confidence : null;
@@ -282,13 +283,15 @@ function PickCard({ item, type, colors }: {
   const confBg   = conf === "high" ? "#dcfce7" : conf === "medium" ? "#fef9c3" : "#fee2e2";
   const confLabel = conf === "high" ? "신뢰 높음" : conf === "medium" ? "신뢰 보통" : "신뢰 낮음";
 
+  // TouchableOpacity 중첩(button>button) 방지: 외부는 View, 콘텐츠 영역만 터치 핸들링
   return (
-    <TouchableOpacity
-      style={[s.pickRow, { borderBottomColor: colors.border }]}
-      onPress={() => setExpanded(v => !v)}
-      activeOpacity={0.7}
-    >
-      <View style={{ flex: 1, gap: 3 }}>
+    <View style={[s.pickRow, { borderBottomColor: colors.border }]}>
+      {/* 왼쪽: 종목 정보 (탭 → 펼침) */}
+      <TouchableOpacity
+        style={{ flex: 1, gap: 3 }}
+        onPress={() => setExpanded(v => !v)}
+        activeOpacity={0.7}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{item.ticker}</Text>
           <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
@@ -309,7 +312,9 @@ function PickCard({ item, type, colors }: {
             )}
           </View>
         )}
-      </View>
+      </TouchableOpacity>
+
+      {/* 오른쪽: 배지 + 분석 버튼 + 펼침 화살표 */}
       <View style={{ alignItems: "flex-end", gap: 6 }}>
         {conf != null && (
           <View style={{ backgroundColor: confBg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
@@ -321,9 +326,22 @@ function PickCard({ item, type, colors }: {
             <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#FF8A7A" }}>{score.toFixed(1)}</Text>
           </View>
         )}
-        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+        <TouchableOpacity
+          onPress={() => onAnalyze(item.ticker, item.name)}
+          activeOpacity={0.7}
+          style={{
+            paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+            borderWidth: 1, borderColor: "#FF8A7A44",
+            backgroundColor: "#FF8A7A11",
+          }}
+        >
+          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#FF8A7A" }}>분석</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setExpanded(v => !v)} hitSlop={8}>
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -567,7 +585,7 @@ export default function ThemesTab() {
             {(presurge.data?.picks ?? []).length === 0
               ? <EmptyState text="급등 예비군이 없습니다" colors={colors} />
               : (presurge.data?.picks ?? []).map((p, i) => (
-                  <PickCard key={`presurge-${i}`} item={p} type="presurge" colors={colors} />
+                  <PickCard key={`presurge-${i}`} item={p} type="presurge" colors={colors} onAnalyze={onAnalyze} />
                 ))
             }
 
@@ -587,7 +605,7 @@ export default function ThemesTab() {
             {(tomorrow.data?.picks ?? []).length === 0
               ? <EmptyState text="내일 픽이 없습니다" colors={colors} />
               : (tomorrow.data?.picks ?? []).map((p, i) => (
-                  <PickCard key={`tomorrow-${i}`} item={p} type="tomorrow" colors={colors} />
+                  <PickCard key={`tomorrow-${i}`} item={p} type="tomorrow" colors={colors} onAnalyze={onAnalyze} />
                 ))
             }
           </ScrollView>
