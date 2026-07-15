@@ -135,23 +135,28 @@ export async function collectTodayWinners(dateStr?: string): Promise<{
   const flows = await fetchInvestorByStocks(ymd, tickers).catch(() => []);
   const flowMap = new Map(flows.map(f => [f.ticker, f]));
 
-  // presurge_picks 에서 오늘 예비군 조회
+  // presurge_picks 에서 어제(D-1) 예비군 조회
+  // presurge는 "D일에 스캔 → D+1일 급등 예측" 구조이므로
+  // D일 실제 급등과 대조하려면 D-1일 스캔 결과를 가져와야 함
+  const presurgeScanDate = new Date(new Date(today).getTime() - 86400_000)
+    .toISOString().slice(0, 10);
   const { rows: presurgePicks } = await pool.query<{
     ticker: string; score: number;
   }>(
     `SELECT ticker, score FROM presurge_picks WHERE scan_date = $1`,
-    [today],
+    [presurgeScanDate],
   ).catch(() => ({ rows: [] as { ticker: string; score: number }[] }));
   const presurgeSet = new Map(presurgePicks.map(p => [p.ticker, p.score]));
 
-  // tomorrow_picks 에서 오늘 상승 후보 조회 (scan_date 또는 전날 날짜)
-  const yesterday = new Date(Date.now() + 9 * 3600_000 - 86400_000).toISOString().slice(0, 10);
-  const { rows: tomorrowPicks } = await pool.query<{ ticker: string }>(
-    `SELECT DISTINCT ticker FROM tomorrow_picks
-     WHERE scan_date IN ($1, $2)`,
-    [today, yesterday],
-  ).catch(() => ({ rows: [] as { ticker: string }[] }));
-  const tomorrowSet = new Set(tomorrowPicks.map(p => p.ticker));
+  // tomorrow_picks는 DB 테이블 없이 system_cache에 JSON으로 저장됨
+  // 만료 여부와 무관하게 가장 최근 캐시를 사용 (어제 생성된 picks가 오늘 수집 시 필요)
+  const { rows: cacheRows } = await pool.query<{ data: string }>(
+    `SELECT data FROM system_cache WHERE key = 'tomorrow_picks_v2' ORDER BY expires_at DESC LIMIT 1`,
+  ).catch(() => ({ rows: [] as { data: string }[] }));
+  const cachedPicks: { ticker: string }[] = cacheRows[0]?.data
+    ? JSON.parse(cacheRows[0].data)
+    : [];
+  const tomorrowSet = new Set(cachedPicks.map(p => p.ticker));
 
   // DB 저장
   let saved = 0;
@@ -249,9 +254,8 @@ export async function getWinnerHitSummary(): Promise<WinnerHitSummary> {
       SUM(CASE WHEN was_presurge_pick THEN 1 ELSE 0 END)  AS presurge_hits,
       SUM(CASE WHEN was_tomorrow_pick THEN 1 ELSE 0 END)  AS tomorrow_hits,
       (SELECT COUNT(*)::int FROM presurge_picks
-        WHERE scan_date = dw.trade_date) AS total_presurge,
-      (SELECT COUNT(*)::int FROM tomorrow_picks
-        WHERE scan_date IN (dw.trade_date, dw.trade_date - INTERVAL '1 day')) AS total_tomorrow
+        WHERE scan_date = dw.trade_date - INTERVAL '1 day') AS total_presurge,
+      0 AS total_tomorrow
     FROM daily_winners dw
     GROUP BY trade_date
     ORDER BY trade_date DESC
