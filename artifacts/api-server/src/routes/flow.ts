@@ -235,8 +235,9 @@ export interface SurgeCandidate {
   market: "KOSPI" | "KOSDAQ";
   change: number;          // 등락률 %
   volume: number;          // 오늘 거래량
-  avgVolume: number;       // 시장 중앙값 거래량
-  volumeRatio: number;     // 거래량 급증률 (오늘/5일평균)
+  turnover: number;        // 거래대금 (억원)
+  avgVolume: number;       // 기준 거래량 (시장 내 75th pct)
+  volumeRatio: number;     // 거래량 급증률 (오늘/시장75th)
   institution: number;     // 기관 순매수 (억)
   foreign: number;         // 외인 순매수 (억)
   smartMoney: number;      // 기관+외인
@@ -353,28 +354,51 @@ async function buildSurgeData(): Promise<SurgeCandidate[]> {
     return [];
   }
 
-  // 1단계: 기본 필터 — 등락률 +2% 이상, 거래량 존재
-  const candidates = rows.filter(r =>
-    r.change >= 2 &&
-    r.volume > 0 &&
-    r.close > 500, // 동전주 제외
-  );
+  // ── 시장별 거래량 75th 퍼센타일 계산 ─────────────────────────────────────────
+  // 기존 "시장 전체 중앙값" 방식은 대형주가 항상 상위권에 오르는 왜곡을 발생시킴.
+  // KOSPI / KOSDAQ 각각의 75th 퍼센타일을 기준선으로 삼으면 자신이 속한 시장 내에서
+  // 상위 25%보다 2배 이상 거래량이 터진 종목만 포착 — 진짜 폭발 신호.
+  const pct = (arr: number[], q: number) => {
+    const s = [...arr].sort((a, b) => a - b);
+    return s[Math.floor(s.length * q)] ?? 1;
+  };
+  const kospiVols  = rows.filter(r => r.market === "KOSPI"  && r.volume > 0).map(r => r.volume);
+  const kosdaqVols = rows.filter(r => r.market === "KOSDAQ" && r.volume > 0).map(r => r.volume);
+  const kospiP75  = pct(kospiVols,  0.75);
+  const kosdaqP75 = pct(kosdaqVols, 0.75);
 
-  // 전체 거래량 중앙값으로 볼륨 비율 추정
-  const allVols = rows.map(r => r.volume).filter(v => v > 0).sort((a, b) => a - b);
-  const medianVol = allVols[Math.floor(allVols.length / 2)] || 1;
+  // ── 1단계: 기본 필터 ────────────────────────────────────────────────────────
+  const MIN_TURNOVER  = 500_000_000; // 5억 거래대금 미만 제외 (얇은 종목)
+  const MIN_VOL_RATIO = 2.0;         // 시장 75th pct의 2배 이상 = 진짜 폭발
 
-  // 2단계: 거래량 급증률 계산 (전체 중앙값 대비)
-  const withRatio = candidates.map(r => ({
-    ...r,
-    volumeRatio: r.volume / medianVol,
-  })).filter(r => r.volumeRatio >= 1.5); // 중앙값의 1.5배 이상
+  const candidates = rows
+    .filter(r =>
+      r.change >= 2 &&                          // 최소 +2% 상승
+      r.change < 28 &&                          // 상한가 근처 제외 (차익 위험)
+      r.volume > 0 &&
+      r.close >= 500 &&                         // 동전주 제외
+      r.close * r.volume >= MIN_TURNOVER &&     // 거래대금 5억 이상
+      !(r.ticker.length === 6 && r.ticker[5] !== "0"), // 우선주 제외
+    )
+    .map(r => {
+      const baseVol = r.market === "KOSPI" ? kospiP75 : kosdaqP75;
+      return { ...r, baseVol, volumeRatio: r.volume / baseVol };
+    })
+    .filter(r => r.volumeRatio >= MIN_VOL_RATIO);
 
-  if (!withRatio.length) return [];
+  if (!candidates.length) return [];
 
-  // 상위 60개만 투자자 순매수 조회 (API 부하 방지)
-  const top60 = withRatio
-    .sort((a, b) => b.volumeRatio - a.volumeRatio)
+  // ── 2단계: 상위 60개 선별 (스마트머니 조회 전 부하 방지) ─────────────────────
+  // 1차 점수: 거래량 배율 + 등락률 + 거래대금 로그 가중치
+  const preScore = (r: typeof candidates[0]) => {
+    const vs = Math.min(40, (r.volumeRatio - 2) * 8);
+    const cs = Math.min(25, r.change * 2.5);
+    const ts = Math.min(15, Math.log10(r.close * r.volume / 100_000_000 + 1) * 10);
+    return vs + cs + ts;
+  };
+
+  const top60 = [...candidates]
+    .sort((a, b) => preScore(b) - preScore(a))
     .slice(0, 60);
 
   const tickers = top60.map(r => r.ticker);
@@ -383,23 +407,38 @@ async function buildSurgeData(): Promise<SurgeCandidate[]> {
   const investorFlows = await fetchInvestorByStocks(todayStr, tickers).catch(() => []);
   const flowMap = new Map(investorFlows.map(f => [f.ticker, f]));
 
-  // 3단계: 종합 점수 계산
+  // ── 3단계: 종합 점수 계산 ───────────────────────────────────────────────────
   const result: SurgeCandidate[] = top60.map(r => {
     const flow = flowMap.get(r.ticker);
     const inst = flow?.institution ?? 0;
     const fore = flow?.foreign ?? 0;
     const smart = inst + fore;
+    const turnoverAeok = Math.round(r.close * r.volume / 100_000_000 * 10) / 10; // 억원
 
-    // 신호 분류
+    // 거래량급증 (최대 40점): 75th pct 2배 초과분 기준
+    const volScore = Math.min(40, (r.volumeRatio - 2) * 8);
+
+    // 등락률 (최대 25점)
+    const changeScore = Math.min(25, r.change * 2.5);
+
+    // 거래대금 (최대 15점): 100억=10점, 500억=17→cap15점
+    const turnoverScore = Math.min(15, Math.log10(turnoverAeok / 10 + 1) * 10);
+
+    // 스마트머니 (최대 30점): 기관 2배 가중, 선형 스케일
+    // 기존 log1p 방식 → 기관 30억이 겨우 17점이던 문제 수정
+    const instScore  = inst  > 0 ? Math.min(20, inst  / 1.5) : 0; // 30억 = 20점
+    const foreScore  = fore  > 0 ? Math.min(10, fore  / 3.0) : 0; // 30억 = 10점
+    const smartScore = instScore + foreScore;
+
+    const surgeScore = volScore + changeScore + turnoverScore + smartScore;
+
+    // 신호 분류 (기준 강화)
+    // breakout:     기관 순매수 10억 이상 + 7%+ 상승 — 진짜 기관이 실은 신호
+    // accumulation: 스마트머니 5억 이상 + 3%+ 상승 — 의미있는 수급 유입
+    // volume_spike: 거래량만 폭발 (개인 주도 or 뉴스성)
     let signal: SurgeCandidate["signal"] = "volume_spike";
-    if (r.change >= 8 && smart > 0) signal = "breakout";
-    else if (r.change >= 3 && smart > 0) signal = "accumulation";
-
-    // 종합 점수: 거래량급증(40) + 등락률(30) + 스마트머니(30)
-    const volScore   = Math.min(40, (r.volumeRatio - 1) * 10);
-    const changeScore = Math.min(30, r.change * 2);
-    const smartScore  = smart > 0 ? Math.min(30, Math.log1p(Math.abs(smart)) * 5) : 0;
-    const surgeScore  = volScore + changeScore + smartScore;
+    if (r.change >= 7 && inst >= 10)      signal = "breakout";
+    else if (r.change >= 3 && smart >= 5) signal = "accumulation";
 
     return {
       ticker:      r.ticker,
@@ -407,7 +446,8 @@ async function buildSurgeData(): Promise<SurgeCandidate[]> {
       market:      r.market ?? "KOSDAQ",
       change:      r.change,
       volume:      r.volume,
-      avgVolume:   medianVol,
+      turnover:    turnoverAeok,
+      avgVolume:   r.baseVol,
       volumeRatio: Math.round(r.volumeRatio * 10) / 10,
       institution: inst,
       foreign:     fore,
@@ -418,12 +458,18 @@ async function buildSurgeData(): Promise<SurgeCandidate[]> {
     };
   });
 
-  // 4단계: 최종 정렬 (점수 + 스마트머니 동시 매수 우선)
+  // ── 4단계: 신호 등급 → 점수 순 최종 정렬, 상위 25개 반환 ─────────────────────
+  const sigRank: Record<SurgeCandidate["signal"], number> = {
+    breakout: 2, accumulation: 1, volume_spike: 0,
+  };
   const final = result
-    .sort((a, b) => b.surgeScore - a.surgeScore)
-    .slice(0, 20);
+    .sort((a, b) => {
+      const sd = sigRank[b.signal] - sigRank[a.signal];
+      return sd !== 0 ? sd : b.surgeScore - a.surgeScore;
+    })
+    .slice(0, 25);
 
-  console.log(`[surge] 완료: ${final.length}개 폭발 조짐 종목 탐지`);
+  console.log(`[surge] 완료: ${final.length}개 수급 폭발 종목 (breakout:${final.filter(x=>x.signal==="breakout").length} / accumulation:${final.filter(x=>x.signal==="accumulation").length} / spike:${final.filter(x=>x.signal==="volume_spike").length})`);
   return final;
 }
 

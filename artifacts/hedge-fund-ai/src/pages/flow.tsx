@@ -19,6 +19,7 @@ interface SurgeCandidate {
   market: "KOSPI" | "KOSDAQ";
   change: number;
   volume: number;
+  turnover: number;        // 거래대금 (억원)
   volumeRatio: number;
   institution: number;
   foreign: number;
@@ -218,6 +219,15 @@ export function SurgeWidget() {
                 const sig = SIGNAL_CFG[s.signal];
                 const isExpanded = expandedTicker === s.ticker;
                 const hasSmartBuy = s.smartMoney > 0;
+                const instBig = s.institution >= 10;   // 기관 10억+
+                const smartLabel = instBig
+                  ? `🏦 기관 +${fmt억(s.institution)}`
+                  : hasSmartBuy
+                  ? `🤝 스마트머니 +${fmt억(s.smartMoney)}`
+                  : "개인 주도";
+                const turnoverStr = s.turnover != null
+                  ? s.turnover >= 1000 ? `${(s.turnover / 1000).toFixed(1)}천억` : `${s.turnover}억`
+                  : null;
                 return (
                   <div key={s.ticker} className={cn(
                     "rounded-xl border overflow-hidden transition-colors",
@@ -252,19 +262,25 @@ export function SurgeWidget() {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[11px] font-medium text-muted-foreground/50">{s.ticker} · {s.market}</span>
-                          <span className={cn("text-[11px] font-bold", hasSmartBuy ? "text-red-500" : "text-muted-foreground/40")}>
-                            {hasSmartBuy ? "🤝 스마트머니↑" : "개인 주도"}
+                          <span className={cn(
+                            "text-[11px] font-bold",
+                            instBig ? "text-rose-600 dark:text-rose-400"
+                            : hasSmartBuy ? "text-red-500"
+                            : "text-muted-foreground/40"
+                          )}>
+                            {smartLabel}
                           </span>
                         </div>
                       </div>
 
-                      {/* 등락률 + 거래량배율 */}
+                      {/* 등락률 + 거래량배율 + 거래대금 */}
                       <div className="text-right shrink-0">
                         <div className="text-[15px] font-black text-red-500 tabular-nums">
                           +{s.change.toFixed(1)}%
                         </div>
                         <div className="text-[10px] text-muted-foreground/50 tabular-nums">
-                          거래량 {s.volumeRatio}배
+                          {s.volumeRatio}배
+                          {turnoverStr && <span className="ml-1 text-muted-foreground/35">/ {turnoverStr}</span>}
                         </div>
                       </div>
 
@@ -281,27 +297,40 @@ export function SurgeWidget() {
                           transition={{ duration: 0.15 }}
                           className="overflow-hidden"
                         >
-                          <div className="px-4 pb-3 pt-1 border-t border-border/40 grid grid-cols-3 gap-2">
-                            <div className="text-center">
-                              <p className="text-[10px] text-muted-foreground/50 mb-0.5">기관</p>
-                              <p className={cn("text-[12px] font-bold tabular-nums", s.institution > 0 ? "text-red-500" : s.institution < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
-                                {s.institution > 0 ? "+" : ""}{fmt억(s.institution)}
-                              </p>
+                          <div className="px-4 pb-3 pt-2 border-t border-border/40 space-y-2">
+                            {/* 수급 행 */}
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="text-center">
+                                <p className="text-[10px] text-muted-foreground/50 mb-0.5">🏦 기관</p>
+                                <p className={cn("text-[12px] font-bold tabular-nums", s.institution > 0 ? "text-red-500" : s.institution < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                                  {s.institution > 0 ? "+" : ""}{fmt억(s.institution)}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-muted-foreground/50 mb-0.5">🌏 외국인</p>
+                                <p className={cn("text-[12px] font-bold tabular-nums", s.foreign > 0 ? "text-red-500" : s.foreign < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
+                                  {s.foreign > 0 ? "+" : ""}{fmt억(s.foreign)}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-muted-foreground/50 mb-0.5">거래대금</p>
+                                <p className="text-[12px] font-bold tabular-nums text-foreground/70">
+                                  {turnoverStr ?? "-"}
+                                </p>
+                              </div>
                             </div>
-                            <div className="text-center">
-                              <p className="text-[10px] text-muted-foreground/50 mb-0.5">외국인</p>
-                              <p className={cn("text-[12px] font-bold tabular-nums", s.foreign > 0 ? "text-red-500" : s.foreign < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
-                                {s.foreign > 0 ? "+" : ""}{fmt억(s.foreign)}
-                              </p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-[10px] text-muted-foreground/50 mb-0.5">기관+외인</p>
-                              <p className={cn("text-[12px] font-bold tabular-nums", s.smartMoney > 0 ? "text-red-500" : s.smartMoney < 0 ? "text-blue-500" : "text-muted-foreground/40")}>
-                                {s.smartMoney > 0 ? "+" : ""}{fmt억(s.smartMoney)}
-                              </p>
-                            </div>
-                            {s.themes.length > 1 && (
-                              <div className="col-span-3 flex flex-wrap gap-1 mt-1">
+                            {/* 신호 설명 */}
+                            <p className="text-[10px] text-muted-foreground/55 leading-relaxed border-t border-border/30 pt-1.5">
+                              {s.signal === "breakout"
+                                ? `기관이 ${fmt억(s.institution)} 순매수하며 ${s.change.toFixed(1)}% 강하게 돌파. 거래량도 시장 평균의 ${s.volumeRatio}배 폭발 — 오늘 진짜 돈이 들어온 신호.`
+                                : s.signal === "accumulation"
+                                ? `스마트머니(기관·외인) ${fmt억(s.smartMoney)} 순매수와 함께 거래량 ${s.volumeRatio}배 폭발. 조용한 매집 패턴 — 내일 추가 상승 가능성.`
+                                : `오늘 거래량이 시장 평균의 ${s.volumeRatio}배 터졌어요. 기관/외인보다 개인 주도 가능성이 높아 변동성 주의.`
+                              }
+                            </p>
+                            {/* 테마 */}
+                            {s.themes.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
                                 {s.themes.map(t => (
                                   <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/8 text-blue-500/80 border border-blue-500/15">
                                     {t}
