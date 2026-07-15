@@ -245,6 +245,19 @@ export default function AnalysisTab() {
               <Feather name="chevron-right" size={13} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
+          <View style={[styles.scannerRow, { borderTopColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.scannerBtn, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "40" }]}
+              onPress={() => router.push("/scanner")}
+            >
+              <Feather name="zap" size={14} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.scannerTitle, { color: colors.foreground }]}>저평가 스캐너</Text>
+                <Text style={[styles.scannerSub, { color: colors.mutedForeground }]}>AI 적정가 대비 저평가 종목 발굴</Text>
+              </View>
+              <Feather name="chevron-right" size={13} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
 
           {/* Segment */}
           <View style={[styles.segRow, { borderBottomColor: colors.border }]}>
@@ -334,6 +347,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
   },
   quickLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium" },
+  scannerRow: {
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  scannerBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
+  },
+  scannerTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  scannerSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   segRow: {
     flexDirection: "row", paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 0,
