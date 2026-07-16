@@ -38,6 +38,25 @@ function findUvPythons(): string[] {
   return results;
 }
 
+/** Nix store에서 python3.11 바이너리를 동적 탐색 (배포 환경 대응) */
+function findNixStorePythons(): string[] {
+  try {
+    // /nix/store/*/bin/python3.11 패턴으로 직접 탐색
+    const r = spawnSync("find", [
+      "/nix/store", "-maxdepth", "4",
+      "-name", "python3.11",
+      "-type", "f",
+      "-not", "-path", "*/wrapper*",
+    ], { timeout: 8000, encoding: "utf8" });
+    if (r.status === 0) {
+      return (r.stdout ?? "").split("\n")
+        .map(p => p.trim())
+        .filter(p => p && p.includes("/bin/python3.11") && !p.includes("wrapper"));
+    }
+  } catch {}
+  return [];
+}
+
 /**
  * Python 실행 커맨드 확정.
  * bin + prefixArgs로 구성 — spawn(bin, [...prefixArgs, SCRIPT, ...scriptArgs]) 형태로 사용.
@@ -87,6 +106,7 @@ const PYTHON_CMD: { bin: string; prefixArgs: string[] } = (() => {
     "/home/runner/workspace/.pythonlibs/bin/python3.11",
     "/home/runner/workspace/.pythonlibs/bin/python3",
     ...findUvPythons(),
+    ...findNixStorePythons(),   // 배포 환경: /nix/store에서 실제 python3.11 동적 탐색
     "/nix/var/nix/profiles/default/bin/python3.12",
     "/nix/var/nix/profiles/default/bin/python3.11",
     "/nix/var/nix/profiles/default/bin/python3",
