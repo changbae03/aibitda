@@ -89,15 +89,17 @@ const PYTHON_CMD: { bin: string; prefixArgs: string[] } = (() => {
     "/home/runner/.local/bin/uv",
     "/usr/local/bin/uv",
   ].filter(Boolean) as string[];
+  // uv에 --python 3.11 명시 → 시스템 python(Go 래퍼) 대신 uv 자체 CPython 관리
+  const uvPrefixArgs = ["run", "--python", "3.11", "--with", "pykrx", "python3"];
   for (const uvBin of uvCandidates) {
     if (existsSync(uvBin) && isUvAvailable(uvBin)) {
-      console.log(`[pykrx] Python 확정 (uv run): ${uvBin}`);
-      return { bin: uvBin, prefixArgs: ["run", "--with", "pykrx", "python3"] };
+      console.log(`[pykrx] Python 확정 (uv run --python 3.11): ${uvBin}`);
+      return { bin: uvBin, prefixArgs: uvPrefixArgs };
     }
   }
   if (isUvAvailable("uv")) {
-    console.log("[pykrx] Python 확정 (uv run via PATH)");
-    return { bin: "uv", prefixArgs: ["run", "--with", "pykrx", "python3"] };
+    console.log("[pykrx] Python 확정 (uv run --python 3.11 via PATH)");
+    return { bin: "uv", prefixArgs: uvPrefixArgs };
   }
 
   // ③ 절대경로 후보: existsSync → isRealPython 순서로 검증
