@@ -8,9 +8,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 /** 실제로 Python X.Y.Z 를 출력하는지 확인 (Go 래퍼는 패닉하므로 제외) */
-function isRealPython(bin: string): boolean {
+function isRealPython(bin: string, prefixArgs: string[] = []): boolean {
   try {
-    const r = spawnSync(bin, ["--version"], { timeout: 4000, encoding: "utf8" });
+    const r = spawnSync(bin, [...prefixArgs, "--version"], { timeout: 5000, encoding: "utf8" });
     const out = (r.stdout ?? "") + (r.stderr ?? "");
     return r.status === 0 && /Python 3\.\d+/.test(out);
   } catch {
@@ -20,26 +20,72 @@ function isRealPython(bin: string): boolean {
 
 /** uv CPython 설치 경로에서 python3 바이너리를 탐색 */
 function findUvPythons(): string[] {
-  const base = "/home/runner/.local/share/uv/python";
-  try {
-    return readdirSync(base)
-      .filter(d => d.startsWith("cpython-"))
-      .map(d => path.join(base, d, "bin", "python3"))
-      .filter(existsSync);
-  } catch {
-    return [];
+  const bases = [
+    "/home/runner/.local/share/uv/python",  // 개발 환경
+    "/root/.local/share/uv/python",          // 배포 환경 (root 유저)
+    "/home/user/.local/share/uv/python",     // 배포 환경 (user 유저)
+  ];
+  const results: string[] = [];
+  for (const base of bases) {
+    try {
+      readdirSync(base)
+        .filter(d => d.startsWith("cpython-"))
+        .map(d => path.join(base, d, "bin", "python3"))
+        .filter(existsSync)
+        .forEach(p => results.push(p));
+    } catch {}
   }
+  return results;
 }
 
-// Python 바이너리 경로 확정 — existsSync + 실행 검증 (Go 래퍼 패닉 방지)
-const PYTHON_BIN = (() => {
-  const candidates = [
-    process.env.PYTHON_BIN,                                      // 명시적 env override
-    // 버전 고정 경로 (Go 래퍼가 python3를 가로채도 python3.11은 안 가로채는 경우)
+/**
+ * Python 실행 커맨드 확정.
+ * bin + prefixArgs로 구성 — spawn(bin, [...prefixArgs, SCRIPT, ...scriptArgs]) 형태로 사용.
+ * 최우선: uv run --with pykrx python3 (Python 바이너리 + 패키지 자동 관리)
+ * 폴백: 직접 Python 바이너리 탐색
+ */
+const PYTHON_CMD: { bin: string; prefixArgs: string[] } = (() => {
+  // ① PYTHON_BIN 환경변수 override (절대경로)
+  if (process.env.PYTHON_BIN) {
+    if (isRealPython(process.env.PYTHON_BIN)) {
+      console.log(`[pykrx] Python 확정 (env override): ${process.env.PYTHON_BIN}`);
+      return { bin: process.env.PYTHON_BIN, prefixArgs: [] };
+    }
+  }
+
+  // ② uv 사용 가능 여부 확인 — uv run --with pykrx python3 으로 실행
+  //    uv가 Python 바이너리 + pykrx 패키지를 자동으로 관리
+  //    (pykrx 다운로드가 느릴 수 있으므로 uv 존재만 확인하고 신뢰)
+  function isUvAvailable(bin: string): boolean {
+    try {
+      const r = spawnSync(bin, ["--version"], { timeout: 3000, encoding: "utf8" });
+      return r.status === 0 && (r.stdout ?? "").includes("uv ");
+    } catch { return false; }
+  }
+  const uvWhich = spawnSync("which", ["uv"], { encoding: "utf8", timeout: 2000 }).stdout?.trim();
+  const uvCandidates = [
+    uvWhich,
+    "/nix/store/6m2322jq0rkfdnv6cm3dq8437djbfv1l-uv-0.9.5/bin/uv",
+    "/root/.local/bin/uv",
+    "/home/runner/.local/bin/uv",
+    "/usr/local/bin/uv",
+  ].filter(Boolean) as string[];
+  for (const uvBin of uvCandidates) {
+    if (existsSync(uvBin) && isUvAvailable(uvBin)) {
+      console.log(`[pykrx] Python 확정 (uv run): ${uvBin}`);
+      return { bin: uvBin, prefixArgs: ["run", "--with", "pykrx", "python3"] };
+    }
+  }
+  if (isUvAvailable("uv")) {
+    console.log("[pykrx] Python 확정 (uv run via PATH)");
+    return { bin: "uv", prefixArgs: ["run", "--with", "pykrx", "python3"] };
+  }
+
+  // ③ 절대경로 후보: existsSync → isRealPython 순서로 검증
+  const fullPathCandidates = [
     "/home/runner/workspace/.pythonlibs/bin/python3.12",
     "/home/runner/workspace/.pythonlibs/bin/python3.11",
     "/home/runner/workspace/.pythonlibs/bin/python3",
-    // uv 설치 CPython (배포 환경)
     ...findUvPythons(),
     "/nix/var/nix/profiles/default/bin/python3.12",
     "/nix/var/nix/profiles/default/bin/python3.11",
@@ -47,17 +93,27 @@ const PYTHON_BIN = (() => {
     "/usr/bin/python3.12",
     "/usr/bin/python3.11",
     "/usr/bin/python3",
+    "/usr/local/bin/python3.12",
+    "/usr/local/bin/python3.11",
     "/usr/local/bin/python3",
-  ].filter(Boolean) as string[];
-
-  for (const p of candidates) {
+  ];
+  for (const p of fullPathCandidates) {
     if (existsSync(p) && isRealPython(p)) {
-      console.log(`[pykrx] Python 바이너리 확정 (검증 완료): ${p}`);
-      return p;
+      console.log(`[pykrx] Python 확정 (절대경로): ${p}`);
+      return { bin: p, prefixArgs: [] };
     }
   }
-  console.warn("[pykrx] 검증된 Python 바이너리 없음 — PATH 'python3' 폴백");
-  return "python3";
+
+  // ④ PATH 명령 후보 (Go 래퍼가 python3만 가로채고 python3.11은 안 가로채는 경우)
+  for (const bin of ["python3.13", "python3.12", "python3.11", "python3.10"]) {
+    if (isRealPython(bin)) {
+      console.log(`[pykrx] Python 확정 (PATH 버전 고정): ${bin}`);
+      return { bin, prefixArgs: [] };
+    }
+  }
+
+  console.warn("[pykrx] 검증된 Python 없음 — 'python3' 폴백 (실패 가능성 높음)");
+  return { bin: "python3", prefixArgs: [] };
 })();
 
 // esbuild CJS 번들에서는 import.meta.url이 undefined → fileURLToPath가 throw됨
@@ -136,7 +192,7 @@ async function callPykrx(
 ): Promise<any[]> {
   validatePykrxArgs(type, fromDate, toDate, market);
   return new Promise((resolve) => {
-    const proc = spawn(PYTHON_BIN, [SCRIPT, type, fromDate, toDate, market], {
+    const proc = spawn(PYTHON_CMD.bin, [...PYTHON_CMD.prefixArgs, SCRIPT, type, fromDate, toDate, market], {
       env: { ...process.env },
       timeout: timeoutMs,
     });
@@ -189,7 +245,7 @@ async function callPykrxAny(
 ): Promise<any> {
   validatePykrxArgs(type, fromDate, toDate, market);
   return new Promise((resolve) => {
-    const proc = spawn(PYTHON_BIN, [SCRIPT, type, fromDate, toDate, market], {
+    const proc = spawn(PYTHON_CMD.bin, [...PYTHON_CMD.prefixArgs, SCRIPT, type, fromDate, toDate, market], {
       env: { ...process.env },
       timeout: timeoutMs,
     });
