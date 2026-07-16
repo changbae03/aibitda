@@ -63,7 +63,7 @@ function findNixStorePythons(): string[] {
  * 최우선: uv run --with pykrx python3 (Python 바이너리 + 패키지 자동 관리)
  * 폴백: 직접 Python 바이너리 탐색
  */
-const PYTHON_CMD: { bin: string; prefixArgs: string[] } = (() => {
+const PYTHON_CMD: { bin: string; prefixArgs: string[]; extraEnv?: Record<string, string> } = (() => {
   // ① PYTHON_BIN 환경변수 override (절대경로)
   if (process.env.PYTHON_BIN) {
     if (isRealPython(process.env.PYTHON_BIN)) {
@@ -89,17 +89,22 @@ const PYTHON_CMD: { bin: string; prefixArgs: string[] } = (() => {
     "/home/runner/.local/bin/uv",
     "/usr/local/bin/uv",
   ].filter(Boolean) as string[];
-  // uv에 --python 3.11 명시 → 시스템 python(Go 래퍼) 대신 uv 자체 CPython 관리
+  // UV_PYTHON_PREFERENCE=only-managed → 시스템 python(Go 래퍼) 완전 무시
+  // UV_PYTHON_DOWNLOADS=automatic → 필요 시 uv가 CPython 자동 다운로드
   const uvPrefixArgs = ["run", "--python", "3.11", "--with", "pykrx", "python3"];
+  const uvExtraEnv = {
+    UV_PYTHON_PREFERENCE: "only-managed",
+    UV_PYTHON_DOWNLOADS: "automatic",
+  };
   for (const uvBin of uvCandidates) {
     if (existsSync(uvBin) && isUvAvailable(uvBin)) {
-      console.log(`[pykrx] Python 확정 (uv run --python 3.11): ${uvBin}`);
-      return { bin: uvBin, prefixArgs: uvPrefixArgs };
+      console.log(`[pykrx] Python 확정 (uv run only-managed): ${uvBin}`);
+      return { bin: uvBin, prefixArgs: uvPrefixArgs, extraEnv: uvExtraEnv };
     }
   }
   if (isUvAvailable("uv")) {
-    console.log("[pykrx] Python 확정 (uv run --python 3.11 via PATH)");
-    return { bin: "uv", prefixArgs: uvPrefixArgs };
+    console.log("[pykrx] Python 확정 (uv run only-managed via PATH)");
+    return { bin: "uv", prefixArgs: uvPrefixArgs, extraEnv: uvExtraEnv };
   }
 
   // ③ 절대경로 후보: existsSync → isRealPython 순서로 검증
@@ -215,7 +220,7 @@ async function callPykrx(
   validatePykrxArgs(type, fromDate, toDate, market);
   return new Promise((resolve) => {
     const proc = spawn(PYTHON_CMD.bin, [...PYTHON_CMD.prefixArgs, SCRIPT, type, fromDate, toDate, market], {
-      env: { ...process.env },
+      env: { ...process.env, ...(PYTHON_CMD.extraEnv ?? {}) },
       timeout: timeoutMs,
     });
 
@@ -268,7 +273,7 @@ async function callPykrxAny(
   validatePykrxArgs(type, fromDate, toDate, market);
   return new Promise((resolve) => {
     const proc = spawn(PYTHON_CMD.bin, [...PYTHON_CMD.prefixArgs, SCRIPT, type, fromDate, toDate, market], {
-      env: { ...process.env },
+      env: { ...process.env, ...(PYTHON_CMD.extraEnv ?? {}) },
       timeout: timeoutMs,
     });
     let stdout = "";
