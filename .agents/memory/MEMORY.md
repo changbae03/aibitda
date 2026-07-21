@@ -7,5 +7,5 @@
 - [Neon DB pool.query blocking trap](neon-pool-query-blocking.md) — 요청 핸들러 내 pool.query() 호출 시 Neon 연결 타임아웃으로 30초+ 블로킹 → Promise.race 3초 타임아웃 필수
 - [Gemini JSON codeblock wrap](gemini-json-codeblock.md) — Gemini가 응답을 ```json 블록으로 감쌀 때 JSON.parse 실패 → replace(/```json\n?|```/g, "").trim() 전처리 필수
 - [callPykrx object vs array](pykrx-object-return.md) — callPykrx는 배열 전용; 객체 반환 타입엔 callPykrxAny 사용, 빈 캐시 오염 시 isCacheValid로 차단
-- [investor_stocks validation trap](investor-stocks-validation.md) — validatePykrxArgs가 market 파라미터를 ALLOWED_MARKETS로 체크하지만 investor_stocks는 market 자리에 종목코드 목록을 넘겨 validation throw → stocks 항상 0개
+- [pykrx validation ticker types](pykrx-ticker-validation.md) — ohlcv는 6자리 종목코드, investor_stocks는 쉼표 목록을 market 자리에 넘김 → TICKER_CODE_TYPES/TICKER_LIST_TYPES로 분리 검사
 - [Presurge pick accuracy tracking](presurge-pick-accuracy-tracking.md) — 급등 예비군 정확도는 순방향 스냅샷 추적 방식, 회고적 backtest 아님; 데이터 누적 필요

@@ -1075,9 +1075,9 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                     {fundFlow.themeBreakdown.map(t => {
                       const heat = t.score >= 75 ? "🔥" : t.score >= 40 ? "📈" : "❄️";
                       const isHot = t.score >= 75; const isWarm = t.score >= 40;
-                      const chipBg = isHot ? "#f9731615" : isWarm ? "#22c55e15" : colors.muted;
-                      const chipBorder = isHot ? "#f9731640" : isWarm ? "#22c55e40" : colors.border;
-                      const chipColor = isHot ? "#f97316" : isWarm ? "#16a34a" : colors.mutedForeground;
+                      const chipBg = isHot ? "#6366f115" : isWarm ? "#22c55e15" : colors.muted;
+                      const chipBorder = isHot ? "#6366f140" : isWarm ? "#22c55e40" : colors.border;
+                      const chipColor = isHot ? "#6366f1" : isWarm ? "#16a34a" : colors.mutedForeground;
                       return (
                         <View key={t.key} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, backgroundColor: chipBg, borderColor: chipBorder }}>
                           <Text style={{ fontSize: 12 }}>{heat}</Text>

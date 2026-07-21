@@ -195,6 +195,8 @@ const ALLOWED_MARKETS = new Set(["KOSPI", "KOSDAQ", "ALL", "KOSPI200"]);
 
 const TICKER_LIST_TYPES = new Set(["investor_stocks"]); // market 자리에 종목코드 목록을 넘기는 타입
 const TICKER_LIST_RE = /^[\d,]+$/; // "005930,000660,..." 형식
+const TICKER_CODE_TYPES = new Set(["ohlcv"]); // market 자리에 단일 종목코드를 넘기는 타입
+const TICKER_CODE_RE = /^\d{6}$/; // "005930" 형식
 
 function validatePykrxArgs(type: string, fromDate: string, toDate: string, market: string): void {
   if (!ALLOWED_PYKRX_TYPES.has(type))
@@ -205,6 +207,10 @@ function validatePykrxArgs(type: string, fromDate: string, toDate: string, marke
   if (TICKER_LIST_TYPES.has(type)) {
     if (!TICKER_LIST_RE.test(market))
       throw new Error(`[pykrx] investor_stocks market 형식 오류: ${market}`);
+  // ohlcv는 market 자리에 단일 6자리 종목코드를 넘김
+  } else if (TICKER_CODE_TYPES.has(type)) {
+    if (!TICKER_CODE_RE.test(market))
+      throw new Error(`[pykrx] ohlcv ticker 형식 오류: ${market}`);
   } else if (!ALLOWED_MARKETS.has(market)) {
     throw new Error(`[pykrx] 허용되지 않은 market: ${market}`);
   }

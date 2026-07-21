@@ -118,7 +118,7 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
   return (
     <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
-        <Feather name="activity" size={14} color="#FF8A7A" />
+        <Feather name="activity" size={14} color="#6366f1" />
         <Text style={[s.cardTitle, { color: colors.foreground }]}>테마별 수급 강도</Text>
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>돈이 쏠리는 순서</Text>
       </View>
@@ -194,10 +194,10 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
         </Text>
       </View>
       <TouchableOpacity
-        style={{ backgroundColor: "#FFF1EE", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 8, marginLeft: 8 }}
+        style={{ backgroundColor: "#eef2ff", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 8, marginLeft: 8 }}
         onPress={() => onAnalyze(stock.ticker, stock.name)}
       >
-        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#FF8A7A" }}>분석</Text>
+        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#6366f1" }}>분석</Text>
       </TouchableOpacity>
     </View>
   );
@@ -322,8 +322,8 @@ function PickCard({ item, type, colors, onAnalyze }: {
           </View>
         )}
         {score != null && (
-          <View style={{ backgroundColor: "#FFF1EE", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#FF8A7A" }}>{score.toFixed(1)}</Text>
+          <View style={{ backgroundColor: "#eef2ff", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
+            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#6366f1" }}>{score.toFixed(1)}</Text>
           </View>
         )}
         <TouchableOpacity
@@ -331,11 +331,11 @@ function PickCard({ item, type, colors, onAnalyze }: {
           activeOpacity={0.7}
           style={{
             paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-            borderWidth: 1, borderColor: "#FF8A7A44",
-            backgroundColor: "#FF8A7A11",
+            borderWidth: 1, borderColor: "#6366f140",
+            backgroundColor: "#6366f111",
           }}
         >
-          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#FF8A7A" }}>분석</Text>
+          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#6366f1" }}>분석</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setExpanded(v => !v)} hitSlop={8}>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
@@ -448,7 +448,7 @@ export default function ThemesTab() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const tabActiveColor = (tab: Tab) => {
-    if (tab === "테마 분석") return "#FF8A7A";
+    if (tab === "테마 분석") return "#6366f1";
     if (tab === "내일 종목") return "#10b981";
     return colors.foreground;
   };
@@ -504,21 +504,21 @@ export default function ThemesTab() {
       {activeTab === "테마 분석" && (
         feedLoading ? (
           <View style={s.center}>
-            <ActivityIndicator size="small" color="#FF8A7A" />
+            <ActivityIndicator size="small" color="#6366f1" />
             <Text style={[s.loadingText, { color: colors.mutedForeground }]}>AI가 관련주를 분석하는 중… (약 10초)</Text>
           </View>
         ) : feedError ? (
           <View style={s.center}>
             <Feather name="alert-circle" size={32} color={colors.border} />
             <Text style={[s.loadingText, { color: colors.mutedForeground }]}>피드를 불러오지 못했습니다</Text>
-            <TouchableOpacity style={[s.retryBtn, { borderColor: "#FF8A7A" }]} onPress={() => loadFeed()}>
-              <Text style={{ fontSize: 13, color: "#FF8A7A", fontFamily: "Inter_600SemiBold" }}>다시 시도</Text>
+            <TouchableOpacity style={[s.retryBtn, { borderColor: "#6366f1" }]} onPress={() => loadFeed()}>
+              <Text style={{ fontSize: 13, color: "#6366f1", fontFamily: "Inter_600SemiBold" }}>다시 시도</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <ScrollView
             contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
-            refreshControl={<RefreshControl refreshing={false} onRefresh={() => loadFeed()} tintColor="#FF8A7A" />}
+            refreshControl={<RefreshControl refreshing={false} onRefresh={() => loadFeed()} tintColor="#6366f1" />}
           >
             <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 4 }}>
               최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신

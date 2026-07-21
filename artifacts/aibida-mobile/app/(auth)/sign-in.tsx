@@ -214,7 +214,7 @@ const s = StyleSheet.create({
   brand: { alignItems: "center", gap: 8, marginBottom: 32, marginTop: 8 },
   logoBox: {
     width: 64, height: 64, borderRadius: 18,
-    backgroundColor: "#f97316", alignItems: "center", justifyContent: "center",
+    backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center",
   },
   logoText: { fontSize: 28, fontFamily: "Inter_700Bold", color: "#fff" },
   appName: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#0d1421" },
@@ -241,14 +241,14 @@ const s = StyleSheet.create({
   eyeBtn: { position: "absolute", right: 14, alignSelf: "center" },
   errorText: { fontSize: 13, color: "#ef4444", fontFamily: "Inter_400Regular", marginBottom: 10 },
   primaryBtn: {
-    backgroundColor: "#f97316", borderRadius: 12, paddingVertical: 15,
+    backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 15,
     alignItems: "center", justifyContent: "center", marginBottom: 16, marginTop: 4,
   },
   primaryBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
   disabled: { opacity: 0.5 },
   linkBtn: { alignItems: "center", paddingVertical: 12 },
-  linkText: { fontSize: 14, color: "#f97316", fontFamily: "Inter_600SemiBold" },
+  linkText: { fontSize: 14, color: "#6366f1", fontFamily: "Inter_600SemiBold" },
   signupRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 4 },
   signupText: { fontSize: 14, color: "#5d6678", fontFamily: "Inter_400Regular" },
-  signupLink: { fontSize: 14, color: "#f97316", fontFamily: "Inter_600SemiBold" },
+  signupLink: { fontSize: 14, color: "#6366f1", fontFamily: "Inter_600SemiBold" },
 });

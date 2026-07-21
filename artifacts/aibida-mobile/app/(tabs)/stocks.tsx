@@ -312,7 +312,7 @@ export default function NewsTab() {
       {tab === "feed" && (
         <ScrollView
           contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
-          refreshControl={<RefreshControl refreshing={feedLoading} onRefresh={() => loadFeed(true)} tintColor="#f97316" />}
+          refreshControl={<RefreshControl refreshing={feedLoading} onRefresh={() => loadFeed(true)} tintColor="#6366f1" />}
           keyboardShouldPersistTaps="handled"
         >
           {/* 검색바 */}
@@ -347,7 +347,7 @@ export default function NewsTab() {
               <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
                 <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>"{searchQuery}"</Text>
                 {" "}검색 결과{" "}
-                <Text style={{ fontFamily: "Inter_600SemiBold", color: "#f97316" }}>{filtered.length}건</Text>
+                <Text style={{ fontFamily: "Inter_600SemiBold", color: "#6366f1" }}>{filtered.length}건</Text>
               </Text>
             </View>
           )}
@@ -375,7 +375,7 @@ export default function NewsTab() {
               </Text>
               {q && (
                 <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <Text style={{ fontSize: 12, color: "#f97316", fontFamily: "Inter_400Regular" }}>검색 초기화</Text>
+                  <Text style={{ fontSize: 12, color: "#6366f1", fontFamily: "Inter_400Regular" }}>검색 초기화</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -461,7 +461,7 @@ export default function NewsTab() {
               />
             </View>
             <TouchableOpacity
-              style={[s.tlSearchBtn, { backgroundColor: "#f97316", opacity: tlLoading || !tlInput.trim() ? 0.5 : 1 }]}
+              style={[s.tlSearchBtn, { backgroundColor: "#6366f1", opacity: tlLoading || !tlInput.trim() ? 0.5 : 1 }]}
               onPress={() => fetchTimeline(tlInput)}
               disabled={tlLoading || !tlInput.trim()}
             >
@@ -488,7 +488,7 @@ export default function NewsTab() {
           {/* 타임라인 결과 */}
           {tlLoading ? (
             <View style={{ alignItems: "center", gap: 12, paddingVertical: 40 }}>
-              <ActivityIndicator size="large" color="#f97316" />
+              <ActivityIndicator size="large" color="#6366f1" />
               <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
                 "{tlInput}" 타임라인 생성 중…
               </Text>
@@ -498,7 +498,7 @@ export default function NewsTab() {
               <Feather name="alert-circle" size={28} color={colors.border} />
               <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{tlError}</Text>
               <TouchableOpacity onPress={() => fetchTimeline(tlKeyword)}>
-                <Text style={{ fontSize: 12, color: "#f97316" }}>다시 시도</Text>
+                <Text style={{ fontSize: 12, color: "#6366f1" }}>다시 시도</Text>
               </TouchableOpacity>
             </View>
           ) : tlData ? (
@@ -543,7 +543,7 @@ export default function NewsTab() {
                             </Text>
                             {ev.url && (
                               <TouchableOpacity onPress={() => Linking.openURL(ev.url!)}>
-                                <Text style={{ fontSize: 11, color: "#f97316", fontFamily: "Inter_400Regular" }}>
+                                <Text style={{ fontSize: 11, color: "#6366f1", fontFamily: "Inter_400Regular" }}>
                                   {ev.source ?? "원문 보기"} →
                                 </Text>
                               </TouchableOpacity>
@@ -611,7 +611,7 @@ function ScrapsList({ colors, insets, searchQuery, setSearchQuery }: {
 
   if (loading) return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <ActivityIndicator size="small" color="#f97316" />
+      <ActivityIndicator size="small" color="#6366f1" />
     </View>
   );
 
@@ -661,8 +661,8 @@ function ScrapsList({ colors, insets, searchQuery, setSearchQuery }: {
           </View>
           <View style={{ flex: 1, gap: 3 }}>
             {item.topic && (
-              <View style={{ alignSelf: "flex-start", backgroundColor: "#FFF1EE", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, color: "#f97316", fontFamily: "Inter_600SemiBold" }}>{item.topic}</Text>
+              <View style={{ alignSelf: "flex-start", backgroundColor: "#eef2ff", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontSize: 10, color: "#6366f1", fontFamily: "Inter_600SemiBold" }}>{item.topic}</Text>
               </View>
             )}
             <Text style={[s.newsTitle, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={3}>
