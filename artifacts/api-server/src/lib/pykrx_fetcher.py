@@ -687,8 +687,7 @@ def main():
                     "period":         f"{trading_dates[0]}~{trading_dates[-1]}",
                 }
 
-            # 최종 노출 개수도 30 → 15로 축소해 확신도 높은 상위 후보만 보여준다
-            emit({"candidates": filtered[:15], "backtest": backtest,
+            emit({"candidates": filtered[:30], "backtest": backtest,
                   "tradingDays": len(trading_dates), "scannedAt": today_date})
 
         else:
