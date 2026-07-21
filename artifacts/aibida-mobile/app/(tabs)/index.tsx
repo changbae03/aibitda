@@ -1,10 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View, Platform, TextInput,
 } from "react-native";
+import Svg, { Polyline, Path, Circle, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/hooks/useApi";
@@ -87,6 +88,14 @@ interface EarningsEntry {
 interface EconomicEvent {
   date: string; time?: string; title: string; country: string;
   importance: "high" | "medium" | "low"; forecast?: string; previous?: string; unit?: string;
+}
+
+// FRED 지표
+interface IndicatorPoint { date: string; value: number; }
+interface IndicatorSeries {
+  id: string; name: string; nameEn: string; country: string;
+  unit: string; category: string; frequency: "monthly" | "quarterly";
+  data: IndicatorPoint[]; targetLine?: number; rangeLabel?: string;
 }
 
 // ─── 감성 설정 ─────────────────────────────────────────────────────────────
@@ -1170,6 +1179,234 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
 
 const IMP_COLOR: Record<string, string> = { high: "#ef4444", medium: "#f59e0b", low: "#94a3b8" };
 const IMP_LABEL: Record<string, string> = { high: "핵심", medium: "주요", low: "참고" };
+const COUNTRY_FLAG_IND: Record<string, string> = { US: "🇺🇸", KR: "🇰🇷", EU: "🇪🇺", CN: "🇨🇳", JP: "🇯🇵" };
+
+// ── 지표 색상 테마 ──────────────────────────────────────────────────────────
+
+function getIndicatorTheme(s: IndicatorSeries): { color: string; trend: "up" | "down" | "flat" } {
+  const vals = s.data.map(d => d.value);
+  if (vals.length < 2) return { color: "#6366f1", trend: "flat" };
+  const last = vals[vals.length - 1]; const prev = vals[vals.length - 2];
+  const trend: "up" | "down" | "flat" = Math.abs(last - prev) < 0.01 ? "flat" : last > prev ? "up" : "down";
+  if (s.id === "fed-rate") return { color: "#6366f1", trend };
+  if (s.id === "us-cpi" || s.id === "core-pce") {
+    if (last <= 2.5) return { color: "#22c55e", trend };
+    if (last <= 3.5) return { color: "#f59e0b", trend };
+    return { color: trend === "down" ? "#f59e0b" : "#ef4444", trend };
+  }
+  if (s.id === "unemployment" || s.id === "kr-unemployment") {
+    return last < 4.0 ? { color: "#22c55e", trend } : last < 5.0 ? { color: "#f59e0b", trend } : { color: "#ef4444", trend };
+  }
+  if (s.id === "us-gdp" || s.id === "kr-gdp") {
+    return last >= 2.0 ? { color: "#22c55e", trend } : last >= 0 ? { color: "#f59e0b", trend } : { color: "#ef4444", trend };
+  }
+  return { color: "#6366f1", trend };
+}
+
+// ── 미니 스파크라인 (react-native-svg) ─────────────────────────────────────
+
+function MobileSparkline({ data, color, targetLine, w = 90, h = 36 }: {
+  data: number[]; color: string; targetLine?: number; w?: number; h?: number;
+}) {
+  if (data.length < 2) return <View style={{ width: w, height: h }} />;
+  const pad = 3;
+  const allVals = targetLine !== undefined ? [...data, targetLine] : data;
+  const min = Math.min(...allVals); const max = Math.max(...allVals);
+  const range = max - min || 1;
+  const xScale = (i: number) => pad + (i / (data.length - 1)) * (w - pad * 2);
+  const yScale = (v: number) => h - pad - ((v - min) / range) * (h - pad * 2);
+  const pts = data.map((v, i) => `${xScale(i).toFixed(1)},${yScale(v).toFixed(1)}`).join(" ");
+  const lastX = xScale(data.length - 1); const lastY = yScale(data[data.length - 1]);
+  const areaD = [
+    `M ${xScale(0).toFixed(1)},${yScale(data[0]).toFixed(1)}`,
+    ...data.slice(1).map((v, i) => `L ${xScale(i + 1).toFixed(1)},${yScale(v).toFixed(1)}`),
+    `L ${lastX.toFixed(1)},${h} L ${xScale(0).toFixed(1)},${h} Z`,
+  ].join(" ");
+  const uid = `sp-${Math.random().toString(36).slice(2, 7)}`;
+  return (
+    <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <Defs>
+        <SvgLinearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={color} stopOpacity={0.2} />
+          <Stop offset="100%" stopColor={color} stopOpacity={0.01} />
+        </SvgLinearGradient>
+      </Defs>
+      <Path d={areaD} fill={`url(#${uid})`} />
+      <Polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      {targetLine !== undefined && (
+        <Line x1={pad} y1={yScale(targetLine)} x2={w - pad} y2={yScale(targetLine)} stroke={color} strokeWidth={0.8} strokeDasharray="3,2" opacity={0.35} />
+      )}
+      <Circle cx={lastX} cy={lastY} r={2.5} fill={color} />
+    </Svg>
+  );
+}
+
+// ── 지표 카드 ───────────────────────────────────────────────────────────────
+
+function MobileIndicatorCard({ series, colors }: { series: IndicatorSeries; colors: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const { color, trend } = useMemo(() => getIndicatorTheme(series), [series]);
+  const vals = (series.data ?? []).map(d => d.value).filter(v => v != null && !isNaN(v));
+  if (vals.length === 0) return null;
+  const last = vals[vals.length - 1]; const prev = vals[vals.length - 2] ?? last;
+  const delta = last - prev;
+  const lastDate = series.data[series.data.length - 1]?.date ?? "";
+  const dateLabel = lastDate.slice(0, 7);
+  const trendArrow = trend === "up" ? "↑" : trend === "down" ? "↓" : "–";
+
+  return (
+    <Pressable
+      onPress={() => setExpanded(v => !v)}
+      style={({ pressed }) => [{
+        flex: 1, minWidth: "47%", maxWidth: "49%",
+        backgroundColor: colors.card, borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+        padding: 11, overflow: "hidden", opacity: pressed ? 0.85 : 1,
+      }]}
+    >
+      {/* 헤더: 국가 + 카테고리 */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Text style={{ fontSize: 11 }}>{COUNTRY_FLAG_IND[series.country] ?? "🌐"}</Text>
+          <View style={{ backgroundColor: color + "22", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+            <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color }}>{series.category}</Text>
+          </View>
+        </View>
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={11} color={colors.mutedForeground + "66"} />
+      </View>
+
+      {/* 지표명 */}
+      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Medium", color: colors.foreground + "99", marginBottom: 6, lineHeight: 13 }} numberOfLines={2}>
+        {series.name}
+      </Text>
+
+      {/* 값 + 스파크라인 */}
+      <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <View>
+          {series.rangeLabel ? (
+            <>
+              <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground, letterSpacing: -0.5 }}>{series.rangeLabel}</Text>
+              <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>FOMC 레인지</Text>
+            </>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 2 }}>
+                <Text style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground, letterSpacing: -0.5 }}>
+                  {last.toFixed(series.id === "us-gdp" || series.id === "kr-gdp" ? 1 : 2)}
+                </Text>
+                <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>{series.unit}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
+                <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color }}>{trendArrow} {delta >= 0 ? "+" : ""}{delta.toFixed(2)}</Text>
+                <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", color: colors.mutedForeground + "80" }}>{dateLabel}</Text>
+              </View>
+            </>
+          )}
+        </View>
+        <MobileSparkline data={vals.slice(-18)} color={color} targetLine={series.targetLine} />
+      </View>
+
+      {/* 펼쳤을 때: 최근 히스토리 */}
+      {expanded && (
+        <View style={{ marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, gap: 4 }}>
+          {[...series.data].reverse().slice(0, 6).map((row, i, arr) => {
+            const nextVal = arr[i + 1]?.value;
+            const d = nextVal != null ? row.value - nextVal : null;
+            return (
+              <View key={row.date} style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }}>{row.date.slice(0, 7)}</Text>
+                <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.foreground, width: 44, textAlign: "right" }}>
+                  {row.value.toFixed(series.id === "us-gdp" || series.id === "kr-gdp" ? 1 : 2)}{series.unit}
+                </Text>
+                <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", width: 36, textAlign: "right",
+                  color: d == null ? colors.mutedForeground : d > 0 ? "#22c55e" : d < 0 ? "#ef4444" : colors.mutedForeground + "60" }}>
+                  {d == null ? "—" : `${d > 0 ? "▲" : "▼"}${Math.abs(d).toFixed(2)}`}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+// ── 지표 추이 전체 섹션 ─────────────────────────────────────────────────────
+
+let _indCache: { data: IndicatorSeries[]; at: number } | null = null;
+
+function MobileIndicatorSection({ colors }: { colors: any }) {
+  const [indicators, setIndicators] = useState<IndicatorSeries[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (_indCache && Date.now() - _indCache.at < 12 * 60 * 60 * 1000) {
+      setIndicators(_indCache.data); return;
+    }
+    setLoading(true);
+    apiFetch<IndicatorSeries[]>("/api/market-data/indicator-history")
+      .then(data => {
+        const valid = (Array.isArray(data) ? data : []).filter(s => Array.isArray(s.data) && s.data.length > 0);
+        _indCache = { data: valid, at: Date.now() };
+        setIndicators(valid);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const usIndicators = indicators.filter(s => s.country === "US");
+  const krIndicators = indicators.filter(s => s.country === "KR");
+
+  return (
+    <View style={{ marginHorizontal: 12, marginTop: 12, marginBottom: 4, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.card + "60", overflow: "hidden" }}>
+      {/* 섹션 헤더 */}
+      <Pressable
+        onPress={() => setCollapsed(v => !v)}
+        style={({ pressed }) => [{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, opacity: pressed ? 0.7 : 1 }]}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Feather name="trending-up" size={13} color={colors.primary} />
+          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>주요 지표 추이</Text>
+          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>FRED 실제 데이터</Text>
+        </View>
+        <Feather name={collapsed ? "chevron-right" : "chevron-down"} size={14} color={colors.mutedForeground + "80"} />
+      </Pressable>
+
+      {!collapsed && (
+        <View style={{ paddingHorizontal: 10, paddingBottom: 12 }}>
+          {loading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 20 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>FRED 데이터 불러오는 중…</Text>
+            </View>
+          ) : indicators.length === 0 ? null : (
+            <>
+              {/* 미국 */}
+              {usIndicators.length > 0 && (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, marginBottom: 8, marginLeft: 2 }}>🇺🇸 미국</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {usIndicators.map(s => <MobileIndicatorCard key={s.id} series={s} colors={colors} />)}
+                  </View>
+                </View>
+              )}
+              {/* 한국 */}
+              {krIndicators.length > 0 && (
+                <View>
+                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, marginBottom: 8, marginLeft: 2 }}>🇰🇷 한국</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {krIndicators.map(s => <MobileIndicatorCard key={s.id} series={s} colors={colors} />)}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
 
 function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
   const [calTab, setCalTab] = useState<"earnings" | "economic">("earnings");
@@ -1239,31 +1476,76 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
             </View>
           ))
         ) : (
-          economic.length === 0 ? (
-            <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}><Feather name="bar-chart" size={28} color={colors.border} /><Text style={{ fontSize: 13, color: colors.mutedForeground }}>경제 지표 일정이 없습니다</Text></View>
-          ) : economic.slice(0, 50).map((ev, i) => (
-            <View key={`ec-${i}`} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 8 }}>
-              <View style={{ width: 4, alignSelf: "stretch", backgroundColor: IMP_COLOR[ev.importance] ?? "#94a3b8", borderRadius: 2 }} />
-              <View style={{ flex: 1, gap: 3 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                  <View style={{ backgroundColor: IMP_COLOR[ev.importance] + "22", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: IMP_COLOR[ev.importance] }}>{IMP_LABEL[ev.importance]}</Text>
+          <>
+            {/* ── 주요 지표 추이 섹션 (FRED) ── */}
+            <MobileIndicatorSection colors={colors} />
+
+            {/* ── 다가올 경제지표 발표 ── */}
+            {economic.length > 0 && (
+              <View style={{ marginTop: 8 }}>
+                <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name="calendar" size={12} color={colors.primary} />
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>다가올 경제지표 발표</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#ef4444" }} /><Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>매우 중요</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" }} /><Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>중요</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#94a3b8" }} /><Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>보통</Text>
+                    </View>
                   </View>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.country}</Text>
                 </View>
-                <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 18 }}>{ev.title}</Text>
-                {(ev.forecast || ev.previous) && (
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
-                    {ev.forecast ? `예상 ${ev.forecast}` : ""}{ev.forecast && ev.previous ? " / " : ""}{ev.previous ? `이전 ${ev.previous}` : ""}
-                  </Text>
-                )}
+                {economic.slice(0, 50).map((ev, i) => {
+                  const evDate = ev.date.slice(0, 10);
+                  const prevDate = i > 0 ? economic[i - 1].date.slice(0, 10) : null;
+                  const showDateHeader = evDate !== prevDate;
+                  const dt = new Date(evDate);
+                  const dayKo = ["일", "월", "화", "수", "목", "금", "토"][dt.getDay()];
+                  const dateStr = `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${dayKo})`;
+                  const isToday2 = evDate === today;
+                  const isTomorrow2 = (() => { const t = new Date(); t.setDate(t.getDate() + 1); return evDate === t.toISOString().slice(0, 10); })();
+                  return (
+                    <View key={`ec-${i}`}>
+                      {showDateHeader && (
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, borderTopWidth: i > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: colors.border + "60" }}>
+                          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{dateStr}</Text>
+                          {isToday2 && <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#b45309" }}>오늘</Text></View>}
+                          {isTomorrow2 && <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#2563eb" }}>내일</Text></View>}
+                        </View>
+                      )}
+                      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 10 }}>
+                        <View style={{ width: 3, alignSelf: "stretch", backgroundColor: IMP_COLOR[ev.importance] ?? "#94a3b8", borderRadius: 2 }} />
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                            <Text style={{ fontSize: 12 }}>{COUNTRY_FLAG_IND[ev.country] ?? "🌐"}</Text>
+                            <View style={{ backgroundColor: IMP_COLOR[ev.importance] + "22", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: IMP_COLOR[ev.importance] }}>{IMP_LABEL[ev.importance]}</Text>
+                            </View>
+                            {ev.time && <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.time}</Text>}
+                          </View>
+                          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 18 }}>{ev.title}</Text>
+                          {(ev.forecast || ev.previous) && (
+                            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                              {ev.forecast ? `예상 ${ev.forecast}` : ""}{ev.forecast && ev.previous ? " · " : ""}{ev.previous ? `이전 ${ev.previous}` : ""}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-              <View style={{ alignItems: "flex-end", gap: 2 }}>
-                <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground + "99" }}>{fmtDate(ev.date)}</Text>
-                {ev.time && <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.time}</Text>}
+            )}
+            {economic.length === 0 && !loading && (
+              <View style={{ alignItems: "center", paddingVertical: 40, gap: 10 }}>
+                <Feather name="bar-chart" size={28} color={colors.border} />
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>경제 지표 일정이 없습니다</Text>
               </View>
-            </View>
-          ))
+            )}
+          </>
         )}
       </ScrollView>
     </View>
