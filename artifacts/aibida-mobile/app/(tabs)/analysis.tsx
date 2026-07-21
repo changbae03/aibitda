@@ -145,20 +145,36 @@ export default function AnalysisTab() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const inputRef = React.useRef<TextInput>(null);
   const [seg, setSeg] = useState<"최근 분석" | "인기 종목">("최근 분석");
   const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
+  const [showDrop, setShowDrop] = useState(false);
+  const [selected, setSelected] = useState<StockSearchResult | null>(null);
 
   const search = useStockSearch(query);
   const recent = useRecentAnalyses();
   const popular = usePopular();
 
-  function handleSelect(item: StockSearchResult) {
-    setSearching(false);
-    setQuery("");
-    router.push({ pathname: "/new-analysis", params: { ticker: item.ticker, name: item.name } });
+  function pickStock(item: StockSearchResult) {
+    setSelected(item);
+    setQuery(item.ticker);
+    setShowDrop(false);
+    inputRef.current?.blur();
   }
 
+  function clearSelection() {
+    setSelected(null);
+    setQuery("");
+    setShowDrop(false);
+  }
+
+  function goAnalyze() {
+    const target = selected ?? search.data?.[0] ?? null;
+    if (!target) return;
+    router.push({ pathname: "/new-analysis", params: { ticker: target.ticker, name: target.name } });
+  }
+
+  const canStart = !!(selected ?? (query.trim() && search.data && search.data.length > 0));
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
@@ -173,40 +189,59 @@ export default function AnalysisTab() {
         </Text>
 
         {/* Search row */}
-        <View style={[styles.searchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="search" size={15} color={colors.mutedForeground} style={{ marginLeft: 14 }} />
+        <View style={[styles.searchRow, {
+          backgroundColor: colors.card,
+          borderColor: selected ? colors.primary : showDrop ? colors.primary + "88" : colors.border,
+        }]}>
+          <Feather
+            name={selected ? "check-circle" : "search"}
+            size={15}
+            color={selected ? colors.primary : colors.mutedForeground}
+            style={{ marginLeft: 14 }}
+          />
           <TextInput
+            ref={inputRef}
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="삼성전자, NVDA, 005930, AAPL..."
             placeholderTextColor={colors.mutedForeground}
             value={query}
-            onChangeText={(v) => { setQuery(v); setSearching(true); }}
-            onFocus={() => setSearching(true)}
+            onChangeText={(v) => {
+              setQuery(v);
+              setSelected(null);
+              setShowDrop(v.trim().length > 0);
+            }}
+            onFocus={() => { if (query.trim().length > 0) setShowDrop(true); }}
             returnKeyType="search"
+            onSubmitEditing={goAnalyze}
           />
           {query.length > 0 ? (
-            <Pressable onPress={() => { setQuery(""); setSearching(false); }} style={styles.searchClear}>
+            <Pressable onPress={clearSelection} style={styles.searchClear}>
               <Feather name="x" size={14} color={colors.mutedForeground} />
             </Pressable>
           ) : null}
           <Pressable
-            style={[styles.searchBtn, { backgroundColor: colors.primary + (query.trim() ? "ff" : "55") }]}
-            onPress={() => {
-              const first = search.data?.[0];
-              if (first) handleSelect(first);
-            }}
-            disabled={!query.trim()}
+            style={[styles.searchBtn, { backgroundColor: canStart ? colors.primary : colors.primary + "44" }]}
+            onPress={goAnalyze}
+            disabled={!canStart}
           >
             <Text style={[styles.searchBtnText, { color: "#fff" }]}>분석 시작  →</Text>
           </Pressable>
         </View>
-        <Text style={[styles.heroHint, { color: colors.mutedForeground }]}>
-          ⏱ 평균 3분 만에 리포트 완성
-        </Text>
+
+        {/* Selected stock name hint */}
+        {selected ? (
+          <Text style={[styles.heroHint, { color: colors.primary }]}>
+            ✓ {selected.name}{selected.sector ? ` · ${selected.sector}` : ""}
+          </Text>
+        ) : (
+          <Text style={[styles.heroHint, { color: colors.mutedForeground }]}>
+            ⏱ 평균 3분 만에 리포트 완성
+          </Text>
+        )}
       </View>
 
-      {/* Search results */}
-      {searching && query.trim().length >= 1 ? (
+      {/* Dropdown */}
+      {showDrop && query.trim().length >= 1 ? (
         <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {search.isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ padding: 20 }} />
@@ -217,14 +252,20 @@ export default function AnalysisTab() {
               data={search.data ?? []}
               keyExtractor={(item) => item.ticker}
               keyboardShouldPersistTaps="handled"
-              style={{ maxHeight: 280 }}
+              style={{ maxHeight: 260 }}
               renderItem={({ item }) => (
                 <Pressable
-                  style={({ pressed }) => [styles.searchResultRow, { borderBottomColor: colors.border, backgroundColor: pressed ? colors.muted : "transparent" }]}
-                  onPress={() => handleSelect(item)}
+                  style={({ pressed }) => [
+                    styles.searchResultRow,
+                    { borderBottomColor: colors.border, backgroundColor: pressed ? colors.muted : "transparent" },
+                  ]}
+                  onPress={() => pickStock(item)}
                 >
-                  <Text style={[styles.srTicker, { color: colors.foreground }]}>{item.ticker}</Text>
-                  <Text style={[styles.srName, { color: colors.mutedForeground }]}>{item.name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.srTicker, { color: colors.foreground }]}>{item.ticker}</Text>
+                    <Text style={[styles.srName, { color: colors.mutedForeground }]}>{item.name}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
                 </Pressable>
               )}
             />
