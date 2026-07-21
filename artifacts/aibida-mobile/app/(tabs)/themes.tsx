@@ -13,7 +13,7 @@ import {
   type TomorrowPick, type PresurgePick, type ThemeSignal,
 } from "@/hooks/useApi";
 
-// ── Types (web API 동일) ──────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface FeedStock {
   ticker: string;
@@ -42,109 +42,115 @@ interface ThemeFeedItem {
   themeSmartMoney?: number;
 }
 
-// ── Force score helpers ───────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function stockForceScore(s: FeedStock): number {
-  const ch = s.priceChange ?? 0;
-  const vr = (s.volumeRatio ?? 1) - 1;
-  return ch * 0.6 + vr * 0.4;
+function stockForceScore(s: FeedStock) {
+  return (s.priceChange ?? 0) * 0.6 + ((s.volumeRatio ?? 1) - 1) * 0.4;
 }
 
 function computeThemeForce(stocks: FeedStock[]) {
-  const withData = stocks.filter(s => s.priceChange != null);
-  if (withData.length === 0) return null;
-  const scores = withData.map(stockForceScore);
-  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-  return { avg, max: Math.max(...scores) };
+  const w = stocks.filter(s => s.priceChange != null);
+  if (!w.length) return null;
+  const scores = w.map(stockForceScore);
+  return { avg: scores.reduce((a, b) => a + b, 0) / scores.length, max: Math.max(...scores) };
 }
 
-/** phase(서버 계산값) 또는 가격 avg 기반 표시 메타 */
-function phaseMeta(phase?: ThemePhase, priceAvg?: number | null) {
-  if (phase === "hot")      return { label: "강세",      emoji: "🔥", color: "#EF4444", barColor: "#EF4444" };
-  if (phase === "momentum") return { label: "상승 중",   emoji: "⚡", color: "#F97316", barColor: "#F97316" };
-  if (phase === "emerging") return { label: "수급 형성", emoji: "📡", color: "#8B5CF6", barColor: "#8B5CF6" };
-  // quiet or fallback → price avg 기반
-  const avg = priceAvg ?? 0;
-  if (avg >= 2)  return { label: "상승 중",  emoji: "⚡", color: "#F97316", barColor: "#F97316" };
-  if (avg >= 0)  return { label: "보합",     emoji: "〰", color: "#94a3b8", barColor: "#94a3b8" };
-  return               { label: "조정 중",  emoji: "↘",  color: "#94a3b8", barColor: "#94a3b8" };
+function phaseMeta(phase?: ThemePhase, avg?: number | null) {
+  if (phase === "hot")      return { label: "강세",      color: "#EF4444", bg: "#FEE2E2", dot: "#EF4444" };
+  if (phase === "momentum") return { label: "상승 중",   color: "#F97316", bg: "#FFF1EE", dot: "#F97316" };
+  if (phase === "emerging") return { label: "수급 형성", color: "#7C3AED", bg: "#EDE9FE", dot: "#7C3AED" };
+  const a = avg ?? 0;
+  if (a >= 2) return { label: "상승 중", color: "#F97316", bg: "#FFF1EE", dot: "#F97316" };
+  if (a >= 0) return { label: "보합",    color: "#94a3b8", bg: "#F1F5F9", dot: "#94a3b8" };
+  return       { label: "조정",     color: "#94a3b8", bg: "#F1F5F9", dot: "#94a3b8" };
 }
 
-/** 종목별 상태 텍스트 — 스마트머니 우선 반영 */
 function momentumInfo(s: FeedStock): { text: string; color: string } {
   const sm = s.smartMoneyAek;
   const inst = s.institutionAek ?? 0;
   const fore = s.foreignAek ?? 0;
-  const up  = (s.priceChange ?? 0) > 0.5;
-  const vol = (s.volumeRatio ?? 1) >= 1.3;
-
-  // 스마트머니 신호 우선
   if (sm != null) {
-    if (inst > 0 && fore > 0)    return { text: "기관+외인 동시 매수", color: "#7C3AED" };
-    if (inst > 10)                return { text: `기관 +${inst.toFixed(0)}억`, color: "#7C3AED" };
-    if (inst > 0)                 return { text: "기관 소량 매집",       color: "#8B5CF6" };
-    if (fore > 10)                return { text: `외인 +${fore.toFixed(0)}억`, color: "#0EA5E9" };
-    if (fore > 0)                 return { text: "외인 유입 중",         color: "#0EA5E9" };
-    if (inst < -10)               return { text: "기관 매도 중",         color: "#EF4444" };
+    if (inst > 0 && fore > 0) return { text: "기관+외인 동시", color: "#7C3AED" };
+    if (inst > 10)             return { text: `기관 +${inst.toFixed(0)}억`, color: "#7C3AED" };
+    if (inst > 0)              return { text: "기관 매집",      color: "#8B5CF6" };
+    if (fore > 10)             return { text: `외인 +${fore.toFixed(0)}억`, color: "#0EA5E9" };
+    if (fore > 0)              return { text: "외인 유입",      color: "#0EA5E9" };
+    if (inst < -10)            return { text: "기관 매도",      color: "#EF4444" };
   }
-
-  // 가격/거래량 신호
   if (s.priceChange == null) return { text: "조회 중", color: "#94a3b8" };
-  if (up && vol)   return { text: "거래량 동반 상승", color: "#16a34a" };
-  if (up && !vol)  return { text: "상승 (거래량 약)",  color: "#ca8a04" };
-  if (!up && vol)  return { text: "거래량 증가",       color: "#F97316" };
-  return                  { text: "관망",              color: "#94a3b8" };
+  const up = s.priceChange > 0.5;
+  const vol = (s.volumeRatio ?? 1) >= 1.3;
+  if (up && vol)  return { text: "거래량↑ 상승", color: "#16a34a" };
+  if (up && !vol) return { text: "상승",         color: "#ca8a04" };
+  if (!up && vol) return { text: "거래량↑",      color: "#F97316" };
+  return               { text: "관망",            color: "#94a3b8" };
 }
 
 const TABS = ["테마 분석", "내일 종목", "수급 레이더"] as const;
 type Tab = typeof TABS[number];
 
-// ── 테마별 수급 강도 랭킹 ─────────────────────────────────────────────────
+// ── 테마별 수급 강도 랭킹 ──────────────────────────────────────────────────────
 
 function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: any }) {
-  // 서버 phase 기준으로 정렬 (hot > momentum > emerging > quiet)
   const phaseRank: Record<string, number> = { hot: 4, momentum: 3, emerging: 2, quiet: 1 };
-  const ranked = feed
+  const ranked = [...feed]
     .map(item => ({ ...item, force: computeThemeForce(item.stocks) }))
     .sort((a, b) => {
       const pr = (phaseRank[b.phase ?? "quiet"] ?? 1) - (phaseRank[a.phase ?? "quiet"] ?? 1);
-      if (pr !== 0) return pr;
-      return (b.themeSmartMoney ?? 0) - (a.themeSmartMoney ?? 0);
+      return pr !== 0 ? pr : (b.themeSmartMoney ?? 0) - (a.themeSmartMoney ?? 0);
     });
-
-  if (ranked.length === 0) return null;
-  const absMax = Math.max(...ranked.map(r => Math.abs(r.force?.avg ?? 0)), 1);
+  if (!ranked.length) return null;
+  const absMax = Math.max(...ranked.map(r => Math.abs(r.force?.avg ?? 0)), 0.1);
 
   return (
-    <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
-        <Feather name="activity" size={14} color="#6366f1" />
-        <Text style={[s.cardTitle, { color: colors.foreground }]}>테마별 수급 강도</Text>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>돈이 쏠리는 순서</Text>
+    <View style={[rs.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {/* 헤더 */}
+      <View style={rs.sectionHeader}>
+        <View style={[rs.iconWrap, { backgroundColor: "#eef2ff" }]}>
+          <Feather name="activity" size={13} color="#6366f1" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[rs.sectionTitle, { color: colors.foreground }]}>테마별 수급 강도</Text>
+          <Text style={[rs.sectionSub, { color: colors.mutedForeground }]}>돈이 쏠리는 순서</Text>
+        </View>
       </View>
+
+      {/* 랭킹 rows */}
       {ranked.map((item, i) => {
         const force = item.force;
         const meta = phaseMeta(item.phase, force?.avg);
-        const barPct = Math.max(2, (Math.abs(force?.avg ?? 0) / absMax) * 100);
-        const sm = item.themeSmartMoney;
+        const barPct = Math.max(4, (Math.abs(force?.avg ?? 0) / absMax) * 100);
+        const isTop3 = i < 3;
+
         return (
-          <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Text style={{ fontSize: 10, color: colors.mutedForeground, width: 14, textAlign: "right", fontFamily: "Pretendard-Regular" }}>{i + 1}</Text>
-            <Text style={{ fontSize: 15 }}>{item.emoji}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Medium" }} numberOfLines={1}>{item.name}</Text>
-              {item.phase === "emerging" && sm != null && sm > 0 && (
-                <Text style={{ fontSize: 9, color: "#8B5CF6", fontFamily: "Pretendard-Regular" }}>
-                  스마트머니 {sm > 0 ? "+" : ""}{sm.toFixed(0)}억 유입
+          <View key={item.id} style={[rs.rankRow, i === ranked.length - 1 && { borderBottomWidth: 0 }, { borderBottomColor: colors.border }]}>
+            {/* 순위 번호 */}
+            <Text style={[rs.rankNum, { color: isTop3 ? colors.foreground : colors.mutedForeground, fontFamily: isTop3 ? "Pretendard-Bold" : "Pretendard-Regular" }]}>
+              {i + 1}
+            </Text>
+
+            {/* 이모지 */}
+            <Text style={rs.rankEmoji}>{item.emoji}</Text>
+
+            {/* 이름 */}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[rs.rankName, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
+              {item.phase === "emerging" && (item.themeSmartMoney ?? 0) > 0 && (
+                <Text style={rs.rankSm}>
+                  스마트머니 +{item.themeSmartMoney!.toFixed(0)}억
                 </Text>
               )}
             </View>
-            <View style={{ width: 80, height: 6, backgroundColor: colors.muted, borderRadius: 3, overflow: "hidden" }}>
-              <View style={{ width: `${barPct}%` as any, height: "100%", backgroundColor: meta.barColor, borderRadius: 3 }} />
+
+            {/* 바 */}
+            <View style={[rs.barTrack, { backgroundColor: colors.border }]}>
+              <View style={[rs.barFill, { width: `${barPct}%` as any, backgroundColor: meta.dot }]} />
             </View>
-            <Text style={{ fontSize: 10, color: meta.color, width: 52, textAlign: "right", fontFamily: "Pretendard-SemiBold" }}>
-              {meta.emoji} {meta.label}
-            </Text>
+
+            {/* 상태 뱃지 */}
+            <View style={[rs.phaseBadge, { backgroundColor: meta.bg }]}>
+              <Text style={[rs.phaseText, { color: meta.color }]}>{meta.label}</Text>
+            </View>
           </View>
         );
       })}
@@ -152,58 +158,66 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
   );
 }
 
-// ── 종목 행 ────────────────────────────────────────────────────────────────
+// ── 종목 행 (테마 카드 내부) ───────────────────────────────────────────────────
 
 function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (t: string, n: string) => void; colors: any }) {
   const change = stock.priceChange;
   const momentum = momentumInfo(stock);
-  const hasSmartMoney = stock.smartMoneyAek != null;
+  const isKR = stock.market === "KR";
   const sm = stock.smartMoneyAek ?? 0;
-  const isAccumulating = hasSmartMoney && sm > 0 && Math.abs(change ?? 0) < 3;
+  const isAccumulating = stock.smartMoneyAek != null && sm > 0 && Math.abs(change ?? 0) < 3;
 
   return (
-    <View style={[s.stockRow, { borderBottomColor: colors.border }]}>
-      <View style={{ flex: 1, gap: 3 }}>
+    <View style={[rs.stockRow, { borderBottomColor: colors.border }]}>
+      {/* 왼쪽 컨텐츠 */}
+      <View style={{ flex: 1, gap: 4 }}>
+        {/* 1행: 배지들 */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
           {stock.isLeader && (
-            <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontSize: 9, color: "#D97706", fontFamily: "Pretendard-Bold" }}>주도주</Text>
+            <View style={[rs.badge, { backgroundColor: "#FEF3C7" }]}>
+              <Text style={[rs.badgeText, { color: "#D97706" }]}>주도주</Text>
             </View>
           )}
           {isAccumulating && (
-            <View style={{ backgroundColor: "#EDE9FE", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontSize: 9, color: "#7C3AED", fontFamily: "Pretendard-Bold" }}>📡 매집</Text>
+            <View style={[rs.badge, { backgroundColor: "#EDE9FE" }]}>
+              <Text style={[rs.badgeText, { color: "#7C3AED" }]}>매집 중</Text>
             </View>
           )}
-          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{stock.name}</Text>
-          <View style={{
-            backgroundColor: stock.market === "KR" ? "#EFF6FF" : "#F0FDF4",
-            paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4,
-          }}>
-            <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: stock.market === "KR" ? "#3B82F6" : "#16A34A" }}>{stock.market}</Text>
+          <View style={[rs.badge, { backgroundColor: isKR ? "#EFF6FF" : "#F0FDF4" }]}>
+            <Text style={[rs.badgeText, { color: isKR ? "#3B82F6" : "#16A34A" }]}>{stock.market}</Text>
           </View>
+        </View>
+
+        {/* 2행: 종목명 + 등락 */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={[rs.stockName, { color: colors.foreground }]}>{stock.name}</Text>
           {change != null && (
-            <Text style={{ fontSize: 11, color: change >= 0 ? "#EF4444" : "#3B82F6", fontFamily: "Pretendard-SemiBold" }}>
+            <Text style={[rs.stockChange, { color: change >= 0 ? "#EF4444" : "#3B82F6" }]}>
               {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
             </Text>
           )}
-          <Text style={{ fontSize: 10, color: momentum.color, fontFamily: "Pretendard-Regular" }}>{momentum.text}</Text>
+          <Text style={[rs.stockMomentum, { color: momentum.color }]}>{momentum.text}</Text>
         </View>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 16 }} numberOfLines={2}>
+
+        {/* 3행: 투자 근거 */}
+        <Text style={[rs.stockRationale, { color: colors.mutedForeground }]} numberOfLines={2}>
           {stock.rationale}
         </Text>
       </View>
+
+      {/* 분석 버튼 */}
       <TouchableOpacity
-        style={{ backgroundColor: "#eef2ff", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 8, marginLeft: 8 }}
+        style={rs.analyzeBtn}
         onPress={() => onAnalyze(stock.ticker, stock.name)}
+        activeOpacity={0.75}
       >
-        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#6366f1" }}>분석</Text>
+        <Text style={rs.analyzeBtnText}>분석</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-// ── 테마 카드 ──────────────────────────────────────────────────────────────
+// ── 테마 카드 ──────────────────────────────────────────────────────────────────
 
 function ThemeCard({ item, idx, onAnalyze, colors }: {
   item: ThemeFeedItem; idx: number;
@@ -213,56 +227,69 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
   const force = computeThemeForce(item.stocks);
   const meta = phaseMeta(item.phase, force?.avg);
   const isEmerging = item.phase === "emerging";
+  const isHot = item.phase === "hot";
   const sm = item.themeSmartMoney;
 
   return (
-    <View style={[s.card, {
-      backgroundColor: colors.card, borderColor: isEmerging ? "#C4B5FD" : colors.border,
-      borderWidth: isEmerging ? 1.5 : StyleSheet.hairlineWidth,
+    <View style={[rs.themeCard, {
+      backgroundColor: colors.card,
+      borderColor: isEmerging ? "#C4B5FD" : isHot ? "#FECACA" : colors.border,
+      borderWidth: (isEmerging || isHot) ? 1.5 : StyleSheet.hairlineWidth,
     }]}>
-      {/* 수급 형성 중 배너 */}
+      {/* 수급 형성 배너 */}
       {isEmerging && (
-        <View style={{ backgroundColor: "#EDE9FE", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 11, color: "#7C3AED", fontFamily: "Pretendard-Bold" }}>📡 수급 형성 중</Text>
+        <View style={[rs.emergingBanner, { borderBottomColor: "#C4B5FD" }]}>
+          <Text style={rs.emergingEmoji}>📡</Text>
+          <Text style={rs.emergingTitle}>수급 형성 중</Text>
           {sm != null && sm > 0 && (
-            <Text style={{ fontSize: 10, color: "#8B5CF6", fontFamily: "Pretendard-Regular" }}>
-              스마트머니 +{sm.toFixed(0)}억 유입 — 가격 반영 전
-            </Text>
+            <Text style={rs.emergingSm}>스마트머니 +{sm.toFixed(0)}억 유입 · 가격 반영 전</Text>
           )}
         </View>
       )}
+
+      {/* 헤더 행 (탭해서 펼침) */}
       <TouchableOpacity
-        style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+        style={rs.themeHeader}
         onPress={() => setExpanded(v => !v)}
         activeOpacity={0.7}
       >
-        <View style={{
-          width: 38, height: 38, backgroundColor: colors.muted,
-          borderRadius: 19, alignItems: "center", justifyContent: "center",
-        }}>
+        {/* 이모지 아바타 */}
+        <View style={[rs.themeEmoji, { backgroundColor: meta.bg }]}>
           <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
         </View>
+
+        {/* 이름 + 상태 */}
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.name}</Text>
-            <Text style={{ fontSize: 11, color: meta.color, fontFamily: "Pretendard-SemiBold" }}>
-              {meta.emoji} {meta.label}
-            </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+            <Text style={[rs.themeName, { color: colors.foreground }]}>{item.name}</Text>
+            <View style={[rs.phaseBadge, { backgroundColor: meta.bg }]}>
+              <Text style={[rs.phaseText, { color: meta.color }]}>{meta.label}</Text>
+            </View>
           </View>
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
-            {item.stocks.length}종목
+          <Text style={[rs.themeStockCount, { color: colors.mutedForeground }]}>
+            종목 {item.stocks.length}개
           </Text>
         </View>
+
         <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
       </TouchableOpacity>
 
+      {/* 펼쳐진 내용 */}
       {expanded && (
-        <View style={{ marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, paddingTop: 10, paddingBottom: 8, lineHeight: 18, fontFamily: "Pretendard-Regular" }}>
-            {item.summary}
-          </Text>
+        <View style={[rs.themeBody, { borderTopColor: colors.border }]}>
+          {/* 테마 요약 */}
+          {item.summary ? (
+            <Text style={[rs.themeSummary, { color: colors.mutedForeground }]}>{item.summary}</Text>
+          ) : null}
+
+          {/* 종목 목록 */}
           {item.stocks.map((stock, i) => (
-            <StockRow key={`${stock.ticker}-${i}`} stock={stock} onAnalyze={onAnalyze} colors={colors} />
+            <StockRow
+              key={`${stock.ticker}-${i}`}
+              stock={stock}
+              onAnalyze={onAnalyze}
+              colors={colors}
+            />
           ))}
         </View>
       )}
@@ -270,7 +297,7 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
   );
 }
 
-// ── 내일 종목: 픽 카드 ────────────────────────────────────────────────────
+// ── 픽 카드 (내일 종목) ───────────────────────────────────────────────────────
 
 function PickCard({ item, type, colors, onAnalyze }: {
   item: TomorrowPick | PresurgePick; type: "tomorrow" | "presurge"; colors: any;
@@ -279,123 +306,177 @@ function PickCard({ item, type, colors, onAnalyze }: {
   const [expanded, setExpanded] = useState(false);
   const conf = type === "tomorrow" ? (item as TomorrowPick).confidence : null;
   const score = type === "presurge" ? (item as PresurgePick).score : null;
-  const confColor = conf === "high" ? "#16a34a" : conf === "medium" ? "#ca8a04" : "#dc2626";
-  const confBg   = conf === "high" ? "#dcfce7" : conf === "medium" ? "#fef9c3" : "#fee2e2";
-  const confLabel = conf === "high" ? "신뢰 높음" : conf === "medium" ? "신뢰 보통" : "신뢰 낮음";
 
-  // TouchableOpacity 중첩(button>button) 방지: 외부는 View, 콘텐츠 영역만 터치 핸들링
+  const confMap: Record<string, { color: string; bg: string; label: string }> = {
+    high:   { color: "#16a34a", bg: "#dcfce7", label: "신뢰 높음" },
+    medium: { color: "#ca8a04", bg: "#fef9c3", label: "신뢰 보통" },
+    low:    { color: "#dc2626", bg: "#fee2e2", label: "신뢰 낮음" },
+  };
+  const confStyle = confMap[conf ?? ""] ?? null;
+
   return (
-    <View style={[s.pickRow, { borderBottomColor: colors.border }]}>
-      {/* 왼쪽: 종목 정보 (탭 → 펼침) */}
+    <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <TouchableOpacity
-        style={{ flex: 1, gap: 3 }}
         onPress={() => setExpanded(v => !v)}
         activeOpacity={0.7}
+        style={rs.pickHeader}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
-          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
-            {item.name}
-          </Text>
-        </View>
-        {expanded && (
-          <View style={{ gap: 6, paddingTop: 8 }}>
-            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 18 }}>{item.reason}</Text>
-            {item.themes && item.themes.length > 0 && (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>
-                {item.themes.map((t, i) => (
-                  <View key={i} style={{ backgroundColor: colors.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{t}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+        {/* 왼쪽 */}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={[rs.pickTicker, { color: colors.foreground }]}>{item.ticker}</Text>
+            <Text style={[rs.pickName, { color: colors.mutedForeground }]} numberOfLines={1}>{item.name}</Text>
           </View>
-        )}
+          {!expanded && (
+            <Text style={[rs.pickReasonPreview, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {item.reason}
+            </Text>
+          )}
+        </View>
+
+        {/* 오른쪽 */}
+        <View style={{ alignItems: "flex-end", gap: 5 }}>
+          {confStyle && (
+            <View style={[rs.badge, { backgroundColor: confStyle.bg }]}>
+              <Text style={[rs.badgeText, { color: confStyle.color }]}>{confStyle.label}</Text>
+            </View>
+          )}
+          {score != null && (
+            <View style={[rs.badge, { backgroundColor: "#eef2ff" }]}>
+              <Text style={[rs.badgeText, { color: "#6366f1", fontFamily: "Pretendard-Bold" }]}>{score.toFixed(1)}점</Text>
+            </View>
+          )}
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+        </View>
       </TouchableOpacity>
 
-      {/* 오른쪽: 배지 + 분석 버튼 + 펼침 화살표 */}
-      <View style={{ alignItems: "flex-end", gap: 6 }}>
-        {conf != null && (
-          <View style={{ backgroundColor: confBg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: confColor }}>{confLabel}</Text>
-          </View>
-        )}
-        {score != null && (
-          <View style={{ backgroundColor: "#eef2ff", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: "#6366f1" }}>{score.toFixed(1)}</Text>
-          </View>
-        )}
-        <TouchableOpacity
-          onPress={() => onAnalyze(item.ticker, item.name)}
-          activeOpacity={0.7}
-          style={{
-            paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-            borderWidth: 1, borderColor: "#6366f140",
-            backgroundColor: "#6366f111",
-          }}
-        >
-          <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: "#6366f1" }}>분석</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setExpanded(v => !v)} hitSlop={8}>
-          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
-        </TouchableOpacity>
-      </View>
+      {/* 펼침 */}
+      {expanded && (
+        <View style={[rs.pickBody, { borderTopColor: colors.border }]}>
+          <Text style={[rs.pickReason, { color: colors.foreground }]}>{item.reason}</Text>
+          {(item.themes ?? []).length > 0 && (
+            <View style={rs.tagRow}>
+              {(item.themes ?? []).map((t, i) => (
+                <View key={i} style={[rs.tag, { backgroundColor: colors.muted }]}>
+                  <Text style={[rs.tagText, { color: colors.mutedForeground }]}>{t}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          <TouchableOpacity
+            style={rs.pickAnalyzeBtn}
+            onPress={() => onAnalyze(item.ticker, item.name)}
+            activeOpacity={0.75}
+          >
+            <Feather name="cpu" size={13} color="#6366f1" />
+            <Text style={rs.pickAnalyzeBtnText}>AI 분석 시작</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
 
-// ── 수급 레이더: 신호 카드 ───────────────────────────────────────────────
+// ── 수급 신호 카드 ────────────────────────────────────────────────────────────
 
 function SignalCard({ signal, colors }: { signal: ThemeSignal; colors: any }) {
   const [expanded, setExpanded] = useState(false);
   const strength = signal.strength;
-  const strengthColor = strength === "strong" ? "#EF4444" : strength === "moderate" ? "#F97316" : "#94a3b8";
-  const strengthBg    = strength === "strong" ? "#FEE2E2" : strength === "moderate" ? "#FFF1EE" : "#F1F5F9";
-  const strengthLabel = strength === "strong" ? "강한 신호" : strength === "moderate" ? "보통 신호" : "약한 신호";
+  const strengthMap: Record<string, { color: string; bg: string; label: string }> = {
+    strong:   { color: "#EF4444", bg: "#FEE2E2", label: "강한 신호" },
+    moderate: { color: "#F97316", bg: "#FFF1EE", label: "보통 신호" },
+    weak:     { color: "#94a3b8", bg: "#F1F5F9", label: "약한 신호" },
+  };
+  const sm = strengthMap[strength ?? "weak"] ?? strengthMap.weak;
   const tickers = signal.tickers ?? signal.stocks ?? [];
 
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[rs.signalCard, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => setExpanded(v => !v)}
       activeOpacity={0.7}
     >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+      <View style={rs.signalHeader}>
+        {/* 강도 인디케이터 */}
+        <View style={[rs.signalDot, { backgroundColor: sm.color }]} />
+
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-            <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{signal.theme}</Text>
-            {strength && (
-              <View style={{ backgroundColor: strengthBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: strengthColor }}>{strengthLabel}</Text>
-              </View>
-            )}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 3 }}>
+            <Text style={[rs.signalTheme, { color: colors.foreground }]}>{signal.theme}</Text>
+            <View style={[rs.badge, { backgroundColor: sm.bg }]}>
+              <Text style={[rs.badgeText, { color: sm.color }]}>{sm.label}</Text>
+            </View>
           </View>
           {signal.signal && (
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{signal.signal}</Text>
+            <Text style={[rs.signalText, { color: colors.mutedForeground }]} numberOfLines={expanded ? undefined : 2}>
+              {signal.signal}
+            </Text>
           )}
-          {expanded && (signal.reason ?? signal.description) && (
-            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 18, marginTop: 8 }}>
+        </View>
+
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={colors.mutedForeground} style={{ marginLeft: 8 }} />
+      </View>
+
+      {expanded && (
+        <View style={[rs.signalBody, { borderTopColor: colors.border }]}>
+          {(signal.reason ?? signal.description) && (
+            <Text style={[rs.signalReason, { color: colors.foreground }]}>
               {signal.reason ?? signal.description}
             </Text>
           )}
-          {expanded && tickers.length > 0 && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+          {tickers.length > 0 && (
+            <View style={rs.tagRow}>
               {tickers.map((t, i) => (
-                <View key={i} style={{ backgroundColor: colors.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                  <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "Pretendard-SemiBold" }}>{t}</Text>
+                <View key={i} style={[rs.tag, { backgroundColor: "#eef2ff" }]}>
+                  <Text style={[rs.tagText, { color: "#6366f1", fontFamily: "Pretendard-SemiBold" }]}>{t}</Text>
                 </View>
               ))}
             </View>
           )}
         </View>
-        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
-      </View>
+      )}
     </TouchableOpacity>
   );
 }
 
-// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
+// ── 섹션 헤더 ─────────────────────────────────────────────────────────────────
+
+function SectionHeader({ emoji, title, badge, badgeColor, badgeBg, sub }: {
+  emoji: string; title: string;
+  badge?: string; badgeColor?: string; badgeBg?: string;
+  sub?: string;
+}) {
+  const colors = useColors();
+  return (
+    <View style={rs.listSectionHeader}>
+      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+          <Text style={[rs.listSectionTitle, { color: colors.foreground }]}>{title}</Text>
+          {badge && (
+            <View style={[rs.badge, { backgroundColor: badgeBg ?? "#eef2ff" }]}>
+              <Text style={[rs.badgeText, { color: badgeColor ?? "#6366f1" }]}>{badge}</Text>
+            </View>
+          )}
+        </View>
+        {sub && <Text style={[rs.listSectionSub, { color: colors.mutedForeground }]}>{sub}</Text>}
+      </View>
+    </View>
+  );
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+function EmptyState({ text, colors }: { text: string; colors: any }) {
+  return (
+    <View style={rs.emptyState}>
+      <Feather name="inbox" size={28} color={colors.border} />
+      <Text style={[rs.emptyText, { color: colors.mutedForeground }]}>{text}</Text>
+    </View>
+  );
+}
+
+// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 export default function ThemesTab() {
   const colors = useColors();
@@ -403,17 +484,13 @@ export default function ThemesTab() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("테마 분석");
 
-  // 테마 피드
   const [feed, setFeed] = useState<ThemeFeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
   const [feedCachedAt, setFeedCachedAt] = useState<string | null>(null);
 
-  // 내일 종목
   const tomorrow = useTomorrowPicks();
   const presurge = usePresurge();
-
-  // 수급 레이더
   const signals = useThemeSignals();
 
   const loadFeed = useCallback(async (attempt = 0) => {
@@ -442,24 +519,22 @@ export default function ThemesTab() {
   useEffect(() => { loadFeed(); }, [loadFeed]);
 
   function onAnalyze(ticker: string, name: string) {
-    router.push(`/analysis/${encodeURIComponent(ticker)}?name=${encodeURIComponent(name)}`);
+    router.push(`/new-analysis?ticker=${encodeURIComponent(ticker)}&name=${encodeURIComponent(name)}`);
   }
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const botPad = (Platform.OS === "web" ? 84 : insets.bottom) + 80;
 
-  const tabActiveColor = (tab: Tab) => {
-    if (tab === "테마 분석") return "#6366f1";
-    if (tab === "내일 종목") return "#10b981";
-    return colors.foreground;
+  const tabColors: Record<Tab, string> = {
+    "테마 분석": "#6366f1",
+    "내일 종목": "#10b981",
+    "수급 레이더": colors.foreground,
   };
 
   function onRefresh() {
     if (activeTab === "테마 분석") loadFeed();
     if (activeTab === "내일 종목") {
-      // 강제 갱신: ?refresh=1 엔드포인트 호출 후 쿼리 재패치
-      apiFetch(`/api/market/tomorrow-picks?refresh=1`)
-        .catch(() => {})
-        .finally(() => tomorrow.refetch());
+      apiFetch(`/api/market/tomorrow-picks?refresh=1`).catch(() => {}).finally(() => tomorrow.refetch());
       presurge.refetch();
     }
     if (activeTab === "수급 레이더") signals.refetch();
@@ -471,63 +546,75 @@ export default function ThemesTab() {
     : false;
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
-      {/* 헤더 */}
-      <View style={[s.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+    <View style={[rs.root, { backgroundColor: colors.background }]}>
+      {/* ── 헤더 ── */}
+      <View style={[rs.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
+        <View style={rs.headerTop}>
           <View>
-            <Text style={[s.headerTitle, { color: colors.foreground }]}>테마 · 수급</Text>
-            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>AI 기관 수급 · 테마 분석</Text>
+            <Text style={[rs.headerTitle, { color: colors.foreground }]}>테마 · 수급</Text>
+            <Text style={[rs.headerSub, { color: colors.mutedForeground }]}>AI 기관 수급 · 테마 분석</Text>
           </View>
         </View>
 
-        {/* 탭 버튼 — pill 스타일 */}
-        <View style={{ flexDirection: "row", gap: 4 }}>
+        {/* 탭 */}
+        <View style={rs.tabRow}>
           {TABS.map(tab => {
             const isActive = activeTab === tab;
-            const activeColor = tabActiveColor(tab);
+            const activeColor = tabColors[tab];
             return (
               <Pressable
                 key={tab}
                 onPress={() => setActiveTab(tab)}
                 style={({ pressed }) => [{
-                  paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20,
-                  backgroundColor: isActive ? activeColor + "18" : "transparent",
+                  paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+                  backgroundColor: isActive ? activeColor + "16" : "transparent",
                   opacity: pressed ? 0.7 : 1,
                 }]}
               >
-                <Text style={{ fontSize: 13, fontFamily: isActive ? "Pretendard-SemiBold" : "Pretendard-Regular", color: isActive ? activeColor : colors.mutedForeground }}>{tab}</Text>
+                <Text style={{
+                  fontSize: 13,
+                  fontFamily: isActive ? "Pretendard-SemiBold" : "Pretendard-Regular",
+                  color: isActive ? activeColor : colors.mutedForeground,
+                }}>
+                  {tab}
+                </Text>
               </Pressable>
             );
           })}
         </View>
       </View>
 
-      {/* ── 테마 분석 탭 ─────────────────────────────────── */}
+      {/* ── 테마 분석 탭 ── */}
       {activeTab === "테마 분석" && (
         feedLoading ? (
-          <View style={s.center}>
+          <View style={rs.center}>
             <ActivityIndicator size="small" color="#6366f1" />
-            <Text style={[s.loadingText, { color: colors.mutedForeground }]}>AI가 관련주를 분석하는 중… (약 10초)</Text>
+            <Text style={[rs.loadingText, { color: colors.mutedForeground }]}>
+              AI가 관련주를 분석하는 중… (약 10초)
+            </Text>
           </View>
         ) : feedError ? (
-          <View style={s.center}>
+          <View style={rs.center}>
             <Feather name="alert-circle" size={32} color={colors.border} />
-            <Text style={[s.loadingText, { color: colors.mutedForeground }]}>피드를 불러오지 못했습니다</Text>
-            <TouchableOpacity style={[s.retryBtn, { borderColor: "#6366f1" }]} onPress={() => loadFeed()}>
+            <Text style={[rs.loadingText, { color: colors.mutedForeground }]}>피드를 불러오지 못했습니다</Text>
+            <TouchableOpacity style={[rs.retryBtn, { borderColor: "#6366f1" }]} onPress={() => loadFeed()}>
               <Text style={{ fontSize: 13, color: "#6366f1", fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
+            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: botPad }}
             refreshControl={<RefreshControl refreshing={false} onRefresh={() => loadFeed()} tintColor="#6366f1" />}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 4 }}>
-              최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신
-              {feedCachedAt ? ` · ${new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신됨` : ""}
+            {/* 갱신 시각 */}
+            <Text style={[rs.feedMeta, { color: colors.mutedForeground }]}>
+              최근 3일 기관·외국인 순매수 집중 테마 분석 · 3시간마다 갱신
+              {feedCachedAt ? ` · ${new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신` : ""}
             </Text>
+
             <ThemeForceRanking feed={feed} colors={colors} />
+
             {[...feed]
               .sort((a, b) => {
                 const fa = computeThemeForce(a.stocks)?.avg ?? -Infinity;
@@ -541,42 +628,38 @@ export default function ThemesTab() {
         )
       )}
 
-      {/* ── 내일 종목 탭 ─────────────────────────────────── */}
+      {/* ── 내일 종목 탭 ── */}
       {activeTab === "내일 종목" && (
         (tomorrow.isLoading || presurge.isLoading) ? (
-          <View style={s.center}>
+          <View style={rs.center}>
             <ActivityIndicator size="small" color="#10b981" />
-            <Text style={[s.loadingText, { color: colors.mutedForeground }]}>분석 중…</Text>
+            <Text style={[rs.loadingText, { color: colors.mutedForeground }]}>분석 중…</Text>
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
+            contentContainerStyle={{ paddingBottom: botPad }}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#10b981" />}
+            showsVerticalScrollIndicator={false}
           >
-            {/* 컨셉 안내 카드 */}
-            <View style={[s.conceptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <Text style={{ fontSize: 16 }}>✨</Text>
-                <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
-                  3가지 렌즈로 내일 상승 종목을 찾습니다
-                </Text>
-              </View>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 16, marginBottom: 10 }}>
-                서로 다른 지표를 함께 보면 한 지표만으론 놓치는 신호를 줄일 수 있습니다. 여러 리스트에 동시에 등장하는 종목일수록 신뢰도가 높습니다.
+            {/* 안내 카드 */}
+            <View style={[rs.conceptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[rs.conceptTitle, { color: colors.foreground }]}>✨ 3가지 렌즈로 내일 상승 종목 탐색</Text>
+              <Text style={[rs.conceptDesc, { color: colors.mutedForeground }]}>
+                여러 리스트에 동시에 등장하는 종목일수록 신뢰도가 높습니다.
               </Text>
-              <View style={{ gap: 6 }}>
-                {[
-                  { n: 1, color: "#EF4444", bg: "#FEE2E2", title: "오늘 수급 폭발 포착",  desc: "실시간 · 거래량 급증 + 기관·외인 매집 · 장중 갱신" },
-                  { n: 2, color: "#10b981", bg: "#DCFCE7", title: "내일 급등 예비군",    desc: "기술적 패턴 · 눌림목·거래량 수축→팽창 스캔" },
-                  { n: 3, color: "#6366f1", bg: "#E0E7FF", title: "내일 상승 후보",      desc: "테마·검색 트렌드 · 순환매 지연·화제성 포착" },
-                ].map(({ n, color, bg, title, desc }) => (
-                  <View key={n} style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.muted, padding: 10, borderRadius: 10 }}>
-                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color }}>{n}</Text>
+              <View style={{ gap: 8, marginTop: 10 }}>
+                {([
+                  { n: "①", color: "#EF4444", bg: "#FEE2E2", title: "오늘 수급 폭발 포착", desc: "거래량 급증 + 기관·외인 매집 실시간 스캔" },
+                  { n: "②", color: "#10b981", bg: "#DCFCE7", title: "내일 급등 예비군",   desc: "기술적 패턴 · 눌림목·거래량 수축→팽창" },
+                  { n: "③", color: "#6366f1", bg: "#E0E7FF", title: "내일 상승 후보",     desc: "테마·검색 트렌드 · 순환매 지연 포착" },
+                ] as const).map(({ n, color, bg, title, desc }) => (
+                  <View key={n} style={[rs.conceptRow, { backgroundColor: colors.muted }]}>
+                    <View style={[rs.conceptNum, { backgroundColor: bg }]}>
+                      <Text style={[rs.conceptNumText, { color }]}>{n}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color }}>{title}</Text>
-                      <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{desc}</Text>
+                      <Text style={[rs.conceptRowTitle, { color }]}>{title}</Text>
+                      <Text style={[rs.conceptRowDesc, { color: colors.mutedForeground }]}>{desc}</Text>
                     </View>
                   </View>
                 ))}
@@ -584,75 +667,64 @@ export default function ThemesTab() {
             </View>
 
             {/* 급등 예비군 */}
-            <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>⚡</Text>
-                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>급등 예비군</Text>
-                <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                  <Text style={{ fontSize: 10, color: "#EF4444", fontFamily: "Pretendard-SemiBold" }}>오늘 수급 포착</Text>
-                </View>
-              </View>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2, fontFamily: "Pretendard-Regular" }}>
-                거래량 급증 + 기관·외인 매집 실시간 스캔
-              </Text>
+            <SectionHeader
+              emoji="⚡"
+              title="급등 예비군"
+              badge="오늘 수급 포착"
+              badgeColor="#EF4444"
+              badgeBg="#FEE2E2"
+              sub="거래량 급증 + 기관·외인 매집 실시간 스캔"
+            />
+            <View style={{ paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
+              {(presurge.data?.picks ?? []).length === 0
+                ? <EmptyState text="급등 예비군이 없습니다" colors={colors} />
+                : (presurge.data?.picks ?? []).map((p, i) => (
+                    <PickCard key={`presurge-${i}`} item={p} type="presurge" colors={colors} onAnalyze={onAnalyze} />
+                  ))}
             </View>
-            {(presurge.data?.picks ?? []).length === 0
-              ? <EmptyState text="급등 예비군이 없습니다" colors={colors} />
-              : (presurge.data?.picks ?? []).map((p, i) => (
-                  <PickCard key={`presurge-${i}`} item={p} type="presurge" colors={colors} onAnalyze={onAnalyze} />
-                ))
-            }
 
             {/* 내일 상승 후보 */}
-            <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>🎯</Text>
-                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>내일 상승 후보</Text>
-                <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                  <Text style={{ fontSize: 10, color: "#16a34a", fontFamily: "Pretendard-SemiBold" }}>내일픽</Text>
-                </View>
-              </View>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2, fontFamily: "Pretendard-Regular" }}>
-                테마·검색 트렌드 · 순환매 지연·화제성 포착
-              </Text>
+            <SectionHeader
+              emoji="🎯"
+              title="내일 상승 후보"
+              badge="내일픽"
+              badgeColor="#16a34a"
+              badgeBg="#DCFCE7"
+              sub="테마·검색 트렌드 · 순환매 지연·화제성 포착"
+            />
+            <View style={{ paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
+              {(tomorrow.data?.picks ?? []).length === 0
+                ? <EmptyState text="내일 픽이 없습니다" colors={colors} />
+                : (tomorrow.data?.picks ?? []).map((p, i) => (
+                    <PickCard key={`tomorrow-${i}`} item={p} type="tomorrow" colors={colors} onAnalyze={onAnalyze} />
+                  ))}
             </View>
-            {(tomorrow.data?.picks ?? []).length === 0
-              ? <EmptyState text="내일 픽이 없습니다" colors={colors} />
-              : (tomorrow.data?.picks ?? []).map((p, i) => (
-                  <PickCard key={`tomorrow-${i}`} item={p} type="tomorrow" colors={colors} onAnalyze={onAnalyze} />
-                ))
-            }
           </ScrollView>
         )
       )}
 
-      {/* ── 수급 레이더 탭 ───────────────────────────────── */}
+      {/* ── 수급 레이더 탭 ── */}
       {activeTab === "수급 레이더" && (
         signals.isLoading ? (
-          <View style={s.center}>
+          <View style={rs.center}>
             <ActivityIndicator size="small" color={colors.foreground} />
-            <Text style={[s.loadingText, { color: colors.mutedForeground }]}>신호 분석 중…</Text>
+            <Text style={[rs.loadingText, { color: colors.mutedForeground }]}>신호 분석 중…</Text>
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
+            contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: botPad }}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.foreground} />}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 4 }}>
-              기관·외국인 수급 신호를 실시간으로 분석합니다
+            <Text style={[rs.feedMeta, { color: colors.mutedForeground }]}>
+              기관·외국인 수급 신호 실시간 분석
             </Text>
             {(() => {
-              const allSignals = signals.data?.signals ?? signals.data?.feed ?? [];
-              if (allSignals.length === 0) {
-                return <EmptyState text="수급 신호가 없습니다" colors={colors} />;
-              }
-              const sorted = [...allSignals].sort((a, b) => {
-                const order = { strong: 0, moderate: 1, weak: 2 };
-                return (order[a.strength ?? "weak"] ?? 2) - (order[b.strength ?? "weak"] ?? 2);
-              });
-              return sorted.map((sig, i) => (
-                <SignalCard key={`${sig.theme}-${i}`} signal={sig} colors={colors} />
-              ));
+              const all = signals.data?.signals ?? signals.data?.feed ?? [];
+              if (!all.length) return <EmptyState text="수급 신호가 없습니다" colors={colors} />;
+              return [...all]
+                .sort((a, b) => ({ strong: 0, moderate: 1, weak: 2 }[a.strength ?? "weak"] ?? 2) - ({ strong: 0, moderate: 1, weak: 2 }[b.strength ?? "weak"] ?? 2))
+                .map((sig, i) => <SignalCard key={`${sig.theme}-${i}`} signal={sig} colors={colors} />);
             })()}
           </ScrollView>
         )
@@ -661,50 +733,131 @@ export default function ThemesTab() {
   );
 }
 
-function EmptyState({ text, colors }: { text: string; colors: any }) {
-  return (
-    <View style={{ alignItems: "center", paddingVertical: 48, gap: 8 }}>
-      <Feather name="inbox" size={32} color={colors.border} />
-      <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{text}</Text>
-    </View>
-  );
-}
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
+const rs = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    paddingHorizontal: 16, paddingBottom: 14,
+
+  // Header
+  header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
+  headerSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  tabRow: { flexDirection: "row", gap: 2 },
+
+  // Section card (랭킹)
+  section: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, paddingBottom: 10 },
+  iconWrap: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  sectionTitle: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  sectionSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 1 },
+
+  // Rank row
+  rankRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
-  tabBtn: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+  rankNum: { fontSize: 12, width: 16, textAlign: "right" },
+  rankEmoji: { fontSize: 16, width: 22, textAlign: "center" },
+  rankName: { fontSize: 13, fontFamily: "Pretendard-Medium" },
+  rankSm: { fontSize: 10, color: "#7C3AED", fontFamily: "Pretendard-Regular", marginTop: 1 },
+  barTrack: { width: 72, height: 7, borderRadius: 4, overflow: "hidden" },
+  barFill: { height: "100%", borderRadius: 4 },
+  phaseBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  phaseText: { fontSize: 10, fontFamily: "Pretendard-SemiBold" },
+
+  // Theme card
+  themeCard: { borderRadius: 16, overflow: "hidden" },
+  emergingBanner: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    backgroundColor: "#F5F3FF", borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  tabLabel: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
-  card: {
-    borderRadius: 14, borderWidth: 1, padding: 14,
+  emergingEmoji: { fontSize: 13 },
+  emergingTitle: { fontSize: 12, fontFamily: "Pretendard-Bold", color: "#7C3AED" },
+  emergingSm: { fontSize: 11, color: "#8B5CF6", fontFamily: "Pretendard-Regular", flex: 1 },
+  themeHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  themeEmoji: {
+    width: 42, height: 42, borderRadius: 13,
+    alignItems: "center", justifyContent: "center",
   },
-  cardTitle: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
+  themeName: { fontSize: 15, fontFamily: "Pretendard-Bold" },
+  themeStockCount: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 3 },
+  themeBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 },
+  themeSummary: {
+    fontSize: 13, fontFamily: "Pretendard-Regular",
+    lineHeight: 20, paddingHorizontal: 14, paddingVertical: 10,
+  },
+
+  // Stock row
   stockRow: {
     flexDirection: "row", alignItems: "flex-start",
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14, paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth, gap: 10,
   },
-  pickRow: {
+  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  badgeText: { fontSize: 10, fontFamily: "Pretendard-SemiBold" },
+  stockName: { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
+  stockChange: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
+  stockMomentum: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  stockRationale: { fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  analyzeBtn: {
+    backgroundColor: "#eef2ff", paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 9, alignSelf: "flex-start", marginTop: 18,
+  },
+  analyzeBtnText: { fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#6366f1" },
+
+  // Pick card
+  pickCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  pickHeader: { flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 10 },
+  pickTicker: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  pickName: { fontSize: 13, fontFamily: "Pretendard-Regular", flex: 1 },
+  pickReasonPreview: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 3 },
+  pickBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
+  pickReason: { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tag: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
+  tagText: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  pickAnalyzeBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 9,
+    backgroundColor: "#eef2ff", borderRadius: 10,
+  },
+  pickAnalyzeBtnText: { fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#6366f1" },
+
+  // Signal card
+  signalCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  signalHeader: { flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 10 },
+  signalDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  signalTheme: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  signalText: { fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  signalBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
+  signalReason: { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+
+  // Section header (내일 종목 섹션 구분)
+  listSectionHeader: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 10,
   },
-  conceptCard: {
-    margin: 16, borderRadius: 14, borderWidth: 1, padding: 14,
-  },
-  center: {
-    flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24,
-  },
-  loadingText: {
-    fontSize: 13, fontFamily: "Pretendard-Regular", textAlign: "center",
-  },
-  retryBtn: {
-    marginTop: 4, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 8, borderWidth: 1,
-  },
+  listSectionTitle: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  listSectionSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 2 },
+
+  // Concept card
+  conceptCard: { margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  conceptTitle: { fontSize: 14, fontFamily: "Pretendard-Bold", marginBottom: 5 },
+  conceptDesc: { fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  conceptRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 11 },
+  conceptNum: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  conceptNumText: { fontSize: 11, fontFamily: "Pretendard-Bold" },
+  conceptRowTitle: { fontSize: 12, fontFamily: "Pretendard-Bold" },
+  conceptRowDesc: { fontSize: 10, fontFamily: "Pretendard-Regular", marginTop: 1 },
+
+  // Misc
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  retryBtn: { borderWidth: 1, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10 },
+  feedMeta: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  emptyState: { alignItems: "center", paddingVertical: 40, gap: 8 },
+  emptyText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
 });
