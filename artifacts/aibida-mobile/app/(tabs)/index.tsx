@@ -83,7 +83,10 @@ interface MomentumAnalysis {
 // Calendar
 interface EarningsEntry {
   ticker: string; companyName: string; earningsDate: string;
-  epsEstimate: number | null; currency: string; isKorean: boolean; isCompleted?: boolean;
+  epsEstimate: number | null; epsLow?: number | null; epsHigh?: number | null;
+  epsActualPrev?: number | null; epsEstimatePrev?: number | null; epsSurprisePct?: number | null;
+  revenueEstimate?: number | null; fiscalQuarterEnding?: string | null;
+  analyticCount?: number | null; currency: string; isKorean: boolean; isCompleted?: boolean;
 }
 interface EconomicEvent {
   date: string; time?: string; title: string; country: string;
@@ -1408,8 +1411,119 @@ function MobileIndicatorSection({ colors }: { colors: any }) {
   );
 }
 
+function fmtRevenue(val: number, currency: string) {
+  if (currency === "KRW") {
+    if (val >= 1e12) return `${(val / 1e12).toFixed(1)}조`;
+    if (val >= 1e8) return `${(val / 1e8).toFixed(0)}억`;
+    return `${val.toLocaleString()}`;
+  }
+  if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
+  if (val >= 1e6) return `$${(val / 1e6).toFixed(0)}M`;
+  return `$${val.toLocaleString()}`;
+}
+
+function fmtEps(val: number, currency: string) {
+  if (currency === "KRW") return `₩${val.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`;
+  return `$${val.toFixed(2)}`;
+}
+
+function EarningsCard({ e, colors }: { e: EarningsEntry; colors: any }) {
+  const initials = (e.companyName || e.ticker).slice(0, 2).toUpperCase();
+  const isKR = e.isKorean;
+  const surprisePct = e.epsSurprisePct;
+  const hasEps = e.epsEstimate != null;
+  const hasRevenue = e.revenueEstimate != null && e.revenueEstimate! > 0;
+
+  const surpriseColor = surprisePct == null ? null
+    : surprisePct > 0 ? "#16a34a" : "#dc2626";
+
+  return (
+    <View style={{
+      marginHorizontal: 16, marginBottom: 10,
+      backgroundColor: colors.card, borderRadius: 16,
+      borderWidth: 1, borderColor: colors.border,
+      padding: 14, gap: 10,
+    }}>
+      {/* Row 1: avatar + name + badge + quarter */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View style={{
+          width: 40, height: 40, borderRadius: 12,
+          backgroundColor: isKR ? "#dbeafe" : "#fef9c3",
+          alignItems: "center", justifyContent: "center",
+        }}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: isKR ? "#2563eb" : "#b45309" }}>{initials}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+            <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{e.ticker.replace(".KS", "").replace(".KQ", "")}</Text>
+            <View style={{ backgroundColor: isKR ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+              <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>{isKR ? "🇰🇷 KR" : "🇺🇸 US"}</Text>
+            </View>
+            {e.isCompleted && (
+              <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>발표완료</Text>
+              </View>
+            )}
+          </View>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginTop: 1 }} numberOfLines={1}>{e.companyName}</Text>
+        </View>
+        {e.fiscalQuarterEnding && (
+          <View style={{ backgroundColor: colors.muted, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 }}>
+            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>{e.fiscalQuarterEnding}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Row 2: EPS + Revenue metrics */}
+      {(hasEps || hasRevenue) && (
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          {hasEps && (
+            <View style={{ flex: 1, backgroundColor: colors.muted, borderRadius: 10, padding: 10, gap: 3 }}>
+              <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>EPS 예상</Text>
+              <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
+                {fmtEps(e.epsEstimate!, e.currency)}
+              </Text>
+              {e.epsLow != null && e.epsHigh != null && (
+                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                  {fmtEps(e.epsLow, e.currency)} ~ {fmtEps(e.epsHigh, e.currency)}
+                </Text>
+              )}
+              {e.analyticCount != null && e.analyticCount > 0 && (
+                <Text style={{ fontSize: 9, color: colors.mutedForeground + "99", fontFamily: "Pretendard-Regular" }}>
+                  애널리스트 {e.analyticCount}명
+                </Text>
+              )}
+            </View>
+          )}
+          {hasRevenue && (
+            <View style={{ flex: 1, backgroundColor: colors.muted, borderRadius: 10, padding: 10, gap: 3 }}>
+              <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>매출 예상</Text>
+              <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
+                {fmtRevenue(e.revenueEstimate!, e.currency)}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Row 3: Previous surprise */}
+      {surprisePct != null && e.epsActualPrev != null && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+          <Feather name="trending-up" size={11} color={surpriseColor!} />
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+            전분기 실적: <Text style={{ color: colors.foreground, fontFamily: "Pretendard-Medium" }}>{fmtEps(e.epsActualPrev, e.currency)}</Text>
+            {"  "}서프라이즈: <Text style={{ color: surpriseColor!, fontFamily: "Pretendard-SemiBold" }}>
+              {surprisePct > 0 ? "+" : ""}{(surprisePct * 100).toFixed(1)}%
+            </Text>
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
-  const [calTab, setCalTab] = useState<"earnings" | "economic">("earnings");
+  const [calTab, setCalTab] = useState<"economic" | "earnings">("economic");
   const [earnings, setEarnings] = useState<EarningsEntry[]>([]);
   const [economic, setEconomic] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1426,18 +1540,27 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
   }, []);
 
   const today = new Date().toISOString().slice(0, 10);
-  function fmtDate(d: string) {
+
+  function fmtDateLabel(d: string) {
     try {
-      const dt = new Date(d); const isToday = d.slice(0, 10) === today;
+      const dt = new Date(d);
       const dayKo = ["일", "월", "화", "수", "목", "금", "토"][dt.getDay()];
-      return isToday ? `오늘 (${dt.getMonth() + 1}/${dt.getDate()})` : `${dt.getMonth() + 1}/${dt.getDate()} (${dayKo})`;
+      return `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${dayKo})`;
     } catch { return d; }
   }
+
+  const earningsByDate = earnings.slice(0, 50).reduce<Record<string, EarningsEntry[]>>((acc, e) => {
+    const key = e.earningsDate.slice(0, 10);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(e);
+    return acc;
+  }, {});
+  const earningsDates = Object.keys(earningsByDate).sort();
 
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-        {([["earnings", "실적 발표"], ["economic", "경제 지표"]] as const).map(([key, label]) => (
+        {([["economic", "경제 지표"], ["earnings", "실적 발표"]] as const).map(([key, label]) => (
           <Pressable
             key={key}
             style={({ pressed }) => [{
@@ -1451,36 +1574,45 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
           </Pressable>
         ))}
       </View>
+
       <ScrollView contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}>
         {loading ? (
           <View style={{ padding: 16, gap: 10 }}>
             {[0, 1, 2, 3, 4].map(i => <SkeletonCard key={i} height={68} />)}
           </View>
         ) : calTab === "earnings" ? (
-          earnings.length === 0 ? (
-            <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}><Feather name="calendar" size={28} color={colors.border} /><Text style={{ fontSize: 13, color: colors.mutedForeground }}>실적 발표 일정이 없습니다</Text></View>
-          ) : earnings.slice(0, 50).map((e, i) => (
-            <View key={`${e.ticker}-${i}`} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 10 }}>
-              <View style={{ flex: 1, gap: 3 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{e.ticker}</Text>
-                  <View style={{ backgroundColor: e.isKorean ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: e.isKorean ? "#2563eb" : "#b45309" }}>{e.isKorean ? "KR" : "US"}</Text>
-                  </View>
-                  {e.isCompleted && <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>완료</Text></View>}
-                </View>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{e.companyName}</Text>
-                {e.epsEstimate != null && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>EPS 예상 {e.epsEstimate > 0 ? "+" : ""}{e.epsEstimate.toFixed(2)}</Text>}
-              </View>
-              <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground + "99" }}>{fmtDate(e.earningsDate)}</Text>
+          earningsDates.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
+              <Feather name="calendar" size={28} color={colors.border} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>실적 발표 일정이 없습니다</Text>
             </View>
-          ))
+          ) : (
+            <View style={{ paddingTop: 12 }}>
+              {earningsDates.map((dateKey) => {
+                const isToday = dateKey === today;
+                const isTomorrow = (() => { const t = new Date(); t.setDate(t.getDate() + 1); return dateKey === t.toISOString().slice(0, 10); })();
+                return (
+                  <View key={dateKey} style={{ marginBottom: 4 }}>
+                    {/* Date header */}
+                    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}>
+                      <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{fmtDateLabel(dateKey)}</Text>
+                      {isToday && <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#b45309" }}>오늘</Text></View>}
+                      {isTomorrow && <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#2563eb" }}>내일</Text></View>}
+                      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{earningsByDate[dateKey].length}개사</Text>
+                    </View>
+                    {/* Cards */}
+                    {earningsByDate[dateKey].map((e, i) => (
+                      <EarningsCard key={`${e.ticker}-${i}`} e={e} colors={colors} />
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          )
         ) : (
           <>
-            {/* ── 주요 지표 추이 섹션 (FRED) ── */}
             <MobileIndicatorSection colors={colors} />
-
-            {/* ── 다가올 경제지표 발표 ── */}
             {economic.length > 0 && (
               <View style={{ marginTop: 8 }}>
                 <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
