@@ -1,19 +1,19 @@
 const colors = {
   dark: {
     text: "#e2e8f4",
-    tint: "#6366f1",
+    tint: "#FF8A7A",
     background: "#0d1119",
     foreground: "#e2e8f4",
     card: "#141821",
     cardForeground: "#e2e8f4",
-    primary: "#6366f1",
+    primary: "#FF8A7A",
     primaryForeground: "#ffffff",
     secondary: "#1a2030",
     secondaryForeground: "#e2e8f4",
     muted: "#1a2030",
     mutedForeground: "#64748b",
-    accent: "#1e2a3d",
-    accentForeground: "#e2e8f4",
+    accent: "#2a1a1a",
+    accentForeground: "#FF8A7A",
     border: "#1e2a3d",
     input: "#1e2a3d",
     up: "#ef4444",
@@ -25,23 +25,22 @@ const colors = {
     destructive: "#ef4444",
     destructiveForeground: "#ffffff",
   },
-  // CleanLight — pure white base, indigo accent, slate surface tokens
   light: {
     text: "#0f172a",
-    tint: "#6366f1",
-    background: "#ffffff",      // pure white
-    foreground: "#0f172a",      // slate-900
-    card: "#ffffff",            // white cards
+    tint: "#FF8A7A",
+    background: "#ffffff",
+    foreground: "#0f172a",
+    card: "#ffffff",
     cardForeground: "#0f172a",
-    primary: "#6366f1",         // indigo-500
+    primary: "#FF8A7A",
     primaryForeground: "#ffffff",
-    secondary: "#f1f5f9",       // slate-100
+    secondary: "#f1f5f9",
     secondaryForeground: "#334155",
-    muted: "#f8fafc",           // slate-50
-    mutedForeground: "#64748b", // slate-500
-    accent: "#eef2ff",          // indigo-50
-    accentForeground: "#4338ca",
-    border: "#e2e8f0",          // slate-200
+    muted: "#f8fafc",
+    mutedForeground: "#64748b",
+    accent: "#fff1ef",
+    accentForeground: "#c0463a",
+    border: "#e2e8f0",
     input: "#e2e8f0",
     up: "#ef4444",
     upBg: "#fef2f2",
