@@ -274,6 +274,7 @@ export default function ThemesPage() {
   const [feed, setFeed] = useState<ThemeFeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
+  const [feedCachedAt, setFeedCachedAt] = useState<string | null>(null);
 
   // 직접 발굴
   const [showSearch, setShowSearch] = useState(false);
@@ -308,10 +309,13 @@ export default function ThemesPage() {
       try {
         const r = await fetch(getApiUrl("api/themes/trending-feed"));
         if (!r.ok) throw new Error("bad response");
-        const data = await r.json();
+        const raw = await r.json();
         if (cancelled) return;
-        if (Array.isArray(data) && data.length > 0) {
+        const data = Array.isArray(raw) ? raw : (raw.feed ?? []);
+        const cachedAt = Array.isArray(raw) ? null : (raw.cachedAt ?? null);
+        if (data.length > 0) {
           setFeed(data);
+          if (cachedAt) setFeedCachedAt(cachedAt);
           setFeedLoading(false);
         } else if (attempt < 8) {
           // 서버가 백그라운드 생성 중 — 5초 후 재시도
@@ -480,6 +484,11 @@ export default function ThemesPage() {
         </div>
         <p className="text-sm text-foreground/55">
           최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신
+          {feedCachedAt && (
+            <span className="text-foreground/35 ml-1">
+              · {new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신됨
+            </span>
+          )}
         </p>
       </div>
 

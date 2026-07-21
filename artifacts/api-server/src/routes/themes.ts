@@ -1132,12 +1132,12 @@ router.get("/themes/trending-feed", async (req, res) => {
 
     // 신선한 캐시 → 즉시 반환
     if (isFresh && feedCache) {
-      return res.json(feedCache.feed);
+      return res.json({ feed: feedCache.feed, cachedAt: new Date(feedCache.cachedAt).toISOString() });
     }
 
     // 만료된 캐시(stale) → 즉시 반환 + 백그라운드 갱신
     if (isStale && feedCache) {
-      res.json(feedCache.feed);
+      res.json({ feed: feedCache.feed, cachedAt: new Date(feedCache.cachedAt).toISOString() });
       rebuildFeedInBackground();
       return;
     }

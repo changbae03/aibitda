@@ -407,6 +407,7 @@ export default function ThemesTab() {
   const [feed, setFeed] = useState<ThemeFeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
+  const [feedCachedAt, setFeedCachedAt] = useState<string | null>(null);
 
   // 내일 종목
   const tomorrow = useTomorrowPicks();
@@ -419,9 +420,12 @@ export default function ThemesTab() {
     setFeedLoading(true);
     setFeedError(false);
     try {
-      const data = await apiFetch<ThemeFeedItem[]>(`/api/themes/trending-feed`);
-      if (Array.isArray(data) && data.length > 0) {
+      const raw = await apiFetch<any>(`/api/themes/trending-feed`);
+      const data: ThemeFeedItem[] = Array.isArray(raw) ? raw : (raw.feed ?? []);
+      const cachedAt: string | null = Array.isArray(raw) ? null : (raw.cachedAt ?? null);
+      if (data.length > 0) {
         setFeed(data);
+        if (cachedAt) setFeedCachedAt(cachedAt);
       } else if (attempt < 6) {
         setTimeout(() => loadFeed(attempt + 1), 5000);
         return;
@@ -518,6 +522,7 @@ export default function ThemesTab() {
           >
             <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 4 }}>
               최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신
+              {feedCachedAt ? ` · ${new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신됨` : ""}
             </Text>
             <ThemeForceRanking feed={feed} colors={colors} />
             {[...feed]
