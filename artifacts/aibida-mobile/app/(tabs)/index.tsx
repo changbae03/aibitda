@@ -122,45 +122,45 @@ function SessionCard({ session, selected, onPress, colors }: {
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [{
-        width: "48%", borderRadius: 14, padding: 14, gap: 6,
-        borderWidth: selected ? 1.5 : 1,
-        borderColor: selected ? colors.primary : colors.border,
-        backgroundColor: selected ? colors.primary + "12" : colors.card,
-        opacity: pressed ? 0.75 : 1,
+        width: "48%", borderRadius: 16, padding: 13, gap: 5,
+        backgroundColor: selected ? colors.primary + "0F" : colors.muted,
+        borderWidth: selected ? 1.5 : 0,
+        borderColor: selected ? colors.primary + "80" : "transparent",
+        opacity: pressed ? 0.7 : 1,
       }]}
     >
       {session.isActive && (
-        <View style={{ position: "absolute", top: 10, right: 10, width: 7, height: 7, borderRadius: 4, backgroundColor: "#f59e0b" }} />
+        <View style={{ position: "absolute", top: 11, right: 11, width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" }} />
       )}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-        <Text style={{ fontSize: 14 }}>{SESSION_ICON[session.icon] ?? "📋"}</Text>
-        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }} numberOfLines={1}>{session.label}</Text>
+        <Text style={{ fontSize: 13 }}>{SESSION_ICON[session.icon] ?? "📋"}</Text>
+        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: selected ? colors.primary : colors.foreground }} numberOfLines={1}>{session.label}</Text>
       </View>
-      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground + "99" }}>
-        {session.time === "주말" ? "토·일 수시 업데이트" : `${session.time} KST`}
+      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+        {session.time === "주말" ? "토·일 수시" : `${session.time} KST`}
       </Text>
 
       {available ? (
         <>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: sc.color }} />
-            <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: sc.color }}>{sc.label}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: sc.color }} />
+            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: sc.color }}>{sc.label}</Text>
           </View>
-          <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, lineHeight: 16 }} numberOfLines={3}>
+          <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, lineHeight: 15 }} numberOfLines={2}>
             {session.brief!.summary}
           </Text>
         </>
       ) : isGen ? (
         <View style={{ gap: 4, marginTop: 4 }}>
           {[1, 0.7, 0.5].map((op, i) => (
-            <View key={i} style={{ height: 5, borderRadius: 3, backgroundColor: colors.border, opacity: op }} />
+            <View key={i} style={{ height: 4, borderRadius: 2, backgroundColor: colors.border, opacity: op }} />
           ))}
           <Text style={{ fontSize: 10, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 2 }}>생성 중…</Text>
         </View>
       ) : session.status === "past" ? (
-        <Text style={{ fontSize: 11, color: colors.border, fontFamily: "Pretendard-Regular", marginTop: 2 }}>브리핑 없음</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground + "60", fontFamily: "Pretendard-Regular", marginTop: 2 }}>브리핑 없음</Text>
       ) : (
-        <Text style={{ fontSize: 11, color: colors.border, fontFamily: "Pretendard-Regular", marginTop: 2 }}>준비중</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground + "60", fontFamily: "Pretendard-Regular", marginTop: 2 }}>준비중</Text>
       )}
     </Pressable>
   );
@@ -170,9 +170,12 @@ function SessionCard({ session, selected, onPress, colors }: {
 
 function SL({ label, colors }: { label: string; colors: any }) {
   return (
-    <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
-      {label}
-    </Text>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 10 }}>
+      <View style={{ width: 2, height: 12, borderRadius: 1, backgroundColor: colors.primary + "60" }} />
+      <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, letterSpacing: 0.2 }}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -213,11 +216,11 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
   return (
     <View style={{ gap: 20 }}>
       {/* 요약 */}
-      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Regular", color: colors.foreground, lineHeight: 22 }}>{brief.summary}</Text>
+      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 23 }}>{brief.summary}</Text>
 
       {/* 리드 단락 */}
       {brief.leadParagraph && (
-        <View style={{ borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: 12 }}>
+        <View style={{ borderLeftWidth: 2.5, borderLeftColor: colors.primary + "50", paddingLeft: 13, paddingVertical: 2 }}>
           <Text style={{ fontSize: 13, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.leadParagraph}</Text>
         </View>
       )}
@@ -388,9 +391,12 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
 
       {/* 핵심 리스크 */}
       {brief.keyRisk && (
-        <View style={{ backgroundColor: "#1e3a5f", borderWidth: 1, borderColor: "#1e40af60", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 4 }}>
-          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: "#60a5fa", letterSpacing: 1.2, textTransform: "uppercase" }}>핵심 리스크</Text>
-          <Text style={{ fontSize: 12, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 18 }}>{brief.keyRisk}</Text>
+        <View style={{ backgroundColor: colors.downBg, borderWidth: 1, borderColor: colors.down + "30", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, gap: 5 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.down }} />
+            <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: colors.down }}>핵심 리스크</Text>
+          </View>
+          <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 19 }}>{brief.keyRisk}</Text>
         </View>
       )}
 
@@ -438,31 +444,31 @@ function HistoryItem({ item, colors }: { item: any; colors: any }) {
     status: "available", isActive: false,
   };
   return (
-    <View style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginBottom: 8 }}>
+    <View style={{ borderRadius: 14, backgroundColor: colors.muted, overflow: "hidden", marginBottom: 8 }}>
       <Pressable
         onPress={() => setOpen(o => !o)}
         style={({ pressed }) => [{
           flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-          paddingHorizontal: 14, paddingVertical: 12,
-          backgroundColor: pressed ? colors.muted : colors.card,
+          paddingHorizontal: 14, paddingVertical: 13,
+          opacity: pressed ? 0.7 : 1,
         }]}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
-          <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground }}>{sessionLabel}</Text>
+          <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: sc.color }} />
+          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{sessionLabel}</Text>
           {item.summary && (
             <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1 }} numberOfLines={1}>
-              — {item.summary.slice(0, 50)}
+              {item.summary.slice(0, 48)}
             </Text>
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{timeStr}</Text>
-          <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>{open ? "▲" : "▾"}</Text>
+          <Feather name={open ? "chevron-up" : "chevron-down"} size={13} color={colors.mutedForeground} />
         </View>
       </Pressable>
       {open && item.data && (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+        <View style={{ paddingHorizontal: 14, paddingBottom: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border + "60" }}>
           <BriefDetail session={fakeSlot} colors={colors} />
         </View>
       )}
@@ -527,15 +533,12 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       showsVerticalScrollIndicator={false}
     >
-      {dateLabel ? (
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginBottom: 12, fontFamily: "Pretendard-Regular" }}>{dateLabel}</Text>
-      ) : null}
-
       {/* Session Timeline */}
       <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-        <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>
-          오늘의 시장 흐름
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>오늘의 시장 흐름</Text>
+          {dateLabel ? <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{dateLabel}</Text> : null}
+        </View>
 
         {isLoading ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "space-between" }}>
@@ -564,29 +567,34 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
 
       {/* Selected Brief Detail */}
       {selectedSession && !isLoading && (
-        <View style={[styles.briefCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        <View style={{ marginHorizontal: 16, borderRadius: 18, backgroundColor: colors.muted, overflow: "hidden", marginBottom: 4 }}>
           {/* 브리핑 헤더 */}
-          <View style={[styles.briefCardHeader, { borderBottomColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 13 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-              <Text style={{ fontSize: 16 }}>{SESSION_ICON[selectedSession.icon] ?? "📋"}</Text>
+              <Text style={{ fontSize: 15 }}>{SESSION_ICON[selectedSession.icon] ?? "📋"}</Text>
               <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{selectedSession.label}</Text>
-              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
-                {selectedSession.time === "주말" ? "" : `${selectedSession.time} KST`}
-              </Text>
+              {selectedSession.time !== "주말" && (
+                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                  {selectedSession.time} KST
+                </Text>
+              )}
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {selectedSession.generatedAt && (
                 <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
-                  {new Date(selectedSession.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 생성
+                  {new Date(selectedSession.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
                 </Text>
               )}
               {selectedSession.brief?.sentiment && (
-                <View style={{ backgroundColor: sc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: sc.color }}>{sc.label}</Text>
+                <View style={{ backgroundColor: sc.bg, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20 }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: sc.color }}>{sc.label}</Text>
                 </View>
               )}
             </View>
           </View>
+
+          {/* 구분선 */}
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border + "60", marginHorizontal: 16 }} />
 
           {/* 브리핑 본문 */}
           <View style={{ padding: 16 }}>
@@ -596,18 +604,16 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
       )}
 
       {/* 브리핑 히스토리 */}
-      <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
+      <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
         <TouchableOpacity
           onPress={() => {
             if (!historyOpen && history.length === 0) fetchHistory();
             setHistoryOpen(o => !o);
           }}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8 }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 10 }}
         >
-          <Text style={{ fontSize: 10, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
-            {historyOpen ? "▼" : "▶"}
-          </Text>
-          <Text style={{ fontSize: 12, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+          <Feather name={historyOpen ? "chevron-down" : "chevron-right"} size={14} color={colors.mutedForeground} />
+          <Text style={{ fontSize: 12, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Medium" }}>
             지난 브리핑
           </Text>
         </TouchableOpacity>
@@ -766,17 +772,21 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
   return (
     <View style={{ flex: 1 }}>
       {/* 서브탭 */}
-      <View style={{ flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
         {([["search", "검색"], ["rebalancing", "리밸런싱"], ["fundflow", "집중 종목"]] as const).map(([key, label]) => (
-          <TouchableOpacity
+          <Pressable
             key={key}
-            style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: etfSubTab === key ? colors.primary : "transparent" }}
+            style={({ pressed }) => [{
+              paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20,
+              backgroundColor: etfSubTab === key ? colors.primary + "12" : "transparent",
+              opacity: pressed ? 0.7 : 1,
+            }]}
             onPress={() => setEtfSubTab(key)}
           >
-            <Text style={{ fontSize: 12, fontFamily: etfSubTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: etfSubTab === key ? colors.primary : colors.mutedForeground }}>
+            <Text style={{ fontSize: 13, fontFamily: etfSubTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: etfSubTab === key ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
 
@@ -788,17 +798,21 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           showsVerticalScrollIndicator={false}
         >
           {/* 모드 토글 */}
-          <View style={{ flexDirection: "row", margin: 14, borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+          <View style={{ flexDirection: "row", margin: 14, marginBottom: 10, borderRadius: 12, backgroundColor: colors.muted, padding: 3 }}>
             {(["etf", "stock"] as const).map(m => (
-              <TouchableOpacity
+              <Pressable
                 key={m}
-                style={{ flex: 1, paddingVertical: 9, alignItems: "center", backgroundColor: searchMode === m ? colors.primary : "transparent" }}
+                style={({ pressed }) => [{
+                  flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 10,
+                  backgroundColor: searchMode === m ? colors.card : "transparent",
+                  opacity: pressed ? 0.8 : 1,
+                }]}
                 onPress={() => { setSearchMode(m); setSearchQuery(""); setSelectedEtf(null); setHoldings([]); setExposure([]); }}
               >
-                <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: searchMode === m ? "#fff" : colors.mutedForeground }}>
+                <Text style={{ fontSize: 12, fontFamily: searchMode === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: searchMode === m ? colors.primary : colors.mutedForeground }}>
                   {m === "etf" ? "ETF 보유 종목" : "종목 담은 ETF"}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
 
@@ -1185,11 +1199,19 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
         {([["earnings", "실적 발표"], ["economic", "경제 지표"]] as const).map(([key, label]) => (
-          <TouchableOpacity key={key} style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: calTab === key ? colors.primary : "transparent" }} onPress={() => setCalTab(key)}>
+          <Pressable
+            key={key}
+            style={({ pressed }) => [{
+              paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+              backgroundColor: calTab === key ? colors.primary + "12" : "transparent",
+              opacity: pressed ? 0.7 : 1,
+            }]}
+            onPress={() => setCalTab(key)}
+          >
             <Text style={{ fontSize: 13, fontFamily: calTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: calTab === key ? colors.primary : colors.mutedForeground }}>{label}</Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}>
@@ -1268,17 +1290,24 @@ export default function MarketScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* 헤더 */}
-      <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.primary }]}>애빛다</Text>
+      <View style={[styles.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
+        <View>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>애빛다</Text>
+          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>AI 헤지펀드 · 시장 분석</Text>
+        </View>
         {subTab === "overview" && (
-          <View style={[styles.toggle, { backgroundColor: colors.muted }]}>
+          <View style={{ flexDirection: "row", backgroundColor: colors.muted, borderRadius: 10, padding: 3 }}>
             {(["kr", "us"] as const).map(m => (
               <Pressable
                 key={m}
                 onPress={() => setMarket(m)}
-                style={[styles.toggleBtn, { backgroundColor: market === m ? colors.primary : "transparent" }]}
+                style={({ pressed }) => [{
+                  paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
+                  backgroundColor: market === m ? colors.card : "transparent",
+                  opacity: pressed ? 0.8 : 1,
+                }]}
               >
-                <Text style={{ fontSize: 12, fontFamily: market === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: market === m ? "#fff" : colors.mutedForeground }}>
+                <Text style={{ fontSize: 12, fontFamily: market === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: market === m ? colors.primary : colors.mutedForeground }}>
                   {m === "kr" ? "🇰🇷 한국" : "🇺🇸 미국"}
                 </Text>
               </Pressable>
@@ -1288,18 +1317,21 @@ export default function MarketScreen() {
       </View>
 
       {/* 서브탭 바 */}
-      <View style={[styles.subTabBar, { borderBottomColor: colors.border }]}>
-        {SUB_TABS.map(({ key: tabKey, label, icon }) => (
-          <TouchableOpacity
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+        {SUB_TABS.map(({ key: tabKey, label }) => (
+          <Pressable
             key={tabKey}
-            style={[styles.subTabBtn, subTab === tabKey && { borderBottomColor: colors.primary }]}
+            style={({ pressed }) => [{
+              paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+              backgroundColor: subTab === tabKey ? colors.primary + "12" : "transparent",
+              opacity: pressed ? 0.7 : 1,
+            }]}
             onPress={() => setSubTab(tabKey)}
           >
-            <Feather name={icon} size={13} color={subTab === tabKey ? colors.primary : colors.mutedForeground} />
             <Text style={{ fontSize: 13, fontFamily: subTab === tabKey ? "Pretendard-SemiBold" : "Pretendard-Regular", color: subTab === tabKey ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
 
@@ -1317,15 +1349,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
-  toggle: { flexDirection: "row", borderRadius: 8, padding: 3 },
-  toggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 6 },
-  subTabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
-  subTabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  briefCard: { marginHorizontal: 16, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  briefCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   indexCard: { borderRadius: 12, borderWidth: 1, padding: 12 },
   pulseCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   sectorCard: { borderRadius: 12, borderWidth: 1, padding: 12 },

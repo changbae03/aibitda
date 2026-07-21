@@ -265,45 +265,48 @@ export default function NewsTab() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* ── 헤더 ── */}
-      <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={[s.headerMain, { color: colors.foreground }]}>속보</Text>
-            <Feather name="zap" size={18} color="#f97316" style={{ marginHorizontal: -2 }} />
-            <Text style={[s.headerSub, { color: colors.foreground + "66" }]}>주요뉴스</Text>
+      <View style={[s.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={[s.headerMain, { color: colors.foreground }]}>뉴스</Text>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#f97316" }} />
+              <Text style={[s.headerMain, { color: colors.foreground + "55", fontSize: 18 }]}>속보</Text>
+            </View>
+            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>매크로 · 실시간 뉴스 분석</Text>
           </View>
           {tab === "feed" && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {cachedTime && !feedLoading && (
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{cachedTime} 기준</Text>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{cachedTime}</Text>
               )}
-              <TouchableOpacity onPress={() => loadFeed(true)} disabled={feedLoading} style={{ padding: 4 }}>
-                <Feather name="refresh-cw" size={16} color={feedLoading ? colors.border : colors.mutedForeground} />
-              </TouchableOpacity>
+              <Pressable onPress={() => loadFeed(true)} disabled={feedLoading} style={({ pressed }) => [{ padding: 6, borderRadius: 8, backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}>
+                <Feather name="refresh-cw" size={14} color={feedLoading ? colors.border : colors.mutedForeground} />
+              </Pressable>
             </View>
           )}
         </View>
-        {/* 굵은 구분선 */}
-        <View style={{ height: 2, backgroundColor: colors.foreground + "CC", marginBottom: 12 }} />
 
-        {/* 탭 버튼 */}
-        <View style={[s.tabBar, { backgroundColor: colors.muted + "60", borderColor: colors.border }]}>
+        {/* 탭 버튼 — pill 스타일 */}
+        <View style={{ flexDirection: "row", gap: 4 }}>
           {([
-            { key: "feed",     label: "피드",        icon: "list" },
-            { key: "scraps",   label: "스크랩",      icon: "bookmark" },
-            { key: "timeline", label: "이슈 타임라인", icon: "clock" },
-          ] as const).map(({ key, label, icon }) => (
-            <TouchableOpacity
+            { key: "feed",     label: "피드" },
+            { key: "scraps",   label: "스크랩" },
+            { key: "timeline", label: "이슈 타임라인" },
+          ] as const).map(({ key, label }) => (
+            <Pressable
               key={key}
-              style={[s.tabBtn, tab === key && { backgroundColor: colors.background }]}
+              style={({ pressed }) => [{
+                paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20,
+                backgroundColor: tab === key ? colors.primary + "12" : "transparent",
+                opacity: pressed ? 0.7 : 1,
+              }]}
               onPress={() => { setTab(key as Tab); setSearchQuery(""); }}
             >
-              <Feather name={icon} size={12} color={tab === key ? colors.foreground : colors.mutedForeground} />
-              <Text style={[s.tabLabel, { color: tab === key ? colors.foreground : colors.mutedForeground,
-                fontFamily: tab === key ? "Pretendard-SemiBold" : "Pretendard-Regular" }]}>
+              <Text style={{ fontSize: 13, fontFamily: tab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: tab === key ? colors.primary : colors.mutedForeground }}>
                 {label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       </View>

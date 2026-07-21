@@ -66,10 +66,15 @@ function AnalysisRow({ item }: { item: AnalysisListItem }) {
   const isKR = /^\d/.test(item.ticker);
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? colors.muted : colors.card, borderColor: colors.border }]}
+      style={({ pressed }) => [{
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        paddingHorizontal: 16, paddingVertical: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
+        backgroundColor: pressed ? colors.muted : colors.background,
+      }]}
       onPress={() => router.push(`/analysis/${item.id}`)}
     >
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Text style={[styles.rowTicker, { color: colors.foreground }]}>{item.ticker}</Text>
           <Text style={[styles.rowName, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -301,11 +306,19 @@ export default function AnalysisTab() {
           </View>
 
           {/* Segment */}
-          <View style={[styles.segRow, { borderBottomColor: colors.border }]}>
+          <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
             {(["최근 분석", "인기 종목"] as const).map((t) => (
-              <TouchableOpacity key={t} style={[styles.segBtn, seg === t && { borderBottomColor: colors.foreground }]} onPress={() => setSeg(t)}>
-                <Text style={[styles.segLabel, { color: seg === t ? colors.foreground : colors.mutedForeground }]}>{t}</Text>
-              </TouchableOpacity>
+              <Pressable
+                key={t}
+                style={({ pressed }) => [{
+                  paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+                  backgroundColor: seg === t ? colors.primary + "12" : "transparent",
+                  opacity: pressed ? 0.7 : 1,
+                }]}
+                onPress={() => setSeg(t)}
+              >
+                <Text style={{ fontSize: 13, fontFamily: seg === t ? "Pretendard-SemiBold" : "Pretendard-Regular", color: seg === t ? colors.primary : colors.mutedForeground }}>{t}</Text>
+              </Pressable>
             ))}
           </View>
 

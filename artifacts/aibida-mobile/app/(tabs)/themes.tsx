@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Platform,
+  RefreshControl, ActivityIndicator, Platform, Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -473,28 +473,31 @@ export default function ThemesTab() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* 헤더 */}
-      <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <Text style={{ fontSize: 20 }}>🔥</Text>
-          <Text style={[s.headerTitle, { color: colors.foreground }]}>테마 분석</Text>
+      <View style={[s.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <View>
+            <Text style={[s.headerTitle, { color: colors.foreground }]}>테마 · 수급</Text>
+            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>AI 기관 수급 · 테마 분석</Text>
+          </View>
         </View>
 
-        {/* 탭 버튼 */}
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        {/* 탭 버튼 — pill 스타일 */}
+        <View style={{ flexDirection: "row", gap: 4 }}>
           {TABS.map(tab => {
             const isActive = activeTab === tab;
             const activeColor = tabActiveColor(tab);
             return (
-              <TouchableOpacity
+              <Pressable
                 key={tab}
                 onPress={() => setActiveTab(tab)}
-                style={[
-                  s.tabBtn,
-                  { backgroundColor: isActive ? activeColor : colors.muted },
-                ]}
+                style={({ pressed }) => [{
+                  paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20,
+                  backgroundColor: isActive ? activeColor + "18" : "transparent",
+                  opacity: pressed ? 0.7 : 1,
+                }]}
               >
-                <Text style={[s.tabLabel, { color: isActive ? "#fff" : colors.mutedForeground }]}>{tab}</Text>
-              </TouchableOpacity>
+                <Text style={{ fontSize: 13, fontFamily: isActive ? "Pretendard-SemiBold" : "Pretendard-Regular", color: isActive ? activeColor : colors.mutedForeground }}>{tab}</Text>
+              </Pressable>
             );
           })}
         </View>
@@ -673,7 +676,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 20, fontFamily: "Pretendard-Bold" },
+  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
   tabBtn: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
   },

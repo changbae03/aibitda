@@ -522,26 +522,32 @@ export default function PortfolioTab() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* ── 헤더 ── */}
-      <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <Text style={[s.headerTitle, { color: colors.foreground }]}>MY</Text>
-        <TouchableOpacity onPress={() => router.push("/mypage")} style={{ padding: 6 }}>
-          <Feather name="user" size={18} color={colors.mutedForeground} />
+      <View style={[s.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
+        <View>
+          <Text style={[s.headerTitle, { color: colors.foreground }]}>MY</Text>
+          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>관심 종목 · 분석 이력</Text>
+        </View>
+        <TouchableOpacity onPress={() => router.push("/mypage")} style={{ padding: 8, borderRadius: 10, backgroundColor: colors.muted }}>
+          <Feather name="user" size={16} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
       {/* ── 서브탭 바 ── */}
-      <View style={[s.subTabBar, { borderBottomColor: colors.border }]}>
-        {MY_TABS.map(({ key, label, icon }) => (
-          <TouchableOpacity
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+        {MY_TABS.map(({ key, label }) => (
+          <Pressable
             key={key}
-            style={[s.subTabBtn, myTab === key && { borderBottomColor: colors.primary }]}
+            style={({ pressed }) => [{
+              paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+              backgroundColor: myTab === key ? colors.primary + "12" : "transparent",
+              opacity: pressed ? 0.7 : 1,
+            }]}
             onPress={() => setMyTab(key)}
           >
-            <Feather name={icon} size={13} color={myTab === key ? colors.primary : colors.mutedForeground} />
             <Text style={{ fontSize: 13, fontFamily: myTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: myTab === key ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
 
