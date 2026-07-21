@@ -263,10 +263,18 @@ export function useThemesFeed() {
 export function useStockSearch(query: string) {
   return useQuery({
     queryKey: ["stock-search", query],
-    queryFn: () =>
-      apiFetch<StockSearchResult[]>(
+    queryFn: async () => {
+      const raw = await apiFetch<any[]>(
         `/api/market-data/search/${encodeURIComponent(query)}`
-      ),
+      );
+      return raw.map((r: any): StockSearchResult => ({
+        ticker: r.ticker ?? r.symbol ?? r.code ?? "",
+        name: r.name ?? r.shortname ?? r.companyName ?? "",
+        market: r.market ?? r.exchange ?? "",
+        sector: r.sector,
+        exchange: r.exchange ?? r.market,
+      }));
+    },
     enabled: query.trim().length >= 1,
     staleTime: 60 * 1000,
     retry: 1,

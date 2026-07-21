@@ -146,20 +146,41 @@ export default function NewAnalysisScreen() {
         )}
 
         <ScrollView keyboardShouldPersistTaps="handled">
-          {(search.data ?? []).map((item) => (
-            <Pressable
-              key={item.ticker}
-              style={({ pressed }) => [s.resultRow, { backgroundColor: pressed ? colors.muted : "transparent" }]}
-              onPress={() => { setSelected(item); setPhase("confirm"); }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={s.resultTicker}>{item.ticker}</Text>
-                <Text style={s.resultName}>{item.name}</Text>
-                {item.sector && <Text style={s.resultSector}>{item.sector}</Text>}
-              </View>
-              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-            </Pressable>
-          ))}
+          {(search.data ?? []).map((item) => {
+            const exch = item.exchange ?? item.market ?? "";
+            const isKR = exch === "KOSPI" || exch === "KOSDAQ" || /\.KS|\.KQ/.test(item.ticker);
+            const exchLabel = exch === "KOSPI" ? "코스피" : exch === "KOSDAQ" ? "코스닥" : exch === "NASDAQ" ? "나스닥" : exch === "NYSE" ? "NYSE" : exch || null;
+            const codeOnly = item.ticker.replace(".KS", "").replace(".KQ", "");
+            return (
+              <Pressable
+                key={item.ticker}
+                style={({ pressed }) => [s.resultRow, { backgroundColor: pressed ? colors.muted : "transparent" }]}
+                onPress={() => { setSelected(item); setPhase("confirm"); }}
+              >
+                <View style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  backgroundColor: isKR ? "#dbeafe" : "#fef9c3",
+                  alignItems: "center", justifyContent: "center", marginRight: 12,
+                }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: isKR ? "#2563eb" : "#b45309" }}>
+                    {(item.name || codeOnly).slice(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={s.resultTicker}>{item.name || codeOnly}</Text>
+                    {exchLabel && (
+                      <View style={{ backgroundColor: isKR ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>{exchLabel}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={s.resultName}>{codeOnly}</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </SafeAreaView>
     );

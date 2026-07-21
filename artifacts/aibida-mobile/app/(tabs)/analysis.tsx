@@ -256,22 +256,44 @@ export default function AnalysisTab() {
               data={search.data ?? []}
               keyExtractor={(item) => item.ticker}
               keyboardShouldPersistTaps="handled"
-              style={{ maxHeight: 260 }}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.searchResultRow,
-                    { borderBottomColor: colors.border, backgroundColor: pressed ? colors.muted : "transparent" },
-                  ]}
-                  onPress={() => pickStock(item)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.srTicker, { color: colors.foreground }]}>{item.ticker}</Text>
-                    <Text style={[styles.srName, { color: colors.mutedForeground }]}>{item.name}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
-                </Pressable>
-              )}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item }) => {
+                const exch = item.exchange ?? item.market ?? "";
+                const isKR = exch === "KOSPI" || exch === "KOSDAQ" || /\.KS|\.KQ/.test(item.ticker);
+                const exchLabel = exch === "KOSPI" ? "코스피" : exch === "KOSDAQ" ? "코스닥" : exch === "NASDAQ" ? "나스닥" : exch === "NYSE" ? "NYSE" : exch || null;
+                const codeOnly = item.ticker.replace(".KS", "").replace(".KQ", "");
+                return (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.searchResultRow,
+                      { borderBottomColor: colors.border, backgroundColor: pressed ? colors.muted : "transparent" },
+                    ]}
+                    onPress={() => pickStock(item)}
+                  >
+                    <View style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      backgroundColor: isKR ? "#dbeafe" : "#fef9c3",
+                      alignItems: "center", justifyContent: "center", marginRight: 10,
+                    }}>
+                      <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: isKR ? "#2563eb" : "#b45309" }}>
+                        {(item.name || codeOnly).slice(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                        <Text style={[styles.srTicker, { color: colors.foreground }]}>{item.name || codeOnly}</Text>
+                        {exchLabel && (
+                          <View style={{ backgroundColor: isKR ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>{exchLabel}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.srName, { color: colors.mutedForeground }]}>{codeOnly}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                  </Pressable>
+                );
+              }}
             />
           )}
         </View>
