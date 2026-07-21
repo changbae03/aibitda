@@ -40,32 +40,55 @@ export interface BriefResponse {
 export interface TomorrowPick {
   ticker: string;
   name: string;
-  category: "confluence" | "theme" | "signal";
+  market?: string;
+  category: "confluence" | "laggard" | "volume" | "momentum" | "theme" | "signal";
   confidence: "high" | "medium" | "low";
-  reason: string;
+  rationale?: string;
+  reason?: string;
+  theme?: string;
+  themeEmoji?: string;
+  themeHeat?: number;
   themes?: string[];
   finalScore: number;
   signals?: string[];
+  priceChange?: number;
+  volumeRatio?: number;
+  laggardGap?: number;
+  confluenceGroups?: string[];
 }
 
 export interface TomorrowPicksResponse {
   picks: TomorrowPick[];
   cachedAt: string;
   fromCache: boolean;
+  stale?: boolean;
 }
 
 export interface PresurgePick {
   ticker: string;
   name: string;
+  market?: string;
   score: number;
-  reason: string;
+  change?: number;
+  close?: number;
+  maAligned?: boolean;
+  bbWidthPct?: number;
+  momentum3d?: number;
+  nearHighPct?: number;
+  volDryupDays?: number;
+  volExpansion?: number;
+  priceRangePct?: number;
+  reason?: string;
   signals?: string[];
   themes?: string[];
 }
 
 export interface PresurgeResponse {
-  picks: PresurgePick[];
-  cachedAt?: string;
+  picks?: PresurgePick[];
+  data?: PresurgePick[];
+  cachedAt?: number | string;
+  scanning?: boolean;
+  backtest?: any;
 }
 
 export interface ThemeSignal {
@@ -234,7 +257,12 @@ export function useTomorrowPicks() {
 export function usePresurge() {
   return useQuery({
     queryKey: ["presurge"],
-    queryFn: () => apiFetch<PresurgeResponse>(`/api/market/presurge`),
+    queryFn: async () => {
+      const raw = await apiFetch<PresurgeResponse>(`/api/market/presurge`);
+      // API returns { data: [...] } but we normalise to { picks: [...] }
+      const picks = raw.picks ?? raw.data ?? [];
+      return { ...raw, picks } as PresurgeResponse & { picks: PresurgePick[] };
+    },
     staleTime: 10 * 60 * 1000,
     retry: 1,
   });
