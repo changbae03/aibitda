@@ -278,33 +278,6 @@ export default function AnalysisTab() {
         </View>
       ) : (
         <>
-          {/* Quick links */}
-          <View style={[styles.quickRow, { borderTopColor: colors.border }]}>
-            <TouchableOpacity style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push("/tracker")}>
-              <Feather name="activity" size={14} color={colors.primary} />
-              <Text style={[styles.quickLabel, { color: colors.foreground }]}>실시간 트래커</Text>
-              <Feather name="chevron-right" size={13} color={colors.mutedForeground} />
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push("/popular")}>
-              <Feather name="award" size={14} color={colors.primary} />
-              <Text style={[styles.quickLabel, { color: colors.foreground }]}>인기 분석</Text>
-              <Feather name="chevron-right" size={13} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.scannerRow, { borderTopColor: colors.border }]}>
-            <TouchableOpacity
-              style={[styles.scannerBtn, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "40" }]}
-              onPress={() => router.push("/scanner")}
-            >
-              <Feather name="zap" size={14} color={colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.scannerTitle, { color: colors.foreground }]}>저평가 스캐너</Text>
-                <Text style={[styles.scannerSub, { color: colors.mutedForeground }]}>AI 적정가 대비 저평가 종목 발굴</Text>
-              </View>
-              <Feather name="chevron-right" size={13} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
           {/* Segment */}
           <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
             {(["최근 분석", "인기 종목"] as const).map((t) => (
@@ -392,34 +365,10 @@ const styles = StyleSheet.create({
   srTicker: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
   srName: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
   emptySearch: { padding: 16, textAlign: "center", fontFamily: "Pretendard-Regular" },
-  quickRow: {
-    flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12,
-  },
-  quickBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
-  },
-  quickLabel: { flex: 1, fontSize: 13, fontFamily: "Pretendard-Medium" },
-  scannerRow: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  scannerBtn: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
-  },
-  scannerTitle: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
-  scannerSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 1 },
   segRow: {
     flexDirection: "row", paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 0,
   },
-  segBtn: {
-    paddingVertical: 10, paddingHorizontal: 4, marginRight: 20,
-    borderBottomWidth: 2, borderBottomColor: "transparent",
-  },
-  segLabel: { fontSize: 14, fontFamily: "Pretendard-Medium" },
   list: { paddingTop: 4 },
   row: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
