@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   topLeft: { flex: 1, gap: 4 },
-  companyName: { fontSize: 20, fontWeight: "700", fontFamily: "Inter_700Bold" },
+  companyName: { fontSize: 20, fontWeight: "700", fontFamily: "Pretendard-Bold" },
   ticker: { fontSize: 13 },
   verdictBadge: {
     paddingHorizontal: 12,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  verdictText: { fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" },
+  verdictText: { fontSize: 14, fontWeight: "700", fontFamily: "Pretendard-Bold" },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   priceItem: { alignItems: "center", gap: 4 },
   priceLabel: { fontSize: 11 },
-  priceValue: { fontSize: 15, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
+  priceValue: { fontSize: 15, fontWeight: "600", fontFamily: "Pretendard-SemiBold" },
   stepsContainer: { paddingHorizontal: 16, gap: 12 },
   stepCard: {
     borderRadius: 12,
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  stepTitle: { fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold" },
+  stepTitle: { fontSize: 13, fontWeight: "700", fontFamily: "Pretendard-Bold" },
   infoBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
   infoBadgeText: { fontSize: 10, fontWeight: "600" },
   agentName: { fontSize: 11 },

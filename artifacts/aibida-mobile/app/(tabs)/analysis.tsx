@@ -19,22 +19,22 @@ function VerdictBadge({ verdict }: { verdict?: string | null }) {
   const v = verdict.toLowerCase();
   if (v.includes("strong buy")) return (
     <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color: "#16a34a", fontFamily: "Inter_600SemiBold" }}>강력매수</Text>
+      <Text style={{ fontSize: 11, color: "#16a34a", fontFamily: "Pretendard-SemiBold" }}>강력매수</Text>
     </View>
   );
   if (v.includes("buy")) return (
     <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color: "#16a34a", fontFamily: "Inter_600SemiBold" }}>매수</Text>
+      <Text style={{ fontSize: 11, color: "#16a34a", fontFamily: "Pretendard-SemiBold" }}>매수</Text>
     </View>
   );
   if (v.includes("hold")) return (
     <View style={{ backgroundColor: "#fef9c3", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color: "#a16207", fontFamily: "Inter_600SemiBold" }}>보유</Text>
+      <Text style={{ fontSize: 11, color: "#a16207", fontFamily: "Pretendard-SemiBold" }}>보유</Text>
     </View>
   );
   if (v.includes("sell")) return (
     <View style={{ backgroundColor: "#fee2e2", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color: "#dc2626", fontFamily: "Inter_600SemiBold" }}>매도</Text>
+      <Text style={{ fontSize: 11, color: "#dc2626", fontFamily: "Pretendard-SemiBold" }}>매도</Text>
     </View>
   );
   return null;
@@ -54,7 +54,7 @@ function StatusDot({ status }: { status: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-      <Text style={{ fontSize: 11, color, fontFamily: "Inter_400Regular" }}>{label}</Text>
+      <Text style={{ fontSize: 11, color, fontFamily: "Pretendard-Regular" }}>{label}</Text>
     </View>
   );
 }
@@ -311,15 +311,15 @@ export default function AnalysisTab() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   hero: { paddingHorizontal: 20, paddingBottom: 20, gap: 10 },
-  heroTitle: { fontSize: 30, fontFamily: "Inter_700Bold", lineHeight: 38 },
-  heroSub: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular" },
+  heroTitle: { fontSize: 30, fontFamily: "Pretendard-Bold", lineHeight: 38 },
+  heroSub: { fontSize: 13, lineHeight: 19, fontFamily: "Pretendard-Regular" },
   searchRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 12, borderWidth: 1, overflow: "hidden",
     marginTop: 6,
   },
   searchInput: {
-    flex: 1, fontSize: 14, fontFamily: "Inter_400Regular",
+    flex: 1, fontSize: 14, fontFamily: "Pretendard-Regular",
     paddingVertical: 13, paddingHorizontal: 10, padding: 0,
   },
   searchClear: { padding: 10 },
@@ -327,17 +327,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13,
     alignItems: "center", justifyContent: "center",
   },
-  searchBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  heroHint: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center" },
+  searchBtnText: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
+  heroHint: { fontSize: 11, fontFamily: "Pretendard-Regular", textAlign: "center" },
   dropdown: {
     marginHorizontal: 16, borderRadius: 12, borderWidth: 1, overflow: "hidden", marginBottom: 8,
   },
   searchResultRow: {
     padding: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  srTicker: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  srName: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  emptySearch: { padding: 16, textAlign: "center", fontFamily: "Inter_400Regular" },
+  srTicker: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  srName: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  emptySearch: { padding: 16, textAlign: "center", fontFamily: "Pretendard-Regular" },
   quickRow: {
     flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 12,
     borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
   },
-  quickLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium" },
+  quickLabel: { flex: 1, fontSize: 13, fontFamily: "Pretendard-Medium" },
   scannerRow: {
     paddingHorizontal: 16, paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -355,8 +355,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 10,
     paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
   },
-  scannerTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  scannerSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  scannerTitle: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
+  scannerSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 1 },
   segRow: {
     flexDirection: "row", paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 0,
@@ -365,17 +365,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10, paddingHorizontal: 4, marginRight: 20,
     borderBottomWidth: 2, borderBottomColor: "transparent",
   },
-  segLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  segLabel: { fontSize: 14, fontFamily: "Pretendard-Medium" },
   list: { paddingTop: 4 },
   row: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowTicker: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  rowName: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
-  rowMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  rowTicker: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  rowName: { fontSize: 12, fontFamily: "Pretendard-Regular", flex: 1 },
+  rowMeta: { fontSize: 11, fontFamily: "Pretendard-Regular" },
   emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
-  emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  emptyTitle: { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
+  emptySub: { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
 });

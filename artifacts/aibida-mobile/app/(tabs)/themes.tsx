@@ -120,7 +120,7 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
         <Feather name="activity" size={14} color="#6366f1" />
         <Text style={[s.cardTitle, { color: colors.foreground }]}>테마별 수급 강도</Text>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>돈이 쏠리는 순서</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>돈이 쏠리는 순서</Text>
       </View>
       {ranked.map((item, i) => {
         const force = item.force;
@@ -129,12 +129,12 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
         const sm = item.themeSmartMoney;
         return (
           <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Text style={{ fontSize: 10, color: colors.mutedForeground, width: 14, textAlign: "right", fontFamily: "Inter_400Regular" }}>{i + 1}</Text>
+            <Text style={{ fontSize: 10, color: colors.mutedForeground, width: 14, textAlign: "right", fontFamily: "Pretendard-Regular" }}>{i + 1}</Text>
             <Text style={{ fontSize: 15 }}>{item.emoji}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_500Medium" }} numberOfLines={1}>{item.name}</Text>
+              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Medium" }} numberOfLines={1}>{item.name}</Text>
               {item.phase === "emerging" && sm != null && sm > 0 && (
-                <Text style={{ fontSize: 9, color: "#8B5CF6", fontFamily: "Inter_400Regular" }}>
+                <Text style={{ fontSize: 9, color: "#8B5CF6", fontFamily: "Pretendard-Regular" }}>
                   스마트머니 {sm > 0 ? "+" : ""}{sm.toFixed(0)}억 유입
                 </Text>
               )}
@@ -142,7 +142,7 @@ function ThemeForceRanking({ feed, colors }: { feed: ThemeFeedItem[]; colors: an
             <View style={{ width: 80, height: 6, backgroundColor: colors.muted, borderRadius: 3, overflow: "hidden" }}>
               <View style={{ width: `${barPct}%` as any, height: "100%", backgroundColor: meta.barColor, borderRadius: 3 }} />
             </View>
-            <Text style={{ fontSize: 10, color: meta.color, width: 52, textAlign: "right", fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ fontSize: 10, color: meta.color, width: 52, textAlign: "right", fontFamily: "Pretendard-SemiBold" }}>
               {meta.emoji} {meta.label}
             </Text>
           </View>
@@ -167,29 +167,29 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
           {stock.isLeader && (
             <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontSize: 9, color: "#D97706", fontFamily: "Inter_700Bold" }}>주도주</Text>
+              <Text style={{ fontSize: 9, color: "#D97706", fontFamily: "Pretendard-Bold" }}>주도주</Text>
             </View>
           )}
           {isAccumulating && (
             <View style={{ backgroundColor: "#EDE9FE", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontSize: 9, color: "#7C3AED", fontFamily: "Inter_700Bold" }}>📡 매집</Text>
+              <Text style={{ fontSize: 9, color: "#7C3AED", fontFamily: "Pretendard-Bold" }}>📡 매집</Text>
             </View>
           )}
-          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{stock.name}</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{stock.name}</Text>
           <View style={{
             backgroundColor: stock.market === "KR" ? "#EFF6FF" : "#F0FDF4",
             paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4,
           }}>
-            <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: stock.market === "KR" ? "#3B82F6" : "#16A34A" }}>{stock.market}</Text>
+            <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: stock.market === "KR" ? "#3B82F6" : "#16A34A" }}>{stock.market}</Text>
           </View>
           {change != null && (
-            <Text style={{ fontSize: 11, color: change >= 0 ? "#EF4444" : "#3B82F6", fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ fontSize: 11, color: change >= 0 ? "#EF4444" : "#3B82F6", fontFamily: "Pretendard-SemiBold" }}>
               {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
             </Text>
           )}
-          <Text style={{ fontSize: 10, color: momentum.color, fontFamily: "Inter_400Regular" }}>{momentum.text}</Text>
+          <Text style={{ fontSize: 10, color: momentum.color, fontFamily: "Pretendard-Regular" }}>{momentum.text}</Text>
         </View>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 16 }} numberOfLines={2}>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 16 }} numberOfLines={2}>
           {stock.rationale}
         </Text>
       </View>
@@ -197,7 +197,7 @@ function StockRow({ stock, onAnalyze, colors }: { stock: FeedStock; onAnalyze: (
         style={{ backgroundColor: "#eef2ff", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 8, marginLeft: 8 }}
         onPress={() => onAnalyze(stock.ticker, stock.name)}
       >
-        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#6366f1" }}>분석</Text>
+        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#6366f1" }}>분석</Text>
       </TouchableOpacity>
     </View>
   );
@@ -223,9 +223,9 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
       {/* 수급 형성 중 배너 */}
       {isEmerging && (
         <View style={{ backgroundColor: "#EDE9FE", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 11, color: "#7C3AED", fontFamily: "Inter_700Bold" }}>📡 수급 형성 중</Text>
+          <Text style={{ fontSize: 11, color: "#7C3AED", fontFamily: "Pretendard-Bold" }}>📡 수급 형성 중</Text>
           {sm != null && sm > 0 && (
-            <Text style={{ fontSize: 10, color: "#8B5CF6", fontFamily: "Inter_400Regular" }}>
+            <Text style={{ fontSize: 10, color: "#8B5CF6", fontFamily: "Pretendard-Regular" }}>
               스마트머니 +{sm.toFixed(0)}억 유입 — 가격 반영 전
             </Text>
           )}
@@ -244,12 +244,12 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{item.name}</Text>
-            <Text style={{ fontSize: 11, color: meta.color, fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.name}</Text>
+            <Text style={{ fontSize: 11, color: meta.color, fontFamily: "Pretendard-SemiBold" }}>
               {meta.emoji} {meta.label}
             </Text>
           </View>
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
             {item.stocks.length}종목
           </Text>
         </View>
@@ -258,7 +258,7 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
 
       {expanded && (
         <View style={{ marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, paddingTop: 10, paddingBottom: 8, lineHeight: 18, fontFamily: "Inter_400Regular" }}>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, paddingTop: 10, paddingBottom: 8, lineHeight: 18, fontFamily: "Pretendard-Regular" }}>
             {item.summary}
           </Text>
           {item.stocks.map((stock, i) => (
@@ -293,19 +293,19 @@ function PickCard({ item, type, colors, onAnalyze }: {
         activeOpacity={0.7}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{item.ticker}</Text>
-          <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
+          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
             {item.name}
           </Text>
         </View>
         {expanded && (
           <View style={{ gap: 6, paddingTop: 8 }}>
-            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 18 }}>{item.reason}</Text>
+            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 18 }}>{item.reason}</Text>
             {item.themes && item.themes.length > 0 && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>
                 {item.themes.map((t, i) => (
                   <View key={i} style={{ backgroundColor: colors.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{t}</Text>
+                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{t}</Text>
                   </View>
                 ))}
               </View>
@@ -318,12 +318,12 @@ function PickCard({ item, type, colors, onAnalyze }: {
       <View style={{ alignItems: "flex-end", gap: 6 }}>
         {conf != null && (
           <View style={{ backgroundColor: confBg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: confColor }}>{confLabel}</Text>
+            <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: confColor }}>{confLabel}</Text>
           </View>
         )}
         {score != null && (
           <View style={{ backgroundColor: "#eef2ff", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#6366f1" }}>{score.toFixed(1)}</Text>
+            <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: "#6366f1" }}>{score.toFixed(1)}</Text>
           </View>
         )}
         <TouchableOpacity
@@ -335,7 +335,7 @@ function PickCard({ item, type, colors, onAnalyze }: {
             backgroundColor: "#6366f111",
           }}
         >
-          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#6366f1" }}>분석</Text>
+          <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: "#6366f1" }}>분석</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setExpanded(v => !v)} hitSlop={8}>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
@@ -364,18 +364,18 @@ function SignalCard({ signal, colors }: { signal: ThemeSignal; colors: any }) {
       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{signal.theme}</Text>
+            <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{signal.theme}</Text>
             {strength && (
               <View style={{ backgroundColor: strengthBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: strengthColor }}>{strengthLabel}</Text>
+                <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: strengthColor }}>{strengthLabel}</Text>
               </View>
             )}
           </View>
           {signal.signal && (
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{signal.signal}</Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{signal.signal}</Text>
           )}
           {expanded && (signal.reason ?? signal.description) && (
-            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 18, marginTop: 8 }}>
+            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 18, marginTop: 8 }}>
               {signal.reason ?? signal.description}
             </Text>
           )}
@@ -383,7 +383,7 @@ function SignalCard({ signal, colors }: { signal: ThemeSignal; colors: any }) {
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
               {tickers.map((t, i) => (
                 <View key={i} style={{ backgroundColor: colors.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                  <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>{t}</Text>
+                  <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "Pretendard-SemiBold" }}>{t}</Text>
                 </View>
               ))}
             </View>
@@ -512,7 +512,7 @@ export default function ThemesTab() {
             <Feather name="alert-circle" size={32} color={colors.border} />
             <Text style={[s.loadingText, { color: colors.mutedForeground }]}>피드를 불러오지 못했습니다</Text>
             <TouchableOpacity style={[s.retryBtn, { borderColor: "#6366f1" }]} onPress={() => loadFeed()}>
-              <Text style={{ fontSize: 13, color: "#6366f1", fontFamily: "Inter_600SemiBold" }}>다시 시도</Text>
+              <Text style={{ fontSize: 13, color: "#6366f1", fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -520,7 +520,7 @@ export default function ThemesTab() {
             contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
             refreshControl={<RefreshControl refreshing={false} onRefresh={() => loadFeed()} tintColor="#6366f1" />}
           >
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 4 }}>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 4 }}>
               최근 3일 기관·외국인 순매수가 집중된 테마와 관련주를 분석합니다 · 3시간마다 갱신
               {feedCachedAt ? ` · ${new Date(feedCachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신됨` : ""}
             </Text>
@@ -554,11 +554,11 @@ export default function ThemesTab() {
             <View style={[s.conceptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                 <Text style={{ fontSize: 16 }}>✨</Text>
-                <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>
+                <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
                   3가지 렌즈로 내일 상승 종목을 찾습니다
                 </Text>
               </View>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 16, marginBottom: 10 }}>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 16, marginBottom: 10 }}>
                 서로 다른 지표를 함께 보면 한 지표만으론 놓치는 신호를 줄일 수 있습니다. 여러 리스트에 동시에 등장하는 종목일수록 신뢰도가 높습니다.
               </Text>
               <View style={{ gap: 6 }}>
@@ -569,11 +569,11 @@ export default function ThemesTab() {
                 ].map(({ n, color, bg, title, desc }) => (
                   <View key={n} style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.muted, padding: 10, borderRadius: 10 }}>
                     <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color }}>{n}</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color }}>{n}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color }}>{title}</Text>
-                      <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{desc}</Text>
+                      <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color }}>{title}</Text>
+                      <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{desc}</Text>
                     </View>
                   </View>
                 ))}
@@ -584,12 +584,12 @@ export default function ThemesTab() {
             <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={{ fontSize: 16 }}>⚡</Text>
-                <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground }}>급등 예비군</Text>
+                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>급등 예비군</Text>
                 <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                  <Text style={{ fontSize: 10, color: "#EF4444", fontFamily: "Inter_600SemiBold" }}>오늘 수급 포착</Text>
+                  <Text style={{ fontSize: 10, color: "#EF4444", fontFamily: "Pretendard-SemiBold" }}>오늘 수급 포착</Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2, fontFamily: "Inter_400Regular" }}>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2, fontFamily: "Pretendard-Regular" }}>
                 거래량 급증 + 기관·외인 매집 실시간 스캔
               </Text>
             </View>
@@ -604,12 +604,12 @@ export default function ThemesTab() {
             <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={{ fontSize: 16 }}>🎯</Text>
-                <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground }}>내일 상승 후보</Text>
+                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>내일 상승 후보</Text>
                 <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                  <Text style={{ fontSize: 10, color: "#16a34a", fontFamily: "Inter_600SemiBold" }}>내일픽</Text>
+                  <Text style={{ fontSize: 10, color: "#16a34a", fontFamily: "Pretendard-SemiBold" }}>내일픽</Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2, fontFamily: "Inter_400Regular" }}>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2, fontFamily: "Pretendard-Regular" }}>
                 테마·검색 트렌드 · 순환매 지연·화제성 포착
               </Text>
             </View>
@@ -635,7 +635,7 @@ export default function ThemesTab() {
             contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.foreground} />}
           >
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 4 }}>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 4 }}>
               기관·외국인 수급 신호를 실시간으로 분석합니다
             </Text>
             {(() => {
@@ -662,7 +662,7 @@ function EmptyState({ text, colors }: { text: string; colors: any }) {
   return (
     <View style={{ alignItems: "center", paddingVertical: 48, gap: 8 }}>
       <Feather name="inbox" size={32} color={colors.border} />
-      <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{text}</Text>
+      <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{text}</Text>
     </View>
   );
 }
@@ -673,15 +673,15 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 20, fontFamily: "Pretendard-Bold" },
   tabBtn: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
   },
-  tabLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  tabLabel: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
   card: {
     borderRadius: 14, borderWidth: 1, padding: 14,
   },
-  cardTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  cardTitle: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
   stockRow: {
     flexDirection: "row", alignItems: "flex-start",
     paddingVertical: 12,
@@ -699,7 +699,7 @@ const s = StyleSheet.create({
     flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24,
   },
   loadingText: {
-    fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center",
+    fontSize: 13, fontFamily: "Pretendard-Regular", textAlign: "center",
   },
   retryBtn: {
     marginTop: 4, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 8, borderWidth: 1,

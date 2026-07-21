@@ -122,24 +122,24 @@ function NewsRow({ item, colors }: { item: MacroNewsItem; colors: any }) {
           <Text style={{
             fontSize: 12,
             color: veryNew ? "#f97316" : colors.mutedForeground,
-            fontFamily: veryNew ? "Inter_600SemiBold" : "Inter_400Regular",
+            fontFamily: veryNew ? "Pretendard-SemiBold" : "Pretendard-Regular",
           }}>{relT}</Text>
           {breaking && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#FFF1EE", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
               <Feather name="zap" size={9} color="#f97316" />
-              <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#f97316" }}>속보</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: "#f97316" }}>속보</Text>
             </View>
           )}
         </View>
         {/* 헤드라인 */}
         <Text style={[s.newsTitle, {
           color: colors.foreground,
-          fontFamily: (breaking || veryNew) ? "Inter_600SemiBold" : "Inter_500Medium",
+          fontFamily: (breaking || veryNew) ? "Pretendard-SemiBold" : "Pretendard-Medium",
         }]} numberOfLines={3}>
           {item.title}
         </Text>
         {/* 출처 */}
-        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           {item.source}
         </Text>
       </View>
@@ -165,12 +165,12 @@ function BreakingBanner({ items, colors }: { items: MacroNewsItem[]; colors: any
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         <View style={{ backgroundColor: "#f97316", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-          <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>속보</Text>
+          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: "#fff" }}>속보</Text>
         </View>
-        <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: "#c2410c", flex: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: "#c2410c", flex: 1 }} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={{ fontSize: 11, color: "#f9731680", fontFamily: "Inter_400Regular" }}>
+        <Text style={{ fontSize: 11, color: "#f9731680", fontFamily: "Pretendard-Regular" }}>
           {idx + 1}/{items.length}
         </Text>
       </View>
@@ -275,7 +275,7 @@ export default function NewsTab() {
           {tab === "feed" && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               {cachedTime && !feedLoading && (
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{cachedTime} 기준</Text>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{cachedTime} 기준</Text>
               )}
               <TouchableOpacity onPress={() => loadFeed(true)} disabled={feedLoading} style={{ padding: 4 }}>
                 <Feather name="refresh-cw" size={16} color={feedLoading ? colors.border : colors.mutedForeground} />
@@ -300,7 +300,7 @@ export default function NewsTab() {
             >
               <Feather name={icon} size={12} color={tab === key ? colors.foreground : colors.mutedForeground} />
               <Text style={[s.tabLabel, { color: tab === key ? colors.foreground : colors.mutedForeground,
-                fontFamily: tab === key ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+                fontFamily: tab === key ? "Pretendard-SemiBold" : "Pretendard-Regular" }]}>
                 {label}
               </Text>
             </TouchableOpacity>
@@ -344,10 +344,10 @@ export default function NewsTab() {
           {q && !feedLoading && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingTop: 10 }}>
               <Feather name="search" size={12} color={colors.mutedForeground} />
-              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
-                <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>"{searchQuery}"</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                <Text style={{ fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>"{searchQuery}"</Text>
                 {" "}검색 결과{" "}
-                <Text style={{ fontFamily: "Inter_600SemiBold", color: "#6366f1" }}>{filtered.length}건</Text>
+                <Text style={{ fontFamily: "Pretendard-SemiBold", color: "#6366f1" }}>{filtered.length}건</Text>
               </Text>
             </View>
           )}
@@ -370,12 +370,12 @@ export default function NewsTab() {
           ) : grouped.length === 0 ? (
             <View style={s.emptyState}>
               <Feather name="inbox" size={32} color={colors.border} />
-              <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+              <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                 {q ? `"${searchQuery}"에 해당하는 뉴스가 없습니다` : "뉴스를 불러오지 못했습니다"}
               </Text>
               {q && (
                 <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <Text style={{ fontSize: 12, color: "#6366f1", fontFamily: "Inter_400Regular" }}>검색 초기화</Text>
+                  <Text style={{ fontSize: 12, color: "#6366f1", fontFamily: "Pretendard-Regular" }}>검색 초기화</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -385,10 +385,10 @@ export default function NewsTab() {
                 <View key={group.label}>
                   {/* 날짜 헤더 */}
                   <View style={[s.dateHeader, { backgroundColor: colors.muted + "40", borderBottomColor: colors.border }]}>
-                    <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground + "BB" }}>
+                    <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground + "BB" }}>
                       {group.label}
                     </Text>
-                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                       {group.items.length}건
                     </Text>
                   </View>
@@ -405,13 +405,13 @@ export default function NewsTab() {
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                       {expanded ? "접기" : `${items.length - PAGE}건 더보기`}
                     </Text>
                   </View>
                 </TouchableOpacity>
               )}
-              <Text style={{ fontSize: 10, color: colors.mutedForeground + "66", textAlign: "center", paddingVertical: 12, paddingHorizontal: 20, fontFamily: "Inter_400Regular" }}>
+              <Text style={{ fontSize: 10, color: colors.mutedForeground + "66", textAlign: "center", paddingVertical: 12, paddingHorizontal: 20, fontFamily: "Pretendard-Regular" }}>
                 본 뉴스피드는 각 언론사 RSS를 통해 제공되며, 투자 권유가 아닙니다.
               </Text>
             </>
@@ -428,8 +428,8 @@ export default function NewsTab() {
             <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }}>
               <Feather name="bookmark" size={24} color={colors.mutedForeground} />
             </View>
-            <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>로그인이 필요합니다</Text>
-            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>
+            <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>로그인이 필요합니다</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", textAlign: "center" }}>
               스크랩 기능은 로그인 후 이용할 수 있습니다
             </Text>
           </View>
@@ -442,7 +442,7 @@ export default function NewsTab() {
           contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
             키워드로 처음부터 지금까지의 흐름을 한눈에 · 애빛다가 찾아줍니다
           </Text>
 
@@ -466,7 +466,7 @@ export default function NewsTab() {
               disabled={tlLoading || !tlInput.trim()}
             >
               <Feather name="star" size={14} color="#fff" />
-              <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" }}>검색</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#fff" }}>검색</Text>
             </TouchableOpacity>
           </View>
 
@@ -479,7 +479,7 @@ export default function NewsTab() {
                   style={[s.kwChip, { backgroundColor: colors.muted, borderColor: colors.border }]}
                   onPress={() => { setTlInput(kw); fetchTimeline(kw); }}
                 >
-                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular" }}>{kw}</Text>
+                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular" }}>{kw}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -489,7 +489,7 @@ export default function NewsTab() {
           {tlLoading ? (
             <View style={{ alignItems: "center", gap: 12, paddingVertical: 40 }}>
               <ActivityIndicator size="large" color="#6366f1" />
-              <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+              <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                 "{tlInput}" 타임라인 생성 중…
               </Text>
             </View>
@@ -504,10 +504,10 @@ export default function NewsTab() {
           ) : tlData ? (
             <View style={{ gap: 10 }}>
               <View style={{ backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14 }}>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 6 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 6 }}>
                   "{tlData.keyword}" 요약
                 </Text>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 18 }}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 18 }}>
                   {tlData.summary}
                 </Text>
               </View>
@@ -524,26 +524,26 @@ export default function NewsTab() {
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
                           <View style={{ backgroundColor: imp.badge, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: imp.dot }}>{imp.label}</Text>
+                            <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: imp.dot }}>{imp.label}</Text>
                           </View>
-                          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                             {ev.dateLabel ?? ev.date}
                           </Text>
                           {ev.category && (
-                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{ev.category}</Text>
+                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.category}</Text>
                           )}
                         </View>
-                        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, lineHeight: 18 }}>
+                        <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground, lineHeight: 18 }}>
                           {ev.event}
                         </Text>
                         {isOpen && (
                           <View style={{ marginTop: 8, gap: 6 }}>
-                            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 17 }}>
+                            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>
                               {ev.detail}
                             </Text>
                             {ev.url && (
                               <TouchableOpacity onPress={() => Linking.openURL(ev.url!)}>
-                                <Text style={{ fontSize: 11, color: "#6366f1", fontFamily: "Inter_400Regular" }}>
+                                <Text style={{ fontSize: 11, color: "#6366f1", fontFamily: "Pretendard-Regular" }}>
                                   {ev.source ?? "원문 보기"} →
                                 </Text>
                               </TouchableOpacity>
@@ -561,13 +561,13 @@ export default function NewsTab() {
                 onPress={() => fetchTimeline(tlKeyword)}
               >
                 <Feather name="refresh-cw" size={13} color={colors.mutedForeground} />
-                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>새로고침</Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>새로고침</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={{ alignItems: "center", gap: 10, paddingVertical: 40 }}>
               <Feather name="clock" size={32} color={colors.border} />
-              <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>
+              <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", textAlign: "center" }}>
                 키워드를 입력하면 AI가{"\n"}관련 이슈 타임라인을 만들어줍니다
               </Text>
             </View>
@@ -618,8 +618,8 @@ function ScrapsList({ colors, insets, searchQuery, setSearchQuery }: {
   if (scraps.length === 0) return (
     <View style={s.emptyState}>
       <Feather name="bookmark" size={32} color={colors.border} />
-      <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>스크랩한 기사가 없습니다</Text>
-      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }}>
+      <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>스크랩한 기사가 없습니다</Text>
+      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", textAlign: "center" }}>
         피드에서 기사를 스크랩하면 주제별로 정리됩니다
       </Text>
     </View>
@@ -646,8 +646,8 @@ function ScrapsList({ colors, insets, searchQuery, setSearchQuery }: {
         )}
       </View>
       <View style={{ paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
-          총 <Text style={{ fontFamily: "Inter_700Bold", color: colors.foreground }}>{q ? filtered.length : scraps.length}건</Text>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+          총 <Text style={{ fontFamily: "Pretendard-Bold", color: colors.foreground }}>{q ? filtered.length : scraps.length}건</Text>
         </Text>
       </View>
       {filtered.map(item => (
@@ -662,13 +662,13 @@ function ScrapsList({ colors, insets, searchQuery, setSearchQuery }: {
           <View style={{ flex: 1, gap: 3 }}>
             {item.topic && (
               <View style={{ alignSelf: "flex-start", backgroundColor: "#eef2ff", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, color: "#6366f1", fontFamily: "Inter_600SemiBold" }}>{item.topic}</Text>
+                <Text style={{ fontSize: 10, color: "#6366f1", fontFamily: "Pretendard-SemiBold" }}>{item.topic}</Text>
               </View>
             )}
-            <Text style={[s.newsTitle, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={3}>
+            <Text style={[s.newsTitle, { color: colors.foreground, fontFamily: "Pretendard-Medium" }]} numberOfLines={3}>
               {item.title}
             </Text>
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{item.source}</Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{item.source}</Text>
           </View>
         </Pressable>
       ))}
@@ -681,8 +681,8 @@ function ScrapsList({ colors, insets, searchQuery, setSearchQuery }: {
 const s = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerMain: { fontSize: 22, fontFamily: "Inter_900Black" },
-  headerSub:  { fontSize: 22, fontFamily: "Inter_900Black" },
+  headerMain: { fontSize: 22, fontFamily: "Pretendard-Bold" },
+  headerSub:  { fontSize: 22, fontFamily: "Pretendard-Bold" },
   tabBar: {
     flexDirection: "row", borderRadius: 12, borderWidth: 1, padding: 4, gap: 2,
   },
@@ -696,7 +696,7 @@ const s = StyleSheet.create({
     margin: 12, marginBottom: 4, paddingHorizontal: 12, paddingVertical: 10,
     borderRadius: 12, borderWidth: 1,
   },
-  searchInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", padding: 0 },
+  searchInput: { flex: 1, fontSize: 13, fontFamily: "Pretendard-Regular", padding: 0 },
   newsRow: {
     flexDirection: "row", alignItems: "flex-start",
     paddingHorizontal: 16, paddingVertical: 14,

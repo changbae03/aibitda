@@ -45,9 +45,9 @@ function PriceChange({ change, price, currency }: { change: number | null; price
   const formatted = isKR ? price.toLocaleString("ko-KR") + "원" : "$" + price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
     <View style={{ alignItems: "flex-end", gap: 2 }}>
-      <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground }}>{formatted}</Text>
+      <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{formatted}</Text>
       {change != null && (
-        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: change >= 0 ? colors.up : colors.down }}>
+        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: change >= 0 ? colors.up : colors.down }}>
           {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
         </Text>
       )}
@@ -67,7 +67,7 @@ function AnalysisBadge({ ticker, analyses }: { ticker: string; analyses: any[] }
   const label = v.includes("strong buy") ? "강력매수" : v.includes("buy") ? "매수" : v.includes("sell") ? "매도" : "보유";
   return (
     <View style={{ backgroundColor: bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 10, color, fontFamily: "Inter_600SemiBold" }}>{label}</Text>
+      <Text style={{ fontSize: 10, color, fontFamily: "Pretendard-SemiBold" }}>{label}</Text>
     </View>
   );
 }
@@ -109,7 +109,7 @@ function SignInCTA({ colors, insets, router }: { colors: any; insets: any; route
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
           <Text style={[s.signupLink, { color: colors.mutedForeground }]}>
-            계정이 없으신가요? <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>회원가입</Text>
+            계정이 없으신가요? <Text style={{ color: colors.primary, fontFamily: "Pretendard-SemiBold" }}>회원가입</Text>
           </Text>
         </TouchableOpacity>
       </View>
@@ -341,18 +341,18 @@ function RecentAnalysesTab({ colors, insets, router }: { colors: any; insets: an
                 <Text style={[s.stockTicker, { color: colors.foreground }]}>{item.ticker}</Text>
                 {ko && (
                   <View style={{ backgroundColor: vstyle.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: vstyle.color }}>{ko}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: vstyle.color }}>{ko}</Text>
                   </View>
                 )}
                 {item.status === "generating" && (
                   <View style={{ backgroundColor: colors.primary + "20", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.primary }}>생성 중</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.primary }}>생성 중</Text>
                   </View>
                 )}
               </View>
               <Text style={[s.stockName, { color: colors.mutedForeground }]} numberOfLines={1}>{item.companyName ?? item.ticker}</Text>
               {item.targetPrice && (
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   목표가 {Number(item.targetPrice).toLocaleString("ko-KR")}
                   {item.currency === "USD" ? "$" : "원"}
                 </Text>
@@ -360,7 +360,7 @@ function RecentAnalysesTab({ colors, insets, router }: { colors: any; insets: an
             </View>
             <View style={{ alignItems: "flex-end", gap: 3 }}>
               {daysAgo != null && (
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {daysAgo === 0 ? "오늘" : `${daysAgo}일 전`}
                 </Text>
               )}
@@ -402,7 +402,7 @@ function StatsTab({ colors, insets }: { colors: any; insets: any }) {
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: (Platform.OS === "web" ? 84 : insets.bottom) + 80 }}>
       {/* 헤더 카드 */}
       <View style={[s.statsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 14 }}>
+        <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 14 }}>
           🏆 애빛다 AI 성과 요약
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
@@ -414,8 +414,8 @@ function StatsTab({ colors, insets }: { colors: any; insets: any }) {
             { label: "진행 중",  value: `${stats.ongoingCount.toLocaleString()}건` },
           ].map(({ label, value, color }) => (
             <View key={label} style={{ width: "46%", backgroundColor: colors.background, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 4 }}>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{label}</Text>
-              <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: color ?? colors.foreground }}>{value}</Text>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{label}</Text>
+              <Text style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: color ?? colors.foreground }}>{value}</Text>
             </View>
           ))}
         </View>
@@ -424,36 +424,36 @@ function StatsTab({ colors, insets }: { colors: any; insets: any }) {
       {/* 승률 / 평균 수익 */}
       <View style={{ flexDirection: "row", gap: 12 }}>
         <View style={[s.statsHalf, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>AI 승률</Text>
-          <Text style={{ fontSize: 28, fontFamily: "Inter_900Black", color: "#16a34a" }}>{winRatePct}%</Text>
-          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>목표 달성 기준</Text>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>AI 승률</Text>
+          <Text style={{ fontSize: 28, fontFamily: "Pretendard-Bold", color: "#16a34a" }}>{winRatePct}%</Text>
+          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>목표 달성 기준</Text>
         </View>
         <View style={[s.statsHalf, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>평균 수익률</Text>
-          <Text style={{ fontSize: 28, fontFamily: "Inter_900Black", color: Number(avgRetPct) >= 0 ? "#16a34a" : "#dc2626" }}>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>평균 수익률</Text>
+          <Text style={{ fontSize: 28, fontFamily: "Pretendard-Bold", color: Number(avgRetPct) >= 0 ? "#16a34a" : "#dc2626" }}>
             {Number(avgRetPct) >= 0 ? "+" : ""}{avgRetPct}%
           </Text>
-          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>완료 케이스 기준</Text>
+          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>완료 케이스 기준</Text>
         </View>
       </View>
 
       {/* 인기 종목 */}
       {stats.topTickers?.length > 0 && (
         <View style={[s.statsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 12 }}>
             📊 많이 분석된 종목 TOP {Math.min(stats.topTickers.length, 5)}
           </Text>
           {stats.topTickers.slice(0, 5).map((t, i) => (
             <View key={t.ticker} style={[s.topRow, { borderBottomColor: colors.border }]}>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.mutedForeground, width: 22 }}>{i + 1}</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, width: 22 }}>{i + 1}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{t.ticker}</Text>
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{t.companyName}</Text>
+                <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{t.ticker}</Text>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{t.companyName}</Text>
               </View>
               <View style={{ alignItems: "flex-end", gap: 2 }}>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{t.count}건</Text>
+                <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{t.count}건</Text>
                 {t.winRate != null && (
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: t.winRate >= 0.5 ? "#16a34a" : "#dc2626" }}>
+                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: t.winRate >= 0.5 ? "#16a34a" : "#dc2626" }}>
                     승률 {(t.winRate * 100).toFixed(0)}%
                   </Text>
                 )}
@@ -466,7 +466,7 @@ function StatsTab({ colors, insets }: { colors: any; insets: any }) {
       {/* 최근 케이스 */}
       {stats.recentCases?.length > 0 && (
         <View style={[s.statsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 12 }}>
             📋 최근 리뷰 케이스
           </Text>
           {stats.recentCases.slice(0, 5).map((c, i) => {
@@ -476,16 +476,16 @@ function StatsTab({ colors, insets }: { colors: any; insets: any }) {
               <View key={i} style={[s.topRow, { borderBottomColor: colors.border }]}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isHit ? "#16a34a" : isStop ? "#dc2626" : "#94a3b8", marginTop: 4 }} />
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{c.ticker}</Text>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{c.companyName}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{c.ticker}</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{c.companyName}</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 2 }}>
                   {c.priceReturn != null && (
-                    <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: c.priceReturn >= 0 ? "#16a34a" : "#dc2626" }}>
+                    <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: c.priceReturn >= 0 ? "#16a34a" : "#dc2626" }}>
                       {c.priceReturn >= 0 ? "+" : ""}{(c.priceReturn * 100).toFixed(1)}%
                     </Text>
                   )}
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                  <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                     {isHit ? "목표 달성" : isStop ? "손절" : "진행 중"}
                   </Text>
                 </View>
@@ -538,7 +538,7 @@ export default function PortfolioTab() {
             onPress={() => setMyTab(key)}
           >
             <Feather name={icon} size={13} color={myTab === key ? colors.primary : colors.mutedForeground} />
-            <Text style={{ fontSize: 13, fontFamily: myTab === key ? "Inter_600SemiBold" : "Inter_400Regular", color: myTab === key ? colors.primary : colors.mutedForeground }}>
+            <Text style={{ fontSize: 13, fontFamily: myTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: myTab === key ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
           </TouchableOpacity>
@@ -561,7 +561,7 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
   subTabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
   subTabBtn: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -569,37 +569,37 @@ const s = StyleSheet.create({
   },
   searchSection: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1 },
-  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", padding: 0 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Pretendard-Regular", padding: 0 },
   dropdown: { marginHorizontal: 16, marginTop: 4, borderRadius: 12, borderWidth: 1, overflow: "hidden" },
   searchRow: { flexDirection: "row", alignItems: "center", padding: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  srTicker: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  srName: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  emptySearch: { padding: 16, textAlign: "center", fontFamily: "Inter_400Regular" },
+  srTicker: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  srName: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  emptySearch: { padding: 16, textAlign: "center", fontFamily: "Pretendard-Regular" },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
   emptyIcon: { width: 80, height: 80, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontFamily: "Pretendard-Bold" },
+  emptySub: { fontSize: 13, fontFamily: "Pretendard-Regular", textAlign: "center", lineHeight: 20 },
   summaryBar: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   summaryItem: { flex: 1, alignItems: "center", gap: 2 },
-  summaryVal: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  summaryLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  summaryVal: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  summaryLabel: { fontSize: 11, fontFamily: "Pretendard-Regular" },
   summarySep: { width: 1, height: 32 },
   stockRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  stockTicker: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  stockName: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  stockTicker: { fontSize: 15, fontFamily: "Pretendard-Bold" },
+  stockName: { fontSize: 12, fontFamily: "Pretendard-Regular" },
   statsCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 0 },
   statsHalf: { flex: 1, borderRadius: 14, borderWidth: 1, padding: 16, gap: 4, alignItems: "center" },
   topRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   // CTA
   ctaContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 },
   ctaIconBox: { width: 80, height: 80, borderRadius: 24, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  ctaTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
-  ctaSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
+  ctaTitle: { fontSize: 20, fontFamily: "Pretendard-Bold", textAlign: "center" },
+  ctaSub: { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center", lineHeight: 22 },
   featuresBox: { width: "100%", borderRadius: 14, borderWidth: 1, overflow: "hidden", marginTop: 4 },
   featureRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   featureIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  featureText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  featureText: { fontSize: 14, fontFamily: "Pretendard-Medium" },
   loginBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginTop: 4, width: "100%", justifyContent: "center" },
-  loginBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
-  signupLink: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  loginBtnText: { fontSize: 16, fontFamily: "Pretendard-Bold", color: "#fff" },
+  signupLink: { fontSize: 14, fontFamily: "Pretendard-Regular" },
 });

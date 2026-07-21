@@ -298,8 +298,8 @@ export default function NewAnalysisScreen() {
           <View style={[s.stepIcon, { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.up, marginBottom: 20 }]}>
             <Feather name="check" size={32} color="#fff" />
           </View>
-          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 8 }}>분석 완료!</Text>
-          <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 32 }}>
+          <Text style={{ fontSize: 22, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>분석 완료!</Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 32 }}>
             {selected?.name} 분석이 완료되었습니다
           </Text>
           <TouchableOpacity
@@ -330,7 +330,7 @@ export default function NewAnalysisScreen() {
         </View>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32 }}>
           <Feather name="alert-circle" size={48} color={colors.down} style={{ marginBottom: 16 }} />
-          <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8, textAlign: "center" }}>분석을 시작할 수 없습니다</Text>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 8, textAlign: "center" }}>분석을 시작할 수 없습니다</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", lineHeight: 20, marginBottom: 32 }}>{errorMsg}</Text>
           <TouchableOpacity style={s.startBtn} onPress={() => setPhase("confirm")}>
             <Text style={s.startBtnText}>다시 시도</Text>
@@ -348,59 +348,59 @@ function makeStyles(c: ReturnType<typeof useColors>) {
     root: { flex: 1, backgroundColor: c.background },
     navRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
     backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-    navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: c.foreground },
+    navTitle: { fontSize: 17, fontFamily: "Pretendard-SemiBold", color: c.foreground },
     searchSection: { paddingHorizontal: 16, marginBottom: 8 },
     searchBox: {
       flexDirection: "row", alignItems: "center", gap: 10,
       backgroundColor: c.card, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
       borderWidth: 1, borderColor: c.border,
     },
-    searchInput: { flex: 1, fontSize: 15, color: c.foreground, fontFamily: "Inter_400Regular", padding: 0 },
+    searchInput: { flex: 1, fontSize: 15, color: c.foreground, fontFamily: "Pretendard-Regular", padding: 0 },
     resultRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border },
-    resultTicker: { fontSize: 15, fontFamily: "Inter_700Bold", color: c.foreground },
-    resultName: { fontSize: 12, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
-    resultSector: { fontSize: 11, color: c.mutedForeground + "aa", fontFamily: "Inter_400Regular" },
+    resultTicker: { fontSize: 15, fontFamily: "Pretendard-Bold", color: c.foreground },
+    resultName: { fontSize: 12, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    resultSector: { fontSize: 11, color: c.mutedForeground + "aa", fontFamily: "Pretendard-Regular" },
     confirmContent: { padding: 16, gap: 16, paddingBottom: 100 },
     stockCard: { backgroundColor: c.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: c.border },
     stockCardInner: { flexDirection: "row", alignItems: "center", gap: 12 },
     stockIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.primary + "22", alignItems: "center", justifyContent: "center" },
-    stockIconText: { fontSize: 18, fontFamily: "Inter_700Bold", color: c.primary },
-    stockTicker: { fontSize: 18, fontFamily: "Inter_700Bold", color: c.foreground },
-    stockName: { fontSize: 13, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    stockIconText: { fontSize: 18, fontFamily: "Pretendard-Bold", color: c.primary },
+    stockTicker: { fontSize: 18, fontFamily: "Pretendard-Bold", color: c.foreground },
+    stockName: { fontSize: 13, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
     stepsPreview: { backgroundColor: c.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: c.border, gap: 10 },
-    stepsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: c.mutedForeground, marginBottom: 4 },
+    stepsTitle: { fontSize: 13, fontFamily: "Pretendard-SemiBold", color: c.mutedForeground, marginBottom: 4 },
     stepPreviewRow: { flexDirection: "row", alignItems: "center", gap: 10 },
     stepDot: { width: 8, height: 8, borderRadius: 4 },
-    stepPreviewText: { fontSize: 13, color: c.foreground, fontFamily: "Inter_400Regular" },
+    stepPreviewText: { fontSize: 13, color: c.foreground, fontFamily: "Pretendard-Regular" },
     contextSection: { gap: 8 },
-    contextLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: c.mutedForeground },
+    contextLabel: { fontSize: 13, fontFamily: "Pretendard-SemiBold", color: c.mutedForeground },
     contextInput: {
       backgroundColor: c.card, borderRadius: 12, padding: 14,
       borderWidth: 1, borderColor: c.border, fontSize: 14,
-      color: c.foreground, fontFamily: "Inter_400Regular", minHeight: 90,
+      color: c.foreground, fontFamily: "Pretendard-Regular", minHeight: 90,
     },
-    charCount: { fontSize: 11, color: c.mutedForeground, textAlign: "right", fontFamily: "Inter_400Regular" },
+    charCount: { fontSize: 11, color: c.mutedForeground, textAlign: "right", fontFamily: "Pretendard-Regular" },
     startBtnWrap: { padding: 16, paddingBottom: 32 },
     startBtn: {
       backgroundColor: c.primary, borderRadius: 14, paddingVertical: 16,
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
     },
-    startBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
+    startBtnText: { fontSize: 16, fontFamily: "Pretendard-Bold", color: "#fff" },
     runningContent: { padding: 24, gap: 24 },
     runningHeader: { alignItems: "center", gap: 12, paddingTop: 20 },
-    runningTicker: { fontSize: 24, fontFamily: "Inter_700Bold", color: c.foreground },
-    runningName: { fontSize: 14, color: c.mutedForeground, fontFamily: "Inter_400Regular" },
+    runningTicker: { fontSize: 24, fontFamily: "Pretendard-Bold", color: c.foreground },
+    runningName: { fontSize: 14, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
     currentStepBadge: {
       flexDirection: "row", alignItems: "center", gap: 10,
       backgroundColor: c.primary + "18", borderRadius: 12, padding: 14,
       borderWidth: 1, borderColor: c.primary + "44",
     },
     pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.primary },
-    currentStepText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: c.primary },
+    currentStepText: { fontSize: 14, fontFamily: "Pretendard-SemiBold", color: c.primary },
     stepsList: { gap: 12, backgroundColor: c.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: c.border },
     stepRow: { flexDirection: "row", alignItems: "center", gap: 12 },
     stepIcon: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-    stepText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-    runningNote: { textAlign: "center", color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 },
+    stepText: { fontSize: 13, fontFamily: "Pretendard-Medium" },
+    runningNote: { textAlign: "center", color: c.mutedForeground, fontFamily: "Pretendard-Regular", fontSize: 13 },
   });
 }

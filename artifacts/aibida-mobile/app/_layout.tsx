@@ -1,10 +1,4 @@
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from "@expo-google-fonts/inter";
+import { useFonts } from "expo-font";
 import { ClerkProvider, ClerkLoaded } from "@clerk/expo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
@@ -46,7 +40,7 @@ const queryClient = new QueryClient({
 const HEADER_OPTS = {
   headerStyle: { backgroundColor: "#ffffff" },
   headerTintColor: "#0d1421",
-  headerTitleStyle: { fontFamily: "Inter_600SemiBold", color: "#0d1421" } as any,
+  headerTitleStyle: { fontFamily: "Pretendard-SemiBold", color: "#0d1421" } as any,
   headerBackTitle: "뒤로",
   contentStyle: { backgroundColor: "#f0f1f6" },
   headerShadowVisible: false,
@@ -100,10 +94,10 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    "Pretendard-Regular":   require("../assets/fonts/Pretendard-Regular.otf"),
+    "Pretendard-Medium":    require("../assets/fonts/Pretendard-Medium.otf"),
+    "Pretendard-SemiBold":  require("../assets/fonts/Pretendard-SemiBold.otf"),
+    "Pretendard-Bold":      require("../assets/fonts/Pretendard-Bold.otf"),
   });
 
   useEffect(() => {

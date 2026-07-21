@@ -134,9 +134,9 @@ function SessionCard({ session, selected, onPress, colors }: {
       )}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
         <Text style={{ fontSize: 14 }}>{SESSION_ICON[session.icon] ?? "📋"}</Text>
-        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.foreground }} numberOfLines={1}>{session.label}</Text>
+        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }} numberOfLines={1}>{session.label}</Text>
       </View>
-      <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground + "99" }}>
+      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground + "99" }}>
         {session.time === "주말" ? "토·일 수시 업데이트" : `${session.time} KST`}
       </Text>
 
@@ -144,9 +144,9 @@ function SessionCard({ session, selected, onPress, colors }: {
         <>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
             <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: sc.color }} />
-            <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: sc.color }}>{sc.label}</Text>
+            <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: sc.color }}>{sc.label}</Text>
           </View>
-          <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, lineHeight: 16 }} numberOfLines={3}>
+          <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, lineHeight: 16 }} numberOfLines={3}>
             {session.brief!.summary}
           </Text>
         </>
@@ -155,12 +155,12 @@ function SessionCard({ session, selected, onPress, colors }: {
           {[1, 0.7, 0.5].map((op, i) => (
             <View key={i} style={{ height: 5, borderRadius: 3, backgroundColor: colors.border, opacity: op }} />
           ))}
-          <Text style={{ fontSize: 10, color: "#f59e0b", fontFamily: "Inter_400Regular", marginTop: 2 }}>생성 중…</Text>
+          <Text style={{ fontSize: 10, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 2 }}>생성 중…</Text>
         </View>
       ) : session.status === "past" ? (
-        <Text style={{ fontSize: 11, color: colors.border, fontFamily: "Inter_400Regular", marginTop: 2 }}>브리핑 없음</Text>
+        <Text style={{ fontSize: 11, color: colors.border, fontFamily: "Pretendard-Regular", marginTop: 2 }}>브리핑 없음</Text>
       ) : (
-        <Text style={{ fontSize: 11, color: colors.border, fontFamily: "Inter_400Regular", marginTop: 2 }}>준비중</Text>
+        <Text style={{ fontSize: 11, color: colors.border, fontFamily: "Pretendard-Regular", marginTop: 2 }}>준비중</Text>
       )}
     </Pressable>
   );
@@ -170,7 +170,7 @@ function SessionCard({ session, selected, onPress, colors }: {
 
 function SL({ label, colors }: { label: string; colors: any }) {
   return (
-    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
+    <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
       {label}
     </Text>
   );
@@ -186,9 +186,9 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
       <View style={{ alignItems: "center", paddingVertical: 28, gap: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f59e0b" }} />
-          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#f59e0b" }}>브리핑 생성 중</Text>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#f59e0b" }}>브리핑 생성 중</Text>
         </View>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           AI가 현재 시장 데이터를 분석하고 있습니다
         </Text>
         {[1, 0.7, 0.5].map((op, i) => (
@@ -201,7 +201,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
   if (!brief) {
     return (
       <View style={{ alignItems: "center", paddingVertical: 28, gap: 8 }}>
-        <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+        <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           {session.isPast
             ? "이 시간대에 브리핑이 생성되지 않았습니다"
             : `${session.label} 브리핑은 ${session.time} KST 이후 자동 생성됩니다`}
@@ -213,12 +213,12 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
   return (
     <View style={{ gap: 20 }}>
       {/* 요약 */}
-      <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 22 }}>{brief.summary}</Text>
+      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Regular", color: colors.foreground, lineHeight: 22 }}>{brief.summary}</Text>
 
       {/* 리드 단락 */}
       {brief.leadParagraph && (
         <View style={{ borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: 12 }}>
-          <Text style={{ fontSize: 13, color: colors.foreground + "CC", fontFamily: "Inter_400Regular", lineHeight: 21 }}>{brief.leadParagraph}</Text>
+          <Text style={{ fontSize: 13, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.leadParagraph}</Text>
         </View>
       )}
 
@@ -226,7 +226,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
       {brief.storyLine && (
         <View style={{ gap: 6 }}>
           <SL label="심층 분석" colors={colors} />
-          <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 21 }}>{brief.storyLine}</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.storyLine}</Text>
         </View>
       )}
 
@@ -239,12 +239,12 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               .filter(([, v]) => v.changePercent != null || v.close != null)
               .map(([name, v]) => (
                 <View key={name} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: "45%" }}>
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 2 }} numberOfLines={1}>{v.label ?? name}</Text>
+                  <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 2 }} numberOfLines={1}>{v.label ?? name}</Text>
                   {v.close != null && (
-                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{v.close.toLocaleString("ko-KR")}</Text>
+                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{v.close.toLocaleString("ko-KR")}</Text>
                   )}
                   {v.changePercent != null && (
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: (v.changePercent ?? 0) >= 0 ? colors.up : colors.down }}>
+                    <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: (v.changePercent ?? 0) >= 0 ? colors.up : colors.down }}>
                       {fmtPct(v.changePercent)}
                     </Text>
                   )}
@@ -264,7 +264,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               if (!label) return null;
               return (
                 <View key={`kt-${i}`} style={{ backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.foreground + "CC" }}>{label}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.foreground + "CC" }}>{label}</Text>
                 </View>
               );
             })}
@@ -281,13 +281,13 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             const isPos = dir === "positive"; const isNeg = dir === "negative";
             return (
               <View key={`me-${i}`} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: isPos ? colors.up : isNeg ? colors.down : colors.border, marginTop: 1 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: isPos ? colors.up : isNeg ? colors.down : colors.border, marginTop: 1 }}>
                   {isPos ? "▲" : isNeg ? "▼" : "●"}
                 </Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: colors.foreground, lineHeight: 19 }}>{e.title}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 19 }}>{e.title}</Text>
                   {((e as any).impact_desc || e.description) && (
-                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 17, marginTop: 2 }}>
+                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17, marginTop: 2 }}>
                       {(e as any).impact_desc ?? e.description}
                     </Text>
                   )}
@@ -308,8 +308,8 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               const isDn = (s.change ?? 0) < 0 || s.trend === "하락" || s.trend === "약세";
               return (
                 <View key={s.sector} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: "47%" }}>
-                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s.sector}</Text>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: isUp ? colors.up : isDn ? colors.down : colors.mutedForeground, marginLeft: 6 }}>
+                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{s.sector}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: isUp ? colors.up : isDn ? colors.down : colors.mutedForeground, marginLeft: 6 }}>
                     {s.change != null ? fmtPct(s.change) : s.trend}
                   </Text>
                 </View>
@@ -328,7 +328,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               return (
                 <View key={`mf-${i}`} style={{ flexDirection: "row", gap: 8 }}>
                   <Text style={{ color: colors.border, marginTop: 2 }}>•</Text>
-                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
                 </View>
               );
             }
@@ -336,10 +336,10 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             return (
               <View key={`mf-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{mf.factor}</Text>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{mf.status}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{mf.factor}</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{mf.status}</Text>
                 </View>
-                {mf.implication && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 17 }}>{mf.implication}</Text>}
+                {mf.implication && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{mf.implication}</Text>}
               </View>
             );
           })}
@@ -355,16 +355,16 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               return (
                 <View key={`fl-${i}`} style={{ flexDirection: "row", gap: 8 }}>
                   <Text style={{ color: colors.border, marginTop: 2 }}>•</Text>
-                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
                 </View>
               );
             }
             const fl = f as ForwardLookItem;
             return (
               <View key={`fl-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
-                <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 3 }}>{fl.point}</Text>
-                {fl.detail && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 17 }}>{fl.detail}</Text>}
-                {fl.watchFor && <Text style={{ fontSize: 11, color: "#f59e0b", fontFamily: "Inter_400Regular", marginTop: 4 }}>📌 {fl.watchFor}</Text>}
+                <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 3 }}>{fl.point}</Text>
+                {fl.detail && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{fl.detail}</Text>}
+                {fl.watchFor && <Text style={{ fontSize: 11, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 4 }}>📌 {fl.watchFor}</Text>}
               </View>
             );
           })}
@@ -377,8 +377,8 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
           <SL label="투자 포인트" colors={colors} />
           {brief.actionPoints.map((a, i) => (
             <View key={`ap-${i}`} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-              <Text style={{ fontSize: 12, color: "#f59e0b", fontFamily: "Inter_700Bold", marginTop: 1 }}>→</Text>
-              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 }}>
+              <Text style={{ fontSize: 12, color: "#f59e0b", fontFamily: "Pretendard-Bold", marginTop: 1 }}>→</Text>
+              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>
                 {typeof a === "string" ? a : JSON.stringify(a)}
               </Text>
             </View>
@@ -389,8 +389,8 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
       {/* 핵심 리스크 */}
       {brief.keyRisk && (
         <View style={{ backgroundColor: "#1e3a5f", borderWidth: 1, borderColor: "#1e40af60", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 4 }}>
-          <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#60a5fa", letterSpacing: 1.2, textTransform: "uppercase" }}>핵심 리스크</Text>
-          <Text style={{ fontSize: 12, color: colors.foreground + "CC", fontFamily: "Inter_400Regular", lineHeight: 18 }}>{brief.keyRisk}</Text>
+          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: "#60a5fa", letterSpacing: 1.2, textTransform: "uppercase" }}>핵심 리스크</Text>
+          <Text style={{ fontSize: 12, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 18 }}>{brief.keyRisk}</Text>
         </View>
       )}
 
@@ -402,10 +402,10 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             const title = ev.title ?? ev.event ?? "";
             return (
               <View key={`ue-${i}`} style={{ flexDirection: "row", gap: 12 }}>
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", width: 72 }}>{ev.date}</Text>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", width: 72 }}>{ev.date}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular" }}>{title}</Text>
-                  {ev.description && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>{ev.description}</Text>}
+                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular" }}>{title}</Text>
+                  {ev.description && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginTop: 2 }}>{ev.description}</Text>}
                 </View>
               </View>
             );
@@ -449,15 +449,15 @@ function HistoryItem({ item, colors }: { item: any; colors: any }) {
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
           <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc.color }} />
-          <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.foreground }}>{sessionLabel}</Text>
+          <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground }}>{sessionLabel}</Text>
           {item.summary && (
-            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1 }} numberOfLines={1}>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1 }} numberOfLines={1}>
               — {item.summary.slice(0, 50)}
             </Text>
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{timeStr}</Text>
+          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{timeStr}</Text>
           <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>{open ? "▲" : "▾"}</Text>
         </View>
       </Pressable>
@@ -528,12 +528,12 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
       showsVerticalScrollIndicator={false}
     >
       {dateLabel ? (
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginBottom: 12, fontFamily: "Inter_400Regular" }}>{dateLabel}</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginBottom: 12, fontFamily: "Pretendard-Regular" }}>{dateLabel}</Text>
       ) : null}
 
       {/* Session Timeline */}
       <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>
+        <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>
           오늘의 시장 흐름
         </Text>
 
@@ -569,20 +569,20 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
           <View style={[styles.briefCardHeader, { borderBottomColor: colors.border }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
               <Text style={{ fontSize: 16 }}>{SESSION_ICON[selectedSession.icon] ?? "📋"}</Text>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{selectedSession.label}</Text>
-              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+              <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{selectedSession.label}</Text>
+              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                 {selectedSession.time === "주말" ? "" : `${selectedSession.time} KST`}
               </Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {selectedSession.generatedAt && (
-                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {new Date(selectedSession.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 생성
                 </Text>
               )}
               {selectedSession.brief?.sentiment && (
                 <View style={{ backgroundColor: sc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: sc.color }}>{sc.label}</Text>
+                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: sc.color }}>{sc.label}</Text>
                 </View>
               )}
             </View>
@@ -604,10 +604,10 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
           }}
           style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8 }}
         >
-          <Text style={{ fontSize: 10, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+          <Text style={{ fontSize: 10, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
             {historyOpen ? "▼" : "▶"}
           </Text>
-          <Text style={{ fontSize: 12, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+          <Text style={{ fontSize: 12, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
             지난 브리핑
           </Text>
         </TouchableOpacity>
@@ -619,7 +619,7 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
                 {[0, 1, 2].map(i => <SkeletonCard key={i} height={52} />)}
               </View>
             ) : history.length === 0 ? (
-              <Text style={{ fontSize: 12, color: colors.border, fontFamily: "Inter_400Regular", paddingVertical: 12 }}>
+              <Text style={{ fontSize: 12, color: colors.border, fontFamily: "Pretendard-Regular", paddingVertical: 12 }}>
                 저장된 브리핑이 없습니다
               </Text>
             ) : (
@@ -773,7 +773,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
             style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: etfSubTab === key ? colors.primary : "transparent" }}
             onPress={() => setEtfSubTab(key)}
           >
-            <Text style={{ fontSize: 12, fontFamily: etfSubTab === key ? "Inter_600SemiBold" : "Inter_400Regular", color: etfSubTab === key ? colors.primary : colors.mutedForeground }}>
+            <Text style={{ fontSize: 12, fontFamily: etfSubTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: etfSubTab === key ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
           </TouchableOpacity>
@@ -795,7 +795,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 style={{ flex: 1, paddingVertical: 9, alignItems: "center", backgroundColor: searchMode === m ? colors.primary : "transparent" }}
                 onPress={() => { setSearchMode(m); setSearchQuery(""); setSelectedEtf(null); setHoldings([]); setExposure([]); }}
               >
-                <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: searchMode === m ? "#fff" : colors.mutedForeground }}>
+                <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: searchMode === m ? "#fff" : colors.mutedForeground }}>
                   {m === "etf" ? "ETF 보유 종목" : "종목 담은 ETF"}
                 </Text>
               </TouchableOpacity>
@@ -831,7 +831,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 else loadStockExposure(searchQuery);
               }}
             >
-              <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" }}>검색</Text>
+              <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#fff" }}>검색</Text>
             </TouchableOpacity>
           </View>
 
@@ -840,7 +840,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
             <View style={{ paddingHorizontal: 14, gap: 14 }}>
               {POPULAR_ETFS.map(group => (
                 <View key={group.label} style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 1, textTransform: "uppercase" }}>{group.label}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1, textTransform: "uppercase" }}>{group.label}</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {group.items.map(etf => (
                       <TouchableOpacity
@@ -848,7 +848,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                         style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
                         onPress={() => { setSearchQuery(etf.code); loadEtfHoldings(etf.code, etf.name); }}
                       >
-                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{etf.code}</Text>
+                        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{etf.code}</Text>
                         <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{etf.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -868,22 +868,22 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           {/* ETF 보유 종목 결과 */}
           {!searchLoading && selectedEtf && holdings.length > 0 && (
             <View style={{ paddingHorizontal: 14 }}>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 10 }}>
+              <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 10 }}>
                 {selectedEtf.code} 보유 종목 ({holdings.length}개)
               </Text>
               {holdings.map((h, idx) => (
                 <View key={h.stockCode} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary, width: 22 }}>{h.rank ?? idx + 1}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.primary, width: 22 }}>{h.rank ?? idx + 1}</Text>
                     <View>
-                      <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{h.stockName}</Text>
+                      <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{h.stockName}</Text>
                       <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{h.stockCode}</Text>
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{h.weight.toFixed(2)}%</Text>
+                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{h.weight.toFixed(2)}%</Text>
                     {h.weightChange != null && h.weightChange !== 0 && (
-                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: h.weightChange > 0 ? colors.up : colors.down }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: h.weightChange > 0 ? colors.up : colors.down }}>
                         {h.weightChange > 0 ? "▲" : "▼"} {Math.abs(h.weightChange).toFixed(2)}%p
                       </Text>
                     )}
@@ -896,18 +896,18 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           {/* 종목이 담긴 ETF 결과 */}
           {!searchLoading && searchMode === "stock" && exposure.length > 0 && (
             <View style={{ paddingHorizontal: 14 }}>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 10 }}>
+              <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 10 }}>
                 '{searchQuery}' 포함 ETF ({exposure.length}개)
               </Text>
               {exposure.map((item, idx) => (
                 <View key={item.etf.code + idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{item.etf.code}</Text>
+                    <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{item.etf.code}</Text>
                     <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{item.etf.name}</Text>
                     {item.etf.sector ? <Text style={{ fontSize: 10, color: colors.mutedForeground + "88" }}>{item.etf.sector}</Text> : null}
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{item.holding.weight.toFixed(2)}%</Text>
+                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.holding.weight.toFixed(2)}%</Text>
                     <Text style={{ fontSize: 10, color: colors.mutedForeground }}>비중 {item.holding.rank}위</Text>
                   </View>
                 </View>
@@ -947,7 +947,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 요약 헤더 */}
               <View style={{ margin: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground }}>ETF 리밸런싱 현황</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground }}>ETF 리밸런싱 현황</Text>
                   <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
                     {(() => { try { return new Date(rebalData.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return rebalData.updatedAt; } })()}
                   </Text>
@@ -960,7 +960,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                     { label: "제외 종목", value: rebalData.exits.length },
                   ].map(stat => (
                     <View key={stat.label} style={{ flex: 1, alignItems: "center", backgroundColor: colors.muted, borderRadius: 10, paddingVertical: 8 }}>
-                      <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground }}>{stat.value}</Text>
+                      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{stat.value}</Text>
                       <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2 }}>{stat.label}</Text>
                     </View>
                   ))}
@@ -975,7 +975,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 { key: "bigSells", label: "비중 축소", emoji: "📉", data: rebalData.bigSells, color: "#ef4444" },
               ] as const).filter(s => (s.data as RebalStock[]).length > 0).map(section => (
                 <View key={section.key} style={{ marginHorizontal: 14, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>
                     {section.emoji} {section.label} ({(section.data as RebalStock[]).length}개)
                   </Text>
                   <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
@@ -983,16 +983,16 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                       <View key={stock.ticker + idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: idx < (section.data as RebalStock[]).slice(0,8).length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
                         <View style={{ flex: 1, gap: 2 }}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{stock.ticker}</Text>
+                            <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{stock.ticker}</Text>
                             <View style={{ backgroundColor: stock.region === "KR" ? "#3b82f615" : "#f9731615", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: stock.region === "KR" ? "#3b82f6" : "#f97316" }}>{stock.region}</Text>
+                              <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: stock.region === "KR" ? "#3b82f6" : "#f97316" }}>{stock.region}</Text>
                             </View>
                           </View>
                           {stock.name ? <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{stock.name}</Text> : null}
                           <Text style={{ fontSize: 10, color: colors.mutedForeground + "88" }} numberOfLines={1}>{stock.etfs.join(" · ")}</Text>
                         </View>
                         {stock.delta != null && (
-                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: section.color }}>
+                          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: section.color }}>
                             {stock.delta > 0 ? "+" : ""}{stock.delta.toFixed(1)}%p
                           </Text>
                         )}
@@ -1005,14 +1005,14 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 섹터 변화 */}
               {rebalData.sectorMoves.length > 0 && (
                 <View style={{ marginHorizontal: 14, marginBottom: 14 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 8 }}>🏭 섹터 변화</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>🏭 섹터 변화</Text>
                   <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
                     {rebalData.sectorMoves.map((sm, idx) => (
                       <View key={sm.sector} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: idx < rebalData.sectorMoves.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{sm.sector}</Text>
+                        <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{sm.sector}</Text>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{sm.prevCount} → {sm.etfCount}개 ETF</Text>
-                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: sm.direction === "up" ? colors.up : sm.direction === "down" ? colors.down : colors.mutedForeground }}>
+                          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: sm.direction === "up" ? colors.up : sm.direction === "down" ? colors.down : colors.mutedForeground }}>
                             {sm.direction === "up" ? "▲" : sm.direction === "down" ? "▼" : "→"}
                           </Text>
                         </View>
@@ -1056,7 +1056,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
             <>
               {/* 헤더 */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10 }}>
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {fundFlow.coverageStats.krEtfCount + fundFlow.coverageStats.usEtfCount}개 ETF 집계
                   <Text style={{ color: colors.border + "99" }}>  ·  </Text>
                   {(() => { try { return new Date(fundFlow.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return fundFlow.updatedAt; } })()}
@@ -1070,7 +1070,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 섹터 온도 */}
               {fundFlow.themeBreakdown?.length > 0 && (
                 <View style={{ marginHorizontal: 16, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>지금 어떤 섹터가 뜨거운가</Text>
+                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>지금 어떤 섹터가 뜨거운가</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                     {fundFlow.themeBreakdown.map(t => {
                       const heat = t.score >= 75 ? "🔥" : t.score >= 40 ? "📈" : "❄️";
@@ -1081,7 +1081,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                       return (
                         <View key={t.key} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, backgroundColor: chipBg, borderColor: chipBorder }}>
                           <Text style={{ fontSize: 12 }}>{heat}</Text>
-                          <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: chipColor }}>{t.label}</Text>
+                          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: chipColor }}>{t.label}</Text>
                         </View>
                       );
                     })}
@@ -1095,7 +1095,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                   <TouchableOpacity key={p} onPress={() => setFlowPanel(p)}
                     style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 8, borderRadius: 10, backgroundColor: flowPanel === p ? colors.card : "transparent" }}>
                     <Text style={{ fontSize: 12 }}>{p === "kr" ? "🏛" : "🌐"}</Text>
-                    <Text style={{ fontSize: 12, fontFamily: flowPanel === p ? "Inter_600SemiBold" : "Inter_400Regular", color: flowPanel === p ? colors.foreground : colors.mutedForeground }}>
+                    <Text style={{ fontSize: 12, fontFamily: flowPanel === p ? "Pretendard-SemiBold" : "Pretendard-Regular", color: flowPanel === p ? colors.foreground : colors.mutedForeground }}>
                       {p === "kr" ? "국내 ETF 집중 종목" : "해외 ETF 집중 종목"}
                     </Text>
                   </TouchableOpacity>
@@ -1105,7 +1105,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 종목 리스트 */}
               <View style={{ marginHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
                 <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.muted }}>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                     {flowPanel === "kr"
                       ? `국내 ${fundFlow.coverageStats.krEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`
                       : `해외 ${fundFlow.coverageStats.usEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`}
@@ -1115,28 +1115,28 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                   const rankColor = i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#b45309" : colors.border;
                   return (
                     <View key={stock.code} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: i < (flowPanel === "kr" ? fundFlow.krTopStocks : fundFlow.usTopStocks).length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                      <Text style={{ fontSize: 14, fontFamily: "Inter_900Black", color: rankColor, width: 20, textAlign: "center" }}>{i + 1}</Text>
+                      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: rankColor, width: 20, textAlign: "center" }}>{i + 1}</Text>
                       <View style={{ flex: 1, gap: 5 }}>
                         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                          <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{stock.name || stock.code}</Text>
-                          <Text style={{ fontSize: 10, color: colors.border, fontFamily: "Inter_400Regular" }}>{stock.code}</Text>
+                          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{stock.name || stock.code}</Text>
+                          <Text style={{ fontSize: 10, color: colors.border, fontFamily: "Pretendard-Regular" }}>{stock.code}</Text>
                         </View>
                         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
                           {stock.etfs.slice(0, 4).map(e => (
                             <View key={e} style={{ backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
-                              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{e}</Text>
+                              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{e}</Text>
                             </View>
                           ))}
                           {stock.etfs.length > 4 && (
                             <View style={{ backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
-                              <Text style={{ fontSize: 10, color: colors.mutedForeground + "88", fontFamily: "Inter_400Regular" }}>+{stock.etfs.length - 4}개 ETF</Text>
+                              <Text style={{ fontSize: 10, color: colors.mutedForeground + "88", fontFamily: "Pretendard-Regular" }}>+{stock.etfs.length - 4}개 ETF</Text>
                             </View>
                           )}
                         </View>
                       </View>
                       <View style={{ alignItems: "flex-end" }}>
-                        <Text style={{ fontSize: 20, fontFamily: "Inter_900Black", color: colors.foreground, lineHeight: 24 }}>{stock.etfCount}</Text>
-                        <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>개 ETF</Text>
+                        <Text style={{ fontSize: 20, fontFamily: "Pretendard-Bold", color: colors.foreground, lineHeight: 24 }}>{stock.etfCount}</Text>
+                        <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>개 ETF</Text>
                       </View>
                     </View>
                   );
@@ -1188,7 +1188,7 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
       <View style={{ flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
         {([["earnings", "실적 발표"], ["economic", "경제 지표"]] as const).map(([key, label]) => (
           <TouchableOpacity key={key} style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: calTab === key ? colors.primary : "transparent" }} onPress={() => setCalTab(key)}>
-            <Text style={{ fontSize: 13, fontFamily: calTab === key ? "Inter_600SemiBold" : "Inter_400Regular", color: calTab === key ? colors.primary : colors.mutedForeground }}>{label}</Text>
+            <Text style={{ fontSize: 13, fontFamily: calTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: calTab === key ? colors.primary : colors.mutedForeground }}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -1204,16 +1204,16 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
             <View key={`${e.ticker}-${i}`} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 10 }}>
               <View style={{ flex: 1, gap: 3 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground }}>{e.ticker}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{e.ticker}</Text>
                   <View style={{ backgroundColor: e.isKorean ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: e.isKorean ? "#2563eb" : "#b45309" }}>{e.isKorean ? "KR" : "US"}</Text>
+                    <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: e.isKorean ? "#2563eb" : "#b45309" }}>{e.isKorean ? "KR" : "US"}</Text>
                   </View>
-                  {e.isCompleted && <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: "#16a34a" }}>완료</Text></View>}
+                  {e.isCompleted && <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>완료</Text></View>}
                 </View>
-                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{e.companyName}</Text>
-                {e.epsEstimate != null && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>EPS 예상 {e.epsEstimate > 0 ? "+" : ""}{e.epsEstimate.toFixed(2)}</Text>}
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{e.companyName}</Text>
+                {e.epsEstimate != null && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>EPS 예상 {e.epsEstimate > 0 ? "+" : ""}{e.epsEstimate.toFixed(2)}</Text>}
               </View>
-              <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.foreground + "99" }}>{fmtDate(e.earningsDate)}</Text>
+              <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground + "99" }}>{fmtDate(e.earningsDate)}</Text>
             </View>
           ))
         ) : (
@@ -1225,20 +1225,20 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
               <View style={{ flex: 1, gap: 3 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                   <View style={{ backgroundColor: IMP_COLOR[ev.importance] + "22", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: IMP_COLOR[ev.importance] }}>{IMP_LABEL[ev.importance]}</Text>
+                    <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: IMP_COLOR[ev.importance] }}>{IMP_LABEL[ev.importance]}</Text>
                   </View>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{ev.country}</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.country}</Text>
                 </View>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: colors.foreground, lineHeight: 18 }}>{ev.title}</Text>
+                <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 18 }}>{ev.title}</Text>
                 {(ev.forecast || ev.previous) && (
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                     {ev.forecast ? `예상 ${ev.forecast}` : ""}{ev.forecast && ev.previous ? " / " : ""}{ev.previous ? `이전 ${ev.previous}` : ""}
                   </Text>
                 )}
               </View>
               <View style={{ alignItems: "flex-end", gap: 2 }}>
-                <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.foreground + "99" }}>{fmtDate(ev.date)}</Text>
-                {ev.time && <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{ev.time}</Text>}
+                <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground + "99" }}>{fmtDate(ev.date)}</Text>
+                {ev.time && <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.time}</Text>}
               </View>
             </View>
           ))
@@ -1278,7 +1278,7 @@ export default function MarketScreen() {
                 onPress={() => setMarket(m)}
                 style={[styles.toggleBtn, { backgroundColor: market === m ? colors.primary : "transparent" }]}
               >
-                <Text style={{ fontSize: 12, fontFamily: market === m ? "Inter_600SemiBold" : "Inter_400Regular", color: market === m ? "#fff" : colors.mutedForeground }}>
+                <Text style={{ fontSize: 12, fontFamily: market === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: market === m ? "#fff" : colors.mutedForeground }}>
                   {m === "kr" ? "🇰🇷 한국" : "🇺🇸 미국"}
                 </Text>
               </Pressable>
@@ -1296,7 +1296,7 @@ export default function MarketScreen() {
             onPress={() => setSubTab(tabKey)}
           >
             <Feather name={icon} size={13} color={subTab === tabKey ? colors.primary : colors.mutedForeground} />
-            <Text style={{ fontSize: 13, fontFamily: subTab === tabKey ? "Inter_600SemiBold" : "Inter_400Regular", color: subTab === tabKey ? colors.primary : colors.mutedForeground }}>
+            <Text style={{ fontSize: 13, fontFamily: subTab === tabKey ? "Pretendard-SemiBold" : "Pretendard-Regular", color: subTab === tabKey ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
           </TouchableOpacity>
@@ -1319,7 +1319,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
   toggle: { flexDirection: "row", borderRadius: 8, padding: 3 },
   toggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 6 },
   subTabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
