@@ -89,9 +89,10 @@ const PYTHON_CMD: { bin: string; prefixArgs: string[]; extraEnv?: Record<string,
     "/home/runner/.local/bin/uv",
     "/usr/local/bin/uv",
   ].filter(Boolean) as string[];
-  // UV_PYTHON_PREFERENCE=only-managed → 시스템 python(Go 래퍼) 완전 무시
-  // UV_PYTHON_DOWNLOADS=automatic → 필요 시 uv가 CPython 자동 다운로드
-  const uvPrefixArgs = ["run", "--python", "3.11", "--with", "pykrx", "python3"];
+  // --python cpython-3.11 → uv 자체 관리 CPython 명시 (PATH의 Go 래퍼 완전 우회)
+  // UV_PYTHON_DOWNLOADS=automatic → 미설치 시 uv가 CPython 자동 다운로드
+  // UV_PYTHON_PREFERENCE=only-managed → 추가 보험: 시스템 Python 무시
+  const uvPrefixArgs = ["run", "--python", "cpython-3.11", "--with", "pykrx", "--no-project", "python3"];
   const uvExtraEnv = {
     UV_PYTHON_PREFERENCE: "only-managed",
     UV_PYTHON_DOWNLOADS: "automatic",
