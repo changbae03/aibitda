@@ -920,6 +920,7 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
   const [error, setError] = useState<string | null>(null);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [stale, setStale] = useState(false);
 
   async function load(forceRefresh = false) {
     if (forceRefresh) setRefreshing(true);
@@ -927,13 +928,19 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
     setError(null);
     try {
       const url = getApiUrl(`/api/market/tomorrow-picks${forceRefresh ? "?refresh=1" : ""}`);
-      const r = await fetch(url);
+      const r = await fetch(url, { credentials: "include" });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "오류가 발생했습니다");
       setPicks(data.picks ?? []);
       setCachedAt(data.cachedAt ?? null);
+      setStale(!!data.stale);
     } catch (e: any) {
-      setError(e.message ?? "데이터를 불러오지 못했습니다");
+      // 갱신 실패 시 기존 picks 유지 (에러만 표시)
+      if (forceRefresh && picks.length > 0) {
+        setError(null); // 기존 데이터 계속 표시
+      } else {
+        setError(e.message ?? "데이터를 불러오지 못했습니다");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -992,7 +999,11 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
           </div>
           <p className="text-[12px] text-foreground/45 leading-relaxed">
             테마 미반영 {laggardCount}  ·  거래량 집중 {volumeCount}  ·  모멘텀 {momentumCount}
-            {cachedTime && <span className="text-foreground/25 ml-2">· {cachedTime} 기준</span>}
+            {cachedTime && (
+              <span className={cn("ml-2", stale ? "text-amber-500/70" : "text-foreground/25")}>
+                · {cachedTime} 기준{stale ? " (구 데이터)" : ""}
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -1001,7 +1012,7 @@ function TomorrowPicksContent({ onAnalyze }: { onAnalyze: (ticker: string, name:
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-foreground/45 bg-muted/50 hover:bg-muted hover:text-foreground/70 transition-all disabled:opacity-40 shrink-0"
         >
           <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
-          갱신
+          {refreshing ? "갱신 중…" : "갱신"}
         </button>
       </div>
 

@@ -451,7 +451,13 @@ export default function ThemesTab() {
 
   function onRefresh() {
     if (activeTab === "테마 분석") loadFeed();
-    if (activeTab === "내일 종목") { tomorrow.refetch(); presurge.refetch(); }
+    if (activeTab === "내일 종목") {
+      // 강제 갱신: ?refresh=1 엔드포인트 호출 후 쿼리 재패치
+      apiFetch(`/api/market/tomorrow-picks?refresh=1`)
+        .catch(() => {})
+        .finally(() => tomorrow.refetch());
+      presurge.refetch();
+    }
     if (activeTab === "수급 레이더") signals.refetch();
   }
 

@@ -14,7 +14,7 @@ import { getSignalsCache, fetchSignalsData } from "./themes";
 const router = Router();
 
 const PICKS_CACHE_KEY = "tomorrow_picks_v2";
-const THEMES_CACHE_KEY = "themes_feed_cache_v19";
+const THEMES_CACHE_KEY = "themes_feed_cache_v21";
 const TTL_MS = 3 * 60 * 60 * 1000;
 
 // ─── 인터페이스 ──────────────────────────────────────────────────────────────
@@ -397,18 +397,19 @@ function scoreSignalPicks(signals: SignalGroup[], themeSet: Set<string>): Tomorr
 
 // ─── DB 캐시 ─────────────────────────────────────────────────────────────────
 
-async function loadFromDB(): Promise<{ data: TomorrowPick[]; cachedAt: string } | null> {
+async function loadFromDB(allowExpired = false): Promise<{ data: TomorrowPick[]; cachedAt: string } | null> {
   try {
-    const r = await pool.query(
-      "SELECT data, expires_at FROM system_cache WHERE key=$1 AND expires_at > NOW() LIMIT 1",
-      [PICKS_CACHE_KEY],
-    );
+    const query = allowExpired
+      ? "SELECT data, expires_at FROM system_cache WHERE key=$1 ORDER BY expires_at DESC LIMIT 1"
+      : "SELECT data, expires_at FROM system_cache WHERE key=$1 AND expires_at > NOW() LIMIT 1";
+    const r = await pool.query(query, [PICKS_CACHE_KEY]);
     if (r.rows.length > 0) {
       const raw = r.rows[0].data;
       const parsed: TomorrowPick[] = Array.isArray(raw) ? raw : (typeof raw === "string" ? JSON.parse(raw) : raw);
-      // 빈 캐시(0개)는 무시 — 테마 피드 미준비 상태의 잘못 저장된 결과
       if (parsed.length === 0) return null;
-      return { data: parsed, cachedAt: r.rows[0].expires_at };
+      // 실제 생성시각 = expires_at - TTL_MS
+      const createdAt = new Date(new Date(r.rows[0].expires_at).getTime() - TTL_MS).toISOString();
+      return { data: parsed, cachedAt: createdAt };
     }
     return null;
   } catch { return null; }
@@ -450,18 +451,25 @@ async function loadThemesFeed(): Promise<ThemeFeedItem[] | null> {
   }
 }
 
-async function loadSignals(): Promise<SignalGroup[]> {
-  // 1. 인메모리 캐시 우선 (HTTP 자기참조 없이 직접 읽기)
-  const cached = getSignalsCache();
-  if (cached.length > 0) return cached;
+async function loadSignals(force = false): Promise<SignalGroup[]> {
+  // force=true 이면 캐시 무시하고 새로 fetch
+  if (!force) {
+    const cached = getSignalsCache();
+    if (cached.length > 0) return cached;
+  }
 
-  // 2. 캐시 미스 → 직접 fetch (서버 시작 직후 등)
   try {
-    console.log("[tomorrow-picks] signals 캐시 미스 → 직접 fetch 시작...");
+    if (force) console.log("[tomorrow-picks] signals 강제 갱신 시작...");
+    else console.log("[tomorrow-picks] signals 캐시 미스 → 직접 fetch 시작...");
     const fresh = await fetchSignalsData();
-    console.log(`[tomorrow-picks] signals 직접 fetch 완료: ${fresh.length}개 그룹`);
+    console.log(`[tomorrow-picks] signals fetch 완료: ${fresh.length}개 그룹`);
     return fresh;
   } catch (e) {
+    // force 실패 시 기존 캐시 반환
+    if (force) {
+      const cached = getSignalsCache();
+      if (cached.length > 0) { console.warn("[tomorrow-picks] signals 강제 갱신 실패 — 기존 캐시 사용"); return cached; }
+    }
     console.warn("[tomorrow-picks] signals fetch 실패:", e);
     return [];
   }
@@ -480,9 +488,18 @@ router.get("/market/tomorrow-picks", async (req, res) => {
       }
     }
 
-    const [feed, signals] = await Promise.all([loadThemesFeed(), loadSignals()]);
+    const [feed, signals] = await Promise.all([
+      loadThemesFeed(),
+      loadSignals(forceRefresh),
+    ]);
 
     if (!feed || feed.length === 0) {
+      // 갱신 실패 시 만료된 캐시라도 반환 (503 대신 stale 플래그)
+      const stale = await loadFromDB(true);
+      if (stale) {
+        console.warn("[tomorrow-picks] 테마 피드 없음 — 만료 캐시 반환 (stale)");
+        return res.json({ picks: stale.data, cachedAt: stale.cachedAt, fromCache: true, stale: true });
+      }
       return res.status(503).json({ error: "테마 피드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요." });
     }
 
