@@ -161,10 +161,9 @@ export default function AnalysisTab() {
   const popular = usePopular();
 
   function pickStock(item: StockSearchResult) {
-    setSelected(item);
-    setQuery(item.ticker);
     setShowDrop(false);
     inputRef.current?.blur();
+    router.push({ pathname: "/new-analysis", params: { ticker: item.ticker, name: item.name } });
   }
 
   function clearSelection() {
