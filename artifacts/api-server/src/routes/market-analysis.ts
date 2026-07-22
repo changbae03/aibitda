@@ -583,6 +583,16 @@ async function generateBrief(): Promise<MarketBriefResult> {
   const pipeline = pipelineStatus.status === "fulfilled" ? pipelineStatus.value : null;
   const newsBlock = newsResult.status === "fulfilled" ? newsResult.value : "";
 
+  // ── US 지수 폴백: Yahoo Finance가 null 반환 시 US 마감 브리핑 스냅샷 사용 ─
+  // US 마감 브리핑(20:30 UTC)이 KR 장전 브리핑(21:00 UTC) 30분 전에 성공적으로
+  // 데이터를 가져왔을 경우 _latestUsIndexSnapshot에 저장되어 있음
+  const effectiveIdx = (idx?.snp500?.at(-1) ? idx : null)
+    ?? ((_latestUsIndexSnapshot?.snp500?.at(-1)) ? _latestUsIndexSnapshot : null)
+    ?? idx;
+  if (!idx?.snp500?.at(-1) && _latestUsIndexSnapshot?.snp500?.at(-1)) {
+    console.log("[market-brief] US 지수 null → US 마감 브리핑 스냅샷 폴백 사용");
+  }
+
   // KOSPI/KOSDAQ 최신값
   const kospiLatest  = idx?.kospi?.at(-1)  ?? null;
   const kosdaqLatest = idx?.kosdaq?.at(-1) ?? null;
@@ -598,18 +608,19 @@ async function generateBrief(): Promise<MarketBriefResult> {
   const kosdaqPred = pipeline?.kosdaq ? `${pipeline.kosdaq.predictedReturn3d >= 0 ? "+" : ""}${pipeline.kosdaq.predictedReturn3d}%` : null;
   const snp500Pred = pipeline?.snp500 ? `${pipeline.snp500.predictedReturn3d >= 0 ? "+" : ""}${pipeline.snp500.predictedReturn3d}%` : null;
 
-  // 미국 지수 최신값
-  const snpL   = idx?.snp500?.at(-1) ?? null;
-  const nasdaqL = idx?.nasdaq?.at(-1) ?? null;
-  const dowL    = idx?.dow?.at(-1)    ?? null;
-  const vixL    = idx?.vix?.at(-1)    ?? null;
-  const soxL    = idx?.sox?.at(-1)    ?? null;
-  const dxyL    = idx?.dxy?.at(-1)    ?? null;
+  // 미국 지수 최신값 (effectiveIdx: Yahoo Finance 실패 시 US 마감 브리핑 스냅샷 폴백)
+  const snpL   = effectiveIdx?.snp500?.at(-1) ?? null;
+  const nasdaqL = effectiveIdx?.nasdaq?.at(-1) ?? null;
+  const dowL    = effectiveIdx?.dow?.at(-1)    ?? null;
+  const vixL    = effectiveIdx?.vix?.at(-1)    ?? null;
+  const soxL    = effectiveIdx?.sox?.at(-1)    ?? null;
+  const dxyL    = effectiveIdx?.dxy?.at(-1)    ?? null;
 
   // ── 미국 시장 데이터 신선도 판단 ────────────────────────────────────────────
   // Yahoo Finance는 마지막 거래일 데이터를 반환 → 휴장일을 직접 감지해야 함
+  const todayKSTforAge = effectiveIdx?.todayKST ?? idx?.todayKST ?? new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
   const usDataAgeDays = snpL?.date
-    ? Math.round((new Date(idx!.todayKST).getTime() - new Date(snpL.date).getTime()) / 86_400_000)
+    ? Math.round((new Date(todayKSTforAge).getTime() - new Date(snpL.date).getTime()) / 86_400_000)
     : 0;
   // 1일: 어제 거래(화~토 KST 장전) | 2일: 금요일(월요일 장전 정상) | ≥3일: 공휴일 포함 휴장
   const usHolidayPeriod = usDataAgeDays >= 3;
@@ -1113,6 +1124,9 @@ ${keyTopicsRule}
 let _usBriefCache: BriefCache | null = null;
 let _usBriefRefreshing = false;
 
+/** US 마감 브리핑 생성 시 저장한 최신 지수 스냅샷 — KR 장전 브리핑 폴백용 */
+let _latestUsIndexSnapshot: Awaited<ReturnType<typeof fetchRecentIndexData>> | null = null;
+
 async function saveUsBriefToDb(cache: BriefCache) {
   const sessionType = cache.data.sessionType ?? detectUsSession();
   const slotKey = sessionDbKey("us", sessionToSlot(sessionType));
@@ -1205,6 +1219,9 @@ async function generateUsBrief(): Promise<MarketBriefResult> {
   const ecos     = ecosData.status  === "fulfilled"      ? ecosData.value       : null;
   const pipeline = pipelineStatus.status === "fulfilled" ? pipelineStatus.value : null;
   const newsBlock = newsResult.status === "fulfilled"    ? newsResult.value     : "";
+
+  // US 지수 스냅샷 저장 — KR 장전 브리핑 폴백용
+  if (idx?.snp500?.at(-1)) _latestUsIndexSnapshot = idx;
 
   const snpL    = idx?.snp500?.at(-1) ?? null;
   const nasdaqL = idx?.nasdaq?.at(-1) ?? null;
