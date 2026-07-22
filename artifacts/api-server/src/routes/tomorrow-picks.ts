@@ -477,6 +477,39 @@ async function loadSignals(force = false): Promise<SignalGroup[]> {
 
 // ─── 라우트 ──────────────────────────────────────────────────────────────────
 
+/** feed + signals로 picks 계산 → DB 저장 → combined 반환 (라우트·스케줄러 공용) */
+async function computeAndSave(forceSignals = false): Promise<TomorrowPick[] | null> {
+  const [feed, signals] = await Promise.all([
+    loadThemesFeed(),
+    loadSignals(forceSignals),
+  ]);
+  if (!feed || feed.length === 0) return null;
+
+  const signalMap       = buildTickerSignalMap(signals);
+  const themePicks      = scoreThemePicks(feed, signalMap);
+  const themeTickerSet  = new Set(themePicks.map(p => p.ticker));
+  const signalPicks     = signals.length > 0 ? scoreSignalPicks(signals, themeTickerSet) : [];
+  const confluencePicks = signals.length > 0 ? scoreConfluencePicks(signals, signalMap, themeTickerSet) : [];
+  const confluenceSet   = new Set(confluencePicks.map(p => p.ticker));
+  const filteredSignal  = signalPicks.filter(p => !confluenceSet.has(p.ticker));
+
+  const combined = [
+    ...confluencePicks,
+    ...themePicks.slice(0, 15),
+    ...filteredSignal,
+  ]
+    .sort((a, b) => {
+      const confOrder = { high: 2, medium: 1, low: 0 };
+      const cDiff = (confOrder[b.confidence] ?? 0) - (confOrder[a.confidence] ?? 0);
+      if (cDiff !== 0) return cDiff;
+      return b.finalScore - a.finalScore;
+    })
+    .slice(0, 30);
+
+  await saveToDB(combined);
+  return combined;
+}
+
 router.get("/market/tomorrow-picks", async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === "1";
@@ -488,13 +521,8 @@ router.get("/market/tomorrow-picks", async (req, res) => {
       }
     }
 
-    const [feed, signals] = await Promise.all([
-      loadThemesFeed(),
-      loadSignals(forceRefresh),
-    ]);
-
-    if (!feed || feed.length === 0) {
-      // 갱신 실패 시 만료된 캐시라도 반환 (503 대신 stale 플래그)
+    const combined = await computeAndSave(forceRefresh);
+    if (!combined) {
       const stale = await loadFromDB(true);
       if (stale) {
         console.warn("[tomorrow-picks] 테마 피드 없음 — 만료 캐시 반환 (stale)");
@@ -503,43 +531,33 @@ router.get("/market/tomorrow-picks", async (req, res) => {
       return res.status(503).json({ error: "테마 피드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요." });
     }
 
-    // 시그널 교집합 맵 빌드 (kr_trending 포함)
-    const signalMap = buildTickerSignalMap(signals);
-
-    const themePicks    = scoreThemePicks(feed, signalMap);
-    const themeTickerSet = new Set(themePicks.map(p => p.ticker));
-    const signalPicks   = signals.length > 0 ? scoreSignalPicks(signals, themeTickerSet) : [];
-
-    // 교차 시그널 픽 — themeTickerSet만 제외 (signalPicks와는 중복 허용하여 고신뢰로 대체)
-    const confluencePicks = signals.length > 0
-      ? scoreConfluencePicks(signals, signalMap, themeTickerSet)
-      : [];
-    const confluenceTickerSet = new Set(confluencePicks.map(p => p.ticker));
-
-    // signalPicks 중 confluencePicks와 중복된 것 제거 (confluence가 더 높은 신뢰도)
-    const filteredSignalPicks = signalPicks.filter(p => !confluenceTickerSet.has(p.ticker));
-
-    // 합산: confluence(고신뢰) 먼저 → 테마 laggard → 시그널 픽, 점수순 정렬
-    const combined = [
-      ...confluencePicks,
-      ...themePicks.slice(0, 15),
-      ...filteredSignalPicks,
-    ]
-      .sort((a, b) => {
-        const confOrder = { high: 2, medium: 1, low: 0 };
-        const cDiff = (confOrder[b.confidence] ?? 0) - (confOrder[a.confidence] ?? 0);
-        if (cDiff !== 0) return cDiff;
-        return b.finalScore - a.finalScore;
-      })
-      .slice(0, 30);
-
-    await saveToDB(combined);
-
     return res.json({ picks: combined, cachedAt: new Date().toISOString(), fromCache: false });
   } catch (e: any) {
     console.error("[tomorrow-picks]", e);
-    res.status(500).json({ error: "오류가 발생했습니다." });
+    return res.status(500).json({ error: "오류가 발생했습니다." });
   }
 });
+
+/* ── 장중 동기 갱신용 export ─────────────────────────────────────── */
+
+let _tomorrowPicksRefreshing = false;
+
+/**
+ * 스케줄러에서 호출 — DB 캐시를 무효화하고 picks를 백그라운드 재계산합니다.
+ */
+export function triggerBackgroundRefresh(): void {
+  if (_tomorrowPicksRefreshing) {
+    console.log("[tomorrow-picks] 이미 갱신 중 — 장중 갱신 스킵");
+    return;
+  }
+  _tomorrowPicksRefreshing = true;
+  // DB 캐시 무효화 후 재계산
+  pool.query("DELETE FROM system_cache WHERE key=$1", [PICKS_CACHE_KEY])
+    .catch(() => {})
+    .then(() => computeAndSave(true))
+    .then(picks => console.log(`[tomorrow-picks] 장중 갱신 완료: ${picks?.length ?? 0}개`))
+    .catch(e => console.warn("[tomorrow-picks] 장중 갱신 실패:", e))
+    .finally(() => { _tomorrowPicksRefreshing = false; });
+}
 
 export default router;

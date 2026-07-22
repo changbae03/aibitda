@@ -2137,6 +2137,19 @@ export function getSignalsCache(): SignalGroup[] {
 
 export { fetchSignalsData };
 
+/**
+ * 스케줄러에서 호출 — signals 캐시를 무효화하고 백그라운드에서 재fetch합니다.
+ */
+export function triggerSignalsRefresh(): void {
+  signalsCache = null; // 캐시 무효화 → 다음 요청에 반드시 재조회
+  fetchSignalsData()
+    .then(data => {
+      if (data.length > 0) signalsCache = { data, cachedAt: Date.now() };
+      console.log(`[signals] 장중 동기 갱신 완료: ${data.length}개 그룹`);
+    })
+    .catch(e => console.warn("[signals] 장중 동기 갱신 실패:", e));
+}
+
 /** KST 기준 오늘 날짜 (YYYYMMDD) */
 function todayKST(): string {
   const d = new Date(Date.now() + 9 * 3600_000);

@@ -28,6 +28,9 @@ import { invalidateBriefCache, refreshBriefInBackground, fetchMarketNews, refres
 import { autoRecalibrate, autoUpdateAllSectorPriors } from "../routes/performance.js";
 import { pool } from "@workspace/db";
 import { collectTodayWinners, syncPresurgeHitResults } from "./daily-winners.js";
+import { triggerSignalsRefresh } from "../routes/themes.js";
+import { triggerBackgroundScan as triggerPresurgeScan } from "../routes/presurge.js";
+import { triggerBackgroundRefresh as triggerTomorrowPicksRefresh } from "../routes/tomorrow-picks.js";
 
 // 실행 중복 방지용 플래그
 let morningBriefToday     = "";   // 06:00 KST 장전 브리핑
@@ -43,6 +46,10 @@ let usPremarketBriefToday = "";   // 17:00 KST 개장 전 브리핑 (프리마�
 let usOpenBriefToday      = "";   // 23:30 KST 장중 1차 브리핑 (개장 1시간 후)
 let usMidBriefToday       = "";   // 02:00 KST 장중 2차 브리핑
 let usCloseBriefToday     = "";   // 05:30 KST 마감 브리핑 (정규장 마감 직후)
+
+// 장중 30분 동기 갱신 — 수급 폭발·급등 예비군·내일 상승 후보를 같은 시각에 갱신
+// "YYYY-MM-DD-HH-MM" 형식으로 슬롯 중복 방지
+let lastIntraday30Slot    = "";   // 09:00~15:30 KST 매 30분 슬롯
 
 function utcNow() { return new Date(); }
 
@@ -191,6 +198,30 @@ function checkAndRun() {
       .then(() => console.log("[scheduler] presurge 적중 결과 동기화 완료"))
       .catch(e => console.error("[scheduler] 급등 종목 수집 실패:", e?.message));
   }
+
+  // ── 장중 30분 동기 갱신: 09:00~15:30 KST = 00:00~06:30 UTC (평일) ──────────
+  // 수급 폭발·급등 예비군·내일 상승 후보를 동일 시각에 일괄 갱신
+  // 09:00 KST = 00:00 UTC, 09:30 = 00:30, ..., 15:00 = 06:00, 15:30 = 06:30
+  const utcTotalMin = utcH * 60 + utcM;
+  const isIntraday30 = dow >= 1 && dow <= 5
+    && (utcM === 0 || utcM === 30)
+    && utcTotalMin >= 0 && utcTotalMin <= 390; // 00:00~06:30 UTC
+  const slotKey30 = `${dateStr}-${utcH}-${utcM}`;
+  if (isIntraday30 && lastIntraday30Slot !== slotKey30) {
+    lastIntraday30Slot = slotKey30;
+    const kstH = (utcH + 9) % 24;
+    const kstM = utcM;
+    console.log(`[scheduler] 장중 30분 동기 갱신 시작 (${String(kstH).padStart(2, "0")}:${String(kstM).padStart(2, "0")} KST)`);
+    // 수급 폭발 (signals)
+    try { triggerSignalsRefresh(); } catch (e) { console.error("[scheduler] signals 갱신 실패:", e); }
+    // 급등 예비군 (presurge) — 스캔이 무거우므로 09:00·12:00·15:00 KST만 실행
+    const isPresurgeSlot = utcTotalMin === 0 || utcTotalMin === 180 || utcTotalMin === 360;
+    if (isPresurgeSlot) {
+      try { triggerPresurgeScan(); } catch (e) { console.error("[scheduler] presurge 갱신 실패:", e); }
+    }
+    // 내일 상승 후보 (tomorrow picks)
+    try { triggerTomorrowPicksRefresh(); } catch (e) { console.error("[scheduler] tomorrow-picks 갱신 실패:", e); }
+  }
 }
 
 export function startMarketScheduler() {
@@ -240,6 +271,7 @@ export function startMarketScheduler() {
   console.log("  [US] 마감 브리핑:   평일 05:30 KST");
   console.log("  - 섹터 재보정:      평일 16:30 KST");
   console.log("  - 딥 캘리브레이션:  매주 일요일 11:00 KST");
+  console.log("  [내일종목] 30분 동기 갱신: 평일 09:00~15:30 KST (signals·tomorrow-picks 매 30분, presurge 09:00·12:00·15:00 KST)");
 }
 
 export { getMl as _getMlModule };

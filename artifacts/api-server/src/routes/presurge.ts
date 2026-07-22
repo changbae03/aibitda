@@ -227,4 +227,20 @@ router.get("/market/presurge/accuracy", async (_req, res) => {
   }
 });
 
+/* ── 장중 동기 갱신용 export ─────────────────────────────────────── */
+
+/**
+ * 스케줄러에서 호출 — 백그라운드에서 presurge 스캔을 재실행합니다.
+ * 이미 스캔 중이면 무시합니다.
+ */
+export function triggerBackgroundScan(): void {
+  if (scanning) {
+    console.log("[presurge] 이미 스캔 중 — 장중 갱신 스킵");
+    return;
+  }
+  runScan()
+    .then(c => console.log(`[presurge] 장중 동기 갱신 완료: ${c.result.candidates.length}개`))
+    .catch(e => console.error("[presurge] 장중 동기 갱신 실패:", e));
+}
+
 export default router;
