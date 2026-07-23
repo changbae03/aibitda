@@ -14,6 +14,7 @@ import {
   type StockSearchResult, type AnalysisListItem, type PopularItem,
   type AnalysisCreateResult,
 } from "@/hooks/useApi";
+import TickerLogo from "@/components/TickerLogo";
 
 const CORAL = "#FF8A7A";
 
@@ -77,15 +78,24 @@ function AnalysisRow({ item }: { item: AnalysisListItem }) {
     <Pressable
       style={({ pressed }) => [{
         flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        paddingHorizontal: 16, paddingVertical: 14,
+        paddingHorizontal: 16, paddingVertical: 13,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
         backgroundColor: pressed ? colors.muted : colors.background,
+        gap: 12,
       }]}
       onPress={() => router.push(`/analysis/${item.id}`)}
     >
+      <TickerLogo
+        ticker={item.ticker}
+        name={item.companyName ?? item.englishName}
+        size={38}
+        borderRadius={11}
+        bgColor={isKR ? "#dbeafe" : "#fef9c3"}
+        textColor={isKR ? "#1d4ed8" : "#b45309"}
+      />
       <View style={{ flex: 1, gap: 3 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker.replace(".KS","").replace(".KQ","")}</Text>
           <Text style={{ fontSize: 14, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
             {item.companyName ?? item.englishName ?? ""}
           </Text>
@@ -111,6 +121,7 @@ function AnalysisRow({ item }: { item: AnalysisListItem }) {
 function PopularRow({ item }: { item: PopularItem }) {
   const colors = useColors();
   const router  = useRouter();
+  const isKR    = /^\d/.test(item.ticker);
   const [outcomeColor, outcomeLabel] =
     item.outcome === "hit_target" ? [colors.success,     "목표달성"]
     : item.outcome === "hit_stop" ? [colors.destructive, "손절"]
@@ -119,15 +130,24 @@ function PopularRow({ item }: { item: PopularItem }) {
     <Pressable
       style={({ pressed }) => [{
         flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        paddingHorizontal: 16, paddingVertical: 14,
+        paddingHorizontal: 16, paddingVertical: 13,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
         backgroundColor: pressed ? colors.muted : colors.background,
+        gap: 12,
       }]}
       onPress={() => router.push(`/analysis/${item.id}`)}
     >
+      <TickerLogo
+        ticker={item.ticker}
+        name={item.companyName}
+        size={38}
+        borderRadius={11}
+        bgColor={isKR ? "#dbeafe" : "#fef9c3"}
+        textColor={isKR ? "#1d4ed8" : "#b45309"}
+      />
       <View style={{ flex: 1, gap: 3 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker.replace(".KS","").replace(".KQ","")}</Text>
           <Text style={{ fontSize: 14, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
             {item.companyName}
           </Text>
@@ -177,11 +197,14 @@ function ConfirmModal({
 
           {/* Company row */}
           <View style={styles.confirmCompanyRow}>
-            <View style={[styles.avatar, { backgroundColor: isKR ? "#dbeafe" : "#fef9c3" }]}>
-              <Text style={[styles.avatarText, { color: isKR ? "#1d4ed8" : "#b45309" }]}>
-                {initials(stock)}
-              </Text>
-            </View>
+            <TickerLogo
+              ticker={stock.ticker}
+              name={stock.name}
+              size={44}
+              borderRadius={12}
+              bgColor={isKR ? "#dbeafe" : "#fef9c3"}
+              textColor={isKR ? "#1d4ed8" : "#b45309"}
+            />
             <View style={{ flex: 1 }}>
               <Text style={[styles.confirmName, { color: colors.foreground }]}>{stock.name || code}</Text>
               <Text style={[styles.confirmCode, { color: colors.mutedForeground }]}>{code}</Text>
@@ -200,7 +223,7 @@ function ConfirmModal({
           <Text style={[styles.confirmDescMain, { color: colors.foreground }]}>
             7단계 심층 분석을 시작합니다.
           </Text>
-          <Text style={[styles.confirmDescSub, { color: colors.mutedForeground }]}>
+          <Text style={[styles.confirmDescSub, { color: colors.mutedForeground }]} lineBreakStrategyIOS="hangul-word">
             평균 3분 소요 · DCF/NPV 등 밸류에이션 자동 선정
           </Text>
 
@@ -502,11 +525,14 @@ export default function AnalysisTab() {
                     ]}
                     onPress={() => selectStock(item)}
                   >
-                    <View style={[styles.dropAvatar, { backgroundColor: isKR ? "#dbeafe" : "#fef9c3" }]}>
-                      <Text style={[styles.dropAvatarText, { color: isKR ? "#2563eb" : "#b45309" }]}>
-                        {initials(item)}
-                      </Text>
-                    </View>
+                    <TickerLogo
+                      ticker={item.ticker}
+                      name={item.name}
+                      size={36}
+                      borderRadius={10}
+                      bgColor={isKR ? "#dbeafe" : "#fef9c3"}
+                      textColor={isKR ? "#2563eb" : "#b45309"}
+                    />
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                         <Text style={[styles.dropName, { color: colors.foreground }]}>{item.name || code}</Text>
@@ -684,7 +710,7 @@ const styles = StyleSheet.create({
   exchBadgeText:     { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
   confirmDesc:       { fontSize: 16, fontFamily: "Pretendard-SemiBold", marginBottom: 2 },
   confirmDescMain:   { fontSize: 18, fontFamily: "Pretendard-Bold", marginBottom: 6 },
-  confirmDescSub:    { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  confirmDescSub:    { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 24 },
   confirmCredit:     { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 12, textAlign: "right" },
   confirmBtns:       { flexDirection: "row", gap: 10, marginTop: 24 },
   confirmBtnCancel: {
