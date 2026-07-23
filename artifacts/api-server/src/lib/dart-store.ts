@@ -29,10 +29,10 @@ async function ensureTable(): Promise<void> {
     CREATE TABLE IF NOT EXISTS ticker_financials (
       id              SERIAL PRIMARY KEY,
       ticker          VARCHAR(20)  NOT NULL,
-      corp_code       VARCHAR(20)  NOT NULL,
+      corp_code       VARCHAR(20)  NOT NULL DEFAULT '',
       bsns_year       INTEGER      NOT NULL,
       reprt_code      VARCHAR(5)   NOT NULL,
-      period_label    VARCHAR(16)  NOT NULL,
+      period_label    VARCHAR(16)  NOT NULL DEFAULT '',
       fs_type         VARCHAR(3)   NOT NULL,
       revenue         BIGINT,
       operating_income BIGINT,
@@ -47,11 +47,24 @@ async function ensureTable(): Promise<void> {
       UNIQUE(ticker, bsns_year, reprt_code, fs_type)
     )
   `);
-  // 기존 테이블에 period_label 컬럼이 없는 경우 추가 (마이그레이션)
-  await pool.query(`
-    ALTER TABLE ticker_financials
-    ADD COLUMN IF NOT EXISTS period_label VARCHAR(16) NOT NULL DEFAULT ''
-  `);
+  // 기존 테이블에 누락된 컬럼 추가 (순차 마이그레이션)
+  const migrations = [
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS corp_code       VARCHAR(20) NOT NULL DEFAULT ''`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS period_label    VARCHAR(16) NOT NULL DEFAULT ''`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS revenue         BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS operating_income BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS net_income      BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS total_assets    BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS equity          BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS cash            BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS total_debt      BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS eps             BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS bps             BIGINT`,
+    `ALTER TABLE ticker_financials ADD COLUMN IF NOT EXISTS fetched_at      TIMESTAMPTZ DEFAULT NOW()`,
+  ];
+  for (const sql of migrations) {
+    try { await pool.query(sql); } catch { /* 이미 존재하면 무시 */ }
+  }
   tableReady = true;
 }
 
