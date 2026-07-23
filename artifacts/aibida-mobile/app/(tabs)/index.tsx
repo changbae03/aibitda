@@ -1706,7 +1706,7 @@ export default function MarketScreen() {
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
         <View>
-          <Image source={require("../../assets/images/logo.png")} style={styles.headerLogo} resizeMode="contain" />
+          <Text style={{ fontSize: 26, fontFamily: "Pretendard-Bold", color: "#FF8A7A", letterSpacing: -0.5 }}>애빛다</Text>
         </View>
         {subTab === "overview" && (
           <View style={{ flexDirection: "row", backgroundColor: colors.muted, borderRadius: 10, padding: 3 }}>
