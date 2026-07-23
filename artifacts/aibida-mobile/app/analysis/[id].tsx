@@ -67,26 +67,46 @@ function fmtVol(v: number | null | undefined, currency = "KRW"): string {
   return v.toLocaleString("ko-KR");
 }
 
-/** JSON 블록을 제거하고 이후 텍스트만 반환 */
-function stripJsonBlock(text: string): string {
-  if (!text) return "";
-  // ```json ... ``` 또는 ``` ... ``` 제거
+/**
+ * JSON 블록을 제거하고 이후 텍스트만 반환.
+ * 텍스트가 없으면 JSON 내 텍스트 필드(plain_verdict, summary, narrative 등)를 조합.
+ * null = 처리 불가(콘텐츠 없음).
+ */
+function stripJsonBlock(text: string): string | null {
+  if (!text?.trim()) return null;
+  // ```json ... ``` 코드 블록 제거
   let s = text.replace(/```json[\s\S]*?```/g, "").replace(/```[\s\S]*?```/g, "").trim();
-  // 앞부분 JSON 오브젝트 제거 (200자 안에 { 로 시작하면)
+  // 앞부분 JSON 오브젝트 감지 및 제거
   const si = s.indexOf("{");
+  let jsonObj: any = null;
   if (si !== -1 && si < 200) {
-    let depth = 0; let inString = false; let escaped = false;
+    let depth = 0; let inStr = false; let esc = false; let ei = -1;
     for (let i = si; i < s.length; i++) {
       const ch = s[i];
-      if (escaped) { escaped = false; continue; }
-      if (ch === "\\" && inString) { escaped = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
+      if (esc) { esc = false; continue; }
+      if (ch === "\\" && inStr) { esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
       if (ch === "{") depth++;
-      else if (ch === "}") { depth--; if (depth === 0) { s = s.slice(i + 1).trim(); break; } }
+      else if (ch === "}") { depth--; if (depth === 0) { ei = i; break; } }
+    }
+    if (ei !== -1) {
+      try { jsonObj = JSON.parse(s.slice(si, ei + 1)); } catch { /**/ }
+      s = s.slice(ei + 1).trim();
     }
   }
-  return s;
+  // JSON 제거 후 텍스트가 있으면 그대로 반환
+  if (s) return s;
+  // 텍스트가 없으면 JSON 필드에서 서술 텍스트 추출
+  if (jsonObj) {
+    const textFields = ["plain_verdict", "summary", "narrative", "analysis", "conclusion", "reasoning", "description"];
+    const parts: string[] = [];
+    for (const f of textFields) {
+      if (typeof jsonObj[f] === "string" && jsonObj[f].trim()) parts.push(jsonObj[f].trim());
+    }
+    if (parts.length > 0) return parts.join("\n\n");
+  }
+  return null;
 }
 
 function extractJson(raw: string): any | null {
@@ -988,12 +1008,14 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
           if (!step?.content) return null;
           const agent = AGENTS[key];
           const displayContent = stripJsonBlock(step.content);
-          const accentColor    = agent?.color ?? "#2563eb";
+          // 표시할 텍스트가 전혀 없으면 해당 스텝 카드 숨김
+          if (!displayContent) return null;
+          const accentColor = agent?.color ?? "#2563eb";
 
           return (
             <Card key={key}>
               {/* Step header */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18", alignItems: "center", justifyContent: "center" }}>
                   <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: accentColor }}>{index + 1}</Text>
                 </View>
@@ -1002,34 +1024,13 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
                     {agent?.name ?? key}
                   </Text>
                   <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
-                    {step.agentName ?? agent?.role ?? ""}
+                    {agent?.role ?? ""}
                   </Text>
                 </View>
-                {step.informationType && (
-                  <View style={{ backgroundColor: accentColor + "18", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: accentColor }}>
-                      {step.informationType === "confirmed_fact" ? "확인된 사실"
-                       : step.informationType === "data_based_estimate" ? "데이터 추정"
-                       : step.informationType === "hypothesis" ? "가설"
-                       : step.informationType}
-                    </Text>
-                  </View>
-                )}
               </View>
 
               {/* Content — markdown rendered */}
-              <MarkdownText
-                content={displayContent || step.content}
-                baseColor={colors.foreground}
-              />
-
-              {/* Validation notes */}
-              {step.validationNotes && (
-                <View style={[styles.validationBox, { backgroundColor: colors.accent, borderColor: colors.border }]}>
-                  <Text style={[styles.validationLabel, { color: colors.mutedForeground }]}>검증 노트</Text>
-                  <Text style={{ fontSize: 12, lineHeight: 18, color: colors.mutedForeground }}>{step.validationNotes}</Text>
-                </View>
-              )}
+              <MarkdownText content={displayContent} baseColor={colors.foreground} />
             </Card>
           );
         })}
