@@ -189,6 +189,7 @@ const ALLOWED_PYKRX_TYPES = new Set([
   "naver_trending", "top_volume", "top_gainers",
   "cap", "ohlcv_market", "etf_search", "etf_holdings",
   "short_balance", "investor_stocks", "presurge_scan",
+  "investor_market",
 ]);
 const KRX_DATE_RE = /^\d{8}$/;
 const ALLOWED_MARKETS = new Set(["KOSPI", "KOSDAQ", "ALL", "KOSPI200"]);
@@ -270,7 +271,7 @@ async function callPykrx(
 }
 
 /** pykrx 호출 — 배열/객체 모두 허용 (presurge_scan 등 객체 반환 타입용) */
-async function callPykrxAny(
+export async function callPykrxAny(
   type: string,
   fromDate: string,
   toDate: string,

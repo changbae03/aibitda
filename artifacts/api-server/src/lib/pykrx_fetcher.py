@@ -418,6 +418,107 @@ def main():
                     print(f"[investor_stocks] {ticker} 실패: {e}", file=sys.stderr)
             emit(result)
 
+        # ── 시장 전체 종목별 투자자 순매수 (OHLCV 포함) ─────────────────────────
+        elif data_type == "investor_market":
+            # from_date / to_date = 날짜 (YYYYMMDD), market_arg = 'KOSPI' or 'KOSDAQ'
+            # get_market_net_purchases_of_equities_by_ticker(fromdate, todate, market, investor)
+            # → DataFrame: index=티커, cols=[종목명, 매도거래량, 매수거래량, 순매수거래량,
+            #                                매도거래대금, 매수거래대금, 순매수거래대금]
+            import math as _math
+
+            def _si(v, d=0):
+                try:
+                    f = float(v); return d if _math.isnan(f) else int(f)
+                except Exception: return d
+
+            def _sf(v, d=0.0):
+                try:
+                    f = float(v); return d if _math.isnan(f) else round(f, 2)
+                except Exception: return d
+
+            inst_df = None
+            fore_df = None
+            try:
+                with StdoutToStderr():
+                    inst_df = krx.get_market_net_purchases_of_equities_by_ticker(
+                        from_date, to_date, market_arg, "기관합계"
+                    )
+            except Exception as _e:
+                print(f"[investor_market] 기관합계 조회 실패: {_e}", file=sys.stderr)
+
+            try:
+                with StdoutToStderr():
+                    fore_df = krx.get_market_net_purchases_of_equities_by_ticker(
+                        from_date, to_date, market_arg, "외국인"
+                    )
+            except Exception as _e:
+                print(f"[investor_market] 외국인 조회 실패: {_e}", file=sys.stderr)
+
+            if (inst_df is None or inst_df.empty) and (fore_df is None or fore_df.empty):
+                emit([])
+                return
+
+            # 기관 순매수거래대금 → 억원
+            inst_map = {}
+            if inst_df is not None and not inst_df.empty:
+                for tk, row in inst_df.iterrows():
+                    inst_map[str(tk)] = {
+                        "name": str(row.get("종목명", "")),
+                        "institution": _si(row.get("순매수거래대금", 0)) // 100_000_000,
+                    }
+
+            # 외국인 순매수거래대금 → 억원
+            fore_map = {}
+            if fore_df is not None and not fore_df.empty:
+                for tk, row in fore_df.iterrows():
+                    fore_map[str(tk)] = {
+                        "name": str(row.get("종목명", "")),
+                        "foreign": _si(row.get("순매수거래대금", 0)) // 100_000_000,
+                    }
+
+            # 전체 티커 합집합
+            all_tickers = set(inst_map.keys()) | set(fore_map.keys())
+
+            # OHLCV (종가·등락률·거래량)
+            ohlcv_map = {}
+            try:
+                with StdoutToStderr():
+                    ohlcv_df = krx.get_market_ohlcv_by_ticker(from_date, market=market_arg)
+                if ohlcv_df is not None and not ohlcv_df.empty:
+                    for _tk, _row in ohlcv_df.iterrows():
+                        ohlcv_map[str(_tk)] = {
+                            "close":  _si(_row.get("종가",  0)),
+                            "volume": _si(_row.get("거래량", 0)),
+                            "change": _sf(_row.get("등락률", 0.0)),
+                        }
+            except Exception as _e2:
+                print(f"[investor_market] ohlcv 조회 실패: {_e2}", file=sys.stderr)
+
+            # 결합 + 필터 (기관+외인 ≥ 3억)
+            candidates = []
+            for t in all_tickers:
+                i_data = inst_map.get(t, {})
+                f_data = fore_map.get(t, {})
+                institution = i_data.get("institution", 0)
+                foreign     = f_data.get("foreign",     0)
+                if institution + foreign < 3:
+                    continue
+                name = i_data.get("name") or f_data.get("name") or t
+                ov   = ohlcv_map.get(t, {})
+                candidates.append({
+                    "ticker":      t,
+                    "name":        name,
+                    "institution": institution,
+                    "foreign":     foreign,
+                    "individual":  0,
+                    "close":       ov.get("close",  0),
+                    "volume":      ov.get("volume", 0),
+                    "change":      ov.get("change", 0.0),
+                })
+
+            print(f"[investor_market] {market_arg}: 후보 {len(candidates)}개", file=sys.stderr)
+            emit(candidates)
+
         # ── 급등 전조 스캔 (N일치 전 종목 OHLCV → 기술적 지표 → 점수화) ────────
         elif data_type == "presurge_scan":
             import math

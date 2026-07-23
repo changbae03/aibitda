@@ -431,8 +431,38 @@ export function useLiveGainers() {
   return useQuery({
     queryKey: ["live-gainers"],
     queryFn:  () => apiFetch<LiveGainersResponse>("/api/market/live-gainers"),
-    staleTime:      4 * 60 * 1000,   // 4분
-    refetchInterval: 5 * 60 * 1000,  // 5분마다 자동 재조회
+    staleTime:      4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export interface InstitutionPick {
+  ticker:      string;
+  name:        string;
+  market:      string;
+  institution: number;
+  foreign:     number;
+  combined:    number;
+  change:      number;
+  close:       number;
+  volume:      number;
+  score:       number;
+  type:        "both" | "institution" | "foreign";
+  rationale:   string;
+}
+
+export interface InstitutionPicksResponse {
+  picks:     InstitutionPick[];
+  cachedAt:  string;
+  fromCache: boolean;
+}
+
+export function useInstitutionPicks() {
+  return useQuery({
+    queryKey: ["institution-picks"],
+    queryFn:  () => apiFetch<InstitutionPicksResponse>("/api/market/institution-picks"),
+    staleTime: 15 * 60 * 1000,
     retry: 1,
   });
 }

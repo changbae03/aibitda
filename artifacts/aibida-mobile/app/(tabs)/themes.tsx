@@ -8,9 +8,9 @@ import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import {
-  useTomorrowPicks, usePresurge, useThemeSignals, useLiveGainers,
+  useTomorrowPicks, usePresurge, useThemeSignals, useLiveGainers, useInstitutionPicks,
   apiFetch,
-  type TomorrowPick, type PresurgePick, type ThemeSignal, type LiveGainerItem,
+  type TomorrowPick, type PresurgePick, type ThemeSignal, type LiveGainerItem, type InstitutionPick,
 } from "@/hooks/useApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -472,6 +472,98 @@ function LiveGainerCard({ item, idx, colors, onAnalyze }: {
   );
 }
 
+// ── 기관·외인 매집 카드 ────────────────────────────────────────────────────────
+
+function InstitutionPickCard({ item, idx, colors, onAnalyze }: {
+  item: InstitutionPick; idx: number; colors: any;
+  onAnalyze: (ticker: string, name: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isTop3 = idx < 3;
+  const changeUp = item.change >= 0;
+
+  const typeColor =
+    item.type === "both"        ? "#7C3AED"
+    : item.type === "institution" ? "#0EA5E9"
+    : "#F97316";
+  const typeBg =
+    item.type === "both"        ? "#EDE9FE"
+    : item.type === "institution" ? "#E0F2FE"
+    : "#FFF7ED";
+  const typeLabel =
+    item.type === "both"        ? "기관+외인"
+    : item.type === "institution" ? "기관 매집"
+    : "외인 매집";
+
+  const marketLabel = item.market === "KOSPI" ? "코스피" : "코스닥";
+
+  return (
+    <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <TouchableOpacity onPress={() => setExpanded(v => !v)} activeOpacity={0.7} style={rs.pickHeader}>
+        <Text style={[rs.pickRank, {
+          color: isTop3 ? colors.foreground : colors.mutedForeground,
+          fontFamily: isTop3 ? "Pretendard-Bold" : "Pretendard-Regular",
+        }]}>{idx + 1}</Text>
+
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={[rs.pickName, { color: colors.foreground }]}>{item.name}</Text>
+            <Text style={[rs.pickTicker, { color: colors.mutedForeground }]}>{item.ticker}</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
+            <View style={[rs.badge, { backgroundColor: typeBg }]}>
+              <Text style={[rs.badgeText, { color: typeColor }]}>{typeLabel}</Text>
+            </View>
+            <Text style={[rs.catLabel, { color: colors.mutedForeground }]}>{marketLabel}</Text>
+            {item.institution > 0 && (
+              <Text style={[rs.signalChip, { color: "#0EA5E9" }]}>기관 +{item.institution}억</Text>
+            )}
+            {item.foreign > 0 && (
+              <Text style={[rs.signalChip, { color: "#F97316" }]}>외인 +{item.foreign}억</Text>
+            )}
+          </View>
+        </View>
+
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          <Text style={[rs.changeText, { color: changeUp ? "#EF4444" : "#3B82F6" }]}>
+            {changeUp ? "+" : ""}{item.change.toFixed(1)}%
+          </Text>
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+        </View>
+      </TouchableOpacity>
+
+      {item.rationale ? (
+        <Text style={[rs.pickRationale, { color: colors.mutedForeground, paddingLeft: 38 }]} numberOfLines={expanded ? undefined : 2}>
+          {item.rationale}
+        </Text>
+      ) : null}
+
+      {expanded && (
+        <View style={[rs.pickBody, { borderTopColor: colors.border }]}>
+          <View style={{ flexDirection: "row", gap: 16, marginBottom: 10 }}>
+            <View>
+              <Text style={[rs.catLabel, { color: colors.mutedForeground }]}>종가</Text>
+              <Text style={[rs.pickName, { color: colors.foreground }]}>{item.close.toLocaleString()}원</Text>
+            </View>
+            <View>
+              <Text style={[rs.catLabel, { color: colors.mutedForeground }]}>합산 순매수</Text>
+              <Text style={[rs.pickName, { color: typeColor }]}>+{item.combined}억</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={rs.pickAnalyzeBtn} onPress={() => onAnalyze(item.ticker, item.name)} activeOpacity={0.75}>
+            <Feather name="cpu" size={13} color="#6366f1" />
+            <Text style={rs.pickAnalyzeBtnText}>AI 분석 시작</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={[rs.scoreBar, { backgroundColor: colors.border }]}>
+        <View style={[rs.scoreBarFill, { width: `${Math.min(item.combined, 100)}%` as any, backgroundColor: typeColor }]} />
+      </View>
+    </View>
+  );
+}
+
 // ── 급등 예비군 카드 ──────────────────────────────────────────────────────────
 
 // 카테고리 메타
@@ -737,6 +829,7 @@ export default function ThemesTab() {
   const presurge = usePresurge();
   const signals = useThemeSignals();
   const liveGainers = useLiveGainers();
+  const institutionPicks = useInstitutionPicks();
 
   const loadFeed = useCallback(async (attempt = 0) => {
     setFeedLoading(true);
@@ -781,12 +874,13 @@ export default function ThemesTab() {
     if (activeTab === "내일 종목") {
       apiFetch(`/api/market/tomorrow-picks?refresh=1`).catch(() => {}).finally(() => tomorrow.refetch());
       presurge.refetch();
+      institutionPicks.refetch();
     }
     if (activeTab === "수급 레이더") signals.refetch();
   }
 
   const isRefreshing =
-    activeTab === "내일 종목" ? (tomorrow.isFetching || presurge.isFetching)
+    activeTab === "내일 종목" ? (tomorrow.isFetching || presurge.isFetching || institutionPicks.isFetching)
     : activeTab === "수급 레이더" ? signals.isFetching
     : false;
 
@@ -875,7 +969,7 @@ export default function ThemesTab() {
 
       {/* ── 내일 종목 탭 ── */}
       {activeTab === "내일 종목" && (
-        (tomorrow.isLoading || presurge.isLoading) ? (
+        (institutionPicks.isLoading && presurge.isLoading && tomorrow.isLoading) ? (
           <View style={rs.center}>
             <ActivityIndicator size="small" color="#10b981" />
             <Text style={[rs.loadingText, { color: colors.mutedForeground }]}>분석 중…</Text>
@@ -888,14 +982,14 @@ export default function ThemesTab() {
           >
             {/* 안내 카드 */}
             <View style={[rs.conceptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[rs.conceptTitle, { color: colors.foreground }]}>✨ 3가지 렌즈로 내일 상승 종목 탐색</Text>
+              <Text style={[rs.conceptTitle, { color: colors.foreground }]}>🏦 기관·외인 매집 종목 스크리너</Text>
               <Text style={[rs.conceptDesc, { color: colors.mutedForeground }]}>
-                여러 리스트에 동시에 등장하는 종목일수록 신뢰도가 높습니다.
+                아직 안 오른 종목 중 기관·외국인이 조용히 사 모으는 종목을 실시간으로 찾습니다.
               </Text>
               <View style={{ gap: 8, marginTop: 10 }}>
                 {([
-                  { n: "①", color: "#EF4444", bg: "#FEE2E2", title: "오늘 수급 폭발 포착", desc: "거래량 급증 + 기관·외인 매집 실시간 스캔" },
-                  { n: "②", color: "#10b981", bg: "#DCFCE7", title: "내일 급등 예비군",   desc: "상한가 연속후보 · 급등 모멘텀 · 박스권 전조 패턴" },
+                  { n: "①", color: "#7C3AED", bg: "#EDE9FE", title: "기관·외인 매집", desc: "KOSPI·KOSDAQ 전 종목 순매수 스캔 · 주가 5% 미만 상승" },
+                  { n: "②", color: "#10b981", bg: "#DCFCE7", title: "급등 예비군",   desc: "기술적 전조 패턴 · 거래량 매집 · 박스권 돌파 전조" },
                   { n: "③", color: "#6366f1", bg: "#E0E7FF", title: "내일 상승 후보",     desc: "테마·검색 트렌드 · 순환매 지연 포착" },
                 ] as const).map(({ n, color, bg, title, desc }) => (
                   <View key={n} style={[rs.conceptRow, { backgroundColor: colors.muted }]}>
@@ -911,33 +1005,29 @@ export default function ThemesTab() {
               </View>
             </View>
 
-            {/* 지금 급등 중 — 장중에만 표시 */}
-            {(liveGainers.data?.marketOpen || (liveGainers.data?.data ?? []).length > 0) && (
-              <>
-                <SectionHeader
-                  emoji="🔴"
-                  title="지금 급등 중"
-                  badge="실시간 KIS"
-                  badgeColor="#DC2626"
-                  badgeBg="#FEF2F2"
-                  sub="장중 상승률 순위 · 5분마다 갱신"
-                />
-                <View style={{ paddingHorizontal: 16, gap: 8, marginBottom: 8 }}>
-                  {liveGainers.isLoading
-                    ? <ActivityIndicator size="small" color="#DC2626" style={{ paddingVertical: 20 }} />
-                    : (liveGainers.data?.data ?? []).length === 0
-                    ? <EmptyState text="장이 열리면 자동으로 표시됩니다" colors={colors} />
-                    : (liveGainers.data?.data ?? []).slice(0, 20).map((g, i) => (
-                        <LiveGainerCard key={`lg-${g.ticker}-${i}`} item={g} idx={i} colors={colors} onAnalyze={onAnalyze} />
-                      ))}
-                  {liveGainers.data?.cachedAt && (
-                    <Text style={[rs.listSectionSub, { color: colors.mutedForeground, textAlign: "center", marginTop: 4 }]}>
-                      {new Date(liveGainers.data.cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
-                    </Text>
-                  )}
-                </View>
-              </>
-            )}
+            {/* 기관·외인 매집 */}
+            <SectionHeader
+              emoji="🏦"
+              title="기관·외인 매집"
+              badge={institutionPicks.data ? `${(institutionPicks.data.picks ?? []).length}종목` : "스캔 중"}
+              badgeColor="#7C3AED"
+              badgeBg="#EDE9FE"
+              sub="KOSPI·KOSDAQ 전 종목 · 기관+외인 순매수 ≥ 3억 · 주가등락 5% 미만"
+            />
+            <View style={{ paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
+              {institutionPicks.isLoading
+                ? <ActivityIndicator size="small" color="#7C3AED" style={{ paddingVertical: 20 }} />
+                : (institutionPicks.data?.picks ?? []).length === 0
+                ? <EmptyState text="매집 종목이 없습니다 (장 마감 후 갱신)" colors={colors} />
+                : (institutionPicks.data?.picks ?? []).map((p, i) => (
+                    <InstitutionPickCard key={`inst-${p.ticker}-${i}`} item={p} idx={i} colors={colors} onAnalyze={onAnalyze} />
+                  ))}
+              {institutionPicks.data?.cachedAt && (
+                <Text style={[rs.listSectionSub, { color: colors.mutedForeground, textAlign: "center", marginTop: 4 }]}>
+                  {new Date(institutionPicks.data.cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                </Text>
+              )}
+            </View>
 
             {/* 급등 예비군 */}
             <SectionHeader
@@ -946,7 +1036,7 @@ export default function ThemesTab() {
               badge="기술적 패턴 스캔"
               badgeColor="#059669"
               badgeBg="#D1FAE5"
-              sub="오늘 안 오른 종목 중 내일 급등 전조 · 거래량 매집 · 테마 후발주 · 박스권 전조"
+              sub="오늘 안 오른 종목 중 내일 급등 전조 · 거래량 매집 · 박스권 전조"
             />
             <View style={{ paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
               {presurge.isLoading
