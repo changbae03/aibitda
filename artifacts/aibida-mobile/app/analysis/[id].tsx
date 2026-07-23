@@ -917,7 +917,7 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
   const blocks = React.useMemo(() => parseMarkdown(content), [content]);
 
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 0 }}>
       {blocks.map((block, idx) => {
         switch (block.type) {
           case "h1":
@@ -925,55 +925,57 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
               <InlineText
                 key={idx}
                 text={block.text}
-                style={{ fontSize: 20, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 10, marginBottom: 2 }}
+                style={{ fontSize: 19, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 22, marginBottom: 6, lineHeight: 26 }}
               />
             );
           case "h2":
             return (
-              <InlineText
-                key={idx}
-                text={block.text}
-                style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 8, marginBottom: 2 }}
-              />
+              <View key={idx} style={{ marginTop: 22, marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1.5, borderBottomColor: colors.border }}>
+                <InlineText
+                  text={block.text}
+                  style={{ fontSize: 17, fontFamily: "Pretendard-Bold", color: colors.foreground, lineHeight: 24 }}
+                />
+              </View>
             );
           case "h3":
             return (
-              <InlineText
-                key={idx}
-                text={block.text}
-                style={{ fontSize: 16, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginTop: 6 }}
-              />
-            );
-          case "hr":
-            return <View key={idx} style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 6 }} />;
-          case "bullet":
-            return (
-              <View key={idx} style={{ flexDirection: "row", gap: 8, paddingLeft: block.indent * 4 }}>
-                <Text style={{ fontSize: 16, color: baseColor, marginTop: 2, lineHeight: 22 }}>•</Text>
+              <View key={idx} style={{ flexDirection: "row", alignItems: "flex-start", marginTop: 16, marginBottom: 8, paddingLeft: 10, borderLeftWidth: 2.5, borderLeftColor: "#2563eb" }}>
                 <InlineText
                   text={block.text}
-                  style={{ flex: 1, fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
+                  style={{ flex: 1, fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#2563eb", lineHeight: 22 }}
+                />
+              </View>
+            );
+          case "hr":
+            return <View key={idx} style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 16 }} />;
+          case "bullet":
+            return (
+              <View key={idx} style={{ flexDirection: "row", gap: 8, paddingLeft: block.indent * 8, marginBottom: 8 }}>
+                <Text style={{ fontSize: 16, color: baseColor, marginTop: 5, lineHeight: 30 }}>•</Text>
+                <InlineText
+                  text={block.text}
+                  style={{ flex: 1, fontSize: 16, lineHeight: 30, fontFamily: "Pretendard-Regular", color: baseColor }}
                 />
               </View>
             );
           case "numbered":
             return (
-              <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
-                <Text style={{ fontSize: 16, color: colors.mutedForeground, lineHeight: 22, fontFamily: "Pretendard-SemiBold", minWidth: 20 }}>{block.n}.</Text>
+              <View key={idx} style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                <Text style={{ fontSize: 16, color: colors.mutedForeground, lineHeight: 30, fontFamily: "Pretendard-SemiBold", minWidth: 22 }}>{block.n}.</Text>
                 <InlineText
                   text={block.text}
-                  style={{ flex: 1, fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
+                  style={{ flex: 1, fontSize: 16, lineHeight: 30, fontFamily: "Pretendard-Regular", color: baseColor }}
                 />
               </View>
             );
           case "table":
-            return <MarkdownTable key={idx} headers={block.headers} rows={block.rows} />;
+            return <View key={idx} style={{ marginVertical: 12 }}><MarkdownTable headers={block.headers} rows={block.rows} /></View>;
           case "para":
             return (
               <InlineText
                 key={idx}
                 text={block.lines.join(" ")}
-                style={{ fontSize: 16, lineHeight: 23, fontFamily: "Pretendard-Regular", color: baseColor }}
+                style={{ fontSize: 16, lineHeight: 30, fontFamily: "Pretendard-Regular", color: baseColor, marginBottom: 16 }}
               />
             );
           default:
