@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Platform, Pressable, ScrollView,
+  ActivityIndicator, Animated, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import type { TextStyle, ViewStyle } from "react-native";
@@ -1000,12 +1000,104 @@ const mdStyles = StyleSheet.create({
 
 // ── AgentStepsSection ─────────────────────────────────────────────────────────
 
+const STEP_TOPICS: Record<string, string> = {
+  company_intro:       "기업 개요 · 사업 구조 · 주요 제품 · 경영진",
+  industry_analysis:   "산업 구조 · 성장률 · 정책 환경 · 경쟁 구도 · 매크로 리스크",
+  catalyst_analysis:   "투자 촉매 · 스마트머니 수급 · 주요 이벤트 · 리스크",
+  company_analysis:    "실적 분석 · 매출/이익 전망 · 재무 건전성 · 이익률",
+  relative_valuation:  "DCF · PER · EV/EBITDA · 피어 비교 · 목표주가 산출",
+  market_analysis:     "기술적 분석 · 지지/저항선 · 모멘텀 · 수급 흐름",
+  investment_strategy: "투자 전략 · 매수 타이밍 · 리스크 관리 · 시나리오",
+};
+
+function InProgressStepCard({ stepKey, index }: { stepKey: string; index: number }) {
+  const colors = useColors();
+  const agent  = AGENTS[stepKey];
+  const accentColor = agent?.color ?? "#2563eb";
+  const pulse = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.9,  duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.35, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  return (
+    <Card style={{ borderColor: accentColor + "55", borderWidth: 1.5 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18", alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="small" color={accentColor} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: accentColor }}>
+            {agent?.name ?? stepKey}
+          </Text>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+            {agent?.role ?? ""} · 분석 리포트 작성 중…
+          </Text>
+        </View>
+        <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground }}>
+          {index + 1}/{STEP_ORDER.length}
+        </Text>
+      </View>
+      <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 20, marginBottom: 14 }}>
+        {STEP_TOPICS[stepKey] ?? "분석 진행 중"}
+      </Text>
+      <Animated.View style={{ gap: 9, opacity: pulse }}>
+        {[1, 0.88, 0.72, 0.52].map((w, i) => (
+          <View key={i} style={{ height: 13, borderRadius: 6, backgroundColor: colors.muted, width: `${w * 100}%` as any }} />
+        ))}
+      </Animated.View>
+    </Card>
+  );
+}
+
+function UpcomingStepCard({ stepKey, index }: { stepKey: string; index: number }) {
+  const colors = useColors();
+  const agent  = AGENTS[stepKey];
+  return (
+    <Card style={{ opacity: 0.3 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.mutedForeground }}>{index + 1}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.mutedForeground }}>
+            {agent?.name ?? stepKey}
+          </Text>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+            {agent?.role ?? ""}
+          </Text>
+        </View>
+      </View>
+      <View style={{ gap: 9 }}>
+        {[0.92, 0.76, 0.55].map((w, i) => (
+          <View key={i} style={{ height: 13, borderRadius: 6, backgroundColor: colors.muted, width: `${w * 100}%` as any }} />
+        ))}
+      </View>
+    </Card>
+  );
+}
+
 function AgentStepsSection({ analysis }: { analysis: any }) {
   const colors  = useColors();
   const stepsMap: Record<string, any> = {};
   for (const s of (analysis.steps ?? [])) stepsMap[s.stepKey] = s;
-  const hasAny = STEP_ORDER.some((k) => !!stepsMap[k]?.content);
-  if (!hasAny) return null;
+
+  const isRunning     = analysis.status === "in_progress" || analysis.status === "queued";
+  const currentStepKey: string | null = (analysis.steps ?? []).find((s: any) => s.status === "in_progress")?.stepKey ?? null;
+  const hasCompleted  = STEP_ORDER.some((k) => !!stepsMap[k]?.content);
+
+  if (!hasCompleted && !isRunning) return null;
+
+  // 진행 중 스텝 이후 아직 시작 안 한 스텝들 (최대 2개 고스트 카드용)
+  const currentIdx   = currentStepKey ? STEP_ORDER.indexOf(currentStepKey as any) : -1;
+  const upcomingKeys = currentIdx >= 0 ? STEP_ORDER.slice(currentIdx + 1, currentIdx + 3) : [];
 
   return (
     <View style={styles.section}>
@@ -1016,13 +1108,11 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
           if (!step?.content) return null;
           const agent = AGENTS[key];
           const displayContent = stripJsonBlock(step.content);
-          // 표시할 텍스트가 전혀 없으면 해당 스텝 카드 숨김
           if (!displayContent) return null;
           const accentColor = agent?.color ?? "#2563eb";
 
           return (
             <Card key={key}>
-              {/* Step header */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18", alignItems: "center", justifyContent: "center" }}>
                   <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: accentColor }}>{index + 1}</Text>
@@ -1036,12 +1126,28 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
                   </Text>
                 </View>
               </View>
-
-              {/* Content — markdown rendered */}
               <MarkdownText content={displayContent} baseColor={colors.foreground} />
             </Card>
           );
         })}
+
+        {/* 현재 진행 중인 단계 — 애니메이션 스켈레톤 */}
+        {isRunning && currentStepKey && !stepsMap[currentStepKey]?.content && (
+          <InProgressStepCard
+            key={`inprog-${currentStepKey}`}
+            stepKey={currentStepKey}
+            index={STEP_ORDER.indexOf(currentStepKey as any)}
+          />
+        )}
+
+        {/* 다음 예정 단계 — 흐릿한 고스트 카드 */}
+        {isRunning && upcomingKeys.map((key) => (
+          <UpcomingStepCard
+            key={`upcoming-${key}`}
+            stepKey={key}
+            index={STEP_ORDER.indexOf(key as any)}
+          />
+        ))}
       </View>
     </View>
   );
