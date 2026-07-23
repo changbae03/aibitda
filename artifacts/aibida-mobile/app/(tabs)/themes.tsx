@@ -8,9 +8,9 @@ import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import {
-  useTomorrowPicks, usePresurge, useThemeSignals,
+  useTomorrowPicks, usePresurge, useThemeSignals, useLiveGainers,
   apiFetch,
-  type TomorrowPick, type PresurgePick, type ThemeSignal,
+  type TomorrowPick, type PresurgePick, type ThemeSignal, type LiveGainerItem,
 } from "@/hooks/useApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -410,6 +410,68 @@ function TomorrowPickCard({ item, idx, colors, onAnalyze }: {
   );
 }
 
+// ── 장중 급등 순위 카드 ───────────────────────────────────────────────────────
+
+function LiveGainerCard({ item, idx, colors, onAnalyze }: {
+  item: LiveGainerItem; idx: number; colors: any;
+  onAnalyze: (ticker: string, name: string) => void;
+}) {
+  const isUpperLimit = item.change >= 28.5;
+  const isMomentum   = item.change >= 15;
+  const accentColor  = isUpperLimit ? "#DC2626" : isMomentum ? "#EA580C" : "#EF4444";
+  const accentBg     = isUpperLimit ? "#FEF2F2" : isMomentum ? "#FFF7ED" : "#FFF1EE";
+
+  return (
+    <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: isUpperLimit ? "#FECACA" : isMomentum ? "#FED7AA" : colors.border, borderWidth: isUpperLimit ? 1.5 : 1 }]}>
+      <View style={rs.pickHeader}>
+        {/* 순위 */}
+        <Text style={[rs.pickRank, {
+          color: idx < 3 ? accentColor : colors.mutedForeground,
+          fontFamily: idx < 3 ? "Pretendard-Bold" : "Pretendard-Regular",
+        }]}>{idx + 1}</Text>
+
+        {/* 종목 정보 */}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <Text style={[rs.pickName, { color: colors.foreground }]}>{item.name}</Text>
+            <Text style={[rs.pickTicker, { color: colors.mutedForeground }]}>{item.ticker}</Text>
+            {isUpperLimit && (
+              <View style={[rs.badge, { backgroundColor: "#FEF2F2" }]}>
+                <Text style={[rs.badgeText, { color: "#DC2626", fontFamily: "Pretendard-SemiBold" }]}>🔴 상한가</Text>
+              </View>
+            )}
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 4, alignItems: "center" }}>
+            <Text style={[rs.metricLabel, { color: colors.mutedForeground }]}>
+              {item.price.toLocaleString()}원
+            </Text>
+            {item.tradingValue > 0 && (
+              <Text style={[rs.metricLabel, { color: colors.mutedForeground }]}>
+                거래대금 {item.tradingValue}억
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* 등락률 + 분석 */}
+        <View style={{ alignItems: "flex-end", gap: 6 }}>
+          <Text style={[rs.changeText, { color: accentColor, fontSize: 16, fontFamily: "Pretendard-Bold" }]}>
+            +{item.change.toFixed(2)}%
+          </Text>
+          <TouchableOpacity
+            style={[rs.pickAnalyzeBtn, { paddingHorizontal: 8, paddingVertical: 4 }]}
+            onPress={() => onAnalyze(item.ticker, item.name)}
+            activeOpacity={0.75}
+          >
+            <Feather name="cpu" size={12} color="#6366f1" />
+            <Text style={[rs.pickAnalyzeBtnText, { fontSize: 11 }]}>AI 분석</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ── 급등 예비군 카드 ──────────────────────────────────────────────────────────
 
 // 카테고리 메타
@@ -660,6 +722,7 @@ export default function ThemesTab() {
   const tomorrow = useTomorrowPicks();
   const presurge = usePresurge();
   const signals = useThemeSignals();
+  const liveGainers = useLiveGainers();
 
   const loadFeed = useCallback(async (attempt = 0) => {
     setFeedLoading(true);
@@ -834,6 +897,34 @@ export default function ThemesTab() {
               </View>
             </View>
 
+            {/* 지금 급등 중 — 장중에만 표시 */}
+            {(liveGainers.data?.marketOpen || (liveGainers.data?.data ?? []).length > 0) && (
+              <>
+                <SectionHeader
+                  emoji="🔴"
+                  title="지금 급등 중"
+                  badge="실시간 KIS"
+                  badgeColor="#DC2626"
+                  badgeBg="#FEF2F2"
+                  sub="장중 상승률 순위 · 5분마다 갱신"
+                />
+                <View style={{ paddingHorizontal: 16, gap: 8, marginBottom: 8 }}>
+                  {liveGainers.isLoading
+                    ? <ActivityIndicator size="small" color="#DC2626" style={{ paddingVertical: 20 }} />
+                    : (liveGainers.data?.data ?? []).length === 0
+                    ? <EmptyState text="장이 열리면 자동으로 표시됩니다" colors={colors} />
+                    : (liveGainers.data?.data ?? []).slice(0, 20).map((g, i) => (
+                        <LiveGainerCard key={`lg-${g.ticker}-${i}`} item={g} idx={i} colors={colors} onAnalyze={onAnalyze} />
+                      ))}
+                  {liveGainers.data?.cachedAt && (
+                    <Text style={[rs.listSectionSub, { color: colors.mutedForeground, textAlign: "center", marginTop: 4 }]}>
+                      {new Date(liveGainers.data.cachedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                    </Text>
+                  )}
+                </View>
+              </>
+            )}
+
             {/* 급등 예비군 */}
             <SectionHeader
               emoji="⚡"
@@ -841,7 +932,7 @@ export default function ThemesTab() {
               badge="기술적 패턴 스캔"
               badgeColor="#EF4444"
               badgeBg="#FEE2E2"
-              sub="눌림목 + 거래량 수축→팽창 · 최근 15일 기준"
+              sub="상한가 연속후보 · 급등 모멘텀 · 박스권 전조 패턴"
             />
             <View style={{ paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
               {presurge.isLoading

@@ -397,6 +397,90 @@ export async function fetchKISInvestorFlowBatch(
   return map;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * 국내주식 등락률 순위 (장중 실시간 상승률 TOP30)
+ * TR_ID: FHPST01700000
+ * ───────────────────────────────────────────────────────────────────────── */
+
+export interface KISGainerItem {
+  ticker:       string;
+  name:         string;
+  price:        number;  // 현재가 (원)
+  change:       number;  // 등락률 (%)
+  changeAmt:    number;  // 전일 대비 (원)
+  volume:       number;  // 누적 거래량 (주)
+  tradingValue: number;  // 누적 거래대금 (억원)
+}
+
+export async function fetchKISLiveGainers(limit = 30): Promise<KISGainerItem[]> {
+  try {
+    const token = await getAccessToken();
+    const url = new URL(`${BASE_URL}/uapi/domestic-stock/v1/ranking/fluctuation`);
+
+    const params: Record<string, string> = {
+      fid_rsfl_rate2:         "",
+      fid_cond_mrkt_div_code: "J",    // 주식
+      fid_cond_scr_div_code:  "20170",
+      fid_input_iscd:         "0000", // 전체 종목
+      fid_rank_sort_cls_code: "0",    // 0: 상승률 상위
+      fid_input_cnt_1:        "0",
+      fid_prc_cls_code:       "0",
+      fid_input_price_1:      "",
+      fid_input_price_2:      "",
+      fid_vol_cnt:            "",
+      fid_trgt_cls_code:      "0",
+      fid_trgt_exls_cls_code: "0",
+      fid_div_cls_code:       "0",
+      fid_rsfl_rate1:         "",
+    };
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization:  `Bearer ${token}`,
+        appkey:         process.env.KIS_APP_KEY!,
+        appsecret:      process.env.KIS_APP_SECRET!,
+        tr_id:          "FHPST01700000",
+        custtype:       "P",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      console.warn(`[kis] live-gainers 조회 실패: ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json();
+    if (json.rt_cd !== "0") {
+      console.warn(`[kis] live-gainers 오류: ${json.msg1}`);
+      return [];
+    }
+
+    const rows: any[] = Array.isArray(json.output) ? json.output : [];
+    const parseInt_ = (v: string | undefined) =>
+      parseInt((v ?? "0").replace(/,/g, ""), 10) || 0;
+    const parseFloat_ = (v: string | undefined) =>
+      parseFloat((v ?? "0").replace(/,/g, "")) || 0;
+
+    return rows
+      .slice(0, limit)
+      .map((d: any) => ({
+        ticker:       String(d.stck_shrn_iscd ?? ""),
+        name:         String(d.hts_kor_isnm ?? "").trim(),
+        price:        parseInt_(d.stck_prpr),
+        change:       parseFloat_(d.prdy_ctrt),
+        changeAmt:    parseInt_(d.prdy_vrss),
+        volume:       parseInt_(d.acml_vol),
+        tradingValue: Math.round(parseInt_(d.acml_tr_pbmn) / 1e8), // 원 → 억원
+      }))
+      .filter(d => /^\d{6}$/.test(d.ticker));
+  } catch (err) {
+    console.error("[kis] fetchKISLiveGainers 예외:", err);
+    return [];
+  }
+}
+
 /**
  * 여러 종목 동시 조회 (Promise.all, 최대 20개)
  */

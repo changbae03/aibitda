@@ -393,6 +393,33 @@ export function useBatchQuotes(tickers: string[]) {
   });
 }
 
+export interface LiveGainerItem {
+  ticker:       string;
+  name:         string;
+  price:        number;
+  change:       number;
+  changeAmt:    number;
+  volume:       number;
+  tradingValue: number;
+}
+
+export interface LiveGainersResponse {
+  data:       LiveGainerItem[];
+  marketOpen: boolean;
+  cachedAt:   number | null;
+  stale?:     boolean;
+}
+
+export function useLiveGainers() {
+  return useQuery({
+    queryKey: ["live-gainers"],
+    queryFn:  () => apiFetch<LiveGainersResponse>("/api/market/live-gainers"),
+    staleTime:      4 * 60 * 1000,   // 4분
+    refetchInterval: 5 * 60 * 1000,  // 5분마다 자동 재조회
+    retry: 1,
+  });
+}
+
 export function useCreateAnalysis() {
   const qc = useQueryClient();
   return useMutation({
