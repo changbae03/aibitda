@@ -865,8 +865,8 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
               ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
             ]}
           >
-            <Text style={[mdStyles.headerCell, { color: colors.foreground }]}>
-              {headers[ci] ?? ""}
+            <Text style={[mdStyles.headerCell, { color: colors.foreground }]} lineBreakStrategyIOS="hangul-word">
+              {(headers[ci] ?? "").replace(/\*\*/g, "")}
             </Text>
           </View>
         ))}
@@ -882,7 +882,10 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
           ]}
         >
           {Array.from({ length: colCount }).map((_, ci) => {
-            const cell = row[ci] ?? "";
+            const raw    = row[ci] ?? "";
+            const boldM  = raw.match(/^\*\*(.+)\*\*$/s);
+            const cell   = boldM ? boldM[1] : raw;
+            const isBold = !!boldM;
             const isUp   = cell === "↑" || cell === "▲";
             const isDown = cell === "↓" || cell === "▼";
             return (
@@ -900,6 +903,7 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
                     mdStyles.dataCell,
                     { color: isUp ? "#16a34a" : isDown ? "#dc2626" : colors.foreground },
                     ci === 0 && { textAlign: "center", fontFamily: "Pretendard-Medium" },
+                    isBold && { fontFamily: "Pretendard-SemiBold" },
                   ]}
                   lineBreakStrategyIOS="hangul-word"
                 >
