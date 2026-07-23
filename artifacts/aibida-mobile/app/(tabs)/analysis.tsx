@@ -404,9 +404,14 @@ export default function AnalysisTab() {
         <Text style={[styles.heroTitle, { color: colors.foreground }]}>
           어떤 종목을{"\n"}분석할까요?
         </Text>
-        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-          코스피·코스닥·NYSE·NASDAQ 종목코드 또는 회사명으로 검색하면{"\n"}AI 에이전트가 즉시 심층 분석을 시작합니다
-        </Text>
+        <View style={{ gap: 4, marginTop: 2 }}>
+          <Text style={[styles.heroSub, { color: colors.mutedForeground }]} lineBreakStrategyIOS="hangul-word">
+            코스피·코스닥·NYSE·NASDAQ 종목을 검색하면
+          </Text>
+          <Text style={[styles.heroSub, { color: colors.mutedForeground }]} lineBreakStrategyIOS="hangul-word">
+            AI 에이전트가 즉시 심층 분석을 시작합니다
+          </Text>
+        </View>
 
         {/* 크레딧 배지 */}
         {remaining != null && (
@@ -609,7 +614,7 @@ const styles = StyleSheet.create({
   /* hero */
   hero:      { paddingHorizontal: 24, paddingBottom: 20, gap: 12 },
   heroTitle: { fontSize: 34, fontFamily: "Pretendard-Bold", lineHeight: 42 },
-  heroSub:   { fontSize: 15, lineHeight: 20, fontFamily: "Pretendard-Regular" },
+  heroSub:   { fontSize: 15, lineHeight: 24, fontFamily: "Pretendard-Regular" },
 
   creditBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
