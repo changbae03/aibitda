@@ -9,6 +9,10 @@ import type { TextStyle, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/hooks/useApi";
+import {
+  FinancialChartPanel, DisclosurePanel, DividendPanel,
+  ShortInfoPanel, MajorShareholdersPanel, ETFInclusionPanel, NewsTimelinePanel,
+} from "@/components/detail-panels";
 
 // ── 상수: 웹 agents.ts와 완전히 동일 ─────────────────────────────────────────
 
@@ -1258,6 +1262,17 @@ export default function AnalysisDetailScreen() {
             <PeerMultiplesPanel ticker={analysis.ticker} />
             <AnalystConsensusPanel ticker={analysis.ticker} currentPrice={currentPrice} />
             <AgentStepsSection analysis={analysis} />
+            {/* 추가 데이터 패널 */}
+            <FinancialChartPanel ticker={analysis.ticker} />
+            <DisclosurePanel ticker={analysis.ticker} />
+            <DividendPanel ticker={analysis.ticker} />
+            <ShortInfoPanel ticker={analysis.ticker} />
+            <MajorShareholdersPanel ticker={analysis.ticker} />
+            <ETFInclusionPanel ticker={analysis.ticker} />
+            <NewsTimelinePanel
+              ticker={analysis.ticker}
+              keyword={analysis.companyName ?? analysis.ticker}
+            />
           </>
         )}
 
