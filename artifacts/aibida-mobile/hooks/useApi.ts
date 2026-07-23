@@ -81,6 +81,8 @@ export interface PresurgePick {
   reason?: string;
   signals?: string[];
   themes?: string[];
+  /** 후보 유형: upper_limit=상한가 연속후보, momentum=급등모멘텀후보, presurge=박스권전조 */
+  category?: "upper_limit" | "momentum" | "presurge";
 }
 
 export interface PresurgeResponse {

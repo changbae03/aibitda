@@ -412,6 +412,13 @@ function TomorrowPickCard({ item, idx, colors, onAnalyze }: {
 
 // ── 급등 예비군 카드 ──────────────────────────────────────────────────────────
 
+// 카테고리 메타
+const PRESURGE_CATEGORY = {
+  upper_limit: { label: "상한가 연속", color: "#DC2626", bg: "#FEF2F2", icon: "🔴" },
+  momentum:    { label: "급등 모멘텀", color: "#EA580C", bg: "#FFF7ED", icon: "🟠" },
+  presurge:    { label: "전조 패턴",   color: "#7C3AED", bg: "#F5F3FF", icon: "🔷" },
+} as const;
+
 function PresurgeCard({ item, idx, colors, onAnalyze }: {
   item: PresurgePick; idx: number; colors: any;
   onAnalyze: (ticker: string, name: string) => void;
@@ -422,14 +429,24 @@ function PresurgeCard({ item, idx, colors, onAnalyze }: {
   const isKR = !item.market || item.market === "KOSPI" || item.market === "KOSDAQ";
   const marketLabel = item.market === "KOSPI" ? "코스피" : item.market === "KOSDAQ" ? "코스닥" : item.market ?? "KR";
   const pct = Math.min(100, Math.max(0, ((item.score ?? 0) / 100) * 100));
+  const catKey = (item.category ?? "presurge") as keyof typeof PRESURGE_CATEGORY;
+  const cat = PRESURGE_CATEGORY[catKey] ?? PRESURGE_CATEGORY.presurge;
 
-  // 핵심 지표 태그 조합
+  // 카테고리별 핵심 지표 태그
   const tags: string[] = [];
-  if ((item.volExpansion ?? 0) >= 2)   tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
-  if ((item.volDryupDays ?? 0) >= 3)   tags.push(`${item.volDryupDays}일 거래량 수축`);
-  if (item.maAligned)                  tags.push("이평선 정배열");
-  if ((item.nearHighPct ?? 0) >= 95)   tags.push("신고가 근접");
-  if ((item.momentum3d ?? 0) > 0)      tags.push(`3일 모멘텀 +${item.momentum3d!.toFixed(1)}%`);
+  if (catKey === "upper_limit") {
+    tags.push("상한가 달성");
+    if ((item.volExpansion ?? 0) >= 2) tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+  } else if (catKey === "momentum") {
+    if ((item.volExpansion ?? 0) >= 2) tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+    if ((item.momentum3d ?? 0) > 0)    tags.push(`당일 +${change.toFixed(1)}%`);
+  } else {
+    if ((item.volExpansion ?? 0) >= 2)   tags.push(`거래량 ×${item.volExpansion!.toFixed(1)}`);
+    if ((item.volDryupDays ?? 0) >= 3)   tags.push(`${item.volDryupDays}일 거래량 수축`);
+    if (item.maAligned)                  tags.push("이평선 정배열");
+    if ((item.nearHighPct ?? 0) >= 95)   tags.push("신고가 근접");
+    if ((item.momentum3d ?? 0) > 0)      tags.push(`3일 모멘텀 +${item.momentum3d!.toFixed(1)}%`);
+  }
 
   return (
     <View style={[rs.pickCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -442,19 +459,25 @@ function PresurgeCard({ item, idx, colors, onAnalyze }: {
 
         {/* 종목 정보 */}
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <Text style={[rs.pickName, { color: colors.foreground }]}>{item.name}</Text>
             <Text style={[rs.pickTicker, { color: colors.mutedForeground }]}>{item.ticker}</Text>
             <View style={[rs.badge, { backgroundColor: isKR ? "#EFF6FF" : "#F0FDF4" }]}>
               <Text style={[rs.badgeText, { color: isKR ? "#3B82F6" : "#16A34A" }]}>{marketLabel}</Text>
+            </View>
+            {/* 카테고리 배지 */}
+            <View style={[rs.badge, { backgroundColor: cat.bg }]}>
+              <Text style={[rs.badgeText, { color: cat.color, fontFamily: "Pretendard-SemiBold" }]}>
+                {cat.label}
+              </Text>
             </View>
           </View>
           {/* 핵심 지표 태그 */}
           {tags.length > 0 && (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 5 }}>
               {tags.map((t, i) => (
-                <View key={i} style={[rs.badge, { backgroundColor: "#fef9c3" }]}>
-                  <Text style={[rs.badgeText, { color: "#b45309" }]}>{t}</Text>
+                <View key={i} style={[rs.badge, { backgroundColor: catKey === "upper_limit" ? "#FEE2E2" : catKey === "momentum" ? "#FFEDD5" : "#fef9c3" }]}>
+                  <Text style={[rs.badgeText, { color: catKey === "upper_limit" ? "#991B1B" : catKey === "momentum" ? "#C2410C" : "#b45309" }]}>{t}</Text>
                 </View>
               ))}
             </View>
@@ -466,9 +489,11 @@ function PresurgeCard({ item, idx, colors, onAnalyze }: {
           <Text style={[rs.changeText, { color: changeUp ? "#EF4444" : "#3B82F6" }]}>
             {changeUp ? "+" : ""}{change.toFixed(1)}%
           </Text>
-          <Text style={[rs.scoreLabel, { color: colors.mutedForeground }]}>
-            {item.score?.toFixed(0)}점
-          </Text>
+          {catKey !== "upper_limit" && (
+            <Text style={[rs.scoreLabel, { color: colors.mutedForeground }]}>
+              {item.score?.toFixed(0)}점
+            </Text>
+          )}
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
         </View>
       </TouchableOpacity>
@@ -793,7 +818,7 @@ export default function ThemesTab() {
               <View style={{ gap: 8, marginTop: 10 }}>
                 {([
                   { n: "①", color: "#EF4444", bg: "#FEE2E2", title: "오늘 수급 폭발 포착", desc: "거래량 급증 + 기관·외인 매집 실시간 스캔" },
-                  { n: "②", color: "#10b981", bg: "#DCFCE7", title: "내일 급등 예비군",   desc: "기술적 패턴 · 눌림목·거래량 수축→팽창" },
+                  { n: "②", color: "#10b981", bg: "#DCFCE7", title: "내일 급등 예비군",   desc: "상한가 연속후보 · 급등 모멘텀 · 박스권 전조 패턴" },
                   { n: "③", color: "#6366f1", bg: "#E0E7FF", title: "내일 상승 후보",     desc: "테마·검색 트렌드 · 순환매 지연 포착" },
                 ] as const).map(({ n, color, bg, title, desc }) => (
                   <View key={n} style={[rs.conceptRow, { backgroundColor: colors.muted }]}>

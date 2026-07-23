@@ -534,6 +534,8 @@ export interface PresurgeCandidate {
   maAligned:     boolean;
   momentum3d:    number;
   bbWidthPct:    number;
+  /** 후보 유형: upper_limit=상한가 연속, momentum=급등 모멘텀, presurge=박스권 전조 */
+  category?:     "upper_limit" | "momentum" | "presurge";
 }
 
 export interface PresurgeScanResult {

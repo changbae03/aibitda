@@ -519,22 +519,68 @@ def main():
 
                 if len(series) < 6:
                     continue
-                if today_change >= 15:   # 이미 급등 중 → 제외 (20→15: 상한가 근처 위험 종목 조기 제거)
-                    continue
-
-                # 유동성 필터: 오늘 거래대금 10억원 미만은 제외 (5억→10억: 얇은 종목 추가 제거)
-                today_turnover = today_close * today_volume
-                if today_turnover < 1_000_000_000:
-                    continue
 
                 # 우선주 제외 (일반주는 티커 마지막 자리가 '0', 우선주는 그 외 숫자)
                 if len(ticker) == 6 and ticker[-1] != "0":
                     continue
 
-                # 거래량 지표
-                vol5      = volumes[-6:-1]
-                vol_mean5 = _stat.mean(vol5) if vol5 else 1
-                vol_ratio = today_volume / vol_mean5 if vol_mean5 > 0 else 1
+                # 거래량·유동성 지표 (카테고리 판단에도 공통 사용)
+                today_turnover = today_close * today_volume
+                vol5           = volumes[-6:-1]
+                vol_mean5      = _stat.mean(vol5) if vol5 else 1
+                vol_ratio      = today_volume / vol_mean5 if vol_mean5 > 0 else 1
+
+                # ── 상한가 연속 후보 ─────────────────────────────────────────────
+                # 당일 상한가(29%~) → 다음날 연속 상한가 확률 15~25% (실증 통계)
+                if today_change >= 28.5:
+                    if today_turnover >= 5_000_000_000:   # 50억 이상 (유동성 보장)
+                        mom3_ = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else today_change
+                        candidates.append({
+                            "ticker":        ticker,
+                            "market":        info["market"],
+                            "close":         today_close,
+                            "change":        round(today_change, 1),
+                            "score":         99.0,
+                            "volExpansion":  round(vol_ratio, 1),
+                            "volDryupDays":  0,
+                            "priceRangePct": 0.0,
+                            "nearHighPct":   100.0,
+                            "maAligned":     False,
+                            "momentum3d":    round(mom3_, 1),
+                            "bbWidthPct":    0.0,
+                            "name":          "",
+                            "category":      "upper_limit",
+                        })
+                    continue   # 기존 presurge 점수 로직에서는 제외
+
+                # ── 급등 모멘텀 후보 ─────────────────────────────────────────────
+                # 15~28% 급등 + 거래량 2.5배+ → 모멘텀 연장 가능성 (테마 연쇄 급등 포함)
+                if today_change >= 15.0:
+                    if vol_ratio >= 2.5 and today_turnover >= 2_000_000_000:   # 20억+, 거래량 2.5배+
+                        mom3_ = (closes[-1] / closes[-4] - 1) * 100 if len(closes) >= 4 and closes[-4] > 0 else today_change
+                        m_score = round(40 + min(25, today_change * 0.9) + min(20, (vol_ratio - 1) * 4), 1)
+                        candidates.append({
+                            "ticker":        ticker,
+                            "market":        info["market"],
+                            "close":         today_close,
+                            "change":        round(today_change, 1),
+                            "score":         min(95.0, m_score),
+                            "volExpansion":  round(vol_ratio, 1),
+                            "volDryupDays":  0,
+                            "priceRangePct": 0.0,
+                            "nearHighPct":   0.0,
+                            "maAligned":     False,
+                            "momentum3d":    round(mom3_, 1),
+                            "bbWidthPct":    0.0,
+                            "name":          "",
+                            "category":      "momentum",
+                        })
+                    continue   # 기존 presurge 점수 로직에서는 제외
+
+                # ── 기존 급등 전조 (박스권 수축→팽창) 로직 ─────────────────────
+                # 유동성 필터: 오늘 거래대금 10억원 미만은 제외 (5억→10억: 얇은 종목 추가 제거)
+                if today_turnover < 1_000_000_000:
+                    continue
 
                 # 거래량 수축일수 (연속)
                 vol_dryup = 0
@@ -655,10 +701,16 @@ def main():
                     "momentum3d":    round(mom3, 1),
                     "bbWidthPct":    round(bb_pct, 1),
                     "name":          "",
+                    "category":      "presurge",
                 })
 
             candidates.sort(key=lambda x: x["score"], reverse=True)
-            top60 = candidates[:60]
+
+            # 카테고리별 배분: 상한가 연속 ≤5, 급등 모멘텀 ≤8, 박스권 전조 나머지
+            _ul  = [c for c in candidates if c.get("category") == "upper_limit"][:5]
+            _mo  = [c for c in candidates if c.get("category") == "momentum"][:8]
+            _ps  = [c for c in candidates if c.get("category", "presurge") == "presurge"]
+            top60 = (_ul + _mo + _ps)[:60]
 
             # 종목명 조회 + 스팩(SPAC) 제외 (스팩은 NAV 근접 거래 특성상 기술적
             # 패턴이 무의미해 정밀도를 떨어뜨림)
