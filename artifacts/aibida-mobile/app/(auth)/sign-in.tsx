@@ -33,6 +33,7 @@ export default function SignInScreen() {
   const [code, setCode] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [kakaoLoading, setKakaoLoading] = useState(false);
 
   const isFetching = fetchStatus === "fetching";
   const needsTrust = signIn?.status === "needs_client_trust";
@@ -76,6 +77,23 @@ export default function SignInScreen() {
       setErrorMsg(e?.message ?? "Google 로그인에 실패했습니다");
     } finally {
       setGoogleLoading(false);
+    }
+  }, [startSSOFlow, router]);
+
+  const handleKakao = useCallback(async () => {
+    setKakaoLoading(true);
+    try {
+      const { createdSessionId, setActive } = await startSSOFlow({
+        strategy: "oauth_kakao",
+        redirectUrl: AuthSession.makeRedirectUri(),
+      });
+      if (createdSessionId) {
+        setActive!({ session: createdSessionId, navigate: async ({ decorateUrl }) => router.replace(decorateUrl("/") as any) });
+      }
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "카카오 로그인에 실패했습니다");
+    } finally {
+      setKakaoLoading(false);
     }
   }, [startSSOFlow, router]);
 
@@ -138,6 +156,17 @@ export default function SignInScreen() {
         </View>
 
         <Text style={s.title}>로그인</Text>
+
+        {/* 카카오 */}
+        <TouchableOpacity style={s.kakaoBtn} onPress={handleKakao} disabled={kakaoLoading}>
+          {kakaoLoading
+            ? <ActivityIndicator color="#3C1E1E" />
+            : <>
+                <Text style={s.kakaoIcon}>💬</Text>
+                <Text style={s.kakaoBtnText}>카카오로 계속하기</Text>
+              </>
+          }
+        </TouchableOpacity>
 
         {/* Google */}
         <TouchableOpacity style={s.googleBtn} onPress={handleGoogle} disabled={googleLoading}>
@@ -221,6 +250,13 @@ const s = StyleSheet.create({
   appTagline: { fontSize: 13, color: "#5d6678", fontFamily: "Pretendard-Regular" },
   title: { fontSize: 22, fontFamily: "Pretendard-Bold", color: "#0d1421", marginBottom: 20 },
   subtitle: { fontSize: 14, color: "#5d6678", fontFamily: "Pretendard-Regular", marginBottom: 20 },
+  kakaoBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    backgroundColor: "#FEE500", borderRadius: 12, paddingVertical: 14,
+    marginBottom: 10,
+  },
+  kakaoIcon: { fontSize: 18 },
+  kakaoBtnText: { fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#3C1E1E" },
   googleBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
     backgroundColor: "#fff", borderRadius: 12, paddingVertical: 14,

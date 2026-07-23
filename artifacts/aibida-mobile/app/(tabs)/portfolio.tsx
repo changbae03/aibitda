@@ -1,5 +1,7 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth, useSSO } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -74,8 +76,32 @@ function AnalysisBadge({ ticker, analyses }: { ticker: string; analyses: any[] }
 
 // ── 비로그인 CTA ───────────────────────────────────────────────────────────
 
+WebBrowser.maybeCompleteAuthSession();
+
 function SignInCTA({ colors, insets, router }: { colors: any; insets: any; router: any }) {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const { startSSOFlow } = useSSO();
+  const [kakaoLoading, setKakaoLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleKakao = async () => {
+    setKakaoLoading(true);
+    setErrorMsg("");
+    try {
+      const { createdSessionId, setActive } = await startSSOFlow({
+        strategy: "oauth_kakao",
+        redirectUrl: AuthSession.makeRedirectUri(),
+      });
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId });
+      }
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "카카오 로그인에 실패했습니다");
+    } finally {
+      setKakaoLoading(false);
+    }
+  };
+
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
@@ -103,13 +129,28 @@ function SignInCTA({ colors, insets, router }: { colors: any; insets: any; route
             </View>
           ))}
         </View>
-        <TouchableOpacity style={[s.loginBtn, { backgroundColor: colors.primary }]} onPress={() => router.push("/(auth)/sign-in")} activeOpacity={0.85}>
-          <Feather name="log-in" size={16} color="#fff" />
-          <Text style={s.loginBtnText}>로그인하기</Text>
+
+        {/* 카카오 로그인 버튼 */}
+        <TouchableOpacity style={s.kakaoBtn} onPress={handleKakao} activeOpacity={0.85} disabled={kakaoLoading}>
+          {kakaoLoading ? (
+            <ActivityIndicator color="#3C1E1E" />
+          ) : (
+            <>
+              <Text style={s.kakaoIcon}>💬</Text>
+              <Text style={s.kakaoBtnText}>카카오로 로그인</Text>
+            </>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
+
+        {!!errorMsg && (
+          <Text style={{ fontSize: 13, color: "#ef4444", textAlign: "center", fontFamily: "Pretendard-Regular" }}>
+            {errorMsg}
+          </Text>
+        )}
+
+        <TouchableOpacity onPress={() => router.push("/(auth)/sign-in")}>
           <Text style={[s.signupLink, { color: colors.mutedForeground }]}>
-            계정이 없으신가요? <Text style={{ color: colors.primary, fontFamily: "Pretendard-SemiBold" }}>회원가입</Text>
+            이메일로 로그인 · <Text style={{ color: colors.primary, fontFamily: "Pretendard-SemiBold" }}>회원가입</Text>
           </Text>
         </TouchableOpacity>
       </View>
@@ -607,5 +648,8 @@ const s = StyleSheet.create({
   featureText: { fontSize: 14, fontFamily: "Pretendard-Medium" },
   loginBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginTop: 4, width: "100%", justifyContent: "center" },
   loginBtnText: { fontSize: 16, fontFamily: "Pretendard-Bold", color: "#fff" },
+  kakaoBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FEE500", borderRadius: 14, paddingVertical: 15, width: "100%", marginTop: 4 },
+  kakaoIcon: { fontSize: 18 },
+  kakaoBtnText: { fontSize: 16, fontFamily: "Pretendard-Bold", color: "#3C1E1E" },
   signupLink: { fontSize: 14, fontFamily: "Pretendard-Regular" },
 });
