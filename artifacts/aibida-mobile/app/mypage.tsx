@@ -116,7 +116,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
+  headerTitle: { fontSize: 19, fontFamily: "Pretendard-SemiBold" },
   profileCard: {
     flexDirection: "row", alignItems: "center", gap: 14,
     margin: 16, borderRadius: 16, padding: 16,
@@ -126,9 +126,9 @@ const s = StyleSheet.create({
     width: 52, height: 52, borderRadius: 26,
     alignItems: "center", justifyContent: "center",
   },
-  avatarText: { fontSize: 20, fontFamily: "Pretendard-Bold", color: "#fff" },
-  userName: { fontSize: 17, fontFamily: "Pretendard-Bold" },
-  userEmail: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  avatarText: { fontSize: 22, fontFamily: "Pretendard-Bold", color: "#fff" },
+  userName: { fontSize: 19, fontFamily: "Pretendard-Bold" },
+  userEmail: { fontSize: 15, fontFamily: "Pretendard-Regular", marginTop: 2 },
   section: {
     marginHorizontal: 16, borderRadius: 12, borderWidth: 1, overflow: "hidden",
   },
@@ -137,11 +137,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 15,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  menuLabel: { flex: 1, fontSize: 15, fontFamily: "Pretendard-Medium" },
+  menuLabel: { flex: 1, fontSize: 17, fontFamily: "Pretendard-Medium" },
   signOutBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     paddingVertical: 14, borderRadius: 12, borderWidth: 1,
   },
-  signOutText: { fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#ef4444" },
-  version: { textAlign: "center", fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 24 },
+  signOutText: { fontSize: 17, fontFamily: "Pretendard-SemiBold", color: "#ef4444" },
+  version: { textAlign: "center", fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 24 },
 });

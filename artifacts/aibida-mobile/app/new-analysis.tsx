@@ -620,13 +620,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroTitle: {
-    fontSize: 34,
+    fontSize: 36,
     fontFamily: "Pretendard-Bold",
     lineHeight: 42,
     letterSpacing: -0.5,
   },
   heroSub: {
-    fontSize: 13,
+    fontSize: 15,
     lineHeight: 20,
     fontFamily: "Pretendard-Regular",
   },
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  creditText: { fontSize: 12, fontFamily: "Pretendard-Medium" },
+  creditText: { fontSize: 14, fontFamily: "Pretendard-Medium" },
 
   // Search bar
   searchBar: {
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 17,
     fontFamily: "Pretendard-Regular",
     paddingVertical: 15,
     paddingHorizontal: 10,
@@ -669,12 +669,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   startBtnText: {
-    fontSize: 13,
+    fontSize: 15,
     fontFamily: "Pretendard-Bold",
     color: "#fff",
   },
   hint: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: "Pretendard-Regular",
     textAlign: "center",
   },
@@ -695,15 +695,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   dropHeaderTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: "Pretendard-SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  dropHeaderHint: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  dropHeaderHint: { fontSize: 13, fontFamily: "Pretendard-Regular" },
   dropLoading: { padding: 20, alignItems: "center" },
   dropEmpty: { padding: 20, alignItems: "center" },
-  dropEmptyText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  dropEmptyText: { fontSize: 15, fontFamily: "Pretendard-Regular" },
 
   // Stock row (dropdown + confirm)
   stockRow: {
@@ -722,18 +722,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stockAvatarLg: { width: 48, height: 48, borderRadius: 14 },
-  stockAvatarText: { fontSize: 14, fontFamily: "Pretendard-Bold" },
-  stockAvatarTextLg: { fontSize: 16 },
+  stockAvatarText: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  stockAvatarTextLg: { fontSize: 18 },
   stockMeta: { flex: 1 },
   stockNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  stockName: { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
-  stockCode: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  stockName: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
+  stockCode: { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 2 },
   exchBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 5,
   },
-  exchBadgeText: { fontSize: 10, fontFamily: "Pretendard-SemiBold" },
+  exchBadgeText: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
 
   // Nav
   navRow: {
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  navTitle: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
+  navTitle: { fontSize: 19, fontFamily: "Pretendard-SemiBold" },
 
   // Confirm
   confirmCard: {
@@ -760,8 +760,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   confirmCardInner: { flexDirection: "row", alignItems: "center", gap: 12 },
-  confirmName: { fontSize: 18, fontFamily: "Pretendard-Bold" },
-  confirmCode: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  confirmName: { fontSize: 20, fontFamily: "Pretendard-Bold" },
+  confirmCode: { fontSize: 15, fontFamily: "Pretendard-Regular", marginTop: 2 },
 
   stepsCard: {
     marginHorizontal: 16,
@@ -771,26 +771,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 12,
   },
-  stepsTitle: { fontSize: 12, fontFamily: "Pretendard-SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
+  stepsTitle: { fontSize: 14, fontFamily: "Pretendard-SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   stepsGrid: { gap: 8 },
   stepItem: { flexDirection: "row", alignItems: "center", gap: 10 },
   stepDot: { width: 8, height: 8, borderRadius: 4 },
-  stepItemText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  stepItemText: { fontSize: 15, fontFamily: "Pretendard-Regular" },
 
   contextWrap: { paddingHorizontal: 16, gap: 8 },
-  contextLabel: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
+  contextLabel: { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
   contextInput: {
     borderRadius: 12, padding: 14, borderWidth: 1,
-    fontSize: 14, fontFamily: "Pretendard-Regular", minHeight: 90,
+    fontSize: 16, fontFamily: "Pretendard-Regular", minHeight: 90,
   },
-  charCount: { fontSize: 11, textAlign: "right", fontFamily: "Pretendard-Regular" },
+  charCount: { fontSize: 13, textAlign: "right", fontFamily: "Pretendard-Regular" },
 
   startBtnWrap: { padding: 16, paddingBottom: 32, marginTop: "auto" },
   startBtnFull: {
     borderRadius: 14, paddingVertical: 16,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
   },
-  startBtnFullText: { fontSize: 16, fontFamily: "Pretendard-Bold", color: "#fff" },
+  startBtnFullText: { fontSize: 18, fontFamily: "Pretendard-Bold", color: "#fff" },
 
   // Running
   runningRoot: { flex: 1, padding: 24, gap: 20, paddingTop: 40 },
@@ -799,22 +799,22 @@ const styles = StyleSheet.create({
     width: 72, height: 72, borderRadius: 36,
     alignItems: "center", justifyContent: "center",
   },
-  runningName: { fontSize: 24, fontFamily: "Pretendard-Bold" },
-  runningTicker: { fontSize: 14, fontFamily: "Pretendard-Regular" },
+  runningName: { fontSize: 26, fontFamily: "Pretendard-Bold" },
+  runningTicker: { fontSize: 16, fontFamily: "Pretendard-Regular" },
   progressTrack: { height: 5, borderRadius: 3, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 3 },
-  progressLabel: { fontSize: 12, fontFamily: "Pretendard-Regular", textAlign: "center" },
+  progressLabel: { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center" },
   currentBadge: {
     flexDirection: "row", alignItems: "center", gap: 10,
     borderRadius: 12, padding: 14, borderWidth: 1,
   },
   pulseDot: { width: 8, height: 8, borderRadius: 4 },
-  currentBadgeText: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  currentBadgeText: { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
   stepsList: { borderRadius: 16, padding: 16, borderWidth: 1, gap: 12 },
   stepsListRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   stepIcon: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  stepsListText: { fontSize: 13, fontFamily: "Pretendard-Medium" },
-  runningNote: { fontSize: 13, textAlign: "center", fontFamily: "Pretendard-Regular" },
+  stepsListText: { fontSize: 15, fontFamily: "Pretendard-Medium" },
+  runningNote: { fontSize: 15, textAlign: "center", fontFamily: "Pretendard-Regular" },
 
   // Done / Error
   doneRoot: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
@@ -822,6 +822,6 @@ const styles = StyleSheet.create({
     width: 80, height: 80, borderRadius: 40,
     alignItems: "center", justifyContent: "center", marginBottom: 8,
   },
-  doneTitle: { fontSize: 24, fontFamily: "Pretendard-Bold", marginTop: 4 },
-  doneSub: { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center", lineHeight: 22, marginTop: 8 },
+  doneTitle: { fontSize: 26, fontFamily: "Pretendard-Bold", marginTop: 4 },
+  doneSub: { fontSize: 16, fontFamily: "Pretendard-Regular", textAlign: "center", lineHeight: 22, marginTop: 8 },
 });

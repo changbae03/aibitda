@@ -166,7 +166,7 @@ function VerdictBadge({ verdict }: { verdict?: string | null }) {
   const c = map[verdict] ?? map[verdict.toUpperCase()] ?? { color: "#6b7280", bg: "#f3f4f6", label: verdict };
   return (
     <View style={{ backgroundColor: c.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-      <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: c.color }}>{c.label}</Text>
+      <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: c.color }}>{c.label}</Text>
     </View>
   );
 }
@@ -183,7 +183,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: bg, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 }}>
       {isRunning && <ActivityIndicator size="small" color={color} style={{ width: 12, height: 12 }} />}
-      <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color }}>{label}</Text>
+      <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color }}>{label}</Text>
     </View>
   );
 }
@@ -289,7 +289,7 @@ function HeaderCard({
               {fmtPrice(analysis.targetPrice, currency)}
             </Text>
             {quote?.price != null && quote.price > 0 && (
-              <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>
+              <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>
                 +{(((analysis.targetPrice - quote.price) / quote.price) * 100).toFixed(1)}% 상승여지
               </Text>
             )}
@@ -378,7 +378,7 @@ function TldrCard({ analysis }: { analysis: any }) {
         {json.summary && (
           <View style={[styles.tldrRow, { backgroundColor: colors.accent }]}>
             <Text style={[styles.tldrSubLabel, { color: colors.mutedForeground }]}>투자 논거</Text>
-            <Text style={[styles.tldrText, { color: colors.mutedForeground, fontSize: 13 }]}>{json.summary}</Text>
+            <Text style={[styles.tldrText, { color: colors.mutedForeground, fontSize: 15 }]}>{json.summary}</Text>
           </View>
         )}
       </Card>
@@ -512,8 +512,8 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
                 <View style={{ flexDirection: "row", gap: 0 }}>
                   {([["PER", data.averages.per_trailing, 1, "x"], ["PBR", data.averages.pbr, 2, "x"], ["EV/EBITDA", data.averages.ev_ebitda, 1, "x"], ["ROE", data.averages.roe, 1, "%"]] as [string, number | null | undefined, number, string][]).map(([label, val, dec, suf]) => (
                     <View key={label} style={{ flex: 1, alignItems: "center", gap: 2 }}>
-                      <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{label}</Text>
-                      <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{label}</Text>
+                      <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
                         {val != null ? `${val.toFixed(dec)}${suf}` : "—"}
                       </Text>
                     </View>
@@ -525,13 +525,13 @@ function PeerMultiplesPanel({ ticker }: { ticker: string }) {
               <View key={peerTicker} style={[styles.peerRow, { borderBottomColor: colors.border, borderBottomWidth: idx < rows.length - 1 ? StyleSheet.hairlineWidth : 0 }]}>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={[styles.peerName, { color: colors.foreground }]} numberOfLines={1}>{peer.name || peerTicker}</Text>
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{peerTicker}</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{peerTicker}</Text>
                 </View>
                 <View style={{ flexDirection: "row", gap: 0 }}>
                   {([["PER", peer.per_trailing, 1, "x"], ["PBR", peer.pbr, 2, "x"], ["ROE", peer.roe, 1, "%"]] as [string, number | null, number, string][]).map(([label, val, dec, suf]) => (
                     <View key={label} style={{ width: 52, alignItems: "center", gap: 2 }}>
-                      <Text style={{ fontSize: 9, color: colors.mutedForeground }}>{label}</Text>
-                      <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{label}</Text>
+                      <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>
                         {val != null ? `${val.toFixed(dec)}${suf}` : "—"}
                       </Text>
                     </View>
@@ -613,7 +613,7 @@ function AnalystConsensusPanel({ ticker, currentPrice }: { ticker: string; curre
               </View>
             )}
             {!loading && consensus.label && (
-              <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: consensus.color }}>{consensus.label}</Text>
+              <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: consensus.color }}>{consensus.label}</Text>
             )}
           </View>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
@@ -624,10 +624,10 @@ function AnalystConsensusPanel({ ticker, currentPrice }: { ticker: string; curre
             <View style={[styles.avgRow, { backgroundColor: colors.accent, flexDirection: "row", gap: 0 }]}>
               {([["하단", info.targetLowPrice, "#dc2626"], ["평균", info.targetMeanPrice, colors.foreground], ["상단", info.targetHighPrice, "#16a34a"]] as [string, number | null, string][]).map(([label, val, color]) => (
                 <View key={label} style={{ flex: 1, alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{label}</Text>
-                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color }}>{val != null ? fmtPrice(val, currency as any) : "—"}</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{label}</Text>
+                  <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color }}>{val != null ? fmtPrice(val, currency as any) : "—"}</Text>
                   {label === "평균" && upside != null && (
-                    <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: upside >= 0 ? "#16a34a" : "#dc2626" }}>
+                    <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: upside >= 0 ? "#16a34a" : "#dc2626" }}>
                       {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
                     </Text>
                   )}
@@ -642,18 +642,18 @@ function AnalystConsensusPanel({ ticker, currentPrice }: { ticker: string; curre
                   {sellPct > 0 && <View style={{ width: `${sellPct}%` as any, backgroundColor: "#f87171" }} />}
                 </View>
                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>매수 {buyCount}명 ({buyPct}%)</Text>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#d97706" }}>중립 {holdCount}명 ({holdPct}%)</Text>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#dc2626" }}>매도 {sellCount}명 ({sellPct}%)</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>매수 {buyCount}명 ({buyPct}%)</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#d97706" }}>중립 {holdCount}명 ({holdPct}%)</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#dc2626" }}>매도 {sellCount}명 ({sellPct}%)</Text>
                 </View>
               </View>
             )}
             {(info.firmTargets ?? []).slice(0, 8).map((f, i, arr) => (
               <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }} numberOfLines={1}>{f.firm}</Text>
+                <Text style={{ flex: 1, fontSize: 15, color: colors.foreground }} numberOfLines={1}>{f.firm}</Text>
                 <View style={{ alignItems: "flex-end", gap: 2 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{fmtPrice(f.target, currency as any)}</Text>
-                  {f.grade && <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{f.grade}</Text>}
+                  <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{fmtPrice(f.target, currency as any)}</Text>
+                  {f.grade && <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{f.grade}</Text>}
                 </View>
               </View>
             ))}
@@ -694,7 +694,7 @@ function RunningProgressCard({ analysis }: { analysis: any }) {
       {currentStep && (
         <View style={[styles.currentStep, { backgroundColor: "#FFF0EE", borderColor: "#FFCFC9" }]}>
           <ActivityIndicator size="small" color="#FF8A7A" />
-          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#FF8A7A" }}>
+          <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#FF8A7A" }}>
             {STEP_LABELS_KO[currentStep] ?? currentStep}
           </Text>
         </View>
@@ -712,10 +712,10 @@ function RunningProgressCard({ analysis }: { analysis: any }) {
                 ) : active ? (
                   <ActivityIndicator size="small" color="#FF8A7A" style={{ width: 12, height: 12 }} />
                 ) : (
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground }}>{i + 1}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground }}>{i + 1}</Text>
                 )}
               </View>
-              <Text style={{ fontSize: 13, fontFamily: done ? "Pretendard-SemiBold" : "Pretendard-Regular", color }}>
+              <Text style={{ fontSize: 15, fontFamily: done ? "Pretendard-SemiBold" : "Pretendard-Regular", color }}>
                 {AGENTS[key]?.name ?? key}
               </Text>
             </View>
@@ -925,7 +925,7 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
               <InlineText
                 key={idx}
                 text={block.text}
-                style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 10, marginBottom: 2 }}
+                style={{ fontSize: 20, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 10, marginBottom: 2 }}
               />
             );
           case "h2":
@@ -933,7 +933,7 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
               <InlineText
                 key={idx}
                 text={block.text}
-                style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 8, marginBottom: 2 }}
+                style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 8, marginBottom: 2 }}
               />
             );
           case "h3":
@@ -941,7 +941,7 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
               <InlineText
                 key={idx}
                 text={block.text}
-                style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginTop: 6 }}
+                style={{ fontSize: 16, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginTop: 6 }}
               />
             );
           case "hr":
@@ -949,20 +949,20 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
           case "bullet":
             return (
               <View key={idx} style={{ flexDirection: "row", gap: 8, paddingLeft: block.indent * 4 }}>
-                <Text style={{ fontSize: 14, color: baseColor, marginTop: 2, lineHeight: 22 }}>•</Text>
+                <Text style={{ fontSize: 16, color: baseColor, marginTop: 2, lineHeight: 22 }}>•</Text>
                 <InlineText
                   text={block.text}
-                  style={{ flex: 1, fontSize: 14, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
+                  style={{ flex: 1, fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
                 />
               </View>
             );
           case "numbered":
             return (
               <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
-                <Text style={{ fontSize: 14, color: colors.mutedForeground, lineHeight: 22, fontFamily: "Pretendard-SemiBold", minWidth: 20 }}>{block.n}.</Text>
+                <Text style={{ fontSize: 16, color: colors.mutedForeground, lineHeight: 22, fontFamily: "Pretendard-SemiBold", minWidth: 20 }}>{block.n}.</Text>
                 <InlineText
                   text={block.text}
-                  style={{ flex: 1, fontSize: 14, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
+                  style={{ flex: 1, fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
                 />
               </View>
             );
@@ -973,7 +973,7 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
               <InlineText
                 key={idx}
                 text={block.lines.join(" ")}
-                style={{ fontSize: 14, lineHeight: 23, fontFamily: "Pretendard-Regular", color: baseColor }}
+                style={{ fontSize: 16, lineHeight: 23, fontFamily: "Pretendard-Regular", color: baseColor }}
               />
             );
           default:
@@ -986,8 +986,8 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
 
 const mdStyles = StyleSheet.create({
   cell:       { paddingVertical: 8, paddingHorizontal: 10, justifyContent: "center" },
-  headerCell: { fontSize: 11, fontFamily: "Pretendard-Bold", textAlign: "center" },
-  dataCell:   { fontSize: 12, fontFamily: "Pretendard-Regular", textAlign: "center" },
+  headerCell: { fontSize: 13, fontFamily: "Pretendard-Bold", textAlign: "center" },
+  dataCell:   { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center" },
 });
 
 // ── AgentStepsSection ─────────────────────────────────────────────────────────
@@ -1017,13 +1017,13 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
               {/* Step header */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: accentColor + "18", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: accentColor }}>{index + 1}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: accentColor }}>{index + 1}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: accentColor }}>
+                  <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: accentColor }}>
                     {agent?.name ?? key}
                   </Text>
-                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
                     {agent?.role ?? ""}
                   </Text>
                 </View>
@@ -1097,7 +1097,7 @@ export default function AnalysisDetailScreen() {
         <NavBar status="queued" onBack={() => router.back()} />
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <ActivityIndicator color="#FF8A7A" size="large" />
-          <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 10, fontFamily: "Pretendard-Regular" }}>
+          <Text style={{ color: colors.mutedForeground, fontSize: 15, marginTop: 10, fontFamily: "Pretendard-Regular" }}>
             분석 보고서 로딩 중…
           </Text>
         </View>
@@ -1111,11 +1111,11 @@ export default function AnalysisDetailScreen() {
         <NavBar status="error" onBack={() => router.back()} />
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12 }}>
           <Feather name="alert-circle" size={36} color={colors.destructive} />
-          <Text style={{ color: colors.mutedForeground, fontSize: 15, fontFamily: "Pretendard-Regular" }}>
+          <Text style={{ color: colors.mutedForeground, fontSize: 17, fontFamily: "Pretendard-Regular" }}>
             분석을 불러오지 못했어요
           </Text>
           <Pressable onPress={loadAnalysis} style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#FF8A7A", borderRadius: 8 }}>
-            <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
+            <Text style={{ color: "#fff", fontSize: 16, fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
           </Pressable>
         </View>
       </View>
@@ -1172,80 +1172,80 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   navBack:     { flexDirection: "row", alignItems: "center", gap: 6 },
-  navBackText: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  navBackText: { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
 
   /* card */
   card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   section: { marginTop: 16, paddingHorizontal: 16 },
   sectionLabel: {
-    fontSize: 10, fontFamily: "Pretendard-Bold",
+    fontSize: 12, fontFamily: "Pretendard-Bold",
     textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8,
   },
 
   /* header */
   headerCard:      { margin: 16, marginBottom: 0 },
   headerTop:       { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 },
-  companyName:     { fontSize: 22, fontFamily: "Pretendard-Bold" },
-  companyIndustry: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  companyName:     { fontSize: 24, fontFamily: "Pretendard-Bold" },
+  companyIndustry: { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 2 },
   priceRow:        { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, marginBottom: 12 },
-  livePrice:       { fontSize: 26, fontFamily: "Pretendard-Bold" },
-  liveChange:      { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
+  livePrice:       { fontSize: 28, fontFamily: "Pretendard-Bold" },
+  liveChange:      { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
   liveDot:         { width: 8, height: 8, borderRadius: 4 },
 
   targetRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderTopWidth: StyleSheet.hairlineWidth, marginBottom: 12 },
-  targetLabel: { fontSize: 12, fontFamily: "Pretendard-Regular" },
-  targetPrice: { fontSize: 20, fontFamily: "Pretendard-Bold" },
+  targetLabel: { fontSize: 14, fontFamily: "Pretendard-Regular" },
+  targetPrice: { fontSize: 22, fontFamily: "Pretendard-Bold" },
 
   metricsGrid:  { flexDirection: "row", flexWrap: "wrap", borderTopWidth: StyleSheet.hairlineWidth, marginBottom: 10 },
   metricItem:   { width: "33.33%", paddingVertical: 10, paddingHorizontal: 4, alignItems: "center", gap: 3 },
-  metricLabel:  { fontSize: 10, fontFamily: "Pretendard-Regular" },
-  metricValue:  { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
+  metricLabel:  { fontSize: 12, fontFamily: "Pretendard-Regular" },
+  metricValue:  { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
 
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
   tag:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  tagText: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  tagText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
 
   /* tldr */
   tldrRow:       { paddingVertical: 10, paddingHorizontal: 2, borderBottomWidth: StyleSheet.hairlineWidth, gap: 5, marginHorizontal: -2 },
-  tldrSubLabel:  { fontSize: 10, fontFamily: "Pretendard-Bold", textTransform: "uppercase", letterSpacing: 0.6 },
-  tldrVerdictVal:{ fontSize: 14, fontFamily: "Pretendard-Bold" },
-  tldrText:      { fontSize: 14, lineHeight: 22, fontFamily: "Pretendard-Regular" },
+  tldrSubLabel:  { fontSize: 12, fontFamily: "Pretendard-Bold", textTransform: "uppercase", letterSpacing: 0.6 },
+  tldrVerdictVal:{ fontSize: 16, fontFamily: "Pretendard-Bold" },
+  tldrText:      { fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular" },
 
   /* scenario */
   scenarioRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, gap: 10 },
   scenarioLabel:     { width: 68 },
-  scenarioCaseText:  { fontSize: 12, fontFamily: "Pretendard-Bold" },
-  scenarioSub:       { fontSize: 10, marginTop: 2, fontFamily: "Pretendard-Regular" },
+  scenarioCaseText:  { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  scenarioSub:       { fontSize: 12, marginTop: 2, fontFamily: "Pretendard-Regular" },
   scenarioMid:       { flex: 1 },
-  scenarioPriceText: { fontSize: 14, fontFamily: "Pretendard-Bold" },
-  scenarioUpside:    { fontSize: 12, fontFamily: "Pretendard-SemiBold", marginTop: 2 },
+  scenarioPriceText: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  scenarioUpside:    { fontSize: 14, fontFamily: "Pretendard-SemiBold", marginTop: 2 },
   scenarioProb:      { width: 68 },
   scenarioProbHeader:{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  scenarioProbLabel: { fontSize: 10, fontFamily: "Pretendard-Regular" },
-  scenarioProbValue: { fontSize: 11, fontFamily: "Pretendard-Bold" },
+  scenarioProbLabel: { fontSize: 12, fontFamily: "Pretendard-Regular" },
+  scenarioProbValue: { fontSize: 13, fontFamily: "Pretendard-Bold" },
   probTrack:         { height: 5, borderRadius: 3, overflow: "hidden" },
   probFill:          { height: "100%", borderRadius: 3 },
 
   /* panels */
   panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12 },
-  panelTitle:  { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  panelTitle:  { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
   countBadge:  { backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  countBadgeText: { fontSize: 10, fontFamily: "Pretendard-Bold", color: "#1d4ed8" },
+  countBadgeText: { fontSize: 12, fontFamily: "Pretendard-Bold", color: "#1d4ed8" },
   avgRow:  { padding: 12, borderRadius: 10, gap: 8 },
-  avgTitle:{ fontSize: 10, fontFamily: "Pretendard-SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
+  avgTitle:{ fontSize: 12, fontFamily: "Pretendard-SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   peerRow: { paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 8 },
-  peerName:{ fontSize: 13, fontFamily: "Pretendard-SemiBold" },
+  peerName:{ fontSize: 15, fontFamily: "Pretendard-SemiBold" },
 
   /* running */
   progressTrack: { height: 6, borderRadius: 3, overflow: "hidden", marginVertical: 10 },
   progressFill:  { height: "100%", borderRadius: 3 },
-  progressLabel: { fontSize: 12, fontFamily: "Pretendard-Regular", textAlign: "center", marginBottom: 4 },
+  progressLabel: { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center", marginBottom: 4 },
   currentStep:   { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, alignSelf: "flex-start" },
 
   /* steps */
-  stepContent:    { fontSize: 14, lineHeight: 23, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  stepContent:    { fontSize: 16, lineHeight: 23, fontFamily: "Pretendard-Regular", marginTop: 2 },
   validationBox:  { marginTop: 10, padding: 10, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, gap: 4 },
-  validationLabel:{ fontSize: 10, fontFamily: "Pretendard-Bold", textTransform: "uppercase", letterSpacing: 0.5 },
+  validationLabel:{ fontSize: 12, fontFamily: "Pretendard-Bold", textTransform: "uppercase", letterSpacing: 0.5 },
 
-  disclaimer: { fontSize: 11, lineHeight: 17, textAlign: "center", margin: 16, marginTop: 24, fontFamily: "Pretendard-Regular" },
+  disclaimer: { fontSize: 13, lineHeight: 17, textAlign: "center", margin: 16, marginTop: 24, fontFamily: "Pretendard-Regular" },
 });

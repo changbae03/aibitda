@@ -255,7 +255,7 @@ function ThemeCard({ item, idx, onAnalyze, colors }: {
       >
         {/* 이모지 아바타 */}
         <View style={[rs.themeEmoji, { backgroundColor: meta.bg }]}>
-          <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
+          <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
         </View>
 
         {/* 이름 + 상태 */}
@@ -352,7 +352,7 @@ function TomorrowPickCard({ item, idx, colors, onAnalyze }: {
                 <Text style={[rs.badgeText, { color: confMeta.color }]}>{confMeta.label}</Text>
               </View>
             )}
-            {item.themeEmoji ? <Text style={{ fontSize: 11 }}>{item.themeEmoji}</Text> : null}
+            {item.themeEmoji ? <Text style={{ fontSize: 13 }}>{item.themeEmoji}</Text> : null}
             {item.theme ? (
               <Text style={[rs.themeTag, { color: colors.mutedForeground }]} numberOfLines={1}>{item.theme}</Text>
             ) : null}
@@ -455,7 +455,7 @@ function LiveGainerCard({ item, idx, colors, onAnalyze }: {
 
         {/* 등락률 + 분석 */}
         <View style={{ alignItems: "flex-end", gap: 6 }}>
-          <Text style={[rs.changeText, { color: accentColor, fontSize: 16, fontFamily: "Pretendard-Bold" }]}>
+          <Text style={[rs.changeText, { color: accentColor, fontSize: 18, fontFamily: "Pretendard-Bold" }]}>
             +{item.change.toFixed(2)}%
           </Text>
           <TouchableOpacity
@@ -464,7 +464,7 @@ function LiveGainerCard({ item, idx, colors, onAnalyze }: {
             activeOpacity={0.75}
           >
             <Feather name="cpu" size={12} color="#6366f1" />
-            <Text style={[rs.pickAnalyzeBtnText, { fontSize: 11 }]}>AI 분석</Text>
+            <Text style={[rs.pickAnalyzeBtnText, { fontSize: 13 }]}>AI 분석</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -785,7 +785,7 @@ function SectionHeader({ emoji, title, badge, badgeColor, badgeBg, sub }: {
   const colors = useColors();
   return (
     <View style={rs.listSectionHeader}>
-      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+      <Text style={{ fontSize: 20 }}>{emoji}</Text>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
           <Text style={[rs.listSectionTitle, { color: colors.foreground }]}>{title}</Text>
@@ -911,7 +911,7 @@ export default function ThemesTab() {
                 }]}
               >
                 <Text style={{
-                  fontSize: 13,
+                  fontSize: 15,
                   fontFamily: isActive ? "Pretendard-SemiBold" : "Pretendard-Regular",
                   color: isActive ? activeColor : colors.mutedForeground,
                 }}>
@@ -937,7 +937,7 @@ export default function ThemesTab() {
             <Feather name="alert-circle" size={32} color={colors.border} />
             <Text style={[rs.loadingText, { color: colors.mutedForeground }]}>피드를 불러오지 못했습니다</Text>
             <TouchableOpacity style={[rs.retryBtn, { borderColor: "#6366f1" }]} onPress={() => loadFeed()}>
-              <Text style={{ fontSize: 13, color: "#6366f1", fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
+              <Text style={{ fontSize: 15, color: "#6366f1", fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1108,16 +1108,16 @@ const rs = StyleSheet.create({
   // Header
   header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold" },
-  headerSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
+  headerSub: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 1 },
   tabRow: { flexDirection: "row", gap: 2 },
 
   // Section card (랭킹)
   section: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, paddingBottom: 10 },
   iconWrap: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  sectionTitle: { fontSize: 14, fontFamily: "Pretendard-Bold" },
-  sectionSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  sectionTitle: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  sectionSub: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 1 },
 
   // Rank row
   rankRow: {
@@ -1125,14 +1125,14 @@ const rs = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rankNum: { fontSize: 12, width: 16, textAlign: "right" },
-  rankEmoji: { fontSize: 16, width: 22, textAlign: "center" },
-  rankName: { fontSize: 13, fontFamily: "Pretendard-Medium" },
-  rankSm: { fontSize: 10, color: "#7C3AED", fontFamily: "Pretendard-Regular", marginTop: 1 },
+  rankNum: { fontSize: 14, width: 16, textAlign: "right" },
+  rankEmoji: { fontSize: 18, width: 22, textAlign: "center" },
+  rankName: { fontSize: 15, fontFamily: "Pretendard-Medium" },
+  rankSm: { fontSize: 12, color: "#7C3AED", fontFamily: "Pretendard-Regular", marginTop: 1 },
   barTrack: { width: 72, height: 7, borderRadius: 4, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 4 },
   phaseBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  phaseText: { fontSize: 10, fontFamily: "Pretendard-SemiBold" },
+  phaseText: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
 
   // Theme card
   themeCard: { borderRadius: 16, overflow: "hidden" },
@@ -1141,19 +1141,19 @@ const rs = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 9,
     backgroundColor: "#F5F3FF", borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  emergingEmoji: { fontSize: 13 },
-  emergingTitle: { fontSize: 12, fontFamily: "Pretendard-Bold", color: "#7C3AED" },
-  emergingSm: { fontSize: 11, color: "#8B5CF6", fontFamily: "Pretendard-Regular", flex: 1 },
+  emergingEmoji: { fontSize: 15 },
+  emergingTitle: { fontSize: 14, fontFamily: "Pretendard-Bold", color: "#7C3AED" },
+  emergingSm: { fontSize: 13, color: "#8B5CF6", fontFamily: "Pretendard-Regular", flex: 1 },
   themeHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   themeEmoji: {
     width: 42, height: 42, borderRadius: 13,
     alignItems: "center", justifyContent: "center",
   },
-  themeName: { fontSize: 15, fontFamily: "Pretendard-Bold" },
-  themeStockCount: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 3 },
+  themeName: { fontSize: 17, fontFamily: "Pretendard-Bold" },
+  themeStockCount: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 3 },
   themeBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 },
   themeSummary: {
-    fontSize: 13, fontFamily: "Pretendard-Regular",
+    fontSize: 15, fontFamily: "Pretendard-Regular",
     lineHeight: 20, paddingHorizontal: 14, paddingVertical: 10,
   },
 
@@ -1164,94 +1164,94 @@ const rs = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, gap: 10,
   },
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
-  badgeText: { fontSize: 10, fontFamily: "Pretendard-SemiBold" },
-  stockName: { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
-  stockChange: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
-  stockMomentum: { fontSize: 11, fontFamily: "Pretendard-Regular" },
-  stockRationale: { fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  badgeText: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
+  stockName: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
+  stockChange: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  stockMomentum: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  stockRationale: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18 },
   analyzeBtn: {
     backgroundColor: "#eef2ff", paddingHorizontal: 12, paddingVertical: 8,
     borderRadius: 9, alignSelf: "flex-start", marginTop: 18,
   },
-  analyzeBtnText: { fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#6366f1" },
+  analyzeBtnText: { fontSize: 14, fontFamily: "Pretendard-SemiBold", color: "#6366f1" },
 
   // Pick / Presurge card
   pickCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
   pickHeader: { flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 10 },
-  pickRank: { fontSize: 12, width: 16, textAlign: "right", marginTop: 2 },
-  pickName: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
-  pickTicker: { fontSize: 11, fontFamily: "Pretendard-Regular" },
-  pickReasonPreview: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 3 },
+  pickRank: { fontSize: 14, width: 16, textAlign: "right", marginTop: 2 },
+  pickName: { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
+  pickTicker: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  pickReasonPreview: { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 3 },
   pickBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
   pickRationale: {
-    fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18,
+    fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18,
     paddingHorizontal: 14, paddingBottom: 10, color: "#64748b",
   },
-  pickReason: { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  pickReason: { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 20 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
-  tagText: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  tagText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
   pickAnalyzeBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 9,
     backgroundColor: "#eef2ff", borderRadius: 10,
   },
-  pickAnalyzeBtnText: { fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#6366f1" },
+  pickAnalyzeBtnText: { fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#6366f1" },
 
   // Category / confidence
   dot: { width: 7, height: 7, borderRadius: 3.5 },
-  catLabel: { fontSize: 11, fontFamily: "Pretendard-Regular" },
-  themeTag: { fontSize: 11, fontFamily: "Pretendard-Regular" },
-  changeText: { fontSize: 13, fontFamily: "Pretendard-Bold" },
+  catLabel: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  themeTag: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  changeText: { fontSize: 15, fontFamily: "Pretendard-Bold" },
 
   // Signal row (신호 칩)
   signalRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, paddingHorizontal: 14, paddingBottom: 8 },
-  laggardGap: { fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#10b981" },
-  signalChip: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  laggardGap: { fontSize: 14, fontFamily: "Pretendard-SemiBold", color: "#10b981" },
+  signalChip: { fontSize: 13, fontFamily: "Pretendard-Regular" },
 
   // Score bar
   scoreBar: { height: 3 },
   scoreBarFill: { height: "100%" },
-  scoreLabel: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  scoreLabel: { fontSize: 13, fontFamily: "Pretendard-Regular" },
 
   // Metrics grid (presurge 펼침)
   metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   metricItem: { minWidth: 80, gap: 2 },
-  metricLabel: { fontSize: 10, fontFamily: "Pretendard-Regular" },
-  metricValue: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  metricLabel: { fontSize: 12, fontFamily: "Pretendard-Regular" },
+  metricValue: { fontSize: 16, fontFamily: "Pretendard-Bold" },
 
   // Signal card
   signalCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
   signalHeader: { flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 10 },
   signalDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-  signalTheme: { fontSize: 14, fontFamily: "Pretendard-Bold" },
-  signalText: { fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  signalTheme: { fontSize: 16, fontFamily: "Pretendard-Bold" },
+  signalText: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18 },
   signalBody: { borderTopWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
-  signalReason: { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  signalReason: { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 20 },
 
   // Section header (내일 종목 섹션 구분)
   listSectionHeader: {
     flexDirection: "row", alignItems: "center",
     gap: 10, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 10,
   },
-  listSectionTitle: { fontSize: 16, fontFamily: "Pretendard-Bold" },
-  listSectionSub: { fontSize: 11, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  listSectionTitle: { fontSize: 18, fontFamily: "Pretendard-Bold" },
+  listSectionSub: { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 2 },
 
   // Concept card
   conceptCard: { margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
-  conceptTitle: { fontSize: 14, fontFamily: "Pretendard-Bold", marginBottom: 5 },
-  conceptDesc: { fontSize: 12, fontFamily: "Pretendard-Regular", lineHeight: 18 },
+  conceptTitle: { fontSize: 16, fontFamily: "Pretendard-Bold", marginBottom: 5 },
+  conceptDesc: { fontSize: 14, fontFamily: "Pretendard-Regular", lineHeight: 18 },
   conceptRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 11 },
   conceptNum: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  conceptNumText: { fontSize: 11, fontFamily: "Pretendard-Bold" },
-  conceptRowTitle: { fontSize: 12, fontFamily: "Pretendard-Bold" },
-  conceptRowDesc: { fontSize: 10, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  conceptNumText: { fontSize: 13, fontFamily: "Pretendard-Bold" },
+  conceptRowTitle: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  conceptRowDesc: { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
 
   // Misc
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  loadingText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  loadingText: { fontSize: 15, fontFamily: "Pretendard-Regular" },
   retryBtn: { borderWidth: 1, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10 },
-  feedMeta: { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  feedMeta: { fontSize: 13, fontFamily: "Pretendard-Regular" },
   emptyState: { alignItems: "center", paddingVertical: 40, gap: 8 },
-  emptyText: { fontSize: 13, fontFamily: "Pretendard-Regular" },
+  emptyText: { fontSize: 15, fontFamily: "Pretendard-Regular" },
 });

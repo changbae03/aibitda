@@ -47,7 +47,7 @@ function VerdictBadge({ verdict }: { verdict?: string | null }) {
     : ["#f3f4f6", "#6b7280", verdict];
   return (
     <View style={{ backgroundColor: bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color, fontFamily: "Pretendard-SemiBold" }}>{label}</Text>
+      <Text style={{ fontSize: 13, color, fontFamily: "Pretendard-SemiBold" }}>{label}</Text>
     </View>
   );
 }
@@ -63,7 +63,7 @@ function StatusDot({ status }: { status: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-      <Text style={{ fontSize: 11, color, fontFamily: "Pretendard-Regular" }}>{label}</Text>
+      <Text style={{ fontSize: 13, color, fontFamily: "Pretendard-Regular" }}>{label}</Text>
     </View>
   );
 }
@@ -85,19 +85,19 @@ function AnalysisRow({ item }: { item: AnalysisListItem }) {
     >
       <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
-          <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
             {item.companyName ?? item.englishName ?? ""}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <StatusDot status={item.status} />
           {item.targetPrice != null && (
-            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
               목표 {isKR ? item.targetPrice.toLocaleString("ko-KR") + "원" : "$" + item.targetPrice.toFixed(2)}
             </Text>
           )}
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{date}</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{date}</Text>
         </View>
       </View>
       <View style={{ alignItems: "flex-end", gap: 6 }}>
@@ -127,18 +127,18 @@ function PopularRow({ item }: { item: PopularItem }) {
     >
       <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
-          <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
+          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.ticker}</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
             {item.companyName}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: outcomeColor }} />
-            <Text style={{ fontSize: 11, color: outcomeColor, fontFamily: "Pretendard-Regular" }}>{outcomeLabel}</Text>
+            <Text style={{ fontSize: 13, color: outcomeColor, fontFamily: "Pretendard-Regular" }}>{outcomeLabel}</Text>
           </View>
           {item.priceReturn != null && (
-            <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: item.priceReturn >= 0 ? colors.success : colors.destructive }}>
+            <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: item.priceReturn >= 0 ? colors.success : colors.destructive }}>
               {item.priceReturn >= 0 ? "+" : ""}{item.priceReturn.toFixed(1)}%
             </Text>
           )}
@@ -507,7 +507,7 @@ export default function AnalysisTab() {
                         <Text style={[styles.dropName, { color: colors.foreground }]}>{item.name || code}</Text>
                         {exchLabel && (
                           <View style={{ backgroundColor: isKR ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>
                               {exchLabel}
                             </Text>
                           </View>
@@ -537,7 +537,7 @@ export default function AnalysisTab() {
                 onPress={() => setSeg(t)}
               >
                 <Text style={{
-                  fontSize: 13,
+                  fontSize: 15,
                   fontFamily: seg === t ? "Pretendard-SemiBold" : "Pretendard-Regular",
                   color: seg === t ? CORAL : colors.mutedForeground,
                 }}>{t}</Text>
@@ -559,8 +559,8 @@ export default function AnalysisTab() {
                 ListEmptyComponent={
                   <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
                     <Feather name="cpu" size={36} color={colors.border} />
-                    <Text style={{ fontSize: 16, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>아직 분석이 없습니다</Text>
-                    <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>위에서 종목을 검색해 분석을 시작하세요</Text>
+                    <Text style={{ fontSize: 18, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>아직 분석이 없습니다</Text>
+                    <Text style={{ fontSize: 15, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>위에서 종목을 검색해 분석을 시작하세요</Text>
                   </View>
                 }
               />
@@ -608,8 +608,8 @@ const styles = StyleSheet.create({
 
   /* hero */
   hero:      { paddingHorizontal: 24, paddingBottom: 20, gap: 12 },
-  heroTitle: { fontSize: 32, fontFamily: "Pretendard-Bold", lineHeight: 42 },
-  heroSub:   { fontSize: 13, lineHeight: 20, fontFamily: "Pretendard-Regular" },
+  heroTitle: { fontSize: 34, fontFamily: "Pretendard-Bold", lineHeight: 42 },
+  heroSub:   { fontSize: 15, lineHeight: 20, fontFamily: "Pretendard-Regular" },
 
   creditBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
@@ -617,14 +617,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
     borderWidth: 1, borderColor: "#FFCFC9",
   },
-  creditText: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
+  creditText: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
 
   searchRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 14, borderWidth: 1, overflow: "hidden", marginTop: 4,
   },
   searchInput: {
-    flex: 1, fontSize: 14, fontFamily: "Pretendard-Regular",
+    flex: 1, fontSize: 16, fontFamily: "Pretendard-Regular",
     paddingVertical: 14, paddingHorizontal: 10,
   },
   searchClear: { padding: 10 },
@@ -632,8 +632,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     alignItems: "center", justifyContent: "center", minWidth: 90,
   },
-  searchBtnText: { fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#fff" },
-  heroHint:  { fontSize: 11, fontFamily: "Pretendard-Regular", textAlign: "center" },
+  searchBtnText: { fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#fff" },
+  heroHint:  { fontSize: 13, fontFamily: "Pretendard-Regular", textAlign: "center" },
 
   /* dropdown */
   dropdown: { marginHorizontal: 16, borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
@@ -641,16 +641,16 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  dropHeaderTitle: { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
-  dropHeaderHint:  { fontSize: 11, fontFamily: "Pretendard-Regular" },
+  dropHeaderTitle: { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
+  dropHeaderHint:  { fontSize: 13, fontFamily: "Pretendard-Regular" },
   dropRow: {
     flexDirection: "row", alignItems: "center", padding: 12,
     borderBottomWidth: StyleSheet.hairlineWidth, gap: 10,
   },
   dropAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  dropAvatarText: { fontSize: 12, fontFamily: "Pretendard-Bold" },
-  dropName:  { fontSize: 14, fontFamily: "Pretendard-SemiBold" },
-  dropCode:  { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 1 },
+  dropAvatarText: { fontSize: 14, fontFamily: "Pretendard-Bold" },
+  dropName:  { fontSize: 16, fontFamily: "Pretendard-SemiBold" },
+  dropCode:  { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 1 },
   dropEmpty: { padding: 20, textAlign: "center", fontFamily: "Pretendard-Regular" },
 
   /* tabs */
@@ -669,29 +669,29 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18, shadowRadius: 24, elevation: 12,
   },
-  confirmLabel:      { fontSize: 12, fontFamily: "Pretendard-Regular", marginBottom: 14 },
+  confirmLabel:      { fontSize: 14, fontFamily: "Pretendard-Regular", marginBottom: 14 },
   confirmCompanyRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
   avatar:            { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  avatarText:        { fontSize: 16, fontFamily: "Pretendard-Bold" },
-  confirmName:       { fontSize: 18, fontFamily: "Pretendard-Bold" },
-  confirmCode:       { fontSize: 13, fontFamily: "Pretendard-Regular", marginTop: 2 },
+  avatarText:        { fontSize: 18, fontFamily: "Pretendard-Bold" },
+  confirmName:       { fontSize: 20, fontFamily: "Pretendard-Bold" },
+  confirmCode:       { fontSize: 15, fontFamily: "Pretendard-Regular", marginTop: 2 },
   exchBadge:         { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  exchBadgeText:     { fontSize: 10, fontFamily: "Pretendard-SemiBold" },
-  confirmDesc:       { fontSize: 14, fontFamily: "Pretendard-SemiBold", marginBottom: 2 },
-  confirmDescMain:   { fontSize: 16, fontFamily: "Pretendard-Bold", marginBottom: 6 },
-  confirmDescSub:    { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
-  confirmCredit:     { fontSize: 12, fontFamily: "Pretendard-Regular", marginTop: 12, textAlign: "right" },
+  exchBadgeText:     { fontSize: 12, fontFamily: "Pretendard-SemiBold" },
+  confirmDesc:       { fontSize: 16, fontFamily: "Pretendard-SemiBold", marginBottom: 2 },
+  confirmDescMain:   { fontSize: 18, fontFamily: "Pretendard-Bold", marginBottom: 6 },
+  confirmDescSub:    { fontSize: 15, fontFamily: "Pretendard-Regular", lineHeight: 20 },
+  confirmCredit:     { fontSize: 14, fontFamily: "Pretendard-Regular", marginTop: 12, textAlign: "right" },
   confirmBtns:       { flexDirection: "row", gap: 10, marginTop: 24 },
   confirmBtnCancel: {
     flex: 1, paddingVertical: 14, borderRadius: 12,
     borderWidth: 1, alignItems: "center", justifyContent: "center",
   },
-  confirmBtnCancelText: { fontSize: 15, fontFamily: "Pretendard-SemiBold" },
+  confirmBtnCancelText: { fontSize: 17, fontFamily: "Pretendard-SemiBold" },
   confirmBtnStart: {
     flex: 1.4, paddingVertical: 14, borderRadius: 12,
     alignItems: "center", justifyContent: "center",
   },
-  confirmBtnStartText:  { fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#fff" },
+  confirmBtnStartText:  { fontSize: 17, fontFamily: "Pretendard-SemiBold", color: "#fff" },
 
   /* disclaimer modal */
   disclaimerCard: {
@@ -703,17 +703,17 @@ const styles = StyleSheet.create({
   },
   disclaimerHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 16 },
   disclaimerClose:  { padding: 4 },
-  disclaimerTicker: { fontSize: 12, fontFamily: "Pretendard-Regular", marginBottom: 4 },
-  disclaimerTitle:  { fontSize: 20, fontFamily: "Pretendard-Bold" },
-  disclaimerBody:   { fontSize: 14, lineHeight: 22, fontFamily: "Pretendard-Regular", marginBottom: 16 },
+  disclaimerTicker: { fontSize: 14, fontFamily: "Pretendard-Regular", marginBottom: 4 },
+  disclaimerTitle:  { fontSize: 22, fontFamily: "Pretendard-Bold" },
+  disclaimerBody:   { fontSize: 16, lineHeight: 22, fontFamily: "Pretendard-Regular", marginBottom: 16 },
   disclaimerWarning: {
     padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 20,
   },
-  disclaimerWarningText: { fontSize: 12, lineHeight: 18, fontFamily: "Pretendard-Regular" },
+  disclaimerWarningText: { fontSize: 14, lineHeight: 18, fontFamily: "Pretendard-Regular" },
   disclaimerBtn: {
     backgroundColor: "#111", borderRadius: 14, paddingVertical: 16,
     alignItems: "center", justifyContent: "center",
   },
-  disclaimerBtnText: { fontSize: 16, fontFamily: "Pretendard-SemiBold", color: "#fff" },
-  disclaimerAuto:    { fontSize: 12, fontFamily: "Pretendard-Regular", textAlign: "center", marginTop: 12 },
+  disclaimerBtnText: { fontSize: 18, fontFamily: "Pretendard-SemiBold", color: "#fff" },
+  disclaimerAuto:    { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center", marginTop: 12 },
 });

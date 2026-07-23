@@ -145,10 +145,10 @@ function SessionCard({ session, selected, onPress, colors }: {
         <View style={{ position: "absolute", top: 11, right: 11, width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" }} />
       )}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-        <Text style={{ fontSize: 13 }}>{SESSION_ICON[session.icon] ?? "📋"}</Text>
-        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: selected ? colors.primary : colors.foreground }} numberOfLines={1}>{session.label}</Text>
+        <Text style={{ fontSize: 15 }}>{SESSION_ICON[session.icon] ?? "📋"}</Text>
+        <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: selected ? colors.primary : colors.foreground }} numberOfLines={1}>{session.label}</Text>
       </View>
-      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
+      <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>
         {session.time === "주말" ? "토·일 수시" : `${session.time} KST`}
       </Text>
 
@@ -156,9 +156,9 @@ function SessionCard({ session, selected, onPress, colors }: {
         <>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
             <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: sc.color }} />
-            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: sc.color }}>{sc.label}</Text>
+            <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: sc.color }}>{sc.label}</Text>
           </View>
-          <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, lineHeight: 15 }} numberOfLines={2}>
+          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, lineHeight: 15 }} numberOfLines={2}>
             {session.brief!.summary}
           </Text>
         </>
@@ -167,12 +167,12 @@ function SessionCard({ session, selected, onPress, colors }: {
           {[1, 0.7, 0.5].map((op, i) => (
             <View key={i} style={{ height: 4, borderRadius: 2, backgroundColor: colors.border, opacity: op }} />
           ))}
-          <Text style={{ fontSize: 10, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 2 }}>생성 중…</Text>
+          <Text style={{ fontSize: 12, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 2 }}>생성 중…</Text>
         </View>
       ) : session.status === "past" ? (
-        <Text style={{ fontSize: 11, color: colors.mutedForeground + "60", fontFamily: "Pretendard-Regular", marginTop: 2 }}>브리핑 없음</Text>
+        <Text style={{ fontSize: 13, color: colors.mutedForeground + "60", fontFamily: "Pretendard-Regular", marginTop: 2 }}>브리핑 없음</Text>
       ) : (
-        <Text style={{ fontSize: 11, color: colors.mutedForeground + "60", fontFamily: "Pretendard-Regular", marginTop: 2 }}>준비중</Text>
+        <Text style={{ fontSize: 13, color: colors.mutedForeground + "60", fontFamily: "Pretendard-Regular", marginTop: 2 }}>준비중</Text>
       )}
     </Pressable>
   );
@@ -184,7 +184,7 @@ function SL({ label, colors }: { label: string; colors: any }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 10 }}>
       <View style={{ width: 2, height: 12, borderRadius: 1, backgroundColor: colors.primary + "60" }} />
-      <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, letterSpacing: 0.2 }}>
+      <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, letterSpacing: 0.2 }}>
         {label}
       </Text>
     </View>
@@ -201,9 +201,9 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
       <View style={{ alignItems: "center", paddingVertical: 28, gap: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f59e0b" }} />
-          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: "#f59e0b" }}>브리핑 생성 중</Text>
+          <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: "#f59e0b" }}>브리핑 생성 중</Text>
         </View>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+        <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           AI가 현재 시장 데이터를 분석하고 있습니다
         </Text>
         {[1, 0.7, 0.5].map((op, i) => (
@@ -216,7 +216,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
   if (!brief) {
     return (
       <View style={{ alignItems: "center", paddingVertical: 28, gap: 8 }}>
-        <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+        <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           {session.isPast
             ? "이 시간대에 브리핑이 생성되지 않았습니다"
             : `${session.label} 브리핑은 ${session.time} KST 이후 자동 생성됩니다`}
@@ -228,12 +228,12 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
   return (
     <View style={{ gap: 20 }}>
       {/* 요약 */}
-      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 23 }}>{brief.summary}</Text>
+      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 23 }}>{brief.summary}</Text>
 
       {/* 리드 단락 */}
       {brief.leadParagraph && (
         <View style={{ borderLeftWidth: 2.5, borderLeftColor: colors.primary + "50", paddingLeft: 13, paddingVertical: 2 }}>
-          <Text style={{ fontSize: 13, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.leadParagraph}</Text>
+          <Text style={{ fontSize: 15, color: colors.foreground + "CC", fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.leadParagraph}</Text>
         </View>
       )}
 
@@ -241,7 +241,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
       {brief.storyLine && (
         <View style={{ gap: 6 }}>
           <SL label="심층 분석" colors={colors} />
-          <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.storyLine}</Text>
+          <Text style={{ fontSize: 15, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 21 }}>{brief.storyLine}</Text>
         </View>
       )}
 
@@ -254,12 +254,12 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               .filter(([, v]) => v.changePercent != null || v.close != null)
               .map(([name, v]) => (
                 <View key={name} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: "45%" }}>
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 2 }} numberOfLines={1}>{v.label ?? name}</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginBottom: 2 }} numberOfLines={1}>{v.label ?? name}</Text>
                   {v.close != null && (
-                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{v.close.toLocaleString("ko-KR")}</Text>
+                    <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{v.close.toLocaleString("ko-KR")}</Text>
                   )}
                   {v.changePercent != null && (
-                    <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: (v.changePercent ?? 0) >= 0 ? colors.up : colors.down }}>
+                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: (v.changePercent ?? 0) >= 0 ? colors.up : colors.down }}>
                       {fmtPct(v.changePercent)}
                     </Text>
                   )}
@@ -279,7 +279,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               if (!label) return null;
               return (
                 <View key={`kt-${i}`} style={{ backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.foreground + "CC" }}>{label}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Regular", color: colors.foreground + "CC" }}>{label}</Text>
                 </View>
               );
             })}
@@ -296,13 +296,13 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             const isPos = dir === "positive"; const isNeg = dir === "negative";
             return (
               <View key={`me-${i}`} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-                <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: isPos ? colors.up : isNeg ? colors.down : colors.border, marginTop: 1 }}>
+                <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: isPos ? colors.up : isNeg ? colors.down : colors.border, marginTop: 1 }}>
                   {isPos ? "▲" : isNeg ? "▼" : "●"}
                 </Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 19 }}>{e.title}</Text>
+                  <Text style={{ fontSize: 15, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 19 }}>{e.title}</Text>
                   {((e as any).impact_desc || e.description) && (
-                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17, marginTop: 2 }}>
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17, marginTop: 2 }}>
                       {(e as any).impact_desc ?? e.description}
                     </Text>
                   )}
@@ -323,8 +323,8 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               const isDn = (s.change ?? 0) < 0 || s.trend === "하락" || s.trend === "약세";
               return (
                 <View key={s.sector} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: "47%" }}>
-                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{s.sector}</Text>
-                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: isUp ? colors.up : isDn ? colors.down : colors.mutedForeground, marginLeft: 6 }}>
+                  <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{s.sector}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: isUp ? colors.up : isDn ? colors.down : colors.mutedForeground, marginLeft: 6 }}>
                     {s.change != null ? fmtPct(s.change) : s.trend}
                   </Text>
                 </View>
@@ -343,7 +343,7 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               return (
                 <View key={`mf-${i}`} style={{ flexDirection: "row", gap: 8 }}>
                   <Text style={{ color: colors.border, marginTop: 2 }}>•</Text>
-                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
+                  <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
                 </View>
               );
             }
@@ -351,10 +351,10 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             return (
               <View key={`mf-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{mf.factor}</Text>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{mf.status}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{mf.factor}</Text>
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{mf.status}</Text>
                 </View>
-                {mf.implication && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{mf.implication}</Text>}
+                {mf.implication && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{mf.implication}</Text>}
               </View>
             );
           })}
@@ -370,16 +370,16 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
               return (
                 <View key={`fl-${i}`} style={{ flexDirection: "row", gap: 8 }}>
                   <Text style={{ color: colors.border, marginTop: 2 }}>•</Text>
-                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
+                  <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>{f}</Text>
                 </View>
               );
             }
             const fl = f as ForwardLookItem;
             return (
               <View key={`fl-${i}`} style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
-                <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 3 }}>{fl.point}</Text>
-                {fl.detail && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{fl.detail}</Text>}
-                {fl.watchFor && <Text style={{ fontSize: 11, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 4 }}>📌 {fl.watchFor}</Text>}
+                <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginBottom: 3 }}>{fl.point}</Text>
+                {fl.detail && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", lineHeight: 17 }}>{fl.detail}</Text>}
+                {fl.watchFor && <Text style={{ fontSize: 13, color: "#f59e0b", fontFamily: "Pretendard-Regular", marginTop: 4 }}>📌 {fl.watchFor}</Text>}
               </View>
             );
           })}
@@ -392,8 +392,8 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
           <SL label="투자 포인트" colors={colors} />
           {brief.actionPoints.map((a, i) => (
             <View key={`ap-${i}`} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-              <Text style={{ fontSize: 12, color: "#f59e0b", fontFamily: "Pretendard-Bold", marginTop: 1 }}>→</Text>
-              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>
+              <Text style={{ fontSize: 14, color: "#f59e0b", fontFamily: "Pretendard-Bold", marginTop: 1 }}>→</Text>
+              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular", flex: 1, lineHeight: 18 }}>
                 {typeof a === "string" ? a : JSON.stringify(a)}
               </Text>
             </View>
@@ -406,9 +406,9 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
         <View style={{ backgroundColor: colors.downBg, borderWidth: 1, borderColor: colors.down + "30", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, gap: 5 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.down }} />
-            <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: colors.down }}>핵심 리스크</Text>
+            <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.down }}>핵심 리스크</Text>
           </View>
-          <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 19 }}>{brief.keyRisk}</Text>
+          <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular", lineHeight: 19 }}>{brief.keyRisk}</Text>
         </View>
       )}
 
@@ -420,10 +420,10 @@ function BriefDetail({ session, colors }: { session: SessionSlot; colors: any })
             const title = ev.title ?? ev.event ?? "";
             return (
               <View key={`ue-${i}`} style={{ flexDirection: "row", gap: 12 }}>
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", width: 72 }}>{ev.date}</Text>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", width: 72 }}>{ev.date}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Pretendard-Regular" }}>{title}</Text>
-                  {ev.description && <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginTop: 2 }}>{ev.description}</Text>}
+                  <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: "Pretendard-Regular" }}>{title}</Text>
+                  {ev.description && <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginTop: 2 }}>{ev.description}</Text>}
                 </View>
               </View>
             );
@@ -467,15 +467,15 @@ function HistoryItem({ item, colors }: { item: any; colors: any }) {
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
           <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: sc.color }} />
-          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{sessionLabel}</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{sessionLabel}</Text>
           {item.summary && (
-            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1 }} numberOfLines={1}>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", flex: 1 }} numberOfLines={1}>
               {item.summary.slice(0, 48)}
             </Text>
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{timeStr}</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{timeStr}</Text>
           <Feather name={open ? "chevron-up" : "chevron-down"} size={13} color={colors.mutedForeground} />
         </View>
       </Pressable>
@@ -548,8 +548,8 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
       {/* Session Timeline */}
       <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>오늘의 시장 흐름</Text>
-          {dateLabel ? <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{dateLabel}</Text> : null}
+          <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>오늘의 시장 흐름</Text>
+          {dateLabel ? <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{dateLabel}</Text> : null}
         </View>
 
         {isLoading ? (
@@ -559,9 +559,9 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
         ) : error ? (
           <View style={{ alignItems: "center", paddingVertical: 32, gap: 10 }}>
             <Feather name="alert-circle" size={24} color={colors.border} />
-            <Text style={{ fontSize: 13, color: colors.mutedForeground }}>데이터를 불러오지 못했습니다</Text>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>데이터를 불러오지 못했습니다</Text>
             <TouchableOpacity onPress={() => refetch()}>
-              <Text style={{ fontSize: 12, color: colors.primary }}>다시 시도</Text>
+              <Text style={{ fontSize: 14, color: colors.primary }}>다시 시도</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -583,23 +583,23 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
           {/* 브리핑 헤더 */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 13 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-              <Text style={{ fontSize: 15 }}>{SESSION_ICON[selectedSession.icon] ?? "📋"}</Text>
-              <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{selectedSession.label}</Text>
+              <Text style={{ fontSize: 17 }}>{SESSION_ICON[selectedSession.icon] ?? "📋"}</Text>
+              <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{selectedSession.label}</Text>
               {selectedSession.time !== "주말" && (
-                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {selectedSession.time} KST
                 </Text>
               )}
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {selectedSession.generatedAt && (
-                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {new Date(selectedSession.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
                 </Text>
               )}
               {selectedSession.brief?.sentiment && (
                 <View style={{ backgroundColor: sc.bg, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: sc.color }}>{sc.label}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: sc.color }}>{sc.label}</Text>
                 </View>
               )}
             </View>
@@ -625,7 +625,7 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
           style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 10 }}
         >
           <Feather name={historyOpen ? "chevron-down" : "chevron-right"} size={14} color={colors.mutedForeground} />
-          <Text style={{ fontSize: 12, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Medium" }}>
+          <Text style={{ fontSize: 14, color: historyOpen ? colors.foreground : colors.mutedForeground, fontFamily: "Pretendard-Medium" }}>
             지난 브리핑
           </Text>
         </TouchableOpacity>
@@ -637,7 +637,7 @@ function OverviewTab({ market, colors, insets }: { market: "kr" | "us"; colors: 
                 {[0, 1, 2].map(i => <SkeletonCard key={i} height={52} />)}
               </View>
             ) : history.length === 0 ? (
-              <Text style={{ fontSize: 12, color: colors.border, fontFamily: "Pretendard-Regular", paddingVertical: 12 }}>
+              <Text style={{ fontSize: 14, color: colors.border, fontFamily: "Pretendard-Regular", paddingVertical: 12 }}>
                 저장된 브리핑이 없습니다
               </Text>
             ) : (
@@ -795,7 +795,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
             }]}
             onPress={() => setEtfSubTab(key)}
           >
-            <Text style={{ fontSize: 13, fontFamily: etfSubTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: etfSubTab === key ? colors.primary : colors.mutedForeground }}>
+            <Text style={{ fontSize: 15, fontFamily: etfSubTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: etfSubTab === key ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
           </Pressable>
@@ -821,7 +821,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 }]}
                 onPress={() => { setSearchMode(m); setSearchQuery(""); setSelectedEtf(null); setHoldings([]); setExposure([]); }}
               >
-                <Text style={{ fontSize: 12, fontFamily: searchMode === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: searchMode === m ? colors.primary : colors.mutedForeground }}>
+                <Text style={{ fontSize: 14, fontFamily: searchMode === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: searchMode === m ? colors.primary : colors.mutedForeground }}>
                   {m === "etf" ? "ETF 보유 종목" : "종목 담은 ETF"}
                 </Text>
               </Pressable>
@@ -837,7 +837,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 onChangeText={setSearchQuery}
                 placeholder={searchMode === "etf" ? "ETF 코드 또는 이름 (예: 069500)" : "종목 코드 또는 이름 (예: 삼성전자)"}
                 placeholderTextColor={colors.mutedForeground}
-                style={{ flex: 1, fontSize: 13, color: colors.foreground, paddingVertical: 9, paddingLeft: 8 }}
+                style={{ flex: 1, fontSize: 15, color: colors.foreground, paddingVertical: 9, paddingLeft: 8 }}
                 returnKeyType="search"
                 onSubmitEditing={() => {
                   if (searchMode === "etf") loadEtfHoldings(searchQuery, searchQuery);
@@ -857,7 +857,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 else loadStockExposure(searchQuery);
               }}
             >
-              <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#fff" }}>검색</Text>
+              <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: "#fff" }}>검색</Text>
             </TouchableOpacity>
           </View>
 
@@ -866,7 +866,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
             <View style={{ paddingHorizontal: 14, gap: 14 }}>
               {POPULAR_ETFS.map(group => (
                 <View key={group.label} style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1, textTransform: "uppercase" }}>{group.label}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1, textTransform: "uppercase" }}>{group.label}</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {group.items.map(etf => (
                       <TouchableOpacity
@@ -874,8 +874,8 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                         style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
                         onPress={() => { setSearchQuery(etf.code); loadEtfHoldings(etf.code, etf.name); }}
                       >
-                        <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{etf.code}</Text>
-                        <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{etf.name}</Text>
+                        <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{etf.code}</Text>
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{etf.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -894,22 +894,22 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           {/* ETF 보유 종목 결과 */}
           {!searchLoading && selectedEtf && holdings.length > 0 && (
             <View style={{ paddingHorizontal: 14 }}>
-              <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 10 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 10 }}>
                 {selectedEtf.code} 보유 종목 ({holdings.length}개)
               </Text>
               {holdings.map((h, idx) => (
                 <View key={h.stockCode} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.primary, width: 22 }}>{h.rank ?? idx + 1}</Text>
+                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.primary, width: 22 }}>{h.rank ?? idx + 1}</Text>
                     <View>
-                      <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{h.stockName}</Text>
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{h.stockCode}</Text>
+                      <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{h.stockName}</Text>
+                      <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{h.stockCode}</Text>
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{h.weight.toFixed(2)}%</Text>
+                    <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{h.weight.toFixed(2)}%</Text>
                     {h.weightChange != null && h.weightChange !== 0 && (
-                      <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: h.weightChange > 0 ? colors.up : colors.down }}>
+                      <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: h.weightChange > 0 ? colors.up : colors.down }}>
                         {h.weightChange > 0 ? "▲" : "▼"} {Math.abs(h.weightChange).toFixed(2)}%p
                       </Text>
                     )}
@@ -922,19 +922,19 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           {/* 종목이 담긴 ETF 결과 */}
           {!searchLoading && searchMode === "stock" && exposure.length > 0 && (
             <View style={{ paddingHorizontal: 14 }}>
-              <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 10 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 10 }}>
                 '{searchQuery}' 포함 ETF ({exposure.length}개)
               </Text>
               {exposure.map((item, idx) => (
                 <View key={item.etf.code + idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{item.etf.code}</Text>
-                    <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{item.etf.name}</Text>
-                    {item.etf.sector ? <Text style={{ fontSize: 10, color: colors.mutedForeground + "88" }}>{item.etf.sector}</Text> : null}
+                    <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{item.etf.code}</Text>
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground }} numberOfLines={1}>{item.etf.name}</Text>
+                    {item.etf.sector ? <Text style={{ fontSize: 12, color: colors.mutedForeground + "88" }}>{item.etf.sector}</Text> : null}
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.holding.weight.toFixed(2)}%</Text>
-                    <Text style={{ fontSize: 10, color: colors.mutedForeground }}>비중 {item.holding.rank}위</Text>
+                    <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{item.holding.weight.toFixed(2)}%</Text>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>비중 {item.holding.rank}위</Text>
                   </View>
                 </View>
               ))}
@@ -945,7 +945,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           {!searchLoading && selectedEtf && holdings.length === 0 && (
             <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
               <Feather name="inbox" size={28} color={colors.border} />
-              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>보유 종목 정보 없음</Text>
+              <Text style={{ fontSize: 15, color: colors.mutedForeground }}>보유 종목 정보 없음</Text>
             </View>
           )}
         </ScrollView>
@@ -965,16 +965,16 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           ) : !rebalData ? (
             <View style={{ alignItems: "center", paddingVertical: 60, gap: 12 }}>
               <Feather name="refresh-cw" size={28} color={colors.border} />
-              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>리밸런싱 데이터를 불러오지 못했습니다</Text>
-              <TouchableOpacity onPress={loadRebal}><Text style={{ fontSize: 12, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
+              <Text style={{ fontSize: 15, color: colors.mutedForeground }}>리밸런싱 데이터를 불러오지 못했습니다</Text>
+              <TouchableOpacity onPress={loadRebal}><Text style={{ fontSize: 14, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
             </View>
           ) : (
             <>
               {/* 요약 헤더 */}
               <View style={{ margin: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: colors.foreground }}>ETF 리밸런싱 현황</Text>
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
+                  <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground }}>ETF 리밸런싱 현황</Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
                     {(() => { try { return new Date(rebalData.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return rebalData.updatedAt; } })()}
                   </Text>
                 </View>
@@ -986,8 +986,8 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                     { label: "제외 종목", value: rebalData.exits.length },
                   ].map(stat => (
                     <View key={stat.label} style={{ flex: 1, alignItems: "center", backgroundColor: colors.muted, borderRadius: 10, paddingVertical: 8 }}>
-                      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{stat.value}</Text>
-                      <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2 }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{stat.value}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>{stat.label}</Text>
                     </View>
                   ))}
                 </View>
@@ -1001,7 +1001,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 { key: "bigSells", label: "비중 축소", emoji: "📉", data: rebalData.bigSells, color: "#ef4444" },
               ] as const).filter(s => (s.data as RebalStock[]).length > 0).map(section => (
                 <View key={section.key} style={{ marginHorizontal: 14, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>
                     {section.emoji} {section.label} ({(section.data as RebalStock[]).length}개)
                   </Text>
                   <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
@@ -1009,16 +1009,16 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                       <View key={stock.ticker + idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: idx < (section.data as RebalStock[]).slice(0,8).length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
                         <View style={{ flex: 1, gap: 2 }}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{stock.ticker}</Text>
+                            <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{stock.ticker}</Text>
                             <View style={{ backgroundColor: stock.region === "KR" ? "#3b82f615" : "#f9731615", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: stock.region === "KR" ? "#3b82f6" : "#f97316" }}>{stock.region}</Text>
+                              <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: stock.region === "KR" ? "#3b82f6" : "#f97316" }}>{stock.region}</Text>
                             </View>
                           </View>
-                          {stock.name ? <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{stock.name}</Text> : null}
-                          <Text style={{ fontSize: 10, color: colors.mutedForeground + "88" }} numberOfLines={1}>{stock.etfs.join(" · ")}</Text>
+                          {stock.name ? <Text style={{ fontSize: 13, color: colors.mutedForeground }} numberOfLines={1}>{stock.name}</Text> : null}
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground + "88" }} numberOfLines={1}>{stock.etfs.join(" · ")}</Text>
                         </View>
                         {stock.delta != null && (
-                          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: section.color }}>
+                          <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: section.color }}>
                             {stock.delta > 0 ? "+" : ""}{stock.delta.toFixed(1)}%p
                           </Text>
                         )}
@@ -1031,14 +1031,14 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 섹터 변화 */}
               {rebalData.sectorMoves.length > 0 && (
                 <View style={{ marginHorizontal: 14, marginBottom: 14 }}>
-                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>🏭 섹터 변화</Text>
+                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground, marginBottom: 8 }}>🏭 섹터 변화</Text>
                   <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
                     {rebalData.sectorMoves.map((sm, idx) => (
                       <View key={sm.sector} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: idx < rebalData.sectorMoves.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                        <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{sm.sector}</Text>
+                        <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{sm.sector}</Text>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{sm.prevCount} → {sm.etfCount}개 ETF</Text>
-                          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: sm.direction === "up" ? colors.up : sm.direction === "down" ? colors.down : colors.mutedForeground }}>
+                          <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{sm.prevCount} → {sm.etfCount}개 ETF</Text>
+                          <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: sm.direction === "up" ? colors.up : sm.direction === "down" ? colors.down : colors.mutedForeground }}>
                             {sm.direction === "up" ? "▲" : sm.direction === "down" ? "▼" : "→"}
                           </Text>
                         </View>
@@ -1051,7 +1051,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 변화 없음 */}
               {!rebalData.hasChanges && (
                 <View style={{ alignItems: "center", paddingVertical: 30, gap: 8 }}>
-                  <Text style={{ fontSize: 13, color: colors.mutedForeground }}>최근 리밸런싱 변화 없음</Text>
+                  <Text style={{ fontSize: 15, color: colors.mutedForeground }}>최근 리밸런싱 변화 없음</Text>
                 </View>
               )}
             </>
@@ -1074,29 +1074,29 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
           ) : !fundFlow ? (
             <View style={{ alignItems: "center", paddingVertical: 60, gap: 12 }}>
               <Feather name="layers" size={28} color={colors.border} />
-              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>데이터를 불러오지 못했습니다</Text>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground + "99" }}>처음 로드 시 20~30초 소요될 수 있습니다</Text>
-              <TouchableOpacity onPress={loadFundFlow}><Text style={{ fontSize: 12, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
+              <Text style={{ fontSize: 15, color: colors.mutedForeground }}>데이터를 불러오지 못했습니다</Text>
+              <Text style={{ fontSize: 13, color: colors.mutedForeground + "99" }}>처음 로드 시 20~30초 소요될 수 있습니다</Text>
+              <TouchableOpacity onPress={loadFundFlow}><Text style={{ fontSize: 14, color: colors.primary }}>다시 시도</Text></TouchableOpacity>
             </View>
           ) : (
             <>
               {/* 헤더 */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10 }}>
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {fundFlow.coverageStats.krEtfCount + fundFlow.coverageStats.usEtfCount}개 ETF 집계
                   <Text style={{ color: colors.border + "99" }}>  ·  </Text>
                   {(() => { try { return new Date(fundFlow.updatedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return fundFlow.updatedAt; } })()}
                 </Text>
                 <TouchableOpacity onPress={loadFundFlow} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Feather name="refresh-cw" size={12} color={colors.mutedForeground} />
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>새로고침</Text>
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground }}>새로고침</Text>
                 </TouchableOpacity>
               </View>
 
               {/* 섹터 온도 */}
               {fundFlow.themeBreakdown?.length > 0 && (
                 <View style={{ marginHorizontal: 16, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>지금 어떤 섹터가 뜨거운가</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-Bold", color: colors.mutedForeground, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>지금 어떤 섹터가 뜨거운가</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                     {fundFlow.themeBreakdown.map(t => {
                       const heat = t.score >= 75 ? "🔥" : t.score >= 40 ? "📈" : "❄️";
@@ -1106,8 +1106,8 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                       const chipColor = isHot ? "#6366f1" : isWarm ? "#16a34a" : colors.mutedForeground;
                       return (
                         <View key={t.key} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, backgroundColor: chipBg, borderColor: chipBorder }}>
-                          <Text style={{ fontSize: 12 }}>{heat}</Text>
-                          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: chipColor }}>{t.label}</Text>
+                          <Text style={{ fontSize: 14 }}>{heat}</Text>
+                          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: chipColor }}>{t.label}</Text>
                         </View>
                       );
                     })}
@@ -1120,8 +1120,8 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                 {(["kr", "us"] as const).map(p => (
                   <TouchableOpacity key={p} onPress={() => setFlowPanel(p)}
                     style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 8, borderRadius: 10, backgroundColor: flowPanel === p ? colors.card : "transparent" }}>
-                    <Text style={{ fontSize: 12 }}>{p === "kr" ? "🏛" : "🌐"}</Text>
-                    <Text style={{ fontSize: 12, fontFamily: flowPanel === p ? "Pretendard-SemiBold" : "Pretendard-Regular", color: flowPanel === p ? colors.foreground : colors.mutedForeground }}>
+                    <Text style={{ fontSize: 14 }}>{p === "kr" ? "🏛" : "🌐"}</Text>
+                    <Text style={{ fontSize: 14, fontFamily: flowPanel === p ? "Pretendard-SemiBold" : "Pretendard-Regular", color: flowPanel === p ? colors.foreground : colors.mutedForeground }}>
                       {p === "kr" ? "국내 ETF 집중 종목" : "해외 ETF 집중 종목"}
                     </Text>
                   </TouchableOpacity>
@@ -1131,7 +1131,7 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
               {/* 종목 리스트 */}
               <View style={{ marginHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
                 <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.muted }}>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                     {flowPanel === "kr"
                       ? `국내 ${fundFlow.coverageStats.krEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`
                       : `해외 ${fundFlow.coverageStats.usEtfCount}개 ETF가 공통으로 많이 담고 있는 종목 순위`}
@@ -1141,28 +1141,28 @@ function ETFTab({ colors, insets }: { colors: any; insets: any }) {
                   const rankColor = i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#b45309" : colors.border;
                   return (
                     <View key={stock.code} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: i < (flowPanel === "kr" ? fundFlow.krTopStocks : fundFlow.usTopStocks).length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: rankColor, width: 20, textAlign: "center" }}>{i + 1}</Text>
+                      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: rankColor, width: 20, textAlign: "center" }}>{i + 1}</Text>
                       <View style={{ flex: 1, gap: 5 }}>
                         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                          <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{stock.name || stock.code}</Text>
-                          <Text style={{ fontSize: 10, color: colors.border, fontFamily: "Pretendard-Regular" }}>{stock.code}</Text>
+                          <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{stock.name || stock.code}</Text>
+                          <Text style={{ fontSize: 12, color: colors.border, fontFamily: "Pretendard-Regular" }}>{stock.code}</Text>
                         </View>
                         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
                           {stock.etfs.slice(0, 4).map(e => (
                             <View key={e} style={{ backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
-                              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{e}</Text>
+                              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }} numberOfLines={1}>{e}</Text>
                             </View>
                           ))}
                           {stock.etfs.length > 4 && (
                             <View style={{ backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
-                              <Text style={{ fontSize: 10, color: colors.mutedForeground + "88", fontFamily: "Pretendard-Regular" }}>+{stock.etfs.length - 4}개 ETF</Text>
+                              <Text style={{ fontSize: 12, color: colors.mutedForeground + "88", fontFamily: "Pretendard-Regular" }}>+{stock.etfs.length - 4}개 ETF</Text>
                             </View>
                           )}
                         </View>
                       </View>
                       <View style={{ alignItems: "flex-end" }}>
-                        <Text style={{ fontSize: 20, fontFamily: "Pretendard-Bold", color: colors.foreground, lineHeight: 24 }}>{stock.etfCount}</Text>
-                        <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>개 ETF</Text>
+                        <Text style={{ fontSize: 22, fontFamily: "Pretendard-Bold", color: colors.foreground, lineHeight: 24 }}>{stock.etfCount}</Text>
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>개 ETF</Text>
                       </View>
                     </View>
                   );
@@ -1270,16 +1270,16 @@ function MobileIndicatorCard({ series, colors }: { series: IndicatorSeries; colo
       {/* 헤더: 국가 + 카테고리 */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Text style={{ fontSize: 11 }}>{COUNTRY_FLAG_IND[series.country] ?? "🌐"}</Text>
+          <Text style={{ fontSize: 13 }}>{COUNTRY_FLAG_IND[series.country] ?? "🌐"}</Text>
           <View style={{ backgroundColor: color + "22", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-            <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color }}>{series.category}</Text>
+            <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color }}>{series.category}</Text>
           </View>
         </View>
         <Feather name={expanded ? "chevron-up" : "chevron-down"} size={11} color={colors.mutedForeground + "66"} />
       </View>
 
       {/* 지표명 */}
-      <Text style={{ fontSize: 10, fontFamily: "Pretendard-Medium", color: colors.foreground + "99", marginBottom: 6, lineHeight: 13 }} numberOfLines={2}>
+      <Text style={{ fontSize: 12, fontFamily: "Pretendard-Medium", color: colors.foreground + "99", marginBottom: 6, lineHeight: 13 }} numberOfLines={2}>
         {series.name}
       </Text>
 
@@ -1288,20 +1288,20 @@ function MobileIndicatorCard({ series, colors }: { series: IndicatorSeries; colo
         <View>
           {series.rangeLabel ? (
             <>
-              <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: colors.foreground, letterSpacing: -0.5 }}>{series.rangeLabel}</Text>
-              <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>FOMC 레인지</Text>
+              <Text style={{ fontSize: 17, fontFamily: "Pretendard-Bold", color: colors.foreground, letterSpacing: -0.5 }}>{series.rangeLabel}</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>FOMC 레인지</Text>
             </>
           ) : (
             <>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 2 }}>
-                <Text style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground, letterSpacing: -0.5 }}>
+                <Text style={{ fontSize: 20, fontFamily: "Pretendard-Bold", color: colors.foreground, letterSpacing: -0.5 }}>
                   {last.toFixed(series.id === "us-gdp" || series.id === "kr-gdp" ? 1 : 2)}
                 </Text>
-                <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>{series.unit}</Text>
+                <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>{series.unit}</Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-                <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color }}>{trendArrow} {delta >= 0 ? "+" : ""}{delta.toFixed(2)}</Text>
-                <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", color: colors.mutedForeground + "80" }}>{dateLabel}</Text>
+                <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color }}>{trendArrow} {delta >= 0 ? "+" : ""}{delta.toFixed(2)}</Text>
+                <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground + "80" }}>{dateLabel}</Text>
               </View>
             </>
           )}
@@ -1317,11 +1317,11 @@ function MobileIndicatorCard({ series, colors }: { series: IndicatorSeries; colo
             const d = nextVal != null ? row.value - nextVal : null;
             return (
               <View key={row.date} style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }}>{row.date.slice(0, 7)}</Text>
-                <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.foreground, width: 44, textAlign: "right" }}>
+                <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, flex: 1 }}>{row.date.slice(0, 7)}</Text>
+                <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground, width: 44, textAlign: "right" }}>
                   {row.value.toFixed(series.id === "us-gdp" || series.id === "kr-gdp" ? 1 : 2)}{series.unit}
                 </Text>
-                <Text style={{ fontSize: 9, fontFamily: "Pretendard-Regular", width: 36, textAlign: "right",
+                <Text style={{ fontSize: 11, fontFamily: "Pretendard-Regular", width: 36, textAlign: "right",
                   color: d == null ? colors.mutedForeground : d > 0 ? "#22c55e" : d < 0 ? "#ef4444" : colors.mutedForeground + "60" }}>
                   {d == null ? "—" : `${d > 0 ? "▲" : "▼"}${Math.abs(d).toFixed(2)}`}
                 </Text>
@@ -1370,8 +1370,8 @@ function MobileIndicatorSection({ colors }: { colors: any }) {
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Feather name="trending-up" size={13} color={colors.primary} />
-          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>주요 지표 추이</Text>
-          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>FRED 실제 데이터</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>주요 지표 추이</Text>
+          <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>FRED 실제 데이터</Text>
         </View>
         <Feather name={collapsed ? "chevron-right" : "chevron-down"} size={14} color={colors.mutedForeground + "80"} />
       </Pressable>
@@ -1381,14 +1381,14 @@ function MobileIndicatorSection({ colors }: { colors: any }) {
           {loading ? (
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 20 }}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>FRED 데이터 불러오는 중…</Text>
+              <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>FRED 데이터 불러오는 중…</Text>
             </View>
           ) : indicators.length === 0 ? null : (
             <>
               {/* 미국 */}
               {usIndicators.length > 0 && (
                 <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, marginBottom: 8, marginLeft: 2 }}>🇺🇸 미국</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, marginBottom: 8, marginLeft: 2 }}>🇺🇸 미국</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {usIndicators.map(s => <MobileIndicatorCard key={s.id} series={s} colors={colors} />)}
                   </View>
@@ -1397,7 +1397,7 @@ function MobileIndicatorSection({ colors }: { colors: any }) {
               {/* 한국 */}
               {krIndicators.length > 0 && (
                 <View>
-                  <Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, marginBottom: 8, marginLeft: 2 }}>🇰🇷 한국</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.mutedForeground, marginBottom: 8, marginLeft: 2 }}>🇰🇷 한국</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {krIndicators.map(s => <MobileIndicatorCard key={s.id} series={s} colors={colors} />)}
                   </View>
@@ -1451,25 +1451,25 @@ function EarningsCard({ e, colors }: { e: EarningsEntry; colors: any }) {
           backgroundColor: isKR ? "#dbeafe" : "#fef9c3",
           alignItems: "center", justifyContent: "center",
         }}>
-          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Bold", color: isKR ? "#2563eb" : "#b45309" }}>{initials}</Text>
+          <Text style={{ fontSize: 15, fontFamily: "Pretendard-Bold", color: isKR ? "#2563eb" : "#b45309" }}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-            <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{e.ticker.replace(".KS", "").replace(".KQ", "")}</Text>
+            <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>{e.ticker.replace(".KS", "").replace(".KQ", "")}</Text>
             <View style={{ backgroundColor: isKR ? "#dbeafe" : "#fef9c3", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>{isKR ? "🇰🇷 KR" : "🇺🇸 US"}</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: isKR ? "#2563eb" : "#b45309" }}>{isKR ? "🇰🇷 KR" : "🇺🇸 US"}</Text>
             </View>
             {e.isCompleted && (
               <View style={{ backgroundColor: "#dcfce7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                <Text style={{ fontSize: 9, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>발표완료</Text>
+                <Text style={{ fontSize: 11, fontFamily: "Pretendard-SemiBold", color: "#16a34a" }}>발표완료</Text>
               </View>
             )}
           </View>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginTop: 1 }} numberOfLines={1}>{e.companyName}</Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular", marginTop: 1 }} numberOfLines={1}>{e.companyName}</Text>
         </View>
         {e.fiscalQuarterEnding && (
           <View style={{ backgroundColor: colors.muted, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 }}>
-            <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>{e.fiscalQuarterEnding}</Text>
+            <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>{e.fiscalQuarterEnding}</Text>
           </View>
         )}
       </View>
@@ -1479,17 +1479,17 @@ function EarningsCard({ e, colors }: { e: EarningsEntry; colors: any }) {
         <View style={{ flexDirection: "row", gap: 10 }}>
           {hasEps && (
             <View style={{ flex: 1, backgroundColor: colors.muted, borderRadius: 10, padding: 10, gap: 3 }}>
-              <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>EPS 예상</Text>
-              <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
+              <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>EPS 예상</Text>
+              <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
                 {fmtEps(e.epsEstimate!, e.currency)}
               </Text>
               {e.epsLow != null && e.epsHigh != null && (
-                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                   {fmtEps(e.epsLow, e.currency)} ~ {fmtEps(e.epsHigh, e.currency)}
                 </Text>
               )}
               {e.analyticCount != null && e.analyticCount > 0 && (
-                <Text style={{ fontSize: 9, color: colors.mutedForeground + "99", fontFamily: "Pretendard-Regular" }}>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground + "99", fontFamily: "Pretendard-Regular" }}>
                   애널리스트 {e.analyticCount}명
                 </Text>
               )}
@@ -1497,8 +1497,8 @@ function EarningsCard({ e, colors }: { e: EarningsEntry; colors: any }) {
           )}
           {hasRevenue && (
             <View style={{ flex: 1, backgroundColor: colors.muted, borderRadius: 10, padding: 10, gap: 3 }}>
-              <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>매출 예상</Text>
-              <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
+              <Text style={{ fontSize: 12, fontFamily: "Pretendard-Regular", color: colors.mutedForeground }}>매출 예상</Text>
+              <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground }}>
                 {fmtRevenue(e.revenueEstimate!, e.currency)}
               </Text>
             </View>
@@ -1510,7 +1510,7 @@ function EarningsCard({ e, colors }: { e: EarningsEntry; colors: any }) {
       {surprisePct != null && e.epsActualPrev != null && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
           <Feather name="trending-up" size={11} color={surpriseColor!} />
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
             전분기 실적: <Text style={{ color: colors.foreground, fontFamily: "Pretendard-Medium" }}>{fmtEps(e.epsActualPrev, e.currency)}</Text>
             {"  "}서프라이즈: <Text style={{ color: surpriseColor!, fontFamily: "Pretendard-SemiBold" }}>
               {surprisePct > 0 ? "+" : ""}{(surprisePct * 100).toFixed(1)}%
@@ -1570,7 +1570,7 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
             }]}
             onPress={() => setCalTab(key)}
           >
-            <Text style={{ fontSize: 13, fontFamily: calTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: calTab === key ? colors.primary : colors.mutedForeground }}>{label}</Text>
+            <Text style={{ fontSize: 15, fontFamily: calTab === key ? "Pretendard-SemiBold" : "Pretendard-Regular", color: calTab === key ? colors.primary : colors.mutedForeground }}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -1584,7 +1584,7 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
           earningsDates.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 60, gap: 10 }}>
               <Feather name="calendar" size={28} color={colors.border} />
-              <Text style={{ fontSize: 13, color: colors.mutedForeground }}>실적 발표 일정이 없습니다</Text>
+              <Text style={{ fontSize: 15, color: colors.mutedForeground }}>실적 발표 일정이 없습니다</Text>
             </View>
           ) : (
             <View style={{ paddingTop: 12 }}>
@@ -1595,11 +1595,11 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
                   <View key={dateKey} style={{ marginBottom: 4 }}>
                     {/* Date header */}
                     <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}>
-                      <Text style={{ fontSize: 13, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{fmtDateLabel(dateKey)}</Text>
-                      {isToday && <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#b45309" }}>오늘</Text></View>}
-                      {isTomorrow && <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#2563eb" }}>내일</Text></View>}
+                      <Text style={{ fontSize: 15, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{fmtDateLabel(dateKey)}</Text>
+                      {isToday && <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#b45309" }}>오늘</Text></View>}
+                      {isTomorrow && <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#2563eb" }}>내일</Text></View>}
                       <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{earningsByDate[dateKey].length}개사</Text>
+                      <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{earningsByDate[dateKey].length}개사</Text>
                     </View>
                     {/* Cards */}
                     {earningsByDate[dateKey].map((e, i) => (
@@ -1617,16 +1617,16 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
               <View style={{ marginTop: 8 }}>
                 <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Feather name="calendar" size={12} color={colors.primary} />
-                  <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>다가올 경제지표 발표</Text>
+                  <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>다가올 경제지표 발표</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: "auto" }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#ef4444" }} /><Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>매우 중요</Text>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#ef4444" }} /><Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>매우 중요</Text>
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" }} /><Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>중요</Text>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" }} /><Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>중요</Text>
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#94a3b8" }} /><Text style={{ fontSize: 9, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>보통</Text>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#94a3b8" }} /><Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>보통</Text>
                     </View>
                   </View>
                 </View>
@@ -1643,24 +1643,24 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
                     <View key={`ec-${i}`}>
                       {showDateHeader && (
                         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, borderTopWidth: i > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: colors.border + "60" }}>
-                          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{dateStr}</Text>
-                          {isToday2 && <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#b45309" }}>오늘</Text></View>}
-                          {isTomorrow2 && <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 10, fontFamily: "Pretendard-SemiBold", color: "#2563eb" }}>내일</Text></View>}
+                          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground }}>{dateStr}</Text>
+                          {isToday2 && <View style={{ backgroundColor: "#fef3c7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#b45309" }}>오늘</Text></View>}
+                          {isTomorrow2 && <View style={{ backgroundColor: "#dbeafe", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}><Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: "#2563eb" }}>내일</Text></View>}
                         </View>
                       )}
                       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 10 }}>
                         <View style={{ width: 3, alignSelf: "stretch", backgroundColor: IMP_COLOR[ev.importance] ?? "#94a3b8", borderRadius: 2 }} />
                         <View style={{ flex: 1, gap: 3 }}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                            <Text style={{ fontSize: 12 }}>{COUNTRY_FLAG_IND[ev.country] ?? "🌐"}</Text>
+                            <Text style={{ fontSize: 14 }}>{COUNTRY_FLAG_IND[ev.country] ?? "🌐"}</Text>
                             <View style={{ backgroundColor: IMP_COLOR[ev.importance] + "22", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 9, fontFamily: "Pretendard-Bold", color: IMP_COLOR[ev.importance] }}>{IMP_LABEL[ev.importance]}</Text>
+                              <Text style={{ fontSize: 11, fontFamily: "Pretendard-Bold", color: IMP_COLOR[ev.importance] }}>{IMP_LABEL[ev.importance]}</Text>
                             </View>
-                            {ev.time && <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.time}</Text>}
+                            {ev.time && <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>{ev.time}</Text>}
                           </View>
-                          <Text style={{ fontSize: 13, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 18 }}>{ev.title}</Text>
+                          <Text style={{ fontSize: 15, fontFamily: "Pretendard-Medium", color: colors.foreground, lineHeight: 18 }}>{ev.title}</Text>
                           {(ev.forecast || ev.previous) && (
-                            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                               {ev.forecast ? `예상 ${ev.forecast}` : ""}{ev.forecast && ev.previous ? " · " : ""}{ev.previous ? `이전 ${ev.previous}` : ""}
                             </Text>
                           )}
@@ -1674,7 +1674,7 @@ function CalendarTab({ colors, insets }: { colors: any; insets: any }) {
             {economic.length === 0 && !loading && (
               <View style={{ alignItems: "center", paddingVertical: 40, gap: 10 }}>
                 <Feather name="bar-chart" size={28} color={colors.border} />
-                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>경제 지표 일정이 없습니다</Text>
+                <Text style={{ fontSize: 15, color: colors.mutedForeground }}>경제 지표 일정이 없습니다</Text>
               </View>
             )}
           </>
@@ -1706,8 +1706,7 @@ export default function MarketScreen() {
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
         <View>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>애빛다</Text>
-          <Text style={{ fontSize: 10, fontFamily: "Pretendard-Regular", color: colors.mutedForeground, marginTop: 1 }}>AI 헤지펀드 · 시장 분석</Text>
+          <Text style={[styles.headerTitle, { color: "#FF8A7A" }]}>애빛다</Text>
         </View>
         {subTab === "overview" && (
           <View style={{ flexDirection: "row", backgroundColor: colors.muted, borderRadius: 10, padding: 3 }}>
@@ -1721,7 +1720,7 @@ export default function MarketScreen() {
                   opacity: pressed ? 0.8 : 1,
                 }]}
               >
-                <Text style={{ fontSize: 12, fontFamily: market === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: market === m ? colors.primary : colors.mutedForeground }}>
+                <Text style={{ fontSize: 14, fontFamily: market === m ? "Pretendard-SemiBold" : "Pretendard-Regular", color: market === m ? colors.primary : colors.mutedForeground }}>
                   {m === "kr" ? "🇰🇷 한국" : "🇺🇸 미국"}
                 </Text>
               </Pressable>
@@ -1742,7 +1741,7 @@ export default function MarketScreen() {
             }]}
             onPress={() => setSubTab(tabKey)}
           >
-            <Text style={{ fontSize: 13, fontFamily: subTab === tabKey ? "Pretendard-SemiBold" : "Pretendard-Regular", color: subTab === tabKey ? colors.primary : colors.mutedForeground }}>
+            <Text style={{ fontSize: 15, fontFamily: subTab === tabKey ? "Pretendard-SemiBold" : "Pretendard-Regular", color: subTab === tabKey ? colors.primary : colors.mutedForeground }}>
               {label}
             </Text>
           </Pressable>
@@ -1765,7 +1764,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
+  headerTitle: { fontSize: 26, fontFamily: "Pretendard-Bold" },
   indexCard: { borderRadius: 12, borderWidth: 1, padding: 12 },
   pulseCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   sectorCard: { borderRadius: 12, borderWidth: 1, padding: 12 },

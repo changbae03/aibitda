@@ -21,11 +21,11 @@ function VerdictBadge({ verdict }: { verdict: string | null }) {
   const v = verdict.toLowerCase();
   if (v.includes("strong buy"))
     return <View style={{ backgroundColor: "#10b98122", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color: "#10b981", fontFamily: "Pretendard-SemiBold" }}>강력매수</Text>
+      <Text style={{ fontSize: 13, color: "#10b981", fontFamily: "Pretendard-SemiBold" }}>강력매수</Text>
     </View>;
   if (v.includes("buy"))
     return <View style={{ backgroundColor: colors.upBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-      <Text style={{ fontSize: 11, color: colors.up, fontFamily: "Pretendard-SemiBold" }}>매수</Text>
+      <Text style={{ fontSize: 13, color: colors.up, fontFamily: "Pretendard-SemiBold" }}>매수</Text>
     </View>;
   return null;
 }
@@ -35,21 +35,21 @@ function OutcomeBadge({ outcome, ret }: { outcome: string | null; ret: number | 
   if (!outcome || outcome === "pending") return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" }} />
-      <Text style={{ fontSize: 11, color: "#f59e0b", fontFamily: "Pretendard-Regular" }}>진행중</Text>
+      <Text style={{ fontSize: 13, color: "#f59e0b", fontFamily: "Pretendard-Regular" }}>진행중</Text>
     </View>
   );
   if (outcome === "hit_target") return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <Feather name="target" size={11} color={colors.up} />
-      <Text style={{ fontSize: 11, color: colors.up, fontFamily: "Pretendard-SemiBold" }}>목표달성</Text>
-      {ret != null && <Text style={{ fontSize: 11, color: colors.up, fontFamily: "Pretendard-Bold" }}>+{ret.toFixed(1)}%</Text>}
+      <Text style={{ fontSize: 13, color: colors.up, fontFamily: "Pretendard-SemiBold" }}>목표달성</Text>
+      {ret != null && <Text style={{ fontSize: 13, color: colors.up, fontFamily: "Pretendard-Bold" }}>+{ret.toFixed(1)}%</Text>}
     </View>
   );
   if (outcome === "hit_stop") return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <Feather name="shield" size={11} color={colors.down} />
-      <Text style={{ fontSize: 11, color: colors.down, fontFamily: "Pretendard-SemiBold" }}>손절</Text>
-      {ret != null && <Text style={{ fontSize: 11, color: colors.down, fontFamily: "Pretendard-Bold" }}>{ret.toFixed(1)}%</Text>}
+      <Text style={{ fontSize: 13, color: colors.down, fontFamily: "Pretendard-SemiBold" }}>손절</Text>
+      {ret != null && <Text style={{ fontSize: 13, color: colors.down, fontFamily: "Pretendard-Bold" }}>{ret.toFixed(1)}%</Text>}
     </View>
   );
   return null;
@@ -201,33 +201,33 @@ function makeStyles(c: ReturnType<typeof useColors>) {
     root: { flex: 1, backgroundColor: c.background },
     header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
     backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-    headerTitle: { fontSize: 20, fontFamily: "Pretendard-Bold", color: c.foreground },
-    headerSub: { fontSize: 12, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold", color: c.foreground },
+    headerSub: { fontSize: 14, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
     statsBar: {
       flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginBottom: 10,
       backgroundColor: c.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: c.border,
     },
     statItem: { flex: 1, alignItems: "center", gap: 2 },
-    statVal: { fontSize: 16, fontFamily: "Pretendard-Bold", color: c.foreground },
-    statLabel: { fontSize: 11, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    statVal: { fontSize: 18, fontFamily: "Pretendard-Bold", color: c.foreground },
+    statLabel: { fontSize: 13, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
     statSep: { width: 1, height: 30, backgroundColor: c.border },
     sortRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 8 },
     sortBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.border },
     sortActive: { backgroundColor: c.primary + "22", borderColor: c.primary },
-    sortLabel: { fontSize: 13, fontFamily: "Pretendard-Medium", color: c.mutedForeground },
+    sortLabel: { fontSize: 15, fontFamily: "Pretendard-Medium", color: c.mutedForeground },
     sortLabelActive: { color: c.primary },
     list: { padding: 16, gap: 10, paddingBottom: 40 },
     card: { backgroundColor: c.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: c.border, gap: 12 },
     cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-    ticker: { fontSize: 16, fontFamily: "Pretendard-Bold", color: c.foreground },
-    company: { fontSize: 12, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
-    industry: { fontSize: 11, color: c.mutedForeground + "99", fontFamily: "Pretendard-Regular" },
-    elapsed: { fontSize: 11, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    ticker: { fontSize: 18, fontFamily: "Pretendard-Bold", color: c.foreground },
+    company: { fontSize: 14, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    industry: { fontSize: 13, color: c.mutedForeground + "99", fontFamily: "Pretendard-Regular" },
+    elapsed: { fontSize: 13, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
     cardBottom: { flexDirection: "row", alignItems: "center", gap: 16 },
     metaItem: { gap: 1 },
-    metaLabel: { fontSize: 10, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
-    metaVal: { fontSize: 13, color: c.foreground, fontFamily: "Pretendard-SemiBold" },
-    date: { marginLeft: "auto", fontSize: 11, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
-    empty: { textAlign: "center", color: c.mutedForeground, marginTop: 60, fontFamily: "Pretendard-Regular", fontSize: 14 },
+    metaLabel: { fontSize: 12, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    metaVal: { fontSize: 15, color: c.foreground, fontFamily: "Pretendard-SemiBold" },
+    date: { marginLeft: "auto", fontSize: 13, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    empty: { textAlign: "center", color: c.mutedForeground, marginTop: 60, fontFamily: "Pretendard-Regular", fontSize: 16 },
   });
 }

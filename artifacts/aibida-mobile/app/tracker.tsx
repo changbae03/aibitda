@@ -49,10 +49,10 @@ function ProgressBar({ current, entry, target }: { current: number; entry: numbe
         />
       </View>
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           진입 {entry >= 1000 ? entry.toLocaleString("ko-KR") + "원" : "$" + entry.toFixed(2)}
         </Text>
-        <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
           목표 {target >= 1000 ? target.toLocaleString("ko-KR") + "원" : "$" + target.toFixed(2)}
         </Text>
       </View>
@@ -155,7 +155,7 @@ export default function TrackerScreen() {
                       <>
                         <Text style={s.currentPrice}>{fmt(currentPrice)}</Text>
                         {q?.change != null && (
-                          <Text style={{ fontSize: 12, fontFamily: "Pretendard-SemiBold", color: q.change >= 0 ? colors.up : colors.down }}>
+                          <Text style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: q.change >= 0 ? colors.up : colors.down }}>
                             {q.change >= 0 ? "▲" : "▼"} {Math.abs(q.change).toFixed(2)}%
                           </Text>
                         )}
@@ -179,13 +179,13 @@ export default function TrackerScreen() {
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   {upside != null && (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>남은 상승여력</Text>
-                      <Text style={{ fontSize: 14, fontFamily: "Pretendard-Bold", color: upside >= 0 ? colors.up : colors.down }}>
+                      <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>남은 상승여력</Text>
+                      <Text style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: upside >= 0 ? colors.up : colors.down }}>
                         {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
                       </Text>
                     </View>
                   )}
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Pretendard-Regular" }}>
                     {new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
                   </Text>
                 </View>
@@ -203,20 +203,20 @@ function makeStyles(c: ReturnType<typeof useColors>) {
     root: { flex: 1, backgroundColor: c.background },
     header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
     backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-    headerTitle: { fontSize: 20, fontFamily: "Pretendard-Bold", color: c.foreground },
-    headerSub: { fontSize: 12, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    headerTitle: { fontSize: 22, fontFamily: "Pretendard-Bold", color: c.foreground },
+    headerSub: { fontSize: 14, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
     refreshBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
     list: { padding: 16, gap: 12, paddingBottom: 40 },
     card: { backgroundColor: c.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: c.border, gap: 12 },
     cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-    ticker: { fontSize: 16, fontFamily: "Pretendard-Bold", color: c.foreground },
-    company: { fontSize: 12, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
-    industry: { fontSize: 11, color: c.mutedForeground + "99", fontFamily: "Pretendard-Regular" },
-    currentPrice: { fontSize: 16, fontFamily: "Pretendard-Bold", color: c.foreground },
+    ticker: { fontSize: 18, fontFamily: "Pretendard-Bold", color: c.foreground },
+    company: { fontSize: 14, color: c.mutedForeground, fontFamily: "Pretendard-Regular" },
+    industry: { fontSize: 13, color: c.mutedForeground + "99", fontFamily: "Pretendard-Regular" },
+    currentPrice: { fontSize: 18, fontFamily: "Pretendard-Bold", color: c.foreground },
     verdictBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-    verdictText: { fontSize: 11, fontFamily: "Pretendard-SemiBold" },
+    verdictText: { fontSize: 13, fontFamily: "Pretendard-SemiBold" },
     empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
-    emptyTitle: { fontSize: 16, fontFamily: "Pretendard-SemiBold", color: c.foreground },
-    emptyDesc: { fontSize: 13, color: c.mutedForeground, textAlign: "center", fontFamily: "Pretendard-Regular", lineHeight: 20 },
+    emptyTitle: { fontSize: 18, fontFamily: "Pretendard-SemiBold", color: c.foreground },
+    emptyDesc: { fontSize: 15, color: c.mutedForeground, textAlign: "center", fontFamily: "Pretendard-Regular", lineHeight: 20 },
   });
 }
