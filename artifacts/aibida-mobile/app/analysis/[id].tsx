@@ -5,6 +5,7 @@ import {
   ActivityIndicator, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
+import type { TextStyle, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/hooks/useApi";
@@ -705,6 +706,270 @@ function RunningProgressCard({ analysis }: { analysis: any }) {
   );
 }
 
+// ── MarkdownText ──────────────────────────────────────────────────────────────
+
+/** 인라인 마크다운: **bold**, *italic* 파싱 */
+function InlineText({ text, style }: { text: string; style?: TextStyle }) {
+  const parts: { content: string; bold: boolean; italic: boolean }[] = [];
+  const re = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ content: text.slice(last, m.index), bold: false, italic: false });
+    if (m[2]) parts.push({ content: m[2], bold: true, italic: true });
+    else if (m[3]) parts.push({ content: m[3], bold: true, italic: false });
+    else if (m[4]) parts.push({ content: m[4], bold: false, italic: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ content: text.slice(last), bold: false, italic: false });
+  if (parts.length === 0) return <Text style={style}>{text}</Text>;
+  return (
+    <Text style={style}>
+      {parts.map((p, i) => (
+        <Text
+          key={i}
+          style={[
+            style,
+            p.bold  && { fontFamily: "Pretendard-Bold" },
+            p.italic && { fontStyle: "italic" },
+          ] as TextStyle[]}
+        >
+          {p.content}
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
+type MdBlock =
+  | { type: "h1" | "h2" | "h3"; text: string }
+  | { type: "hr" }
+  | { type: "bullet"; text: string; indent: number }
+  | { type: "numbered"; text: string; n: number }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "para"; lines: string[] };
+
+function parseMarkdown(raw: string): MdBlock[] {
+  const lines = raw.split("\n");
+  const blocks: MdBlock[] = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // blank
+    if (!trimmed) { i++; continue; }
+
+    // headings
+    if (/^### /.test(trimmed)) { blocks.push({ type: "h3", text: trimmed.slice(4).trim() }); i++; continue; }
+    if (/^## /.test(trimmed))  { blocks.push({ type: "h2", text: trimmed.slice(3).trim() }); i++; continue; }
+    if (/^# /.test(trimmed))   { blocks.push({ type: "h1", text: trimmed.slice(2).trim() }); i++; continue; }
+
+    // hr
+    if (/^[\-\*_]{3,}$/.test(trimmed)) { blocks.push({ type: "hr" }); i++; continue; }
+
+    // table: collect consecutive | lines
+    if (trimmed.startsWith("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      // separator row: every cell is only dashes/colons e.g. |---|:--:|--:|
+      const isSep = (l: string) =>
+        l.split("|").slice(1, -1).every(cell => /^\s*:?-+:?\s*$/.test(cell));
+      const parseRow = (l: string): string[] =>
+        l.split("|").slice(1, -1).map(c => c.trim());
+      const nonSep = tableLines.filter(l => !isSep(l));
+      if (nonSep.length >= 1) {
+        const headers = parseRow(nonSep[0]);
+        const rows = nonSep.slice(1).map(parseRow);
+        blocks.push({ type: "table", headers, rows });
+      }
+      continue;
+    }
+
+    // bullet list
+    const bulletM = /^(\s*)[-*+] (.*)$/.exec(line);
+    if (bulletM) {
+      blocks.push({ type: "bullet", text: bulletM[2].trim(), indent: bulletM[1].length });
+      i++;
+      continue;
+    }
+
+    // numbered list
+    const numberedM = /^(\d+)\. (.*)$/.exec(trimmed);
+    if (numberedM) {
+      blocks.push({ type: "numbered", text: numberedM[2].trim(), n: parseInt(numberedM[1]) });
+      i++;
+      continue;
+    }
+
+    // paragraph: collect until a heading/table/hr/list or blank
+    const paraLines: string[] = [];
+    while (i < lines.length) {
+      const t = lines[i].trim();
+      if (!t) { i++; break; }
+      if (/^#+\s/.test(t) || t.startsWith("|") || /^[\-\*_]{3,}$/.test(t) || /^(\s*)[-*+] /.test(lines[i]) || /^\d+\. /.test(t)) break;
+      paraLines.push(t);
+      i++;
+    }
+    if (paraLines.length > 0) blocks.push({ type: "para", lines: paraLines });
+  }
+  return blocks;
+}
+
+function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  const colors = useColors();
+  if (headers.length === 0) return null;
+
+  const colCount = Math.max(headers.length, ...rows.map(r => r.length));
+
+  // Compute column widths (min 48, max uncapped — let ScrollView handle)
+  const COL_W = 80;
+  const FIRST_COL_W = 100;
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginHorizontal: -2 }}>
+      <View style={{ borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: "hidden" }}>
+        {/* Header row */}
+        <View style={{ flexDirection: "row", backgroundColor: colors.muted }}>
+          {Array.from({ length: colCount }).map((_, ci) => (
+            <View
+              key={ci}
+              style={[
+                mdStyles.cell,
+                { width: ci === 0 ? FIRST_COL_W : COL_W, backgroundColor: colors.muted },
+                ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
+              ]}
+            >
+              <Text style={[mdStyles.headerCell, { color: colors.foreground }]} numberOfLines={2}>
+                {headers[ci] ?? ""}
+              </Text>
+            </View>
+          ))}
+        </View>
+        {/* Data rows */}
+        {rows.map((row, ri) => (
+          <View
+            key={ri}
+            style={[
+              { flexDirection: "row" },
+              ri < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+              ri % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.accent },
+            ]}
+          >
+            {Array.from({ length: colCount }).map((_, ci) => {
+              const cell = row[ci] ?? "";
+              const isUp   = cell === "↑" || cell === "▲";
+              const isDown = cell === "↓" || cell === "▼";
+              return (
+                <View
+                  key={ci}
+                  style={[
+                    mdStyles.cell,
+                    { width: ci === 0 ? FIRST_COL_W : COL_W },
+                    ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      mdStyles.dataCell,
+                      { color: isUp ? "#16a34a" : isDown ? "#dc2626" : colors.foreground },
+                    ]}
+                    numberOfLines={3}
+                  >
+                    {cell}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+function MarkdownText({ content, baseColor }: { content: string; baseColor: string }) {
+  const colors = useColors();
+  const blocks = React.useMemo(() => parseMarkdown(content), [content]);
+
+  return (
+    <View style={{ gap: 6 }}>
+      {blocks.map((block, idx) => {
+        switch (block.type) {
+          case "h1":
+            return (
+              <InlineText
+                key={idx}
+                text={block.text}
+                style={{ fontSize: 18, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 10, marginBottom: 2 }}
+              />
+            );
+          case "h2":
+            return (
+              <InlineText
+                key={idx}
+                text={block.text}
+                style={{ fontSize: 16, fontFamily: "Pretendard-Bold", color: colors.foreground, marginTop: 8, marginBottom: 2 }}
+              />
+            );
+          case "h3":
+            return (
+              <InlineText
+                key={idx}
+                text={block.text}
+                style={{ fontSize: 14, fontFamily: "Pretendard-SemiBold", color: colors.foreground, marginTop: 6 }}
+              />
+            );
+          case "hr":
+            return <View key={idx} style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 6 }} />;
+          case "bullet":
+            return (
+              <View key={idx} style={{ flexDirection: "row", gap: 8, paddingLeft: block.indent * 4 }}>
+                <Text style={{ fontSize: 14, color: baseColor, marginTop: 2, lineHeight: 22 }}>•</Text>
+                <InlineText
+                  text={block.text}
+                  style={{ flex: 1, fontSize: 14, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
+                />
+              </View>
+            );
+          case "numbered":
+            return (
+              <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
+                <Text style={{ fontSize: 14, color: colors.mutedForeground, lineHeight: 22, fontFamily: "Pretendard-SemiBold", minWidth: 20 }}>{block.n}.</Text>
+                <InlineText
+                  text={block.text}
+                  style={{ flex: 1, fontSize: 14, lineHeight: 22, fontFamily: "Pretendard-Regular", color: baseColor }}
+                />
+              </View>
+            );
+          case "table":
+            return <MarkdownTable key={idx} headers={block.headers} rows={block.rows} />;
+          case "para":
+            return (
+              <InlineText
+                key={idx}
+                text={block.lines.join(" ")}
+                style={{ fontSize: 14, lineHeight: 23, fontFamily: "Pretendard-Regular", color: baseColor }}
+              />
+            );
+          default:
+            return null;
+        }
+      })}
+    </View>
+  );
+}
+
+const mdStyles = StyleSheet.create({
+  cell:       { paddingVertical: 8, paddingHorizontal: 10, justifyContent: "center" },
+  headerCell: { fontSize: 11, fontFamily: "Pretendard-Bold", textAlign: "center" },
+  dataCell:   { fontSize: 12, fontFamily: "Pretendard-Regular", textAlign: "center" },
+});
+
 // ── AgentStepsSection ─────────────────────────────────────────────────────────
 
 function AgentStepsSection({ analysis }: { analysis: any }) {
@@ -752,10 +1017,11 @@ function AgentStepsSection({ analysis }: { analysis: any }) {
                 )}
               </View>
 
-              {/* Content */}
-              <Text style={[styles.stepContent, { color: colors.foreground }]}>
-                {displayContent || step.content}
-              </Text>
+              {/* Content — markdown rendered */}
+              <MarkdownText
+                content={displayContent || step.content}
+                baseColor={colors.foreground}
+              />
 
               {/* Validation notes */}
               {step.validationNotes && (
