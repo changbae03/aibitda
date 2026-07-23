@@ -8,7 +8,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/hooks/useApi";
-import { useGetAnalysis } from "@workspace/api-client-react";
 
 // ── 상수: 웹 agents.ts와 완전히 동일 ─────────────────────────────────────────
 
@@ -780,11 +779,22 @@ export default function AnalysisDetailScreen() {
   const colors    = useColors();
   const insets    = useSafeAreaInsets();
   const router    = useRouter();
-  const { data: analysis, isLoading, error, refetch } = useGetAnalysis(Number(id));
 
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [quote, setQuote] = useState<{ price: number | null; change: number | null; currency: string } | null>(null);
   const stats = useTickerStats(analysis?.ticker ?? null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadAnalysis = React.useCallback(() => {
+    if (!id) return;
+    apiFetch<any>(`/api/analysis/${id}`)
+      .then((data) => { setAnalysis(data); setIsLoading(false); setFetchError(false); })
+      .catch(() => { setFetchError(true); setIsLoading(false); });
+  }, [id]);
+
+  useEffect(() => { loadAnalysis(); }, [loadAnalysis]);
 
   // 실시간 현재가 fetch
   useEffect(() => {
@@ -800,14 +810,14 @@ export default function AnalysisDetailScreen() {
 
   // 분석 진행 중일 때 폴링
   useEffect(() => {
-    const status = (analysis as any)?.status;
+    const status = analysis?.status;
     if (status === "in_progress" || status === "queued") {
-      pollRef.current = setInterval(() => refetch(), 4000);
+      pollRef.current = setInterval(() => loadAnalysis(), 4000);
     } else {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [(analysis as any)?.status]);
+  }, [analysis?.status]);
 
   const botPad = Platform.OS === "web" ? 34 : insets.bottom + 24;
   const analysisStatus = (analysis as any)?.status ?? "unknown";
@@ -828,7 +838,7 @@ export default function AnalysisDetailScreen() {
     );
   }
 
-  if (error || !analysis) {
+  if (fetchError || (!isLoading && !analysis)) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <NavBar status="error" onBack={() => router.back()} />
@@ -837,6 +847,9 @@ export default function AnalysisDetailScreen() {
           <Text style={{ color: colors.mutedForeground, fontSize: 15, fontFamily: "Pretendard-Regular" }}>
             분석을 불러오지 못했어요
           </Text>
+          <Pressable onPress={loadAnalysis} style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#FF8A7A", borderRadius: 8 }}>
+            <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Pretendard-SemiBold" }}>다시 시도</Text>
+          </Pressable>
         </View>
       </View>
     );
