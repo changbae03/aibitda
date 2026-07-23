@@ -53,11 +53,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen
         name="analysis/[id]"
-        options={{
-          title: "AI 분석 보고서",
-          presentation: "modal",
-          ...HEADER_OPTS,
-        }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="new-analysis"
