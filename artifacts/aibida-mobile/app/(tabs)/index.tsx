@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView,
+  ActivityIndicator, Image, Pressable, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View, Platform, TextInput,
 } from "react-native";
 import Svg, { Polyline, Path, Circle, Line, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
@@ -1706,7 +1706,7 @@ export default function MarketScreen() {
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topPad + 14, borderBottomColor: colors.border }]}>
         <View>
-          <Text style={[styles.headerTitle, { color: "#FF8A7A" }]}>애빛다</Text>
+          <Image source={require("../../assets/images/logo.png")} style={styles.headerLogo} resizeMode="contain" />
         </View>
         {subTab === "overview" && (
           <View style={{ flexDirection: "row", backgroundColor: colors.muted, borderRadius: 10, padding: 3 }}>
@@ -1764,7 +1764,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 26, fontFamily: "Pretendard-Bold" },
+  headerLogo: { width: 100, height: 44, borderRadius: 10 },
   indexCard: { borderRadius: 12, borderWidth: 1, padding: 12 },
   pulseCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   sectorCard: { borderRadius: 12, borderWidth: 1, padding: 12 },

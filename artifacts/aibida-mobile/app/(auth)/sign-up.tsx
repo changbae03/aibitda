@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -138,10 +138,7 @@ export default function SignUpScreen() {
         </View>
 
         <View style={s.brand}>
-          <View style={s.logoBox}>
-            <Text style={s.logoText}>애</Text>
-          </View>
-          <Text style={s.appName}>애빛다 시작하기</Text>
+          <Image source={require("../../assets/images/logo.png")} style={s.logoImg} />
           <Text style={s.appTagline}>AI 투자 분석을 무료로 체험하세요</Text>
         </View>
 
@@ -221,11 +218,7 @@ const s = StyleSheet.create({
   topRow: { flexDirection: "row", justifyContent: "flex-end", marginBottom: 8 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   brand: { alignItems: "center", gap: 8, marginBottom: 32, marginTop: 8 },
-  logoBox: {
-    width: 64, height: 64, borderRadius: 18,
-    backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center",
-  },
-  logoText: { fontSize: 30, fontFamily: "Pretendard-Bold", color: "#fff" },
+  logoImg: { width: 96, height: 96, borderRadius: 22 },
   appName: { fontSize: 24, fontFamily: "Pretendard-Bold", color: "#0d1421" },
   appTagline: { fontSize: 15, color: "#5d6678", fontFamily: "Pretendard-Regular" },
   verifyIcon: {
