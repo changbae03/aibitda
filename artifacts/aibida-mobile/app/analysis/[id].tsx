@@ -846,69 +846,71 @@ function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] 
 
   const colCount = Math.max(headers.length, ...rows.map(r => r.length));
 
-  // Compute column widths (min 48, max uncapped — let ScrollView handle)
-  const COL_W = 80;
-  const FIRST_COL_W = 100;
+  // 첫 번째 열(시점 등)은 좁게, 나머지는 균등 분배
+  function colFlex(ci: number) {
+    if (colCount <= 1) return 1;
+    return ci === 0 ? 0.9 : 1.3;
+  }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginHorizontal: -2 }}>
-      <View style={{ borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: "hidden" }}>
-        {/* Header row */}
-        <View style={{ flexDirection: "row", backgroundColor: colors.muted }}>
-          {Array.from({ length: colCount }).map((_, ci) => (
-            <View
-              key={ci}
-              style={[
-                mdStyles.cell,
-                { width: ci === 0 ? FIRST_COL_W : COL_W, backgroundColor: colors.muted },
-                ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
-              ]}
-            >
-              <Text style={[mdStyles.headerCell, { color: colors.foreground }]} numberOfLines={2}>
-                {headers[ci] ?? ""}
-              </Text>
-            </View>
-          ))}
-        </View>
-        {/* Data rows */}
-        {rows.map((row, ri) => (
+    <View style={{ borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: "hidden", marginVertical: 4 }}>
+      {/* Header row */}
+      <View style={{ flexDirection: "row", backgroundColor: colors.muted }}>
+        {Array.from({ length: colCount }).map((_, ci) => (
           <View
-            key={ri}
+            key={ci}
             style={[
-              { flexDirection: "row" },
-              ri < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-              ri % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.accent },
+              mdStyles.cell,
+              { flex: colFlex(ci), backgroundColor: colors.muted, alignItems: "center" },
+              ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
             ]}
           >
-            {Array.from({ length: colCount }).map((_, ci) => {
-              const cell = row[ci] ?? "";
-              const isUp   = cell === "↑" || cell === "▲";
-              const isDown = cell === "↓" || cell === "▼";
-              return (
-                <View
-                  key={ci}
-                  style={[
-                    mdStyles.cell,
-                    { width: ci === 0 ? FIRST_COL_W : COL_W },
-                    ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      mdStyles.dataCell,
-                      { color: isUp ? "#16a34a" : isDown ? "#dc2626" : colors.foreground },
-                    ]}
-                    numberOfLines={3}
-                  >
-                    {cell}
-                  </Text>
-                </View>
-              );
-            })}
+            <Text style={[mdStyles.headerCell, { color: colors.foreground }]}>
+              {headers[ci] ?? ""}
+            </Text>
           </View>
         ))}
       </View>
-    </ScrollView>
+      {/* Data rows */}
+      {rows.map((row, ri) => (
+        <View
+          key={ri}
+          style={[
+            { flexDirection: "row" },
+            ri < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+            ri % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.accent },
+          ]}
+        >
+          {Array.from({ length: colCount }).map((_, ci) => {
+            const cell = row[ci] ?? "";
+            const isUp   = cell === "↑" || cell === "▲";
+            const isDown = cell === "↓" || cell === "▼";
+            return (
+              <View
+                key={ci}
+                style={[
+                  mdStyles.cell,
+                  { flex: colFlex(ci), alignItems: "flex-start" },
+                  ci < colCount - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
+                  ci === 0 && { alignItems: "center" },
+                ]}
+              >
+                <Text
+                  style={[
+                    mdStyles.dataCell,
+                    { color: isUp ? "#16a34a" : isDown ? "#dc2626" : colors.foreground },
+                    ci === 0 && { textAlign: "center", fontFamily: "Pretendard-Medium" },
+                  ]}
+                  lineBreakStrategyIOS="hangul-word"
+                >
+                  {cell}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -987,9 +989,9 @@ function MarkdownText({ content, baseColor }: { content: string; baseColor: stri
 }
 
 const mdStyles = StyleSheet.create({
-  cell:       { paddingVertical: 8, paddingHorizontal: 10, justifyContent: "center" },
-  headerCell: { fontSize: 13, fontFamily: "Pretendard-Bold", textAlign: "center" },
-  dataCell:   { fontSize: 14, fontFamily: "Pretendard-Regular", textAlign: "center" },
+  cell:       { paddingVertical: 10, paddingHorizontal: 10, justifyContent: "center" },
+  headerCell: { fontSize: 13, fontFamily: "Pretendard-Bold", textAlign: "center", lineHeight: 18 },
+  dataCell:   { fontSize: 13, fontFamily: "Pretendard-Regular", lineHeight: 20 },
 });
 
 // ── AgentStepsSection ─────────────────────────────────────────────────────────
